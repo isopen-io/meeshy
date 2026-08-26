@@ -5,17 +5,21 @@ import { participantUserRoomTargets } from './emitToConversationParticipants';
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  toIsoOrNull,
 } from './utils/lastMessagePreviewPrism';
 import { resolvePersonalPreviewOverrides } from './utils/personalPreviewOverride';
+import type { ServerEmitIO } from './serverEmit';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
  * function is trivially unit-testable and accepts both the production
  * `Server` and the REST-side `socketIOManager.getIO()` shape.
+ *
+ * Alias de `ServerEmitIO` depuis le cycle 104 : la forme est inchangée, le
+ * couple `(événement, charge)` est désormais celui de `ServerToClientEvents`.
+ * Le nom survit parce que sept fichiers l'importent — voir `serverEmit.ts`.
  */
-export interface PreviewEmitIO {
-  to(room: string): { emit(event: string, payload: unknown): unknown };
-}
+export type PreviewEmitIO = ServerEmitIO;
 
 /**
  * Exporté pour que les relais qui ne font que TRANSMETTRE ce prisma
@@ -230,7 +234,9 @@ export async function emitConversationPreviewUpdate(
     const messagePayloadFor = (message: PreviewMessage | null) => {
       const place = sharedPlaceFromMetadata(message?.metadata);
       return {
-        lastMessageAt: message?.createdAt ?? null,
+        // Chaîne ISO — voir `toIsoOrNull`. `null` reste une VALEUR ici : c'est
+        // ainsi que ce chemin dit « ce lecteur n'a plus aucun message visible ».
+        lastMessageAt: toIsoOrNull(message?.createdAt),
         lastMessageId: message?.id ?? null,
         // `lastMessagePreview` n'est PAS ici : il sort de
         // `resolveLastMessagePreviewPrism` avec le reste de la paire, plafonné

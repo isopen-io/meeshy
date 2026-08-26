@@ -1,38 +1,45 @@
 import XCTest
 import CoreGraphics
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
 final class PostDetailReachAndVisibilityTests: XCTestCase {
 
-    // MARK: PostReachFormatter.compact
-    func test_compact_formatsThousandsAndMillions() {
-        XCTAssertEqual(PostReachFormatter.compact(0), "0")
-        XCTAssertEqual(PostReachFormatter.compact(999), "999")
-        XCTAssertEqual(PostReachFormatter.compact(1_200), "1.2k")
-        XCTAssertEqual(PostReachFormatter.compact(3_400_000), "3.4M")
+    // MARK: PostReachFormatter.components — ce qu'il lui reste à décider
+    //
+    // 238i avait doté ce type d'un paramètre `locale` et de tests de propriété
+    // sur les comptes. 239i les DÉPLACE plutôt qu'il ne les supprime : le rendu
+    // d'un compte de portée appartient désormais à `ReachMetricLabel`, qui doit
+    // recevoir l'entier — pour en dire l'abrégé à l'écran ET la valeur exacte à
+    // VoiceOver. La couverture de locale vit donc dans
+    // `ReachMetricLabelTests`, où la règle vit maintenant.
+    //
+    // Ce qui reste ici est ce que ce type seul décide : le pseudo, et le fait
+    // que les statistiques soient réservées à l'auteur.
+
+    func test_components_author_hasPseudoAndShowsStats() {
+        let c = PostReachFormatter.components(username: "marie", isAuthor: true)
+        XCTAssertEqual(c.pseudo, "@marie")
+        XCTAssertTrue(c.showsStats)
     }
 
-    // MARK: PostReachFormatter.components
-    func test_components_author_hasPseudoAndStats() {
-        let c = PostReachFormatter.components(username: "marie", isAuthor: true, viewCount: 1_200, impressionCount: 3_400)
+    func test_components_nonAuthor_hasPseudobutHidesStats() {
+        let c = PostReachFormatter.components(username: "marie", isAuthor: false)
         XCTAssertEqual(c.pseudo, "@marie")
-        XCTAssertEqual(c.views, "1.2k")
-        XCTAssertEqual(c.impressions, "3.4k")
-    }
-
-    func test_components_nonAuthor_hasPseudoNoStats() {
-        let c = PostReachFormatter.components(username: "marie", isAuthor: false, viewCount: 1_200, impressionCount: 3_400)
-        XCTAssertEqual(c.pseudo, "@marie")
-        XCTAssertNil(c.views)
-        XCTAssertNil(c.impressions)
+        XCTAssertFalse(c.showsStats, "Les statistiques de portée sont privées : seul l'auteur les voit.")
     }
 
     func test_components_noUsername_pseudoNil() {
-        let empty = PostReachFormatter.components(username: "", isAuthor: false, viewCount: 0, impressionCount: 0)
-        XCTAssertNil(empty.pseudo)
-        let nilName = PostReachFormatter.components(username: nil, isAuthor: false, viewCount: 0, impressionCount: 0)
-        XCTAssertNil(nilName.pseudo)
+        XCTAssertNil(PostReachFormatter.components(username: "", isAuthor: false).pseudo)
+        XCTAssertNil(PostReachFormatter.components(username: nil, isAuthor: false).pseudo)
+    }
+
+    /// Le pseudo ne dépend pas de la qualité d'auteur — un lecteur voit le
+    /// `@pseudo` de l'auteur sans voir ses chiffres.
+    func test_components_pseudoIsIndependentOfAuthorship() {
+        XCTAssertEqual(PostReachFormatter.components(username: "marie", isAuthor: true).pseudo,
+                       PostReachFormatter.components(username: "marie", isAuthor: false).pseudo)
     }
 
     // MARK: StoryCanvasVisibility.isVisible — named-space frame, 0 = top of viewport

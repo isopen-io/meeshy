@@ -59,3 +59,34 @@ export function buildCursorPaginationMeta(
     nextCursor: resultCount > 0 ? lastItemId : null
   };
 }
+
+/**
+ * Windows an already-ordered, already-filtered in-memory list by an `id`
+ * cursor. This is the in-memory counterpart of a DB keyset cursor: use it only
+ * when the page cannot be expressed as a Prisma `cursor`/`skip` query — e.g. the
+ * "top-N most active members" listing, whose list is recomputed on every request
+ * from live message-count ranking + presence.
+ *
+ * Because the list is recomputed each call, a cursor handed out on a previous
+ * page routinely names a row that is no longer present (a member dropped out of
+ * the ranking, or went offline under `onlineOnly`). A naïve
+ * `findIndex(cursor) + 1` collapses that miss to `0` (findIndex → -1), silently
+ * re-serving page 1 and duplicating already-seen rows — an infinite-scroll loop.
+ * A stale cursor must instead TERMINATE pagination: an unknown cursor yields an
+ * empty tail, never a restart.
+ */
+export function sliceByIdCursor<T extends { id: string }>(
+  items: readonly T[],
+  cursor: string | undefined,
+  pageLimit: number
+): { page: T[]; hasMore: boolean; nextCursor: string | null } {
+  const foundIndex = cursor ? items.findIndex((item) => item.id === cursor) : -1;
+  const startIndex = cursor ? (foundIndex >= 0 ? foundIndex + 1 : items.length) : 0;
+  const page = items.slice(startIndex, startIndex + pageLimit);
+  const hasMore = startIndex + page.length < items.length;
+  return {
+    page,
+    hasMore,
+    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null
+  };
+}

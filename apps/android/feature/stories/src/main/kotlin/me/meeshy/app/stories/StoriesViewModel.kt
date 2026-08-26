@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.session.SessionRepository
+import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.story.FailedStoryPublish
 import me.meeshy.sdk.story.PendingStoryPublish
 import me.meeshy.sdk.story.StoryRepository
@@ -40,6 +41,7 @@ class StoriesViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val config: MeeshyConfig,
     private val workManager: WorkManager,
+    private val socialSocket: SocialSocketManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(StoriesUiState())
@@ -90,6 +92,42 @@ class StoriesViewModel @Inject constructor(
                         )
                     }
                 }
+        }
+        observeStoryDeletions()
+        observeStoryUpdates()
+    }
+
+    /**
+     * Folds a realtime `story:deleted` into the tray: the story is removed from the
+     * authoritative Room cache and the cache-first stream repaints without it. The purge
+     * is unconditional (no own-echo guard, unlike a reaction) — a story deleted on another
+     * device must vanish for its author too. Mirrors iOS `StoryViewModel.storyDeleted`.
+     */
+    private fun observeStoryDeletions() {
+        viewModelScope.launch {
+            socialSocket.storyDeleted.collect { payload ->
+                storyRepository.removeCachedStory(payload.storyId)
+            }
+        }
+    }
+
+    /**
+     * Folds a realtime `story:updated` into the tray: the edited story is merged onto the
+     * authoritative Room cache (adopting the edit while keeping the reader's monotone seen
+     * state, unless a content edit reset engagement) and the cache-first stream repaints.
+     * The `engagementReset` flag and the current user id (the author-seen exception) are
+     * resolved here; the merge law itself lives in the SDK. Mirrors iOS
+     * `StoryViewModel.storyUpdated`.
+     */
+    private fun observeStoryUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyUpdated.collect { payload ->
+                storyRepository.applyStoryUpdate(
+                    updated = payload.story,
+                    engagementReset = payload.engagementReset ?: false,
+                    currentUserId = sessionRepository.currentUserId,
+                )
+            }
         }
     }
 

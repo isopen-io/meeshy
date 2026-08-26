@@ -155,7 +155,7 @@ describe('PATCH /conversations/:id/participants/:userId/ban — already banned',
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-            .mockResolvedValueOnce({ id: 'part-target', role: 'member', bannedAt: new Date(), displayName: 'Bob' }),
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID, role: 'member', bannedAt: new Date(), displayName: 'Bob' }),
         },
       },
     }));
@@ -176,7 +176,7 @@ describe('PATCH /conversations/:id/participants/:userId/ban — insufficient rol
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'member' })       // caller is member (level 10)
-            .mockResolvedValueOnce({ id: 'part-target', role: 'admin', bannedAt: null, displayName: 'Bob' }), // target is admin (level 30)
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID, role: 'admin', bannedAt: null, displayName: 'Bob' }), // target is admin (level 30)
         },
       },
     }));
@@ -199,7 +199,7 @@ describe('PATCH /conversations/:id/participants/:userId/ban — success', () => 
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-            .mockResolvedValueOnce({ id: 'part-target', role: 'member', bannedAt: null, displayName: 'Bob' }),
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID, role: 'member', bannedAt: null, displayName: 'Bob' }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
       },
@@ -312,7 +312,7 @@ describe('PATCH /conversations/:id/participants/:userId/unban — success', () =
         participant: {
           findFirst: jest.fn<any>()
             .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
-            .mockResolvedValueOnce({ id: 'part-target' }),
+            .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
       },
@@ -367,7 +367,7 @@ describe('PATCH …/ban — les AUTRES appareils du banni', () => {
         findFirst: jest.fn<any>()
           .mockResolvedValueOnce({ id: 'part-actor', role: 'creator', userId: USER_ID })
           .mockResolvedValue({
-            id: 'part-target',
+            id: 'part-target', userId: TARGET_USER_ID,
             role: 'member',
             bannedAt: null,
             displayName: 'Target',
@@ -403,5 +403,82 @@ describe('PATCH …/ban — les AUTRES appareils du banni', () => {
 
   it("n'émet qu'UNE fois — un appareil du banni resté dans la room ne double pas", () => {
     expect(io._sent.filter((s) => s.event === 'conversation:participant-banned')).toHaveLength(1);
+  });
+});
+
+/**
+ * Lot 1 — l'effectif ENTIER pour l'admin du groupe, des DEUX côtés du
+ * bannissement. Un broadcast unique ne portait que la présentation plafonnée :
+ * l'admin qui venait de lire 250 par REST le voyait retomber à « 199+ » au
+ * premier bannissement, et les deux clients persistent la valeur reçue.
+ */
+describe('PATCH …/ban et …/unban — l\'effectif ENTIER pour l\'admin du groupe', () => {
+  const BIG_AUDIENCE = [
+    { id: 'part-admin', userId: 'user-admin', role: 'admin', user: { role: 'USER' } },
+    ...Array.from({ length: 249 }, (_, i) => ({
+      id: `part-big-${i}`,
+      userId: null,
+      role: 'member',
+      user: null,
+    })),
+  ];
+
+  async function runBanRoute(url: string, findFirst: any) {
+    const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    const io = makeChainableIO();
+    const prisma = makePrisma({
+      participant: {
+        findFirst,
+        findMany: jest.fn<any>().mockResolvedValue(BIG_AUDIENCE),
+      },
+    });
+    app.decorate('socketIOHandler', {
+      getManager: () => ({ getIO: () => io, invalidateParticipantCache: jest.fn() }),
+    } as any);
+    registerBanRoutes(app, prisma as any, null, async (req: any) => {
+      req.authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: { id: USER_ID, role: 'USER' } };
+    });
+    await app.ready();
+    await app.inject({ method: 'PATCH', url });
+    await app.close();
+    return io;
+  }
+
+  it('sert 250 à l\'admin du groupe sur le bannissement', async () => {
+    const io = await runBanRoute(
+      `/conversations/${CONV_ID}/participants/${TARGET_USER_ID}/ban`,
+      jest.fn<any>()
+        .mockResolvedValueOnce({ id: 'part-actor', role: 'creator', userId: USER_ID })
+        .mockResolvedValue({
+          id: 'part-target', userId: TARGET_USER_ID,
+          role: 'member',
+          bannedAt: null,
+          displayName: 'Target',
+          isActive: true,
+          leftAt: null,
+        })
+    );
+
+    const sends = io._sendsFor('conversation:participant-banned');
+    expect(sends).toHaveLength(2);
+    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
+    expect(sends[0].excepts).toEqual(['user:user-admin']);
+    expect(sends[1].rooms).toEqual(['user:user-admin']);
+    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
+  });
+
+  it('sert 250 à l\'admin du groupe sur la levée', async () => {
+    const io = await runBanRoute(
+      `/conversations/${CONV_ID}/participants/${TARGET_USER_ID}/unban`,
+      jest.fn<any>()
+        .mockResolvedValueOnce({ id: 'part-caller', role: 'admin' })
+        .mockResolvedValueOnce({ id: 'part-target', userId: TARGET_USER_ID , bannedAt: new Date('2026-08-01T00:00:00.000Z') })
+    );
+
+    const sends = io._sendsFor('conversation:participant-unbanned');
+    expect(sends).toHaveLength(2);
+    expect(sends[0].payload).toMatchObject({ memberCount: 199, memberCountCapped: true });
+    expect(sends[1].rooms).toEqual(['user:user-admin']);
+    expect(sends[1].payload).toMatchObject({ memberCount: 250 });
   });
 });

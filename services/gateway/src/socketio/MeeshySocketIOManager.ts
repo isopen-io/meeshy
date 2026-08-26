@@ -3,15 +3,22 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
-import { Server as SocketIOServer, type Socket } from 'socket.io';
+import { Server as SocketIOServer } from 'socket.io';
+// Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
+// CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
+// paramétré par les deux cartes du contrat), mais il ÉCOUTE comme les autres :
+// ses paramètres de socket n'ont aucune raison d'être plus permissifs que ceux
+// des six handlers qui dérivent déjà les leurs.
+import type { MeeshySocket as Socket } from './typed-socket';
 import { Server as HTTPServer } from 'http';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { isMessageTranslationTarget } from '../services/zmq-translation/utils/zmq-helpers';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
 import { filterMessagePayloadForLanguages, groupSocketsByLanguage } from './utils/message-payload-filter';
 import { applyResolvedLanguagesRefresh } from './utils/resolved-languages-refresh';
 import { MaintenanceService } from '../services/MaintenanceService';
+import { disconnectRevokedSessions } from './disconnectRevokedSessions';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
 import { CallEventsHandler } from './CallEventsHandler';
@@ -41,13 +48,15 @@ import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
 import { stripClientMessageId } from './utils/message-ack-shaping.js';
 import {
   emitToConversationParticipants,
-  participantUserRooms,
   participantUserRoomTargets,
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
+import { presenceStatusEmissions } from './presence-audience';
 import {
   PREVIEW_PRISM_PARTICIPANT_SELECT,
   resolveLastMessagePreviewPrism,
+  toIsoOrNull,
+  type PreviewPrismParticipant,
 } from './utils/lastMessagePreviewPrism';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
@@ -60,7 +69,10 @@ import { PushNotificationService } from '../services/PushNotificationService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { setSharedNotificationService } from '../services/notifications/notification-service-registry';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService';
-import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking';
+import { getBlockRelatedUserIds } from '../utils/blocking';
+import { PresenceVisibilityService, type PresenceViewer } from '../services/PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { PostAudioService } from '../services/posts/PostAudioService';
 import { PostTranslationService } from '../services/posts/PostTranslationService';
 import { StoryTextObjectTranslationService } from '../services/posts/StoryTextObjectTranslationService';
@@ -78,6 +90,8 @@ import type {
 import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../services/ConversationStatsService';
 import type { Message } from '@meeshy/shared/types/index';
+import { buildMessageNewPayload } from './messageNewPayload';
+import { buildMessageEditedCore, resolveWireSenderId } from './messageEditedPayload';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { BoundedTtlCache } from '../utils/bounded-cache';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
@@ -85,8 +99,12 @@ import { MentionService, resolveUsernamesToIds } from '../services/MentionServic
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { emitConversationPreviewUpdate } from './emitConversationPreviewUpdate';
 import { linkMessageEmissions, type SocketEmission } from './linkMessageEmissions';
+import { emitServerEvent, type ServerEventName } from './serverEmit';
 import { announcesMessageArrival } from './queuedMessageArrival';
 import type { QueuedMessagePayload } from '@meeshy/shared/types/delivery-queue';
+import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
+import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -103,30 +121,55 @@ const logger = enhancedLogger.child({ module: 'SocketIOManager' });
  */
 const BRIDGE_SNAPSHOT_LIMIT = 30;
 
-// Maps a queued entry's `eventType` (absent = legacy 'new') to the Socket.IO
-// event replayed on reconnect for that offline-queue entry.
-function _drainedEventName(eventType: QueuedMessagePayload['eventType']): string {
-  if (eventType === 'edited') return SERVER_EVENTS.MESSAGE_EDITED;
-  if (eventType === 'deleted') return SERVER_EVENTS.MESSAGE_DELETED;
-  if (eventType === 'reaction-added') return SERVER_EVENTS.REACTION_ADDED;
-  if (eventType === 'reaction-removed') return SERVER_EVENTS.REACTION_REMOVED;
-  if (eventType === 'attachment-reaction-added') return SERVER_EVENTS.ATTACHMENT_REACTION_ADDED;
-  if (eventType === 'attachment-reaction-removed') return SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
-  if (eventType === 'attachment-updated') return SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED;
-  if (eventType === 'translation') return SERVER_EVENTS.MESSAGE_TRANSLATION;
-  if (eventType === 'pinned') return SERVER_EVENTS.MESSAGE_PINNED;
-  if (eventType === 'unpinned') return SERVER_EVENTS.MESSAGE_UNPINNED;
-  return SERVER_EVENTS.MESSAGE_NEW;
-}
+/**
+ * Les rôles que la directive du 2026-08-25 tient pour privilégiés sur la
+ * présence (« ADMIN et supérieur »), ÉNUMÉRÉS en croisant les rôles du SCHÉMA
+ * avec la loi partagée, au lieu d'être recopiés à la main.
+ *
+ * `['ADMIN', 'BIGBOSS']` écrit en dur serait juste aujourd'hui et faux le jour
+ * où `isGlobalAdmin` change d'avis — sans qu'aucun témoin ne rougisse, puisque
+ * les deux listes vivraient dans des fichiers différents. Ici la liste ne peut
+ * pas diverger : elle EST le filtre, appliqué aux valeurs que la colonne
+ * `User.role` peut réellement porter.
+ */
+const PRESENCE_PRIVILEGED_ROLES = Object.values(UserRole).filter(isGlobalAdmin);
+
 
 // What one queued entry actually puts on the wire. Every eventType replays as a
 // single event EXCEPT 'link-message', which owes the same two events the live
 // room emit owes — see `linkMessageEmissions`. A recipient who was offline when
 // a share-link guest wrote is precisely the one this had to reach: the live
 // emit had already gone out without them.
+//
+// La charge sort de Redis en `Record<string, unknown>` : c'est une frontière de
+// DÉSÉRIALISATION, et le rattachement au contrat s'y affirme, comme dans
+// `linkMessageEmissions`.
+//
+// Ce que le cycle 106 a changé, c'est l'autre bout. L'ENFILAGE est désormais
+// vérifié : `queuedEventContract.ts` dérive de `DRAINED_EVENT` la charge que
+// chaque `eventType` doit porter, et les huit écrivains y sont tenus. Un
+// transport ne peut donc plus diffuser une forme et en enfiler une autre — la
+// divergence n'aurait eu pour témoin qu'un destinataire hors ligne au mauvais
+// moment, c'est-à-dire personne.
+//
+// Ce qui restait une AFFIRMATION sans validation à l'exécution — que l'octet
+// relu de Redis soit bien ce qu'on y a écrit — est désormais VÉRIFIÉ pour la
+// seule chose dont dépend l'adressage : le NOM de l'événement. Le typage borne
+// toujours ce qu'on ÉCRIT et non ce qu'on RELIT ; la différence est qu'une
+// entrée qu'on ne sait pas nommer se déclare maintenant indélivrable au lieu de
+// partir sous un nom absent.
+//
+// Une liste VIDE dit « je ne sais pas diffuser ceci ». C'est la seule réponse
+// honnête : `emit(undefined, payload)` ne lève pas (mesuré, socket.io 4.8), il
+// diffuse un événement anonyme que nul n'écoute — et le drain étant DESTRUCTIF,
+// le message est alors perdu sans recours et sans trace. L'appelant décide de
+// la suite (journal, exclusion des accusés) ; ce n'est pas à la frontière de
+// désérialisation de le faire.
 function _drainedEmissions(entry: QueuedMessagePayload): SocketEmission[] {
   if (entry.eventType === 'link-message') return linkMessageEmissions(entry.payload);
-  return [{ event: _drainedEventName(entry.eventType), payload: entry.payload }];
+  const event = drainedEventName(entry.eventType);
+  if (event === undefined) return [];
+  return [{ event, payload: entry.payload } as SocketEmission];
 }
 
 export interface SocketUser {
@@ -194,6 +237,7 @@ export class MeeshySocketIOManager {
   private socialEventsHandler: SocialEventsHandler;
   private locationHandler: LocationHandler;
   private privacyPreferencesService: PrivacyPreferencesService;
+  private presenceVisibilityService: PresenceVisibilityService;
   private agentClient: ZmqAgentClient | null = null;
   private mentionService: MentionService;
   private deliveryQueue: RedisDeliveryQueue | null = null;
@@ -229,6 +273,15 @@ export class MeeshySocketIOManager {
   private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
   private readonly PRESENCE_SNAPSHOT_CACHE_TTL_MS = 60_000;
 
+  // Les `User.id` des ADMIN/BIGBOSS — l'audience PRIVILÉGIÉE de chaque
+  // transition de présence (directive 2026-08-25). Mise en cache pour la même
+  // raison que l'instantané ci-dessus : `_broadcastUserStatus` s'exécute à
+  // CHAQUE connexion, chaque déconnexion, et pour chaque compte que le balayage
+  // de maintenance passe hors ligne d'un coup. La requête est bornée par le
+  // nombre d'administrateurs (une poignée), jamais par la population connectée.
+  private globalAdminIdsCache: { ids: string[]; cachedAt: number } | null = null;
+  private readonly GLOBAL_ADMIN_IDS_CACHE_TTL_MS = 60_000;
+
   // Statistiques
   private stats = {
     total_connections: 0,
@@ -256,6 +309,12 @@ export class MeeshySocketIOManager {
 
     // Initialiser PrivacyPreferencesService pour vérifier les préférences de confidentialité
     this.privacyPreferencesService = new PrivacyPreferencesService(prisma);
+
+    // La loi de visibilité de la présence (amitié acceptée / ADMIN+ / blocage /
+    // préférences) vit dans UN service, partagé avec les routes REST. Il reçoit
+    // l'instance de préférences du gestionnaire pour que le cache de prefs soit
+    // le MÊME des deux côtés du transport.
+    this.presenceVisibilityService = new PresenceVisibilityService(prisma, this.privacyPreferencesService);
 
     // CORRECTION: Créer NotificationService AVANT MessagingService pour que les mentions génèrent des notifications
     this.notificationService = new NotificationService(prisma);
@@ -296,6 +355,22 @@ export class MeeshySocketIOManager {
     // offline par `updateOfflineUsers`, broadcastant un faux `isOnline: false`.
     this.maintenanceService.setIsCurrentlyConnected(
       (userId: string, _isAnonymous: boolean) => this.connectedUsers.has(userId)
+    );
+
+    // Le balayage journalier des demandes de suppression (`processAccountDeletionRequests`)
+    // met des comptes HORS SERVICE (`isActive: false`) : leurs sockets encore vivants
+    // recevraient leurs fils et émettraient `typing:start` (= « en ligne » chez les
+    // clients). Seul le manager tient `io` : il fournit le révocateur, résolu à
+    // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
+    // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
+    this.maintenanceService.setSessionRevoker((userId: string) =>
+      disconnectRevokedSessions({
+        io: this.io,
+        userId,
+        reason: 'logout_all_devices',
+        message: 'Your account was deleted — every session was signed out.',
+        onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
+      })
     );
 
     // Initialiser Socket.IO avec les types shared
@@ -342,13 +417,13 @@ export class MeeshySocketIOManager {
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
     this.socialEventsHandler = new SocialEventsHandler({
-      io: this.io as SocketIOServer,
+      io: this.io,
       prisma: this.prisma,
     });
 
     // Initialiser le LocationHandler pour les événements de partage de localisation
     this.locationHandler = new LocationHandler({
-      io: this.io as SocketIOServer,
+      io: this.io,
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
@@ -359,7 +434,7 @@ export class MeeshySocketIOManager {
     PostAudioService.init(this.prisma, this.socialEventsHandler);
 
     // Initialiser le StoryTextObjectTranslationService singleton
-    StoryTextObjectTranslationService.init(this.prisma, this.io as SocketIOServer);
+    StoryTextObjectTranslationService.init(this.prisma, this.io);
 
     this.authHandler = new AuthHandler({
       prisma: this.prisma,
@@ -375,9 +450,9 @@ export class MeeshySocketIOManager {
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
       broadcastCallParticipantLeft: (opts) =>
-        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io as SocketIOServer, ...opts }),
+        this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io, ...opts }),
       forceCleanupCallParticipant: (opts) =>
-        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io as SocketIOServer, ...opts }),
+        this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io, ...opts }),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
@@ -475,6 +550,14 @@ export class MeeshySocketIOManager {
       // construit plus haut dans ce même constructeur.
       replayLiveLocations: (socket, conversationId) =>
         this.locationHandler.replayLiveLocationsTo(socket, conversationId),
+      // La liste nominative `onlineUsers` de `conversation:stats` est projetée
+      // par LECTEUR à l'émission (directive produit du 2026-08-25) : le handler
+      // reçoit le lecteur avec son VRAI rôle et la loi unique — la même paire
+      // que `_emitPresenceSnapshot` consomme. Les stats ne partent qu'aux
+      // inscrits, et le handler ne demande un lecteur que pour un `User.id`
+      // résolu, d'où `isAnonymous: false`.
+      presenceViewer: (userId) => this._presenceViewer(userId, false),
+      presenceVisibility: this.presenceVisibilityService,
     });
   }
 
@@ -527,6 +610,18 @@ export class MeeshySocketIOManager {
    * `bannedAt: null` ne matche pas les documents où le champ est ABSENT (jamais
    * écrit), et exclurait donc les lignes historiques — le piège que `ban.ts`
    * documente déjà pour `leftAt` (audit C5).
+   *
+   * **PRÉCONDITION, tenue par l'appelant** : chaque entrée porte un
+   * `conversationId` de forme ObjectId (`isAddressableConversationId`). Elle
+   * n'est pas cosmétique — les ids sont AGRÉGÉS en un seul `in`, donc une seule
+   * entrée illisible fait lever la requête pour le lot ENTIER, et l'échec
+   * atterrit dans le `catch` ci-dessous, qui rejoue tout SANS FILTRE. Le
+   * fail-open y est délibéré et juste pour ce qu'il vise (une base qui ne répond
+   * pas) ; il ne peut simplement pas distinguer ce cas de « nous n'avons jamais
+   * posé de question valide », et sur ce second cas il transforme une entrée
+   * corrompue en désactivation du gate d'autorisation. La garde vit donc chez
+   * l'appelant, AVANT la requête : c'est le seul endroit où l'entrée fautive est
+   * encore nommable une par une.
    */
   private async _dropEndedMemberships(
     userId: string,
@@ -571,13 +666,71 @@ export class MeeshySocketIOManager {
       const drained = await this.deliveryQueue.drain(userId);
       if (drained.length === 0) return;
 
+      // Le journal par entrée est monté AVANT le gate d'appartenance, parce que
+      // la première chose à refuser se refuse avant lui — voir le tri
+      // d'adressabilité juste en dessous.
+      //
+      // `delivered` ne retient que ce qui est RÉELLEMENT parti. Les trois
+      // signaux qui suivent en descendent, parce qu'ils AFFIRMENT tous les trois
+      // la même chose : que le message est arrivé. La règle est celle que la
+      // garde d'appartenance énonce plus bas — « l'affirmer d'un message qu'on
+      // vient de refuser de livrer mentirait à son auteur ». Elle ne couvrait
+      // que le refus ; elle couvre maintenant l'échec.
+      //
+      // Le journal est PAR ENTRÉE, et il NOMME son message. C'est la seule
+      // trace qu'une perte de rejeu laissera jamais : ni exception qui remonte,
+      // ni événement côté client, ni compteur qui bouge — le destinataire n'a
+      // simplement pas reçu son message. Un résumé chiffré ne suffirait pas,
+      // parce que ce qu'il faut pour rattraper la perte est l'IDENTITÉ de ce
+      // qui est tombé, pas son nombre.
+      const delivered: QueuedMessagePayload[] = [];
+      const undelivered: QueuedMessagePayload[] = [];
+      const dropEntry = (entry: QueuedMessagePayload, reason: string, error?: unknown): void => {
+        undelivered.push(entry);
+        logger.error('Queued entry dropped without delivery — it is already out of the queue', {
+          userId,
+          reason,
+          conversationId: entry.conversationId,
+          messageId: entry.messageId,
+          eventType: entry.eventType ?? 'new',
+          error,
+        });
+      };
+
+      // PREMIER refus, et il est en amont du gate d'autorisation par nécessité,
+      // pas par goût de l'ordre : `_dropEndedMemberships` AGRÈGE les
+      // `conversationId` du lot en un seul `conversationId: { in: [...] }`. Une
+      // entrée dont l'id n'est pas interrogeable ne se contente donc pas de se
+      // perdre elle-même — elle fait lever la requête pour TOUT le lot, et
+      // l'échec tombe dans un `catch` qui rejoue l'arriéré SANS FILTRE.
+      // C'est-à-dire : une seule entrée illisible désactive le gate
+      // d'autorisation du rejeu, et l'arriéré d'une conversation quittée — ou
+      // dont le lecteur a été banni — repart en entier.
+      //
+      // C'est l'isolation que la couche du dessous PROMET (« so one corrupt
+      // entry can never poison a whole drain/peek », `parseRawEntries`) et que
+      // le cycle 111 a déjà dû rétablir une fois, sur le comparateur de tri.
+      // Même famille, une couche plus haut, et cette fois sur l'AUTORISATION :
+      // l'entrée corrompue n'y désordonne pas les entrées saines, elle les
+      // déshabille de leur gate.
+      const addressable = drained.filter(entry => {
+        if (isAddressableConversationId(entry.conversationId)) return true;
+        dropEntry(entry, 'conversation-id-not-addressable');
+        return false;
+      });
+      // Rien d'adressable : il n'y a aucune conversation à NOMMER, donc rien à
+      // faire chercher au client. Le journal ci-dessus est la seule trace
+      // possible, et c'est déjà la règle que ce chemin applique — on ne
+      // fabrique pas un signal de récupération qui ne désigne rien.
+      if (addressable.length === 0) return;
+
       // Gate d'autorisation, avant toute émission : une entrée dont
       // l'appartenance a pris fin n'est pas rejouée, et ne compte donc dans
       // aucun des trois signaux ci-dessous (émission, `pending-messages:delivered`,
       // accusé de réception). Un accusé affirme « ce message est arrivé chez son
       // destinataire » — l'affirmer d'un message qu'on vient de refuser de livrer
       // mentirait à son auteur.
-      const pending = await this._dropEndedMemberships(userId, isAnonymous, drained);
+      const pending = await this._dropEndedMemberships(userId, isAnonymous, addressable);
       if (pending.length === 0) return;
 
       logger.info(`Delivering ${pending.length} queued messages to ${userId}`);
@@ -587,17 +740,120 @@ export class MeeshySocketIOManager {
       // AuthHandler joins ROOMS.user(...) BEFORE registering the socket and
       // before the presence-snapshot/drain call, for both JWT and anonymous
       // paths (anonymous personal rooms use the participant id).
-      // Replayed payloads are stored as opaque JSON in the queue — they were
-      // shaped at enqueue time, so re-checking them against ServerToClientEvents
-      // here is impossible (loose emit, same as the previous raw-Socket path).
-      const userRoom = this.io.to(ROOMS.user(userId)) as unknown as { emit: (event: string, payload: unknown) => void };
+      // Ce site portait un cast — `as unknown as { emit(event: string, payload:
+      // unknown): void }` — sous ce commentaire : « les charges rejouées sont du
+      // JSON opaque, mises en forme à l'enfilage, donc les revérifier contre
+      // `ServerToClientEvents` ici est IMPOSSIBLE ».
+      //
+      // C'était vrai, et ça ne l'est plus depuis le cycle 104 : `_drainedEmissions`
+      // rend des `SocketEmission`, c'est-à-dire des `ServerEmission` — un couple
+      // `(événement, charge)` CORRÉLÉ — et l'affirmation de ce couple est posée
+      // là où la forme est réellement connue, à la frontière de désérialisation.
+      // Le rejeu n'a donc plus besoin d'une porte à lui : il passe par la même
+      // que la diffusion directe.
+      //
+      // Le cast était une PORTE, pas une commodité, et c'est ce qui l'a rendu
+      // invisible : le balayage du cycle 104 cherche des DÉCLARATIONS
+      // (`emit(event: string, …)`), et une porte peut aussi s'ouvrir par
+      // assertion de type.
+      const userRoom = this.io.to(ROOMS.user(userId));
+
+      // Le rejeu est isolé PAR ENTRÉE, et ce n'est pas une précaution de style :
+      // `drain()` a DÉJÀ retiré ces entrées de Redis et de la file mémoire. Tout
+      // ce qui n'est pas émis dans cette boucle est perdu sans recours — il n'y
+      // a pas de seconde lecture.
+      //
+      // La couche du dessous porte déjà cette garantie et l'écrit :
+      // `parseRawEntries` laisse tomber une entrée illisible « so one corrupt
+      // entry can never poison a whole drain/peek ». Nue, cette boucle-ci la
+      // reprenait d'une main et la rendait de l'autre — un seul `emit` qui lève
+      // (adaptateur en défaut, encodeur sur une charge non sérialisable de la
+      // tranche MÉMOIRE, qui n'a jamais traversé JSON) emportait toutes les
+      // entrées SUIVANTES, plus `pending-messages:delivered`, plus TOUS les
+      // accusés de réception. C'est la leçon du cycle 98 — « un correctif prouvé
+      // à une couche peut être défait par la couche qui le consomme » — en
+      // amont, et sur le chemin le plus destructif du système.
+      //
+      // Le journal par entrée (`dropEntry`, monté avant le gate d'appartenance)
+      // porte les QUATRE refus de ce chemin — l'id de conversation illisible, la
+      // charge informe, le nom d'événement non résolu, l'enveloppe de lien
+      // privée de son message — chacun sous sa propre `reason`, parce qu'aucun
+      // des quatre n'envoie chercher au même endroit.
       for (const entry of pending) {
-        for (const emission of _drainedEmissions(entry)) {
-          userRoom.emit(emission.event, emission.payload);
+        // Les deux moitiés du couple, refusées séparément parce que le journal
+        // doit NOMMER laquelle a manqué : c'est la seule trace qu'une perte de
+        // rejeu laissera jamais, et « le nom » et « la charge » n'envoient pas
+        // chercher au même endroit.
+        if (!isDeliverableQueuedPayload(entry.payload)) {
+          dropEntry(entry, 'payload-not-an-object');
+          continue;
+        }
+        const emissions = _drainedEmissions(entry);
+        if (emissions.length === 0) {
+          // Deux façons de ne rien savoir diffuser, et le journal doit les
+          // SÉPARER : elles n'envoient pas chercher au même endroit. Un nom
+          // d'événement non résolu accuse la file (un `eventType` d'une version
+          // plus récente de la passerelle) ; une enveloppe de lien sans message
+          // accuse son producteur. `'link-message'` est le seul `eventType` dont
+          // la charge se DÉPLIE, donc le seul qui puisse échouer par autre chose
+          // que son nom.
+          dropEntry(
+            entry,
+            entry.eventType === 'link-message'
+              ? 'link-envelope-without-message'
+              : 'unresolvable-event-type'
+          );
+          continue;
+        }
+        try {
+          for (const emission of emissions) {
+            emitServerEvent(userRoom, emission);
+          }
+          delivered.push(entry);
+        } catch (error) {
+          dropEntry(entry, 'emit-failed', error);
         }
       }
-      const affectedConversationIds = [...new Set(pending.map(e => e.conversationId))];
-      userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: pending.length, conversationIds: affectedConversationIds });
+
+      // `count` ne compte QUE ce qui est parti — c'est une affirmation de
+      // livraison, elle doit rester vraie. `conversationIds`, lui, porte les
+      // conversations TOUCHÉES par le drain, rejeu réussi ou entrée perdue.
+      //
+      // La distinction est ce qui rend une perte RÉCUPÉRABLE au lieu de
+      // définitive : l'unique consommateur de cet événement s'en sert pour
+      // invalider les messages des conversations nommées
+      // (`use-socket-cache-sync`, `handlePendingMessagesDelivered`), et les
+      // messages qu'une entrée indélivrable transportait sont, eux, toujours en
+      // base — seul leur rejeu temps réel a échoué. Nommer la conversation
+      // envoie donc le client les rechercher. L'omettre transformerait un
+      // incident de transport en trou permanent dans le fil.
+      //
+      // Ces deux champs ne disent pas la même chose et c'est délibéré : un
+      // `count: 0` accompagné d'une conversation nommée se lit exactement comme
+      // ce qui s'est passé — « rien n'a pu être rejoué, va relire celle-ci ».
+      //
+      // Isolé, pour la même raison que la boucle au-dessus et que les canaux de
+      // `NotificationService.emitBestEffort` : ce signal DÉCLENCHE une relecture
+      // là où les accusés qui suivent font avancer la coche de l'expéditeur.
+      // Nu, il faisait porter aux seconds le sort du premier — et la panne qui
+      // fait lever un `emit` les fait lever tous les deux.
+      try {
+        // Filtré par la MÊME garde que le tri d'adressabilité : une entrée
+        // refusée pour son id de conversation n'a rien à nommer ici. Publier son
+        // id enverrait le client invalider une conversation qui n'existe pas —
+        // un signal de récupération qui ne désigne rien vaut moins que le
+        // silence, et le journal par entrée reste, lui, la trace de la perte.
+        const affectedConversationIds = [
+          ...new Set(
+            [...delivered, ...undelivered]
+              .map(e => e.conversationId)
+              .filter(isAddressableConversationId)
+          ),
+        ];
+        userRoom.emit(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, { count: delivered.length, conversationIds: affectedConversationIds });
+      } catch (error) {
+        logger.error('Failed to announce the end of the offline replay', { userId, error });
+      }
 
       // Emit delivery receipts to senders so their checkmarks advance from
       // "sent" (single tick) to "delivered" (double tick) as soon as the
@@ -615,7 +871,7 @@ export class MeeshySocketIOManager {
       // restait sur un tic unique jusqu'à ce que quelqu'un OUVRE la
       // conversation, c'est-à-dire exactement l'attente que cette unité existe
       // pour supprimer.
-      this._emitDeliveryForDrainedMessages(userId, pending, isAnonymous).catch(err => {
+      this._emitDeliveryForDrainedMessages(userId, delivered, isAnonymous).catch(err => {
         logger.warn('Failed to emit delivery receipts for drained messages', { userId, error: err });
       });
     } catch (error) {
@@ -649,7 +905,7 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     // Delivery receipts only make sense for entries that announce a message
     // ARRIVING — a mutation entry (edit, delete, reaction, pin, attachment
-    // enrichment, translation) replays its own event (see `_drainedEventName`)
+    // enrichment, translation) replays its own event (see `drainedEventName`)
     // but was never awaiting a "delivered" checkmark in the first place.
     //
     // Le prédicat est NOMMÉ et vit avec le vocabulaire (`queuedMessageArrival`)
@@ -793,10 +1049,8 @@ export class MeeshySocketIOManager {
   async enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'pinned' | 'unpinned' | 'edited' | 'deleted';
     messageId: string;
-    payload: Record<string, unknown>;
-  }): Promise<void> {
+  } & QueuedVariantFor<'pinned' | 'unpinned' | 'edited' | 'deleted'>): Promise<void> {
     await this._enqueueForOfflineParticipants(params);
   }
 
@@ -825,7 +1079,7 @@ export class MeeshySocketIOManager {
     conversationId: string;
     actorParticipantId: string | null | undefined;
     messageId: string;
-    payload: Record<string, unknown>;
+    payload: QueuedPayloadFor<'link-message'>;
   }): Promise<void> {
     await this._enqueueForOfflineParticipants({ ...params, eventType: 'link-message' });
   }
@@ -918,7 +1172,7 @@ export class MeeshySocketIOManager {
    */
   private async normalizeConversationId(conversationId: string): Promise<string> {
     try {
-      if (/^[0-9a-fA-F]{24}$/.test(conversationId)) return conversationId;
+      if (isValidObjectId(conversationId)) return conversationId;
       const cached = this.conversationIdCache.get(conversationId);
       if (cached) return cached;
       const conversation = await this.prisma.conversation.findUnique({
@@ -999,7 +1253,7 @@ export class MeeshySocketIOManager {
   ): Promise<void> {
     if (!this.io) return;
     await this.callEventsHandler.endCallParticipationForDepartedMember({
-      io: this.io as SocketIOServer,
+      io: this.io,
       conversationId,
       userId
     });
@@ -1032,44 +1286,93 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Émet `presence:snapshot` au socket fraîchement authentifié : liste les userIds
-   * (ou participantIds anonymes) actuellement online parmi les contacts du nouvel
-   * arrivant — c'est-à-dire les autres participants des conversations qu'il rejoint.
-   * Permet au client de seed son store sans attendre qu'un changement d'état arrive
-   * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
+   * Le LECTEUR de l'instantané, avec son VRAI rôle — la seule donnée qui
+   * autorise un ADMIN/BIGBOSS à voir la présence de qui il regarde.
+   *
+   * Ni `SocketUser`, ni `socket.data`, ni le contexte du handshake ne portent
+   * `User.role` (mesuré : le `select` de `AuthHandler._authenticateJWTUser` ne
+   * lit que les langues). Il est donc relu UNE fois par connexion, sur un
+   * chemin qui fait déjà plusieurs lectures — jamais par contact filtré.
+   *
+   * Un lecteur ANONYME n'est pas un lecteur de rang bas : il n'a AUCUNE
+   * relation, donc la loi partagée lui rend `null` et tout est masqué. C'est
+   * `PresenceVisibilityService` qui le dit — ici on ne fait que ne pas
+   * fabriquer d'identité pour lui.
    */
+  private async _presenceViewer(userId: string, isAnonymous: boolean): Promise<PresenceViewer> {
+    if (isAnonymous) return null;
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    // Pas de ligne — socket périmé, compte supprimé — ⇒ AUCUN lecteur, donc
+    // tout masqué. Même refus fermé que la porte REST jumelle
+    // (`viewerFromAuthContext`, `routes/users/presence-gate.ts`), qui rend
+    // `null` pour un contexte inscrit sans rôle : une identité qu'on ne sait
+    // pas qualifier ne se voit accorder aucune relation.
+    if (!row) return null;
+    // Une ligne SANS rôle lisible reste un lecteur ordinaire : elle garde ses
+    // amitiés et ne gagne aucun privilège.
+    return { userId, role: row.role ?? 'USER' };
+  }
+
   /**
-   * Masque la présence des contacts selon leurs préférences privacy (cascade
-   * showOnlineStatus maître + showLastSeen) ET le blocage bidirectionnel avec
-   * `viewerId` — même règle que `GET /users/presence` (`PresenceVisibilityService`).
-   * Anonymes → défaut (montrés, non-bloquables). Appliqué à l'émission (pas au
-   * cache) pour couvrir aussi le cache-hit.
+   * Applique la visibilité de présence de CHAQUE contact pour CE lecteur —
+   * amitié acceptée, rôle du lecteur, blocage bidirectionnel et préférences,
+   * tenus ensemble par `PresenceVisibilityService.resolveForTargets`, la même
+   * porte que `GET /users/presence`.
+   *
+   * Directive produit (2026-08-25) : partager une conversation n'autorise plus
+   * rien. Le prédécesseur (`_applyPresencePrefs`) n'appliquait que les
+   * préférences et le blocage, donc un co-participant INCONNU recevait la
+   * pastille et la dernière connexion de tout le monde à chaque reconnexion.
+   *
+   * Masqué se présente ici comme HORS LIGNE (`isOnline: false`,
+   * `lastActiveAt: null`) et non comme une absence : le contact reste dans la
+   * liste — les clients typent `isOnline` non nullable sur ce canal — mais il
+   * n'en apprend rien. `lastActiveAt` voyage À CÔTÉ d'`isOnline` et tombe avec
+   * lui : un gate posé sur le seul drapeau laisserait partir l'horodatage, qui
+   * est précisément ce que la directive interdit de révéler.
+   *
+   * Le filtre est appliqué à l'ÉMISSION, jamais au cache : `presenceSnapshotCache`
+   * stocke l'état BRUT, partagé par tous les lecteurs, et la visibilité est par
+   * lecteur.
    */
-  private async _applyPresencePrefs(
-    viewerId: string,
+  private async _applyPresenceVisibility(
+    viewer: PresenceViewer,
     users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[],
   ): Promise<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[]> {
     if (users.length === 0) return users;
-    const [prefsMap, blockedUserIds] = await Promise.all([
-      this.privacyPreferencesService.getPreferencesForUsers(
-        users.map(u => ({ id: u.userId, isAnonymous: false })),
-      ),
-      getBlockedUserIdsAmong(this.prisma, viewerId, users.map(u => u.userId)),
-    ]);
-    return users.map(u => {
-      if (blockedUserIds.has(u.userId)) return { ...u, isOnline: false, lastActiveAt: null };
-      const p = prefsMap.get(u.userId);
-      if (p && !p.showOnlineStatus) return { ...u, isOnline: false, lastActiveAt: null };
-      return { ...u, lastActiveAt: p && !p.showLastSeen ? null : u.lastActiveAt };
-    });
+    const visibility = await this.presenceVisibilityService.resolveForTargets(
+      viewer,
+      users.map(u => u.userId),
+    );
+    // Les ids ANONYMES (des `Participant.id`) n'ont pas de compte : le
+    // résolveur ne leur trouve ni amitié ni préférence, donc il rend HIDDEN —
+    // sauf à un ADMIN+, à qui il rend FULL pour tout id qu'on lui présente.
+    return users.map(u => applyPresenceVisibilityAsOffline(u, visibility.get(u.userId)));
   }
 
+  /**
+   * Émet `presence:snapshot` au socket fraîchement authentifié : l'état de
+   * présence des contacts du nouvel arrivant, pour que le client amorce son
+   * store sans attendre la prochaine transition.
+   *
+   * La LISTE des contacts reste dérivée des conversations — c'est la façon la
+   * moins chère de nommer « les gens que ce client va afficher ». Ce n'est PAS
+   * une autorisation : chaque entrée traverse ensuite
+   * `_applyPresenceVisibility`, où un co-participant qui n'est ni ami accepté
+   * ni ADMIN+ ressort HORS LIGNE, sans dernière connexion (directive produit du
+   * 2026-08-25). Ce qui gouverne l'audience est la RELATION ; la conversation
+   * ne fait que fournir des candidats.
+   */
   private async _emitPresenceSnapshot(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
     try {
+      const viewer = await this._presenceViewer(userId, isAnonymous);
       const cached = this.presenceSnapshotCache.get(userId);
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
-        const users = await this._applyPresencePrefs(
-          userId,
+        const users = await this._applyPresenceVisibility(
+          viewer,
           cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
         );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
@@ -1125,7 +1428,9 @@ export class MeeshySocketIOManager {
           }
 
           this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
-          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: await this._applyPresencePrefs(userId, users) });
+          socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+            users: await this._applyPresenceVisibility(viewer, users),
+          });
           logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
         }
       }
@@ -1160,7 +1465,7 @@ export class MeeshySocketIOManager {
   /**
    * Remet les pastilles d'aplomb à la reconnexion — le SEUL signal qui le
    * fasse. La file hors-ligne rejoue l'aperçu, le rang et la promotion en tête
-   * de chaque ligne (`_drainedEventName` ne mappe que des événements de
+   * de chaque ligne (`drainedEventName` ne mappe que des événements de
    * message) ; le COMPTEUR, lui, ne se calcule que côté serveur, depuis les
    * curseurs de lecture.
    *
@@ -1184,45 +1489,40 @@ export class MeeshySocketIOManager {
     isAnonymous: boolean
   ): Promise<void> {
     try {
-      // SANS la relation `conversation`, pourtant nécessaire plus bas : elle
-      // est REQUISE côté schéma, et il existe en prod des participants
-      // orphelins (conversation supprimée hors Prisma). La charger ici fait
-      // rejeter la lecture ENTIÈRE (`PrismaClientUnknownRequestError: Field
-      // conversation is required to return data, got null`) — une seule ligne
-      // orpheline privait le lecteur de TOUTES ses pastilles, à chaque
-      // reconnexion. La résolution se fait en seconde requête, qui départage
-      // lignes saines et orphelines au lieu de tomber avec elles.
       const participantRows = await this.prisma.participant.findMany({
         where: isAnonymous
           ? { id: readerKey, isActive: true }
           : { userId: readerKey, isActive: true },
-        select: { id: true, conversationId: true },
+        select: { conversationId: true },
       });
       if (participantRows.length === 0) return;
+
       // `lastMessageAt` ne sert PAS au compteur — il sert à borner la passe
       // de ponts ci-dessous sur les conversations que le lecteur va
-      // réellement voir. Cf. `BRIDGE_SNAPSHOT_LIMIT`.
-      const conversationRows = await this.prisma.conversation.findMany({
+      // réellement voir (cf. `BRIDGE_SNAPSHOT_LIMIT`). Il est lu À PART, et
+      // jamais par la relation requise `participant.conversation` : une
+      // adhésion dont la conversation a été supprimée (orpheline) faisait
+      // lever Prisma (« Inconsistent query result: Field conversation is
+      // required ») et perdait l'instantané ENTIER — 118 compteurs pour une
+      // ligne de 2025, à chaque reconnexion, mesuré en prod le 2026-08-26.
+      // L'orpheline est ignorée ici et signalée, pour le balayage de
+      // maintenance qui la retirera.
+      const liveConversations = await this.prisma.conversation.findMany({
         where: { id: { in: participantRows.map(p => p.conversationId) } },
         select: { id: true, lastMessageAt: true },
       });
-      const lastMessageAtByConversation = new Map(
-        conversationRows.map(row => [row.id, row.lastMessageAt ?? null])
-      );
-      const orphanRows = participantRows.filter(
-        p => !lastMessageAtByConversation.has(p.conversationId)
-      );
-      if (orphanRows.length > 0) {
-        logger.warn('orphan participants skipped in unread snapshot — their conversations no longer exist (GC: scripts/maintenance/fix-orphan-participants.ts)', {
+      const liveConversationIds = new Set(liveConversations.map(c => c.id));
+      const orphanConversationIds = participantRows
+        .map(p => p.conversationId)
+        .filter(id => !liveConversationIds.has(id));
+      if (orphanConversationIds.length > 0) {
+        logger.warn('unread snapshot: participations pointing to a missing conversation were skipped', {
           readerKey,
           isAnonymous,
-          participantIds: orphanRows.map(p => p.id),
-          conversationIds: [...new Set(orphanRows.map(p => p.conversationId))],
+          orphanConversationIds,
         });
       }
-      const conversationIds = participantRows
-        .filter(p => lastMessageAtByConversation.has(p.conversationId))
-        .map(p => p.conversationId);
+      const conversationIds = liveConversations.map(c => c.id);
       if (conversationIds.length === 0) return;
       // `getUnreadCountsForUser` résout DÉJÀ les deux identités en interne
       // (`OR: [{ id: userId }, { userId }]`) — c'est la lecture de participants
@@ -1260,6 +1560,9 @@ export class MeeshySocketIOManager {
       // sous les yeux au retour du réseau. Les conversations plus anciennes
       // gardent leur compteur exact — seul leur pont attend le prochain
       // `GET /conversations`, qui le rendra en même temps que leur ligne.
+      const lastMessageAtByConversation = new Map(
+        liveConversations.map(c => [c.id, c.lastMessageAt ?? null])
+      );
       const bridgeCandidates = [...unreadCounts]
         .map(([conversationId, unreadCount]) => ({ conversationId, unreadCount }))
         .filter(candidate => candidate.unreadCount > 0)
@@ -1961,7 +2264,7 @@ export class MeeshySocketIOManager {
           conversationId: normalizedId,
           eventType: 'translation',
           messageId: result.messageId,
-          payload: translationData as unknown as Record<string, unknown>,
+          payload: translationData,
           dedupKey: `${result.messageId}:${targetLanguage}`,
           restrictToReadersOfLanguage: targetLanguage,
         });
@@ -2220,7 +2523,12 @@ export class MeeshySocketIOManager {
       }
 
       // Diffuser dans la room de conversation
-      this.io.to(roomName).emit(eventConstant, translationData);
+      // Nom d'événement CALCULÉ : socket.io ne le vérifie PAS (mesure du
+      // cycle 104 — sur un `Ev` union, `EventParams` s'effondre en union de
+      // tuples et n'importe quelle charge de la famille passe sous n'importe
+      // quel membre). Ce site AVAIT l'air gardé — il émet sur un `Server`
+      // paramétré par `ServerToClientEvents` — et ne l'était pas.
+      emitServerEvent(this.io.to(roomName), eventConstant, translationData);
       logger.info('audio-translation:ready broadcast', { messageId: data.messageId, attachmentId: data.attachmentId, conversationId: normalizedId, lang: data.language });
 
       // Generic attachment-updated delta : same rationale as the
@@ -2280,22 +2588,6 @@ export class MeeshySocketIOManager {
       SERVER_EVENTS.AUDIO_TRANSLATIONS_COMPLETED,
       '✅'
     );
-  }
-
-  private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
-    const lang = targetLanguage.toLowerCase();
-    const targetUsers: SocketUser[] = [];
-
-    for (const [, user] of this.connectedUsers) {
-      const matches =
-        user.resolvedLanguages.includes(lang) ||
-        user.language.toLowerCase() === lang;
-      if (matches) {
-        targetUsers.push(user);
-      }
-    }
-
-    return targetUsers;
   }
 
   /**
@@ -2368,61 +2660,97 @@ export class MeeshySocketIOManager {
   }
 
   /**
-   * Diffuse une transition de présence (connexion / déconnexion) aux pairs qui
-   * AFFICHENT la pastille de cette personne.
+   * Les `User.id` des ADMIN/BIGBOSS, derrière un cache mémoire à TTL.
    *
-   * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen, et le
-   * blocage bidirectionnel — même règle que `GET /users/presence`.
+   * La requête est bornée par le nombre d'administrateurs — jamais par la
+   * population connectée de la passerelle, la contrainte de coût que ce chemin
+   * porte depuis qu'il a cessé d'énumérer `connectedUsers`. Le cache évite de
+   * la rejouer à chaque connexion et déconnexion ; sa TTL est celle de
+   * l'instantané de présence, pour la même raison : le retard maximal d'une
+   * promotion de rôle sur ce canal est de 60 s, et la porte REST
+   * (`PresenceVisibilityService`) n'a, elle, aucun retard.
    *
-   * **L'audience est faite de PERSONNES, pas de fils ouverts.** La pastille de
-   * présence se regarde très majoritairement HORS du fil : liste de
-   * conversations, écrans de contacts, en-têtes (`PRESENCE_DOT_CLASS` web,
-   * `PresenceState.dotColor` iOS). `conversation:<id>` ne pouvait donc pas être
-   * la seule adresse de l'événement, parce qu'un client la QUITTE en refermant
-   * le fil tout en restant connecté — `conversation:leave` →
-   * `ConversationHandler.handleConversationLeave` → `socket.leave(...)`, émis par
-   * `ConversationSocketHandler.deinit` (iOS) dès qu'une vue de conversation
-   * disparaît. La room que `AuthHandler` avait jointe à la connexion pour
-   * ATTEINDRE ce participant était démontée par un geste qui ne voulait dire que
-   * « je ne regarde plus ce fil ».
+   * Une room `user:<id>` sans socket vivant ne coûte rien à `.to()` : un
+   * administrateur déconnecté n'est pas un destinataire à filtrer.
+   */
+  private async _globalAdminUserIds(): Promise<string[]> {
+    const cached = this.globalAdminIdsCache;
+    if (cached && Date.now() - cached.cachedAt < this.GLOBAL_ADMIN_IDS_CACHE_TTL_MS) {
+      return cached.ids;
+    }
+    const rows = await this.prisma.user.findMany({
+      where: { role: { in: PRESENCE_PRIVILEGED_ROLES } },
+      select: { id: true },
+    });
+    const ids = rows.map(row => row.id);
+    this.globalAdminIdsCache = { ids, cachedAt: Date.now() };
+    return ids;
+  }
+
+  /**
+   * Diffuse une transition de présence (connexion / déconnexion) aux personnes
+   * AUTORISÉES à la connaître.
    *
-   * Ce que ça coûtait, et pourquoi rien ne le rattrapait : `user:status` ne se
-   * répète pas, il ne marque que des TRANSITIONS. Un pair qui se connecte
-   * pendant que je suis ailleurs n'émettra plus rien tant qu'il reste en ligne,
-   * et `presence:snapshot` — le seul autre porteur de cette information — n'est
-   * envoyé qu'à l'authentification. Côté iOS, `PresenceManager` ne sonde jamais
-   * le réseau : son minuteur de 30 s ne fait que recalculer la DÉCROISSANCE
-   * 1/3/5 min depuis `lastActiveAt`. Une transition manquée ne se rattrapait
-   * donc pas d'elle-même : le pair restait éteint sur ma liste jusqu'à la
-   * prochaine reconnexion de socket — et ce, précisément pour les conversations
-   * que j'avais ouvertes, c'est-à-dire les miennes.
+   * Directive produit (2026-08-25), gravée dans
+   * `packages/shared/utils/presence-visibility.ts` : « Lorsqu'on n'est pas ami
+   * (aucune connexion) : je veux supprimer ma présence en ligne […] et personne
+   * ne doit savoir ma dernière connexion sur l'application si on n'est pas ami.
+   * Les utilisateurs avec le rôle ADMIN et supérieur peuvent constamment avoir
+   * l'état de présence. »
    *
-   * Le remède suit la doctrine déjà écrite dans `emitToConversationParticipants` :
-   * un participant s'adresse par `userId ?? id`, dans une room personnelle que
-   * `AuthHandler` joint à la connexion et que RIEN ne fait quitter. Les rooms de
-   * conversation restent en tête de chaîne — l'élargissement n'est qu'ADDITIF,
-   * il ne retire aucun destinataire d'aujourd'hui — et le chaînage `.to()`
-   * garantit au plus une copie par socket, y compris pour celui qui siège dans
-   * les deux.
+   * L'audience est donc faite de RELATIONS, et d'elles seules :
    *
-   * Le prix est une requête `participant` de plus par transition, sur un chemin
-   * de connexion / déconnexion (jamais par message). C'est la MÊME requête que
-   * `_emitPresenceSnapshot` fait déjà à la connexion ; elle n'est délibérément
-   * pas mutualisée avec son cache, dont le TTL rendrait la LIVRAISON de la
-   * présence tributaire de la fraîcheur d'un cache cosmétique.
+   *  - **inscrit** — les rooms personnelles (`ROOMS.user`) de ses AMIS acceptés,
+   *    des ADMIN/BIGBOSS, et la sienne (ses autres appareils). **Aucune room de
+   *    conversation.** Partager un fil n'est pas une relation : c'était pourtant
+   *    l'adresse qui, jusqu'à ce lot, livrait chaque transition à tout
+   *    co-participant inconnu — la fuite exacte que la directive nomme.
+   *  - **invité de lien (anonyme)** — il n'a pas de compte, donc pas d'ami :
+   *    ADMIN/BIGBOSS seulement. Son nom d'affichage ne part plus dans le fil.
+   *
+   * Deux charges au plus, jamais une seule aplatie : `showOnlineStatus = false`
+   * doit taire la présence pour les AMIS sans la taire pour les administrateurs
+   * ni pour les autres appareils du sujet, que la loi partagée met en FULL. Le
+   * `return` précoce sur cette préférence coupait les trois d'un coup. La
+   * décision « quelle charge pour quel sous-ensemble » vit dans
+   * `presenceStatusEmissions` (`./presence-audience`), pure et testée à part —
+   * `lastActiveAt` y tombe avec `showLastSeen` pour les amis seulement, car il
+   * voyage À CÔTÉ d'`isOnline` et un gate posé sur le seul drapeau le
+   * laisserait partir.
+   *
+   * Un sujet DÉSACTIVÉ n'émet AUCUNE charge — pas même la privilégiée. La loi
+   * partagée (`resolvePresenceVisibility`) tranche `targetIsDeactivated` AVANT
+   * le privilège, et `resolveForTargets` l'applique déjà à l'instantané comme à
+   * la porte REST ; ce canal la rejoint (revue F6, 2026-08-26). Le point
+   * compte parce que la désactivation (`user-management.service.updateStatus`)
+   * pose `deactivatedAt` SANS révoquer les sockets : un compte désactivé encore
+   * connecté continuait d'annoncer chacune de ses transitions à son éventail.
+   * `Participant` n'a pas de `deactivatedAt` — l'invité de lien n'est pas
+   * concerné.
+   *
+   * Le blocage bidirectionnel reste appliqué à TOUTES les charges, y compris
+   * celle des administrateurs : `.except(socketIds)` — un socket.id est aussi
+   * une room Socket.IO. C'est un cran plus strict que
+   * `PresenceVisibilityService.resolveForTargets`, qui rend FULL à un admin
+   * bloqué ; sur un canal de DIFFUSION, la décision de l'utilisateur de couper
+   * le lien l'emporte, et c'est le comportement qui existait déjà ici.
+   *
+   * Coût par transition, la contrainte de ce chemin : une lecture de
+   * préférences (cachée), une lecture d'utilisateur, UNE requête `FriendRequest`
+   * bornée par le nombre d'amis, la liste d'administrateurs (cachée 60 s) et la
+   * relation de blocage (bornée par elle-même). Rien n'y est dimensionné par la
+   * population connectée. Les deux requêtes `participant` qu'exigeait
+   * l'adressage par conversation ont disparu avec lui.
    */
   private async _broadcastUserStatus(userId: string, isOnline: boolean, isAnonymous: boolean): Promise<void> {
     try {
-      // PRIVACY: Vérifier les préférences de confidentialité de l'utilisateur
-      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, isAnonymous);
+      const adminIds = await this._globalAdminUserIds();
 
-      // Si l'utilisateur a désactivé showOnlineStatus, ne pas broadcaster son statut
-      if (!privacyPrefs.showOnlineStatus) {
-        return;
-      }
-
-      // Récupérer les informations de l'utilisateur pour le broadcast
       if (isAnonymous) {
+        // Aucun ami possible, donc aucune audience hors administrateurs : sans
+        // eux, la lecture du participant elle-même n'a plus de destinataire.
+        if (adminIds.length === 0) return;
+
         // userId is participantId for anonymous
         const participant = await this.prisma.participant.findUnique({
           where: { id: userId },
@@ -2430,117 +2758,102 @@ export class MeeshySocketIOManager {
             id: true,
             displayName: true,
             nickname: true,
-            lastActiveAt: true,
-            conversationId: true
-          }
-        });
-
-        if (participant) {
-          const displayName = participant.nickname || participant.displayName;
-
-          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
-          const lastActiveAt = privacyPrefs.showLastSeen ? participant.lastActiveAt : null;
-
-          // L'invité de lien partagé n'a QU'UNE conversation : « la room
-          // refermée » y vaut la totalité de sa présence, là où un inscrit n'en
-          // perdrait qu'une sur N. Le chemin à 1 objet n'est pas le cas facile,
-          // c'est celui qu'aucune redondance n'absorbe — d'où le même
-          // élargissement qu'à la porte inscrite, et non un raccourci.
-          const peers = await this.prisma.participant.findMany({
-            where: { conversationId: participant.conversationId, isActive: true },
-            select: { id: true, userId: true },
-          });
-          emitToConversationParticipants({
-            io: this.io,
-            conversationId: participant.conversationId,
-            participants: peers,
-            event: SERVER_EVENTS.USER_STATUS,
-            payload: {
-              userId: participant.id,
-              username: displayName,
-              isOnline,
-              lastActiveAt
-            },
-          });
-
-        }
-      } else {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            firstName: true,
-            lastName: true,
             lastActiveAt: true
           }
         });
+        if (!participant) return;
 
-        if (user) {
-          const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
-
-          // PRIVACY: Ne pas envoyer lastActiveAt si showLastSeen est désactivé
-          const lastActiveAt = privacyPrefs.showLastSeen ? user.lastActiveAt : null;
-
-          // Find all conversations this user participates in
-          const participantRows = await this.prisma.participant.findMany({
-            where: { userId: user.id, isActive: true },
-            select: { conversationId: true }
+        // Les préférences ne sont pas lues : le seul sous-ensemble servi est
+        // celui que la loi partagée met en FULL, où elles ne s'appliquent pas.
+        for (const emission of presenceStatusEmissions({
+          subjectId: participant.id,
+          isAnonymous: true,
+          friendIds: [],
+          adminIds,
+          lastActiveAt: participant.lastActiveAt,
+          showOnlineStatus: true,
+          showLastSeen: true,
+        })) {
+          this.io.to(emission.rooms).emit(SERVER_EVENTS.USER_STATUS, {
+            userId: participant.id,
+            username: participant.nickname || participant.displayName,
+            isOnline,
+            lastActiveAt: emission.lastActiveAt
           });
-
-          // Un seul emit pour toute l'audience (chaînage `.to()`), et une
-          // audience faite de personnes : les rooms de conversation amorcent la
-          // chaîne — aucun destinataire d'aujourd'hui n'est retiré — puis
-          // `participantUserRooms` y ajoute la room personnelle de chaque
-          // participant, seule adresse qui survive à la fermeture d'un fil.
-          const conversationIds = participantRows.map(p => p.conversationId);
-          const conversationRooms = conversationIds.map(id => ROOMS.conversation(id));
-          const peers = conversationIds.length > 0
-            ? await this.prisma.participant.findMany({
-                where: { conversationId: { in: conversationIds }, isActive: true },
-                select: { id: true, userId: true },
-              })
-            : [];
-          const rooms = participantUserRooms(peers, conversationRooms);
-          if (rooms.length > 0) {
-            // PRIVACY: exclure les sockets des viewers en relation de blocage
-            // bidirectionnel avec ce user — même règle que GET /users/presence
-            // (PresenceVisibilityService). Un socket.id est aussi une room
-            // Socket.IO (auto-join), donc .except(socketId) l'exclut du
-            // broadcast même s'il est par ailleurs membre de `rooms`.
-            //
-            // La relation de blocage est résolue SANS liste de candidats. La
-            // version précédente passait `connectedUsers.keys()` — toute la
-            // population connectée de la gateway — en candidats, si bien qu'une
-            // seule transition de présence portait un `$in` dimensionné par le
-            // serveur entier. Or ce chemin s'exécute à CHAQUE connexion, chaque
-            // déconnexion, et pour chaque user que le balayage de maintenance
-            // passe hors ligne d'un coup : le coût d'une connexion croissait
-            // avec le nombre de personnes déjà connectées.
-            //
-            // Le résultat est le MÊME : un id en relation de blocage qui n'a
-            // aucun socket vivant n'apporte rien à `.except()`, exactement ce
-            // que le pré-filtre par `connectedUsers` retirait. `userSockets` est
-            // vidé à la déconnexion (`AuthHandler.handleDisconnection`), donc
-            // l'intersection se fait ici, en mémoire, au lieu d'en base.
-            const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
-            const blockedSocketIds = [...blockedUserIds].flatMap(
-              id => [...(this.userSockets.get(id) ?? [])],
-            );
-
-            const emitter = blockedSocketIds.length > 0
-              ? this.io.to(rooms).except(blockedSocketIds)
-              : this.io.to(rooms);
-            emitter.emit(SERVER_EVENTS.USER_STATUS, {
-              userId: user.id,
-              username: displayName,
-              isOnline,
-              lastActiveAt
-            });
-          }
-
         }
+        return;
+      }
+
+      // PRIVACY: les préférences gouvernent le sous-ensemble AMIS, pas la
+      // totalité de l'éventail — d'où l'absence de `return` précoce ici.
+      const privacyPrefs = await this.privacyPreferencesService.getPreferences(userId, false);
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          lastActiveAt: true,
+          deactivatedAt: true
+        }
+      });
+      if (!user) return;
+      // Un compte DÉSACTIVÉ n'a de présence pour personne : la loi partagée
+      // rend HIDDEN sur `targetIsDeactivated` AVANT le privilège, donc ni les
+      // amis, ni les ADMIN, ni ses autres appareils ne reçoivent la transition.
+      if (user.deactivatedAt) return;
+
+      // La requête d'amitiés n'est même pas lancée quand elle ne peut servir
+      // personne : `showOnlineStatus = false` retire tout le sous-ensemble AMIS.
+      const friendIds = privacyPrefs.showOnlineStatus
+        ? [...await this.presenceVisibilityService.acceptedFriendIds(user.id)]
+        : [];
+
+      const emissions = presenceStatusEmissions({
+        subjectId: user.id,
+        isAnonymous: false,
+        friendIds,
+        adminIds,
+        lastActiveAt: user.lastActiveAt,
+        showOnlineStatus: privacyPrefs.showOnlineStatus,
+        showLastSeen: privacyPrefs.showLastSeen,
+      });
+      if (emissions.length === 0) return;
+
+      const displayName = user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+
+      // PRIVACY: exclure les sockets des viewers en relation de blocage
+      // bidirectionnel avec ce user. Un socket.id est aussi une room Socket.IO
+      // (auto-join), donc .except(socketId) l'exclut du broadcast même s'il est
+      // par ailleurs membre de `rooms`.
+      //
+      // La relation de blocage est résolue SANS liste de candidats. La version
+      // d'avant passait `connectedUsers.keys()` — toute la population connectée
+      // de la gateway — en candidats, si bien qu'une seule transition de
+      // présence portait un `$in` dimensionné par le serveur entier.
+      //
+      // Le résultat est le MÊME : un id en relation de blocage qui n'a aucun
+      // socket vivant n'apporte rien à `.except()`. `userSockets` est vidé à la
+      // déconnexion (`AuthHandler.handleDisconnection`), donc l'intersection se
+      // fait ici, en mémoire, au lieu d'en base.
+      const blockedUserIds = await getBlockRelatedUserIds(this.prisma, user.id);
+      const blockedSocketIds = [...blockedUserIds].flatMap(
+        id => [...(this.userSockets.get(id) ?? [])],
+      );
+
+      for (const emission of emissions) {
+        const emitter = blockedSocketIds.length > 0
+          ? this.io.to(emission.rooms).except(blockedSocketIds)
+          : this.io.to(emission.rooms);
+        emitter.emit(SERVER_EVENTS.USER_STATUS, {
+          userId: user.id,
+          username: displayName,
+          isOnline,
+          lastActiveAt: emission.lastActiveAt
+        });
       }
     } catch (error) {
       logger.error('❌ [STATUS] Erreur lors du broadcast du statut', error);
@@ -2591,84 +2904,62 @@ export class MeeshySocketIOManager {
       // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
       // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
       const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      // Charge utile `message:new` : les champs DÉRIVÉS DE LA LIGNE MESSAGE
+      // viennent de `buildMessageNewPayload`, la source unique partagée avec le
+      // transport socket (`MessageHandler._buildMessagePayload`). Ce chemin-ci
+      // en portait une copie manuscrite qui avait perdu quatre familles de
+      // champs — l'enveloppe E2EE, le plafond de vue-unique, la provenance d'un
+      // transfert et la réponse à un post — soit exactement celles des messages
+      // qu'il est SEUL à porter côté iOS (`socketFirstEligible` envoie par REST
+      // toute pièce jointe, tout DM chiffré, toute vue-unique, tout éphémère,
+      // tout message à effets). Cf. l'en-tête de `messageNewPayload.ts`.
+      //
+      // `originalContent` et `metadata` restent propres à ce transport :
+      //   - `originalContent` n'est PAS une colonne — il duplique `content` sur
+      //     le fil, et le web le lit en second (`content || originalContent`).
+      //     L'ajouter au chemin socket doublerait le poids texte du chemin le
+      //     plus chaud du service pour un alias hérité ; le retirer d'ici est un
+      //     RETRAIT, qui demande d'abord de relever ses consommateurs web.
+      //   - `metadata` est l'enveloppe brute d'où le chemin socket HISSE ce dont
+      //     les clients ont besoin (`location`, `trackingLinks`, `postReplyTo`).
+      //     iOS y lit encore `callSummary` et `joinNotice`, deux familles de
+      //     messages système que seul ce transport-ci produit.
       const messagePayload = {
-        id: message.id,
-        conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
-        senderId: resolvedSenderId,
-        content: message.content,
-        originalLanguage: message.originalLanguage || 'fr',
-        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
-        messageType: (message.messageType || 'text') as MessageType,
-        messageSource: message.messageSource || undefined,
-        metadata: message.metadata || undefined,
-        isEdited: Boolean(message.isEdited),
-        deletedAt: message.deletedAt || undefined,
-        isBlurred: Boolean(message.isBlurred),
-        isViewOnce: Boolean(message.isViewOnce),
-        effectFlags: (message as unknown as Record<string, unknown>)['effectFlags'] ?? 0,
-        expiresAt: message.expiresAt || undefined,
-        createdAt: message.createdAt || new Date(),
-        updatedAt: message.updatedAt || new Date(),
-        validatedMentions: message.validatedMentions ?? [],
-        // Phase 4 §6.2 — le `clientMessageId` doit voyager jusqu'aux appareils
-        // de l'EXPÉDITEUR, et à eux seuls. Il est retiré du payload des pairs
-        // par `stripClientMessageId` juste avant l'émission (même helper, même
-        // règle que le chemin socket et que les routes de lien). Sans lui, la
-        // ligne optimiste ne peut être promue que par la réponse HTTP — voir le
-        // commentaire du split d'émission plus bas.
-        clientMessageId: (message as unknown as Record<string, unknown>)['clientMessageId'] || undefined,
-        translations: messageTranslations,
-        sender: senderParticipant ? {
-          id: senderParticipant.id,
-          displayName: senderParticipant.nickname || senderParticipant.displayName,
-          avatar: senderParticipant.avatar || senderParticipant.user?.avatar,
-          type: senderParticipant.type,
-          userId: senderParticipant.userId,
-          // Auteur sans compte : le pseudo `ano_…` sert de handle — sans lui,
-          // la bulle temps réel affichait un « @ » vide. Le REST sert en plus
-          // le nom donné au formulaire (le profil de session n'est pas chargé
-          // sur ce chemin).
-          username: senderParticipant.user?.username
-            ?? (senderParticipant.type === 'anonymous' ? senderParticipant.displayName : undefined),
-          firstName: senderParticipant.user?.firstName || '',
-          lastName: senderParticipant.user?.lastName || '',
-        } : undefined,
-        attachments: message.attachments ?? [],
-        replyToId: message.replyToId || undefined,
-        // DUPLICATION CONNUE — pas unifiée avec MessageHandler._buildMessagePayload
-        // (services/gateway/src/socketio/handlers/MessageHandler.ts, champ
-        // `replyTo`) : ce bloc RECONSTRUIT et APLATIT le sender (username/
-        // firstName/lastName remontés depuis `sender.user`), alors que
-        // `_buildMessagePayload` fait un passthrough BRUT de `message.replyTo`
-        // (sender imbriqué, non aplati). Les deux formes de fil sont donc
-        // DÉLIBÉRÉMENT différentes aujourd'hui (chemin socket `message:send`
-        // vs chemin REST/agent de ce fichier) — les fusionner changerait la
-        // forme du payload consommée par un client sans certitude sur lequel
-        // des deux client iOS/web dépend. D'où le commentaire plutôt que la
-        // fusion demandée : **tout champ ajouté ici sur `replyTo` (dont
-        // `location`) doit être répliqué à la main dans `_buildMessagePayload`**,
-        // et inversement — c'est la 3e fois que cette duplication cause un
-        // bug de parité (cf. `location` ci-dessous).
-        replyTo: message.replyTo ? hoistLocationOnto({
-          id: message.replyTo.id,
+        ...buildMessageNewPayload(message, {
           conversationId: normalizedId,
-          senderId: message.replyTo.senderId || undefined,
-          content: message.replyTo.content,
-          originalLanguage: message.replyTo.originalLanguage || 'fr',
-          messageType: (message.replyTo.messageType || 'text') as MessageType,
-          createdAt: message.replyTo.createdAt || new Date(),
-          metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
-          sender: message.replyTo.sender ? {
-            id: message.replyTo.sender.id,
-            displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
-            avatar: message.replyTo.sender.avatar,
-            type: message.replyTo.sender.type,
-            userId: message.replyTo.sender.userId,
-            username: message.replyTo.sender.user?.username,
-            firstName: message.replyTo.sender.user?.firstName || '',
-            lastName: message.replyTo.sender.user?.lastName || '',
-          } : undefined
-        } as unknown as Record<string, unknown>) : undefined,
+          translations: messageTranslations,
+          // Le `select` du chemin REST livre déjà les pièces jointes à la forme
+          // rendue ; le chemin socket, lui, les normalise (cf. la note jumelle).
+          attachments: message.attachments ?? [],
+          // DUPLICATION ASSUMÉE avec MessageHandler._buildMessagePayload : ce
+          // bloc RECONSTRUIT et APLATIT le sender (username/firstName/lastName
+          // remontés depuis `sender.user`), alors que le chemin socket fait un
+          // passthrough BRUT. Les deux formes de fil sont DÉLIBÉRÉMENT
+          // différentes — les fusionner changerait la forme consommée par un
+          // client sans certitude sur lequel des deux en dépend.
+          replyTo: message.replyTo ? hoistLocationOnto({
+            id: message.replyTo.id,
+            conversationId: normalizedId,
+            senderId: message.replyTo.senderId || undefined,
+            content: message.replyTo.content,
+            originalLanguage: message.replyTo.originalLanguage || 'fr',
+            messageType: (message.replyTo.messageType || 'text') as MessageType,
+            createdAt: message.replyTo.createdAt || new Date(),
+            metadata: (message.replyTo as unknown as { metadata?: unknown }).metadata,
+            sender: message.replyTo.sender ? {
+              id: message.replyTo.sender.id,
+              displayName: message.replyTo.sender.nickname || message.replyTo.sender.displayName,
+              avatar: message.replyTo.sender.avatar,
+              type: message.replyTo.sender.type,
+              userId: message.replyTo.sender.userId,
+              username: message.replyTo.sender.user?.username,
+              firstName: message.replyTo.sender.user?.firstName || '',
+              lastName: message.replyTo.sender.user?.lastName || '',
+            } : undefined
+          } as unknown as Record<string, unknown>) : undefined,
+        }),
+        originalContent: (message as unknown as Record<string, unknown>)['originalContent'] as string | undefined || message.content,
+        metadata: message.metadata || undefined,
       };
 
       // Lieu partagé : hisser `metadata.location` en top-level `location`.
@@ -2797,108 +3088,134 @@ export class MeeshySocketIOManager {
         const senderId = message.senderId;
         if (senderId) {
           // Une seule requête : superset (id + userId + joinedAt) pour les deux signaux
-          const allParticipants = await this.prisma.participant.findMany({
-            where: {
-              conversationId: normalizedId,
-              isActive: true
-            },
-            // `user` (préférences de langue) : le Prisme de la ligne de liste,
-            // résolu par destinataire ci-dessous. `joinedAt` reste requis par
-            // `emitUnreadCountsToRecipients`, qui partage cette requête.
-            select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
-          });
-
-          // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
-          // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
-          // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
-          // le bump (resolvedSenderId = User.id du sender, fallback participant id).
-          const updatePayload = {
-            conversationId: normalizedId,
-            updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
-            lastMessageAt: message.createdAt || new Date(),
-            lastMessageId: message.id,
-            // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
-            // avec le reste de la paire, sous le même plafond qu'elle.
-            // Un message position-seule a un `content` vide, donc un aperçu
-            // vide : `location` est alors la SEULE chose dont la ligne de liste
-            // dispose pour composer son libellé. Hissée ici comme les deux
-            // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
-            // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
-            // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
-            // laissait la ligne littéralement blanche.
-            //
-            // Clé ABSENTE quand le message n'a pas de position, jamais présente
-            // à `null` : les clients écrivent `location` AVEC l'identité du
-            // message, donc une clé nulle sur le chemin le plus fréquenté du
-            // service effacerait une épingle correcte à chaque message texte.
-            ...((): Record<string, unknown> => {
-              const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
-              return place ? { location: place } : {};
-            })(),
-            senderId: message.senderId,
-            updatedAt: new Date().toISOString()
-          };
-          // `userId ?? id` (participantUserRoomTargets) : parité avec le chemin
-          // socket de MessageHandler. Un participant sans compte a une room
-          // personnelle nommée d'après son `Participant.id` — la sauter privait un
-          // invité de lien partagé de tout re-tri de sa liste de conversations.
           //
-          // Le Prisme est résolu PAR destinataire, depuis le MÊME `message` qui
-          // alimente `message:new` ci-dessus : les deux événements portent donc
-          // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
-          // arriver derrière pour effacer ce que `message:new` vient d'installer.
-          for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
-            this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
-              ...updatePayload,
-              ...resolveLastMessagePreviewPrism(participant, message)
+          // Dans son PROPRE `try`, et rendue `undefined` — jamais `[]` — quand
+          // elle tombe. Les deux formes se lisent pareil au site d'appel et ne
+          // disent pas la même chose : `[]` affirme « la conversation n'a aucun
+          // participant », `undefined` avoue « je ne sais pas ». La file hors
+          // ligne ci-dessous traite les deux différemment, et c'est la seule des
+          // trois consommatrices dont l'abandon soit DESTRUCTIF (cf. son bloc).
+          let allParticipants: Array<PreviewPrismParticipant & { joinedAt: Date }> | undefined;
+          try {
+            allParticipants = await this.prisma.participant.findMany({
+              where: {
+                conversationId: normalizedId,
+                isActive: true
+              },
+              // `user` (préférences de langue) : le Prisme de la ligne de liste,
+              // résolu par destinataire ci-dessous. `joinedAt` reste requis par
+              // `emitUnreadCountsToRecipients`, qui partage cette requête.
+              select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, joinedAt: true }
             });
+          } catch (err) {
+            logger.warn('participant fetch failed — la file hors ligne fera sa propre requête', { error: err });
           }
 
-          // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
-          // Délégué à l'unité partagée par les trois transports d'envoi : la copie
-          // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
-          // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
-          // La liste déjà chargée lui est passée — pas de seconde requête.
-          const participants = allParticipants.filter((p) => p.id !== senderId);
-
-          await emitUnreadCountsToRecipients({
-            io: this.io,
-            prisma: this.prisma,
-            readStatusService: this.readStatusService,
-            bridgeService: this.bridgeService,
+          // File hors ligne — la TROISIÈME porte de sortie de ce message, et la
+          // seule DURABLE. `message:new` ci-dessus ne sert que les sockets du
+          // salon ; un destinataire déconnecté n'apprend jamais l'existence de
+          // ce message autrement que par le rejeu de `_drainPendingMessages`.
+          //
+          // Elle passe AVANT les deux signaux cosmétiques qui suivent, et c'est
+          // tout l'objet de sa place : elle en était l'AVAL, dans le même `try`,
+          // sous un `catch` qui journalise « non-bloquant ». Un `emit` qui lève
+          // (adaptateur ou encodeur en défaut) annulait alors le rejeu pour TOUS
+          // les absents, en annonçant une perte cosmétique. Même règle qu'à
+          // l'instantané de reconnexion, où le drain est placé HORS du `try`
+          // pour qu'un accroc Mongo cosmétique n'échoue jamais le rejeu.
+          //
+          // `participants` reçoit `undefined` quand le superset est tombé :
+          // l'unité partagée refait alors SA requête, qui ne demande que
+          // `{id, userId}`. Lui passer `[]` la ferait enfiler pour personne —
+          // perdre le message parce qu'une préférence de langue est illisible.
+          //
+          // Délègue à l'unité partagée (comme les trois autres transports) : la
+          // copie inline qui vivait ici était le dernier appelant direct de
+          // `deliveryQueue.enqueue` du dépôt, et son `payload as Record<string,
+          // unknown>` le dernier endroit où une charge pouvait être ENFILÉE sous
+          // une forme que le fil ne diffuse pas.
+          await this._enqueueForOfflineParticipants({
             conversationId: normalizedId,
-            senderId,
+            // Les DEUX identités, comme le chemin WS : `message.senderId` porte
+            // un `Participant.id` ici, un `User.id` ailleurs, et les deux
+            // espaces d'ids ne se croisent jamais.
+            actorParticipantId: senderId,
+            actorUserId: senderId,
+            eventType: 'new',
+            messageId: message.id,
+            // Le corps DESTINATAIRE (cid-strippé), identique à l'émission live :
+            // un rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
+            // espace d'ids optimistes dans celui d'un autre utilisateur.
+            payload: broadcastPayload,
             participants: allParticipants,
-            onError: (error) => logger.warn('unread count update failed', { error }),
           });
 
-          const connectedUserIds = new Set(this.getConnectedUsers());
-
-          for (const participant of participants) {
-            const roomTarget = participant.userId || participant.id;
-
-            // 5.3 SCOPE — le filtre SOCKET_LANG_FILTER s'applique au message:new
-            // ONLINE uniquement. L'enqueue offline ci-dessous stocke le payload
-            // complet (multi-traduit), NON filtré par langue. Acceptable car les
-            // DEUX transports d'envoi enqueuent le payload complet offline de façon
-            // identique : le chemin WS `message:send` (MessageHandler.broadcastNewMessage,
-            // qui enqueue son `broadcastPayload` cid-strippé) et ce chemin REST/ZMQ.
-            // Un message ne traverse qu'un seul transport, donc pas de double-enqueue.
-            // Le drain (`_drainPendingMessages`) EST câblé : il s'exécute sur
-            // connexion (post-auth, post-room-join) — voir l'appel ~ligne 521.
-            // Le destinataire reconnecté rejoue donc ces messages au prochain login.
-            // Le rejeu porte le corps DESTINATAIRE (cid-strippé), identique à
-            // l'émission live — même règle que `enqueueOfflineLinkMessage` : un
-            // rejeu portant le `clientMessageId` de l'auteur ferait fuiter son
-            // espace d'ids optimistes dans celui d'un autre utilisateur.
-            if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
-              this.deliveryQueue.enqueue(roomTarget, {
-                messageId: message.id,
-                conversationId: normalizedId,
-                payload: broadcastPayload as Record<string, unknown>,
-                enqueuedAt: new Date().toISOString(),
-              }).catch(err => logger.warn('Failed to enqueue message for offline user', { userId: roomTarget, error: err }));
+          if (allParticipants) {
+            // CONVERSATION_UPDATED → room user de CHAQUE participant (re-tri liste).
+            // `updatedBy` est requis par ConversationUpdatedEventData (this.io est typé,
+            // contrairement à MessageHandler) : c'est l'auteur du message qui déclenche
+            // le bump (resolvedSenderId = User.id du sender, fallback participant id).
+            const updatePayload = {
+              conversationId: normalizedId,
+              updatedBy: { id: resolvedSenderId ?? message.senderId ?? '' },
+              // Chaîne ISO — voir `toIsoOrNull`. `|| new Date()` conservé : ce
+              // chemin sert aussi des messages fabriqués (agent, traducteur) dont
+              // le `createdAt` peut manquer, et la ligne de liste a besoin d'un
+              // rang pour se trier.
+              lastMessageAt: toIsoOrNull(message.createdAt || new Date()),
+              lastMessageId: message.id,
+              // `lastMessagePreview` sort de `resolveLastMessagePreviewPrism`
+              // avec le reste de la paire, sous le même plafond qu'elle.
+              // Un message position-seule a un `content` vide, donc un aperçu
+              // vide : `location` est alors la SEULE chose dont la ligne de liste
+              // dispose pour composer son libellé. Hissée ici comme les deux
+              // autres émetteurs de ce payload le font déjà (`MessageHandler.ts`,
+              // `emitConversationPreviewUpdate.ts`) — sans elle, ce chemin-ci
+              // (REST/ZMQ, celui par lequel passe justement l'envoi d'un lieu)
+              // laissait la ligne littéralement blanche.
+              //
+              // Clé ABSENTE quand le message n'a pas de position, jamais présente
+              // à `null` : les clients écrivent `location` AVEC l'identité du
+              // message, donc une clé nulle sur le chemin le plus fréquenté du
+              // service effacerait une épingle correcte à chaque message texte.
+              ...((): Record<string, unknown> => {
+                const place = sharedPlaceFromMetadata((message as { metadata?: unknown }).metadata);
+                return place ? { location: place } : {};
+              })(),
+              senderId: message.senderId,
+              updatedAt: new Date().toISOString()
+            };
+            // `userId ?? id` (participantUserRoomTargets) : parité avec le chemin
+            // socket de MessageHandler. Un participant sans compte a une room
+            // personnelle nommée d'après son `Participant.id` — la sauter privait un
+            // invité de lien partagé de tout re-tri de sa liste de conversations.
+            //
+            // Le Prisme est résolu PAR destinataire, depuis le MÊME `message` qui
+            // alimente `message:new` ci-dessus : les deux événements portent donc
+            // toujours la même carte, et le `conversation:updated` jumeau ne peut pas
+            // arriver derrière pour effacer ce que `message:new` vient d'installer.
+            for (const { room, participant } of participantUserRoomTargets(allParticipants)) {
+              this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
+                ...updatePayload,
+                ...resolveLastMessagePreviewPrism(participant, message)
+              });
             }
+
+            // Badge non-lu → destinataires uniquement (exclure l'expéditeur in-process).
+            // Délégué à l'unité partagée par les trois transports d'envoi : la copie
+            // inline qui vivait ici n'excluait l'expéditeur que par `Participant.id`,
+            // correct sur CE chemin mais faux pour tout appelant portant un `User.id`.
+            // La liste déjà chargée lui est passée — pas de seconde requête.
+            await emitUnreadCountsToRecipients({
+              io: this.io,
+              prisma: this.prisma,
+              readStatusService: this.readStatusService,
+              bridgeService: this.bridgeService,
+              conversationId: normalizedId,
+              senderId,
+              participants: allParticipants,
+              onError: (error) => logger.warn('unread count update failed', { error }),
+            });
           }
         }
       } catch (syncError) {
@@ -2937,7 +3254,7 @@ export class MeeshySocketIOManager {
   public refreshUserResolvedLanguages(
     userId: string,
     prefs: {
-      systemLanguage: string;
+      systemLanguage?: string | null;
       regionalLanguage?: string | null;
       customDestinationLanguage?: string | null;
       deviceLocale?: string | null;
@@ -3008,21 +3325,23 @@ export class MeeshySocketIOManager {
       }
 
       const senderParticipant = message.sender;
-      const resolvedSenderId = senderParticipant?.userId || senderParticipant?.user?.id || message.senderId || undefined;
+      const resolvedSenderId = resolveWireSenderId(message);
       const updatedAt = message.updatedAt || new Date();
+      // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
+      // partagée avec le transport socket (`MessageHandler.handleMessageEdit`),
+      // qui en omettait trois champs requis — cf.
+      // `socketio/messageEditedPayload.ts`. Ce producteur-ci les servait déjà
+      // tous : le passage à l'unité ne change RIEN de ce qu'il émet, il
+      // supprime la possibilité qu'un quatrième transport diverge.
       const editedPayload = {
-        id: message.id,
-        conversationId: normalizedId,
-        senderId: resolvedSenderId,
-        content: message.content,
-        originalLanguage: message.originalLanguage || 'fr',
-        messageType: (message.messageType || 'text') as MessageType,
+        ...buildMessageEditedCore(message, {
+          conversationId: normalizedId,
+          content: message.content,
+          isEdited: Boolean(message.isEdited),
+          editedAt: updatedAt,
+        }),
         messageSource: message.messageSource || undefined,
         metadata: message.metadata ?? {},
-        isEdited: Boolean(message.isEdited),
-        editedAt: updatedAt,
-        createdAt: message.createdAt || new Date(),
-        updatedAt,
         translations: messageTranslations,
         sender: senderParticipant ? {
           id: senderParticipant.id,
@@ -3049,7 +3368,7 @@ export class MeeshySocketIOManager {
         actorUserId: null,
         eventType: 'edited',
         messageId: message.id,
-        payload: editedPayload as unknown as Record<string, unknown>,
+        payload: editedPayload,
       });
     } catch (error) {
       logger.error('broadcast message:edited (call) failed', error);
@@ -3397,7 +3716,7 @@ export class MeeshySocketIOManager {
           eventType: 'reaction-added',
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
-          payload: updateEvent as unknown as Record<string, unknown>,
+          payload: updateEvent,
         });
 
         const authorParticipant = message.senderId

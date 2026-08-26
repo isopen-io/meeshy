@@ -38,6 +38,11 @@ public protocol SoundPreviewing: AnyObject {
 /// conséquence sur la consommation de données.
 @MainActor
 public final class SoundPreviewPlayer: SoundPreviewing {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let player = AudioPlayerManager()
     private let finishedSubject = PassthroughSubject<Void, Never>()
     private var cancellables = Set<AnyCancellable>()

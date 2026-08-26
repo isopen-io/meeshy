@@ -124,6 +124,11 @@ extension CallState {
 
 @MainActor
 final class CallManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = CallManager()
 
     // MARK: - Published State
@@ -310,10 +315,17 @@ final class CallManager: ObservableObject {
     /// capture locale (`TranscriptionCapturePolicy`). JAMAIS gâté par la
     /// visibilité du panneau local. Reset au teardown d'appel.
     @Published private(set) var remoteTranscriptionActive = false
-    /// Outbound video auto-suspended by the graceful-degradation survival layer
-    /// (sustained poor link). Distinct from `isVideoEnabled` (the user's camera
-    /// intent, which stays true): the user still WANTS video, the network can't
-    /// carry it. Mirrors `videoSurvivalController.isVideoSuspended` for the UI.
+    /// Outbound video FROZEN by the graceful-degradation survival layer
+    /// (sustained poor link): the encoder is pinned to its floor at 2 fps, the
+    /// TRACK and the CAPTURE are intact — nothing is detached, nothing is
+    /// renegotiated, and the peer is told nothing (L6-1/L6-2). Distinct from
+    /// `isVideoEnabled` (the user's camera intent, which stays true): the user
+    /// still WANTS video, the network can't carry it at full rate. Kept under
+    /// its historical name because it drives the same local affordance
+    /// (`CallView.videoAutoPaused`); it is NOT a "the camera is released"
+    /// signal, and must never be read as one — `isVideoSuspendedByHold` /
+    /// `isVideoSuspendedByCaptureInterruption` are the two flags that mean that.
+    /// Mirrors `videoSurvivalController.isVideoSuspended` for the UI.
     @Published private(set) var isVideoSuspended = false
     /// §7.7 — whether the local capture is the front camera. Drives mirroring
     /// in the UI: only the front camera is mirrored (a mirrored back camera
@@ -787,7 +799,18 @@ final class CallManager: ObservableObject {
         self.videoSurvivalController.$isVideoSuspended
             .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] suspended in self?.isVideoSuspended = suspended }
+            .sink { [weak self] suspended in
+                guard let self else { return }
+                self.isVideoSuspended = suspended
+                // Le gel a DEUX propriétaires : le contrôleur (politique) et
+                // WebRTCService (encodeur). `reset()` n'efface que le premier ;
+                // sans ce dégel branché sur le FRONT DESCENDANT, un reset
+                // pendant un gel (toggleVideo, unhold, thermique critique, fin
+                // d'appel) épingle l'encodeur au plancher pour tout le reste de
+                // l'appel, sans affordance ni chemin de reprise. `removeDuplicates()`
+                // en amont ne laisse donc passer que les vraies transitions.
+                if !suspended { self.webRTCService.unfreezeVideoAfterSurvival() }
+            }
             .store(in: &cancellables)
 
         setupSocketListeners()
@@ -915,9 +938,19 @@ final class CallManager: ObservableObject {
         switch reason {
         case .newDeviceAvailable:
             // Headset / Bluetooth connected — clear a stale speaker override.
+            // Same discipline as toggleSpeaker() (§7.8): overrideOutputAudioPort
+            // can throw (e.g. `insufficientPriority` when the just-connected
+            // accessory itself holds route priority), and discarding that failure
+            // here left `isSpeaker` at `false` even when the override never
+            // actually applied — desyncing the speaker-toggle UI from the real
+            // audio route until an unrelated route change or manual toggle
+            // happened to reconcile it.
+            let previousSpeaker = isSpeaker
             isSpeaker = false
-            applySpeakerRoute()
-            Logger.calls.info("Audio route: new device available — isSpeaker = false")
+            if !applySpeakerRoute() {
+                isSpeaker = previousSpeaker
+            }
+            Logger.calls.info("Audio route: new device available — isSpeaker = \(self.isSpeaker)")
         case .oldDeviceUnavailable:
             // Headset / Bluetooth disconnected — iOS routes back to built-in;
             // re-apply the current speaker preference so RTCAudioSession follows.
@@ -1398,12 +1431,6 @@ final class CallManager: ObservableObject {
         }
 
         resetEndedStateForNewCall()
-        lastCallWasOutgoing = false
-        // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
-        // reportNewIncomingCall from the push handler. Reset the flag (a prior
-        // foreground in-app call may have left it false).
-        callUsesCallKit = true
-        ringbackPlayer.shouldSelfActivateSession = false
 
         guard callState == .idle else {
             // Busy: report + immediately end the secondary call. Mirror the
@@ -1432,6 +1459,17 @@ final class CallManager: ObservableObject {
             HapticFeedback.medium()
             return
         }
+
+        // Session flags of the NEW call — written only once the busy branch is
+        // ruled out. Above the guard they also hit the call ALREADY in progress
+        // (a foreground in-app call legitimately runs with callUsesCallKit ==
+        // false), corrupting it from a second ring it never answered.
+        lastCallWasOutgoing = false
+        // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
+        // reportNewIncomingCall from the push handler. Reset the flag (a prior
+        // foreground in-app call may have left it false).
+        callUsesCallKit = true
+        ringbackPlayer.shouldSelfActivateSession = false
 
         // Set state BEFORE reporting to CallKit to avoid race
         currentCallId = callId
@@ -1497,6 +1535,15 @@ final class CallManager: ObservableObject {
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
         startReliabilityMonitor()
+        // Audit fix (calling-stack audit 2026-08-24) — arm the background
+        // observer HERE too, at ring time, mirroring handleIncomingCallNotification
+        // (same fix, other incoming-call entry point). Without it, a VoIP-push
+        // call that backgrounds before being answered has no observer to run
+        // the applyCameraSuspension(false, cause: "foreground") safety net or
+        // notify the peer of the background/foreground transition while still
+        // ringing. Safe to call twice per call: startBackgroundMonitoring()
+        // starts with stopBackgroundMonitoring() to stay idempotent.
+        startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
         // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
@@ -1785,6 +1832,19 @@ final class CallManager: ObservableObject {
         applyNegotiationRole()
         configureAudioSession()
         startReliabilityMonitor()
+        // Audit fix (calling-stack audit 2026-08-24) — arm the background
+        // observer HERE, at ring time, not only from transitionToConnected().
+        // promoteRingingCallToCallKitIfNeeded() is only ever invoked by the
+        // observer startBackgroundMonitoring() registers; gating that
+        // registration on the call already being connected made the whole
+        // promotion path permanently unreachable for the exact case it exists
+        // to cover — a call ringing in-app (CallKit skipped because the app
+        // was foreground) that backgrounds before being answered. Without a
+        // live observer, iOS can suspend the app mid-ring with no lock-screen
+        // call card, silently dropping the inbound call. Safe to call twice
+        // per call (once here, once at connect): startBackgroundMonitoring()
+        // starts with stopBackgroundMonitoring() to stay idempotent.
+        startBackgroundMonitoring()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
         // PARTICIPANT_JOINED while we initialize media in parallel. See
@@ -2596,6 +2656,28 @@ final class CallManager: ObservableObject {
             await previousAnswer?.value
             await previousCameraSwitch?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 158): re-enabling video while CallKit holds the
+            // call (cellular pre-emption) or the OS has suspended capture must NOT
+            // actually acquire the camera / announce "camera active" to the peer —
+            // mirrors the guard `applySurvivalVideoSend` already applies for the
+            // automatic survival-recovery path. Without this, a hold→toggle-off→
+            // toggle-on sequence (a normal double-tap while the CallKit hold banner
+            // is up) called `upgradeToVideo()` unconditionally, starting capture and
+            // renegotiating with the peer while the call is still on hold — exactly
+            // the false "camera active" signal `applyCameraSuspension`'s doc-comment
+            // and `applySurvivalVideoSend`'s guard both exist to prevent.
+            // `isVideoEnabled` (already set to the new intent above) stays the
+            // source of truth: `handleHold`'s unhold branch resumes video
+            // automatically once the suspension lifts, so intent is never lost —
+            // only the actuation is deferred.
+            if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                FeedbackToastManager.shared.showError(
+                    String(localized: "call.video.hold.blocked",
+                           defaultValue: "Vidéo indisponible pendant la mise en attente de l'appel",
+                           bundle: .main)
+                )
+                return
+            }
             // Caméra jamais demandée : sans ce pré-flight, le prompt système
             // surgissait au beau milieu de `upgradeToVideo()` — l'utilisateur
             // voyait la vidéo « s'activer » puis retomber. On tranche avant.
@@ -2604,6 +2686,13 @@ final class CallManager: ObservableObject {
             if target, await MediaPermissionCoordinator.ensureCamera(announcesRefusal: false) == false {
                 guard !Task.isCancelled else { return }
                 self.isVideoEnabled = false
+                // Same reset as the success path below and toggleVideo's own
+                // catch branches: isVideoEnabled = false alone only clears
+                // survival state on the controller's NEXT quality tick, and
+                // handle() no-ops entirely while a suspend/resume transition
+                // is already in flight — user intent (video refused) must win
+                // immediately, not after that transition settles.
+                self.videoSurvivalController.reset()
                 FeedbackToastManager.shared.showError(
                     String(localized: "call.video.permission.denied",
                            defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
@@ -2659,6 +2748,12 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("toggleVideo failed: camera permission denied — prompting settings redirect")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                // Audit finding (Vague 169) — mirrors handleHold's unhold catches
+                // (Vague 167/168) and this same function's success path above:
+                // isVideoEnabled = false alone only clears survival state on the
+                // controller's NEXT quality tick, and handle() no-ops entirely
+                // while a suspend/resume transition is already in flight.
+                self.videoSurvivalController.reset()
                 // Show a tappable error so the user can open Settings to grant
                 // camera access without ending the audio-only call. The toast's
                 // tap action is the primary affordance; the message text says "tap"
@@ -2676,6 +2771,11 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
                 self.isVideoEnabled = false
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                // Same reset as the cameraPermissionDenied catch just above —
+                // any OTHER upgradeToVideo()/downgradeFromVideo() failure disables
+                // video for the rest of the call just as surely, and owes the
+                // survival controller the same immediate clear.
+                self.videoSurvivalController.reset()
                 FeedbackToastManager.shared.showError(String(localized: "call.video.enable.error", defaultValue: "Impossible d'activer la vidéo", bundle: .main))
             }
         }
@@ -2709,6 +2809,24 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 159): mirrors the toggleVideo() guard
+            // (Vague 158). A hold or a capture-interruption has RELEASED the
+            // camera — flipping front/back here would call capturer.startCapture
+            // and silently reacquire it (camera hardware + OS indicator turn
+            // back on) even though the transceiver stays recvOnly and the peer
+            // never sees the switch. Revert the optimistic mirror flag instead
+            // of actuating; `handleHold`'s unhold branch restores the real
+            // camera state once suspension lifts.
+            //
+            // L6-1 — `isVideoSuspended` is deliberately NOT part of this guard
+            // any more: the survival layer FREEZES the encoder, it no longer
+            // stops the capture. Keeping it here made flipping the camera INERT
+            // for a whole degraded episode (a silent revert of the mirror flag),
+            // for a camera that was running the entire time.
+            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                self.isUsingFrontCamera = previousFrontCamera
+                return
+            }
             let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 self.webRTCService.switchCamera { success in
                     continuation.resume(returning: success)
@@ -2763,6 +2881,15 @@ final class CallManager: ObservableObject {
             await previousICERestart?.value
             await previousAnswer?.value
             guard let self, !Task.isCancelled else { return }
+            // Audit finding (Vague 159): same guard as switchCamera() above —
+            // both drive the same capturer through the same OS-level suspension
+            // state. L6-1 — and, for the same reason as its twin, WITHOUT the
+            // survival freeze: a frozen encoder still owns a running camera.
+            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {
+                self.selectedCameraId = previousSelectedCameraId
+                self.isUsingFrontCamera = previousFrontCamera
+                return
+            }
             let success = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 self.webRTCService.switchToCamera(uniqueID: id) { success in
                     continuation.resume(returning: success)
@@ -3479,6 +3606,12 @@ final class CallManager: ObservableObject {
                     self.callUsesCallKit = false
                     self.ringbackPlayer.shouldSelfActivateSession = true
                 } else {
+                    // CallKit now owns ringing (its own `config.ringtoneSound`,
+                    // same "Ringtone.caf" asset). Stop the in-app loop or it
+                    // plays doubled on top of CallKit's, and the self-activated
+                    // AVAudioSession it was holding (`shouldSelfActivateSession`,
+                    // just cleared above) risks blocking CallKit's `didActivate`.
+                    self.ringbackPlayer.stopRingtone()
                     Logger.calls.info("Promoted ringing call to CallKit on background entry")
                 }
             }
@@ -3539,15 +3672,20 @@ final class CallManager: ObservableObject {
     /// • `isVideoEnabled` — ne pas faire de bruit quand la caméra est éteinte
     ///   par choix de l'utilisateur ; toutes les émissions du fichier sont
     ///   gardées ainsi, sinon on désynchronise l'état du pair ;
-    /// • `isVideoSuspended` — le contrôleur de survie a déjà basculé en audio ;
     /// • `isVideoSuspendedByHold` — CallKit tient l'appel en pause (préemption
     ///   cellulaire) : revenir en avant-plan ne lève PAS un hold, donc annoncer
     ///   « caméra active » serait faux.
+    ///
+    /// L6-1 — `isVideoSuspended` (gel réseau) N'EST PLUS une garde ici : le gel
+    /// laisse la capture tourner, donc il ne dit rien sur la vie de la caméra.
+    /// L'y garder faisait taire un VRAI signal caméra (une interruption de
+    /// capture survenant pendant un épisode dégradé) — l'inverse de ce que cette
+    /// porte existe pour faire.
     private func applyCameraSuspension(_ suspended: Bool, cause: StaticString) {
         guard let callId = currentCallId, callState.isActive else { return }
         guard isVideoSuspendedByCaptureInterruption != suspended else { return }
         isVideoSuspendedByCaptureInterruption = suspended
-        guard isVideoEnabled, !isVideoSuspended, !isVideoSuspendedByHold else { return }
+        guard isVideoEnabled, !isVideoSuspendedByHold else { return }
         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: !suspended)
         Logger.calls.info("Camera \(suspended ? "suspended" : "resumed") (\(cause)) — peer notified")
     }
@@ -3628,7 +3766,11 @@ final class CallManager: ObservableObject {
         } else {
             if isVideoSuspendedByHold {
                 isVideoSuspendedByHold = false
-                if isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByCaptureInterruption {
+                // L6-1 — `isVideoSuspended` retiré de cette condition : un gel
+                // réseau ne relâche pas la caméra, donc il ne doit pas empêcher
+                // le unhold de la REPRENDRE. L'y laisser gardait la vidéo noire
+                // jusqu'à la reprise indépendante du contrôleur de survie.
+                if isVideoEnabled && !isVideoSuspendedByCaptureInterruption {
                     // Companion fix: without renegotiating here, unhold only flips
                     // the local track/direction back — the peer's negotiated SDP
                     // state (possibly stuck at recvOnly from a hold-time ICE
@@ -3691,6 +3833,12 @@ final class CallManager: ObservableObject {
                             Logger.calls.error("unhold video recovery failed: \(error.localizedDescription)")
                             self.isVideoEnabled = false
                             self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+                            // Same discipline as the cameraPermissionDenied branch above:
+                            // isVideoEnabled=false alone only resets survival state on its
+                            // NEXT quality tick, and `handle()` no-ops entirely while a
+                            // transition is already in flight — leaving a stale
+                            // isVideoSuspended/isTransitioning behind this generic failure.
+                            self.videoSurvivalController.reset()
                             if let callId = self.currentCallId {
                                 MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
                             }
@@ -4761,20 +4909,43 @@ final class CallManager: ObservableObject {
                 // those events are silently dropped.
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let joined = await MessageSocketManager.shared.emitCallJoinWithAck(callId: callId)
+                    let ackResult = await MessageSocketManager.shared.emitCallJoinWithAckDetailed(callId: callId)
                     guard self.callState.isActive, self.currentCallId == callId else { return }
-                    if !joined {
+                    // Vague 162 — the call already ended server-side during the
+                    // disconnection (lost the race against the gateway's
+                    // DISCONNECT_GRACE_MS window, or ended for another reason
+                    // while we were offline) and the `call:ended` broadcast that
+                    // would normally tell us was itself dropped by the very
+                    // outage this handler exists to recover from. Previously we
+                    // only logged "proceeding anyway" and never transitioned
+                    // `callState` — the app stayed on the active-call screen
+                    // forever, no retry offered, no indication anything ended.
+                    // Route through the canonical remote-end path (same one
+                    // `call:ended`/`call:error CALL_ENDED` use) with the real
+                    // `endReason` so a transient cause (connectionLost/
+                    // heartbeatTimeout) still offers « Réessayer ».
+                    if ackResult.errorCode == "CALL_ENDED" {
+                        Logger.calls.warning("Socket reconnect — call:join rejected, call already ended server-side (callId=\(callId), endReason=\(ackResult.endReason ?? "nil"))")
+                        self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)
+                        return
+                    }
+                    if !ackResult.joined {
                         Logger.calls.warning("Socket reconnect — call:join ACK timed out (callId=\(callId)), proceeding anyway")
                     }
                     self.flushPendingIceCandidates()
                     // Re-sync video state with the peer. The gateway resets the peer's
                     // call:media-toggled view when our socket disconnects; after reconnect
                     // the peer defaults to assuming our camera is on, which is wrong if we
-                    // toggled video off, the survival controller suspended it, or we are
-                    // backgrounded. Compute the effective state from all three sources.
+                    // toggled video off, are on hold, or are backgrounded.
+                    //
+                    // L6-2 — `isVideoSuspended` is deliberately absent: a socket
+                    // reconnect is MOST likely precisely during a survival freeze,
+                    // and folding the freeze in here re-emitted the very
+                    // `media-toggled(video,false)` the actuator stopped sending —
+                    // the peer would destroy the last frame anyway, one layer down.
+                    // Only the two flags that mean "capture really stopped" count.
                     if self.isVideoEnabled {
-                        let effectiveVideoOn = !self.isVideoSuspended
-                            && !self.isVideoSuspendedByCaptureInterruption
+                        let effectiveVideoOn = !self.isVideoSuspendedByCaptureInterruption
                             && !self.isVideoSuspendedByHold
                         MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)
                         Logger.calls.info("Socket reconnect — re-syncing video state to peer (effectiveVideoOn=\(effectiveVideoOn))")
@@ -5239,16 +5410,45 @@ final class CallManager: ObservableObject {
         Self.formatDuration(callDuration)
     }
 
+    /// Ce que VoiceOver ENTEND de la durée d'appel — « 2 minutes 5 secondes ».
+    ///
+    /// Six sites (`CallView` ×5, `FloatingCallPillView`) passaient
+    /// `formattedDuration` à `.accessibilityValue` : le synthétiseur lit
+    /// « 02:05 » comme une HEURE. 206i/210i/211i avaient donné son libellé à
+    /// cette valeur (« Durée de l'appel ») ; le libellé nomme la mesure, il ne
+    /// corrige pas l'orthographe de ce qu'il introduit.
+    var spokenDuration: String {
+        Self.spokenDuration(callDuration)
+    }
+
     /// Pure helper — extracted for unit-testability without touching `callDuration`.
-    nonisolated static func formatDuration(_ duration: TimeInterval) -> String {
-        let total = Int(duration)
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let seconds = total % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, seconds)
-        }
-        return String(format: "%02d:%02d", minutes, seconds)
+    ///
+    /// L'orthographe est celle de l'app Téléphone : minutes remplies à deux
+    /// chiffres sous l'heure (« 02:05 »), heures dès qu'il y en a
+    /// (« 1:05:00 »). Elle diffère volontairement de celle des minuteries média
+    /// (« 2:05 », `DurationClock.minuteSecond`), et c'est le seul appelant du
+    /// dépôt à promouvoir les heures.
+    ///
+    /// `locale` est un paramètre — et non `.current` en dur — pour la raison
+    /// devenue idiomatique depuis 234i : sans elle, une suite jugerait la
+    /// locale du SIMULATEUR, verte en local et rouge en CI.
+    nonisolated static func formatDuration(
+        _ duration: TimeInterval,
+        locale: Locale = .current
+    ) -> String {
+        let total = LocalizedNumber.wholeSeconds(from: duration)
+        return LocalizedNumber.duration(
+            seconds: total,
+            clock: total >= 3600 ? .hourMinuteSecond : .paddedMinuteSecond,
+            locale: locale
+        )
+    }
+
+    nonisolated static func spokenDuration(
+        _ duration: TimeInterval,
+        locale: Locale = .current
+    ) -> String {
+        LocalizedNumber.spokenDuration(seconds: duration, locale: locale)
     }
 }
 
@@ -5848,6 +6048,11 @@ extension CallManager: WebRTCServiceDelegate {
 // MARK: - CallKit Delegate Proxy
 
 private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var manager: CallManager?
 
     func providerDidReset(_ provider: CXProvider) {
@@ -6150,15 +6355,17 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
 // MARK: - VideoSurvivalActuating
 
 extension CallManager: VideoSurvivalActuating {
-    /// Drop outbound video to audio-only (sustained poor link). Mirrors the
-    /// manual `toggleVideo` media path — downgrade + notify peer + renegotiate —
-    /// but deliberately DOES NOT touch `isVideoEnabled`: the user's camera intent
-    /// is preserved so video resumes automatically on recovery.
+    /// FREEZE outbound video (sustained poor link): the encoder drops to its
+    /// floor at 2 fps, so the peer keeps seeing a still image instead of losing
+    /// the picture. Deliberately does NOT touch `isVideoEnabled` (the user's
+    /// camera intent is preserved), NOT the track, NOT the capture session, and
+    /// signals nothing to the peer — see `actuateSurvivalVideoSend`.
     func suspendOutboundVideo() async -> Bool {
         await applySurvivalVideoSend(enabled: false)
     }
 
-    /// Re-acquire the camera and resume sending video once the link has recovered.
+    /// Hand the encoder back to the quality ladder once the link has recovered.
+    /// There is no camera to re-acquire: the freeze never released it.
     func resumeOutboundVideo() async -> Bool {
         await applySurvivalVideoSend(enabled: true)
     }
@@ -6166,17 +6373,21 @@ extension CallManager: VideoSurvivalActuating {
     private func applySurvivalVideoSend(enabled: Bool) async -> Bool {
         // Only act while the user still wants video and we're in an active call.
         guard isVideoEnabled, let callId = currentCallId else { return false }
-        // Do NOT renegotiate during an ICE restart: the SDP exchange is already
-        // in flight, and overlapping it with a survival-controller downgrade or
-        // resume causes SDP glare. The survival controller will re-evaluate once
-        // the call reaches .connected and stats start flowing again.
+        // Do NOT act during an ICE restart: media parameters written against a
+        // sender whose transport is mid-restart are lost with the old encoding,
+        // and the published `isVideoSuspended` would then describe a floor that
+        // is no longer applied. The survival controller re-evaluates once the
+        // call reaches .connected and stats start flowing again.
         if case .reconnecting = callState { return false }
-        // Do NOT resume video if an OS-level suspension is active: a CallKit hold
-        // (cellular pre-emption) or background entry both signal "no camera" to the
-        // peer. A network-quality recovery must not override either of those signals
-        // — the peer would see a false "camera active" even though iOS is either
-        // blocking camera access or has suspended capture for the held call.
-        if enabled && (isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption) { return false }
+        // Do NOT act — in EITHER direction — while an OS-level suspension is
+        // active: a CallKit hold (cellular pre-emption) or a background/capture
+        // interruption has genuinely stopped the capture, `handleHold` already
+        // owns the media transition for that window, and there is no live
+        // encoding to floor or to release. Both directions are blocked, not just
+        // resume: letting a suspend through mid-hold would publish
+        // `isVideoSuspended = true` — the local "video paused" affordance — for
+        // a call whose video is already off for an unrelated, visible reason.
+        if isVideoSuspendedByHold || isVideoSuspendedByCaptureInterruption { return false }
 
         let previousToggle = videoToggleTask
         let previousHold = holdVideoTask
@@ -6203,66 +6414,43 @@ extension CallManager: VideoSurvivalActuating {
             // was queued behind a concurrent manual toggle or CallKit hold.
             guard self.isVideoEnabled, self.currentCallId == callId else { return false }
             if case .reconnecting = self.callState { return false }
-            if enabled && (self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption) { return false }
+            // Mirrors the pre-flight guard above — re-validated because state
+            // may have changed (e.g. a hold started) while this transition
+            // was queued behind a concurrent task.
+            if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption { return false }
             return await self.actuateSurvivalVideoSend(enabled: enabled, callId: callId)
         }
         survivalVideoTask = task
         return await task.value
     }
 
+    /// L6-1/L6-2 — the actuator is an ENCODER floor, not a media transition.
+    /// `freezeVideoForSurvival()` rewrites the video sender's parameters
+    /// (100 kbps · 2 fps · 360p · `.maintainResolution`) and nothing else: the
+    /// capture session keeps running, the track stays attached and the
+    /// transceiver stays `sendRecv`. Consequences, both deliberate:
+    ///
+    /// • nothing to renegotiate — no `createOffer`, no `emitCallOffer`, so a
+    ///   degraded link never risks SDP glare with an in-flight ICE restart;
+    /// • nothing to ANNOUNCE — `call:media-toggled` stays reserved for the three
+    ///   cases where capture really stops (camera button, capture interruption,
+    ///   CallKit hold). Emitting it here made a weak link indistinguishable from
+    ///   a deliberate camera-off, and the peer answered by DESTROYING the last
+    ///   frame in favour of our avatar. It now keeps the last frame; the weak
+    ///   link is surfaced by the quality channel (`call:quality-alert`) when the
+    ///   gateway's own rtt/loss thresholds fire — which is NOT equivalent
+    ///   coverage (a `.poor` tier reached through bandwidth or jitter alone
+    ///   raises no alert), an accepted trade: a frame without a pill beats a
+    ///   false "camera off".
     private func actuateSurvivalVideoSend(enabled: Bool, callId: String) async -> Bool {
-        do {
-            let needsRenegotiation: Bool
-            if enabled {
-                needsRenegotiation = try await webRTCService.upgradeToVideo()
-            } else {
-                needsRenegotiation = await webRTCService.downgradeFromVideo()
-            }
-            hasLocalVideoTrack = webRTCService.hasLocalVideoTrack
-
-            // The upgrade/downgrade above is a suspension point — the call may have
-            // ended while we were awaiting. Re-check before signalling so we never
-            // toggle video or emit a renegotiation offer for a call that is gone.
-            guard currentCallId == callId else {
-                Logger.calls.info("[CALL] survival A/V switch aborted: call ended mid-flight")
-                return false
-            }
-
-            // Tell the peer so it shows our avatar placeholder (suspend) or
-            // restores our video (resume) — a track flip alone never reaches it.
-            MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: enabled)
-
-            if needsRenegotiation,
-               let userId = remoteUserId,
-               let offer = await webRTCService.createOffer(),
-               currentCallId == callId {
-                emitCallOffer(callId: callId, toUserId: userId, isVideo: enabled, sdp: offer)
-                Logger.calls.info("[CALL] survival A/V switch offer sent (video=\(enabled))")
-            }
-            return true
-        } catch WebRTCError.cameraPermissionDenied where enabled {
-            // Camera permission was revoked while the call was live.  The
-            // survival controller would otherwise keep retrying on every
-            // recovery cycle (each returning false → revert → retry next streak).
-            // Permanently disable video to stop the loop: set isVideoEnabled=false
-            // so the survival controller's next tick returns .initial immediately
-            // (it guards on `userWantsVideo`). Then surface the Settings toast.
-            Logger.calls.error("[CALL] survival resume failed: camera permission denied — permanently disabling video")
-            isVideoEnabled = false
-            videoSurvivalController.reset()
-            FeedbackToastManager.shared.showError(
-                String(localized: "call.video.permission.denied",
-                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                       bundle: .main)
-            ) {
-                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                UIApplication.shared.open(url)
-            }
-            return false
-        } catch {
-            Logger.calls.error("survival video \(enabled ? "resume" : "suspend") failed: \(error.localizedDescription)")
-            return false
+        if enabled {
+            webRTCService.unfreezeVideoAfterSurvival()
+        } else {
+            webRTCService.freezeVideoForSurvival()
         }
+        hasLocalVideoTrack = webRTCService.hasLocalVideoTrack
+        Logger.calls.info("[CALL] survival video \(enabled ? "thawed" : "frozen") (callId=\(callId))")
+        return true
     }
 }
 

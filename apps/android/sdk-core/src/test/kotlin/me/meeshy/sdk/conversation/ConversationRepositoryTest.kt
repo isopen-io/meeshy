@@ -12,6 +12,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.JoinAuthenticatedResponse
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.PaginatedParticipant
 import me.meeshy.sdk.model.PaginatedParticipantsPagination
@@ -67,6 +68,8 @@ private abstract class StubConversationApi : ConversationApi {
         ApiResponse<Unit>(success = false)
     override suspend fun banParticipant(id: String, userId: String) =
         ApiResponse<Unit>(success = false)
+    override suspend fun joinViaShareLink(linkId: String) =
+        ApiResponse<JoinAuthenticatedResponse>(success = false)
 }
 
 private class FakeConversationApi(

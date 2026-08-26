@@ -154,12 +154,10 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         400: validationErrorResponseSchema,
         429: {
           description: 'Too many password reset requests',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' },
-            retryAfter: { type: 'number' }
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
           }
         },
         500: errorResponseSchema
@@ -268,13 +266,10 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - invalid token, password mismatch, weak password, or missing 2FA code',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'string',
-              example: 'Invalid or expired reset token'
-            }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', example: 'Invalid or expired reset token' },
           }
         },
         401: errorResponseSchema,
@@ -376,18 +371,20 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - missing token parameter',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
+            ...errorResponseSchema.properties,
             valid: { type: 'boolean', example: false },
-            error: { type: 'string', example: 'Token is required' }
+            error: { type: 'string', example: 'Token is required' },
           }
         },
         500: {
           description: 'Internal server error during token verification',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
+            ...errorResponseSchema.properties,
             valid: { type: 'boolean', example: false },
-            error: { type: 'string', example: 'Error verifying token' }
+            error: { type: 'string', example: 'Error verifying token' },
           }
         }
       },
@@ -504,12 +501,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         },
         429: {
           description: 'Rate limit exceeded',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []
@@ -589,12 +581,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         },
         429: {
           description: 'Rate limit exceeded',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []
@@ -670,12 +657,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         },
         429: {
           description: 'Rate limit exceeded',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []
@@ -741,12 +723,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         },
         429: {
           description: 'Rate limit exceeded - wait before resending',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       },
       security: []

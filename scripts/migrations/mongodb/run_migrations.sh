@@ -103,6 +103,7 @@ MIGRATIONS=(
     "009_partial_index_post_originalRepostOfId.js"
     "010_notification_expiry_index.js"
     "011_user_blocked_user_ids_index.js"
+    "012_backfill_attachment_capturedInApp.js"
 )
 
 # Filter to specific migration if requested

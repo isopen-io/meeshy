@@ -50,6 +50,29 @@ public struct LentilleSticker: View {
                 .font(MeeshyFont.relative(LentilleMetrics.Sticker.size, weight: LentilleMetrics.Sticker.weight))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
             Spacer(minLength: 0)
+            // D5 — `isExpanded` était DÉCLARÉ, STOCKÉ, et jamais lu : replier
+            // une section rendait deux bandes rigoureusement identiques
+            // empilées (mesuré : `MEESHY TEAM` y=199.3 puis `CETTE SEMAINE`
+            // y=228.7, aucun rang entre), que rien ne distinguait d'un défaut
+            // de rendu. Le groupeur n'était pas en cause — les deux chemins
+            // filtrent bien les buckets vides ; c'est le sticker qui taisait
+            // ce qu'il savait déjà.
+            //
+            // Conditionné à `onToggle != nil` : une section calculée n'est pas
+            // repliable, un chevron y mentirait sur ce que le toucher fait.
+            //
+            // `chevron.forward` et non `chevron.right` : le symbole directionnel
+            // suit le sens de lecture, donc il s'inverse de lui-même en RTL —
+            // là où `.right` resterait à droite en arabe.
+            if onToggle != nil {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.forward")
+                    .font(MeeshyFont.relative(LentilleMetrics.Sticker.size, weight: LentilleMetrics.Sticker.weight))
+                    .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                    // Décoratif : l'état est porté par le bouton lui-même, et
+                    // VoiceOver annoncerait sinon « chevron » entre le titre de
+                    // section et son action.
+                    .accessibilityHidden(true)
+            }
         }
         .padding(.vertical, LentilleMetrics.Sticker.paddingVertical)
         .padding(.horizontal, LentilleMetrics.Sticker.paddingHorizontal)

@@ -1,6 +1,11 @@
-import type { Server } from 'socket.io';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { SequenceService } from '../../services/SequenceService';
+import {
+  emitServerEvent,
+  type ServerEmitIO,
+  type ServerEventName,
+  type ServerEventPayload,
+} from '../serverEmit';
 
 /**
  * SyncEngine unifié (spec §5+§7.5, sous-tâche A2) — émission Socket.IO
@@ -28,9 +33,13 @@ import type { SequenceService } from '../../services/SequenceService';
  * LOCKSTEP avec les clients : le `_seq` est per-user GLOBAL, pas per-event. Un
  * client qui n'observe qu'un SOUS-ENSEMBLE des events estampillés voit un trou
  * à chaque event non observé. Étendre la liste des appelants ci-dessous oblige
- * donc à étendre l'observation dans le MÊME train de release, sur les DEUX
- * clients qui la portent : iOS (`SyncSeqTracker.observe`, MessageSocketManager)
- * et web (`observeSyncSeq`, `notification-socketio.singleton`).
+ * donc à étendre l'observation dans le MÊME train de release, sur les TROIS
+ * clients qui la portent : iOS (`SyncSeqTracker.observe`, MessageSocketManager),
+ * web (`observeSyncSeq`, `notification-socketio.singleton`) et Android
+ * (`SyncSeqTracker.observe`, `sdk-core/.../socket/MessageSocketManager.kt` —
+ * câblé au cycle 108 ; avant ça Android jetait le champ et n'avait AUCUNE
+ * détection de trou exacte, pendant que le contrat partagé affirmait le
+ * contraire).
  *
  * Ordering (SyncEngine A2, fix ordering) : `nextSeq` renvoie des valeurs
  * distinctes et strictement croissantes DANS L'ORDRE D'APPEL, mais deux appels
@@ -59,12 +68,12 @@ const userEmitChains = new Map<string, Promise<void>>();
 
 export const DEFAULT_SEQ_TIMEOUT_MS = 2000;
 
-export function emitWithSeq(
-  io: Server,
+export function emitWithSeq<E extends ServerEventName>(
+  io: ServerEmitIO,
   sequenceService: SequenceService,
   userId: string,
-  event: string,
-  payload: Record<string, unknown>,
+  event: E,
+  payload: ServerEventPayload<E>,
   timeoutMs: number = DEFAULT_SEQ_TIMEOUT_MS,
 ): Promise<void> {
   const previous = userEmitChains.get(userId) ?? Promise.resolve();
@@ -77,25 +86,43 @@ export function emitWithSeq(
   userEmitChains.set(userId, next);
   // Éviter la croissance non bornée de la Map : on retire la queue une fois
   // drainée, sauf si un appel plus récent l'a déjà remplacée.
-  void next.finally(() => {
-    if (userEmitChains.get(userId) === next) {
-      userEmitChains.delete(userId);
-    }
-  });
+  //
+  // Le `.catch` final n'est PAS décoratif. `.finally` ADOPTE le sort de `next` :
+  // la promesse qu'il rend rejette quand `next` rejette, et cette promesse-ci
+  // est DÉTACHÉE par le `void`. Un appelant qui garde consciencieusement le
+  // `next` qu'on lui rend ne couvre donc pas cette branche dérivée — elle
+  // rejette sans écouteur, ce que Node compte comme `unhandledRejection`
+  // (CLAUDE.md § « `void p` exige TOUJOURS `p.catch(...)` », Leçon 230). La
+  // cause est réelle et pas hypothétique : `emitEnriched` finit par
+  // `io.to(...).emit(...)`, qui lève quand l'adaptateur ou l'encodeur est en
+  // défaut. Le nettoyage de la Map est le SEUL travail dû ici ; l'erreur, elle,
+  // appartient à l'appelant, qui la reçoit par le `next` rendu.
+  void next
+    .finally(() => {
+      if (userEmitChains.get(userId) === next) {
+        userEmitChains.delete(userId);
+      }
+    })
+    .catch(() => { /* le rejet est celui de `next` — déjà rendu à l'appelant */ });
   return next;
 }
 
-async function emitEnriched(
-  io: Server,
+async function emitEnriched<E extends ServerEventName>(
+  io: ServerEmitIO,
   sequenceService: SequenceService,
   userId: string,
-  event: string,
-  payload: Record<string, unknown>,
+  event: E,
+  payload: ServerEventPayload<E>,
   timeoutMs: number,
 ): Promise<void> {
   const seq = await allocateSeq(sequenceService, userId, timeoutMs);
+  // `_seq` est DÉCLARÉ au contrat depuis le cycle 105 : l'enrichissement rend
+  // donc `ServerEventPayload<E> & { _seq: number }`, assignable à
+  // `ServerEventPayload<E>` sans aucune assertion. Tant que ce paramètre valait
+  // `Record<string, unknown>`, le champ voyageait chez les trois clients sans
+  // qu'aucun contrat n'en parle.
   const enriched = seq === undefined ? payload : { ...payload, _seq: seq };
-  io.to(ROOMS.user(userId)).emit(event, enriched);
+  emitServerEvent(io.to(ROOMS.user(userId)), event, enriched);
 }
 
 /**

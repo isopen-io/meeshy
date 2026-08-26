@@ -137,10 +137,10 @@ jest.mock('../../../services/PrivacyPreferencesService', () => ({
     shouldShowReadReceipts: (...args: any[]) => mockShouldShowReadReceipts(...args),
   })),
 }));
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
   }),
 }));
 jest.mock('../../../services/messaging/MessagingService', () => ({
@@ -449,7 +449,7 @@ beforeEach(() => {
   mockMarkMessagesAsReceived.mockResolvedValue(undefined);
   mockGetLatestMessageSummary.mockResolvedValue({});
   mockShouldShowReadReceipts.mockResolvedValue(false);
-  mockResolvePrefsOnly.mockResolvedValue(new Map());
+  mockResolveForTargets.mockResolvedValue(new Map());
   mockHandleMessage.mockResolvedValue({ success: true, data: { id: 'msg-1', conversationId: 'resolved-conv-id' } });
 
   prisma = makePrisma();
@@ -759,7 +759,10 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].senderId).toBe(USER_ID);
   });
 
-  it('serves sender presence when showOnlineStatus is visible', async () => {
+  it('sert la présence de l’expéditeur quand la loi l’accorde (soi / ami / ADMIN+)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([
+      [USER_ID, { showOnline: true, showLastSeenTimestamp: true }],
+    ]));
     const msg = makeMessage({
       sender: {
         id: PART_ID,
@@ -781,8 +784,8 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].sender.lastActiveAt).not.toBeNull();
   });
 
-  it('masks sender presence when showOnlineStatus is hidden', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([
+  it('masque la présence de l’expéditeur quand la loi la refuse (co-participant non-ami)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([
       [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
     ]));
     const msg = makeMessage({
@@ -1718,8 +1721,8 @@ describe('GET /conversations/:id/pinned-messages', () => {
     expect(body.data[0].sender.username).toBe('alice');
   });
 
-  it('masks pinned sender presence when showOnlineStatus is hidden', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([
+  it('masque la présence de l’expéditeur épinglé quand la loi la refuse (co-participant non-ami)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([
       [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
     ]));
     const pinnedMsg = {
@@ -1977,6 +1980,9 @@ describe('GET /conversations/:id/messages/search', () => {
   });
 
   it('returns content matches with transformed sender', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([
+      [USER_ID, { showOnline: true, showLastSeenTimestamp: true }],
+    ]));
     const matchMsg = {
       id: MSG_ID,
       conversationId: CONV_ID,
@@ -2010,8 +2016,8 @@ describe('GET /conversations/:id/messages/search', () => {
     expect(body.cursorPagination.hasMore).toBe(false);
   });
 
-  it('masks search result sender presence when showOnlineStatus is hidden', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([
+  it('masque la présence de l’expéditeur d’un résultat de recherche quand la loi la refuse (co-participant non-ami)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([
       [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
     ]));
     const matchMsg = {
@@ -2107,6 +2113,9 @@ describe('GET /conversations/:id/messages/search', () => {
 
   it('hasMore when merged results exceed searchLimit', async () => {
     const limit = 5;
+    // Search delegates its page size to validatePagination (mocked here); make
+    // the SSOT report the page size this scenario needs.
+    mockValidatePagination.mockReturnValue({ offset: 0, limit });
     // Build limit+1 content matches to trigger hasMore
     const msgs = Array.from({ length: limit + 1 }, (_, i) => ({
       id: `msg-${i}`,
@@ -2127,6 +2136,34 @@ describe('GET /conversations/:id/messages/search', () => {
     const body = reply._body;
     expect(body.cursorPagination.hasMore).toBe(true);
     expect(body.data.length).toBeLessThanOrEqual(limit);
+  });
+
+  // Regression: the search page size used to be parsed inline as
+  // `Math.min(parseInt(limitStr) || 20, 50)`, which reintroduced the exact bug
+  // `validatePagination` was written to kill — `limit=0` falsy-coerced to a full
+  // page (20 instead of the floor of 1), and `limit=-5` flowed through as a
+  // NEGATIVE Prisma `take`. The querystring schema declares `limit` as a bare
+  // string (no numeric min/max), so nothing upstream clamps it. Route the page
+  // size through the SSOT helper instead.
+  it('routes the search page size through validatePagination (maxLimit 50)', async () => {
+    prisma.message.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello', { limit: '0' }), reply);
+    expect(mockValidatePagination).toHaveBeenCalledWith('0', '0', { maxLimit: 50 });
+  });
+
+  it('uses the limit validatePagination returns for take, hasMore and cursorPagination', async () => {
+    mockValidatePagination.mockReturnValue({ offset: 0, limit: 7 });
+    prisma.message.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    const reply = makeReply();
+    await getHandler_()(makeSearchReq('hello', { limit: '999' }), reply);
+    // Content search reads one extra row (limit + 1) to measure hasMore.
+    expect(prisma.message.findMany.mock.calls[0][0].take).toBe(8);
+    expect(reply._body.cursorPagination.limit).toBe(7);
   });
 
   it('error path → 500', async () => {
@@ -4016,5 +4053,222 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     for (const options of mockAuthMiddlewareOptions) {
       expect(options).toEqual({ requireAuth: true, allowAnonymous: true });
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Confidentialité de la présence (2026-08-25) — les trois charges servies PAR
+// DESTINATAIRE (liste, épinglés, recherche) projettent l'expéditeur pour le
+// viewer : la route remet le viewer TEL QUEL à la loi (jamais les seules
+// préférences), applique ce qu'elle rend, et refuse par défaut ce qu'elle tait.
+// La loi elle-même (ami / soi / ADMIN+ ; MODERATOR = utilisateur ordinaire) est
+// témoignée dans PresenceVisibilityService.test.ts ; ici on prouve que la route
+// ne la contourne ni ne la réécrit.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+const PRESENCE_FULL = { showOnline: true, showLastSeenTimestamp: true };
+const SENDER_USER_ID = '507f1f77bcf86cd799439055';
+const SENDER_LAST_ACTIVE = new Date('2026-08-25T10:00:00.000Z');
+
+const registeredViewer = (role: string) =>
+  makeAuthContext({ type: 'user', registeredUser: { id: USER_ID, role } });
+const anonymousViewer = () => ({
+  type: 'anonymous',
+  isAuthenticated: true,
+  isAnonymous: true,
+  userId: 'anon-session',
+  participantId: PART_ID,
+  registeredUser: undefined,
+  hasFullAccess: false,
+});
+
+const registeredSender = () => ({
+  id: 'p-sender',
+  userId: SENDER_USER_ID,
+  displayName: 'Bob',
+  avatar: null,
+  type: 'member',
+  role: 'USER',
+  language: 'fr',
+  user: { id: SENDER_USER_ID, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true, lastActiveAt: SENDER_LAST_ACTIVE },
+});
+const accountlessSender = () => ({
+  id: 'p-anon',
+  userId: null,
+  displayName: 'ano_Bob',
+  avatar: null,
+  type: 'anonymous',
+  role: 'member',
+  language: 'fr',
+  user: null,
+  anonymousSession: null,
+  isOnline: true,
+  lastActiveAt: SENDER_LAST_ACTIVE,
+});
+
+describe('GET /conversations/:id/messages — présence de l’expéditeur projetée par destinataire', () => {
+  const handler = () => fastify._routes['GET']['/conversations/:id/messages'];
+  const serve = async (sender: any, authContext: any) => {
+    prisma.message.findMany.mockResolvedValue([makeMessage({ sender })]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await handler()(makeRequest({ authContext }), reply);
+    return reply._body.data[0].sender;
+  };
+
+  it('remet le viewer (userId + rôle) tel quel à la loi — un MODERATOR n’est pas promu par la route, et son refus est appliqué', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_HIDDEN]]));
+    const sender = await serve(registeredSender(), registeredViewer('MODERATOR'));
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'MODERATOR' }, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(false);
+    expect(sender.lastActiveAt).toBeNull();
+  });
+
+  it('viewer anonyme : la loi reçoit `null`, la présence est masquée', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_HIDDEN]]));
+    const sender = await serve(registeredSender(), anonymousViewer());
+    expect(mockResolveForTargets).toHaveBeenCalledWith(null, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(false);
+    expect(sender.lastActiveAt).toBeNull();
+  });
+
+  it('ami / ADMIN+ : la loi accorde, la route sert isOnline ET lastActiveAt', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_FULL]]));
+    const sender = await serve(registeredSender(), registeredViewer('ADMIN'));
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'ADMIN' }, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(true);
+    expect(sender.lastActiveAt).toEqual(SENDER_LAST_ACTIVE);
+  });
+
+  it('entrée ABSENTE pour un inscrit : refus par défaut (régime strict), jamais la valeur brute', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+    const sender = await serve(registeredSender(), registeredViewer('USER'));
+    expect(sender.isOnline).toBe(false);
+    expect(sender.lastActiveAt).toBeNull();
+  });
+
+  // Le repli d'une entrée absente est UN site (`presenceMissingEntryPolicy`,
+  // presence-gate) partagé avec les routes de conversation : un ADMIN y est
+  // servi, pour un inscrit non résolu comme pour un expéditeur sans compte.
+  it('entrée ABSENTE pour un inscrit : révélée à un ADMIN, comme un expéditeur sans compte', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+    const sender = await serve(registeredSender(), registeredViewer('ADMIN'));
+    expect(sender.isOnline).toBe(true);
+    expect(sender.lastActiveAt).toEqual(SENDER_LAST_ACTIVE);
+  });
+
+  it('expéditeur SANS COMPTE (jamais dans la carte) : masqué pour un utilisateur ordinaire', async () => {
+    const sender = await serve(accountlessSender(), registeredViewer('USER'));
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'USER' }, []);
+    expect(sender.isOnline).toBe(false);
+    expect(sender.lastActiveAt).toBeNull();
+  });
+
+  it('expéditeur SANS COMPTE : servi à un ADMIN, qui voit toujours', async () => {
+    const sender = await serve(accountlessSender(), registeredViewer('ADMIN'));
+    expect(sender.isOnline).toBe(true);
+    expect(sender.lastActiveAt).toEqual(SENDER_LAST_ACTIVE);
+  });
+});
+
+describe('GET /conversations/:id/pinned-messages — présence de l’expéditeur projetée par destinataire', () => {
+  const handler = () => fastify._routes['GET']['/conversations/:id/pinned-messages'];
+  const pinnedOf = (sender: any) => ({
+    id: MSG_ID, conversationId: CONV_ID, senderId: sender.id,
+    content: 'pinned', originalLanguage: 'fr', messageType: 'text',
+    editedAt: null, deletedAt: null, replyToId: null,
+    forwardedFromId: null, forwardedFromConversationId: null,
+    pinnedAt: new Date(), pinnedBy: USER_ID,
+    isViewOnce: false, isBlurred: false, expiresAt: null, effectFlags: 0,
+    translations: null, createdAt: new Date(), updatedAt: new Date(),
+    sender, attachments: [], _count: { reactions: 0, replies: 0 },
+  });
+  const serve = async (sender: any, authContext: any) => {
+    prisma.message.findMany.mockResolvedValue([pinnedOf(sender)]);
+    prisma.message.count.mockResolvedValue(1);
+    const reply = makeReply();
+    await handler()(makeRequest({ authContext }), reply);
+    return reply._body.data[0].sender;
+  };
+
+  it('remet le viewer tel quel à la loi et applique son refus (MODERATOR = utilisateur ordinaire)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_HIDDEN]]));
+    const sender = await serve(registeredSender(), registeredViewer('MODERATOR'));
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'MODERATOR' }, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(false);
+  });
+
+  it('viewer anonyme : la loi reçoit `null`, la présence est masquée', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_HIDDEN]]));
+    const sender = await serve(registeredSender(), anonymousViewer());
+    expect(mockResolveForTargets).toHaveBeenCalledWith(null, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(false);
+  });
+
+  it('ami / ADMIN+ : la loi accorde, isOnline est servi', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_FULL]]));
+    const sender = await serve(registeredSender(), registeredViewer('ADMIN'));
+    expect(sender.isOnline).toBe(true);
+  });
+
+  it('entrée ABSENTE pour un inscrit : refus par défaut (régime strict)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+    const sender = await serve(registeredSender(), registeredViewer('USER'));
+    expect(sender.isOnline).toBe(false);
+  });
+
+  it('ne charge pas lastActiveAt, et le gate ne fabrique pas la clé', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_FULL]]));
+    const sender = await serve(registeredSender(), registeredViewer('ADMIN'));
+    expect(sender).not.toHaveProperty('lastActiveAt');
+  });
+});
+
+describe('GET /conversations/:id/messages/search — présence de l’expéditeur projetée par destinataire', () => {
+  const handler = () => fastify._routes['GET']['/conversations/:id/messages/search'];
+  const matchOf = (sender: any) => ({
+    id: MSG_ID, conversationId: CONV_ID, content: 'hello world', originalLanguage: 'fr',
+    messageType: 'text', translations: null, createdAt: new Date(), senderId: sender.id, sender,
+  });
+  const serve = async (sender: any, authContext: any) => {
+    prisma.message.findMany
+      .mockResolvedValueOnce([matchOf(sender)])
+      .mockResolvedValueOnce([]);
+    const reply = makeReply();
+    await handler()(makeRequest({ authContext, query: { q: 'hello' } }), reply);
+    return reply._body.data[0].sender;
+  };
+
+  it('remet le viewer tel quel à la loi et applique son refus (MODERATOR = utilisateur ordinaire)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_HIDDEN]]));
+    const sender = await serve(registeredSender(), registeredViewer('MODERATOR'));
+    expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: USER_ID, role: 'MODERATOR' }, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(false);
+  });
+
+  it('viewer anonyme : la loi reçoit `null`, la présence est masquée', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_HIDDEN]]));
+    const sender = await serve(registeredSender(), anonymousViewer());
+    expect(mockResolveForTargets).toHaveBeenCalledWith(null, [SENDER_USER_ID]);
+    expect(sender.isOnline).toBe(false);
+  });
+
+  it('ami / ADMIN+ : la loi accorde, isOnline est servi', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_FULL]]));
+    const sender = await serve(registeredSender(), registeredViewer('ADMIN'));
+    expect(sender.isOnline).toBe(true);
+  });
+
+  it('entrée ABSENTE pour un inscrit : refus par défaut (régime strict)', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map());
+    const sender = await serve(registeredSender(), registeredViewer('USER'));
+    expect(sender.isOnline).toBe(false);
+  });
+
+  it('ne charge pas lastActiveAt, et le gate ne fabrique pas la clé', async () => {
+    mockResolveForTargets.mockResolvedValue(new Map([[SENDER_USER_ID, PRESENCE_FULL]]));
+    const sender = await serve(registeredSender(), registeredViewer('ADMIN'));
+    expect(sender).not.toHaveProperty('lastActiveAt');
   });
 });

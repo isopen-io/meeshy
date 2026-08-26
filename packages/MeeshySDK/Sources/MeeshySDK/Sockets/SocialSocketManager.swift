@@ -382,7 +382,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// R2 — feed re-sync trigger; FeedViewModel observes this to backfill
     /// posts/reactions missed while the social socket was down.
     public let didReconnect = PassthroughSubject<Void, Never>()
-    private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
 
     // Cached formatters — ISO8601DateFormatter is expensive to allocate.
@@ -417,11 +416,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
         return d
-    }
-
-    deinit {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
     }
 
     private init() {
@@ -543,6 +537,8 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
             .sessionDelegate(CertificatePinningDelegate()),
+            // BW-IOS-01 — `permessage-deflate` (voir `MessageSocketManager.connect()`).
+            .compress,
         ])
 
         socket = manager?.defaultSocket
@@ -552,14 +548,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     /// Transport-only teardown (R1 — sibling of MessageSocketManager.suspendTransport).
-    /// Drops the socket + heartbeat so a stale `isConnected == true` cannot fool
+    /// Drops the socket so a stale `isConnected == true` cannot fool
     /// the resume path, but PRESERVES `hadPreviousConnection` so the next
     /// `.connect` is recognised as a reconnect (fires `didReconnect` → feed/social
     /// re-sync). Contrast `disconnect()` (logout/cold reset) which also clears it.
     private func suspendTransport() {
         reconnectTask?.cancel()
         reconnectTask = nil
-        stopHeartbeat()
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -580,7 +575,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     // MARK: - Background lifecycle
 
-    /// Stops the heartbeat and tears down the socket explicitly so the
+    /// Tears the socket down explicitly so the
     /// resume path cannot be fooled by a stale `isConnected == true`
     /// flag. iOS suspension kills the WebSocket silently; without an
     /// explicit teardown here, `resumeFromBackground()` would guard on
@@ -646,20 +641,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
         }
         return wasReconnect
-    }
-
-    // MARK: - Heartbeat
-
-    private func startHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            self?.socket?.emit("heartbeat")
-        }
-    }
-
-    private func stopHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
     }
 
     // MARK: - Client Events
@@ -932,7 +913,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 self.isConnected = true
                 self.connectionState = .connected
             }
-            self.startHeartbeat()
+            // BW-IOS-07 — AUCUN battement applicatif ici, delibere. Le pong
+            // ENGINE (25 s) rafraichit deja la presence de cette socket, plus
+            // souvent que les 30 s retirees ; le `heartbeat` NU qui vivait ici
+            // n'avait ni `clientTime` (donc aucun RTT calculable) ni ecouteur
+            // d'ack — doublon exact du battement web supprime au cycle 78. Le
+            // seul battement applicatif iOS est celui de
+            // `MessageSocketManager`, qui porte `clientTime`.
             self.subscribeFeed()
             // Re-join des post rooms après (re)connexion : le gateway a oublié nos
             // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
@@ -949,7 +936,6 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         socket.on(clientEvent: .disconnect) { [weak self] _, _ in
             guard let self else { return }
-            self.stopHeartbeat()
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {

@@ -6,6 +6,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.JoinAuthenticatedResponse
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
@@ -70,6 +71,13 @@ interface ConversationApi {
 
     @POST("conversations")
     suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
+
+    // Empty-body POST (no @Body — like markRead): the gateway derives the joiner
+    // from the JWT. Idempotent server-side (routes/conversations/sharing.ts
+    // resolveConversationEntry): an existing member gets the same canonical
+    // conversationId as a fresh join, so callers never pre-check membership.
+    @POST("conversations/join/{linkId}")
+    suspend fun joinViaShareLink(@Path("linkId") linkId: String): ApiResponse<JoinAuthenticatedResponse>
 
     // POST, jamais PATCH : le gateway n'enregistre ce chemin qu'en POST
     // (routes/message-read-status.ts /mark-as-read + alias /read). Le PATCH

@@ -22,6 +22,12 @@ import {
   type ForwardTarget,
 } from '@/lib/forward-target-merge';
 import { generateClientMessageId } from '@/utils/client-message-id';
+import { postsService } from '@/services/posts.service';
+import {
+  publicationTargetsFor,
+  publicationNeedsCaptureConfirmation,
+  type PublicationTarget,
+} from '@meeshy/shared/utils/forward-to-publication';
 import { getConversationNameOnly } from './conversation-item/conversation-utils';
 import { resolveOtherDirectParticipantUser } from './lentille/lentille-row-utils';
 import type { Conversation, Message } from '@meeshy/shared/types';
@@ -327,6 +333,26 @@ export function ForwardMessageModal({
         );
         const ok = result?.success ?? false;
         if (ok) clientMessageIds.delete(cidKey);
+
+        // Le mot part APRÈS, et seulement si le transfert a abouti : l'envoyer
+        // sur un transfert échoué laisserait « regarde ça » seul dans un fil,
+        // sans le message qu'il commente. Il voyage comme un message PROPRE —
+        // aucun `forwardedFromId` — parce que `forwardedFromId` désigne un
+        // message d'origine dont le texte est celui de l'original ; réécrire ce
+        // texte ferait mentir l'aperçu de source servi aux clients.
+        const trimmedNote = noteRef.current.trim();
+        if (ok && trimmedNote) {
+          await meeshySocketIOService.sendMessage(
+            conversationId,
+            trimmedNote,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            generateClientMessageId(),
+          );
+        }
         model.finishSend(rowId, ok, ok ? undefined : t('forward.failed', 'Échec du transfert'));
         if (ok && !hasToastedRef.current) {
           hasToastedRef.current = true;
@@ -392,6 +418,56 @@ export function ForwardMessageModal({
     bump();
   }, []);
 
+  // La PREMIÈRE pièce jointe décide : le fil rend un média par publication, et
+  // une feuille qui proposerait « publier » sur un lot hétérogène mentirait sur
+  // ce qui partirait réellement.
+  const primaryAttachment = message.attachments?.[0];
+  const publicationTargets = publicationTargetsFor(primaryAttachment?.mimeType);
+
+  const [pendingCapture, setPendingCapture] = useState<PublicationTarget | null>(null);
+
+  const publish = useCallback(
+    async (target: PublicationTarget) => {
+      if (!primaryAttachment) return;
+      try {
+        await postsService.publishAttachment({
+          attachmentId: primaryAttachment.id,
+          target,
+          content: noteRef.current.trim() || undefined,
+          capturedInApp: primaryAttachment.capturedInApp || undefined,
+        });
+        toast.success(t('forward.published', 'Publié'));
+        onClose();
+      } catch {
+        toast.error(t('forward.publish-failed', 'La publication a échoué'));
+      }
+    },
+    [primaryAttachment, onClose, t],
+  );
+
+  const handlePublishTap = useCallback(
+    (target: PublicationTarget) => {
+      // Publier une capture est irréversible du point de vue de qui l'a prise :
+      // une photo sortie de la caméra n'a encore été vue par personne. On
+      // demande donc, une fois, avant d'ouvrir le média à un fil entier.
+      if (publicationNeedsCaptureConfirmation({ capturedInApp: !!primaryAttachment?.capturedInApp, target })) {
+        setPendingCapture(target);
+        return;
+      }
+      void publish(target);
+    },
+    [primaryAttachment, publish],
+  );
+
+  const [note, setNote] = useState('');
+  // Lu par `transmit` sans le faire dépendre de la frappe : une dépendance sur
+  // `note` recréerait le callback à chaque caractère, et avec lui toute la liste
+  // de cibles qui le porte.
+  const noteRef = useRef('');
+  useEffect(() => {
+    noteRef.current = note;
+  }, [note]);
+
   const selectedCount = modelRef.current.selectedIds().length;
 
   return (
@@ -408,6 +484,7 @@ export function ForwardMessageModal({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              data-testid="forward-search"
               placeholder={t('forward.search', 'Rechercher une conversation...')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -500,6 +577,76 @@ export function ForwardMessageModal({
               {isBrowsing && <div data-testid="forward-load-more-sentinel" ref={sentinelRef} />}
             </div>
           </div>
+        </div>
+
+        {publicationTargets.length > 0 && (
+          <div className="pt-2 border-t">
+            <p className="text-xs text-muted-foreground mb-1.5 px-1">
+              {t('forward.publish-section', 'Publier')}
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {publicationTargets.map((target) => (
+                <Button
+                  key={target}
+                  variant="outline"
+                  size="sm"
+                  data-testid={`forward-publish-${target.toLowerCase()}`}
+                  onClick={() => handlePublishTap(target)}
+                >
+                  {target === 'STORY'
+                    ? t('forward.publish-story', 'Ma story')
+                    : target === 'REEL'
+                      ? t('forward.publish-reel', 'Nouveau réel')
+                      : t('forward.publish-post', 'Nouveau post')}
+                </Button>
+              ))}
+            </div>
+
+            {pendingCapture && (
+              <div data-testid="forward-publish-capture-warning" className="mt-2 rounded-lg border p-2.5">
+                <p className="text-xs mb-2">
+                  {t(
+                    'forward.publish-capture-warning',
+                    "Ce média vient d'être capturé par l'application. Le publier le rendra visible au-delà de cette conversation.",
+                  )}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    data-testid="forward-publish-confirm"
+                    onClick={() => {
+                      const target = pendingCapture;
+                      setPendingCapture(null);
+                      void publish(target);
+                    }}
+                  >
+                    {t('forward.publish-confirm', 'Publier')}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    data-testid="forward-publish-cancel"
+                    onClick={() => setPendingCapture(null)}
+                  >
+                    {t('forward.publish-cancel', 'Annuler')}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Le mot d'accompagnement, au plus près du geste d'envoi — il vaut pour
+            TOUTES les cibles retenues, comme la feuille de partage des
+            applications de référence. */}
+        <div className="pt-2">
+          <Input
+            data-testid="forward-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={t('forward.note', 'Ajouter un message…')}
+            aria-label={t('forward.note', 'Ajouter un message…')}
+          />
         </div>
 
         <DialogFooter>

@@ -110,9 +110,15 @@ final class LentilleSceneActivityTests: XCTestCase {
         XCTAssertTrue(perspective.contains("@EnvironmentObject private var scene: LentilleSceneActivity"))
         XCTAssertTrue(perspective.contains("level: level, reduceMotion: reduceMotion)"),
                       "La pose de rangée est fondue par le niveau de scène.")
-        let card = try normalized("Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift")
-        XCTAssertTrue(card.contains(".opacity(scene.level)"),
-                      "La carte de focus n'existe que pendant le défilement : son opacité EST le niveau.")
+        // 2026-08-23 — la carte de focus a été DISSOUTE : la magnification
+        // vit dans la rangée. Le niveau de scène garde exactement le même
+        // rôle, au même endroit dans la chaîne : c'est lui qui décide que la
+        // magnification n'existe que pendant le défilement. Ce témoin atteste
+        // le NOUVEAU porteur plutôt que de disparaître avec l'ancien.
+        let gate = try normalized("Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift")
+        XCTAssertTrue(gate.contains("@ObservedObject var scene: LentilleSceneActivity"))
+        XCTAssertTrue(gate.contains("scene.level > 0 && election.electedId == conversationId"),
+                      "La magnification n'existe que pendant le défilement : le niveau de scène la porte.")
     }
 
     func test_quickActions_areTheListTail_andTheEmptyState_behindTheFlag() throws {

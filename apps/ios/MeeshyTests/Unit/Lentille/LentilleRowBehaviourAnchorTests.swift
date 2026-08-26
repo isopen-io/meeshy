@@ -52,8 +52,8 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         try source(at: "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift")
     }
 
-    private func focusCardSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift")
+    private func magnificationSource() throws -> String {
+        try source(at: "Meeshy/Features/Main/Lentille/Mode/LentilleMagnification.swift")
     }
 
     private func providersSource() throws -> String {
@@ -209,6 +209,34 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
+    /// **AMENDEMENT L06 (lot 2, 2026-08-22).** Le premier volet de L06 (« le
+    /// badge rouge 99+ … supprimé, remplacé par un point accent 8 px ») est
+    /// RENVERSÉ par une décision produit : la pastille rouge CHIFFRÉE
+    /// revient sur le rang plat, à la place exacte du glyphe outbox retiré
+    /// (voir L09 ci-dessous), et c'est le point accent de 8 px qui disparaît
+    /// — il portait la même donnée (`unreadCount > 0`) à quelques points de
+    /// la pastille. Le SECOND volet de L06 (« le timestamp rouge sur non-lu
+    /// est supprimé, l'heure reste tertiaire ») reste INTACT : c'est le
+    /// témoin ci-dessus, inchangé.
+    ///
+    /// `behaviour-matrix.json` L06 a été amendé dans le même lot (le texte
+    /// normatif porte désormais l'amendement daté) : sans cela, la matrice
+    /// affirmerait le contraire de ce que la peau rend.
+    func test_L06_amended_countedUnreadBadgeIsBackAndTheEightPointDotIsGone() throws {
+        let code = normalizedCode(try rowSource())
+        XCTAssertTrue(
+            code.contains("UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)"),
+            "behaviour-matrix:L06 (amendé lot 2) : la pastille rouge chiffrée revient " +
+            "sur le rang plat via l'atome partagé UnreadCountBadge."
+        )
+        let bridge = normalizedCode(try source(at: "Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift"))
+        XCTAssertFalse(
+            bridge.contains("UnreadDot"),
+            "behaviour-matrix:L06 (amendé lot 2) : le point accent de 8 px est retiré du pont ✦ " +
+            "— doublon strict de la pastille chiffrée."
+        )
+    }
+
     // MARK: - L07 — glyphe 📌 avant le nom : FERMÉ, V3ter (la sourdine et le drop-cible, eux, étaient déjà réels)
 
     // behaviour-matrix:L07
@@ -243,13 +271,26 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
     /// (compteur, seuil `> 1`, identique au badge historique) : le type de
     /// conversation et le nombre de membres sont maintenant affichés sur la
     /// carte de focus, pas sur le rang.
-    func test_L08_typeBadgeAndMemberCount_areAbsorbedByTheFocusCard() throws {
-        let code = normalizedCode(try focusCardSource())
+    ///
+    /// **2026-08-23 — le porteur a changé, pas la loi.** La focus card a été
+    /// dissoute (la magnification vit dans la rangée) ; le badge de type et
+    /// l'effectif vivent désormais dans `LentilleMagnifiedRow`/`LentilleMemberCountChip`
+    /// (`Lentille/Mode/LentilleMagnification.swift`), montés par la rangée
+    /// SEULEMENT sous magnification. Ce que L08 protège — « ni le type ni
+    /// l'effectif sur le rang au REPOS » — est inchangé, et ce témoin le dit
+    /// désormais dans les deux sens.
+    func test_L08_typeBadgeAndMemberCount_areAbsorbedByTheMagnification() throws {
+        let magnification = normalizedCode(try magnificationSource())
         XCTAssertTrue(
-            code.contains("memberCount") || code.contains("conversation.type"),
-            "behaviour-matrix:L08 : « le badge de type (groupe/canal/bot + " +
-            "memberCount) est absorbé par la focus card » — LentilleFocusCard.swift doit " +
-            "référencer memberCount et/ou conversation.type."
+            magnification.contains("conversation.memberCount") && magnification.contains("conversation.type"),
+            "behaviour-matrix:L08 : « le badge de type (groupe/canal/bot + memberCount) est " +
+            "absorbé par la magnification » — LentilleMagnification.swift doit porter les deux."
+        )
+        let row = normalizedCode(try rowSource())
+        XCTAssertFalse(
+            row.contains("conversation.memberCount"),
+            "… et le rang au REPOS ne doit toujours pas les afficher : il ne connaît que la " +
+            "pastille, montée sous `if let magnification`."
         )
     }
 
@@ -267,24 +308,36 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         )
     }
 
-    // MARK: - L09 — glyphe hasPendingSync conservé (réel, jamais testé jusqu'ici)
+    // MARK: - L09 — glyphe hasPendingSync : RETIRÉ par décision produit (lot 2, 2026-08-22)
 
     // behaviour-matrix:L09
-    /// Réel. Le glyphe `arrow.triangle.2.circlepath` (outbox) est conservé
-    /// tel quel, teinté accent à 70 % — jamais testé par une suite Lentille
-    /// jusqu'à cet audit (le champ `hasPendingSync` lui-même est testé côté
-    /// `ConversationListViewModelTests`, mais son RENDU dans le rang plat ne
-    /// l'était pas).
-    func test_L09_hasPendingSyncGlyph_isConserved_accentSeventyPercent() throws {
+    /// **AMENDEMENT (lot 2, 2026-08-22).** La matrice d'origine gravait « le
+    /// glyphe hasPendingSync (outbox) est conservé tel quel :
+    /// arrow.triangle.2.circlepath en accent à 70 % », et ce témoin le
+    /// vérifiait VERT. Décision produit : le renvoi automatique par l'outbox
+    /// est conservé côté mécanique, seule l'AFFORDANCE VISUELLE de la liste
+    /// disparaît — sa place en queue de ligne de titre revient à la pastille
+    /// chiffrée de non-lus (L06 amendé ci-dessus). Le témoin est donc
+    /// INVERSÉ, jamais supprimé : ce que la matrice affirme et ce que la peau
+    /// rend doivent continuer de se répondre, dans un sens comme dans
+    /// l'autre.
+    ///
+    /// L'état outbox reste ANNONCÉ à VoiceOver (`accessibility.pending_sync`,
+    /// composé par `ThemedConversationRow.conversationAccessibilityLabel`
+    /// dont le rang plat dérive son libellé) : le retrait est visuel, pas
+    /// informationnel.
+    func test_L09_amended_pendingSyncGlyphIsRemovedFromTheRow() throws {
         let code = normalizedCode(try rowSource())
-        XCTAssertTrue(
-            code.contains(#"if conversation.userState.hasPendingSync { Image(systemName: "arrow.triangle.2.circlepath")"#),
-            "L09 : le glyphe outbox doit rester gated par conversation.userState.hasPendingSync, " +
-            "arrow.triangle.2.circlepath — conservé tel quel."
+        XCTAssertFalse(
+            code.contains("arrow.triangle.2.circlepath"),
+            "behaviour-matrix:L09 (amendé lot 2) : le glyphe outbox ne doit plus " +
+            "être rendu par le rang plat — l'outbox continue de renvoyer, sans affordance de " +
+            "liste."
         )
-        XCTAssertTrue(
-            code.contains(".foregroundColor(accent.opacity(0.7))"),
-            "L09 : le glyphe outbox doit rester teinté accent à 70 % — conservé tel quel."
+        XCTAssertFalse(
+            code.contains("hasPendingSync"),
+            "behaviour-matrix:L09 (amendé lot 2) : plus aucun rendu du rang plat ne " +
+            "doit dépendre de userState.hasPendingSync."
         )
     }
 

@@ -10,6 +10,7 @@ import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
+import me.meeshy.sdk.sync.SyncSeqTracker
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +21,7 @@ class AuthRepository @Inject constructor(
     private val tokenStore: TokenStore,
     private val sessionRepository: SessionRepository,
     private val sessionTeardown: SessionTeardown,
+    private val syncSeqTracker: SyncSeqTracker,
 ) {
     val isAuthenticated: Boolean get() = tokenStore.isAuthenticated
 
@@ -119,6 +121,12 @@ class AuthRepository @Inject constructor(
         tokenStore.clear()
         sessionRepository.clear()
         sessionTeardown.wipe()
+        // Le curseur `_seq` est en MÉMOIRE, donc hors du périmètre de
+        // [SessionTeardown] (stores persistés) — il se purge ici, comme iOS le
+        // purge dans `AuthManager` et le web dans `disconnect()`. Il est alloué
+        // PAR USER côté serveur : hérité, il ferait manquer au compte suivant
+        // tous ses trous tant qu'il n'aurait pas dépassé la valeur du précédent.
+        syncSeqTracker.reset()
     }
 
     private fun storeSession(session: AuthSession) {

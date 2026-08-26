@@ -16,6 +16,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   computeContiguousReadPrefix,
   resolveReadAt,
+  resolveReceivedAt,
 } from '../../../utils/read-exactness';
 
 describe('computeContiguousReadPrefix', () => {
@@ -187,6 +188,79 @@ describe('resolveReadAt — bascule non armée (opt-in)', () => {
         cursorLastReadAt: new Date('2026-08-05T00:00:00.000Z'),
         messageCreatedAt: new Date('2026-08-10T00:00:00.000Z'),
         cutover: null,
+      })
+    ).toBeNull();
+  });
+});
+
+/**
+ * `resolveReceivedAt` — « on ne lit pas ce qu'on n'a pas reçu ».
+ *
+ * Défaut observé en production le 2026-08-24 (capture user) : le panneau
+ * « Qui a vu » annonçait `Distribué 0` et `Lu 2` sur le MÊME message, et la
+ * bulle n'affichait qu'une coche. Les deux dates étaient dérivées côte à côte
+ * mais par des chemins ASYMÉTRIQUES : `readAt` acceptait un repli sur le
+ * curseur (`lastReadAt`), `receivedAt` n'acceptait le sien que si
+ * `lastDeliveredAt` existait ET datait d'après le message. Un participant qui
+ * marque « lu » sans avoir jamais émis d'accusé de livraison comptait donc
+ * comme lecteur sans compter comme destinataire.
+ *
+ * L'invariant est logique, pas cosmétique : une lecture PROUVE la réception.
+ */
+describe('resolveReceivedAt', () => {
+  const frozen = new Date('2026-08-20T10:00:00Z');
+  const delivered = new Date('2026-08-20T09:00:00Z');
+  const cursor = new Date('2026-08-20T08:00:00Z');
+  const read = new Date('2026-08-20T11:00:00Z');
+
+  it('prefers the frozen receivedAt over every other source', () => {
+    expect(
+      resolveReceivedAt({
+        frozenReceivedAt: frozen,
+        frozenDeliveredAt: delivered,
+        cursorDeliveredAt: cursor,
+        readAt: read,
+      })
+    ).toEqual(frozen);
+  });
+
+  it('falls back to the frozen deliveredAt, then to the cursor', () => {
+    expect(
+      resolveReceivedAt({
+        frozenReceivedAt: null,
+        frozenDeliveredAt: delivered,
+        cursorDeliveredAt: cursor,
+        readAt: read,
+      })
+    ).toEqual(delivered);
+    expect(
+      resolveReceivedAt({
+        frozenReceivedAt: null,
+        frozenDeliveredAt: null,
+        cursorDeliveredAt: cursor,
+        readAt: read,
+      })
+    ).toEqual(cursor);
+  });
+
+  it('READ implies RECEIVED — a reader with no delivery proof still counts as a recipient', () => {
+    expect(
+      resolveReceivedAt({
+        frozenReceivedAt: null,
+        frozenDeliveredAt: null,
+        cursorDeliveredAt: null,
+        readAt: read,
+      })
+    ).toEqual(read);
+  });
+
+  it('stays null when nothing at all is known — absence is not a reception', () => {
+    expect(
+      resolveReceivedAt({
+        frozenReceivedAt: null,
+        frozenDeliveredAt: null,
+        cursorDeliveredAt: null,
+        readAt: null,
       })
     ).toBeNull();
   });

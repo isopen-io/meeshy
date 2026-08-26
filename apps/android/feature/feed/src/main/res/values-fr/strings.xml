@@ -23,6 +23,8 @@
     <string name="feed_repost_quoted">Cité</string>
     <string name="feed_repost_story">Story</string>
     <string name="feed_repost_open">Ouvrir la publication republiée</string>
+    <string name="feed_location_shared">Position partagée</string>
+    <string name="feed_location_open">Ouvrir le lieu sur la carte</string>
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Enregistrés</string>
     <string name="bookmarks_empty">Aucune publication enregistrée</string>
@@ -60,6 +62,10 @@
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nouvelle publication</item>
         <item quantity="other">%1$d nouvelles publications</item>
+    </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d j\'aime</item>
+        <item quantity="other">%1$d j\'aime</item>
     </plurals>
     <!-- Mood status bar (Prisme: FR) -->
     <string name="status_bar_me">Moi</string>
@@ -120,6 +126,11 @@
     <string name="feed_action_share">Partager</string>
     <string name="feed_action_copy_link">Copier le lien</string>
     <string name="feed_action_repost">Reposter</string>
+    <string name="feed_action_quote">Citer</string>
+    <string name="feed_quote_title">Citer le post</string>
+    <string name="feed_quote_hint">Ajouter un commentaire</string>
+    <string name="feed_quote_submit">Reposter</string>
+    <string name="feed_quote_cancel">Annuler</string>
     <string name="feed_action_bookmark">Enregistrer</string>
     <string name="feed_action_unbookmark">Retirer des enregistrés</string>
     <string name="feed_action_pin">Épingler</string>

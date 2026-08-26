@@ -23,6 +23,7 @@ import {
   Repeat2,
   Download,
 } from 'lucide-react';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -210,6 +211,10 @@ export function ReelPlayer({
   onDownload,
 }: ReelPlayerProps) {
   const { t } = useI18n('reel');
+  // Accent du réel — MÊME graine qu'iOS (`authorAccentColor`, shared) :
+  // l'identifiant d'auteur d'abord, son nom en repli.
+  const reelAccent = authorAccentColor(reel.authorId, reel.author?.displayName ?? reel.author?.username ?? '');
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const [muted, setMuted] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -388,7 +393,15 @@ export function ReelPlayer({
         {/* Action rail */}
         <div className="absolute bottom-28 right-3 flex flex-col items-center gap-5 z-10">
           <RailButton label={t('player.like', 'Like')} count={displayCount(reel, 'likeCount')} active={isLiked} activeColor="#fb7185" onClick={(e) => { e.stopPropagation(); onLike(); }}>
-            <Heart className="h-6 w-6" fill={isLiked ? 'currentColor' : 'none'} />
+            {/* Le contour passe à l'accent du réel quand c'est le lecteur qui a
+                liké : la teinte seule ne distingue pas « aimé » de « aimé PAR
+                MOI ». Même règle, même graine qu'iOS. */}
+            <Heart
+              className="h-6 w-6"
+              fill={isLiked ? 'currentColor' : 'none'}
+              stroke={isLiked ? reelAccent : 'currentColor'}
+              strokeWidth={isLiked ? 2.5 : 2}
+            />
           </RailButton>
           <RailButton label={t('player.comment', 'Comment')} count={displayCount(reel, 'commentCount')} onClick={(e) => { e.stopPropagation(); onComment(); }}>
             <MessageCircle className="h-6 w-6" />
@@ -397,7 +410,12 @@ export function ReelPlayer({
             <Share2 className="h-6 w-6" />
           </RailButton>
           <RailButton label={t('player.save', 'Save')} active={isBookmarked} activeColor="#fbbf24" onClick={(e) => { e.stopPropagation(); onBookmark(); }}>
-            <Bookmark className="h-6 w-6" fill={isBookmarked ? 'currentColor' : 'none'} />
+            <Bookmark
+              className="h-6 w-6"
+              fill={isBookmarked ? 'currentColor' : 'none'}
+              stroke={isBookmarked ? reelAccent : 'currentColor'}
+              strokeWidth={isBookmarked ? 2.5 : 2}
+            />
           </RailButton>
           {onRepost && (
             <RailButton label={t('player.repost', 'Repost')} onClick={(e) => { e.stopPropagation(); onRepost(); }}>

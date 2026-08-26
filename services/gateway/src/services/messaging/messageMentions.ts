@@ -1,5 +1,13 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MentionParticipant } from '@meeshy/shared/utils/mention-parser';
+import { MAX_MENTIONS_PER_MESSAGE } from '../../validation/mention-list.js';
+import { protectedPreview } from '../notifications/NotificationService';
+
+/**
+ * Le masque servi quand la relecture des drapeaux ne conclut pas — message
+ * introuvable ou lecture en échec. Fail-CLOSED : cf. `loadMessageProtection`.
+ */
+const PROTECTION_ON_UNKNOWN = { preview: '🔒 💬', locKey: 'notification.hidden_message' } as const;
 
 /**
  * Le message tel que la résolution de mentions le lit. Structural et minimal :
@@ -329,6 +337,36 @@ export async function reconcileEditedMentions(params: EditedMentionParams): Prom
  * pas défaire une réconciliation réussie. L'appel est donc APRÈS l'écriture, et
  * son échec ne remonte pas — `reconciled` continue de décrire la base.
  */
+/**
+ * Le masque de protection d'un message, ou `null` s'il n'en porte pas.
+ *
+ * Fail-CLOSED : une lecture en échec rend le masque le plus restrictif plutôt
+ * que rien. C'est l'inverse de l'arbitrage habituel de cette unité (best-effort
+ * partout ailleurs), et c'est délibéré — une notification perdue se rattrape,
+ * un secret poussé non. Le pire cas est une bannière qui dit « un message »
+ * sans son extrait.
+ */
+async function loadMessageProtection(
+  prisma: MentionPrisma,
+  messageId: string,
+  onError?: (error: unknown) => void
+): Promise<{ preview: string; locKey: string } | null> {
+  try {
+    const row = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        messageType: true, isEncrypted: true, isViewOnce: true,
+        isBlurred: true, effectFlags: true, expiresAt: true, createdAt: true,
+      },
+    });
+    if (!row) return PROTECTION_ON_UNKNOWN;
+    return protectedPreview(row);
+  } catch (error) {
+    onError?.(error);
+    return PROTECTION_ON_UNKNOWN;
+  }
+}
+
 async function notifyNewlyMentioned(
   params: EditedMentionParams,
   newlyMentionedUserIds: readonly string[]
@@ -349,12 +387,29 @@ async function notifyNewlyMentioned(
     ]);
     if (!sender || !conversation) return;
 
+    // Cycle 123 bis — le contenu ÉDITÉ d'un message PROTÉGÉ ne part pas vers un
+    // ENTRANT. Ce sont des TIERS : éditer un message à vue unique pour y nommer
+    // quelqu'un lui poussait le texte en clair sur son écran verrouillé, alors
+    // que l'éventail d'envoi masque exactement ce texte.
+    //
+    // Les drapeaux se relisent ICI plutôt que de descendre par `params` : une
+    // garde de confidentialité qui dépend du câblage de l'appelant échoue en
+    // montrant PLUS, et les quatre transports d'édition ne construisent pas
+    // tous un `Message` complet (`MentionTargetMessage` ne porte que
+    // `expiresAt`). La lecture n'a lieu que lorsqu'il y a des entrants à
+    // notifier, cas rare sur le chemin d'édition.
+    const protection = await loadMessageProtection(prisma, message.id, onError);
+
     await notificationService.createMentionNotificationsBatch(
       [...newlyMentionedUserIds],
       {
         senderId: editorUserId,
         senderProfile: sender,
-        messageContent: content,
+        messageContent: protection ? protection.preview : content,
+        // Le masque du TEXTE ne suffit pas : sans base déclarée,
+        // `createMentionNotification` retombe sur `message-content` et le
+        // Prisme réinjecterait la TRADUCTION du même secret dans le corps.
+        ...(protection ? { previewBasis: { kind: 'protected-placeholder' as const } } : {}),
         conversationId: message.conversationId,
         messageId: message.id,
         messageExpiresAt: message.expiresAt ?? null,
@@ -426,7 +481,17 @@ async function computeValidatedMentions(
   let candidateUserIds: string[] = [];
 
   if (explicit.length > 0) {
-    candidateUserIds = Array.from(explicit);
+    // Le plafond est celui de l'AUTRE source de la même donnée : l'extraction
+    // depuis le contenu tronque à `MAX_MENTIONS_PER_MESSAGE` sur ses deux sites
+    // (`MentionService`). La liste explicite n'était bornée nulle part — écart
+    // sans conséquence tant qu'elle n'était honorée que par REST, et une entrée
+    // non bornée de plus le jour où le transport socket la déclare.
+    //
+    // Elle TRONQUE, comme l'extraction, plutôt que de rejeter l'envoi : les
+    // deux sources décrivent la même intention, et un message ne doit pas
+    // échouer pour avoir nommé trop de monde là où l'autre chemin se contente
+    // d'en retenir cinquante.
+    candidateUserIds = Array.from(explicit).slice(0, MAX_MENTIONS_PER_MESSAGE);
   } else {
     const participants = await loadMentionParticipants(prisma, message.conversationId, onError);
     const extracted = mentionService.extractMentionsWithParticipants(content, participants);

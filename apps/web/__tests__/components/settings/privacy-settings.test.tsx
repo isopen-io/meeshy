@@ -58,8 +58,17 @@ jest.mock('@/hooks/use-accessibility', () => ({
   SoundFeedback: {
     playClick: jest.fn(),
     playSuccess: jest.fn(),
+    playError: jest.fn(),
     playToggleOn: jest.fn(),
     playToggleOff: jest.fn(),
+  },
+}));
+
+// L'export RGPD passe par GET /api/v1/me/export (enveloppe { success, data }).
+const mockApiGet = jest.fn();
+jest.mock('@/services/api.service', () => ({
+  apiService: {
+    get: (...args: unknown[]) => mockApiGet(...args),
   },
 }));
 
@@ -166,17 +175,18 @@ describe('PrivacySettings', () => {
   });
 
   describe('Export des donnees', () => {
-    it('affiche le bouton d\'export', () => {
-      render(<PrivacySettings />);
+    const servedExport = {
+      exportDate: '2026-08-26T09:00:00.000Z',
+      format: 'json',
+      requestedTypes: ['profile', 'messages', 'contacts'],
+      profile: { id: 'u1', username: 'alice' },
+      messages: [],
+      messagesCount: 0,
+      contacts: [],
+      contactsCount: 0,
+    };
 
-      expect(screen.getByText(/Exporter les donn/)).toBeInTheDocument();
-    });
-
-    it('exporte les donnees au clic', () => {
-      const { SoundFeedback } = require('@/hooks/use-accessibility');
-      const { toast } = require('sonner');
-
-      // Mock du click sur le lien cree dynamiquement
+    const spyAnchorClick = () => {
       const originalCreateElement = document.createElement.bind(document);
       const mockClick = jest.fn();
       jest.spyOn(document, 'createElement').mockImplementation((tagName: string) => {
@@ -186,19 +196,114 @@ describe('PrivacySettings', () => {
         }
         return element;
       });
+      return mockClick;
+    };
+
+    const readBlob = (blob: Blob) =>
+      new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+      });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('affiche le bouton d\'export', () => {
+      render(<PrivacySettings />);
+
+      expect(screen.getByText(/Exporter les donn/)).toBeInTheDocument();
+    });
+
+    it('demande l\'export au serveur (GET /me/export) et telecharge les donnees SERVIES', async () => {
+      const { SoundFeedback } = require('@/hooks/use-accessibility');
+      const { toast } = require('sonner');
+      mockApiGet.mockResolvedValue({ success: true, data: servedExport });
+      const mockClick = spyAnchorClick();
 
       render(<PrivacySettings />);
 
       fireEvent.click(screen.getByText(/Exporter les donn/));
 
       expect(SoundFeedback.playClick).toHaveBeenCalled();
-      expect(mockCreateObjectURL).toHaveBeenCalled();
-      expect(mockClick).toHaveBeenCalled();
-      expect(mockRevokeObjectURL).toHaveBeenCalled();
-      expect(SoundFeedback.playSuccess).toHaveBeenCalled();
-      expect(toast.success).toHaveBeenCalledWith('Données exportées avec succès');
+      expect(mockApiGet).toHaveBeenCalledWith('/me/export', {
+        format: 'json',
+        types: 'profile,messages,contacts',
+      });
 
-      jest.restoreAllMocks();
+      await waitFor(() => {
+        expect(mockCreateObjectURL).toHaveBeenCalled();
+        expect(mockClick).toHaveBeenCalled();
+        expect(mockRevokeObjectURL).toHaveBeenCalled();
+        expect(SoundFeedback.playSuccess).toHaveBeenCalled();
+        expect(toast.success).toHaveBeenCalledWith('Données exportées avec succès');
+      });
+
+      // Le fichier telecharge est la charge servie par la passerelle, pas un
+      // placeholder compose cote client.
+      const blob = (mockCreateObjectURL.mock.calls[0] as unknown[])[0] as Blob;
+      const content = await readBlob(blob);
+      expect(JSON.parse(content)).toEqual(servedExport);
+      expect(content).not.toContain('Données de profil...');
+    });
+
+    it('signale l\'echec et ne telecharge rien quand le serveur repond en erreur', async () => {
+      const { SoundFeedback } = require('@/hooks/use-accessibility');
+      const { toast } = require('sonner');
+      mockApiGet.mockRejectedValue(new Error('network down'));
+      const mockClick = spyAnchorClick();
+
+      render(<PrivacySettings />);
+
+      fireEvent.click(screen.getByText(/Exporter les donn/));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
+      });
+      expect(SoundFeedback.playError).toHaveBeenCalled();
+      expect(mockCreateObjectURL).not.toHaveBeenCalled();
+      expect(mockClick).not.toHaveBeenCalled();
+      expect(SoundFeedback.playSuccess).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('traite une enveloppe success=false comme un echec', async () => {
+      const { toast } = require('sonner');
+      mockApiGet.mockResolvedValue({ success: false, error: { code: 'EXPORT_ERROR', message: 'nope' } });
+      spyAnchorClick();
+
+      render(<PrivacySettings />);
+
+      fireEvent.click(screen.getByText(/Exporter les donn/));
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
+      });
+      expect(mockCreateObjectURL).not.toHaveBeenCalled();
+      expect(toast.success).not.toHaveBeenCalled();
+    });
+
+    it('desactive le bouton pendant l\'export', async () => {
+      let resolveExport: (value: unknown) => void = () => undefined;
+      mockApiGet.mockReturnValue(new Promise((resolve) => { resolveExport = resolve; }));
+      spyAnchorClick();
+
+      render(<PrivacySettings />);
+
+      const button = screen.getByText(/Exporter les donn/).closest('button') as HTMLButtonElement;
+      fireEvent.click(button);
+
+      await waitFor(() => {
+        expect(button).toBeDisabled();
+      });
+
+      resolveExport({ success: true, data: servedExport });
+
+      await waitFor(() => {
+        expect(button).not.toBeDisabled();
+      });
     });
   });
 

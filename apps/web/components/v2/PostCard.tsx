@@ -17,6 +17,7 @@ import { BackgroundSoundBadge, type BackgroundSoundMeta } from './BackgroundSoun
 import type { Post } from '@meeshy/shared/types/post';
 import type { PostReference } from '@meeshy/shared/types/post-reference';
 import type { BackgroundSoundV3 } from '@meeshy/shared/types/canvas-v3';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 type PostCardMedia = {
   id: string;
@@ -29,10 +30,16 @@ type PostCardMedia = {
 
 export interface PostCardProps {
   author: { name: string; avatar?: string; emoji?: string };
+  /** Identifiant de l'auteur — sème l'accent du contenu (`authorAccentColor`).
+   *  Absent, l'accent retombe sur le nom, au risque de diverger d'iOS qui, lui,
+   *  sème sur l'identifiant. */
+  authorId?: string;
   lang: string;
   content: string;
   translations?: TranslationItem[];
   userLanguage?: string;
+  /** Prisme ordonné (rangs 1→4) pour l'auto-résolution de `TranslationToggle`. */
+  preferredLanguages?: string[];
   time: string;
   likes: number;
   comments: number;
@@ -190,9 +197,11 @@ function PostCard({
   content,
   translations,
   userLanguage,
+  preferredLanguages,
   time,
   likes,
   comments,
+  authorId,
   isLiked = false,
   isBookmarked = false,
   isAuthor = false,
@@ -226,6 +235,11 @@ function PostCard({
   className,
 }: PostCardProps) {
   const { t } = useI18n('components');
+  // Accent du contenu — MÊME graine qu'iOS (`authorAccentColor`, shared) :
+  // l'identifiant d'abord, le nom en repli. Deux appareils peignent ainsi le
+  // même post de la même couleur.
+  const postAccent = authorAccentColor(authorId, author.name);
+
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -314,6 +328,23 @@ function PostCard({
     : undefined;
 
   const hasTranslations = translations && translations.length > 0;
+
+  /// Cycle 123 — le corps effectivement servi, tenu par la puce de langue.
+  ///
+  /// La variante `block` est montée `showContent={false}` (le corps a besoin de
+  /// `PostContentText` pour ses mentions et références, que la puce ne rend
+  /// pas), et l'hôte rendait `content` — l'ORIGINAL — inconditionnellement.
+  /// Deux conséquences : la zone « traductions disponibles » annonçait une
+  /// langue résolue jamais servie, et cliquer une traduction n'y changeait
+  /// RIEN — le contrôle était inerte. Même relais que `PostDetail`.
+  /// `null` tant que la puce n'a rien annoncé : on retombe sur `content`, ce
+  /// qui est exactement l'état d'un post sans traduction.
+  const [displayedContent, setDisplayedContent] = useState<string | null>(null);
+  const handleDisplayedChange = useCallback(
+    (version: { content: string }) => setDisplayedContent(version.content),
+    [],
+  );
+
   const hasReactions = reactionSummary && Object.keys(reactionSummary).length > 0;
   const hasMedia = media && media.length > 0;
 
@@ -431,10 +462,12 @@ function PostCard({
                 originalLanguageName={getLanguageName(lang)}
                 translations={translations}
                 userLanguage={userLanguage}
+                preferredLanguages={preferredLanguages}
                 variant="block"
                 showContent={false}
+                onDisplayedChange={handleDisplayedChange}
               />
-              <PostContentText content={content} references={mentions} className="text-[var(--gp-text-primary)]" />
+              <PostContentText content={displayedContent ?? content} references={mentions} className="text-[var(--gp-text-primary)]" />
               <ReferenceNoteRow references={mentions ?? []} viewerId={viewerId} />
             </div>
           ) : (
@@ -532,6 +565,7 @@ function PostCard({
                     originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
                     translations={repostTranslations}
                     userLanguage={userLanguage}
+                    preferredLanguages={preferredLanguages}
                     variant="inline"
                   />
                 </div>
@@ -618,7 +652,10 @@ function PostCard({
           </div>
         )}
 
-        {/* Actions */}
+        {/* Actions — le contour d'une action ACTIVE passe à l'accent du
+            contenu : c'est lui, et non la teinte, qui dit « c'est moi qui l'ai
+            fait ». En SVG le trait est natif (`fill` = teinte sémantique,
+            `stroke` = trace du lecteur), là où iOS superpose deux glyphes. */}
         <div className="flex items-center gap-4">
           <div className="relative" ref={pickerRef}>
             <button
@@ -646,7 +683,8 @@ function PostCard({
                   key={isLiked ? 'liked' : 'unliked'}
                   className="w-5 h-5"
                   fill={isLiked ? 'currentColor' : 'none'}
-                  stroke="currentColor"
+                  stroke={isLiked ? postAccent : 'currentColor'}
+                  strokeWidth={isLiked ? 2.5 : 2}
                   viewBox="0 0 24 24"
                   initial={reduceMotion ? false : { scale: 0.7 }}
                   animate={{ scale: 1 }}
@@ -717,8 +755,14 @@ function PostCard({
               onClick={onBookmark}
               aria-label={isBookmarked ? t('post.removeBookmark') : t('post.bookmark')}
             >
-              <svg className="w-5 h-5" fill={isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              <svg
+                className="w-5 h-5"
+                fill={isBookmarked ? 'currentColor' : 'none'}
+                stroke={isBookmarked ? postAccent : 'currentColor'}
+                strokeWidth={isBookmarked ? 2.5 : 2}
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
             </button>
           )}

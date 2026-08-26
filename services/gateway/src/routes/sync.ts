@@ -11,6 +11,12 @@ import {
 import { Prisma } from '@meeshy/shared/prisma/client';
 import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import { messageSenderUserSelect } from './conversations/utils/message-sender-select';
+import { serializeAttachmentForSocket } from '../socketio/serializeAttachmentForSocket';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
+import {
+  messageAttachmentSchema,
+  messageTranslationSchema,
+} from '@meeshy/shared/types/api-schemas';
 import { logger } from '../utils/logger';
 
 /**
@@ -256,6 +262,189 @@ type SyncIdentity =
   | { readonly kind: 'user'; readonly userId: string }
   | { readonly kind: 'anonymous'; readonly participantId: string };
 
+/**
+ * Ce que la ligne Prisma devient sur le fil.
+ *
+ * Deux champs du `select` ne portent PAS, en base, la forme que les clients
+ * décodent — et aucun des deux n'est une particularité de `/sync` : ce sont les
+ * deux transformations que tout transport de message applique déjà, ici
+ * réemployées plutôt que recopiées.
+ *
+ * 1. **`translations` est une CARTE en base** (`Json?`, « map: langue →
+ *    données ») et un TABLEAU dans le contrat. `transformTranslationsToArray`
+ *    est le sérialiseur du dépôt pour ce passage — le même que la liste de
+ *    messages, l'édition, la suppression et le chemin ZMQ. La distinction
+ *    n'est pas cosmétique côté client : `APIMessage.translations` se décode
+ *    avec un `try` NON tolérant, donc une carte y fait échouer le décodage du
+ *    message ENTIER, pas seulement de ses traductions.
+ *
+ * 2. **`attachments[].reactions` est la relation BRUTE** (`{emoji,
+ *    participantId}`) que `attachmentMediaSelect` charge, quand le contrat de
+ *    fil est `reactionSummary` + `currentUserReactions`.
+ *    `serializeAttachmentForSocket` miroite exactement ce select et fait
+ *    l'agrégation ; son nom dit « socket » et sa documentation dit la vérité
+ *    plus large — « use this helper everywhere a Message attachment is
+ *    broadcast to clients so payloads stay at parity with the REST payload ».
+ *    Servir la relation brute ne se contentait pas d'être indécodable : elle
+ *    publiait QUI a réagi, là où le contrat n'expose qu'un compte et les
+ *    emojis du lecteur.
+ *
+ * `readerParticipantId` est l'id du lecteur DANS CETTE conversation, et pas un
+ * id global : `Participant` est une ligne par conversation, donc le même
+ * utilisateur y porte autant d'ids que de fils. Sans lui, `currentUserReactions`
+ * serait vide partout — c'est-à-dire « je n'ai réagi à rien », affirmé à qui a
+ * réagi.
+ */
+function serializeSyncMessage(
+  message: SyncMessage,
+  readerParticipantId: string | undefined,
+): Record<string, unknown> {
+  return {
+    ...message,
+    translations: transformTranslationsToArray(
+      message.id,
+      message.translations as unknown as Record<string, MessageTranslationJSON> | null,
+    ),
+    attachments: message.attachments.map((attachment) =>
+      serializeAttachmentForSocket(
+        attachment as unknown as Record<string, unknown>,
+        readerParticipantId,
+      ),
+    ),
+  };
+}
+
+/**
+ * Le message tel qu'il part — composé depuis les schémas canoniques du dépôt,
+ * jamais depuis une variante recopiée.
+ *
+ * Ce schéma ne réutilise PAS `messageSchema` en bloc, et le refus est la leçon
+ * du cycle 94 bis : « la réutilisation naïve du schéma partagé perdait ici CINQ
+ * choses ». Un schéma de réponse doit être apparié au PRODUCTEUR de la route —
+ * ici `syncMessageSelect` — et non au schéma du voisin le plus ressemblant.
+ * Les clés sont donc relevées mécaniquement depuis la projection ; seules les
+ * FEUILLES (une traduction, une pièce jointe) reprennent les schémas partagés,
+ * parce que la forme d'une pièce jointe, elle, ne dépend pas de la route.
+ */
+const syncMessageSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    conversationId: { type: 'string' },
+    senderId: { type: 'string', nullable: true },
+    content: { type: 'string' },
+    clientMessageId: { type: 'string', nullable: true },
+    originalLanguage: { type: 'string' },
+    translations: { type: 'array', items: messageTranslationSchema },
+    messageType: { type: 'string' },
+    messageSource: { type: 'string' },
+    // `additionalProperties: true` — sans lui, fast-json-stringify vide le
+    // contenu de l'objet en SILENCE. Même piège que `messageSchema.metadata`,
+    // et il coûte ici la citation de post, le lieu partagé et les faits
+    // d'appel de toute bulle rattrapée hors ligne.
+    metadata: { type: 'object', nullable: true, additionalProperties: true },
+    isEdited: { type: 'boolean' },
+    editedAt: { type: 'string', format: 'date-time', nullable: true },
+    replyToId: { type: 'string', nullable: true },
+    reactionSummary: { type: 'object', nullable: true, additionalProperties: true },
+    reactionCount: { type: 'integer' },
+    validatedMentions: { type: 'array', items: { type: 'string' } },
+    attachments: { type: 'array', items: messageAttachmentSchema },
+    sender: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        userId: { type: 'string', nullable: true },
+        displayName: { type: 'string', nullable: true },
+        avatar: { type: 'string', nullable: true },
+        type: { type: 'string' },
+        role: { type: 'string', nullable: true },
+        language: { type: 'string', nullable: true },
+        user: {
+          type: 'object',
+          nullable: true,
+          properties: {
+            id: { type: 'string' },
+            username: { type: 'string' },
+            displayName: { type: 'string', nullable: true },
+            avatar: { type: 'string', nullable: true },
+          },
+        },
+      },
+    },
+    createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+/** Une disparition : trois scalaires, et `deletedAt` en est le seul contenu —
+ *  un client qui le perd sait qu'une bulle est partie sans savoir quand. */
+const syncTombstoneSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string' },
+    conversationId: { type: 'string' },
+    deletedAt: { type: 'string', format: 'date-time' },
+  },
+} as const;
+
+const syncCollectionSchema = {
+  type: 'object',
+  properties: {
+    added: { type: 'array', items: syncMessageSchema },
+    modified: { type: 'array', items: syncMessageSchema },
+    deleted: { type: 'array', items: syncTombstoneSchema },
+    truncated: { type: 'boolean' },
+    nextCursor: { type: 'string', nullable: true },
+  },
+} as const;
+
+/**
+ * L'enveloppe delta.
+ *
+ * `collections` déclare ses collections NOMMÉMENT plutôt qu'en carte ouverte,
+ * et c'est délibéré : `SUPPORTED_COLLECTIONS` n'en porte qu'une, et le jour où
+ * A6 en ajoutera une seconde, c'est ce schéma qui doit la déclarer. Une carte
+ * `additionalProperties` laisserait entrer la collection neuve NON gouvernée —
+ * exactement l'état que ce lot est en train de quitter.
+ */
+export const syncResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    data: {
+      type: 'object',
+      properties: {
+        checkpoint: { type: 'string', format: 'date-time' },
+        checkpointSeq: { type: 'integer' },
+        collections: {
+          type: 'object',
+          properties: { messages: syncCollectionSchema },
+        },
+        hasMore: { type: 'boolean' },
+        nextCursor: { type: 'string', nullable: true },
+        hasGap: { type: 'boolean' },
+        gapAction: { type: 'string', nullable: true },
+      },
+    },
+  },
+} as const;
+
+const syncErrorResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    error: {
+      type: 'object',
+      properties: {
+        code: { type: 'string' },
+        message: { type: 'string' },
+      },
+    },
+  },
+} as const;
+
 export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
   const prisma = fastify.prisma;
   const sequenceService = new SequenceService(prisma);
@@ -264,7 +453,24 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
     allowAnonymous: true,
   });
 
-  fastify.get('/sync', { preValidation: [requiredAuth] }, async (request, reply) => {
+  fastify.get('/sync', {
+    schema: {
+      description: 'Delta sync — collection pilote `messages` (added / modified / deleted depuis `since`)',
+      tags: ['sync'],
+      summary: 'Delta sync',
+      response: {
+        200: { description: 'Page delta', ...syncResponseSchema },
+        400: { description: 'Requête invalide', ...syncErrorResponseSchema },
+        401: { description: 'Authentification requise', ...syncErrorResponseSchema },
+        // Un 304 n'a PAS de corps, et le déclarer `null` est ce qui le dit.
+        // L'omettre laisserait la route servir un statut non gouverné — le
+        // point de départ de ce lot — et, plus prosaïquement, empêcherait
+        // `reply.status(304)` de typer.
+        304: { description: 'Non modifié — l’ETag correspond', type: 'null' },
+      },
+    },
+    preValidation: [requiredAuth],
+  }, async (request, reply) => {
     const parsed = syncQuerySchema.safeParse(request.query);
     if (!parsed.success) {
       return reply.status(400).send({
@@ -299,7 +505,7 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
       }
     }
 
-    const authRequest = request as UnifiedAuthRequest;
+    const authRequest = request as unknown as UnifiedAuthRequest;
     const authContext = authRequest.authContext;
     const userId = authContext.userId;
 
@@ -358,16 +564,38 @@ export async function syncRoutes(fastify: FastifyInstance): Promise<void> {
       (c) => (c as { truncated?: boolean }).truncated === true,
     );
 
-    // Une page TRONQUÉE n'a pas livré toute la fenêtre, et le reste est un
-    // ARRIÉRÉ : ses `updatedAt` sont ANTÉRIEURS au checkpoint. Avancer le
-    // watermark ici affirmerait une couverture non démontrée, et le client qui
-    // l'adopterait perdrait tout l'arriéré d'un coup — définitivement, la
-    // borne serveur étant stricte. Le watermark reste donc où il est : la
-    // suite se réclame par `nextCursor`, et seule la page qui CLÔT le parcours
-    // (`hasMore: false`) rend un checkpoint adoptable. Même règle que
-    // `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
+    // Le checkpoint AFFIRME une couverture — « tout ce qui a changé jusqu'ici
+    // t'a été livré » — et le client la croit sur parole : il le renvoie en
+    // `since`, où la borne serveur est STRICTE. Une affirmation non démontrée
+    // creuse donc un trou DÉFINITIF (docblock de `SYNC_CHECKPOINT_LAG_MS`).
+    //
+    // Il n'est avançable que par une réponse qui a démontré cette couverture,
+    // et il y a TROIS façons de ne pas la démontrer. Une seule était vérifiée :
+    //
+    // 1. `hasMore` — page TRONQUÉE : le reste est un ARRIÉRÉ dont les
+    //    `updatedAt` sont ANTÉRIEURS au checkpoint. La suite se réclame par
+    //    `nextCursor`, et seule la page qui CLÔT le parcours est adoptable.
+    // 2. `hasGap` — le serveur a REFUSÉ de calculer le delta et court-circuité
+    //    la requête : la fenêtre n'a pas été partiellement livrée, elle n'a pas
+    //    été LUE. C'est le maximum exact du cas que (1) protège, et il avançait
+    //    le watermark. `gapAction: 'full_resync_required'` ne rattrape rien :
+    //    c'est une INSTRUCTION, et une réponse ne peut pas dépendre de ce que
+    //    son destinataire en fera pour rester sûre — la resync peut être
+    //    différée, échouer hors ligne, ou n'être lue par personne (`hasGap` n'a
+    //    aujourd'hui aucun consommateur sur les trois clients).
+    // 3. Aucune collection servie — `collections=','` franchit le
+    //    `z.string().min(1)`, se réduit à `[]`, ne lève aucun
+    //    `UNSUPPORTED_COLLECTION`, et `hasMore` sur zéro collection vaut
+    //    `false`. Rien n'a été lu, et le watermark avançait quand même.
+    //
+    // Retenir le watermark ne coûte qu'une RELECTURE bornée ; l'avancer à tort
+    // est irréversible. La règle est donc écrite en POSITIF — une nouvelle
+    // façon de ne rien couvrir doit s'ajouter ici, pas s'oublier. Même règle
+    // que `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
+    const coveredTheWindow = !hasMore && !hasGap && Object.keys(collectionsResult).length > 0;
+
     const payload = {
-      checkpoint: (hasMore ? sinceDate : checkpoint).toISOString(),
+      checkpoint: (coveredTheWindow ? checkpoint : sinceDate).toISOString(),
       checkpointSeq,
       collections: collectionsResult,
       hasMore,
@@ -540,8 +768,8 @@ async function syncMessages(opts: {
   scope?: string;
   cursor?: SyncCursor;
 }): Promise<{
-  added: SyncMessage[];
-  modified: SyncMessage[];
+  added: Record<string, unknown>[];
+  modified: Record<string, unknown>[];
   deleted: DeletedRef[];
   truncated: boolean;
   nextCursor: string | null;
@@ -569,6 +797,12 @@ async function syncMessages(opts: {
       ? { id: identity.participantId, isActive: true, ...(scope ? { conversationId: scope } : {}) }
       : { userId: identity.userId, isActive: true, ...(scope ? { conversationId: scope } : {}) },
     select: {
+      // L'id de la LIGNE participant, et pas seulement sa conversation : c'est
+      // lui qui dit « cette réaction de pièce jointe est la mienne ». Un
+      // utilisateur porte un `Participant.id` DIFFÉRENT par conversation, donc
+      // la reconnaissance ne peut se faire qu'ici, où la ligne est déjà lue —
+      // le champ ne coûte pas un aller-retour de plus.
+      id: true,
       conversationId: true,
       joinedAt: true,
       shareLinkId: true,
@@ -674,9 +908,21 @@ async function syncMessages(opts: {
         return hiding.clearHistoryBefore === null || m.createdAt >= hiding.clearHistoryBefore;
       });
 
+  // La sérialisation s'applique APRÈS le masquage et APRÈS le budget, sur les
+  // seules lignes réellement LIVRÉES : transformer une ligne qu'on va écarter
+  // serait payer l'agrégation des réactions d'une pièce jointe que personne ne
+  // recevra. Le keyset, lui, reste ancré sur la ligne PRISMA (`changedPage`) —
+  // la position de reprise se lit sur ce qu'a rendu la requête, jamais sur ce
+  // qu'en a fait le sérialiseur.
+  const readerParticipantIdByConversation = new Map(
+    memberships.map((m) => [m.conversationId, m.id] as const),
+  );
+  const serialize = (m: SyncMessage): Record<string, unknown> =>
+    serializeSyncMessage(m, readerParticipantIdByConversation.get(m.conversationId));
+
   // added = créé après `since` ; modified = pré-existant mais modifié.
-  const added = visible.filter((m) => m.createdAt > sinceDate);
-  const modified = visible.filter((m) => m.createdAt <= sinceDate);
+  const added = visible.filter((m) => m.createdAt > sinceDate).map(serialize);
+  const modified = visible.filter((m) => m.createdAt <= sinceDate).map(serialize);
 
   // DELETED — tombstones supprimés depuis `since`. Même keyset `(deletedAt, id)`
   // avec cap+1 : le stream tombstones est désormais paginé (A3.1 le tronquait

@@ -463,6 +463,118 @@ class PostRepositoryTest {
         assertThat(stored).isFalse()
     }
 
+    // --- Realtime translation push (applyTranslationUpdate): the gateway translated the
+    //     post server-side and broadcast the finished entry; no translator call here. ---
+
+    private fun pushedEntry(text: String = "Hola") = ApiPostTranslationEntry(
+        text = text,
+        translationModel = "nllb",
+        confidenceScore = 0.97,
+        createdAt = "2026-08-24T00:00:00Z",
+    )
+
+    @Test
+    fun applyTranslationUpdate_foldsThePushedEntryIntoTheCache_preservingMetadata() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+
+        val stored = repo.applyTranslationUpdate("p1", "es", pushedEntry())
+
+        assertThat(stored).isTrue()
+        repo.feedStream().test {
+            val entry = awaitItem().cachedPost("p1").translations!!["es"]!!
+            assertThat(entry.text).isEqualTo("Hola")
+            assertThat(entry.translationModel).isEqualTo("nllb")
+            assertThat(entry.confidenceScore).isEqualTo(0.97)
+            cancelAndIgnoreRemainingEvents()
+        }
+        coVerify(exactly = 0) { translationApi.translate(any()) }
+    }
+
+    @Test
+    fun applyTranslationUpdate_isInertForAnUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+
+        val stored = repo.applyTranslationUpdate("missing", "es", pushedEntry())
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun applyTranslationUpdate_isInertForABlankTarget() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+
+        val stored = repo.applyTranslationUpdate("p1", "   ", pushedEntry())
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun applyTranslationUpdate_isInertForABlankPushedText() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", originalLanguage = "fr"))
+
+        val stored = repo.applyTranslationUpdate("p1", "es", pushedEntry(text = "   "))
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun applyTranslationUpdate_isIdempotentWhenTheIdenticalEntryIsAlreadyCached() = runTest {
+        val repo = seed(
+            ApiPost(
+                id = "p1",
+                content = "Bonjour",
+                originalLanguage = "fr",
+                translations = mapOf("es" to pushedEntry()),
+            ),
+        )
+
+        val stored = repo.applyTranslationUpdate("p1", "es", pushedEntry())
+
+        assertThat(stored).isFalse()
+    }
+
+    // --- Realtime post edit push (applyPostUpdate): the author edited the post and the
+    //     gateway broadcast the whole new (unpersonalized) post. ---
+
+    @Test
+    fun applyPostUpdate_foldsTheEditIntoTheCache_preservingTheReadersLikeState() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", likeCount = 2, isLikedByMe = true))
+
+        val stored = repo.applyPostUpdate(
+            ApiPost(id = "p1", content = "Bonjour (edited)", likeCount = 9, isLikedByMe = false),
+        )
+
+        assertThat(stored).isTrue()
+        repo.feedStream().test {
+            val post = awaitItem().cachedPost("p1")
+            assertThat(post.content).isEqualTo("Bonjour (edited)")
+            assertThat(post.likeCount).isEqualTo(9)
+            // The broadcast's own like flag (false) is ignored — the reader stays liked.
+            assertThat(post.isLikedByMe).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun applyPostUpdate_isInertForAnUnknownPost() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour"))
+
+        val stored = repo.applyPostUpdate(ApiPost(id = "missing", content = "edited"))
+
+        assertThat(stored).isFalse()
+    }
+
+    @Test
+    fun applyPostUpdate_isInertForAnIdenticalReBroadcast() = runTest {
+        val repo = seed(ApiPost(id = "p1", content = "Bonjour", likeCount = 3, isLikedByMe = true))
+
+        val stored = repo.applyPostUpdate(
+            ApiPost(id = "p1", content = "Bonjour", likeCount = 3, isLikedByMe = true),
+        )
+
+        assertThat(stored).isFalse()
+    }
+
     // --- On-demand post translation for a caller-held post (translatePost) ---
 
     @Test

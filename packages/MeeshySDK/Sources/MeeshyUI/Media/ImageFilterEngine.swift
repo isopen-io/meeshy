@@ -80,6 +80,11 @@ public enum ImageEffect: String, CaseIterable, Identifiable, Codable, Sendable {
 /// The same `render` runs on a small working copy for live preview and on the
 /// full-resolution original for export, so previews are always faithful.
 public final class ImageFilterEngine {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let context: CIContext
 

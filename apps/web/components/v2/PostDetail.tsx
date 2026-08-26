@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { buildAttachmentUrl } from '@/utils/attachment-url';
 import { formatDuration } from '@/utils/audio-formatters';
-import { Download, Repeat2 } from 'lucide-react';
+import { ArrowDownToLine, Download, Repeat2 } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -18,6 +18,7 @@ import type { Post, PostComment } from '@meeshy/shared/types/post';
 import type { BackgroundSoundV3 } from '@meeshy/shared/types/canvas-v3';
 import { getLanguageName } from './flags';
 import { formatCompactNumber } from '@/utils/format-number';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -142,6 +143,8 @@ export interface PostDetailProps {
   currentUserId?: string | null;
   currentUser?: { username: string; avatar?: string | null } | null;
   userLanguage?: string;
+  /** Prisme ordonné (rangs 1→4) pour l'auto-résolution de `TranslationToggle`. */
+  preferredLanguages?: string[];
   /**
    * L'annonce du fond + bouton 🔇 (B3.3-6) — n'existe (n'est rendue) QUE si
    * une piste `sound` v3 existe (B3.5). Mêmes props que `PostCard` (constat 2,
@@ -167,6 +170,15 @@ export interface PostDetailProps {
   onUnbookmark?: () => void;
   onShare?: () => void;
   onRepost?: () => void;
+  /**
+   * L'ANCRAGE — « garder ça pour de bon » : republier la carte en POST
+   * permanent, à côté du repost qui, lui, miroite le format de la source.
+   * Jumeau de `StoryViewer.onRepostAsPost`.
+   *
+   * C'est l'HÔTE qui décide de le câbler ou non : la carte ne sait pas si le
+   * miroir mènerait à de l'éphémère sans recours.
+   */
+  onRepostAsPost?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
   onReport?: () => void;
@@ -199,6 +211,7 @@ function PostDetail({
   currentUserId,
   currentUser,
   userLanguage,
+  preferredLanguages,
   backgroundSound,
   backgroundSoundMeta,
   backgroundSoundMuted = true,
@@ -217,6 +230,7 @@ function PostDetail({
   onUnbookmark,
   onShare,
   onRepost,
+  onRepostAsPost,
   onDelete,
   onEdit,
   onReport,
@@ -237,7 +251,20 @@ function PostDetail({
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const { t } = useI18n('components');
   const translationItems = useMemo(() => postTranslationsToItems(post.translations), [post.translations]);
+
+  // Le corps effectivement servi, tenu par la rangée de drapeaux. `null` tant
+  // qu'elle n'a rien annoncé : on retombe alors sur le contenu du post, ce qui
+  // est exactement l'état d'un post sans traduction.
+  const [displayedContent, setDisplayedContent] = useState<string | null>(null);
+  const handleDisplayedChange = useCallback(
+    (version: { content: string }) => setDisplayedContent(version.content),
+    [],
+  );
   const isAuthor = currentUserId === post.authorId;
+  // Accent du contenu — MÊME graine qu'iOS (`authorAccentColor`, shared) :
+  // l'identifiant d'abord. C'est lui qui trace le contour des actions que le
+  // lecteur a lui-même faites.
+  const postAccent = authorAccentColor(post.authorId, post.author?.displayName ?? post.author?.username ?? '');
   const hasReactions = post.reactionSummary && Object.keys(post.reactionSummary).length > 0;
 
   const repostOf = post.repostOf;
@@ -363,17 +390,30 @@ function PostDetail({
             <div className="mb-4">
               {translationItems.length > 0 ? (
                 <>
+                  {/* Le corps passe par `PostContentText` — lui seul sait rendre
+                      mentions et références — donc la rangée ne rend PAS le texte
+                      et se contente de dire, sous lui, dans quelle langue on lit.
+                      Le contenu servi est celui que la rangée annonce : sans ce
+                      relais, le drapeau afficherait « Français » au-dessus d'un
+                      paragraphe resté en version originale. */}
+                  <PostContentText
+                    content={displayedContent ?? post.content}
+                    references={post.mentions}
+                    className="text-[var(--gp-text-primary)]"
+                  />
+                  <ReferenceNoteRow references={post.mentions ?? []} viewerId={currentUserId ?? undefined} />
                   <TranslationToggle
                     originalContent={post.content}
                     originalLanguage={post.originalLanguage ?? 'unknown'}
                     originalLanguageName={post.originalLanguage ? getLanguageName(post.originalLanguage) : undefined}
                     translations={translationItems}
                     userLanguage={userLanguage}
-                    variant="block"
+                    preferredLanguages={preferredLanguages}
+                    variant="flags"
                     showContent={false}
+                    onDisplayedChange={handleDisplayedChange}
+                    className="mt-1.5"
                   />
-                  <PostContentText content={post.content} references={post.mentions} className="text-[var(--gp-text-primary)]" />
-                  <ReferenceNoteRow references={post.mentions ?? []} viewerId={currentUserId ?? undefined} />
                 </>
               ) : (
                 <>
@@ -472,6 +512,7 @@ function PostDetail({
                       originalLanguageName={repostOf.originalLanguage ? getLanguageName(repostOf.originalLanguage) : undefined}
                       translations={repostTranslationItems}
                       userLanguage={userLanguage}
+                      preferredLanguages={preferredLanguages}
                       variant="inline"
                     />
                   </div>
@@ -565,7 +606,13 @@ function PostDetail({
                 {userReaction ? (
                   <span className="text-lg leading-none">{userReaction}</span>
                 ) : (
-                  <svg className="w-5 h-5" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    className="w-5 h-5"
+                    fill={isLiked ? 'currentColor' : 'none'}
+                    stroke={isLiked ? postAccent : 'currentColor'}
+                    strokeWidth={isLiked ? 2.5 : 2}
+                    viewBox="0 0 24 24"
+                  >
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
                   </svg>
                 )}
@@ -609,6 +656,19 @@ function PostDetail({
               </button>
             )}
 
+            {onRepostAsPost && (
+              <button
+                data-testid="post-detail-repost-as-post"
+                onClick={onRepostAsPost}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-[var(--gp-text-secondary)] hover:bg-[var(--gp-parchment)] transition-colors"
+                aria-label={t('post.repostAsPost', 'Keep on my feed')}
+                title={t('post.repostAsPost', 'Keep on my feed')}
+              >
+                <ArrowDownToLine className="w-5 h-5" />
+                {t('post.repostAsPost', 'Keep on my feed')}
+              </button>
+            )}
+
             <button
               onClick={handleBookmarkToggle}
               className={cn(
@@ -619,8 +679,14 @@ function PostDetail({
               )}
               aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
             >
-              <svg className="w-5 h-5" fill={isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+              <svg
+                className="w-5 h-5"
+                fill={isBookmarked ? 'currentColor' : 'none'}
+                stroke={isBookmarked ? postAccent : 'currentColor'}
+                strokeWidth={isBookmarked ? 2.5 : 2}
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
               </svg>
               Save
             </button>
@@ -639,6 +705,7 @@ function PostDetail({
           currentUserId={currentUserId}
           currentUser={currentUser}
           userLanguage={userLanguage}
+          preferredLanguages={preferredLanguages}
           likedCommentIds={likedCommentIds}
           isLoading={commentsLoading}
           hasMore={commentsHasMore}

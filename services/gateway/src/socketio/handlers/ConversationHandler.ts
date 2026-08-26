@@ -3,11 +3,14 @@
  * Gère les événements de conversation (join, leave, stats)
  */
 
-import type { Socket } from 'socket.io';
+// Cycle 99 — `MeeshySocket`, pas le `Socket` nu de socket.io : les huit refus
+// de jonction ci-dessous sont désormais vérifiés contre `ServerToClientEvents`.
+import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { conversationStatsService } from '../../services/ConversationStatsService';
+import { SERVER_EVENTS, ROOMS, type ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { conversationStatsService, type OnlineUserInfo } from '../../services/ConversationStatsService';
+import type { PresenceViewer, PresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -51,6 +54,24 @@ export interface ConversationHandlerDependencies {
    * normalement, il ne rattrape simplement rien.
    */
   replayLiveLocations?: (socket: Socket, conversationId: string) => void;
+  /**
+   * Le LECTEUR des statistiques, avec son VRAI rôle —
+   * `MeeshySocketIOManager._presenceViewer` en pratique. Ni `SocketUser` ni le
+   * handshake ne portent `User.role` : il est relu en base, une fois par
+   * émission de stats. `null` ⇒ aucun lecteur ⇒ la loi ne nomme personne.
+   *
+   * Obligatoire, à la différence des deux rappels ci-dessus : un handler sans
+   * lecteur ne peut pas projeter `onlineUsers`, et la liste nominative de qui
+   * est en ligne est exactement ce que la directive du 2026-08-25 retire à un
+   * co-participant qui n'est pas ami.
+   */
+  presenceViewer: (userId: string) => Promise<PresenceViewer>;
+  /**
+   * La loi UNIQUE de visibilité de la présence — amitié acceptée, ADMIN+,
+   * blocage, préférences — `PresenceVisibilityService.resolveForTargets`, la
+   * même porte que `presence:snapshot` et `GET /users/presence`.
+   */
+  presenceVisibility: Pick<PresenceVisibilityService, 'resolveForTargets'>;
 }
 
 export class ConversationHandler {
@@ -60,6 +81,8 @@ export class ConversationHandler {
   private readStatusService: Pick<MessageReadStatusService, 'getUnreadCount' | 'getLatestMessageSummary'>;
   private retractTyping?: (socket: Socket, conversationId: string) => Promise<void>;
   private replayLiveLocations?: (socket: Socket, conversationId: string) => void;
+  private presenceViewer: (userId: string) => Promise<PresenceViewer>;
+  private presenceVisibility: Pick<PresenceVisibilityService, 'resolveForTargets'>;
   private rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationHandlerDependencies) {
@@ -69,6 +92,8 @@ export class ConversationHandler {
     this.readStatusService = deps.readStatusService;
     this.retractTyping = deps.retractTyping;
     this.replayLiveLocations = deps.replayLiveLocations;
+    this.presenceViewer = deps.presenceViewer;
+    this.presenceVisibility = deps.presenceVisibility;
   }
 
   /**
@@ -324,7 +349,13 @@ export class ConversationHandler {
       const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
       if (summary.totalMembers === 0 && summary.deliveredCount === 0 && summary.readCount === 0) return;
 
-      const payload = {
+      // Annoté contre le contrat, comme ses quatre frères émetteurs. Le littéral
+      // NU qu'il était échappait à `ReadStatusUpdatedEventData` : sous
+      // `strictNullChecks: false`, le socket typé ne rattrape pas non plus la
+      // nullité, donc c'est le site d'appel qui doit prouver `participantId`.
+      // Il le prouve — les deux branches du contrôle d'appartenance rendent la
+      // main avant d'arriver ici quand la ligne `Participant` est absente.
+      const payload: ReadStatusUpdatedEventData = {
         conversationId,
         participantId: participantRowId,
         userId: registeredUserId,
@@ -385,7 +416,16 @@ export class ConversationHandler {
   }
 
   /**
-   * Envoie les statistiques de conversation à un socket
+   * Envoie les statistiques de conversation à un socket.
+   *
+   * Les stats sont calculées et mises en cache SANS lecteur — l'entrée est
+   * partagée par tous les sockets d'une conversation. Seule `onlineUsers`, une
+   * liste d'IDENTITÉS, est projetée ici, par socket, à travers la loi de
+   * visibilité de la présence (directive produit du 2026-08-25 : hors amitié
+   * acceptée ou ADMIN+, personne ne voit qui est en ligne). Les agrégats sans
+   * identité (`participantCount`, les compteurs par langue) voyagent tels
+   * quels. La charge émise est un NOUVEL objet : l'entrée de cache n'est
+   * jamais touchée, deux sockets en reçoivent deux projections.
    */
   async sendConversationStatsToSocket(socket: Socket, conversationId: string): Promise<void> {
     try {
@@ -399,15 +439,51 @@ export class ConversationHandler {
         conversationId,
         () => Array.from(this.connectedUsers.values()).map((u) => u.id)
       );
+      if (!stats) return;
 
-      if (stats) {
-        socket.emit(SERVER_EVENTS.CONVERSATION_STATS, {
-          conversationId,
-          stats
-        });
-      }
+      socket.emit(SERVER_EVENTS.CONVERSATION_STATS, {
+        conversationId,
+        stats: { ...stats, onlineUsers: await this._onlineUsersVisibleTo(socket, stats.onlineUsers) },
+      });
     } catch (error) {
       logger.error('conversation stats emit failed', { error });
     }
+  }
+
+  /**
+   * La projection de `onlineUsers` pour CE socket : ne reste que ce que la loi
+   * marque `showOnline` — soi et ses amis acceptés pour un lecteur ordinaire,
+   * tout le monde pour un ADMIN+. Fermée par construction : un id que la carte
+   * ne mentionne pas est retiré.
+   *
+   * Un socket anonyme n'a pas d'identité à relire — le lecteur est `null` et
+   * c'est la loi qui répond HIDDEN pour tous, pas ce handler. Une liste vide
+   * ne consulte ni le lecteur ni la loi : rien à projeter, aucune lecture.
+   */
+  private async _onlineUsersVisibleTo(
+    socket: Socket,
+    onlineUsers: readonly OnlineUserInfo[],
+  ): Promise<readonly OnlineUserInfo[]> {
+    if (onlineUsers.length === 0) return onlineUsers;
+
+    const viewerUserId = this._registeredUserIdOf(socket);
+    const viewer = viewerUserId ? await this.presenceViewer(viewerUserId) : null;
+    const visibility = await this.presenceVisibility.resolveForTargets(
+      viewer,
+      onlineUsers.map((u) => u.id),
+    );
+    return onlineUsers.filter((u) => visibility.get(u.id)?.showOnline === true);
+  }
+
+  /**
+   * Le `User.id` derrière un socket, ou `null` pour un invité de lien partagé
+   * — dont la clé dans `connectedUsers` est un jeton de session, jamais une
+   * identité qu'on présente à la loi.
+   */
+  private _registeredUserIdOf(socket: Socket): string | null {
+    const key = this.socketToUser.get(socket.id);
+    const connectedUser = key ? this.connectedUsers.get(key) : undefined;
+    if (!connectedUser || connectedUser.isAnonymous) return null;
+    return connectedUser.userId ?? null;
   }
 }

@@ -96,7 +96,6 @@ class ConversationViewModel: ObservableObject {
             _allVisualAttachments = nil
             _mediaCaptionMap = nil
             _allAudioItems = nil
-            _replyCountMap = nil
             _mentionDisplayNames = nil
             _mentionCandidates = nil
         }
@@ -204,19 +203,47 @@ class ConversationViewModel: ObservableObject {
     /// Users currently typing in this conversation.
     /// Backed by stateStore — changes fire stateStore.objectWillChange, NOT self.objectWillChange.
     /// This prevents the full conversation view graph from re-evaluating on every keystroke.
-    var typingUsernames: [String] {
-        get { stateStore.typingUsernames }
-        set { stateStore.typingUsernames = newValue }
+    var typingParticipants: [TypingParticipant] {
+        get { stateStore.typingParticipants }
+        set { stateStore.typingParticipants = newValue }
     }
 
-    /// Combine publisher for typing usernames — used by UIKit consumers (MessageListViewController).
-    var typingUsernamesPublisher: AnyPublisher<[String], Never> {
-        stateStore.$typingUsernames.eraseToAnyPublisher()
+    /// Projection en noms seuls — libellés d'accessibilité et empreinte de
+    /// roster. Dérivée, jamais stockée : une seconde copie divergerait du
+    /// roster dès qu'un frappeur entre ou sort.
+    var typingUsernames: [String] { typingParticipants.displayNames }
+
+    /// Combine publisher for the typing roster — used by UIKit consumers (MessageListViewController).
+    var typingParticipantsPublisher: AnyPublisher<[TypingParticipant], Never> {
+        stateStore.$typingParticipants.eraseToAnyPublisher()
+    }
+
+    /// Avatar déjà connu de cet auteur — lu dans les messages EN MÉMOIRE, comme
+    /// `mentionCandidates` et `topActiveMembersList` le font déjà. Le plus
+    /// récent gagne : un membre qui vient de changer de photo ne réapparaît pas
+    /// avec l'ancienne. `nil` quand il n'a rien écrit dans ce fil — la vue
+    /// retombe alors sur ses initiales.
+    func localAvatarURL(forSender userId: String) -> String? {
+        guard !userId.isEmpty else { return nil }
+        return messages.last { $0.senderId == userId && $0.senderAvatarURL != nil }?.senderAvatarURL
     }
 
     /// Real-time translation/transcription/audio data keyed by messageId
+    ///
+    /// L'invalidation du cache de RÉSOLUTION du Prisme est une propriété du
+    /// CHAMP, jamais une discipline d'appelant. Les quatre hydrateurs
+    /// retiraient bien leur clé ; le cinquième écrivain — le socket
+    /// (`translation:completed`) — ne le faisait pas, si bien qu'une traduction
+    /// arrivée APRÈS un premier rendu ne basculait jamais la bulle :
+    /// `preferredTranslation` continuait de servir le `nil` mis en cache
+    /// (« aucune traduction ⇒ original »). Ici, aucun écrivain ne peut plus
+    /// l'oublier. Pas de boucle possible : `preferredTranslation` écrit dans
+    /// `translationResolutionCache`, jamais dans ce dictionnaire.
     @Published var messageTranslations: [String: [MessageTranslation]] = [:] {
-        didSet { _mediaCaptionMap = nil }
+        didSet {
+            _mediaCaptionMap = nil
+            translationResolutionCache.removeAll()
+        }
     }
     @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
         didSet { _allAudioItems = nil }
@@ -765,21 +792,6 @@ class ConversationViewModel: ObservableObject {
             }
         }
         _mediaCaptionMap = map
-        return map
-    }
-
-    // MARK: - Reply Count Map (cached, O(1) lookup per message)
-
-    private var _replyCountMap: [String: Int]?
-    var replyCountMap: [String: Int] {
-        if let cached = _replyCountMap { return cached }
-        var map = [String: Int]()
-        for msg in messages {
-            if let parentId = msg.replyToId {
-                map[parentId, default: 0] += 1
-            }
-        }
-        _replyCountMap = map
         return map
     }
 
@@ -1601,6 +1613,7 @@ class ConversationViewModel: ObservableObject {
             Task { [weak self] in
                 guard let self else { return }
                 await self.refreshMessagesFromAPI()
+                await self.syncMissedMessagesOnOpen()
                 await MainActor.run { self.isRevalidating = false }
             }
 
@@ -1630,6 +1643,7 @@ class ConversationViewModel: ObservableObject {
                 Task { [weak self] in
                     guard let self else { return }
                     await self.refreshMessagesFromAPI()
+                    await self.syncMissedMessagesOnOpen()
                     await MainActor.run { self.isRevalidating = false }
                 }
             }
@@ -1823,19 +1837,27 @@ class ConversationViewModel: ObservableObject {
                     case .fresh(let data, _), .stale(let data, _):
                         // Update delivery counters on existing own-message records via GRDB;
                         // the store observation surfaces the changes to `messages` automatically.
+                        // Batché : 1 transaction + 1 refresh pour la rafale,
+                        // au lieu de N awaits → N notifications → N relectures.
                         let persistence = self.messagePersistence
-                        let ownMessages = self.messages.filter(\.isMe)
-                        for existing in ownMessages {
-                            guard let fresh = data.first(where: { $0.id == existing.id }),
-                                  fresh.deliveryStatus.isBetterThan(existing.deliveryStatus)
-                            else { continue }
-                            try? await persistence.updateDeliveryCounters(
-                                localId: existing.id,
-                                deliveredCount: fresh.deliveredCount,
-                                readCount: fresh.readCount,
-                                deliveredToAllAt: fresh.deliveredToAllAt,
-                                readByAllAt: fresh.readByAllAt
-                            )
+                        let freshById = Dictionary(data.map { ($0.id, $0) },
+                                                   uniquingKeysWith: { _, last in last })
+                        let updates: [MessagePersistenceActor.DeliveryCounterUpdate] = self.messages
+                            .filter(\.isMe)
+                            .compactMap { existing in
+                                guard let fresh = freshById[existing.id],
+                                      fresh.deliveryStatus.isBetterThan(existing.deliveryStatus)
+                                else { return nil }
+                                return MessagePersistenceActor.DeliveryCounterUpdate(
+                                    localId: existing.id,
+                                    deliveredCount: fresh.deliveredCount,
+                                    readCount: fresh.readCount,
+                                    deliveredToAllAt: fresh.deliveredToAllAt,
+                                    readByAllAt: fresh.readByAllAt
+                                )
+                            }
+                        if !updates.isEmpty {
+                            try? await persistence.updateDeliveryCounters(updates)
                         }
                         // Surface any messages in the cache that aren't yet in GRDB.
                         let currentIds = Set(self.messages.map(\.id))
@@ -1849,7 +1871,12 @@ class ConversationViewModel: ObservableObject {
                                     senderId: msg.senderId,
                                     content: msg.content.isEmpty ? nil : msg.content,
                                     createdAt: msg.createdAt,
-                                    computedState: .delivered
+                                    computedState: .delivered,
+                                    // Le message vient du CACHE, il connaît sa
+                                    // source : la taire ferait naître un avis
+                                    // système comme une parole ordinaire.
+                                    messageSource: msg.messageSource.rawValue,
+                                    messageType: msg.messageType.rawValue
                                 )
                             }
                             await self.messagePersistence.bufferIncoming(incoming)
@@ -3138,8 +3165,17 @@ class ConversationViewModel: ObservableObject {
             previewText: previewText,
             isMe: quoted.isMe,
             authorColor: quoted.senderColor,
+            // Bulle OPTIMISTE : le message cite est deja en memoire, son avatar
+            // avec. Sans ce report, la citation optimiste s'affichait en
+            // initiales puis « sautait » a la photo au premier refresh serveur.
+            authorAvatarUrl: quoted.senderAvatarURL,
             attachmentType: quoted.attachments.first?.type.rawValue,
-            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl,
+            // Le message cite est en memoire : sa protection est CONNUE, pas
+            // declaree par le fil. Sans ce report, la bulle optimiste d'une
+            // reponse a un media a vue unique en montrait la vignette le temps
+            // que le serveur accuse.
+            attachmentIsProtected: quoted.attachments.first.map { $0.isViewOnce || $0.isBlurred }
         )
     }
 
@@ -3651,6 +3687,11 @@ class ConversationViewModel: ObservableObject {
             )
         }
 
+        // Le contenu change : ses traductions décrivent un texte qui n'existe
+        // plus. Évincées AVANT l'optimiste pour que la bulle ne se re-rende
+        // jamais avec le nouveau texte SOUS l'ancienne traduction.
+        invalidateTranslations(for: messageId)
+
         // Optimistic update: write through persistence so the store
         // observation surfaces the change without a direct messages mutation.
         let editedAt = Date()
@@ -3829,6 +3870,30 @@ class ConversationViewModel: ObservableObject {
         commandHandler.markAsReceived()
     }
 
+
+    // MARK: - Ouverture de conversation
+
+    /// Le rattrapage `after`, joué à l'OUVERTURE quand GRDB était déjà chaud.
+    ///
+    /// `refreshMessagesFromAPI()` lit `offset: 0, limit: 30` : sur une absence
+    /// courte il suffit, mais au-delà de trente messages manqués il colle les
+    /// trente derniers sur le bloc GRDB ancien et laisse un TROU au milieu que
+    /// personne ne regarde — `loadOlderMessages` part du plus ancien vers
+    /// l'arrière, ce rattrapage part du plus récent vers l'avant. Le trou
+    /// n'était comblé que par redondance (le puits `message:new` global et le
+    /// rejeu serveur de 48 h), jamais DÉTECTÉ, et rien ne le couvrait après une
+    /// absence plus longue.
+    ///
+    /// Les deux lectures sont COMPLÉMENTAIRES, pas redondantes : le refresh
+    /// rapporte les éditions et réactions des trente derniers, le rattrapage
+    /// rapporte les messages ABSENTS, quel qu'en soit le nombre.
+    ///
+    /// Sur un GRDB FROID on ne l'appelle pas : le refresh vient d'apporter les
+    /// trente plus récents, il n'y a rien devant eux à rattraper.
+    private func syncMissedMessagesOnOpen() async {
+        guard !messageStore.messages.isEmpty else { return }
+        await syncMissedMessages()
+    }
 
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
@@ -4338,6 +4403,57 @@ class ConversationViewModel: ObservableObject {
             }
             messageTranslations[msgId] = existing
             translationResolutionCache.removeValue(forKey: msgId)
+        }
+    }
+
+    /// Éviction des traductions d'un message dont le CONTENU vient de changer.
+    ///
+    /// Le gateway invalide les siennes à l'ÉCRITURE (`translations: null` posé
+    /// dans le même `updateMany` que `content`) ; ceci en est le jumeau client.
+    /// Une traduction d'un contenu périmé n'est pas une traduction.
+    ///
+    /// Les QUATRE caches tombent ensemble, et c'est le point : vider le seul
+    /// dictionnaire en mémoire range le message parmi les « non couverts » de
+    /// `hydrateTranslationsFromCache`, qui le RÉINJECTE depuis le
+    /// CacheCoordinator puis depuis GRDB — le texte périmé survivrait alors au
+    /// redémarrage. Pendant la fenêtre, l'ORIGINAL est servi (règle 1 du
+    /// Prisme) jusqu'à la prochaine `translation:completed`, qui réalimente le
+    /// dictionnaire langue par langue.
+    ///
+    /// La bascule MANUELLE tombe avec eux : `activeTranslationOverrides`
+    /// COURT-CIRCUITE les quatre autres dans `preferredTranslation(for:)`, un
+    /// override survivant afficherait donc le texte d'avant l'édition alors
+    /// même que tout le reste est vide. La clé est RETIRÉE, jamais écrasée par
+    /// `nil` — une clé présente valant `nil` signifie « le lecteur a demandé
+    /// l'ORIGINAL », un choix qu'il n'a pas fait ici.
+    ///
+    /// Les deux ESPACES D'IDS sont évincés : une bulle optimiste vit sous son
+    /// `temp_…` pendant que les deux caches persistants sont déjà keyés par
+    /// l'id SERVEUR (`pendingServerIds`), et l'édition est le seul chemin que
+    /// l'utilisateur déclenche lui-même — sur SES messages, donc justement
+    /// ceux qui portent un id temporaire. Inerte sur le chemin socket, où
+    /// `serverId(for:)` rend l'id reçu.
+    func invalidateTranslations(for messageId: String) {
+        let resolved = serverId(for: messageId)
+        messageTranslations.removeValue(forKey: messageId)
+        translationResolutionCache.removeValue(forKey: messageId)
+        activeTranslationOverrides.removeValue(forKey: messageId)
+        if resolved != messageId {
+            messageTranslations.removeValue(forKey: resolved)
+            translationResolutionCache.removeValue(forKey: resolved)
+            activeTranslationOverrides.removeValue(forKey: resolved)
+        }
+        let persistence = messagePersistence
+        let ids = resolved == messageId ? [messageId] : [messageId, resolved]
+        Task {
+            for id in ids {
+                await CacheCoordinator.shared.invalidateTranslations(for: id)
+                do {
+                    try await persistence.deleteTranslations(messageLocalId: id)
+                } catch {
+                    Logger.messages.warning("[ConversationVM] deleteTranslations failed \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
+            }
         }
     }
 

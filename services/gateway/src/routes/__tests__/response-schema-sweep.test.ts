@@ -121,12 +121,44 @@ const ROUTES_DIR = join(__dirname, '..');
  * balayage frère : `response-payload-mismatch.test.ts`. **Les deux sont
  * nécessaires ; aucun ne subsume l'autre.**
  *
+ * **Un troisième les complète depuis le cycle 92** : `error-schema-sweep.test.ts`.
+ * Le `calls.ts|details|400` retiré ci-dessus était la FEUILLE d'un défaut dont
+ * ce cliquet ne pouvait pas voir la racine — `error` déclaré OBJET porte des
+ * `properties`, donc n'est pas « nu ». Et cette racine-là vivait sur les
+ * DIX-NEUF schémas du fichier, pas sur le seul 400 que l'inventaire nommait.
+ * Une clé du mauvais TYPE n'est pas supprimée, elle est COERCÉE ; c'est le
+ * balayage d'erreur qui garde cette forme, et il le peut parce que les erreurs
+ * n'ont qu'un producteur.
+ *
  * Détail, preuves de sérialisation et inventaire raisonné :
  * `tasks/realtime-sync-audit-2026-08-22-cycle91-bis.md`.
  */
-const FROZEN_INVENTORY: readonly string[] = [
-  'messages.ts|sender|200',
-];
+/**
+ * **L'inventaire est VIDE depuis le cycle 94**, et c'est un état à défendre,
+ * pas un état atteint.
+ *
+ * Sa dernière ligne — `messages.ts|sender|200`, seule de la **forme 3** — est
+ * partie avec le lot qui a aligné `GET /messages/:messageId` sur son enveloppe
+ * réelle. Ce site ne vidait rien : il masquait. Et l'aligner a rendu lisibles
+ * les deux défauts que l'enveloppe inerte neutralisait — `translations` servi
+ * en CARTE Mongo là où le contrat déclare un tableau, et `encryptionMode`
+ * absent de `messageSchema`. Les deux sont corrigés dans le même lot, gardés
+ * par `__tests__/unit/routes/message-detail-serialization.test.ts`.
+ *
+ * Quand ce cliquet tombe désormais, il n'y a plus de dette à hériter : une
+ * entrée EN TROP est un site NEUF, et la réponse est de le déclarer
+ * (`properties` si structuré, `additionalProperties` si carte), jamais de le
+ * geler ici. Ne geler que ce qu'une raison ÉCRITE justifie de laisser ouvert —
+ * et cette raison se mesure au sérialiseur, pas en lisant le schéma.
+ *
+ * **Un vert ici n'atteste toujours pas qu'un schéma dit VRAI** : ce balayage ne
+ * détecte qu'une déclaration ABSENTE. Une déclaration présente mais fausse
+ * contre son producteur — l'enveloppe de cette route, précisément — lui reste
+ * invisible. Ses deux frères couvrent l'autre moitié :
+ * `response-payload-mismatch.test.ts` (forme 2) et `error-schema-sweep.test.ts`
+ * (types d'erreur).
+ */
+const FROZEN_INVENTORY: readonly string[] = [];
 
 describe('balayage — un schéma de réponse ne déclare jamais un objet NU', () => {
   it("n'introduit aucun site que l'inventaire gelé ne nomme pas", () => {

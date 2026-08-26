@@ -452,11 +452,11 @@ describe('useCreateStoryMutation - null currentUser', () => {
 });
 
 // =============================================================================
-// useCreateStoryMutation - visibility defaults to 'FRIENDS' when not provided
+// useCreateStoryMutation - visibility defaults to 'PUBLIC' when not provided
 // =============================================================================
 
 describe('useCreateStoryMutation - default visibility', () => {
-  it('uses FRIENDS as default visibility when visibility is not provided', async () => {
+  it('uses PUBLIC as default visibility when visibility is not provided', async () => {
     const serverStory = makePost({ id: 'server-vis' });
     let resolveCreate!: (v: Post) => void;
     mockCreateStory.mockImplementation(() => new Promise(r => { resolveCreate = r; }));
@@ -469,11 +469,12 @@ describe('useCreateStoryMutation - default visibility', () => {
     act(() => { result.current.mutate({ content: 'No vis' }); }); // no visibility
 
     await waitFor(() => {
-      const stories = qc.getQueryData<Post[]>(['stories', 'feed']);
-      if (stories && stories.length > 0) {
-        expect(stories[0].visibility).toBe('FRIENDS'); // ?? 'FRIENDS' branch
-      }
+      expect(qc.getQueryData<Post[]>(['stories', 'feed'])).toHaveLength(1);
     });
+    // ?? 'PUBLIC' branch — l'optimiste doit annoncer la MÊME audience que
+    // celle que le service enverra au gateway, sinon la story change de
+    // visibilité sous les yeux de l'auteur au retour serveur.
+    expect(qc.getQueryData<Post[]>(['stories', 'feed'])?.[0].visibility).toBe('PUBLIC');
 
     await act(async () => { resolveCreate(serverStory); });
   });

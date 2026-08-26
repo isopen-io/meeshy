@@ -33,11 +33,18 @@ jest.mock('../../../../middleware/auth', () => ({
   UnifiedAuthRequest: {},
 }));
 
+// PROLONGER le module, jamais le REMPLACER (CLAUDE.md § « Un double PARTIEL
+// d'un module perd en silence tout ce que le module GAGNE »). Ce double listait
+// quatre exports à la main ; le jour où la route en a appelé un cinquième
+// (`generateUniqueShareLinkId`, 2026-08-23), elle a reçu `undefined` et rendu
+// 500 — la panne du cycle 91 rejouée à l'identique. Seul le générateur de
+// linkId est surchargé, pour que l'identifiant reste PRÉDICTIBLE dans les
+// assertions ; sa vraie loi est testée dans `link-helpers.test.ts`.
 jest.mock('../../../../routes/links/utils/link-helpers', () => ({
-  generateInitialLinkId: jest.fn(() => 'mshy_initial_abc123'),
+  ...(jest.requireActual('../../../../routes/links/utils/link-helpers') as object),
+  generateUniqueShareLinkId: jest.fn<any>().mockResolvedValue('mshy_TestLnk1'),
   generateConversationIdentifier: jest.fn((title: string) => `conv_${title.toLowerCase().replace(/\s/g, '_')}`),
-  generateFinalLinkId: jest.fn((id: string) => `mshy_final_${id}`),
-  ensureUniqueShareLinkIdentifier: jest.fn().mockResolvedValue('mshy_unique_link'),
+  ensureUniqueShareLinkIdentifier: jest.fn<any>().mockResolvedValue('mshy_unique_link'),
 }));
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -55,7 +62,7 @@ const mockUser = { id: USER_ID, role: 'USER', username: 'alice', displayName: 'A
 
 const mockShareLink = {
   id: LINK_ID,
-  linkId: 'mshy_initial_abc123',
+  linkId: 'mshy_TestLnk1',
   name: null,
   description: null,
   expiresAt: null,
@@ -81,7 +88,6 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     conversationShareLink: {
       create: jest.fn<any>().mockResolvedValue(mockShareLink),
-      update: jest.fn<any>().mockResolvedValue({ ...mockShareLink, linkId: `mshy_final_${LINK_ID}` }),
     },
     ...overrides,
   } as any;

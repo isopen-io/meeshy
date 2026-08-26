@@ -154,6 +154,51 @@ describe('Call Validation Schemas', () => {
       expect(result.success).toBe(false);
     });
 
+    // Cycle 107 — le schéma est passé d'un objet PLAT gardé par un `.refine` à
+    // une union DISCRIMINÉE. Les contraintes d'exécution sont les mêmes (les
+    // témoins ci-dessus, écrits contre la forme plate, passent inchangés) ; ce
+    // qui change est que chaque membre ne déclare plus que SES champs, donc que
+    // Zod RETIRE ceux de l'autre.
+    //
+    // Ce n'est pas cosmétique : le relais émet `validation.data` et jamais
+    // `data`, précisément pour qu'un client ne puisse pas glisser de champs
+    // arbitraires dans la charge de signalisation du pair. Un `sdp` accroché à
+    // un `ice-candidate` traversait ; il ne traverse plus.
+    it('retire le sdp accroché à un ice-candidate (il ne se relaie plus au pair)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'user-2',
+          candidate: 'candidate:1 1 udp 2130706431 192.168.1.1 5000 typ host',
+          sdp: 'v=0\r\nm=audio 9 RTP/AVP 0\r\n',
+        },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.signal).not.toHaveProperty('sdp');
+    });
+
+    it('retire les champs ICE accrochés à une offre', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\nm=audio 9 RTP/AVP 0\r\n',
+          candidate: 'candidate:1 1 udp 2130706431 192.168.1.1 5000 typ host',
+          sdpMLineIndex: 0,
+          sdpMid: 'audio',
+        },
+      });
+      expect(result.success).toBe(true);
+      const signal = result.success ? result.data.signal : undefined;
+      expect(signal).not.toHaveProperty('candidate');
+      expect(signal).not.toHaveProperty('sdpMLineIndex');
+      expect(signal).not.toHaveProperty('sdpMid');
+    });
+
     it('rejects invalid MongoDB callId', () => {
       const result = socketSignalSchema.safeParse({
         callId: 'not-a-mongo-id',
@@ -836,46 +881,3 @@ describe('socketCallAnalyticsSchema', () => {
   });
 });
 
-describe('Type Guard Tests (video-call.ts)', () => {
-  // Import after mocks to avoid issues
-  const { isActiveCall, isP2PCall, determineCallMode } = require('@meeshy/shared/types/video-call');
-
-  describe('isActiveCall', () => {
-    it('returns true for active states', () => {
-      expect(isActiveCall({ status: 'active' })).toBe(true);
-      expect(isActiveCall({ status: 'ringing' })).toBe(true);
-      expect(isActiveCall({ status: 'connecting' })).toBe(true);
-      expect(isActiveCall({ status: 'reconnecting' })).toBe(true);
-    });
-
-    it('returns false for terminal states', () => {
-      expect(isActiveCall({ status: 'ended' })).toBe(false);
-      expect(isActiveCall({ status: 'missed' })).toBe(false);
-      expect(isActiveCall({ status: 'rejected' })).toBe(false);
-      expect(isActiveCall({ status: 'failed' })).toBe(false);
-      expect(isActiveCall({ status: 'initiated' })).toBe(false);
-    });
-  });
-
-  describe('isP2PCall', () => {
-    it('returns true for p2p mode', () => {
-      expect(isP2PCall({ mode: 'p2p' })).toBe(true);
-    });
-
-    it('returns false for sfu mode', () => {
-      expect(isP2PCall({ mode: 'sfu' })).toBe(false);
-    });
-  });
-
-  describe('determineCallMode', () => {
-    it('returns p2p for 2 or fewer participants', () => {
-      expect(determineCallMode(1)).toBe('p2p');
-      expect(determineCallMode(2)).toBe('p2p');
-    });
-
-    it('returns sfu for 3+ participants', () => {
-      expect(determineCallMode(3)).toBe('sfu');
-      expect(determineCallMode(10)).toBe('sfu');
-    });
-  });
-});

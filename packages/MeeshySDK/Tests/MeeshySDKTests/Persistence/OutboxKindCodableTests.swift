@@ -29,7 +29,7 @@ final class OutboxKindCodableTests: XCTestCase {
             "updateConversation", "updateProfile", "updateSettings",
             "publishStory", "repostStory", "createPost",
             "toggleLikePost", "createComment", "deleteComment",
-            "toggleLikeComment"
+            "toggleLikeComment", "repostPost"
         ]
         let actual = Set(OutboxKind.allCases.map(\.rawValue))
         XCTAssertTrue(
@@ -212,6 +212,26 @@ final class OutboxKindCodableTests: XCTestCase {
         let d = try roundTrip(p)
         XCTAssertEqual(d.originalStoryId, "s1")
         XCTAssertEqual(d.targetConversationId, "c1")
+    }
+
+    /// Fil rouge du repost (lot 7, tâche 7.5) — `.repostPost`, distinct de
+    /// `.repostStory` (`RepostStoryPayload`, repost privé en conversation)
+    /// juste au-dessus.
+    func test_repostPost_roundTrips() throws {
+        let p = RepostPostPayload(
+            clientMutationId: "cmid_rp",
+            postId: "p1",
+            targetType: "POST",
+            content: "My take",
+            isQuote: true,
+            visibility: "FRIENDS"
+        )
+        let d = try roundTrip(p)
+        XCTAssertEqual(d.postId, "p1")
+        XCTAssertEqual(d.targetType, "POST")
+        XCTAssertEqual(d.content, "My take")
+        XCTAssertTrue(d.isQuote)
+        XCTAssertEqual(d.visibility, "FRIENDS")
     }
 
     func test_createPost_roundTrips() throws {

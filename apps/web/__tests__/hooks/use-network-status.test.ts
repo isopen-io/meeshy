@@ -12,6 +12,9 @@ describe('useNetworkStatus', () => {
     Object.defineProperty(navigator, 'onLine', { value: true, writable: true });
     const { result } = renderHook(() => useNetworkStatus());
 
+    // Un navigateur qui émet `offline` rapporte déjà `onLine = false` ; le hook
+    // relit cette valeur au lieu de la déduire du seul nom de l'événement.
+    Object.defineProperty(navigator, 'onLine', { value: false, writable: true });
     act(() => {
       window.dispatchEvent(new Event('offline'));
     });
@@ -23,6 +26,7 @@ describe('useNetworkStatus', () => {
     Object.defineProperty(navigator, 'onLine', { value: false, writable: true });
     const { result } = renderHook(() => useNetworkStatus());
 
+    Object.defineProperty(navigator, 'onLine', { value: true, writable: true });
     act(() => {
       window.dispatchEvent(new Event('online'));
     });

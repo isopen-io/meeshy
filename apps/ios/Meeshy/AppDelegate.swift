@@ -9,6 +9,11 @@ import os
 private let logger = Logger(subsystem: "me.meeshy.app", category: "push")
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     // MARK: - Application Lifecycle
 
@@ -479,6 +484,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 /// OS expiration handler or the happy path finishes first.
 @MainActor
 private final class SilentPushState {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private var completionHandler: ((UIBackgroundFetchResult) -> Void)?
     private var taskId: UIBackgroundTaskIdentifier = .invalid
     private var didFinish = false

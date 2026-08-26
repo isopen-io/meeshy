@@ -25,6 +25,8 @@ import type { AuthenticatedRequest } from './types';
 
 const DEFAULT_PAGE_SIZE = 100;
 const VALID_FILTERS: DirectoryFilter[] = ['all', 'meeshy', 'invitable'];
+/** Tolérance d'horloge cliente pour `syncStartedAt` — au-delà, 400. */
+const SYNC_STARTED_AT_FUTURE_TOLERANCE_MS = 5_000;
 
 function parseFilter(value: unknown): DirectoryFilter {
   return VALID_FILTERS.includes(value as DirectoryFilter) ? (value as DirectoryFilter) : 'all';
@@ -62,7 +64,16 @@ export async function syncContactsDirectory(fastify: FastifyInstance) {
           mode: {
             type: 'string',
             enum: ['merge', 'replace'],
-            description: '`replace` purges entries absent from this payload (full device sync). Defaults to `merge`.'
+            description: '`replace` purges entries absent from this payload (full device sync). Defaults to `merge`. Ignored for purge purposes once `syncStartedAt` or `isFinalBatch` is present — see below.'
+          },
+          syncStartedAt: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Watermark token (ISO 8601), identical across every batch of one multi-batch sync — echoed back by the first batch\'s response. Its presence switches the purge strategy to the batched one (see `isFinalBatch`). Rejected with 400 if more than 5s in the future.'
+          },
+          isFinalBatch: {
+            type: 'boolean',
+            description: 'True on the last batch of a multi-batch sync — triggers the purge of every directory entry not touched (via any batch) since `syncStartedAt`. Absent/false on intermediate batches: no purge at all.'
           }
         }
       },
@@ -78,7 +89,11 @@ export async function syncContactsDirectory(fastify: FastifyInstance) {
                 processedContacts: { type: 'number' },
                 syncedCount: { type: 'number' },
                 matchedCount: { type: 'number' },
-                removedCount: { type: 'number' }
+                removedCount: { type: 'number' },
+                syncStartedAt: {
+                  type: 'string',
+                  description: 'Server clock at request receipt (ISO 8601), captured before any upsert — always returned. Repeat the value returned by the FIRST batch, unchanged, on every subsequent batch of the same sync — never the value returned by an intermediate batch (it would advance the watermark and purge the earlier batches).'
+                }
               }
             }
           }
@@ -90,35 +105,69 @@ export async function syncContactsDirectory(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Horloge serveur à la réception — AVANT tout upsert. Toujours
+      // renvoyée en réponse, et sert de filigrane par défaut pour un lot
+      // unique final (`isFinalBatch: true` sans `syncStartedAt`).
+      const receivedAt = new Date();
+
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
         return sendUnauthorized(reply, 'Authentication required');
       }
 
-      const body = (request.body ?? {}) as { contacts?: unknown; defaultCountry?: unknown; mode?: unknown };
+      const body = (request.body ?? {}) as {
+        contacts?: unknown;
+        defaultCountry?: unknown;
+        mode?: unknown;
+        syncStartedAt?: unknown;
+        isFinalBatch?: unknown;
+      };
       if (!Array.isArray(body.contacts)) {
         return sendBadRequest(reply, 'Invalid contacts payload');
       }
+
+      let syncStartedAt: Date | undefined;
+      if (typeof body.syncStartedAt === 'string') {
+        const parsed = new Date(body.syncStartedAt);
+        if (Number.isNaN(parsed.getTime())) {
+          return sendBadRequest(reply, 'Invalid syncStartedAt');
+        }
+        if (parsed.getTime() > receivedAt.getTime() + SYNC_STARTED_AT_FUTURE_TOLERANCE_MS) {
+          return sendBadRequest(reply, 'syncStartedAt is in the future');
+        }
+        syncStartedAt = parsed;
+      }
+      const isFinalBatch = typeof body.isFinalBatch === 'boolean' ? body.isFinalBatch : undefined;
+      const batched = syncStartedAt !== undefined || isFinalBatch !== undefined;
 
       const totalContacts = body.contacts.length;
       const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
       const mode: SyncMode = body.mode === 'replace' ? 'replace' : 'merge';
 
-      if (totalContacts > MAX_CONTACTS_PER_SYNC) {
+      const truncated = totalContacts > MAX_CONTACTS_PER_SYNC;
+      if (truncated) {
         fastify.log.warn(
           `[CONTACTS-SYNC] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`
         );
       }
 
-      // Un lot tronqué ne doit JAMAIS purger : `replace` supprimerait les
-      // contacts au-delà de la borne, que le client s'apprête à envoyer.
-      const effectiveMode: SyncMode = totalContacts > MAX_CONTACTS_PER_SYNC ? 'merge' : mode;
+      // Un lot tronqué ne doit JAMAIS purger — ni via `contactKey notIn`
+      // (garde-fou historique), ni via le filigrane par lots. La troncature
+      // (`normalizeContacts`) jette des fiches en silence : aucun lot ne les
+      // a jamais touchées, donc les purger amputerait le répertoire de
+      // données qu'aucun envoi n'a reçues. Un lot tronqué ne peut donc
+      // jamais être FINAL, quel que soit `isFinalBatch` demandé par le
+      // client.
+      const effectiveMode: SyncMode = !batched && truncated ? 'merge' : mode;
 
       const service = new ContactDirectoryService(fastify.prisma);
       const result = await service.sync({
         ownerId: authContext.userId,
         contacts,
-        mode: effectiveMode
+        mode: effectiveMode,
+        syncStartedAt,
+        isFinalBatch: truncated ? false : isFinalBatch,
+        receivedAt
       });
 
       return sendSuccess(reply, {
@@ -126,7 +175,8 @@ export async function syncContactsDirectory(fastify: FastifyInstance) {
         processedContacts: contacts.length,
         syncedCount: result.synced,
         matchedCount: result.matched,
-        removedCount: result.removed
+        removedCount: result.removed,
+        syncStartedAt: receivedAt.toISOString()
       });
     } catch (error) {
       logError(fastify.log, '[CONTACTS-SYNC] Error syncing directory', error);

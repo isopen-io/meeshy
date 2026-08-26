@@ -421,6 +421,84 @@ describe('resolveRiverStep — l’axe horizontal traverse les vivants, sans qui
   });
 });
 
+describe('partage de colonnes — l’axe horizontal reste par colonne, pas par naissance', () => {
+  /**
+   * Plus de voix (9) que de couloirs (`RIVER_MAX_LANES` = 7), mais jamais plus
+   * de 7 vivantes à la fois : la rivière tient en `lanes` (pas `serialized`) et
+   * `packColumns` RÉUTILISE des colonnes libérées. Une voix née plus tard (E, F,
+   * G) hérite alors d’une colonne PLUS BASSE qu’une voix née plus tôt et encore
+   * vivante (D, colonne 4). L’ordre de `geometry.lanes` est l’ordre de
+   * NAISSANCE — donc pas l’ordre de colonne. Vague 1 (A, B, C) meurt avant que la
+   * vague 2 (E, F, G, H) ne naisse, après la fenêtre de silence ; D court sans
+   * discontinuer et garde la colonne 4.
+   */
+  const wide = resolveRiverLanes(
+    input(
+      [
+        message('v0', 'V', 0),
+        message('a', 'A', 1),
+        message('b', 'B', 2),
+        message('c', 'C', 3),
+        message('d0', 'D', 4),
+        message('d1', 'D', 30),
+        message('e', 'E', 50),
+        message('f', 'F', 51),
+        message('g', 'G', 52),
+        message('h', 'H', 53),
+        message('d2', 'D', 55),
+        message('v1', 'V', 56),
+        message('v2', 'V', 80),
+      ],
+      {
+        viewerId: 'V',
+        participants: ['V', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((id) => ({
+          id,
+          displayName: id,
+        })),
+      },
+    ),
+  );
+
+  it('confirme le décor : la rivière partage des colonnes en restant sur deux axes', () => {
+    expect(wide.layout).toBe('lanes');
+    expect(laneOf(wide, 'D').laneIndex).toBe(4);
+    expect(laneOf(wide, 'E').laneIndex).toBe(1);
+    expect(laneOf(wide, 'H').laneIndex).toBe(5);
+  });
+
+  it('rend les couloirs vivants PAR COLONNE CROISSANTE, jamais par ordre de naissance', () => {
+    // Au rang 9, D(4) E(1) F(2) G(3) H(5) vivent. En ordre de naissance :
+    // [4, 1, 2, 3, 5] ; l’axe horizontal exige [1, 2, 3, 4, 5].
+    expect(resolveRiverLivingLanes(wide, 9)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('pas à DROITE : atteint la colonne voisine, sans sauter par-dessus des couloirs vivants', () => {
+    // Depuis la colonne 1 (E), le voisin de droite est la colonne 2 (F), pas la
+    // colonne 4 (D, née avant mais rangée plus loin).
+    const step = resolveRiverStep({
+      geometry: wide,
+      cursor: { laneIndex: 1, rank: 9 },
+      direction: 'right',
+    });
+
+    expect(step.cursor.laneIndex).toBe(2);
+    expect(step.reason).toBe('moved');
+  });
+
+  it('pas à GAUCHE : atteint la colonne voisine la plus proche, pas la première née', () => {
+    // Depuis la colonne 5 (H), le voisin de gauche le plus proche est la
+    // colonne 4 (D), pas la colonne 3 (G).
+    const step = resolveRiverStep({
+      geometry: wide,
+      cursor: { laneIndex: 5, rank: 9 },
+      direction: 'left',
+    });
+
+    expect(step.cursor.laneIndex).toBe(4);
+    expect(step.reason).toBe('moved');
+  });
+});
+
 describe('resolveRiverStep — l’axe vertical suit la personne, à travers ses disparitions', () => {
   const followMia = resolveRiverLanes(
     input([
@@ -776,6 +854,17 @@ describe('resolveRiverLaneAt — une colonne partagée dit QUI l’occupe à cet
     expect(resolveRiverLaneAt(geometry, 0, 0)?.laneId).toBe('mia');
     expect(resolveRiverLaneAt(geometry, 0, 1)?.laneId).toBe('sarah');
     expect(resolveRiverLaneAt(geometry, 1, 0)).toBeNull();
+  });
+
+  it('sérialisée, ne nomme AUCUNE colonne au rang d’une annonce — même quand l’arrivant parlera ensuite', () => {
+    const geometry = resolveRiverLanes(
+      input([notice('j', 'lena', 0), message('a', 'lena', 1), message('b', 'mia', 2)]),
+    );
+
+    expect(geometry.layout).toBe('serialized');
+    expect(resolveRiverLaneAt(geometry, 0, 0)).toBeNull();
+    expect(resolveRiverLaneAt(geometry, 0, 1)?.laneId).toBe('lena');
+    expect(resolveRiverLaneAt(geometry, 0, 2)?.laneId).toBe('mia');
   });
 });
 

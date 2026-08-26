@@ -25,10 +25,23 @@ nonisolated public enum LentilleMetrics {
     /// `list.row` — padding `10/16`, marge latérale `8`, radius `16`,
     /// `transform-origin: 16% 50%`.
     nonisolated public enum Row {
-        public static let height: CGFloat = 64
-        public static let paddingVertical: CGFloat = 10
+        /// 64 → 84 le 2026-08-22 : la rangée porte TROIS lignes — nom (avec
+        /// la pile de non-lus en fin de ligne), « auteur : message », puis la
+        /// date seule à droite. Le contenu mesure ~78,6 pt à la taille de
+        /// texte par défaut : 64 n'en logeait que deux. Un essai à 92 a réservé
+        /// la place d'un badge d'effectif de bord, retiré depuis (l'effectif
+        /// est une information de MAGNIFICATION, pas de repos) — la rangée a
+        /// rendu cette hauteur.
+        public static let height: CGFloat = 84
+        public static let paddingVertical: CGFloat = 8
         public static let paddingHorizontal: CGFloat = 16
         public static let marginHorizontal: CGFloat = 8
+        /// Marge VERTICALE entre deux rangées, et entre une rangée et le
+        /// sticker suivant. Elle existait déjà comme littéral (`LazyVStack(spacing: 8)`)
+        /// mais n'avait jamais été NOMMÉE — c'est ce qui a permis à la
+        /// respiration de la carte de focus de valoir 18 pt sans que personne
+        /// ne rapproche les deux chiffres.
+        public static let marginVertical: CGFloat = 8
         public static let radius: CGFloat = 16
         /// Fraction `[0, 1]` de la largeur du rang — pivot du zoom/scale au
         /// défilement (perspective LWS-8). CSS `16%`.
@@ -88,6 +101,17 @@ nonisolated public enum LentilleMetrics {
 
     /// `list.unreadDot` — `8`, couleur accent. §0 : diamètre de design, pas
     /// un token repris d'ailleurs — sa seule maison est ici.
+    ///
+    /// **Plus AUCUN consommateur iOS depuis le lot 2 (2026-08-22)** : le
+    /// point ouvrait la ligne du pont ✦ sous `showsBridge`, c'est-à-dire
+    /// exactement sous `unreadCount > 0` — la pastille rouge CHIFFRÉE
+    /// rétablie en queue de ligne de titre porte la même nouvelle, en sachant
+    /// dire combien. Le miroir Swift SURVIT parce que le token, lui, est
+    /// toujours vivant : la peau WEB le consomme
+    /// (`apps/web/components/conversations/lentille/LentilleRow.tsx`,
+    /// `--lentille-list-unread-dot-size`), et le retirer du JSON y ferait un
+    /// point de 0×0 en silence. À solder quand le lot 2 web fera le même
+    /// arbitrage.
     nonisolated public enum UnreadDot {
         public static let size: CGFloat = 8
     }
@@ -95,6 +119,20 @@ nonisolated public enum LentilleMetrics {
     // MARK: - Carte de focus
 
     /// `list.focusCard` — fond `bg2` + ring INTERNE `1.5` accent, radius `16`.
+    ///
+    /// **La peau iOS ne peint plus de CARTE depuis le 2026-08-23** (directive
+    /// produit : « pas de bordure, on complète juste les informations,
+    /// directement sur le row existant ; l'objet reste le même »). Les valeurs
+    /// ci-dessous restent le miroir FIDÈLE de `list.focusCard` dans
+    /// `packages/shared/design/lentille-tokens.json` — verrouillé contre lui
+    /// par `LentilleMetricsTests.test_focusCard` — parce que le token, lui,
+    /// est toujours vivant : la peau WEB le consomme
+    /// (`apps/web/styles/lentille-tokens.css`,
+    /// `--lentille-list-focus-card-{ring-size,radius,height,…}`). Ce qui a
+    /// changé n'est pas la LOI partagée, c'est ce que la peau iOS en peint :
+    /// elle lit désormais `FocusInline` (ci-dessous) et les métriques de la
+    /// RANGÉE. `ringSize` reste consommé — par le liseré blanc du filtre
+    /// d'étiquette actif ; `breathing` aussi, par la respiration des voisines.
     nonisolated public enum FocusCard {
         public static let ringSize: CGFloat = 1.5
         public static let radius: CGFloat = 16
@@ -102,19 +140,20 @@ nonisolated public enum LentilleMetrics {
         /// importante et un padding suffisant en haut et en bas ») : déborde
         /// de la rangée (64) de 20 pt de chaque côté — la loupe — sans
         /// toucher la hauteur des rangées ; aperçu sur DEUX lignes.
-        public static let height: CGFloat = 104
+        /// 104 → 124 le 2026-08-22 : la carte loge les mêmes trois lignes que
+        /// la rangée, avec un aperçu qui coule sur deux lignes.
+        public static let height: CGFloat = 124
         public static let paddingVertical: CGFloat = 14
         /// Avatar de la carte = le contexte « liste » historique (52), un cran
         /// au-dessus de la rangée plate (44) : c'est la magnification.
         public static let avatarContext: AvatarContext = .conversationList
         public static let nameSize: CGFloat = 17
         @MainActor public static var nameFont: Font { MeeshyFont.relative(nameSize, weight: Name.weight) }
-        public static let shadowRadius: CGFloat = 12
-        public static let shadowY: CGFloat = 4
-        /// Ombre de la carte — nommée ici (`Core/`) : `0.35` est un littéral
-        /// de loi interdit en dur dans les fichiers de peau.
-        public static let shadowOpacityDark: Double = 0.35
-        public static let shadowOpacityLight: Double = 0.12
+        // `shadowRadius`/`shadowY`/`shadowOpacity{Dark,Light}` ont vécu ici
+        // jusqu'au 2026-08-23 : l'ombre portée de la carte. Retirées avec la
+        // carte elle-même — elles n'avaient AUCUN token dans
+        // `lentille-tokens.json` (contrairement au reste de cet enum) et plus
+        // aucun consommateur. Une valeur de loi sans loi ni lecteur.
         /// Respiration (2026-08-22, « le triple de l'espace actuel ») : les
         /// rangées voisines s'écartent de la ligne de focus de ce montant
         /// pendant la scène — translation de compositor, zéro relayout.
@@ -125,11 +164,61 @@ nonisolated public enum LentilleMetrics {
         /// il est ANIMÉ, donc les trous s'ouvraient et se refermaient pendant
         /// le défilement. C'est la moitié « espaces compliqués » du retour
         /// produit. La cause retirée (bord bas désencombré), la valeur revient.
-        public static let breathing: CGFloat = 18
+        /// Amplitude de la respiration : de combien les rangées voisines
+        /// s'écartent de l'élue pendant la scène.
+        ///
+        /// **ÉCRÊTÉE À LA MARGE** (arbitrage produit 2026-08-23). Elle valait
+        /// 18 pt pour une marge de 8 : une rangée poussée mangeait donc la
+        /// marge et mordait le header suivant. Chevauchement mesuré à
+        /// géométrie stabilisée, deux frontières, deux relevés indépendants —
+        /// 9,6 / 8,9 puis 9,2 / 9,1 pt — et l'arithmétique bouclait exactement,
+        /// `18 − 8 − (88 − h)/2 = 9,6` pour `h = 87,3`.
+        ///
+        /// L'ancrer sur `Row.marginVertical` plutôt que d'ajouter un `min()`
+        /// rend le défaut structurellement impossible : la respiration ne peut
+        /// pas dépasser ce que la marge lui offre. Au-delà, elle ne déplace
+        /// plus les rangées, elle les fait se chevaucher.
+        ///
+        /// Ce n'était PAS l'échelle : `listScaleDecay = 0.04` donne un
+        /// `scale ≤ 1` ancré, donc une rangée qui rétrécit ÉLOIGNE ses bords de
+        /// ses voisins — elle ne peut mécaniquement pas mordre un header.
+        public static let breathing: CGFloat = Row.marginVertical
         /// Rampe : nulle jusqu'à une demi-rangée (la rangée élue ne bouge
         /// pas), pleine une rangée plus loin — jamais de saut au passage.
         public static let breathingRampStart: CGFloat = 36
         public static let breathingRampLength: CGFloat = 40
+    }
+
+    // MARK: - Magnification EN PLACE (2026-08-23)
+
+    /// La rangée élue n'est plus RECOUVERTE par une carte : elle est
+    /// COMPLÉTÉE. Directive produit du 2026-08-23, mot pour mot : « pas de
+    /// bordure, on complète juste les informations, directement sur le row
+    /// existant ; sans que l'utilisateur ne sente un changement si ce n'est le
+    /// surplus d'information, l'objet reste le même ».
+    ///
+    /// AUCUN nombre neuf, et c'est le point : chaque valeur DÉRIVE des
+    /// métriques de la rangée. Un token de plus dans
+    /// `packages/shared/design/lentille-tokens.json` aurait fabriqué une
+    /// seconde géométrie à tenir synchronisée avec la première, alors que la
+    /// loi est justement « la même géométrie, plus d'information ».
+    nonisolated public enum FocusInline {
+        /// La rangée, plus ses deux marges — exactement le pas que la liste
+        /// lui réserve déjà. Assez pour loger la QUATRIÈME ligne (l'aperçu qui
+        /// coule sur deux lignes), jamais assez pour mordre une voisine : la
+        /// respiration (`FocusCard.breathing`, la même marge) les écarte
+        /// d'autant pendant la scène.
+        public static let height: CGFloat = Row.height + 2 * Row.marginVertical
+
+        /// Le MÊME padding vertical que la rangée : ce qui déborde déborde de
+        /// la marge, jamais du padding — sinon l'aperçu et le nom bougeraient
+        /// entre repos et magnification, et l'objet ne serait plus le même.
+        public static let paddingVertical: CGFloat = Row.paddingVertical
+
+        /// Le MÊME avatar que la rangée (44). La magnification n'agrandit plus
+        /// rien : elle ajoute. Un avatar qui passe de 44 à 52 sous le doigt,
+        /// c'est précisément le « changement senti » que la directive interdit.
+        public static let avatarContext: AvatarContext = Avatar.context
     }
 
     // MARK: - Encoche de mode
@@ -178,6 +267,14 @@ nonisolated public enum LentilleMetrics {
     nonisolated public enum Rail {
         public static let size: CGFloat = 48
         public static let ringWidth: CGFloat = 3.5
+        /// Respiration VERTICALE du rail. Le rail iOS n'en avait AUCUNE —
+        /// `.padding(.horizontal)` seul — alors que son jumeau web porte
+        /// `py-2` depuis toujours (`LivesRail.tsx:55`). Mesure reproduite deux
+        /// fois au repos : la trail finissait a 199.3 et le premier sticker
+        /// commencait a 199.3, soit 0 pt de jonction, quand TOUTES les autres
+        /// jonctions de la liste valent 8 (header→rang 220.6→228.7,
+        /// 440.0→448.0, 659.3→667.3).
+        public static let paddingVertical: CGFloat = 8
         public static let maxEntries: Int = 6
     }
 
@@ -191,6 +288,10 @@ nonisolated public enum LentilleMetrics {
         /// Chips d'étiquettes de la carte de focus (2026-08-22 : « plus
         /// petites ») — un cran sous l'encoche de mode.
         public static let chipFontSize: CGFloat = 8
+        /// Fond d'une bulle de bord TEINTÉE (effectif) — la chip d'étiquette,
+        /// elle, est pleine de la couleur du tag. Assez pour détacher la bulle
+        /// du fond, assez peu pour qu'une information ne crie pas.
+        public static let bubbleFillOpacity: Double = 0.16
         public static let chipPaddingHorizontal: CGFloat = 6
         public static let chipPaddingVertical: CGFloat = 2
     }

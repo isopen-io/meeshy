@@ -196,7 +196,7 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         // ringing forever, and release the media acquired for it.
         const activeCall = useCallStore.getState().currentCall;
         if (activeCall && activeCall.id !== ack.data.callId) {
-          (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+          socket.emit(CLIENT_EVENTS.CALL_END, {
             callId: ack.data.callId,
             reason: 'rejected',
           });

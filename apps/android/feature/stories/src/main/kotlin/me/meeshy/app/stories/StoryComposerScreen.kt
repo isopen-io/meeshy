@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,30 +32,45 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Login
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.BorderColor
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.FormatAlignCenter
 import androidx.compose.material.icons.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material.icons.filled.FormatColorReset
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Loop
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VerticalAlignBottom
 import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
@@ -70,6 +86,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -82,10 +99,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -100,6 +122,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -118,8 +141,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.meeshy.feature.stories.R
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.StoryBackgroundPalette
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.ui.theme.hexColor
 
 /**
  * Story composer screen — the publish surface reached from the tray's "add story"
@@ -222,10 +248,14 @@ fun StoryComposerScreen(
                 colorMatrix = state.selectedSlideFilterMatrix,
                 textElements = state.selectedSlideTextElements,
                 selectedElement = state.selectedTextElement,
+                elementMenu = state.elementContextMenu,
                 stickers = state.selectedSlideStickers,
                 selectedStickerId = state.selectedStickerId,
                 onTransform = viewModel::onCanvasTransform,
                 onElementTap = viewModel::onSelectTextElement,
+                onElementLongPress = viewModel::onOpenElementMenu,
+                onElementMenuAction = viewModel::onElementMenuAction,
+                onElementMenuDismiss = viewModel::onDismissElementMenu,
                 onElementDrag = viewModel::onTextElementMoved,
                 onElementDragEnd = viewModel::onTextElementDragEnd,
                 onElementTransform = viewModel::onTextElementTransform,
@@ -249,6 +279,13 @@ fun StoryComposerScreen(
                             onStyle = { style -> viewModel.onTextElementStyle(element.id, style) },
                             onColor = { color -> viewModel.onTextElementColor(element.id, color) },
                             onAlign = { align -> viewModel.onTextElementAlign(element.id, align) },
+                            onBackground = { bg -> viewModel.onTextElementBackground(element.id, bg) },
+                            onCycleSize = { viewModel.onTextElementCycleSize(element.id) },
+                            onCycleOutline = { viewModel.onTextElementCycleOutline(element.id) },
+                            onCycleFadeIn = { viewModel.onTextElementCycleFadeIn(element.id) },
+                            onCycleFadeOut = { viewModel.onTextElementCycleFadeOut(element.id) },
+                            onCycleStart = { viewModel.onTextElementCycleStart(element.id) },
+                            onCycleDuration = { viewModel.onTextElementCycleDuration(element.id) },
                             onDuplicate = { viewModel.onDuplicateTextElement(element.id) },
                             onReorder = { op -> viewModel.onReorderTextElement(element.id, op) },
                         )
@@ -291,7 +328,12 @@ fun StoryComposerScreen(
                 MediaPreviewRow(
                     attachments = state.selectedSlideAttachments,
                     pending = state.selectedSlidePending,
+                    backgroundMediaId = state.deck.selectedSlideBackgroundMediaId,
+                    backgroundIsVideo = state.selectedSlideBackgroundIsVideo,
+                    backgroundLoop = state.selectedSlideBackgroundLoop,
                     onRemove = viewModel::onRemoveMedia,
+                    onToggleBackground = viewModel::onToggleSlideBackgroundMedia,
+                    onToggleBackgroundLoop = { viewModel.onSetSlideBackgroundLoop(!state.selectedSlideBackgroundLoop) },
                 )
             }
 
@@ -300,6 +342,8 @@ fun StoryComposerScreen(
                 visibility = state.draft.visibility,
                 selectedFilter = state.selectedSlideFilter,
                 filterIntensity = state.selectedSlideFilterIntensity,
+                slideDurationSeconds = state.selectedSlideDurationSeconds,
+                selectedBackground = state.selectedSlideBackground,
                 canAddText = state.deck.selectedCanAddTextElement,
                 canAddSticker = state.deck.selectedCanAddSticker,
                 isUploadingMedia = state.isUploadingMedia,
@@ -321,6 +365,8 @@ fun StoryComposerScreen(
                 onSelectVisibility = viewModel::onVisibilityChange,
                 onSelectFilter = viewModel::onSelectFilter,
                 onFilterIntensityChange = viewModel::onFilterIntensityChange,
+                onSlideDurationChange = viewModel::onSlideDurationChange,
+                onSelectBackground = viewModel::onSlideBackgroundChange,
             )
         }
     }
@@ -342,6 +388,8 @@ private fun ComposerControlsLayer(
     visibility: StoryVisibility,
     selectedFilter: StoryFilter?,
     filterIntensity: Float,
+    slideDurationSeconds: Double,
+    selectedBackground: StoryBackgroundValue?,
     canAddText: Boolean,
     canAddSticker: Boolean,
     isUploadingMedia: Boolean,
@@ -357,6 +405,8 @@ private fun ComposerControlsLayer(
     onSelectVisibility: (StoryVisibility) -> Unit,
     onSelectFilter: (StoryFilter?) -> Unit,
     onFilterIntensityChange: (Float) -> Unit,
+    onSlideDurationChange: (Double) -> Unit,
+    onSelectBackground: (StoryBackgroundValue?) -> Unit,
 ) {
     val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -397,11 +447,19 @@ private fun ComposerControlsLayer(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
+                        BackgroundRow(
+                            selected = selectedBackground,
+                            onSelect = onSelectBackground,
+                        )
                         FilterRow(
                             selected = selectedFilter,
                             intensity = filterIntensity,
                             onSelect = onSelectFilter,
                             onIntensityChange = onFilterIntensityChange,
+                        )
+                        DurationRow(
+                            seconds = slideDurationSeconds,
+                            onSecondsChange = onSlideDurationChange,
                         )
                         VisibilityRow(
                             selected = visibility,
@@ -543,10 +601,14 @@ private fun StoryCanvasSurface(
     colorMatrix: StoryColorMatrix,
     textElements: List<StoryTextElement>,
     selectedElement: StoryTextElement?,
+    elementMenu: StoryElementContextMenu?,
     stickers: List<StoryStickerElement>,
     selectedStickerId: String?,
     onTransform: (Float, Float, Float, Float, Float) -> Unit,
     onElementTap: (String) -> Unit,
+    onElementLongPress: (String) -> Unit,
+    onElementMenuAction: (StoryElementAction) -> Unit,
+    onElementMenuDismiss: () -> Unit,
     onElementDrag: (String, Float, Float) -> Unit,
     onElementDragEnd: () -> Unit,
     onElementTransform: (String, Float, Float) -> Unit,
@@ -619,6 +681,39 @@ private fun StoryCanvasSurface(
             }
             if (snapFeedback != null) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
+                    // Persistent composition overlay (parity with iOS SafeZoneOverlay): while an
+                    // element is being dragged, draw the viewer-chrome safe rectangle and the
+                    // rule-of-thirds grid so the author frames content clear of the viewer's
+                    // top/bottom chrome. Geometry from the pure, unit-tested StorySafeZoneGrid.
+                    val grid = StorySafeZoneGrid.geometry(size.width, size.height)
+                    if (!grid.isEmpty) {
+                        val gridColor = guideColor.copy(alpha = 0.35f)
+                        val dash = PathEffect.dashPathEffect(floatArrayOf(12f, 12f))
+                        grid.verticalThirds.forEach { gx ->
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(gx, 0f),
+                                end = Offset(gx, size.height),
+                                strokeWidth = 1f,
+                                pathEffect = dash,
+                            )
+                        }
+                        grid.horizontalThirds.forEach { gy ->
+                            drawLine(
+                                color = gridColor,
+                                start = Offset(0f, gy),
+                                end = Offset(size.width, gy),
+                                strokeWidth = 1f,
+                                pathEffect = dash,
+                            )
+                        }
+                        drawRect(
+                            color = gridColor,
+                            topLeft = Offset(grid.safeLeft, grid.safeTop),
+                            size = Size(grid.safeRight - grid.safeLeft, grid.safeBottom - grid.safeTop),
+                            style = Stroke(width = 1.5f, pathEffect = dash),
+                        )
+                    }
                     snapFeedback.verticalGuide?.let { gx ->
                         drawLine(
                             color = guideColor,
@@ -641,9 +736,13 @@ private fun StoryCanvasSurface(
                 TextElementLayer(
                     element = element,
                     selected = element.id == selectedElement?.id,
+                    menu = elementMenu?.takeIf { it.elementId == element.id },
                     canvasWidthPx = canvasWidthPx,
                     canvasHeightPx = canvasHeightPx,
                     onTap = { onElementTap(element.id) },
+                    onLongPress = { onElementLongPress(element.id) },
+                    onMenuAction = onElementMenuAction,
+                    onMenuDismiss = onElementMenuDismiss,
                     onDrag = { dxPx, dyPx ->
                         if (canvasWidthPx > 0f && canvasHeightPx > 0f) {
                             onElementDrag(element.id, dxPx / canvasWidthPx, dyPx / canvasHeightPx)
@@ -711,9 +810,13 @@ private fun StoryCanvasSurface(
 private fun TextElementLayer(
     element: StoryTextElement,
     selected: Boolean,
+    menu: StoryElementContextMenu?,
     canvasWidthPx: Float,
     canvasHeightPx: Float,
     onTap: () -> Unit,
+    onLongPress: () -> Unit,
+    onMenuAction: (StoryElementAction) -> Unit,
+    onMenuDismiss: () -> Unit,
     onDrag: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
     onTransform: (Float, Float) -> Unit,
@@ -738,7 +841,9 @@ private fun TextElementLayer(
                 sizePx = it
                 onMeasured(it)
             }
-            .pointerInput(element.id) { detectTapGestures { onTap() } }
+            .pointerInput(element.id) {
+                detectTapGestures(onLongPress = { onLongPress() }, onTap = { onTap() })
+            }
             .pointerInput(element.id) {
                 detectTransformGestures { _, pan, zoom, rotation ->
                     onDrag(pan.x, pan.y)
@@ -766,22 +871,58 @@ private fun TextElementLayer(
     ) {
         val typography = element.style.typography()
         val textColor = parseHexColor(element.color)
-        Text(
-            text = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) },
-            color = textColor,
-            fontWeight = FontWeight(typography.fontWeight),
-            fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
-            fontFamily = typography.family.toFontFamily(),
-            letterSpacing = typography.letterSpacingEm.em,
-            textAlign = element.align.toTextAlign(),
-            style = if (typography.glow) {
-                LocalTextStyle.current.copy(
-                    shadow = Shadow(color = textColor, blurRadius = 24f),
-                )
+        // The pure model carries the base size in wire "design units" (1080-referential,
+        // iOS parity); the on-canvas preview shows it scaled to sp, and the element's own
+        // graphicsLayer `scale` above multiplies on top — mirroring iOS `fontSize × scale`.
+        val canvasFontSize = (element.size.designSize * STORY_TEXT_CANVAS_FONT_FACTOR).sp
+        val displayText = element.text.ifBlank { stringResource(R.string.stories_composer_text_placeholder) }
+        // Base writing direction is derived from the caption (iOS-parity render-time
+        // derivation via the pure StoryTextBidi), so an Arabic/Hebrew caption lays its
+        // paragraph out right-to-left. Applied to both the stroked underlay and the fill.
+        val textDirection = when (element.baseDirection) {
+            StoryTextDirection.LTR -> TextDirection.Ltr
+            StoryTextDirection.RTL -> TextDirection.Rtl
+        }
+        val baseStyle = (
+            if (typography.glow) {
+                LocalTextStyle.current.copy(shadow = Shadow(color = textColor, blurRadius = 24f))
             } else {
                 LocalTextStyle.current
-            },
-        )
+            }
+            ).copy(textDirection = textDirection)
+        Box(
+            modifier = Modifier
+                .storyTextBacking(element.background)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
+            val outline = element.outline
+            if (outline.isVisible) {
+                // Stroked underlay: the same glyphs painted as an outline beneath the fill,
+                // so the border hugs the letterforms rather than boxing the element.
+                Text(
+                    text = displayText,
+                    color = parseHexColor(outline.color!!),
+                    fontSize = canvasFontSize,
+                    fontWeight = FontWeight(typography.fontWeight),
+                    fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                    fontFamily = typography.family.toFontFamily(),
+                    letterSpacing = typography.letterSpacingEm.em,
+                    textAlign = element.align.toTextAlign(),
+                    style = baseStyle.copy(drawStyle = Stroke(width = outline.width)),
+                )
+            }
+            Text(
+                text = displayText,
+                color = textColor,
+                fontSize = canvasFontSize,
+                fontWeight = FontWeight(typography.fontWeight),
+                fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,
+                fontFamily = typography.family.toFontFamily(),
+                letterSpacing = typography.letterSpacingEm.em,
+                textAlign = element.align.toTextAlign(),
+                style = baseStyle,
+            )
+        }
         if (selected) {
             Surface(
                 onClick = onRemove,
@@ -799,7 +940,43 @@ private fun TextElementLayer(
                 )
             }
         }
+        // Unified long-press context menu, anchored to the element it targets. Each row's
+        // availability comes from the pure StoryElementMenu.resolve, so a greyed row can
+        // never dispatch an inert reducer; picking one routes through onMenuAction, which
+        // also closes the menu.
+        DropdownMenu(expanded = menu != null, onDismissRequest = onMenuDismiss) {
+            menu?.items?.forEach { item ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(item.action.labelRes())) },
+                    enabled = item.enabled,
+                    leadingIcon = { Icon(item.action.menuIcon(), contentDescription = null) },
+                    onClick = { onMenuAction(item.action) },
+                )
+            }
+        }
     }
+}
+
+/** The localised label for a context-menu [StoryElementAction] row. */
+private fun StoryElementAction.labelRes(): Int = when (this) {
+    StoryElementAction.EDIT -> R.string.stories_composer_edit_element
+    StoryElementAction.DUPLICATE -> R.string.stories_composer_duplicate_element
+    StoryElementAction.SEND_TO_BACK -> R.string.stories_composer_zorder_to_back
+    StoryElementAction.MOVE_BACKWARD -> R.string.stories_composer_zorder_backward
+    StoryElementAction.MOVE_FORWARD -> R.string.stories_composer_zorder_forward
+    StoryElementAction.BRING_TO_FRONT -> R.string.stories_composer_zorder_to_front
+    StoryElementAction.DELETE -> R.string.stories_composer_remove_text
+}
+
+/** The leading icon for a context-menu [StoryElementAction] row. */
+private fun StoryElementAction.menuIcon(): ImageVector = when (this) {
+    StoryElementAction.EDIT -> Icons.Filled.Edit
+    StoryElementAction.DUPLICATE -> Icons.Filled.ContentCopy
+    StoryElementAction.SEND_TO_BACK -> Icons.Filled.VerticalAlignBottom
+    StoryElementAction.MOVE_BACKWARD -> Icons.Filled.ArrowDownward
+    StoryElementAction.MOVE_FORWARD -> Icons.Filled.ArrowUpward
+    StoryElementAction.BRING_TO_FRONT -> Icons.Filled.VerticalAlignTop
+    StoryElementAction.DELETE -> Icons.Filled.Delete
 }
 
 /**
@@ -977,6 +1154,13 @@ private fun StoryTextFontFamily.toFontFamily(): FontFamily = when (this) {
 /** The intrinsic on-canvas emoji size before per-sticker [StoryStickerElement.scale]. */
 private val STICKER_BASE_FONT_SIZE = 48.sp
 
+/**
+ * Maps a text element's wire "design-unit" size ([StoryTextSize.designSize], 1080-referential)
+ * to the on-canvas preview size in sp. The medium default (96 design units) previews at 18 sp;
+ * the element's own `scale` multiplies on top. Preview-only — the wire carries the design units.
+ */
+private const val STORY_TEXT_CANVAS_FONT_FACTOR = 0.1875f
+
 /** The on-canvas text colour palette — hex (no `#`), [StoryTextElement.DEFAULT_COLOR] first. */
 private val STORY_TEXT_COLORS = listOf(
     StoryTextElement.DEFAULT_COLOR,
@@ -1010,6 +1194,13 @@ private fun TextStyleToolbar(
     onStyle: (StoryTextStyle) -> Unit,
     onColor: (String) -> Unit,
     onAlign: (StoryTextAlign) -> Unit,
+    onBackground: (StoryTextBackground) -> Unit,
+    onCycleSize: () -> Unit,
+    onCycleOutline: () -> Unit,
+    onCycleFadeIn: () -> Unit,
+    onCycleFadeOut: () -> Unit,
+    onCycleStart: () -> Unit,
+    onCycleDuration: () -> Unit,
     onDuplicate: () -> Unit,
     onReorder: (StoryZOrder) -> Unit,
     modifier: Modifier = Modifier,
@@ -1027,10 +1218,77 @@ private fun TextStyleToolbar(
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
         ) {
             AlignToggle(StoryTextAlign.LEFT, element.align, onAlign)
             AlignToggle(StoryTextAlign.CENTER, element.align, onAlign)
             AlignToggle(StoryTextAlign.RIGHT, element.align, onAlign)
+            IconButton(onClick = onCycleSize) {
+                Icon(
+                    Icons.Filled.FormatSize,
+                    contentDescription = stringResource(R.string.stories_composer_size),
+                    tint = if (element.size != StoryTextSize.DEFAULT) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleOutline) {
+                Icon(
+                    Icons.Filled.BorderColor,
+                    contentDescription = stringResource(R.string.stories_composer_outline),
+                    tint = if (element.outline.isVisible) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleFadeIn) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Login,
+                    contentDescription = stringResource(R.string.stories_composer_fade_in),
+                    tint = if (element.fade.hasFadeIn) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleFadeOut) {
+                Icon(
+                    Icons.AutoMirrored.Filled.Logout,
+                    contentDescription = stringResource(R.string.stories_composer_fade_out),
+                    tint = if (element.fade.hasFadeOut) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleStart) {
+                Icon(
+                    Icons.Filled.Schedule,
+                    contentDescription = stringResource(R.string.stories_composer_timing_start),
+                    tint = if (element.timing.hasStart) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            IconButton(onClick = onCycleDuration) {
+                Icon(
+                    Icons.Filled.Timelapse,
+                    contentDescription = stringResource(R.string.stories_composer_timing_duration),
+                    tint = if (element.timing.isTimed) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
             IconButton(onClick = onDuplicate) {
                 Icon(
                     Icons.Filled.ContentCopy,
@@ -1064,6 +1322,59 @@ private fun TextStyleToolbar(
                     onClick = { onColor(hex) },
                 )
             }
+        }
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(StoryTextBackgroundPresets.all) { preset ->
+                BackgroundSwatch(
+                    background = preset,
+                    selected = element.background == preset,
+                    onClick = { onBackground(preset) },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * One text-backing choice in the toolbar: a rounded swatch previewing the backing
+ * (a slash for None, the frosted scrim for Glass, the fill for Solid), ringed when it
+ * is the element's current backing. Tap forwards the pure [StoryTextBackground] preset
+ * to [onClick]; the decision logic lives in the unit-tested model.
+ */
+@Composable
+private fun BackgroundSwatch(
+    background: StoryTextBackground,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    val fill = when (background) {
+        StoryTextBackground.None -> Color.Transparent
+        is StoryTextBackground.Solid -> parseBackingColor(background.hex)
+        is StoryTextBackground.Glass -> Color.White.copy(alpha = 0.18f)
+    }
+    val label = when (background) {
+        StoryTextBackground.None -> stringResource(R.string.stories_composer_bg_none)
+        is StoryTextBackground.Solid -> "#${background.hex}"
+        is StoryTextBackground.Glass -> stringResource(R.string.stories_composer_bg_glass)
+    }
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(fill)
+            .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(8.dp))
+            .pointerInput(background) { detectTapGestures { onClick() } }
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        if (background is StoryTextBackground.None) {
+            Icon(
+                Icons.Filled.FormatColorReset,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp),
+            )
         }
     }
 }
@@ -1121,6 +1432,35 @@ private fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
 /** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */
 private fun parseHexColor(hex: String): Color =
     runCatching { Color(("ff" + hex.removePrefix("#")).toLong(16)) }.getOrDefault(Color.White)
+
+/**
+ * Parses a `RRGGBB` **or** `RRGGBBAA` (optionally `#`-prefixed) hex into a Compose [Color],
+ * reordering the trailing alpha of the 8-digit form into Compose's `AARRGGBB`. Falls back to
+ * transparent on anything unexpected so a malformed preset never crashes the canvas.
+ */
+private fun parseBackingColor(hex: String): Color = runCatching {
+    val h = hex.removePrefix("#")
+    val argb = when (h.length) {
+        8 -> h.substring(6, 8) + h.substring(0, 6)
+        6 -> "ff$h"
+        else -> return Color.Transparent
+    }
+    Color(argb.toLong(16))
+}.getOrDefault(Color.Transparent)
+
+/**
+ * Paints the element's text backing behind the glyphs (glue): a rounded solid fill for
+ * [StoryTextBackground.Solid], a translucent frosted scrim approximating the iOS blur for
+ * [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None]. The *choice* of
+ * backing is the unit-tested [StoryTextBackground]; this only renders it.
+ */
+private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
+    StoryTextBackground.None -> this
+    is StoryTextBackground.Solid ->
+        this.background(parseBackingColor(background.hex), RoundedCornerShape(10.dp))
+    is StoryTextBackground.Glass ->
+        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+}
 
 /**
  * Mini-preview strip of the multi-slide deck — the structural surface of the
@@ -1217,17 +1557,29 @@ private fun SlideStrip(
 private fun MediaPreviewRow(
     attachments: List<UploadedMedia>,
     pending: List<PendingMediaUpload>,
+    backgroundMediaId: String?,
+    backgroundIsVideo: Boolean,
+    backgroundLoop: Boolean,
     onRemove: (String) -> Unit,
+    onToggleBackground: (String) -> Unit,
+    onToggleBackgroundLoop: () -> Unit,
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(attachments, key = { it.id }) { media ->
+            val isBackground = media.id == backgroundMediaId
             MediaThumbnail(
                 model = media.thumbnailUrl ?: media.url,
                 isPending = false,
+                isBackground = isBackground,
                 onRemove = { onRemove(media.id) },
+                onToggleBackground = { onToggleBackground(media.id) },
+                // The loop toggle appears only on the designated background VIDEO — the
+                // one media whose looping is authorable — so the control is never a no-op.
+                backgroundLoop = if (isBackground && backgroundIsVideo) backgroundLoop else null,
+                onToggleBackgroundLoop = onToggleBackgroundLoop,
             )
         }
         items(pending, key = { it.cmid }) { upload ->
@@ -1246,6 +1598,10 @@ private fun MediaThumbnail(
     model: Any?,
     isPending: Boolean,
     onRemove: () -> Unit,
+    isBackground: Boolean = false,
+    onToggleBackground: (() -> Unit)? = null,
+    backgroundLoop: Boolean? = null,
+    onToggleBackgroundLoop: (() -> Unit)? = null,
 ) {
     Box {
         AsyncImage(
@@ -1256,6 +1612,62 @@ private fun MediaThumbnail(
                 .size(72.dp)
                 .clip(RoundedCornerShape(8.dp)),
         )
+        if (onToggleBackground != null) {
+            Surface(
+                onClick = onToggleBackground,
+                shape = RoundedCornerShape(50),
+                color = if (isBackground) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Black.copy(alpha = 0.55f)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(2.dp)
+                    .size(22.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Wallpaper,
+                    contentDescription = stringResource(
+                        if (isBackground) {
+                            R.string.stories_composer_background_media_clear
+                        } else {
+                            R.string.stories_composer_background_media_set
+                        },
+                    ),
+                    tint = if (isBackground) MaterialTheme.colorScheme.onPrimary else Color.White,
+                    modifier = Modifier.padding(3.dp),
+                )
+            }
+        }
+        if (backgroundLoop != null && onToggleBackgroundLoop != null) {
+            Surface(
+                onClick = onToggleBackgroundLoop,
+                shape = RoundedCornerShape(50),
+                color = if (backgroundLoop) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    Color.Black.copy(alpha = 0.55f)
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(2.dp)
+                    .size(22.dp),
+            ) {
+                Icon(
+                    Icons.Filled.Loop,
+                    contentDescription = stringResource(
+                        if (backgroundLoop) {
+                            R.string.stories_composer_background_loop_on
+                        } else {
+                            R.string.stories_composer_background_loop_off
+                        },
+                    ),
+                    tint = if (backgroundLoop) MaterialTheme.colorScheme.onPrimary else Color.White,
+                    modifier = Modifier.padding(3.dp),
+                )
+            }
+        }
         if (isPending) {
             Surface(
                 color = Color.Black.copy(alpha = 0.55f),
@@ -1322,6 +1734,87 @@ private fun StoryVisibility.labelRes(): Int = when (this) {
 }
 
 /**
+ * The Effets drawer's background picker: a "None" chip (clears the backdrop), one
+ * tappable swatch per [StoryBackgroundPalette] preset (solids and gradients), and a
+ * "random pastel" swatch. Selecting hands the chosen [StoryBackgroundValue] straight
+ * to the deck, which serialises it to `effects.background`; the reader paints it over
+ * its accent→black fallback. Per-slide; the palette + parse rules live in the model,
+ * so this stays glue. The random pastel is minted here (UI-side randomness) via the
+ * pure [StoryBackgroundPalette.randomPastel].
+ */
+@Composable
+private fun BackgroundRow(
+    selected: StoryBackgroundValue?,
+    onSelect: (StoryBackgroundValue?) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = stringResource(R.string.stories_composer_background)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium)
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            item {
+                FilterChip(
+                    selected = selected == null,
+                    onClick = { onSelect(null) },
+                    label = { Text(stringResource(R.string.stories_composer_background_none)) },
+                )
+            }
+            items(StoryBackgroundPalette.presets()) { preset ->
+                BackgroundSwatch(
+                    brush = backgroundSwatchBrush(preset),
+                    isSelected = preset == selected,
+                    onClick = { onSelect(preset) },
+                )
+            }
+            item {
+                val randomLabel = stringResource(R.string.stories_composer_background_random)
+                FilterChip(
+                    selected = false,
+                    onClick = { onSelect(StoryBackgroundPalette.randomPastel()) },
+                    label = { Text(randomLabel) },
+                )
+            }
+        }
+    }
+}
+
+/** One tappable background swatch — a rounded chip painted with [brush], ringed when [isSelected]. */
+@Composable
+private fun BackgroundSwatch(
+    brush: Brush,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ring = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(brush)
+            .border(BorderStroke(if (isSelected) 2.dp else 1.dp, ring), CircleShape)
+            .clickable(onClick = onClick),
+    )
+}
+
+/**
+ * The paint for a preview swatch — a solid fill or a two-colour gradient — reusing the
+ * same `hexColor` SSOT the reader paints with, so the swatch matches what publishes.
+ */
+private fun backgroundSwatchBrush(value: StoryBackgroundValue): Brush = when (value) {
+    is StoryBackgroundValue.Hex -> SolidColor(hexColor(value.hex))
+    is StoryBackgroundValue.Gradient -> Brush.linearGradient(
+        listOf(hexColor(value.start), hexColor(value.end)),
+    )
+}
+
+/**
  * The Effets drawer's photo-filter picker: a "None" chip plus one chip per
  * [StoryFilter] preset (selecting toggles the slide's filter), and — only while a
  * filter is active — a strength slider. All per-slide; the deck holds the state and
@@ -1372,6 +1865,54 @@ private fun FilterRow(
         }
     }
 }
+
+/**
+ * The per-slide duration control in the Effets band — a labelled slider that pins how
+ * long the selected slide stays on screen (parity with iOS's timeline "pin duration").
+ * The slider spans the practical [DURATION_SLIDER_MIN_SECONDS]..[DURATION_SLIDER_MAX_SECONDS]
+ * range; the value it emits is bounded to the iOS `[2, 600]`s range by the pure
+ * `StoryDurationPin` in the ViewModel, and rides to the reader as `effects.timelineDuration`.
+ * Rounded to whole seconds so the pin is a clean value and the label reads simply.
+ */
+@Composable
+private fun DurationRow(
+    seconds: Double,
+    onSecondsChange: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val whole = seconds.roundToInt()
+    val label = stringResource(R.string.stories_composer_slide_duration)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, style = MaterialTheme.typography.labelMedium)
+            Text(
+                stringResource(R.string.stories_composer_slide_duration_value, whole),
+                style = MaterialTheme.typography.labelMedium,
+            )
+        }
+        Slider(
+            value = whole.toFloat().coerceIn(DURATION_SLIDER_MIN_SECONDS, DURATION_SLIDER_MAX_SECONDS),
+            onValueChange = { onSecondsChange(it.roundToInt().toDouble()) },
+            valueRange = DURATION_SLIDER_MIN_SECONDS..DURATION_SLIDER_MAX_SECONDS,
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = label },
+        )
+    }
+}
+
+/** Practical lower bound of the duration slider (matches the model's `StoryDurationPin.MIN_SECONDS`). */
+private const val DURATION_SLIDER_MIN_SECONDS: Float = 2f
+
+/** Practical upper bound of the duration slider — most story slides live well under a minute. */
+private const val DURATION_SLIDER_MAX_SECONDS: Float = 60f
 
 private fun StoryFilter.labelRes(): Int = when (this) {
     StoryFilter.VINTAGE -> R.string.stories_composer_filter_vintage

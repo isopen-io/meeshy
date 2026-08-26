@@ -38,6 +38,11 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
     /// Stocké en texte comme sur `MessageRecord.locationJson` (Task 15) —
     /// même mécanique, même colonne texte plutôt que blob.
     public var locationJson: String?
+    /// Liste nommée d'une audience EXCEPT/ONLY (JSON `[String]`). La colonne
+    /// `visibility` seule ne suffit pas : rouvrir l'éditeur sur un post ONLY
+    /// hydraté du cache afficherait « aucune personne » alors que le post en
+    /// cible plusieurs. Texte nullable → les lignes antérieures décodent nil.
+    public var visibilityUserIdsJson: String?
 
     public init(
         id: String, authorId: String,
@@ -56,7 +61,8 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         translationsJson: Data?,
         createdAt: Date, updatedAt: Date?,
         changeVersion: Int64,
-        locationJson: String? = nil
+        locationJson: String? = nil,
+        visibilityUserIdsJson: String? = nil
     ) {
         self.id = id
         self.authorId = authorId
@@ -89,6 +95,7 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         self.updatedAt = updatedAt
         self.changeVersion = changeVersion
         self.locationJson = locationJson
+        self.visibilityUserIdsJson = visibilityUserIdsJson
     }
 }
 
@@ -96,6 +103,12 @@ public extension PostRecord {
     /// Position décodée depuis `locationJson`, `nil` quand le post n'en porte
     /// pas. Décodage paresseux (comme `CommentRecord.reactionSummary`) plutôt
     /// que colonne stockée séparément — un seul champ JSON fait foi.
+    /// Liste nommée décodée — même décodage paresseux que `location`.
+    var visibilityUserIds: [String]? {
+        guard let visibilityUserIdsJson, let data = visibilityUserIdsJson.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode([String].self, from: data)
+    }
+
     var location: SharedPlace? {
         guard let locationJson, let data = locationJson.data(using: .utf8) else { return nil }
         return JSONDecoder().decodeOrLog(SharedPlace.self, from: data, field: "post locationJson", id: id)

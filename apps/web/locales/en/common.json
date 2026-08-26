@@ -266,11 +266,12 @@
       "video": "video",
       "audio": "audio"
     },
-    "storyVisibility": {
+    "publicationVisibility": {
+      "label": "Audience",
       "public": "Public",
       "friends": "Friends",
       "community": "Community",
-      "except": "All except…",
+      "except": "Friends except…",
       "only": "Only…",
       "private": "Private"
     },
@@ -281,17 +282,50 @@
       "empty": "No one found",
       "remove": "Remove"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Publication format",
+        "post": "Post",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Status"
+      },
+      "media": {
+        "limitReached": "You can attach up to {max} media files.",
+        "limitPartial": "You can attach up to {max} media files. Only {added} added."
+      },
+      "repost": {
+        "title": "Repost",
+        "quote": "Quote",
+        "contentLabel": "Quote content",
+        "posting": "Posting..."
+      },
+      "edit": {
+        "title": "Edit post",
+        "contentLabel": "Edit post content",
+        "removeMedia": "Remove this media"
+      }
+    },
     "postComposer": {
       "contentLabel": "Post content",
       "addPhoto": "Add photo",
       "addVideo": "Add video",
+      "addAudio": "Add audio",
       "changeVisibility": "Change visibility",
-      "visibility": {
-        "public": "Public",
-        "friends": "Friends",
-        "except": "Friends except...",
-        "only": "Only...",
-        "private": "Private"
+      "mediaAlt": {
+        "label": "Alt text",
+        "placeholder": "Describe this media for screen readers"
+      },
+      "soundExtraction": {
+        "label": "Allow others to reuse this sound",
+        "caption": "Other people will be able to reuse the soundtrack of this post's videos in their own publications."
+      },
+      "audio": {
+        "start": "Start recording",
+        "stop": "Stop recording",
+        "retry": "Retry",
+        "confirm": "Use recording",
+        "error": "Microphone access denied. Please allow microphone access and try again."
       },
       "reelToggle": {
         "groupLabel": "Post type",
@@ -324,7 +358,10 @@
         "SILENT": "Silent",
         "PINNED": "Pinned"
       }
-    }
+    },
+    "repost": "Repost",
+    "repostAsPost": "Keep on my feed",
+    "storyLocationHere": "Here"
   },
   "copied": "Copied",
   "never": "Never",

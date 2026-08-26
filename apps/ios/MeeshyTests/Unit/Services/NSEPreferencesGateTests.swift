@@ -117,7 +117,7 @@ final class NSEPreferencesGateTests: XCTestCase {
         XCTAssertEqual(content.interruptionLevel, .passive)
     }
 
-    func test_apply_dndWindowActive_downgradesToPassive() {
+    func test_apply_dndWindowActive_downgradesToPassive() throws {
         var prefs = UserNotificationPreferences.defaults
         prefs.dndEnabled = true
         prefs.dndStartTime = "00:00"
@@ -125,7 +125,14 @@ final class NSEPreferencesGateTests: XCTestCase {
         prefs.dndDays = []
         let content = makeContent()
 
-        NSEPreferencesGate.apply(preferences: prefs, to: content, rawType: "new_message")
+        // `now` FIXE (midi local) : évalué à l'horloge réelle, ce test devenait
+        // rouge chaque jour dans la minute 23:59 — la fenêtre est à fin
+        // EXCLUSIVE, « 00:00 → 23:59 » ne couvre pas [23:59, minuit). C'est
+        // arrivé en CI (run 32605462555, suite exécutée à 23:59 UTC).
+        let noon = try XCTUnwrap(Calendar.current.date(
+            from: DateComponents(year: 2026, month: 1, day: 15, hour: 12, minute: 0)
+        ))
+        NSEPreferencesGate.apply(preferences: prefs, to: content, rawType: "new_message", now: noon)
 
         XCTAssertEqual(content.interruptionLevel, .passive)
         XCTAssertNil(content.sound)

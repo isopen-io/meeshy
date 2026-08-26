@@ -19,9 +19,8 @@ import {
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import {
-  generateInitialLinkId,
+  generateUniqueShareLinkId,
   generateConversationIdentifier,
-  generateFinalLinkId,
   ensureUniqueShareLinkIdentifier
 } from './utils/link-helpers';
 import {
@@ -282,26 +281,28 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Générer le linkId initial
-      const initialLinkId = generateInitialLinkId();
+      // Identifiant PUBLIC du lien — compact, opaque, vérifié libre sur les
+      // deux colonnes publiques AVANT l'écriture. Il ne dérive plus de la clé
+      // primaire de la ligne, donc plus besoin de la créer pour le connaître :
+      // une seule écriture au lieu de deux (cf. `generateShareLinkId`).
+      const linkId = await generateUniqueShareLinkId(fastify.prisma);
 
-      // Générer un identifiant unique
-      let baseIdentifier: string;
+      // Identifiant LISIBLE — dérivé du nom, sinon de la description. Sans ni
+      // l'un ni l'autre, `ensureUniqueShareLinkIdentifier` rend un identifiant
+      // compact plutôt qu'un `mshy_link-<Date.now()>-<Math.random()>` qui
+      // publiait l'instant de création.
+      let baseIdentifier = '';
       if (body.name) {
         baseIdentifier = `mshy_${body.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`;
       } else if (body.description) {
         baseIdentifier = `mshy_${body.description.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 30)}`;
-      } else {
-        const timestamp = Date.now().toString();
-        const randomPart = Math.random().toString(36).substring(2, 8);
-        baseIdentifier = `mshy_link-${timestamp}-${randomPart}`;
       }
       const uniqueIdentifier = await ensureUniqueShareLinkIdentifier(fastify.prisma, baseIdentifier);
 
       // Créer le lien de partage
       const shareLink = await fastify.prisma.conversationShareLink.create({
         data: {
-          linkId: initialLinkId,
+          linkId,
           conversationId: conversationId!,
           createdBy: userId,
           name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
@@ -323,13 +324,6 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           allowedIpRanges: body.allowedIpRanges ?? [],
           identifier: uniqueIdentifier
         }
-      });
-
-      // Mettre à jour avec le linkId final
-      const finalLinkId = generateFinalLinkId(shareLink.id, initialLinkId);
-      await fastify.prisma.conversationShareLink.update({
-        where: { id: shareLink.id },
-        data: { linkId: finalLinkId }
       });
 
       // Notifier les admins et le créateur de la création du lien
@@ -367,11 +361,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       return sendSuccess(reply, {
-        linkId: finalLinkId,
+        linkId,
         conversationId,
         shareLink: {
           id: shareLink.id,
-          linkId: finalLinkId,
+          linkId,
           name: shareLink.name,
           description: shareLink.description,
           expiresAt: shareLink.expiresAt,

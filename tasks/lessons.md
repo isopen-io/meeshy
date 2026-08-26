@@ -1,5 +1,52 @@
 # Lessons
 
+## Leçon 244 — une ligne d'`exclude` dans `tsconfig` retire le code de TOUT ce qui mesure, d'un seul geste (2026-08-22, routine messagerie, cycle 94)
+
+Toutes les autres façons de rendre du code invisible ont un coût que quelqu'un
+voit :
+
+| geste | ce qui se voit |
+|---|---|
+| retirer un test | la couverture baisse |
+| supprimer un fichier | un import casse |
+| poser un `any` | le reste du fichier reste sous contrôle |
+| **`exclude` dans `tsconfig`** | **rien** |
+
+Une ligne d'`exclude` retire le code de la compilation, du type-check, de
+l'émission — et, si `jest.config.json` porte la ligne jumelle, du banc de test et
+de la couverture. Aucun avertissement ne se lève, aucune suite ne rougit, aucun
+seuil ne bouge. **Le répertoire reste là, plein, crédible, cité dans les documents
+d'architecture.**
+
+Coût mesuré sur `services/gateway/src/dma-interoperability/` : 3 231 lignes de
+Signal Protocol (X3DH, Double Ratchet, gestion de clés, moteur, adaptateurs) hors
+compilateur et hors banc, importées par personne. Quatre de ses modules
+importaient un chemin qui ne résout **nulle part** — ni dans le dépôt, ni dans
+l'image Docker. Remis sous le compilateur : **8 erreurs, dont 4 défauts
+d'exécution**, dont trois qui cassaient l'établissement de session par des chemins
+indépendants.
+
+Et le détail qui donne la mesure exacte de ce que le silence coûte : le seul
+endroit du chemin fautif où le compilateur AURAIT pu parler malgré l'exclusion
+portait un `(pk: any)`.
+
+> **Avant de conclure qu'un défaut est un oubli d'auteur, demander ce qui aurait
+> dû le voir.** Le suivi qui a ouvert ce cycle nommait un IV de 4 octets de trop.
+> Ce qu'il fallait aller chercher, c'est ce qui laissait un écart pareil vivre
+> entre trois déclarations partagées et leur unique producteur : deux lignes de
+> configuration, écrites une fois, jamais relues.
+
+Corollaire de manœuvre, pour ne pas transformer la remise sous compilateur en lot
+sans fin : **ce qu'on rallume et ce qu'on laisse éteint se DÉCIDENT séparément, et
+se disent.** Ici — le compilateur : oui, tout de suite (8 erreurs, tractable). Les
+3 suites du sous-arbre : non (mesuré 56 échecs / 114 ; les rendre vertes est un lot
+qui se fait en regardant chaque échec, pas en desserrant des assertions). La
+couverture : non (3 231 lignes quasi non couvertes feraient rougir la CI sous le
+seuil, ce qui n'a aucun rapport avec le défaut). La suppression : non — c'est une
+obligation réglementaire, donc une décision de feuille de route, pas un arbitrage
+d'hygiène de code. **Publier la mesure de ce qu'on n'a pas fait est ce qui permet
+au cycle suivant de partir d'un chiffre plutôt que d'une estimation.**
+
 ## Leçon 243 — un outil trouve la forme qu'on lui a décrite ; l'autre moitié du défaut n'en a aucune (2026-08-22, routine messagerie, cycle 91)
 
 Le cycle 86 a nommé la règle « un objet de réponse sans `properties` EFFACE »,
@@ -58,6 +105,31 @@ Corollaire, déjà croisé au cycle 84 et confirmé ici sous sa forme la plus ne
 > témoin ne tombe. Le retrait se fait à la SOURCE — compter sur une omission de
 > schéma pour retenir un secret, c'est un piège armé, pas une protection.
 
+## Leçon 243 — un script de résolution qui ÉCHOUE avant d'écrire, suivi d'un `&&` filtré par `grep`, committe les marqueurs de conflit (2026-08-22, lot de 22 PR)
+
+Pendant le merge de #3243, ma chaîne enchaînait « script Python de résolution →
+`git add` → tests | `grep` → `git commit --no-edit` ». Le script est tombé à la
+COMPILATION (guillemet mal fermé) — donc rien d'écrit — mais `git add` a pris les
+fichiers TELS QUELS (marqueurs compris), le `grep -E '^(Tests|...)'` de l'étape
+de tests a rendu 0 parce qu'il a TROUVÉ la ligne `FAIL …`, et le commit est parti.
+Résultat : un merge `bce89832a` avec `<<<<<<<` dans `messages-schemas.ts`, sur
+lequel j'avais déjà empilé le merge suivant avant de le voir.
+
+> **Un `&&` ne garde que le code de sortie du DERNIER maillon d'un pipe** —
+> `cmd | grep motif` rend 0 dès que le motif est trouvé, y compris quand le
+> motif est `FAIL`. Et `git add` accepte un fichier à marqueurs sans un mot.
+
+Règles, appliquées sur le reste du lot :
+1. **Jamais de `git commit` dans la même chaîne qu'une résolution ou qu'un test.**
+   Résoudre, puis VOIR (diff de la région, `git grep '^<<<<<<<'`, tests avec leur
+   compte), puis committer dans un appel séparé.
+2. Un script de résolution se termine par un `print('RÉSOLU')` + des `assert`
+   sur l'état final (`'<<<<<<<' not in s`) — et la chaîne n'avance que si ce mot
+   est apparu.
+3. Réparer = revenir AVANT le commit fautif (`git merge --abort` du merge en
+   cours, `git reset --hard <merge précédent>` dans son worktree PRIVÉ — jamais
+   dans l'arbre partagé), rejouer proprement ; pas de `--amend`.
+
 ## Leçon 242 — « Travaille directement sur main » : la directive de l'utilisateur prime le réflexe du worktree (2026-08-22, reprise Rivière)
 
 Mon plan ouvrait un worktree dédié (réflexe acquis : agents parallèles = worktrees). L'utilisateur a
@@ -106,6 +178,8 @@ rend « Needed a single revision » ici : passer par les refs complètes ou deux
 Le single-push détaché reste juste pour les LOTS de PR (consigne du 2026-07-21) ; il se
 termine simplement par `git fetch origin main:main` pour que la branche locale rattrape
 ce qu'on vient de pousser.
+
+## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
 
 ## Leçon 162 — Avant d'OUVRIR un chantier, regarder qui d'autre est déjà dessus — la leçon 159 vaut aussi à l'aller (2026-08-14, routine messaging, cycle 123bis)
 
@@ -11909,3 +11983,4818 @@ Corollaire de manœuvre, coûteux à oublier :
 > retiré `join` / `leave` / `invite` / `mine`. Les témoins qui PASSENT déjà
 > avant la bascule sont ceux-là — on les écrit dans le même lot que ceux qui
 > échouent, et ils valent autant.
+
+## Leçon — une API qu'on ne compile pas se vérifie sur sa surface exacte, pas sur son allure (2026-08-22)
+
+Itération 237i. Le correctif tenait en une ligne, écrite de mémoire :
+
+```swift
+count.formatted(.number.notation(.compact).locale(locale))
+```
+
+La CI l'a rendue **deux fois fausse**, et les deux erreurs sont de natures
+différentes — ce qui est précisément l'intérêt du cas :
+
+1. `type 'BinaryInteger' has no member 'number'`. `.number` est un membre
+   statique porté par une extension conditionnelle de `FormatStyle` ; à travers
+   la surcharge générique `BinaryInteger.formatted(_:)`, il n'a **pas de base à
+   inférer**. L'expression est bien formée à l'œil, et le compilateur n'a
+   pourtant rien pour la résoudre.
+2. `cannot infer contextual base in reference to member 'compact'`. Celle-là est
+   plus simple et plus humiliante : **`.compact` n'existe pas**.
+   `NumberFormatStyleConfiguration.Notation` n'offre que `.automatic`,
+   `.scientific` et `.compactName`. Le nom plausible n'était pas le nom réel.
+
+Le second message masquait le premier autant que l'inverse : « cannot infer
+contextual base » se lit volontiers comme une conséquence de l'échec de
+`.number`, alors que c'est un défaut indépendant. Corriger l'un sans l'autre
+aurait donné un second rouge.
+
+> **Écrire du Swift sans compilateur oblige à préférer, à qualité de rendu
+> égale, la forme qui demande le MOINS d'inférence.** Un style nommé et
+> construit — `IntegerFormatStyle<Int>(locale:).notation(.compactName).format(count)`
+> — n'a aucune base contextuelle à deviner : il compile ou il ne trouve pas le
+> symbole, et dans ce dernier cas l'erreur nomme le symbole. La forme abrégée,
+> elle, échoue sur l'inférence et l'erreur parle du protocole, pas du membre.
+
+Corollaire, qui vaut au-delà de Swift :
+
+> **Le doute doit porter sur les NOMS, pas seulement sur la forme.** J'avais
+> vérifié que la notation compacte existait depuis iOS 15 et que le plancher du
+> projet était iOS 16 — j'ai vérifié la *disponibilité* et pas l'*orthographe*.
+> Quand on ne peut pas compiler, une API mémorisée mérite qu'on énumère les cas
+> réels de son enum, ou qu'on la cite depuis un site d'appel déjà présent dans
+> le dépôt.
+
+Ce qui a bien fonctionné, et qu'il faut garder : les **tests de propriétés**
+n'ont eu à changer d'aucune façon. Ils n'affirmaient aucune chaîne CLDR ni
+aucune forme d'appel — seulement que le rendu français diffère du rendu
+anglais. Un test écrit sur le contrat et non sur l'implémentation survit à la
+correction de l'implémentation.
+
+## Leçon — annoncer un grep « dépôt entier » sans le lancer coûte une revue (2026-08-22)
+
+Itération 237i, suite. L'analyse affirmait, dans sa section « Vérification » :
+
+> **`formatCount` n'a plus qu'une occurrence** dans tout `apps/ios` : la ligne
+> de doc-comment qui explique ce qu'il a remplacé (`grep` sur le dépôt entier,
+> méthode imposée par la leçon 236i).
+
+Deux choses ne vont pas dans cette phrase, et la seconde est la vraie.
+
+La première est visible à l'œil : « dans tout `apps/ios` » et « sur le dépôt
+entier » ne peuvent pas être vrais ensemble. La seconde est que **le dépôt
+n'avait pas été grepé** : la commande avait porté sur `apps/ios` seul. La revue
+de merge a trouvé en trois minutes ce que la vérification annonçait avoir
+couvert — le jumeau `formatCount`, copie mot pour mot, dans
+`packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListView.swift`.
+Merger l'app seule aurait rendu les deux cartes communauté **incohérentes** :
+« 1,5 k » d'un côté, « 1.5k » de l'autre.
+
+L'aggravant : l'itération **citait la leçon 236i** — « un grep de fermeture part
+de la CLÉ, jamais de la SURFACE » — dans le paragraphe même où elle la violait.
+Citer une leçon n'est pas l'appliquer.
+
+> **Un `grep -rn --include=*.swift .` coûte une seconde. Le restreindre à un
+> sous-arbre parce qu'« évidemment le reste ne peut pas contenir ça » coûte une
+> revue — et, si la revue avait laissé passer, une incohérence en production.**
+> Sur ce dépôt en particulier, le réflexe `apps/ios` est faux par construction :
+> `packages/MeeshySDK/Sources/MeeshyUI/` contient des VUES, donc les mêmes
+> défauts d'affichage que l'app.
+
+Effet secondaire instructif : le grep refait pour de bon a trouvé **six sites de
+plus** de la même famille (`FeedPostCard`, `PostDetailReachAndVisibility`,
+`ReelFeedCard`, `ReelsPlayerView`, `ConversationDashboardView` ×2). Ils ne sont
+pas byte-identiques — le tableau de bord bascule à `>= 10_000` là où le feed
+bascule à `>= 1_000` — donc les absorber demandait de trancher si ce seuil est
+intentionnel. Ils sont documentés pour l'itération suivante plutôt qu'avalés en
+passant : **la bonne réponse à « le correctif est incomplet » n'est pas toujours
+« élargir la PR »**, mais elle est toujours « dire exactement ce qui reste ».
+
+Corollaire sur la forme du correctif :
+
+> **Quand un défaut existe des deux côtés d'une frontière de module, porter
+> l'APPEL duplique la règle ; déplacer le HELPER la garde unique.** La revue
+> proposait de recopier l'appel dans le fichier SDK. Un formateur sans état à
+> paramètres opaques relève de la case « rule engines stateless → SDK » du
+> tableau de placement : le déplacer dans `MeeshyUI` sert les deux appelants
+> sans rien dupliquer, ne change aucun site d'appel (l'app importait déjà
+> `MeeshyUI`), et rend même le `pbxproj` identique à `main` puisque les fichiers
+> neufs vivent alors dans le package SPM.
+
+## Leçon — une charge utile non gouvernée ne se trompe jamais (2026-08-22, cycle 94)
+
+`FROZEN_INVENTORY` ne portait plus qu'une ligne, laissée en place par trois
+cycles avec une raison écrite et juste : aligner ce schéma « est un lot en soi,
+sans quoi la déclaration tronquerait ce qui passe aujourd'hui ».
+
+Le lot fait, deux défauts sont apparus **dans le même geste** — et aucun des
+deux n'était nouveau. `translations` sortait en CARTE Mongo là où les trois
+clients décodent un TABLEAU ; `encryptionMode` était absent de `messageSchema`,
+donc supprimé de chaque message de chaque page de la liste, pour des clients
+E2EE qui recevaient le chiffré sans savoir sous quel régime déchiffrer.
+
+Ils vivaient depuis longtemps derrière un 200 vert et des témoins verts. La
+raison est structurelle, pas accidentelle :
+
+> **Tant qu'une réponse n'est gouvernée par aucun schéma, aucune forme n'y est
+> fausse — il n'y a pas de contrat à contredire.** Gouverner, c'est créer la
+> possibilité même du désaccord. Les désaccords étaient là depuis le début ;
+> c'est l'absence de contrat qui les rendait inobservables.
+
+Corollaire de méthode, et c'est le seul qui protège :
+
+> **Les clés servies se relèvent MÉCANIQUEMENT, puis se passent au vrai
+> sérialiseur.** La réutilisation naïve du schéma partagé perdait ici CINQ
+> choses. Aucune lecture attentive du schéma ne l'aurait dit — quatre cycles de
+> suite (84, 89, 91, 94), la « bonne forme d'à côté » était fausse contre le
+> producteur de la route qu'on réparait.
+
+Et sur l'endroit où un tel défaut se manifeste :
+
+> **Le silence d'un défaut ne mesure pas sa gravité, il mesure qui le regarde.**
+> Le seul consommateur de cette route est une extension de notification iOS.
+> Son décodeur échouait, supprimait le blob, et laissait une ligne de log dans
+> un processus qui meurt en quelques secondes. Pour l'utilisateur : un écran
+> qui met un peu plus longtemps à se remplir. Aucun signal ne remonte jamais
+> d'un chemin pareil — il faut aller l'y chercher.
+
+Enfin, ce qui a bien fonctionné et qu'il faut garder : **le piège armé par le
+cycle 88 a tenu son rôle.** `message-detail-sender-presence.test.ts` portait un
+témoin qui disait explicitement garder contre « une future *correction* du
+schéma qui, elle, tronquerait pour de bon ». Il est resté vert — et c'est ce
+vert-là qui prouve que `sender` et son `user` imbriqué ont survécu au lot. Un
+témoin posé sur une non-fuite ACCIDENTELLE vaut exactement ce que le cycle 84
+promettait qu'il vaudrait.
+
+## Leçon — un angle mort DOCUMENTÉ reste un angle mort (2026-08-22, cycle 95)
+
+Le cycle 95 devait donner un contrat de réponse à `GET /sync`. Il l'a fait, et
+la mesure a trouvé trois défauts. Le plus large ne concernait pas `/sync`.
+
+`messageAttachmentSchema.metadata` — un schéma PARTAGÉ, donc servi par toutes
+les routes qui l'importent, la liste de messages comprise — était un objet NU :
+`{ type: 'object', nullable: true }`. Le champ étant LISTÉ, fast-json-stringify
+applique `additionalProperties: false` et le vide. **L'omettre l'aurait mieux
+servi.** Sa jumelle, l'attachement inline de `messageSchema`, portait le même
+défaut avec une description qui NOMMAIT `audioEffectsTimeline` pendant qu'elle
+le supprimait. Côté web,
+`message-formatting.tsx` lit `attachment.metadata?.audioEffectsTimeline` : la
+timeline d'effets d'une note vocale n'a jamais atteint un client.
+
+Ce que ce défaut a d'instructif n'est pas sa nature — le dépôt a un balayage
+outillé et en cliquet pour exactement cette famille depuis le cycle 87 bis.
+C'est qu'il vivait dans la limite ÉCRITE de cet outil, dans le CLAUDE.md du
+service, dans la section même qui explique le défaut :
+
+> Le balayage ne lit que `services/gateway/src/routes` : les schémas de
+> `packages/shared`, dont un défaut se propage le plus loin, lui échappent.
+
+Huit cycles ont lu cette phrase sans que rien n'en sorte.
+
+> **Écrire une limite ne la garde pas ; seul un cliquet la garde.** Une limite
+> documentée se lit comme une excuse recevable, pas comme du travail restant —
+> et plus elle est bien écrite, mieux elle se lit ainsi. C'est le même
+> mécanisme que le commentaire qui scellait la connexion 2FA en la décrivant
+> (cycle 91 bis) : dire un défaut à voix haute peut le rendre permanent.
+
+Corollaire, et c'est la mesure du lot :
+
+> **Gouverner une route en révèle plus que ce qu'elle contient.** Le contrat
+> d'une route est un instrument de mesure braqué sur tout ce qu'elle importe.
+> Ce défaut-ci n'est apparu que parce qu'une charge utile de `/sync` est passée
+> au vrai sérialiseur ; il vivait sur des routes qui, elles, marchaient.
+
+### Corollaire de méthode — le double Prisma rend le `select` INOBSERVABLE
+
+La mutation la plus utile du cycle est celle qui est restée VERTE. Retirer
+`id: true` du `select` des appartenances n'a fait tomber aucun témoin : le
+double rend sa ligne quel que soit le `select`, donc `id` y était présent même
+une fois la requête amputée.
+
+> **Un témoin de VALEUR ne peut jamais garder un `select`.** Entre les deux il y
+> a un double qui ignore la projection. La garde d'un champ chargé assert sur la
+> REQUÊTE (`findMany.mock.calls[0][0].select`), et c'est un témoin SÉPARÉ — le
+> dépôt portait déjà l'idiome dans le fichier même (« DEMANDE ces champs à
+> Prisma — une charge utile vide ne prouve rien »).
+
+Et sur la forme des rangées de témoin, deux fois dans le même lot :
+
+> **Une rangée de témoin doit rendre ce que la REQUÊTE rend, pas ce qui suffit à
+> l'assertion.** Les rangées de la suite omettaient `attachments` (une relation
+> sélectionnée revient en tableau VIDE, jamais `undefined`) parce que rien ne
+> les lisait tant que la charge traversait non gouvernée. Et une traduction de
+> pièce jointe INVENTÉE (`{ url, segments }`) a fait rendre 500 à la route :
+> `messageAttachmentSchema` déclare `type`/`transcription`/`createdAt`
+> **`required`**. Le schéma partagé faisait son travail ; c'est la fiction qui a
+> cédé — en 500, pas en assertion, donc bien plus tard qu'il n'aurait fallu.
+
+## Cycle 96 — une preuve TRANSPORTÉE n'est pas une preuve VÉRIFIÉE
+
+Journal complet : `tasks/realtime-sync-audit-2026-08-22-cycle96.md`.
+
+`signedPreKey.signature` est la seule chose qui rattache la pré-clé signée à la
+clé d'identité, donc la seule chose qui fasse de X3DH un accord authentifié. Le
+dépôt la PRODUISAIT (`SignalKeyManager`), la PERSISTAIT (`DMAEnrollment`), la
+RELISAIT pour la placer dans le paquet (`SignalProtocolEngine`), et la DÉCLARAIT
+obligatoire (`PreKeyBundle`). Quatre couches, chacune irréprochable. La cinquième
+— celle qui la lit — n'existait pas.
+
+> **Un champ présent à chaque étape se lit comme un champ traité.** C'est
+> exactement ce qui rend cette famille invisible : il n'y a rien à trouver. Pas
+> de `TODO`, pas de champ manquant, pas de type qui ment. La preuve voyage, bien
+> formée, jusqu'au bout — et personne ne l'ouvre. Chaque couche rassure la
+> suivante, et l'absence de vérificateur ne ressemble à rien.
+
+La question à poser n'est donc pas « ce champ est-il là ? » mais **« qui le
+LIT, et que fait-il quand il est faux ? »**. Un `grep` du nom du champ répond à
+la première ; seul le second membre de la phrase trouve le défaut. Ici, le nom
+apparaissait six fois dans le sous-arbre, et zéro fois à droite d'une
+comparaison.
+
+**La suite du sous-arbre le documentait sans le voir** : ses six constructions de
+paquet passaient `signature: crypto.randomBytes(64)`, et l'accord aboutissait.
+C'est la preuve la plus courte que rien ne vérifiait — et elle était écrite dans
+le dépôt, verte, depuis toujours. **Une valeur ABSURDE qu'un témoin fait passer
+sans broncher nomme la garde qui manque.** Chercher dans les fixtures ce qu'un
+attaquant n'aurait jamais pu produire est un balayage à part entière.
+
+### Corollaire — une garde conditionnée à la présence de ce qu'elle garde est un no-op
+
+Le second défaut du même lot, dans le même sous-arbre :
+
+```ts
+if (senderIdentityKey && encryptedMessage.signature.length > 0) { /* refuser si invalide */ }
+else if (encryptedMessage.signature.length > 0) { /* avertir */ }
+```
+
+Un message SANS signature ne franchit aucune des deux branches : ni vérification,
+ni avertissement, ni refus. Le bloc se déclare `SECURITY: Strict signature
+verification`. Il était strict contre une signature FAUSSE, jamais contre une
+signature RETIRÉE — et le retrait est strictement moins cher que la forgerie.
+
+> **Une authentification dont l'attaquant décide s'il la subit n'est pas une
+> authentification.** Dès qu'une garde se conditionne à la PRÉSENCE de la preuve,
+> l'omission devient la manœuvre gagnante. Le discriminant juste est l'INTENTION
+> de l'appelant (« m'a-t-on donné de quoi vérifier ? »), jamais l'obligeance de
+> l'émetteur (« m'a-t-on donné quelque chose à vérifier ? »).
+
+Même forme que le commentaire qui scellait la connexion 2FA en la décrivant
+(cycle 91 bis) et que la note de `storyAuthorSelect` qui ÉNUMÉRAIT trois
+audiences en omettant la quatrième (cycle 83) : **le texte affirme la garde, le
+code porte l'exception, et c'est le texte qu'on relit.**
+
+### Et le `as any` disait où était le trou
+
+`SignalProtocolAdapter.performX3DH` portait `recipientBundle as any` depuis
+toujours. Le cast n'était pas une facilité de frappe : le contrat
+`ISignalProtocolAdapter` ne transportait pas la signature que `PreKeyBundle`
+déclare obligatoire, et le cast **faisait taire exactement cette absence-là**.
+
+> **Un `as any` sur un objet de contrat nomme le champ qui manque.** Le retirer
+> n'est pas de l'hygiène de typage — c'est la question « pourquoi ce champ n'y
+> est-il pas ? », et la réponse est parfois un défaut de sécurité. Le cycle 95
+> l'avait consigné comme dette cosmétique de dernier rang ; c'était l'indice.
+
+Corollaire de manœuvre, vérifié ici : **rouvrir une signature de méthode révèle
+ce qu'elle déclarait faux.** En y portant la signature cryptographique, deux
+autres mensonges du même contrat sont tombés — un paramètre
+(`ourEphemeralPrivate`) DÉCLARÉ et silencieusement ignoré, et un résultat qui
+jetait la clé éphémère publique sans laquelle le pair ne peut rien dériver. Ni
+l'un ni l'autre n'aurait été trouvé en cherchant des défauts de sécurité ; les
+deux sont tombés en écrivant honnêtement une liste de paramètres.
+
+## Leçon 244 — Une branche qui n'est pas poussée n'existe pas (2026-08-22)
+
+Rappel user en cours de lot : « merge régulièrement avec le worktree et le main
+local pour ne pas perdre le travail ; si tu es dans une branche, push
+régulièrement ! ». Une heure de commits dormaient sur une branche locale d'un
+worktree, pendant qu'un voisin faisait un `reset --hard` quelques heures plus
+tôt et qu'il restait 990 Mio de disque.
+
+> **Un commit local n'est qu'une promesse ; le push est la sauvegarde.** Dès le
+> premier lot vert : `git push -u origin <branche>`, puis à chaque commit. Dès
+> que les gates d'un lot sont vertes : ff `main` local sur `origin/main`, merge
+> `--no-ff`, push — sans attendre les autres lots. Le gate long (suite
+> complète) ne retient pas le push de la BRANCHE, seulement le merge dans main.
+
+Corollaire : l'arbre de travail n'est pas une sauvegarde non plus — le
+`reset --hard` d'une session voisine ne demande pas la permission.
+
+## Leçon 245 — Un seam `(string, unknown)` annule le contrat de tout ce qui le traverse (2026-08-22, cycle 100)
+
+Le cycle 99 avait typé le `Socket` d'un handler contre `ServerToClientEvents` et
+laissé « basculer les autres un par un ». `SocialEventsHandler` compilait pourtant
+sans erreur une fois basculé — non parce qu'il respectait le contrat, mais parce
+que ses 21 diffusions ne touchent JAMAIS `io.emit` directement : elles passent
+par quatre helpers privés déclarés `(event: string, data: unknown)`.
+
+> **Typer le `Socket` ne garde rien tant qu'un seam intermédiaire reblanchit le
+> couple.** À l'intérieur d'un helper `(event: string, data: unknown)`, `event`
+> est un `string` quelconque et `data` un `unknown` ; le contrat ne peut rien
+> exiger, et au site d'appel il n'y a plus rien à vérifier. La garde ne vaut que
+> jusqu'au PREMIER paramètre non typé.
+
+Le correctif est de rendre le seam générique
+(`<E extends keyof ServerToClientEvents>(event: E, data: Parameters<…>[0])`), pas
+de typer l'objet en amont. Et quand l'inférence d'une lib force un cast (ici
+`DecorateAcknowledgementsWithMultipleResponses` de socket.io sur un `E`
+générique), le placer À L'UNIQUE point qu'elle ne résout pas — jamais dans le
+seam, ce qui le rouvrirait. Un cast qui porte sur un couple déjà vérifié en
+frontière ne blanchit rien ; un cast dans le seam blanchit tout.
+
+Corollaire de méthode : **chercher les seams avant de déclarer un handler
+"couvert".** `grep -c "\.emit("` sur le fichier ne trouvait rien dans
+`SocialEventsHandler` — les émissions étaient toutes derrière `emitToFriends`,
+`emitToFeedsAndPostRoom`, `emitToUser`, `emitToUserFeedAndPostRoom`. Un handler
+sans `io.emit` littéral n'est pas un handler sans émission ; c'est souvent un
+handler dont les émissions sont blanchies.
+
+Et corollaire de routine, payé ce cycle : **repuller `main` AVANT de pousser un
+défaut de production.** Le flip a révélé que le chemin REST/ZMQ de `message:new`
+perdait l'enveloppe E2EE ; je l'ai corrigé et outillé. Une routine sœur (cycle
+99 bis) avait corrigé le MÊME défaut pendant ce cycle, mieux (producteur partagé
+`messageNewPayload.ts`). Constaté au repull, j'ai abandonné ma correction
+redondante au profit de la leur. La leçon des cycles 85/97 — « cette entité
+a-t-elle une jumelle ? » — vaut aussi pour les routines : ta correction a
+peut-être une jumelle déjà mergée.
+
+## Leçon 246 — Un cliquet de TYPES se prouve sous mutation, comme un témoin (2026-08-22, cycle 101)
+
+Le cycle 101 a fermé un défaut de contrat (`message:edited` omettait trois des
+sept champs requis par `SocketIOMessage`, et le décodeur iOS les lit en
+`try c.decode`) et a voulu le retenir par une garde à la COMPILATION plutôt que
+par un seul témoin runtime. La première formulation était celle qui vient
+d'abord à l'esprit :
+
+```ts
+type RequiredKeys = {
+  [K in keyof SocketIOMessage]-?: undefined extends SocketIOMessage[K] ? never : K;
+}[keyof SocketIOMessage];
+```
+
+Elle compilait, elle se lisait juste, et **elle ne gardait rien** : la passerelle
+compile sous `strictNullChecks: false`, où `undefined extends T` est VRAI pour
+tout `T`. Le jeu de clés valait donc `never`, et la garde passait au vert sous
+n'importe quelle mutation. Mesuré : retirer `createdAt` du noyau ne la faisait
+pas tomber d'un cran.
+
+> **Une garde de types est une AFFIRMATION, exactement comme un tri (cycle 86
+> bis), un compte (cycle 93) ou un commentaire de contrainte (cycle 94) : elle
+> se vérifie en la faisant TOMBER.** Écrire la mutation qu'elle nomme et
+> constater l'erreur de compilation est le seul geste qui distingue un cliquet
+> d'une décoration — et il coûte trois minutes.
+
+La forme juste teste le MODIFICATEUR `?`, que le drapeau n'efface pas :
+
+```ts
+[K in keyof T]-?: Record<string, never> extends Pick<T, K> ? never : K
+```
+
+Corollaire, et c'est ce qui rend l'erreur facile à commettre : **les idiomes de
+types publiés supposent presque tous `strict: true`.** Recopier un idiome de
+type dans un projet non strict, c'est recopier une garde dont la moitié des
+prémisses est fausse. Avant d'employer `undefined extends …`, `NonNullable`,
+`Exclude<…, undefined>` comme DISCRIMINANT, lire `tsconfig.json` — puis prouver
+le rouge.
+
+Et corollaire de portée : un témoin runtime et un cliquet de types ne se
+remplacent pas. Ici le témoin prouve ce que le producteur MET SUR LE FIL, le
+cliquet prouve que le noyau ne peut plus rétrécir sans qu'on le voie ; le lot
+livre les deux, chacun prouvé rouge séparément.
+
+## Leçon 247 — Un événement DIFFUSÉ n'est cassé que chez le client qui le consomme comme une DONNÉE (2026-08-22, cycle 101)
+
+`message:edited` a trois producteurs ; celui du transport WebSocket servait un
+littéral écrit à la main dont manquaient `senderId`, `messageType` et
+`createdAt` — trois des sept champs que `SocketIOMessage` rend obligatoires.
+Toute édition faite depuis le web était silencieusement jetée par chaque client
+iOS de la conversation, depuis toujours.
+
+> **Le même défaut de forme produit trois issues selon ce que le client FAIT de
+> la charge utile.** iOS la décode et l'applique (`try c.decode` sans repli) :
+> le message entier est rejeté. Android la décode puis la JETTE, ne lisant que
+> `conversationId` pour relire la conversation : intact. Le web la FUSIONNE dans
+> sa ligne en cache, qui fournit les clés manquantes : intact.
+
+Trois corollaires, et le troisième est le plus cher :
+
+1. **Le client qui ÉMET sur un transport est rarement celui qui casse dessus.**
+   Le web émet `message:edit` et sa fusion le protège ; iOS édite par REST et
+   n'est que destinataire de ce transport-ci. Le côté d'où vient le geste ne
+   voit jamais rien.
+2. **Un client qui traite l'événement en SIGNAL est insensible aux défauts de
+   forme — donc incapable de les révéler.** Sa verdeur n'atteste rien sur le
+   contrat. Ne jamais lire « deux clients sur trois vont bien » comme « la
+   charge utile est bonne » : compter les clients qui la LISENT.
+3. **Relever les trois décodeurs fait partie du diagnostic, pas du rapport.**
+   La question n'est pas « ce champ manque-t-il ? » mais « qui le lit, et que
+   fait-il quand il est absent ? » — la même que la leçon du cycle 96 sur une
+   preuve transportée mais jamais vérifiée.
+
+Et la cause de l'invisibilité était structurelle, pas humaine : ce handler était
+le DERNIER rendu au `Socket` nu de socket.io, parce que son payload `message:new`
+était mué à travers un cast `Record<string, unknown>`. Un tel sac de clés ne
+satisfait aucun champ requis, donc typer le socket aurait fait échouer les cinq
+émissions voisines — et, l'objet restant non typé, l'émission `message:edited`
+deux cents lignes plus haut n'était pas vérifiée non plus.
+
+> **Un seam de blanchiment ne protège pas seulement l'expression qui le porte :
+> il désarme le contrat de TOUT le fichier**, y compris des émissions qui n'ont
+> rien à voir avec lui. Le coût d'un `Record<string, unknown>` ne se mesure pas
+> à son site, mais au périmètre qu'il empêche de typer.
+
+Corollaire de correctif, et il vaut à chaque fois : **réparer un décodage ne
+doit pas installer une divergence de SENS.** `Message.senderId` est un
+`Participant.id`, quand les clients comparent ce champ à leur `User.id`. Servir
+la colonne brute aurait fait passer le décodage tout en cassant la
+reconnaissance « c'est mon message » — une panne muette, strictement pire que
+celle qu'on répare. La règle de résolution existait déjà chez le producteur
+voisin ; elle est extraite (`wireSenderId.ts`) plutôt que retapée.
+
+## Leçon 248 — Deux témoins verts qui exigent des réponses OPPOSÉES à la même question (2026-08-22, cycle 102)
+
+Une règle métier écrite deux fois n'a pas deux gardes : elle en a une par
+exemplaire, et **chaque garde atteste son exemplaire**, y compris quand il est
+faux. Rien ne les confronte, donc rien ne rougit.
+
+Cas mesuré. La question : *quel `messageType` porte un message dont la pièce
+jointe est un `text/plain` ?*
+
+| fichier | témoin | réponse |
+|---|---|---|
+| `attachment-message-type.test.ts` | « treats an unknown or empty MIME as a generic file, **never text** » | `'file'` |
+| `MessageProcessor.test.ts` | « **does not update** message type for text/plain forward » | `'text'` |
+
+Les deux verts, dans le même service, depuis des mois. Le second ne décrivait
+aucune règle : il **gelait le trou** de l'exemplaire manuscrit qu'il gardait —
+lequel ne connaissait que le préfixe `application/` et ne lisait que
+`attachments[0]`.
+
+> **Un témoin atteste la règle de son exemplaire, jamais LA règle.** Quand une
+> règle a plusieurs sites, la couverture croît avec le nombre d'exemplaires
+> pendant que la justesse décroît. Le vert n'est pas une mesure de la règle,
+> c'est une mesure de l'accord d'un site avec lui-même.
+
+Le geste qui le trouve n'est pas un balayage de duplication — les deux corps ne
+se ressemblaient pas — mais une question posée à la COLONNE : **qui l'écrit ?**
+Ici quatre chemins, dont un seul appelait la règle canonique.
+
+Corollaires :
+
+- **Compter les ÉCRIVAINS d'une colonne avant d'en corriger un.** `grep` sur le
+  nom de colonne à gauche d'un `:` ou d'un `=`, pas sur le nom de la fonction
+  qu'on soupçonne — la fonction canonique est justement celle que les sites
+  fautifs n'appellent PAS.
+- **Le point unique est celui où la donnée est COMPLÈTE**, pas celui où on la
+  reçoit. Ici : après la relecture des pièces jointes, la seule étape que les
+  trois chemins traversent — donc le seul endroit où la règle puisse être
+  écrite une fois pour tous.
+- **Un correctif de règle unique est ADDITIF ou il n'est pas sûr.** Ne parler
+  que si la colonne porte encore son défaut laisse intactes les valeurs qu'un
+  producteur légitime a posées (`'location'`, `'system'`), et rend le lot
+  mesurable : les témoins d'additivité passent AVANT comme APRÈS, et ce sont eux
+  qui prouvent qu'on n'a rien détruit.
+- **Un double qui ment sur son collaborateur cache le trou.** Quatre témoins de
+  transfert mockaient la relecture à `[]`, ce que la production ne fait jamais.
+  Tant que le double affirmait « il n'y a pas de pièce jointe à relire », aucun
+  d'eux ne pouvait voir que personne ne dérivait le type.
+
+Et la cause RACINE était plus haut que les quatre sites : la colonne était
+renseignée **depuis un champ de requête**, et `SendMessageRequest` du SDK iOS
+n'a pas ce champ. **Quand un serveur délègue à ses clients un fait qu'il est
+seul à connaître entièrement, il faut compter les clients qui peuvent le dire —
+il y en a toujours un qui ne peut pas.**
+
+
+## Leçon 249 — Une amnistie de CI ne pardonne pas un package, elle pardonne le RÉPERTOIRE (2026-08-23, cycle 105 bis)
+
+Six cycles (99–104) ont bâti pour la passerelle un contrat d'émission
+Socket.IO : une charge typée par événement, une porte d'émission dérivée du
+contrat, un cliquet au TYPE sur la forme de la porte. Le cycle 105 bis a posé la
+question qu'aucun des six n'avait posée : **qu'est-ce qui, en CI, devient rouge
+quand ce contrat est violé ?**
+
+Réponse mesurée : rien.
+
+| garde | ce qu'elle fait d'un couple (événement, charge) faux |
+|---|---|
+| étape `Type-check` de `ci.yml` | `continue-on-error: true` — rouge sans conséquence |
+| job de test (`ts-jest`) | `ignoreCodes: [2307, **2322**, 2339, **2345**, 2740]` |
+| `next build` (web) | `typescript.ignoreBuildErrors: true` |
+
+Or `2322` et `2345` sont EXACTEMENT les codes qu'une charge dépareillée produit.
+Mesuré en retirant un champ requis d'une émission de `preferences-broadcast.ts` :
+`error TS2345`, avalé par le premier, pardonné par le second.
+
+> **Un cliquet de types n'est pas une garde tant qu'on n'a pas nommé l'outil qui
+> le rend rouge ET vérifié que cet outil ne l'a pas mis sur sa liste d'exclusion.**
+> Le cycle 104 avait fait la moitié du chemin — il a corrigé sa propre
+> documentation en découvrant que c'était `ts-jest` et non `tsc` qui gardait son
+> cliquet (via `TS2344`). Il n'a pas posé la question suivante : ce cliquet garde
+> la FORME DE LA PORTE ; qu'est-ce qui garde ce qui PASSE dedans ? Deux codes
+> ignorés plus loin, la réponse était « personne ».
+
+### Le mécanisme : une amnistie se dimensionne sur le package le PIRE
+
+Le drapeau `continue-on-error: true` n'était l'avis de personne sur le typage.
+C'était la seule façon pour une étape UNIQUE couvrant quatre packages d'être
+verte, `apps/web` portant 1241 erreurs quand les trois autres sont à zéro.
+
+> **Une garde à granularité de dépôt s'aligne sur son membre le plus endetté, et
+> ce qu'elle coûte n'est pas visible chez lui : c'est chez les membres SAINS
+> qu'elle annule quelque chose.** Web ne perdait rien à l'amnistie — il n'avait
+> rien à perdre. La passerelle, elle, y perdait six cycles de contrat.
+
+Le geste n'est donc pas de lever l'amnistie (1241 erreurs à corriger d'abord)
+mais de la SCINDER : bloquant pour les packages à zéro, cliquet chiffré pour
+l'endetté. Une dette qui ne peut que descendre n'est plus une amnistie.
+
+Corollaire sur le cliquet chiffré : il doit échouer dans les DEUX sens. Un
+cliquet qui n'exige pas d'être resserré quand il peut l'être ne cliquette pas —
+la marge regagnée redevient silencieusement dépensable. Et il n'est honnête que
+si son chiffre ne dérive pas avec l'environnement : les trois sources de dérive
+(`.next/types/**` présent seulement après un `next build`, client Prisma généré
+seulement dans le job de test, `@meeshy/shared` résolu vers la source et non
+`dist/`) ont été vérifiées une par une, et la première est exclue par chemin.
+
+### Le corollaire de portée, et il a rendu deux défauts
+
+Le cycle 104 avait écrit la phrase juste sans l'instruire : « un fichier de
+production qu'AUCUN test n'atteint n'a, en CI, aucune vérification de type du
+tout ». Instruite, elle rend six fichiers dans `services/gateway/src/` — parce
+que l'`include` de `tsconfig.json` était une ÉNUMÉRATION de dix-huit répertoires
+tenue à la main, qui ne nommait ni `adapters`, ni `migrations`, ni `validation`,
+et n'atteignait `socketio/` que par le graphe d'imports de `server.ts`.
+
+Deux des six étaient cassés, et le second l'était de façon opérationnelle :
+
+- `adapters/node-signal-stores.ts` importait deux types que `@meeshy/shared`
+  n'exporte plus, et déclarait `saveIdentity(): Promise<boolean>` là où
+  `IdentityKeyStore` de libsignal exige `Promise<IdentityChange>`.
+- `migrations/migrate-from-legacy.ts` — que
+  `infrastructure/scripts/migrate-to-staging.sh` EXÉCUTE — adressait
+  `prisma.conversationMember` et `prisma.messageTranslation`, deux modèles qui
+  n'existent pas.
+
+> **Une énumération de répertoires dans un `include` est une liste tenue à la
+> main : elle est en retard par construction, et son retard ne ressemble pas à
+> une erreur — il ressemble à des fichiers qui compilent.** `src/**/*` n'a pas
+> ce mode de défaillance. Vérifier la couverture, ne pas la supposer :
+> `tsc --listFiles` contre `find src -name '*.ts'` rend l'écart en une commande.
+
+### Et le défaut le plus cher du lot n'était pas un type : c'était une BRANCHE
+
+`migrateCollection` écrit sous `if (!DRY_RUN)`. Une cible Prisma `undefined` ne
+casse donc que la course RÉELLE ; le `--dry-run` — le mode que le script de
+déploiement lance en PREMIER pour décider s'il continue — n'atteint jamais la
+ligne fautive et compte `stat.migrated += batch.length`.
+
+> **Un galop d'essai qui saute l'écriture ne teste pas l'écriture : il teste
+> tout SAUF elle, et il est interrogé précisément sur elle.** Devant un mode
+> « simulation » gardé par un drapeau, lire ce que le drapeau saute et se
+> demander si c'est justement l'objet de la question. Ici, deux collections
+> étaient annoncées intégralement migrées par le seul mode que l'opérateur
+> consulte avant de se lancer.
+
+## Leçon 250 — un `as` vers le type NU d'une dépendance efface un contrat entier
+
+Cycle 107. La moitié RÉCEPTION du contrat Socket.IO (`ClientToServerEvents`) est
+restée ingouvernée trois cycles, non par un oubli de déclaration, mais par un
+CAST : `this.io as SocketIOServer`, six fois, vers un `Server` **sans
+générique**. Le manager déclarait pourtant son `io` avec les deux cartes.
+
+`DefaultEventsMap` vaut `[event: string]: (...args: any[]) => void`. Sous lui,
+`socket.on(n'importe quoi, (data: n'importe quoi) => …)` compile.
+
+> **Un cast vers un type nu ne relâche pas un appel, il relâche tout ce que la
+> valeur castée porte** — ici les 22 sites d'écoute d'un sous-système ET tout ce
+> que le même module émet. Et il est plus discret qu'une redéclaration : il ne
+> crée aucun type nommé qu'on puisse chercher (Leçon du cycle 105, généralisée).
+
+Ce que ça a laissé vivre : `call:analytics`, écouté, validé par Zod et agrégé en
+production, ses dix-neuf champs transcrits dans la signature du listener, **absent
+du contrat**, avec trois clients l'émettant chacun contre sa propre
+transcription.
+
+### Corollaire — annoncer la portée MESURÉE d'une garde, pas celle qu'on espère
+
+La porte typée refuse un nom d'événement absent du contrat. Elle NE refuse PAS
+une charge divergente mais assignable dans un sens : `strictFunctionTypes: false`
+rend les paramètres BIVARIANTS. Mesuré au compilateur AVANT d'écrire la prose.
+
+> **Une porte annoncée plus stricte qu'elle n'est vaut moins que pas de porte** :
+> personne n'ira vérifier derrière. Dire ce qu'elle ne garde pas est ce qui rend
+> crédible ce qu'elle garde.
+
+## Leçon 251 — un gate dont on silence la sortie ne mesure plus ce qu'on croit
+
+Même cycle. Une preuve de ROUGE a d'abord été annoncée « la garde ne tombe pas »
+sur la foi d'un `total = 0`. Faux : la mutation avait rendu le paquet partagé non
+compilable, et le `bun run build` intermédiaire — redirigé vers `/dev/null` —
+avait échoué. La passerelle compilait contre un `dist` PÉRIMÉ.
+
+> **Un build intermédiaire raté ne ressemble pas à une panne : il ressemble à un
+> test qui passe.** Dans une chaîne de mesure (build → compile → assert), vérifier
+> le CODE DE SORTIE de chaque étape, surtout quand on mute volontairement le code
+> pour prouver un rouge — c'est exactement le moment où l'on s'attend à des
+> erreurs, donc celui où l'on cesse de les lire.
+
+Même famille que « un témoin qui ne peut pas tomber n'est pas un témoin », un
+étage plus bas : ici ce n'est pas le témoin qui était muet, c'est l'OUTILLAGE de
+la mesure.
+
+### Et c'est arrivé DEUX FOIS dans le même cycle, par deux mécanismes différents
+
+Le second : `bash check-type-debt.sh 2>&1 | tail -20` a rendu `exit code 0` sur
+un gate qui ÉCHOUAIT. **Le code de retour d'un pipeline shell est celui de sa
+DERNIÈRE commande** — ici `tail`, qui réussit toujours. Le verdict réel
+(`✗ AMÉLIORATION NON ENREGISTRÉE : 1239 erreurs, baseline 1241`) était dans le
+texte, à l'écran, pendant que le code de sortie disait « vert ».
+
+Les deux fois, le défaut n'est pas d'avoir mal lu : c'est d'avoir lu **UN SEUL**
+des deux canaux, et pas le même selon la fois — la sortie sans le code, puis le
+code sans la sortie.
+
+> **Un gate rend DEUX verdicts, le texte et le code de retour, et ils peuvent se
+> contredire.** Les lire tous les deux, systématiquement. Et ne jamais passer un
+> gate par un pipe quand c'est son code de sortie qu'on interroge :
+> `set -o pipefail`, ou rediriger vers un fichier et lire `$?` avant tout autre
+> commande.
+
+C'est d'autant plus piégeux qu'un gate qui échoue en disant « améliore-toi »
+(dette regagnée, cliquet à resserrer) n'a pas la forme d'un échec : le texte est
+une bonne nouvelle, et seul le code de retour dit que la CI sera rouge.
+
+## Leçon 252 — une date ABSOLUE en entrée d'une fenêtre glissante est une bombe à retardement
+
+Cycle 108. `main` était ROUGE, sur deux témoins qui passaient la veille et que
+personne n'avait touchés depuis le cycle 101.
+
+`MessageHandlerEditDelete.test.ts` fabriquait son message avec
+`createdAt: new Date('2026-08-22T10:00:00Z')`. `admitMessageEdit` refuse toute
+édition d'auteur au-delà de `MESSAGE_EDIT_WINDOW_MS` (24 h) comptées depuis
+`Date.now()`. La CI du 2026-08-23 a tourné à 10:15Z — **24 h 15 min** après le
+littéral. La porte a refusé l'édition, plus rien n'a été diffusé, et les deux
+`expect` sont tombés.
+
+> **Un littéral de date comparé à `Date.now()` n'est pas une donnée de test :
+> c'est un compte à rebours.** Il passe le jour où on l'écrit, et il tombe une
+> fenêtre plus tard — sans commit, sans revue, sans coupable. Une entrée destinée
+> à une règle temporelle s'écrit TOUJOURS relativement à l'horloge :
+> `new Date(Date.now() - 10 * 60 * 1000)`.
+
+Le fichier connaissait déjà l'idiome : cinq témoins de fenêtre y utilisent
+`twentyFiveHoursAgo` / `tenMinutesAgo`. Les deux fautifs étaient les seuls à
+écrire une date absolue — et ce n'était pas un oubli, c'était une CONSÉQUENCE.
+
+### Le vrai défaut était dans la fabrique, pas dans le littéral
+
+`makeMessageRecord` ne portait NI `createdAt` NI `messageType`. Or la règle est
+écrite pour ne bloquer personne sur une date illisible : `NaN > w` est faux, donc
+un `createdAt` absent **ADMET**. Presque tous les témoins du fichier franchissaient
+donc la fenêtre par ABSENCE de date — la porte était traversée sans être exercée.
+Le seul témoin qui vérifie les sept champs requis par `SocketIOMessage` avait
+besoin d'un vrai `createdAt` : n'en trouvant pas au socle, il s'en est écrit un,
+en absolu. La bombe a été armée par le TROU de la fabrique.
+
+> **Quand un seul témoin doit se fabriquer une donnée que la fabrique aurait dû
+> fournir, ce n'est pas ce témoin qui est bizarre : c'est la fabrique qui est
+> incomplète.** Corriger le littéral (le repousser d'un jour) aurait réarmé la
+> bombe pour le lendemain. Compléter le socle la désarme structurellement.
+
+### Un refus muet ressemble à une régression de contrat
+
+Le témoin tombé est le GARDIEN du défaut du cycle 101 (`message:edited` servi
+sans `senderId`/`messageType`/`createdAt`, décodage iOS du message entier rejeté).
+Sa chute affichait `Received array: []` : aucune émission. Le message d'échec
+accuse donc la DIFFUSION, alors que la panne est dans l'ADMISSION, deux étages
+plus haut. Vérifié par mutation dans les deux sens avant de conclure — et la
+charge utile, elle, était intacte (`buildMessageEditedCore` replie
+`message.createdAt || new Date()`).
+
+> **Un témoin qui tombe pour un motif étranger à ce qu'il garde est pire qu'un
+> témoin absent** : il fait croire que la propriété gardée a régressé, et il
+> pousse au correctif qui la rendrait vraiment fausse.
+
+## Leçon 253 — « la CI était verte à ce commit » ne prouve rien contre une panne DATÉE
+
+Même cycle, et c'est une leçon sur la façon dont deux sessions parallèles se
+sont trompées en sens inverse sur le MÊME symptôme.
+
+Une session sœur (PR #3385) a rencontré les deux mêmes témoins rouges de
+`MessageHandlerEditDelete` en local. Elle a conclu — et écrit dans sa PR :
+
+> Ce n'est pas une régression de `main` : ils échouent à l'identique au commit
+> `f69cbd26`, dont le job « Test gateway » est vert. La recette locale ne
+> reproduit donc pas la CI aussi complètement qu'elle l'affirme.
+
+Le raisonnement est bon et la conclusion fausse, parce que la prémisse tacite
+est fausse : **« la CI de ce commit est verte » se lit comme une propriété du
+COMMIT, alors que c'est une propriété du commit ET de l'INSTANT où le job a
+tourné.** Pour une panne pilotée par l'horloge, les deux se séparent. La CI de
+`f69cbd26` avait tourné AVANT l'expiration des 24 h ; la session, elle, mesurait
+après. Même arbre, même commande, deux verdicts — et aucun défaut de recette.
+
+Quelques heures plus tard la CI de `main` (`HEAD` e87b7b0d) a viré au rouge sur
+exactement ces deux témoins, ce que le log du job nomme explicitement.
+
+> **Un vert de CI est horodaté.** Devant un rouge local qu'un vert distant
+> contredit, la question n'est pas seulement « quel arbre ? » mais « QUAND ? ».
+> Si l'écart entre les deux mesures franchit une frontière temporelle du code
+> testé (une fenêtre, un TTL, une expiration, un changement de jour), le vert
+> distant est PÉRIMÉ, pas contradictoire.
+
+Le prix concret de l'inversion : la session sœur a rangé un `main` en train de
+casser dans ses « Future Considerations », comme un défaut d'outillage local.
+Un défaut attribué à l'outil de mesure cesse d'être cherché dans le produit.
+
+> **L'hypothèse « mon outil de mesure est en cause » est la plus coûteuse des
+> hypothèses confortables** : elle explique n'importe quel écart, elle n'accuse
+> personne, et elle clôt l'enquête. Elle mérite donc la charge de preuve la plus
+> lourde, pas la plus légère — ici, un `git log` de l'horaire du job aurait suffi
+> à la renverser.
+
+### Le corollaire de méthode
+
+Les deux sessions ont vu le même symptôme. Celle qui a cherché POURQUOI la
+fenêtre refusait (`admitMessageEdit`, `MESSAGE_EDIT_WINDOW_MS`, l'horaire du run)
+a trouvé une bombe à retardement ; celle qui a cherché ce qui DIFFÉRAIT entre
+local et CI a trouvé une explication plausible et s'est arrêtée.
+
+> Quand deux environnements divergent, l'explication « les environnements
+> diffèrent » est toujours disponible et presque toujours insuffisante. Elle ne
+> devient une conclusion qu'une fois nommée la variable EXACTE — et ici la
+> variable n'était dans aucun environnement : elle était dans l'horloge.
+## Un littéral de date sous une FENÊTRE n'est pas une constante, c'est une échéance (cycle 108)
+
+`MessageHandlerEditDelete.test.ts` épinglait le `createdAt` d'un message à
+`2026-08-22T10:00:00Z`. `admitMessageEdit` refuse toute édition passé **24 h**
+depuis `createdAt`. Les deux cas ont donc été verts pendant exactement vingt-quatre
+heures, puis rouges le lendemain à 10:00 UTC — pour toutes les branches, tous les
+contributeurs, et **définitivement**. Un dépôt entier bloqué par une fixture.
+
+> **Une fixture de date lue par un code qui la compare à MAINTENANT doit être
+> écrite RELATIVEMENT à maintenant.** `new Date(Date.now() - 60_000)`, jamais un
+> littéral. Le test ne dit pas « le 22 août » ; il dit « dans la fenêtre ».
+
+Deux choses rendent la famille difficile à voir :
+
+1. **Le symptôme désigne le mauvais coupable.** `emitsTo(...)` rendait `[]`, ce
+   qui se lit « le producteur n'émet plus » — un défaut de production, gros et
+   effrayant. Le producteur allait bien : la garde refusait en amont. La vraie
+   cause était dans le `callback`, que le cas n'assertait pas. *Quand une
+   assertion d'émission tombe à vide, lire d'abord le canal de REFUS ; « rien
+   n'est parti » et « quelque chose a dit non » ont le même symptôme.*
+2. **Le cas VOISIN restait vert**, et c'est lui qui a livré le diagnostic : sa
+   fixture n'a pas de `createdAt`, donc rien à périmer. Les cas qui tombaient
+   étaient exactement ceux qui en AJOUTAIENT un. *Un échec qui suit les
+   surcharges d'une factory désigne le champ, pas le producteur.*
+
+Et le corollaire de méthode, celui qui a évité d'accuser le mauvais lot :
+**avant de réparer un rouge apparu après un merge, mesurer la BASE.** Une copie
+vierge d'`origin/main` a rendu les deux mêmes échecs, sans une ligne de la
+branche. Sans cette mesure, une heure serait partie à chercher la régression
+dans un diff qui, hors `apps/android`, n'était fait que de commentaires.
+---
+
+## 2026-08-23 — Une « décision produit » différée se tranche en lisant la branche voisine (238i)
+
+237i a laissé six copies de l'abrégé compact non traitées, avec ce motif :
+« le tableau de bord bascule à `>= 10_000` là où le feed bascule à `>= 1_000` —
+consolider demande de trancher si ce seuil est **intentionnel**, ce qui est une
+décision produit ». Le motif était bon, la conclusion trop large : le doute
+portait sur DEUX sites, pas sur six, et les deux se sont tranchés à la lecture
+sans avoir à consulter qui que ce soit.
+
+- `ConversationDashboardView.formatNumber` : le seuil de 10 000 est réel, et sa
+  preuve est la branche EN DESSOUS — la bande 1 000–9 999 rendait le nombre
+  entier et groupé (`n.formatted()`). La règle produit n'est pas « abrège à
+  10 000 », c'est « ne dégrade pas un compte de mots tant qu'il reste lisible ».
+- `StatRing.displayValue` : le même seuil de 10 000 y était **mort** — la
+  branche suivante (`>= 1_000`) lui était identique au caractère près, même
+  division, même format. Trois relectures l'avaient laissé passer précisément
+  parce qu'il ne changeait rien.
+
+Corollaires :
+
+- **Un seuil ne se lit pas seul : il se lit contre la branche qui le suit.**
+  Deux branches consécutives qui rendent la même chose ne portent aucune
+  décision — c'est un artefact de copie, et le traiter comme un arbitrage
+  produit gèle du code mort en règle métier.
+- **Différer un arbitrage, c'est différer tout ce qui voyage avec lui.** Le
+  doute sur 2 sites a reporté la correction des 4 autres, byte-identiques et
+  sans aucune ambiguïté. Découper le lot par NIVEAU DE DOUTE, pas par famille.
+- **Une famille qui repousse à chaque itération se ferme par une garde, pas par
+  un correctif.** Sept copies, trois itérations de consolidation (234i, 236i,
+  237i) : chacune a corrigé ce qu'elle voyait, aucune n'a empêché la suivante.
+  Le geste qui termine n'est pas le septième correctif, c'est la garde de source
+  qui interdit le huitième.
+
+---
+
+## 2026-08-23 — Une CI verte qui n'a rien exécuté, et une garde qui rougit sur du code correct (238i)
+
+Deux leçons du même run, toutes deux sur la **fiabilité du signal** plutôt que
+sur le code.
+
+### 1. Lire le NOM du check, pas seulement sa couleur
+
+Le premier run de la PR 238i est revenu **tout vert** — et n'avait exécuté
+aucun test iOS. Le job `ios-tests` est nommé DYNAMIQUEMENT (`ios.yml:250`) :
+`Build app + tests unitaires` quand la suite tourne, `Build app (app + cibles de
+test)` quand elle ne fait que compiler. La suite est en **opt-in** : poussée
+réelle sur `main`, `workflow_dispatch`, ou `smoke test|run test|to test` dans le
+**SUJET** du commit de tête — le corps ne compte pas.
+
+Le lot dont l'apport tenait à **une garde neuve et une suite réécrite** allait
+être annoncé vert sans qu'aucun des deux n'ait tourné. C'est la « suite verte
+par omission » de la leçon 236i, par un autre chemin : non plus le pbxproj mais
+la portée du run.
+
+- **Avant d'annoncer « CI verte », vérifier que le check a fait ce que son nom
+  promet.** Un projet qui nomme ses jobs dynamiquement le fait précisément
+  parce que la distinction compte.
+- **Un lot dont la valeur EST un test doit forcer l'exécution de ce test.**
+  Amender le sujet du commit (même arbre, force-push sur sa propre branche)
+  n'est pas un commit vide : c'est le mécanisme documenté du dépôt.
+
+### 2. Une fenêtre en NOMBRE DE CARACTÈRES est une bombe à retardement
+
+`test_statRing_isSingleVoiceOverElement_withLabelAndValue` a rougi alors que le
+code de production la satisfaisait toujours. La garde découpait le corps de la
+struct avec `prefix(2600)` ; un doc-comment ajouté plus haut a déplacé le motif
+de l'offset 2411 à 2595, et comme le motif fait 30 caractères, sa **FIN** est
+passée hors fenêtre.
+
+**La marge résiduelle sur `main` était de 5 caractères.**
+
+- **Une garde qui rougit sur du code correct est le PIRE mode d'échec possible** —
+  pire qu'un faux vert, parce qu'elle envoie corriger ce qui n'est pas cassé,
+  et qu'elle entraîne à se méfier des gardes.
+- **Borner une garde de source SÉMANTIQUEMENT** (jusqu'à la déclaration
+  suivante), jamais par un nombre. Une borne sémantique n'a pas de marge à
+  épuiser.
+- **Ne pas « faire rentrer » son code dans la fenêtre.** C'était la correction
+  tentante ici : raccourcir le commentaire. Elle réarme le piège avec ENCORE
+  MOINS de marge, pour le prochain qui touchera la struct.
+- **Élargir une borne exige de prouver qu'on ne crée pas de faux vert.** Ici la
+  struct suivante (`ArcGauge`) porte le même `.accessibilityElement(children:
+  .ignore)` : sans borne elle satisferait les assertions à la place de
+  `StatRing`. D'où un test dédié qui vérifie la borne dans les deux sens.
+
+## Leçon 253 — un RED intentionnel qui survit à son lot cesse d'être un marqueur
+
+Train d'intégration beta du 2026-08-23. `main` portait un témoin ADVERSAIRE
+rouge en permanence : `messages-list-forward-source-attachment-url-leak`. Le
+commit qui l'a posé l'annonce dans son propre sujet — « socle posé, FUITE ENCORE
+OUVERTE » — et son corps énumère huit points restés ouverts. Le rouge était donc
+DÉLIBÉRÉ, honnête, et documenté.
+
+Il était aussi, en pratique, invisible. « Test gateway » était rouge sur `main`
+depuis assez longtemps pour que le rouge soit devenu la couleur normale du job.
+Quand une seconde suite s'y est ajoutée — une bombe à retardement de 24 h,
+étrangère — le job a affiché **deux** échecs au lieu d'un, et personne ne l'a vu :
+on lisait « Test gateway rouge », ce qu'on lisait déjà la veille.
+
+> **Un test laissé rouge à dessein est une alarme qu'on apprend à ignorer, donc
+> une protection déjà morte.** Il ne protège plus le défaut qu'il décrit, et il
+> masque tout défaut qui atterrit dans le même job. Le coût n'est pas le sien :
+> c'est celui du PROCHAIN rouge, qui se noiera dedans.
+
+Trois façons de tenir un défaut connu sans payer ce prix, par ordre de
+préférence : le FERMER (ici, une trentaine de lignes) ; le marquer `it.failing`,
+qui rougit si le défaut disparaît sans que le témoin bouge ; ou le sortir du job
+bloquant vers un rapport à part. Le laisser vert-par-omission n'est pas dans la
+liste.
+
+### Le corollaire, mesuré le même jour
+
+Quatre PR ouvertes corrigeaient la MÊME bombe de 24 h, de quatre façons
+concurrentes : trois patchaient chaque site d'appel, une seule corrigeait la
+fabrique. Quatre sessions ont diagnostiqué le même rouge en parallèle parce
+qu'aucune ne pouvait savoir qu'une autre s'en occupait — le rouge partagé de
+`main` est un aimant à travail dupliqué. La fusion a retenu la correction de la
+fabrique ; les trois rustines par site auraient chacune passé les tests.
+
+## Leçon 254 — l'absolu d'une mesure ne traverse pas les machines, le delta oui
+
+Le cliquet de dette de types (`scripts/check-type-debt.sh`) compare un COMPTE à
+une baseline écrite dans le script. Mesuré le même jour, sur le même commit :
+**1223 sur cette machine, 1209 sur le runner**. Quatorze erreurs d'écart, stable,
+reproduit à quatre états différents du dépôt, sans rapport avec le code.
+
+Qui remesure localement et écrit ce qu'il lit fait rougir la CI de 14 — et pire,
+qui *baisse* la baseline depuis une mesure locale offre 14 points de budget de
+dette à qui suivra, silencieusement.
+
+> **Ce qui traverse les machines, c'est le DELTA, jamais l'absolu.** La bonne
+> méthode : mesurer `main` ET sa branche dans le MÊME environnement, prendre la
+> différence, et l'appliquer à la valeur que la CI a rendue. Ici : CI 1240 sur
+> `main`, delta local −5 (mesuré fichier par fichier), donc 1235.
+
+Le garde lui-même connaissait un tiers du problème : le cycle 108 avait fermé le
+cas `packages/shared/dist` absent (+3), en refusant de MESURER plutôt que de
+rendre un verdict faux. La bonne réaction ; simplement, l'inventaire des sources
+de dérive n'était pas clos, et rien dans le script ne le dit.
+
+### Et la fusion peut casser un garde en gardant les DEUX moitiés
+
+Deux lots ont écrit la même précondition sous deux noms — `shared_dist_is_built`
+et `unresolved_dist_imports`. La fusion a retenu la DÉFINITION du premier et
+l'APPEL du second, collés l'un derrière l'autre. Le garde mourait sur
+« command not found », donc rendait non-zéro, donc la CI aurait rougi **sur le
+garde lui-même en nommant une régression de dette inexistante** : exactement le
+faux verdict que le cycle 108 venait de fermer. Un `git merge` sans conflit n'est
+pas une revue.
+
+---
+
+## 2026-08-23 — Le contrat promettait, l'émetteur envoyait autre chose, et `unknown` tenait la porte (109)
+
+### 1. Un suivi hérité se MESURE avant d'être recopié — et celui-ci coûtait 3 cycles
+
+« La bivariance reste la limite, elle dépasse Socket.IO, décision à instruire »
+a voyagé de journal en journal du cycle 107 bis au 108 ter **sans que personne
+ne lance la commande**. Elle tient en une ligne : `strictFunctionTypes: true`
+sur la passerelle ⇒ 52 erreurs, dont **9 dans le cœur temps réel**, et ces
+neuf-là nommaient un défaut de production vieux de quatre incidents.
+
+C'est la leçon 107 (« un suivi hérité est une AFFIRMATION ») rejouée à
+l'identique, un cran plus cher : là-bas le suivi était FAUX, ici il était
+VRAI — et différer sa mesure a différé la découverte, pas seulement la
+correction.
+
+- **Un suivi qui dit « c'est une grande décision » mérite d'abord une MESURE,
+  pas un arbitrage.** Le chiffre décide s'il y a un lot ; l'intuition, non.
+- **Un gros total peut cacher un petit lot mûr.** 52 erreurs se lisent comme
+  « intouchable » ; leur DISTRIBUTION disait 43 Fastify (un autre sujet) + 9
+  réactions (mon domaine, et un bug réel).
+
+### 2. `unknown` sur un rappel n'est pas une commodité, c'est l'absence du contrat
+
+Le contrat promettait `ReactionUpdateEventData` ; le handler prenait
+`SocketIOResponse<unknown>` et envoyait une ligne brute, ou
+`{ message: 'Reaction already absent' }`. **Aucune des deux moitiés du fil ne
+vérifiait l'autre.**
+
+Même famille exacte que `Record<string, unknown>` sur `emitWithSeq` (cycle 105)
+et que le cast sur un objet de contrat (cycles 103/104) : la forme opaque n'est
+jamais un choix de typage, c'est **la MARQUE de la gouvernance qui manque**.
+
+- **Le geste qui ferme n'est pas de retyper à la main, c'est de DÉRIVER.**
+  `AckOf<'reaction:add'> = NonNullable<Parameters<ClientToServerEvents['reaction:add']>[1]>`
+  n'est pas une copie du contrat, c'est une lecture : il n'existe plus qu'une
+  déclaration, donc plus rien à faire diverger.
+- **Et il faut typer les LOCALES aussi.** `const successResponse:
+  SocketIOResponse<unknown> = {…}; callback(successResponse)` rouvre au ligne
+  suivante la porte que la signature vient de fermer. D'où `AckResponseOf<E>`.
+
+### 3. Le compilateur trouve ce que quatre relectures ont manqué
+
+À la première compilation sous la porte typée, `TS2353` a nommé **deux sites que
+je n'avais pas vus** : le chemin idempotent des familles COMMENTAIRE et POST
+portait encore la phrase anglaise, alors que leur chemin nominal était réparé
+depuis longtemps — recopiée du site message, avec le commentaire qui l'avoue
+(« Mirrors ReactionHandler.handleReactionRemove »).
+
+Et c'est le chemin du **double-tap**, celui qu'un accusé idempotent existe pour
+absorber : le plus fréquent des trois.
+
+- **« J'ai lu le code » n'est pas une mesure.** Le prouver en posant la garde
+  et en regardant ce qu'elle refuse en est une.
+- **Une réparation à MOITIÉ est le pire état d'une famille** : le chemin nominal
+  vert donne le dossier pour clos, et le chemin résiduel n'a plus personne pour
+  le chercher.
+
+### 4. Ne pas aligner une famille sur sa jumelle sans lire ce que chacune GARANTIT
+
+La tentation évidente était de copier « ACK == broadcast » (comment/post) sur la
+famille message. **C'eût été une régression** : la famille message acquitte dès
+la PERSISTANCE, délibérément, pour qu'un accroc de lecture post-succès ne
+retourne jamais l'accusé en échec (ce qui ferait annuler au client une réaction
+déjà en base). Porter l'agrégation exige d'acquitter APRÈS elle.
+
+- **La consistance juste n'est pas « toutes envoient la même chose », c'est
+  « chacune déclare ce qu'elle envoie ».** Trois émetteurs aux garanties
+  différentes doivent avoir trois déclarations différentes ; les forcer à une
+  seule casse celui qui avait raison.
+- **Devant deux jumelles qui divergent, la question n'est pas « laquelle
+  copier ? » mais « qu'est-ce que chacune garantit que l'autre ne garantit
+  pas ? ».**
+
+### 5. Un balayage se discrimine sur le TYPE, jamais sur le NOM
+
+Mon `grep` de recensement cherchait `callback?: (response: SocketIOResponse` et a
+rendu 11 sites. Le balayage écrit ensuite, discriminant sur la RÉDACTION du
+type, en a trouvé un douzième : `AttachmentReactionHandler` nomme son paramètre
+`r`.
+
+Règle du cycle 107 (« un balayage qui cherche UN idiome mesure sa popularité »)
+retrouvée par l'autre bout — et elle a payé dans la même heure.
+
+### 6. Geler un inventaire est une DÉCISION, et elle se motive par une mesure
+
+Les 11 portes restantes ont été **ouvertes une par une** : aucune ne ment
+(`MessageHandler` déclare `SocketIOResponse<{ messageId }>` là où le contrat
+déclare `MessageSendResponseData`, qui EST `{ messageId }`). Jumeaux
+structurels ⇒ risque de DÉRIVE, pas divergence.
+
+- **Distinguer « ment » de « redit »** décide de l'urgence : les premières se
+  ferment dans le lot qui les trouve, les secondes se drainent ensuite.
+- **Et surtout pas dans le même lot** : 4 des 11 sont sur le chemin d'envoi de
+  message, le plus fréquenté du produit. Un lot de consistance n'y entre pas
+  sans ses propres témoins.
+
+## 2026-08-23 — Le repli couvrait tout, sauf le mode où il était seul (cycle 112)
+
+### 1. Une mesure PUBLIÉE est une affirmation, au même titre qu'un suivi hérité
+
+Le cycle 110 a instruit `mentionedUserIds` — champ que le web émet, que le schéma
+socket strippe, que REST honore — et l'a classé sous un titre sans ambiguïté :
+« Ce qui a été **MESURÉ CORRECT**, et pourquoi on l'écrit ». Motif : la passerelle
+retombe sur l'extraction des `@` du CONTENU quand la liste explicite est vide.
+
+Chaque phrase était vraie. La conclusion manquait une condition — et le titre,
+plus qu'un suivi ordinaire, décourageait d'y revenir.
+
+- **Un inventaire de NON-défauts se relit avec le soupçon d'un inventaire de
+  suivis.** La règle du cycle 107 (« un suivi hérité est une AFFIRMATION ») vaut
+  par l'autre bout : ce qu'un cycle déclare mesuré et sain est aussi une
+  affirmation, et elle se vérifie.
+
+### 2. Deux canaux qui lisent la MÊME variable ne sont pas deux canaux
+
+Le repli existe bien : `if (explicit.length === 0 && !content.includes('@'))`.
+Reste à savoir ce que `content` porte, et c'est le CLIENT qui en décide douze
+fichiers plus tôt :
+
+```ts
+if (encryptionMode === 'e2ee') messageData.content = '[Encrypted]';
+```
+
+| mode | `content` sur le fil | liste explicite | mentions |
+|---|---|---|---|
+| clair / `server` / `hybrid` | `coucou @alice` | strippée | extraites — rien n'est perdu |
+| **`e2ee`** | **`[Encrypted]`** | strippée | **AUCUNE** |
+
+Nommer quelqu'un dans une conversation chiffrée ne produisait ni ligne `Mention`,
+ni `validatedMentions` (le web surligne depuis ce champ), ni notification — le
+compositeur affichant la pastille du mentionné, l'expéditeur voyait un succès.
+
+- **Une redondance ne se mesure pas à ce que chaque voie PORTE, mais à ce qui les
+  fait TOMBER.** Deux voies qui échouent sur la même cause n'en font qu'une. La
+  question n'est pas « existe-t-il un autre chemin ? » mais « cet autre chemin,
+  dans quel état est-il quand celui-ci est coupé ? ».
+- **Un repli mal conditionné n'est jamais silencieux là où on le teste.** Trois
+  modes sur quatre n'en avaient aucun besoin et le rendaient invisible ; le
+  quatrième en dépendait entièrement et n'en recevait rien.
+
+### 3. Un plafond appartient à la RÉSOLUTION, pas au transport — et il TRONQUE
+
+L'extraction depuis le contenu borne à 50 depuis toujours ; la liste EXPLICITE
+n'était bornée nulle part. Déclarer le champ sur le transport qui porte le trafic
+sans le borner aurait ouvert une entrée non bornée de plus.
+
+Posé à la CONVERGENCE des deux sources, jamais dans les schémas :
+
+- dans un schéma, `.max(50)` **REJETTE** l'envoi ;
+- à la convergence, il **TRONQUE** — ce que l'autre source fait déjà.
+
+- **Deux sources de la même donnée doivent subir la même règle ET le même
+  comportement.** Aligner la règle en divergeant sur l'issue (rejet contre
+  troncature) fabrique une seconde incohérence en fermant la première.
+
+### 4. Fermer l'ENTRÉE avant la SORTIE n'était pas un ordre de commodité
+
+Le suivi n°1 du cycle 110 — typer la charge d'émission du web, qui naissait
+`Record<string, unknown>` et partait sous deux `as unknown as` — ne pouvait pas
+être exécuté plus tôt : **le contrat était faux**. Il ne déclarait ni l'enveloppe
+de chiffrement ni les dix champs que la passerelle honore. Typer l'émetteur
+d'abord aurait produit des erreurs sur un contrat mensonger, qu'on aurait fait
+taire par des casts.
+
+- **Un `Record<string, unknown>` de charge est un symptôme de CONSTRUCTION, pas
+  de typage.** Tant que l'objet se complétait par MUTATION (chiffrement, puis
+  pièces jointes), aucun type ne pouvait le décrire. Le corriger commence par
+  rendre la construction immuable — résoudre le chiffrement en VALEUR — pas par
+  écrire une annotation.
+- **Rendre l'émission à l'appelant supprime le besoin de corréler.** Deux
+  branches monomorphes portant chacune un nom d'événement LITTÉRAL sont vérifiées
+  par le socket typé ; l'enveloppe de délai n'a plus à connaître ni le nom ni la
+  charge. Les deux casts n'ont pas été contournés, ils sont devenus inutiles.
+
+### 5. Ce que la porte typée a fait tomber — trois déclarations manquantes
+
+À la première compilation, et aucune n'avait été nommée par une relecture :
+
+1. **`SendMessageRequest`** (contrat REST des clients) ne déclarait pas
+   `mentionedUserIds` — troisième site du même champ ;
+2. **le repli REST du web** ne l'envoyait pas non plus : même défaut que le lot,
+   sur le chemin de secours du MÊME envoi, et invisible parce que rien ne relie
+   visuellement les deux sites ;
+3. **`EncryptionMetadata` était une `interface`** — donc sans signature d'index
+   implicite, donc assignable à AUCUNE carte ouverte. Le contrat de fil déclare
+   la métadonnée en `Readonly<Record<string, unknown>>` délibérément (trois
+   clients, trois formes, JSON opaque en base). Tant que ce type était une
+   interface, **aucun émetteur typé ne pouvait remplir ce champ** : c'est ce qui
+   rendait le cast du web inévitable, et le cast, à son tour, empêchait de le
+   remarquer.
+
+- **Un cast sur un objet de contrat NOMME la déclaration qui manque** (cycle 96),
+  et la troisième vivait dans le paquet PARTAGÉ, à deux fichiers du contrat
+  qu'elle empêchait de satisfaire.
+
+### 6. Un commentaire qui justifie de GARDER quelque chose est une affirmation
+
+La charge socket portait `messageType` sous cette phrase :
+
+```ts
+// Elle reste posée — et posée JUSTE — parce que l'objet sert aussi de charge
+// au repli REST, où elle est, elle, autoritative (cf. `sendMessageViaRest`).
+```
+
+Le contrat ne déclare aucun champ de ce nom et le schéma le STRIPPE : ce motif
+justifiait, seul, de continuer à le poser. Il était faux — `sendMessageViaRest`
+reconstruit sa charge depuis `options` et recalcule `messageType` lui-même. Les
+deux objets ne se touchent jamais.
+
+Rien n'était perdu (le serveur dérive la même règle), mais **huit témoins
+attestaient une clé que la passerelle ne reçoit jamais**. Recalibrés sur le repli
+REST — seul site où la valeur est autoritative, donc le seul dont un changement
+casse quelque chose — plus un neuvième, en négatif, qui gèle son absence sur la
+charge socket.
+
+- Même famille que le compte (93) et le tri (86 bis) : **une justification de
+  maintien s'ouvre avant d'être crue**, et celle-ci tenait en vie le seul champ
+  que le typage refuserait.
+
+## Leçon 255 — un gate qui s'exprime par un PROXY peut être incapable de dire NON à l'un de ses membres
+
+Le drain de la file hors ligne ne demande pas à une entrée « quelle est ta
+forme ? ». Il lui demande **« sais-tu te diffuser ? »**, et lit la réponse dans
+la longueur d'une liste :
+
+```ts
+const emissions = _drainedEmissions(entry);
+if (emissions.length === 0) { dropEntry(entry, 'unresolvable-event-type'); continue; }
+```
+
+Le contrat est écrit dans la fonction elle-même : « une liste VIDE dit *je ne
+sais pas diffuser ceci*. C'est la seule réponse honnête. » Onze `eventType` sur
+douze passent par une table qui peut rendre `undefined`, donc `[]`. Le douzième —
+`'link-message'`, le seul dont la charge se **DÉPLIE** — passait par
+`linkMessageEmissions`, qui poussait l'enveloppe INCONDITIONNELLEMENT avant de
+regarder ce qu'elle contenait. **Il ne pouvait pas rendre `[]`.**
+
+Le refus du message dérivé était pourtant là, ancien et juste. Il ne servait à
+rien : il retirait la seule émission qui compte et laissait la liste à 1.
+
+Ce que l'enveloppe seule livre : rien (son unique auditeur, le web, lit
+`data.message` ; iOS et Android n'écoutent que le `message:new` refusé). Ce que
+la liste non vide AFFIRMAIT, en revanche, coûtait trois signaux — `count`
+comptait la remise, `conversationIds` ne nommait pas la conversation (donc rien
+n'envoyait le client rechercher un message toujours en base), et l'accusé de
+remise partait, avançant un curseur **MONOTONE** : la coche de l'auteur passait
+à « remis » pour un message qu'aucun destinataire n'a reçu. Sur le seul
+transport d'envoi dont dispose un participant anonyme.
+
+> La question à poser à tout gate qui s'exprime par un proxy (une longueur, un
+> `null`, un booléen dérivé) n'est pas « est-il correct ? » mais **« chaque
+> membre de ce qu'il arbitre peut-il le faire répondre NON ? »**. Le proxy avait
+> l'air uniforme parce qu'il est écrit UNE FOIS, au-dessus de la boucle — c'est
+> exactement ce qui cache l'exception.
+
+- Corollaire de journal : quand un refus a plusieurs causes, la `reason` les
+  SÉPARE. `'unresolvable-event-type'` accuse la file,
+  `'link-envelope-without-message'` accuse le producteur de l'enveloppe.
+
+## Leçon 256 — un témoin qui nomme correctement la moitié qu'il garde GÈLE l'autre
+
+Quatre des six témoins du cycle 114 ne sont pas des ajouts : ce sont des
+**retournements**. Ils existaient, ils étaient verts, et ils assertaient le
+défaut mot pour mot :
+
+```ts
+it("n'ajoute PAS `message:new` quand l'enveloppe ne porte aucun message", () => {
+  expect(linkMessageEmissions({}).map((e) => e.event)).toEqual([SERVER_EVENTS.LINK_MESSAGE_NEW]);
+});
+```
+
+L'intitulé dit VRAI, et c'est précisément cette vérité qui a rendu la seconde
+moitié de l'assertion invisible : `⇒ [LINK_MESSAGE_NEW]` se relit comme le RESTE
+de la phrase, pas comme une affirmation à instruire. Deux cycles de gardes
+posées à cette même frontière de désérialisation sont passés à côté.
+
+> **Un `toEqual` sur une liste entière affirme autant sur ce qu'il GARDE que sur
+> ce qu'il ADMET.** Les deux moitiés se relisent séparément — et l'intitulé du
+> témoin ne couvre en général que la première.
+
+- Même famille que le compte (93), le tri (86 bis) et le commentaire qui énonce
+  une contrainte (94) : **une affirmation portée par un témoin vert reste une
+  affirmation.**
+
+
+---
+
+## 2026-08-23 — « Je n'ai pas trouvé de garde » n'est pas « il n'y a pas de garde » (239i)
+
+239i a laissé sciemment une clé i18n orpheline au catalogue, en s'appuyant sur
+deux affirmations dont AUCUNE ne tenait :
+
+1. « Le cliquet ne compte que les clés référencées, elle en sort d'elle-même. »
+   Vrai du cliquet — **et hors sujet**. Une garde DISTINCTE,
+   `test_everyAppCatalogIdentifierKeyIsReferencedInCode`, applique la contrainte
+   INVERSE : aucune clé du catalogue ne doit rester sans appelant. Je l'avais
+   cherchée par `grep` sur `orphan`, `unused.*key`, `cleUtilisee` — trois
+   formulations devinées, aucune n'étant son nom réel.
+2. « Retirer une clé du catalogue a cassé `main` en 236i. » **236i disait
+   l'inverse** : là-bas une clé avait été retirée **pendant qu'un site la
+   référençait encore**. Le défaut était le référencement orphelin, pas la
+   suppression.
+
+Corollaires :
+
+- **Pour prouver qu'aucune garde ne couvre un artefact, lister les tests qui LE
+  LISENT** — pas grepper des noms qu'on imagine. Une recherche par formulation
+  devinée ne peut produire qu'un faux négatif, et un faux négatif ici se paie
+  d'un rouge en CI.
+- **Une leçon passée invoquée de mémoire doit être RELUE avant d'être
+  appliquée.** Citer 236i sans la rouvrir m'a fait en tirer la règle
+  symétriquement opposée à ce qu'elle disait. Une leçon mal citée est pire
+  qu'aucune leçon : elle porte l'autorité d'une erreur déjà payée.
+- **Un catalogue partagé a souvent deux gardes de sens opposé.** Retirer le
+  dernier appelant d'une clé n'est pas neutre : cela crée une clé morte, et
+  oblige donc à retirer la clé dans le MÊME lot.
+## Cycle 114 bis — un champ que PERSONNE n'écrit se lit comme un champ qui vaut faux
+
+### 1. Une garde de confidentialité peut être livrée, testée, verte, et n'avoir jamais eu lieu
+
+`publicationNeedsCaptureConfirmation` était juste. Ses témoins passaient. Le
+schéma de la passerelle acceptait le champ et documentait sa raison d'être. Et
+la confirmation ne s'est **jamais** affichée, parce que `capturedInApp`
+n'existait nulle part ailleurs que dans la règle qui le lit : pas de colonne,
+pas de champ de contrat, **aucun chemin d'écriture**.
+
+Le trait à retenir : **rien ne ressemble à un bug.** Il n'y a pas de `TODO`, pas
+de type qui ment, pas d'exception. Une valeur absente se lit `undefined`, un
+`!!undefined` vaut `false`, et une garde qui ne se déclenche jamais est
+silencieuse par nature — c'est exactement ce qu'on attend d'elle quand tout va
+bien. **Une garde qui ne se déclenche pas n'est pas observable ; il faut donc
+aller vérifier qu'elle PEUT.**
+
+La question à poser à tout drapeau qui commande une garde : **qui l'ÉCRIT ?**
+Pas « qui le déclare », pas « qui le transporte » — qui pose la valeur `true`.
+Le nom apparaissait cinq fois dans le dépôt et zéro fois à gauche d'une
+affectation issue du monde réel. Même balayage que le cycle 96 sur
+`signedPreKey.signature` (six occurrences, zéro à droite d'une comparaison) :
+compter les sites ne dit rien, c'est leur RÔLE grammatical qui parle.
+
+### 2. Un cast NOMMAIT la déclaration manquante — troisième fois
+
+```ts
+const primaryAttachment = (message as { attachments?: Array<{ …; capturedInApp?: boolean }> })
+  .attachments?.[0];
+```
+
+Règle déjà écrite (cycles 96, 103, 104) et vérifiée une fois de plus : **un cast
+sur un objet de contrat nomme le champ qui manque au contrat.** Ici il faisait
+mieux que le nommer — il fabriquait, le temps d'une expression, le champ que la
+production ne produit pas. Le retirer a fait tomber le compilateur sur les six
+sites qui laissaient la valeur passer à la trappe, dont le transformateur web,
+seul chemin entre la réponse et l'objet que la feuille lit.
+
+### 3. Un témoin qui FABRIQUE la valeur en litige atteste une fiction
+
+Les témoins web posaient `capturedInApp: true` à la main dans leurs fixtures. Ils
+prouvaient que « si le champ vaut vrai, la modale s'ouvre » — une propriété du
+composant, vraie, et sans rapport avec la question qui comptait : *ce champ
+peut-il valoir vrai ?*
+
+Même famille que le `MagicMock` nu (cycle 90), que le double Prisma qui rend `[]`
+(cycle 87) et que les fixtures `'conv-1'` du cycle 112 : **un double ment aussi
+par ce qu'il ACCEPTE de représenter.** Le correctif de méthode est le même —
+partir de ce que l'ÉMETTEUR émet réellement, jamais de la forme qu'on aimerait
+qu'il ait.
+
+### 4. Le commentaire disait la panne, à voix haute, et personne ne l'avait crue
+
+```ts
+// `capturedInApp` est DÉCLARÉ par le client, et il est le seul à pouvoir le faire
+```
+
+Vrai sur le principe. Faux en fait : **aucun client n'avait de quoi le
+déclarer.** C'est la famille « un commentaire qui ÉNONCE une contrainte est une
+AFFIRMATION » (cycle 94), avec une variante : celui-ci n'énonçait pas une
+contrainte de schéma mais une **répartition des responsabilités**, et personne
+n'avait vérifié que l'autre partie tenait la sienne. Devant une phrase de la
+forme « c'est X qui fournit ce champ », la question est : *et il le fait ?*
+
+### 5. On peut poser un tuyau parfait et n'y verser personne
+
+C'est la leçon la plus coûteuse du cycle, et elle a failli sortir en production
+sous les traits d'un correctif.
+
+Après deux commits — colonne, persistance, `select`, schéma, type requis,
+transformateur, trois étages iOS — la garde était **toujours inerte** : rien ne
+déclarait la provenance à la capture, donc la colonne valait `false` partout.
+J'avais reproduit le défaut d'origine un étage plus haut, avec plus de code et
+autant d'effet, et j'aurais pu le clore ainsi : les gates étaient verts, les
+témoins prouvaient chaque maillon, et le seul maillon absent était celui dont
+personne n'écrit de témoin — **le premier**.
+
+Ce qui l'a rattrapé : la phrase que je venais d'écrire moi-même dans « reste
+ouvert » disait la panne en toutes lettres. **Relire son propre journal comme on
+relirait le commentaire d'un autre** — les deux se périment de la même façon, et
+un aveu écrit sans être entendu ne vaut pas mieux que le commentaire du §4.
+
+Formulation générale : **une chaîne de données se vérifie par son PREMIER
+maillon, pas par la longueur du reste.** Les maillons intermédiaires ont chacun
+un témoin naturel (« ce mapping recopie-t-il le champ ? ») ; la SOURCE n'en a
+pas, parce qu'il n'y a rien en amont à comparer. C'est donc là que la vérification
+doit être délibérée, et elle ne se formule qu'en une question : *qui, dans le
+monde réel, pose cette valeur, et à quel moment le sait-il ?*
+
+### 6. Corollaire : la provenance est une donnée PÉRISSABLE
+
+Ce champ a une propriété qui explique tout le défaut : **il n'est connaissable
+qu'à un seul instant**, et par un seul acteur. Le serveur ne peut pas le
+déduire (rien dans un fichier ne distingue une photo prise d'une photo
+importée) ; le client ne peut plus le retrouver une seconde après. Le web
+essayait de le relire sur un attachement redescendu du serveur — c'est-à-dire à
+l'endroit et au moment où l'information n'existe plus.
+
+Devant une donnée de cette famille — provenance, intention, contexte de geste —
+**la seule question d'architecture est « où est-elle encore vraie ? »**, et la
+réponse commande le reste : elle s'écrit là, ou elle est perdue. Un lot qui la
+transporte sans l'écrire à la source déplace le problème en le rendant plus
+difficile à voir.
+
+---
+
+
+---
+
+## Leçon 258 — gouverner ce qu'une garantie CONTIENT ne dit rien de la façon dont on l'ATTEINT
+
+Cycle 116. Six cycles avaient durci la file de remise hors ligne : le nom
+d'événement qu'une entrée rejoue (109 bis), la forme minimale de sa charge
+(111), l'adressabilité de sa conversation (112), la corrélation du couple
+`(eventType, payload)` (106), le verdict d'indélivrabilité du drain (114).
+Tous portent sur des entrées **déjà écrites**.
+
+Aucun n'a demandé si l'écriture a lieu. Elle était, sur les DEUX producteurs de
+`message:new`, suspendue au succès de synchronisations que le code qualifie
+lui-même de non-bloquantes :
+
+- REST/ZMQ : l'enfilage était la DERNIÈRE instruction d'un `try` dont tout le
+  reste est cosmétique, sous un `catch` journalisant « non-bloquant ». Un
+  `emit` qui lève — l'adaptateur ou l'encodeur en défaut, ce que le dépôt écrit
+  lui-même ailleurs — annulait le rejeu pour tous les absents ;
+- WS : la requête participants avait bien son `try` dédié, mais retombait sur
+  `[]`, que l'unité partagée lit comme « voici la liste, elle est vide » et non
+  comme « je ne sais pas » (`params.participants ?? sa propre requête` —
+  `[]` n'est pas nullish).
+
+### La question à poser
+
+> Pour toute garantie DURABLE : **de quoi son exécution dépend-elle, et ces
+> dépendances ont-elles le droit d'échouer ?**
+
+Ici les deux dépendances avaient ce droit — écrit, assumé, journalisé. La
+garantie, elle, ne l'avait pas. Le dépôt connaissait déjà la règle et
+l'appliquait à l'instantané de reconnexion (le drain est placé HORS du `try`
+pour qu'un accroc cosmétique n'échoue jamais le rejeu destructif) ; elle n'avait
+jamais été portée aux deux chemins d'ENVOI.
+
+### Corollaire — un défaut choisi pour la commodité du site d'appel décide à la place du consommateur
+
+`let xs: T[] = []` rend le code d'après plus court (`.map`, `.length` sans
+garde) et transforme une IGNORANCE en AFFIRMATION. Le consommateur qui savait
+distinguer les deux — et qui avait un comportement pour chacune — n'a jamais eu
+l'occasion de le faire.
+
+C'est la même distinction que `bridgeComputed(undefined)` / `bridgeNotComputed()`
+(cycle 63), un étage plus bas et sans le vocabulaire pour la dire : les deux
+états y partageaient une valeur.
+
+### Corollaire — une étiquette de `catch` ne qualifie que ce que son auteur avait en tête
+
+« non-bloquant » était vrai des deux premières instructions du `try` et faux de
+la troisième. Personne ne relit un `try` pour vérifier son étiquette : c'est
+l'étiquette qu'on lit. Même famille que « un commentaire qui ÉNONCE une
+contrainte est une AFFIRMATION » (cycle 94) et que le commentaire
+d'impossibilité périmé (cycle 108) — avec cette variante : ici l'étiquette
+décrit une PORTÉE, et une portée grandit toute seule à chaque instruction
+qu'on ajoute au bloc.
+
+
+---
+
+## Leçon 259 — une uniformité n'est une vertu que si les cas unifiés se ressemblent par ce qui COMPTE
+
+Cycle 117. `/sync` tenait son watermark à `since` sur une page TRONQUÉE — avec le
+commentaire qui l'énonce : « un client qui adopterait ce checkpoint perdrait tout
+l'arriéré d'un coup, définitivement ». Il l'AVANÇAIT sur les deux réponses qui ne
+livrent RIEN : le chemin de gap (la requête est court-circuitée) et la demande
+sans aucune collection.
+
+Une couverture PARTIELLE retenait le watermark ; une couverture NULLE l'avançait.
+Le chemin de gap est pourtant le maximum exact du cas que la première règle
+protège.
+
+Ce qui a permis l'inversion tient dans le nom du témoin qui la gelait, à vingt
+lignes du témoin qui gèle la règle contraire :
+
+```ts
+it('applies the same watermark on the gap path, which returns no items at all', …)
+```
+
+« the same watermark » présente l'uniformité comme une garantie. Mais les deux cas
+n'étaient unifiés que par `hasMore: false` — un critère de FORME — alors que ce qui
+gouverne le watermark est la COUVERTURE, et sur ce critère-là ils sont opposés.
+
+> Devant une uniformité revendiquée, la question n'est pas « les cas sont-ils
+> traités pareil ? » mais **« se ressemblent-ils sur la propriété que ce
+> traitement décide ? »**.
+
+C'est la Leçon 256 (« un témoin qui nomme correctement la moitié qu'il garde GÈLE
+l'autre ») avec une variante plus retorse : cet intitulé-ci NOMME le fait gênant
+— « which returns no items at all » — et l'énonce comme une garantie. Devant un
+intitulé de témoin qui décrit une réponse VIDE, la question est : *et c'est bien ?*
+
+### Corollaire — une règle écrite en NÉGATIF est en retard par construction
+
+`hasMore ? sinceDate : checkpoint` est une liste de refus, à laquelle il faut
+penser à ajouter une ligne. Son retard ne ressemble pas à une erreur : il
+ressemble à du code qui passe. La réécrire en POSITIF sous un nom qui porte
+l'invariant — `coveredTheWindow = !hasMore && !hasGap && servedSomething` — met la
+question à l'endroit où elle se pose, et oblige la prochaine façon de ne rien
+couvrir à s'y ajouter.
+
+### Corollaire — une INSTRUCTION dans la réponse ne rattrape pas une donnée fausse dans la même réponse
+
+L'objection était « le client est prévenu, `gapAction: 'full_resync_required'` ».
+Elle ne tient pas : une réponse ne peut pas dépendre de ce que son destinataire en
+fera pour rester sûre. La resync peut être différée, échouer hors ligne, ou n'être
+lue par personne — et dans les trois cas le watermark a déjà avancé, puisqu'il
+voyageait dans la même charge utile. Même famille que « le gate s'applique à la
+SOURCE, jamais au sérialiseur » : ici la source est la VALEUR, et l'instruction
+est le sérialiseur.
+
+### Corollaire de méthode — un lot de témoins tous ROUGES ne prouve pas le bon correctif
+
+Trois témoins neufs rouges disaient « tiens le watermark ». Le correctif trivial
+qui les satisfait tous est « ne l'avance jamais » — et il casse le produit en
+silence, le client relisant la même fenêtre indéfiniment. C'est le témoin
+NÉGATIF, vert AVANT le correctif (« une page complète, servie, sans gap, avance
+quand même »), qui interdit cette sortie. **Un lot qui resserre une condition
+écrit dans le même train le témoin qui interdit de la resserrer trop.**
+
+Et chaque clause d'une conjonction se prouve PORTANTE une par une, par mutation :
+retirer `!hasGap` → 2 témoins tombent, `servedSomething` → 1, `!hasMore` → 3.
+Sans cette mesure, une clause décorative se lit exactement comme une clause utile.
+
+---
+
+## Leçon 257 — un champ à la PREMIÈRE PERSONNE n'a aucune valeur juste sur une diffusion
+
+**Cycle 115.** `ReactionUpdateEventData.aggregation.hasCurrentUser` répond à
+« est-ce que MOI j'ai réagi ? ». Une diffusion de room n'a pas de « moi » : le
+même objet part vers tous les participants. Le gateway le calculait quand même,
+avec l'id de l'**ACTEUR** :
+
+```ts
+// createUpdateEvent — l'objet rendu part vers TOUTE la room
+const aggregation = await this.getEmojiAggregation(messageId, emoji, participantId);
+//                                                                   ^^^^^^^^^^^^^ l'acteur
+```
+
+Et comme l'agrégat est relu APRÈS la mutation, le champ ne portait **aucune
+information** : `true` sur tout `add`, `false` sur tout `remove` — soit `action`
+réécrit une couche plus bas, qui est le nom de l'événement réécrit une couche
+plus bas. Sa seule valeur observable était fausse pour tout destinataire autre
+que l'acteur.
+
+> La question à poser à chaque champ d'une charge DIFFUSÉE n'est pas « est-il
+> correct ? » mais **« sa valeur dépend-elle du destinataire ? »**. Si oui, il
+> n'y a pas de bonne valeur à y mettre : il y a un champ à RETIRER, et une
+> dérivation à rendre au client — qui, lui, sait qui il est.
+
+Le signal se lit sans ouvrir le code : **un nom à la première personne dans une
+charge multi-destinataires** — `hasCurrentUser`, `isMine`, `myVote`,
+`unreadForMe`. Les deux familles de réaction écrites en DERNIER (post, pièce
+jointe) l'avaient déjà tranché, chacune avec sa décision en commentaire (« NO
+userIds, NO hasCurrentUser », « l'état *ma réaction* reste maintenu côté
+client ») ; les deux plus anciennes (message, commentaire) portaient le défaut.
+
+**Le correctif est deux TYPES, pas un champ optionnel** : un optionnel laisse
+chaque site décider seul s'il a le droit de le remplir.
+`ReactionBroadcastAggregation` (ce qu'une diffusion peut porter) et
+`ReactionAggregation extends` (résolu POUR un lecteur, chemin REST). Une seule
+requête, deux formes qui en dérivent.
+
+**Et le client doit IGNORER le champ, pas seulement cesser de le recevoir.** La
+file hors-ligne rejoue la charge ENFILÉE jusqu'à 48 h : retirer le champ à
+l'émission laisse la panne vivre deux jours de plus, sur la population exacte —
+reconnexion après absence — que la file existe pour servir. D'où le `...spread`
+puis surcharge côté lecteur, et le témoin qui gèle la tolérance à l'ancienne
+forme.
+
+### Corollaire — un contournement client bien commenté est un diagnostic qui n'a pas remonté
+
+C'est la moitié chère de ce cycle. La jumelle COMMENTAIRE portait le MÊME défaut
+et avait déjà produit une panne en production ; iOS l'a contournée dans deux
+ViewModels, en nommant la cause exactement :
+
+```swift
+// … PAS `hasCurrentUser`, qui est calculé côté gateway relativement à l'ACTEUR
+// de l'événement, donc il vaut true pour le like d'un TIERS et allumait le cœur
+// de tous les destinataires du broadcast.
+```
+
+Le diagnostic était juste, complet, écrit — et il s'est arrêté à l'endroit du
+SYMPTÔME. Il a protégé son écran, laissé la cause en place pour tous les autres
+clients, et n'a jamais atteint la famille jumelle, qui la portait au même
+endroit. Variante la plus coûteuse de « Cette entité a-t-elle une JUMELLE ? »
+(85) : ici la connaissance existait dans le dépôt et n'a pas franchi la
+frontière client→serveur.
+
+> Devant tout commentaire client qui explique pourquoi il n'utilise PAS un champ
+> du serveur, la question suivante est : **pourquoi le serveur l'envoie-t-il
+> encore, et à qui d'autre ?**
+
+- Même famille que 94 (« un commentaire qui ÉNONCE une contrainte est une
+  AFFIRMATION ») et 85 (la jumelle), avec ceci de particulier que le commentaire
+  disait VRAI et que c'est son exactitude même qui a refermé le sujet.
+
+---
+
+## Leçon 260 — « jumelles » est un COMPTE, et un compte se vérifie
+
+**Cycle 118.** `/CLAUDE.md` §« Règles critiques du Prisme » #3 se terminait par
+« Sources de vérité **jumelles** : `resolveLastMessagePreview()` … et
+`MeeshyConversation.resolvedLastMessagePreview` … — toute évolution touche les
+deux ». Le dépôt a TROIS clients. Le troisième — Android — ne portait pas la
+règle du tout : son `ApiConversation` ne déclarait ni `lastMessageTranslations`
+ni `lastMessageOriginalLanguage`, donc le décodeur (`ignoreUnknownKeys = true`)
+les jetait en silence et la ligne de liste rendait `lastMessage.content`, la
+langue de l'EXPÉDITEUR, pour tout lecteur, à chaque démarrage.
+
+Le mot « jumelles » n'était pas une erreur d'écriture : il DÉCRIVAIT l'état du
+dépôt au moment où il a été écrit, et il a cessé d'être vrai quand un troisième
+client est né. Personne ne l'a recompté, parce qu'une phrase qui nomme
+exhaustivement ses sites se relit comme une définition, pas comme une mesure.
+
+> Même famille que « un tri est une AFFIRMATION » (86 bis), « un compte est une
+> AFFIRMATION » (93) et « un commentaire qui ÉNONCE une contrainte est une
+> AFFIRMATION » (94), avec ceci de particulier : **le nombre était juste le jour
+> où il a été écrit.** Il n'a pas été faux, il l'est DEVENU — comme le
+> commentaire d'impossibilité du cycle 108. Devant toute énumération de sites
+> dans un document (« les deux émetteurs », « les trois clients », « les cinq
+> surfaces »), la question n'est pas « est-ce exact ? » mais **« combien y en
+> a-t-il AUJOURD'HUI ? »**, et elle se répond en comptant dans le dépôt.
+
+### Corollaire — un champ non DÉCLARÉ est perdu DEUX FOIS quand le cache stocke la charge
+
+`ConversationCacheSource` ne persiste pas des colonnes, il persiste
+`encodeToString(conversation)` et relit `decodeFromString`. Un champ absent du
+modèle disparaît donc au décodage de la réponse **puis** à la ré-écriture dans
+Room. Aucune correction d'aval — un résolveur, une vue — n'aurait eu quoi que ce
+soit à lire : c'est la déclaration, et elle seule, qui ouvre le canal.
+
+C'est le miroir client exact de « un schéma de réponse sans `properties`
+EFFACE » : les deux plateformes ont un point où une déclaration manquante ne
+produit pas une erreur mais un SILENCE, et le silence a la forme d'un produit
+qui marche.
+
+### Corollaire — un ACQUIS ne se propage pas d'un composant à son voisin immédiat
+
+Le plus cher de ce cycle. `ConversationListScreen` porte `state.currentUser` et
+le passe — DEUX CENTS LIGNES PLUS BAS, DANS LE MÊME FICHIER — à la carte
+d'aperçu au appui long, qui applique le Prisme message par message. La rangée
+juste derrière composait `messageSummaryLine(message = conversation.lastMessage)`,
+brut. La donnée était là, la règle était connue, la surface secondaire était
+conforme, et la surface que tout le monde voit à chaque lancement ne l'était pas.
+
+> Quand une règle produit est implémentée sur une surface SECONDAIRE (une carte
+> d'aperçu, une feuille de détail, un survol), la question suivante est :
+> **« quelle est la surface PRIMAIRE du même contenu, et la porte-t-elle ? »**.
+> La secondaire est souvent la plus récente, donc la plus soignée — et c'est
+> exactement ce qui rend l'écart invisible.
+
+### Corollaire de choix — entre deux jumeaux qui divergent, suivre celui qui PRODUIT ce qu'on compare
+
+Le résolveur canonicalise trois sources de codes de langue. Les deux jumeaux
+existants ne le font pas pareil : iOS écrit `normalizeLanguageCode(x) ??
+x.lowercased()`, TS écrit `normalizeLanguageCode(x) ?? sous-tag primaire ??
+x.toLowerCase()`. Le discriminant n'est ni l'ancienneté ni la majorité, c'est
+**qui produit les clés comparées** : la passerelle bâtit les clés de la carte
+avec `normalizeLanguageForDedup` (TS), donc s'aligner sur le TS garantit qu'une
+langue du lecteur canonicalise sur la clé RÉELLEMENT présente sur le fil.
+
+### Corollaire de témoin — un prisme à UNE langue ne peut pas prouver qu'on lit la langue d'origine
+
+Le témoin « le lecteur anglophone reçoit l'original » écrit avec un prisme
+`["en"]` passe même si `lastMessageOriginalLanguage` est jeté : aucune clé `en`
+dans la carte ⇒ repli sur l'original, la bonne réponse pour la mauvaise raison.
+Il faut `["en", "fr"]` avec une traduction française disponible : sans le champ,
+le résolveur descend au rang 2 et sert le français. **La donnée qu'un témoin
+prétend garder doit être la SEULE chose qui décide de son issue.**
+
+---
+
+## Leçon 261 — Une énumération de sites porte DEUX affirmations, et la seconde n'est jamais vérifiée
+
+**Cycle 119.** `/CLAUDE.md` § « Règles critiques du Prisme » #3 énonce la règle de
+RANG — « la langue d'origine concourt à son rang, jamais comme court-circuit » —
+puis nomme ses sites : « Sources de vérité, une par client : `resolveLastMessagePreview()`
+… `MeeshyConversation.resolvedLastMessagePreview` … et `LastMessagePreviewResolver.kt`
+— toute évolution touche les TROIS. »
+
+Les trois sont conformes. Le compte est juste. Et le dépôt porte une **seconde
+famille de trois résolveurs**, gouvernée par la MÊME règle et recensée nulle part :
+`AudioTrackLanguageResolver` (iOS), `resolveTranslatedAudio` (Android), et
+`use-audio-translation` (web). Le troisième écrivait la phrase interdite mot pour
+mot :
+
+```ts
+if (originalLang && userLanguages.includes(originalLang)) return 'original';
+for (const lang of userLanguages) { … }
+```
+
+> Une énumération de sites affirme deux choses : **« ces sites-là appliquent la
+> règle »** — vérifiable, et vraie ici — et **« ce sont les sites où la règle
+> s'applique »** — presque jamais vérifiée. C'est l'exactitude de la PREMIÈRE qui
+> fait lire la seconde comme acquise.
+
+Prolongement direct de la leçon 260 (« *jumelles* est un COMPTE, et un compte se
+vérifie ») d'un cran vers le haut : là-bas le nombre était devenu faux ; ici il est
+resté JUSTE, et c'est le PÉRIMÈTRE qui ne l'a jamais été. Devant toute énumération
+qui accompagne une règle, la question n'est donc pas seulement « combien y en
+a-t-il aujourd'hui ? » mais **« cette règle gouverne-t-elle un autre TYPE DE
+CONTENU, et qui le résout ? »**. Le Prisme le disait lui-même deux paragraphes
+plus haut — « le prisme s'applique à TOUT le contenu : messages texte,
+transcriptions audio, métadonnées, aperçus » — et l'énumération, elle, ne couvrait
+que le dernier.
+
+### Corollaire — le témoin d'une règle de RANG doit exercer un rang AUTRE que le premier
+
+La suite portait 62 témoins verts, dont deux qui nomment cette résolution
+exactement. Les deux placent la langue d'origine au **rang 1** — où le
+court-circuit et la règle juste rendent le MÊME verdict. Ils sont restés verts
+sous le correctif, sans une ligne modifiée.
+
+C'est une troisième forme de « un témoin qui ne peut pas tomber », et la plus
+discrète. Les deux connues portent sur l'ASSERTION (elle accepte les deux issues)
+ou sur le HARNAIS (il saute la couche testée). Celle-ci porte sur la **FIXTURE** :
+l'assertion est juste, le harnais est bon, et c'est le jeu de données qui place
+les deux règles concurrentes en accord.
+
+> **Un témoin de RANG écrit sur le rang 1 ne mesure pas un ordre, il mesure une
+> présence.** L'écart entre « appartient au prisme » et « gagne à son rang »
+> n'existe qu'à partir du rang 2 : c'est là, et seulement là, que le témoin doit
+> être écrit.
+
+Le cycle 118 avait déjà payé cette leçon dans sa variante voisine — son témoin
+exigeait un prisme `["en","fr"]` plutôt que `["en"]`, faute de quoi il passait
+« pour la mauvaise raison ». La même exigence n'a pas été portée à la famille
+audio, parce que rien ne disait qu'elle en était une.
+
+### Corollaire — une règle de sélection rend une CLÉ, et la clé doit rester opposable
+
+Le correctif compare les codes de langue en minuscules (les deux côtés ont des
+producteurs différents : `resolveUserLanguagesOrdered` d'un côté, Whisper et le
+pipeline TTS de l'autre) mais rend le `targetLanguage` **tel qu'il est stocké**.
+Trois lecteurs en aval (`currentAudioUrl`, `currentAudioDuration`, la
+transcription courante) retrouvent leur piste par égalité **stricte** sur ce
+champ : rendre la forme normalisée ferait élire la bonne langue puis manquer sa
+piste, et le lecteur retomberait en silence sur l'audio original — c'est-à-dire
+le défaut qu'on vient de corriger, réintroduit par le correctif lui-même.
+
+> Quand on normalise pour COMPARER, la question suivante est : **ce que je rends
+> est-il une valeur d'affichage, ou une clé que quelqu'un va rapprocher d'une
+> autre table ?** Normaliser la comparaison est presque toujours juste ;
+> normaliser la valeur RENDUE ne l'est que si tous ses lecteurs normalisent
+> aussi. Gelé ici par un témoin prouvé rouge par mutation — le seul moyen de
+> montrer qu'une décision de cette forme est gardée.
+
+### Corollaire de méthode — mesurer un suivi hérité AVANT de l'exécuter
+
+Ce cycle devait traiter le suivi que le cycle 118 annonçait comme « le plus
+intéressant » : la rangée Android qui « ne se met à jour que par REST et par
+`message:new` », faute de champs d'aperçu sur `ConversationUpdatedSocketEvent`.
+La déclaration de forme est exacte ; la conséquence ne l'est pas —
+`ConversationListViewModel.kt:414` collecte l'événement et déclenche une
+revalidation fusionnée, donc la rangée se met bien à jour. Bavardage réseau, pas
+défaut de justesse.
+
+Application littérale de la leçon 107 (« un suivi hérité est une AFFIRMATION »),
+avec ceci de notable : **c'est en mesurant le suivi qu'on a eu le temps de
+chercher ailleurs.** L'exécuter sur parole aurait produit un lot vert, propre et
+sans effet — le résultat par défaut décrit au cycle 106.
+
+## Leçon 262 — un flow à REPLAY porté par un service `@Singleton` survit à l'appel qu'il décrit ; le `close()` doit oublier aussi explicitement qu'il dispose (2026-08-24, routine calling, Vague 173)
+
+**Le constat.** `WebRtcEngine` (Android, `@Singleton`, un seul process pour tous les appels
+successifs) expose `remoteVideoTracks` en `MutableSharedFlow<VideoTrack>(replay = 1, …)` — pour
+qu'un composable qui recompose EN COURS d'appel retrouve immédiatement la dernière frame sans
+attendre un nouvel `onAddTrack`. `close()` dispose soigneusement chaque ressource native
+(capturer, surface helper, pistes locales, `peerConnection`, source audio) et remet
+`_iceConnectionState` à `NEW` — mais n'a jamais touché `_remoteVideoTracks`. Le buffer de replay
+n'est pas une ressource native : rien dans le geste « disposer tout ce qu'on a alloué » ne le
+couvre par accident. Le prochain appel, avec un pair DIFFÉRENT, réutilise le même singleton donc le
+même flow — son premier abonné (`CallScreen` qui recompose à l'ouverture) reçoit le `VideoTrack`
+déjà disposé de l'appel PRÉCÉDENT avant même que le nouveau pair n'émette quoi que ce soit :
+`VideoRenderer.addSink()` appelé sur un objet natif déjà libéré, et une frame de l'interlocuteur
+d'avant affichée pendant un appel avec quelqu'un d'autre — fuite de confidentialité, pas seulement
+un défaut d'affichage.
+
+**Le tell.** `remoteAudioTracks` voisin est en `replay = 0` (défaut) et ne fuit rien — c'est
+l'ASYMÉTRIE entre les deux flows côte à côte qui aurait dû alerter : l'un porte une mémoire que
+`close()` doit vider, l'autre n'en porte aucune. Un `replay > 0` sur un flow scopé à une session
+(un appel, une connexion) est une dette de reset qu'il faut nommer explicitement au moment où on
+lit `close()`/`cleanup()` — jamais supposé couvert parce que le reste de la fonction dispose tout
+le voisinage.
+
+**La règle.** Extrait dans `RemoteTrackRegistry`, une classe pure (aucune init native WebRTC) qui
+porte les deux flows ET leur `reset()` — `WebRtcEngine.close()` appelle `remoteTracks.reset()` à
+côté des dispose natifs. Le déplacer hors de `WebRtcEngine` n'est pas cosmétique : `WebRtcEngine`
+construit `EglBase.create()` dans son initialiseur de champ, donc instancier la classe réelle dans
+un test JVM est impraticable ici (webrtc natif absent) — c'est pourquoi aucun test n'existait pour
+`WebRtcEngine` et le bug a survécu sans témoin. Une classe séparée, sans dépendance native,
+rétablit la testabilité sans changer le comportement de production.
+
+**CI reality, à nouveau.** `dl.google.com` est refusé par la policy proxy de cette session
+(confirmé via `$HTTPS_PROXY/__agentproxy/status` → `connect_rejected` sur `dl.google.com:443`) —
+aucun Gradle Android ne tourne ici, exactement la situation documentée par
+`apps/android/tasks/android-routine/ROUTINE.md` § « CI reality » pour un autre chantier
+(feature-parity Stories). Le verdict vient de `.github/workflows/android.yml`, pas d'ici — dit
+explicitement dans le commit plutôt que passé sous silence.
+
+## Leçon 263 — la troisième famille se trouve en POSANT la question de la 261, pas en la citant
+
+Le cycle 120 a ouvert sur la leçon 261 comme sur une consigne à EXÉCUTER, pas à
+réciter. Elle dit : devant une énumération de sites qui
+accompagne une règle, demander **« cette règle gouverne-t-elle un autre TYPE DE
+CONTENU, et qui le résout ? »**. Le Prisme y répond d'avance — « il s'applique à
+TOUT le contenu ». Deux familles étaient recensées (aperçu de liste, audio) ;
+poser la question a fait apparaître la **troisième** : les POSTS et
+COMMENTAIRES, résolus par `APIPost.resolveTranslation` (iOS),
+`LanguageResolver.preferredTranslation` (Android) et — côté web —
+`TranslationToggle` + `usePostTranslation`.
+
+Les deux jumeaux natifs DESCENDENT la liste ordonnée des langues du lecteur. Le
+web ne consultait que le rang 1 (`userLanguage` unique). Conséquence mécanique,
+identique aux cycles 118/119 : la locale appareil entrant au rang 4 (règle 2),
+tout lecteur dont l'appareil diffère de sa langue applicative — cas NOMINAL —
+voyait l'original là où iOS/Android servaient une traduction d'un rang inférieur.
+
+> La 261 disait qu'une énumération porte deux affirmations, dont « ce sont les
+> sites où la règle s'applique » n'est presque jamais vérifiée. La 262 est le mode
+> d'emploi : **on ne la vérifie qu'en nommant un TYPE de contenu que la liste ne
+> couvre pas, puis en cherchant son résolveur sur chaque client.** Citer la leçon
+> ne trouve rien ; instancier sa question sur un type concret (« et les posts ? »)
+> trouve la famille manquante à tous les coups tant que le Prisme n'est pas
+> intégralement recensé.
+
+### Corollaire — le témoin de rang à FIXTURE vide ne mesure pas la recherche
+
+`usePostTranslation` portait déjà des témoins de rangs 3 et 4 — tous verts, tous
+inutiles : ils passaient `{}` comme carte de traductions. Ils attestaient le
+calcul de `preferredLanguage`, jamais la RECHERCHE d'une traduction à ce rang. La
+forme « fixture » de la 261 (l'assertion est juste, le harnais bon, c'est le jeu
+de données qui rend la règle inobservable) a ici une seconde arête : **un témoin
+de rang doit non seulement exercer un rang > 1, mais aussi FOURNIR une traduction
+à ce rang.** Un prisme long au-dessus d'une carte vide ne teste toujours qu'une
+présence, jamais un ordre.
+
+### Corollaire — une capacité additive DÉSAMORCE le piège même là où elle n'est pas encore câblée
+
+Le correctif a rendu `TranslationToggle` capable de descendre le prisme via une
+prop additive `preferredLanguages`, puis ne l'a câblée que sur la surface POSTS.
+Commentaires, stories et status restent au rang 1 — corrects, non encore
+rang-conscients. Mais le PIÈGE armé (un résolveur qui écrit le court-circuit
+interdit) est déjà retiré : le résolveur SAIT descendre, il ne lui manque que la
+liste en entrée. C'est la bonne façon de borner un lot large sans laisser un
+demi-correctif dangereux : **corriger le résolveur pour tous, câbler les
+surfaces une par une.** L'inverse — câbler une surface en laissant le résolveur
+faux ailleurs — rearme le piège à chaque site non touché.
+
+## Leçon 264 — un résolveur du Prisme n'est pas forcément dans un CLIENT : la quatrième famille était côté serveur (2026-08-24, cycle 121)
+
+**Le constat.** Les cycles 118 à 120 ont recensé trois familles de résolveurs du Prisme
+(aperçu de liste, audio, posts/commentaires) et, à chaque fois, la même méthode a trouvé la
+suivante : nommer un TYPE de contenu que la liste ne couvre pas, puis chercher son résolveur.
+Le cycle 121 a instancié la question sur les NOTIFICATIONS — « et le texte poussé dans une
+bannière, qui le résout ? ». Réponse :
+`NotificationService.createMessageNotification` (`services/gateway`), qui appariait la carte
+`Message.translations` à `resolveUserLanguage(...)` — **une** langue, la plus haute renseignée,
+donc le rang 1 dans le cas nominal. Une traduction disponible au rang 2, 3 ou 4 du prisme du
+destinataire n'était jamais poussée : la bannière servait l'ORIGINAL pendant que la ligne de
+liste de la même application — servie par `resolveLastMessagePreview`, qui DESCEND — affichait
+la traduction. Deux textes pour un même message, sur le même écran, à quelques secondes
+d'intervalle.
+
+**Pourquoi les trois balayages précédents l'ont manquée.** Ils balayaient les CLIENTS — web,
+iOS, Android — parce que les trois premières familles y vivaient, chacune en trois
+exemplaires. Celle-ci est résolue **une seule fois, côté serveur, pour les trois clients** :
+elle n'a aucun exemplaire à trouver là où on cherchait.
+
+> La règle qui généralise : **dès qu'un contenu part vers un destinataire NOMMÉ — un push, un
+> e-mail, un digest — c'est l'émetteur qui descend son prisme, pas le lecteur.** Chercher les
+> résolveurs « dans les clients » est un réflexe d'architecture, pas une propriété du Prisme.
+> La question juste n'est pas « où sont les écrans ? » mais **« qui connaît les préférences du
+> lecteur au moment où le contenu est composé ? »**.
+
+**Le tell, et il était lisible.** Le site portait le bon vocabulaire — un commentaire nommant
+le Prisme, la règle #1 correctement citée (« pas de fallback `translations.first` »), et une
+résolution par `resolveUserLanguage`. Tout y était juste SAUF la cardinalité : la fonction rend
+un `string`, sa voisine `resolveUserLanguagesOrdered` rend la liste. **Un résolveur qui cite la
+règle #1 sans citer la règle #3 ne descend pas** — les deux règles ne se gardent pas
+mutuellement : #1 interdit de servir n'importe quelle traduction, #3 oblige à descendre. Un
+site peut respecter la première à la lettre en violant la seconde, et c'est exactement ce qui
+ressemble le plus à du code correct.
+
+### Corollaire — deux résolutions dans la même méthode, et les confondre coûte dans les deux sens
+
+`recipientLang` y servait DEUX choses : le CADRAGE (« Alice vous a envoyé une photo », la
+langue d'interface) et la clé de CONTENU. Le cadrage est légitimement une langue unique — le
+rang 1. Le contenu, lui, n'a pas de langue d'interface : il a des traductions, et le Prisme dit
+de les chercher rang par rang. La correction ne pouvait donc pas être « remplacer
+`resolveUserLanguage` par `resolveUserLanguagesOrdered` » : cela aurait localisé la bannière
+en portugais pour un lecteur dont l'application est en allemand.
+
+> **Quand une même valeur sert de langue d'AFFICHAGE et de clé de RECHERCHE, ce sont deux
+> résolutions qui portent le même nom.** Les rendre ensemble depuis une seule lecture
+> (`resolveRecipientPrism` → `{ lang, ordered }`) est ce qui empêche le prochain appelant de
+> reprendre l'une pour l'autre. Un témoin garde la séparation : contenu servi au rang 4,
+> cadrage resté au rang 1.
+
+### Corollaire — la descente devient UNE fonction, sinon la quatrième famille en fabrique une cinquième
+
+Le consommateur push a besoin de plus qu'un texte : il pousse `translatedContent` **et**
+`translatedLanguage` côte à côte sur le fil APNs. `resolveLastMessagePreview` ne rend qu'un
+texte — donc l'écrire ici aurait produit une seconde boucle de descente, la copie exacte que
+le dépôt interdit et dont les cycles 118-120 sont la facture. La descente est extraite en
+`resolvePrismTranslation({ translations, originalLanguage, preferredLanguages })` →
+`{ language, text } | null`, et `resolveLastMessagePreview` en devient une projection.
+
+> **Quand un nouveau consommateur a besoin d'un peu PLUS que ce que rend le résolveur
+> existant, l'issue par défaut est de le réécrire — et c'est ainsi que naissent les familles
+> divergentes.** Le geste juste est d'extraire la décision et de faire de l'ancien résolveur sa
+> projection : un seul corps, deux formes de rendu. Le témoin qui gèle l'équivalence
+> (`resolved?.text ?? preview` === `resolveLastMessagePreview(...)`) est ce qui interdit à la
+> refonte d'avoir changé la ligne de liste des trois clients au passage.
+
+### Corollaire — le filtre de servabilité précède la descente et ne l'INTERROMPT pas
+
+Les traductions chiffrées ne sont jamais poussées (la NSE déchiffre `encryptedContent`, pas
+les traductions). L'écriture naturelle — descendre, puis écarter l'élue si elle est chiffrée —
+prive le lecteur du rang SUIVANT, auquel il a pourtant droit. Filtrer la carte AVANT la
+descente donne le bon résultat sans cas particulier.
+
+> **Un prédicat de servabilité appartient à la carte, pas à l'élue.** La question qui les
+> sépare : « cette entrée est-elle un candidat ? » (avant) contre « ce candidat me
+> convient-il ? » (après). La seconde forme transforme tout refus en abandon de la recherche.
+
+### Corollaire de méthode — le témoin de la règle #3 ne peut pas tomber contre le code d'AVANT
+
+Quatre des neuf témoins du lot passaient déjà avant le correctif : ceux du rang 1, et ceux où
+la langue d'origine gagne. C'est attendu et ce n'est pas un défaut du lot — **ils gardent le
+mode d'échec du CORRECTIF, pas celui du défaut.** Une descente écrite naïvement (« prendre la
+première traduction disponible ») servirait « Bonjour » là où le message est déjà écrit dans
+la langue de rang 2 du lecteur. Un lot qui n'écrit que les témoins rouges contre l'état
+antérieur livre un correctif dont le propre mode d'échec n'est gardé par rien.
+
+### Le suivi, MESURÉ (leçon 107) et non hérité
+
+Deux des trois éventails de `messageNotificationFanOut` n'appliquent **aucun** Prisme :
+`createReplyNotification` et `createMentionNotification` posent `content: params.messagePreview`
+— l'original — et ne poussent ni `translatedContent` ni `translatedLanguage`. Vérifié en
+ouvrant les deux méthodes, pas déduit de la forme du lot. Défaut DISTINCT (absence du Prisme,
+pas un mauvais rang), et c'est pourquoi il n'a pas été absorbé ici : deux éventails aux
+sémantiques de garde différentes dans le même lot, c'est le demi-correctif que le cycle 120
+recommande précisément d'éviter — **corriger le résolveur pour tous, câbler les surfaces une
+par une.** Le résolveur est partagé et juste ; il ne manque que la liste en entrée.
+
+## Leçon 265 — un suivi MESURÉ se solde ; et le témoin qui garde le cadrage ne peut pas s'écrire sur un champ non persisté (2026-08-24, cycle 122)
+
+**Le constat.** Le cycle 121 avait laissé un suivi mesuré, pas hérité : deux des trois
+éventails de `messageNotificationFanOut` n'appliquaient **aucun** Prisme.
+`createReplyNotification` et `createMentionNotification` posaient
+`content: params.messagePreview` — l'original — et ne poussaient ni `translatedContent` ni
+`translatedLanguage`. Une bannière de réponse ou de mention arrivait donc toujours dans la
+langue de l'expéditeur, pendant que celle d'un message simple — même conversation, même
+seconde, même destinataire — servait la traduction depuis le cycle 121.
+
+Défaut DISTINCT de celui du cycle 121, et c'est ce qui justifiait de ne pas l'absorber alors :
+là-bas un mauvais RANG, ici l'ABSENCE de la descente. Deux sémantiques de garde différentes
+dans un même lot, c'est le demi-correctif que le cycle 120 recommande d'éviter.
+
+> **Un suivi mesuré se solde au cycle suivant, et se solde en ENTIER.** Le mérite du
+> cycle 121 n'est pas d'avoir nommé le reste à faire — c'est de l'avoir mesuré en ouvrant les
+> deux méthodes plutôt qu'en déduisant de la forme du lot. C'est ce qui a rendu le cycle 122
+> mécanique : rien à re-diagnostiquer, seulement à câbler.
+
+### Le geste : corriger le RÉSOLVEUR pour tous, câbler les surfaces une par une (cycle 120)
+
+La descente est extraite en `prismTranslationContext(source, preferredLanguages)`, alimentée
+par `pushableTranslations` (le filtre de servabilité) et `loadMessagePrismSource` (la
+relecture). `createMessageNotification` — qui portait la seule descente correcte — en devient
+un consommateur comme les deux autres, sa source venant de la relecture vivante qui lui sert
+déjà de gate d'éligibilité : **aucune lecture de plus sur le chemin le plus chaud.**
+
+C'est le corollaire de la leçon 264 appliqué en préventif : quand un nouveau consommateur a
+besoin de ce que rend un résolveur existant, l'issue par défaut est de réécrire la boucle, et
+c'est ainsi que naissent les familles divergentes. Trois éventails, une descente.
+
+### Corollaire — une source qui ne dépend pas du LECTEUR se relit une fois, la DESCENTE reste par lecteur
+
+`createMentionNotificationsBatch` appelle `createMentionNotification` par mentionné. Une
+relecture du message par destinataire aurait multiplié une lecture IDENTIQUE par la taille de
+l'éventail. La source (`translations` + `originalLanguage`) est une propriété du MESSAGE ; le
+prisme est une propriété du LECTEUR. Séparer les deux dans le type (`MessagePrismSource`)
+rend la factorisation évidente et le paramètre optionnel (`prismSource`) suit le patron déjà
+présent dans le fichier (`senderProfile`, « identité d'acteur déjà résolue »).
+
+> **Avant de factoriser une lecture dans un éventail, demander de QUOI elle est une propriété.**
+> Ce qui appartient au sujet se lit une fois ; ce qui appartient au destinataire se lit par
+> destinataire. Les confondre coûte dans les deux sens : N lectures identiques, ou un prisme
+> unique appliqué à tout le monde.
+
+### Corollaire — un enrichissement fail-OPEN, un gate fail-closed : ce n'est pas la même lecture
+
+`createMessageNotification` relit le message comme **gate d'éligibilité** — un message
+volatilisé, supprimé ou expiré ANNULE la bannière, et c'est juste : la relecture y protège
+contre une fuite de contenu. Pour la mention et la réponse, l'échéance vient de l'appelant
+(`messageExpiresAt`) et la relecture n'est qu'un ENRICHISSEMENT. Elle échoue donc OUVERT :
+lecture en défaut ⇒ source vide ⇒ bannière sans traduction, jamais bannière supprimée. Même
+arbitrage que `loadNotificationPrefs` et `filterMutedRecipients`, et pour la même raison — la
+traduction est un confort, l'annonce du message une obligation de livraison.
+
+> **Copier une relecture d'un site à l'autre importe son mode d'ÉCHEC avec elle.** La question
+> à poser avant de réutiliser une lecture n'est pas « lit-elle les bons champs ? » mais
+> **« que doit-il se passer quand elle tombe, ICI ? »**. Le même `findUnique` était fail-closed
+> chez son auteur et devait être fail-open chez son emprunteur.
+
+### Le point de méthode — un témoin de CADRAGE ne peut pas s'écrire sur un champ non persisté
+
+Le cycle 121 avait posé le témoin qui sépare les deux résolutions (le CADRAGE reste au rang 1,
+seul le CONTENU descend) sous cette forme :
+
+```ts
+expect((notification as any)?.lang ?? 'de').toBe('de');
+```
+
+`Notification.lang` **n'est pas persisté** — il ne pilote que le rendu du titre/sous-titre à
+l'intérieur de `createNotification`, et n'apparaît pas dans les données écrites. Le témoin
+lisait donc `undefined`, puis assertait son propre repli. **Il ne pouvait pas tomber**, et le
+mesurer l'a confirmé : sous une mutation qui fusionne délibérément les deux résolutions, il
+restait vert.
+
+Le cadrage s'observe sur la valeur SERVIE, comme le reste du harnais l'exige déjà pour le
+contenu :
+
+| éventail | où le cadrage est observable |
+|---|---|
+| `new_message` | le CORPS localisé — donc uniquement sur un message porteur de pièce jointe (`📷 Foto` en allemand contre `📷 Photo` en français) ; sur un texte nu, le corps EST l'extrait et ne porte aucune langue |
+| `user_mentioned` | le SOUS-TITRE poussé (`hat dich erwähnt`) |
+| `message_reply` | **nulle part aujourd'hui** — ni titre localisé, ni sous-titre, et le corps est l'extrait brut |
+
+Les deux premiers témoins sont écrits et TOMBENT sous la mutation. Le troisième n'existe pas,
+et le dire est la seule issue honnête : `lang` y est passé pour la correction et l'économie
+d'une lecture, pas pour un effet mesurable — l'annoncer comme un correctif de cadrage aurait
+été une affirmation invérifiable.
+
+> **Un témoin de séparation entre deux résolutions doit exercer un cas où elles DIFFÈRENT sur
+> une valeur qui SORT.** La forme « fixture » de la leçon 261 a ici sa troisième arête : après
+> le prisme trop court (rang 1 seul) et la carte vide (aucune traduction à trouver), le champ
+> INTERNE — l'assertion est juste, le harnais bon, mais la valeur observée ne franchit jamais
+> la frontière, donc rien ne peut la contredire. Le tell : `?? valeur_attendue` dans un
+> `expect`. Un repli qui vaut exactement ce qu'on assert transforme le témoin en tautologie.
+
+### Ce que le lot n'a PAS ouvert, vérifié plutôt que supposé
+
+Embarquer une traduction dans une notification arme un piège connu : à l'édition du message,
+`Message.translations` est purgée et la traduction embarquée décrit l'ANCIEN texte — que le
+Prisme affiche EN PRIORITÉ. `reproduceEditedMessageNotifications` purge déjà
+`translatedContent`/`translatedLanguage`, et sa boucle est type-agnostique : `user_mentioned`
+et `message_reply` figurent dans `PREVIEW_METADATA_KEY`, donc les deux types nouvellement
+porteurs étaient couverts avant d'être porteurs. Son témoin, lui, n'exerçait que
+`new_message` — il est étendu aux trois dans le même lot.
+
+> **Rendre une donnée présente là où elle ne l'était pas oblige à relire ce qui l'INVALIDE,
+> pas seulement ce qui la produit.** C'est la règle du cycle 84 (« le lot qui rend une donnée
+> visible décide dans le même lot si elle a le droit de l'être ») dans sa variante temporelle :
+> ici la donnée avait le droit d'exister, la question était de savoir qui la périme.
+
+### Le suivi, MESURÉ
+
+Deux autres producteurs ont été OUVERTS avant d'être écartés, et leurs raisons ne sont pas les
+mêmes :
+
+- **`EmailService`** n'a aucune voie qui compose un extrait de message. Ses lanes sont
+  transactionnelles (vérification d'adresse, réinitialisation de mot de passe, alerte de
+  connexion). Rien à descendre.
+- **`createReactionNotification`** porte bien un extrait du message
+  (`metadata.messageContent`), et le Prisme n'a pourtant rien à y faire : son destinataire est
+  `messageAuthorId`, **l'AUTEUR du message**. Le texte est déjà dans la langue dans laquelle il
+  l'a écrit. Ce n'est pas une omission, c'est un cas où la question ne se pose pas.
+
+> Le second est le plus instructif : **un site qui porte du contenu et n'applique pas le Prisme
+> n'est pas nécessairement un défaut.** Le discriminant de la leçon 264 — « qui connaît les
+> préférences du lecteur au moment où le contenu est composé ? » — se double d'un second :
+> **le lecteur est-il l'AUTEUR ?** Si oui, l'original EST sa langue, et une descente n'aurait
+> rien à trouver. Ranger ce site dans « reste à câbler » aurait fabriqué une dette imaginaire,
+> exactement comme le suivi hérité du cycle 107.
+
+La quatrième famille est donc close côté serveur. Les surfaces WEB restées au rang 1
+(commentaires, stories, status — cf. le suivi du cycle 120) sont le reste à câbler, et elles
+sont CORRECTES, seulement pas encore rang-conscientes.
+## Leçon 266 — un contenu RÉSOLU n'est pas un contenu SERVI : le cycle 121 corrigeait un champ que personne ne lit (2026-08-24, cycle 122)
+
+**Le constat.** Le cycle 121 a trouvé la quatrième famille de résolveurs du Prisme (la bannière
+de notification, côté serveur), corrigé son rang, et déposé la traduction élue dans
+`context.translatedContent` — d'où elle repart sur le fil APNs/FCM. Le cycle 122 a posé la
+question suivante : **qui lit ce champ ?** Réponse mesurée, sur les quatre consommateurs
+possibles : personne. Ni `MeeshyNotificationExtension` (aucune occurrence), ni l'application
+iOS, ni Android, ni `firebase-messaging-sw.js`. Le seul texte que les trois plateformes rendent
+est `payload.body`, et il restait composé depuis `params.messagePreview` — l'ORIGINAL.
+
+Autrement dit : le symptôme que le cycle 121 nommait dans son propre titre — deux textes pour
+un même message, la bannière dans la langue de l'expéditeur pendant que la ligne de liste est
+traduite — **survivait intact, une couche plus bas.** Le rang était juste, le champ bien rempli,
+et l'écran inchangé.
+
+> **La question à poser à tout résolveur n'est pas « élit-il le bon rang ? » mais « qui AFFICHE
+> ce qu'il élit ? »** Un correctif dont la valeur n'atteint aucun lecteur n'a corrigé personne,
+> et il est plus difficile à voir qu'un correctif absent : il a un diff, des témoins verts, et
+> un journal qui décrit exactement le bon défaut.
+
+**Pourquoi le cycle 121 ne pouvait pas le voir avec ses propres témoins.** Ils assertaient sur
+`payload.data.translatedContent` — « la charge REMISE à APNs », ce qui est la bonne famille
+d'assertion (la valeur SERVIE, pas un calcul intermédiaire) et le bon champ *si l'on suppose
+qu'il est lu*. La supposition était le défaut, pas l'assertion. C'est la forme « fixture » de la
+leçon 261 déplacée d'un cran : le harnais est bon, l'assertion est juste, et **c'est le CHOIX DU
+CHAMP OBSERVÉ qui rend la règle inobservable.** Le témoin de la 122 est le même appel, sur
+`payload.body`.
+
+> **Corollaire d'outillage : avant d'asserter sur un champ de transport, mesurer qui le
+> consomme.** Un `grep` du nom du champ dans les trois clients coûte une minute et distingue un
+> champ SERVI d'un champ TRANSPORTÉ. C'est le jumeau exact de la leçon « une preuve
+> TRANSPORTÉE n'est pas une preuve VÉRIFIÉE » (X3DH, cycle 96) : là, une signature traversait
+> cinq couches sans que personne l'ouvre ; ici, une traduction traverse le fil sans que personne
+> l'affiche. Même forme, autre sous-système — **un champ présent à chaque étape se lit comme un
+> champ traité.**
+
+### Corollaire — le suivi mesuré du cycle précédent était bon, et il n'était pas le plus urgent
+
+Le cycle 121 laissait un suivi MESURÉ (leçon 107, pas hérité) : les éventails RÉPONSE et MENTION
+n'appliquaient aucun Prisme. C'était vrai, vérifié en ouvrant les deux méthodes, et
+effectivement corrigé ici. Mais le défaut le plus cher n'était pas dans la liste des suivis — il
+était sous le correctif lui-même. **Un suivi mesuré borne ce qu'on savait ne pas avoir fait ; il
+ne dit rien de ce qu'on croyait avoir fait.** Reprendre un suivi est le bon réflexe ; commencer
+par vérifier que le cycle précédent a produit un EFFET l'est davantage.
+
+### Corollaire — un filtre de substitution appartient au site qui sait ce que l'aperçu MONTRE
+
+Substituer la traduction dans le corps a une précondition que le résolveur ne peut pas
+connaître : `Message.translations` ne traduit que `Message.content`. Deux aperçus n'en sont pas :
+
+- un aperçu **PROTÉGÉ** (éphémère / vue unique / flouté / chiffré) est un placeholder — y
+  substituer la traduction relâcherait exactement le texte que la protection masque. C'est le
+  mode d'échec du CORRECTIF, pas du défaut ;
+- la **transcription d'un vocal** est un autre texte, dont les traductions vivent sur
+  `MessageAttachment.translations`. La substituer afficherait un contenu sans rapport avec
+  l'audio.
+
+Le seul site qui sait laquelle des trois formes l'aperçu porte est l'ÉVENTAIL, qui l'a composée.
+D'où un paramètre explicite (`previewIsMessageContent`) plutôt qu'une devinette côté résolveur.
+
+> **Quand une transformation dépend de ce qu'une valeur SIGNIFIE et non de ce qu'elle VAUT,
+> le prédicat remonte au site qui l'a construite.** Un résolveur qui essaie de deviner
+> (« est-ce que ça ressemble à un placeholder ? ») se trompera sur le premier texte qui
+> ressemble aux deux.
+
+### Corollaire — la correction ne dépend pas du câblage de l'appelant, seule l'ÉCONOMIE en dépend
+
+Le lot de mentions lit la carte de traductions UNE fois pour N destinataires et la passe à
+chaque descente ; `createMentionNotification` la relit quand elle n'est pas fournie. Les deux
+chemins servent le même texte. C'est la forme correcte d'une optimisation à une frontière
+publique : **un appelant qui oublie le paramètre perd une requête, jamais le Prisme.** L'inverse
+— un paramètre dont l'absence désactive la règle — est un demi-correctif qui se présente comme
+une optimisation, et un témoin le gèle ici (`le Prisme s'applique SANS câblage de l'appelant`).
+
+### Le suivi, MESURÉ
+
+- **La bannière d'un VOCAL reste dans la langue de l'expéditeur.** Sa transcription a ses
+  propres traductions (`MessageAttachment.translations`, `packages/shared/types/audio-transcription.ts:207`)
+  qu'aucun éventail ne descend — c'est la raison même du `previewIsMessageContent: false` de ce
+  lot, donc une absence ASSUMÉE et nommée, pas un oubli.
+- **`prePersistMessage` (NSE iOS) pré-enregistre un corps VIDE.** Il lit `userInfo["content"]`,
+  une clé que le payload push ne porte pas — vérifié à la source : `PushNotificationService:785`
+  pose `notification.payload = { ...payload.data }`, et `data` n'a pas de clé `content`. Défaut
+  DISTINCT du Prisme (le message pré-enregistré au démarrage à froid est sans texte jusqu'à la
+  synchro REST), relevé en instruisant le risque de régression de ce lot — donc mesuré, pas
+  déduit.
+
+
+### Corollaire de MERGE — deux cycles parallèles, et c'est le témoin de l'autre qui a trouvé mon bug
+
+Une session parallèle a soldé le même suivi (Prisme réponse/mention) et atterri sur `main`
+pendant ce lot, jusqu'au même nom de fichier de témoins. Trois choses en sont sorties, et aucune
+n'aurait existé sans la confrontation :
+
+1. **Son témoin de CADRAGE a fait tomber mon correctif.** Il exerce un message SANS texte,
+   porteur d'une image : le corps se compose alors des seuls badges localisés (« 📷 Foto »). Ma
+   substitution y injectait la traduction — pour un `Message.content` VIDE, dont aucune entrée de
+   `Message.translations` n'est la source. **Un aperçu vide n'a rien à substituer**, et c'est
+   exactement le genre de cas qu'un lot écrit seul ne se donne pas.
+2. **Deux de ses témoins GELAIENT l'inverse de ce lot** — « le corps original reste le corps » —
+   sur deux prémisses : « le client choisit » (faux, mesuré : personne ne lit le champ) et
+   « écraser le corps priverait la NSE de son repli sous le budget APNs » (inversé : la
+   dégradation coupe `translatedContent` AVANT le corps, donc porter la traduction dans le corps
+   est ce qui la fait SURVIVRE). Ces témoins sont INVERSÉS avec les deux prémisses écrites en
+   clair, jamais supprimés.
+3. **Sa correction d'un témoin du cycle 121 qui ne pouvait pas tomber s'appliquait à MES propres
+   témoins** : `expect(notification.lang ?? 'de').toBe('de')` lit `undefined` — `lang` n'est pas
+   persisté — puis assert son propre repli. J'avais recopié ce patron dans six témoins neufs.
+
+> **Devant un lot parallèle qui vise la même cible, la question n'est pas « lequel garder ? »
+> mais « que sait chacun que l'autre ignore ? »** Un `--ours` aurait perdu le bug de l'aperçu
+> vide et gardé six témoins incapables de tomber ; un `--theirs` aurait regelé la prémisse que ce
+> cycle a mesurée fausse. Le seul geste qui ne perd rien est de prendre la base de l'autre et d'y
+> RÉ-APPLIQUER son propre delta — ce qui force à relire chaque désaccord un par un.
+
+---
+---
+
+## Leçon 267 — « correct mais pas rang-conscient » peut cacher une surface qui AFFIRME une langue qu'elle ne sert pas (2026-08-24, cycle 123)
+
+> **Jumelle de la 266, un étage plus haut.** La 266 a mesuré qu'un contenu RÉSOLU côté serveur
+> n'atteignait aucun lecteur (le champ transporté que personne ne lit). Celle-ci mesure la même
+> chose côté CLIENT : le résolveur élit la bonne langue, l'hôte rend l'original. Les deux passes
+> l'ont trouvée indépendamment, sur deux couches, dans la même journée — c'est un indice sur la
+> forme du défaut, pas une coïncidence : **partout où la résolution et le rendu sont séparés par
+> une frontière, la frontière est l'endroit où le Prisme se perd.**
+
+Le suivi hérité des cycles 120/122 nommait trois surfaces web restées au rang 1 —
+commentaires, stories, status — et les qualifiait : « CORRECTES, seulement pas encore
+rang-conscientes ». Le cycle 123 devait donc être mécanique : câbler
+`usePreferredLanguages()` → prop `preferredLanguages`, trois fois, même patron que les posts.
+
+Deux des trois l'étaient. La troisième ne l'était pas.
+
+### Le défaut : le Prisme ANNONCÉ sans être APPLIQUÉ
+
+Sur le chemin legacy de `StoryViewer` (`apps/web/components/v2/StoryViewer.tsx`), le corps de
+la story se rendait ainsi :
+
+```tsx
+<p className={cn(textStyleClass, 'text-center leading-relaxed')}>
+  {story.content}          {/* l'ORIGINAL, toujours */}
+</p>
+
+<TranslationToggle
+  originalContent={story.content}
+  translations={story.translations}
+  userLanguage={userLanguage}
+  showContent={false}      {/* la puce ne rend PAS le texte */}
+/>                         {/* ...et personne ne branche onDisplayedChange */}
+```
+
+La puce annonçait « Français » au-dessus d'un paragraphe resté en anglais. Ce n'est pas une
+surface « correcte mais tronquée au rang 1 » : c'est une surface qui **ment**, et qui ment
+d'autant plus fort que le lecteur a configuré ses langues. Une surface non câblée sert
+l'original sans rien prétendre ; celle-ci affirmait.
+
+Le relais existait — `onDisplayedChange`, et sa propre documentation nommait EXACTEMENT ce
+risque :
+
+> « Les hôtes qui rendent le texte eux-mêmes (`showContent=false`) en ont besoin : sans lui,
+> la rangée dit « Français » pendant que l'hôte rend l'original, et le Prisme ment. »
+
+Un seul hôte du dépôt le branchait (`PostDetail`). L'autre porteur de `showContent={false}`
+ne le branchait pas. La documentation avait décrit le piège sans que rien ne vérifie qu'on
+l'évitait.
+
+> **`showContent={false}` est une DETTE CONTRACTÉE, pas une option d'affichage.** L'hôte qui
+> la pose promet de rendre lui-même ce que le résolveur annonce. Chercher le motif
+> — `showContent={false}` **sans** `onDisplayedChange` — est une requête d'une ligne, et c'est
+> le seul contrôle qui existe : rien dans le type ne les apparie.
+
+### Ce que le qualificatif de suivi a coûté
+
+La leçon 265 a établi qu'un suivi mesuré se solde en entier. Le cycle 123 ajoute l'arête
+d'à côté : **la MESURE d'un suivi doit porter sur le défaut, pas sur sa forme supposée.**
+Le suivi des cycles 120/122 avait mesuré la bonne chose (« ces surfaces ne passent que
+`userLanguage` » — vrai, vérifiable, vérifié) puis y avait attaché un diagnostic non mesuré
+(« donc elles sont correctes »). Le premier fait était une observation d'APPEL ; le second
+une affirmation de COMPORTEMENT, et rien ne les relie : une surface qui passe une seule
+langue peut aussi bien la servir correctement (comme `CommentItem` et `StatusBar`) que ne
+jamais l'appliquer du tout.
+
+> **Un suivi qui qualifie la gravité d'un reste-à-faire affirme deux choses, et la seconde
+> est presque toujours déduite de la première.** « Ces sites ne passent que le rang 1 » se
+> vérifie en lisant les sites d'appel. « Donc ils sont corrects » exige d'ouvrir ce qu'ils
+> RENDENT. C'est la leçon 261 déplacée du recensement vers le triage : la liste était juste,
+> son adjectif ne l'était pas.
+
+### Le corollaire technique : un tableau de langues en prop est une bombe à boucle
+
+Brancher le relais a fait BOUCLER le rendu sans fin, immédiatement. La chaîne :
+
+1. `preferredLanguages` est un `string[]` construit en ligne par l'hôte → nouvelle identité à
+   chaque rendu.
+2. `autoResolved` (`useMemo`) en dépend → nouvel objet.
+3. `displayedVersion` en dépend → nouvel objet.
+4. L'effet de notification dépendait de `displayedVersion` → repart.
+5. L'hôte pose son état → rendu → retour au point 1.
+
+Le correctif n'est pas de mémoïser chez l'hôte — ça ne corrige qu'un site d'appel, et le type
+`string[]` autorise le littéral partout. L'effet dépend désormais des **trois primitives
+servies** (`languageCode`, `content`, `isOriginal`), jamais de l'objet qui les porte : deux
+rendus qui servent le même texte ne notifient qu'une fois, quel que soit l'hôte.
+
+> **Un composant qui accepte un tableau en prop ET notifie son hôte par effet doit comparer
+> des VALEURS, pas l'objet dérivé.** Le contrat « mémoïsez vos props » est réel mais
+> invérifiable à la frontière ; le contrat « je ne renotifie que si ce que je sers change »
+> se tient tout seul. La mémoïsation chez l'hôte reste souhaitable — elle n'est plus la
+> seule chose qui empêche l'écran de figer.
+
+Corollaire de forme, payé dans le même lot : la chaîne mémoïsée est devenue un **hook**, donc
+elle a dû remonter **au-dessus des retours anticipés** du composant (`if (!story) return`,
+`if (referenceAccessBlocked) return`). Un fichier qui porte le commentaire « All hooks are
+declared above — safe to early-return here » dit où est la frontière ; encore faut-il la
+relire avant d'introduire un `useMemo` cent lignes plus bas.
+
+### Le second câblage, plus discret : `resolvePrismeText`
+
+Les overlays de texte de la même story avaient leur PROPRE descente, locale au fichier :
+
+```ts
+const exact = obj.translations[preferredLanguage];       // rang 1 seul
+const prefix = preferredLanguage.split('-')[0];          // rattrapage maison
+```
+
+Deux défauts en un — aveugle aux rangs inférieurs, et un préfixe qui sur-matche (`fry`
+Frisian pour une préférence `fr`). La fonction délègue maintenant à `resolvePrismTranslation`,
+la SSOT nommée par la leçon 264. C'est la même issue par défaut que celle-ci dénonce (« quand
+un consommateur a besoin de ce que rend un résolveur existant, l'issue par défaut est de
+réécrire la boucle »), retrouvée ici DEUX FOIS dans le même fichier : la boucle réécrite pour
+les overlays, et le relais non branché pour le corps.
+
+> Un fichier qui contient déjà une descente maison est l'endroit le plus probable pour en
+> trouver une seconde. La divergence ne se répand pas par contagion entre fichiers — elle se
+> répand par **habitude locale**.
+
+### La suite immédiate : le motif prescrit a rendu une QUATRIÈME surface, la plus vue de toutes
+
+La leçon ci-dessus prescrit une requête d'une ligne : chercher `showContent={false}` **sans**
+`onDisplayedChange`. Elle a été lancée dans le même cycle, et elle a rendu `PostCard` — le
+corps d'un post dans le FIL.
+
+```tsx
+<TranslationToggle … variant="block" showContent={false} />   {/* pas de relais */}
+<PostContentText content={content} … />                        {/* l'ORIGINAL, toujours */}
+```
+
+Le fil est la surface la plus vue du produit, et son défaut était PIRE que celui de la story :
+la variante `block` rend une zone « traductions disponibles » cliquable. Cliquer y changeait
+la sélection interne de la puce — donc la composition de la liste — **sans jamais changer une
+ligne du texte lu**. Le contrôle n'était pas seulement trompeur, il était INERTE.
+
+Deux choses à en retenir, au-delà du correctif :
+
+1. **Le cycle 120 avait câblé `preferredLanguages` sur `PostCard` et l'avait rangé dans
+   « fait ».** Il l'était : la descente arrivait bien jusqu'à la puce. Ce qui manquait est en
+   AVAL du résolveur — entre ce qu'il conclut et ce que l'écran rend. Un audit qui suit une
+   donnée jusqu'à son consommateur s'arrête un cran trop tôt : **il faut la suivre jusqu'au
+   PIXEL.** Les surfaces « posts » ont ainsi figuré trois cycles durant dans la colonne des
+   sites conformes, en en-tête de la table du Prisme dans `CLAUDE.md`.
+2. **Le témoin qui l'attrape n'est pas un témoin de rang.** Les deux premiers de ce lot
+   (rang 2 servi, original quand rien ne matche) passaient déjà sur `PostCard` AVANT le
+   correctif — parce qu'ils interrogeaient la puce. Celui qui tombe interroge le CORPS, et le
+   plus net des trois est le témoin d'INERTIE : « cliquer une traduction change le texte lu ».
+   Il ne parle ni de rang ni de prisme — seulement du fait qu'un contrôle a un effet.
+
+> **La leçon 4 du dépôt (« un contrôle existe s'il a un effet ») est un test de PRISME
+> déguisé.** Partout où un résolveur annonce une langue que l'hôte doit rendre, la question
+> « ce contrôle change-t-il ce que je lis ? » attrape la classe entière de défauts — y compris
+> ceux qu'aucune assertion sur la langue résolue ne peut voir, puisque le résolveur, lui, a
+> raison.
+
+Note d'outillage : ces témoins ont exigé d'ancrer l'assertion sur le CORPS
+(`data-testid="post-content-text"` sur `PostContentText`), car la zone « traductions
+disponibles » liste légitimement l'original en tant qu'autre version consultable — un
+`queryByText('Hello')).toBeNull()` global y tombe pour la mauvaise raison. **Un témoin qui
+distingue deux rendus du même texte doit nommer LEQUEL il regarde.**
+
+## Leçon 268 — Un doc-comment périmé fait fuir les appelants, et un piège CI qui se reproduit trois fois n'est plus un accident
+
+**Contexte** : itération iOS 240i (PR #3426, mergée `52445d9e`).
+
+### (a) La limitation qui n'existe plus mais que le commentaire annonce encore
+
+`PostStatAccessibility` portait, depuis 2025, la phrase :
+
+> Proper multi-language plurals would require a `.xcstrings` plural variant.
+
+Vraie à sa rédaction. **Fausse depuis** : les trois clés de ce type même
+(`feed.post.stat.{likes,comments,reposts}`) avaient reçu leurs
+`variations.plural` complètes — 6 formes arabes comprises. Personne n'a relu
+le commentaire quand la limitation est tombée.
+
+Conséquence mesurée : les **cinq** surfaces SwiftUI du fil ont recopié la règle
+par **quatre clés PLATES différentes** plutôt que d'appeler le helper, qui ne
+servait plus qu'aux deux cellules UIKit. Le défaut le plus grave n'était pas
+un défaut d'accessibilité mais une **faute de français VISIBLE en production** :
+« 1 réponses » à l'écran, en toutes locales.
+
+**Règle : un doc-comment qui DÉCRIT UNE LIMITATION doit être relu quand la
+limitation tombe.** Le laisser en place est plus nuisible qu'un commentaire
+absent — il ne se contente pas d'être faux, il *détourne activement* les
+appelants de la source unique et fabrique la duplication qu'on passera ensuite
+des itérations à réduire.
+
+Corollaire de recherche : avant d'écrire un helper « parce qu'il n'en existe
+pas », chercher le nom COMPTÉ (« likes », « replies ») dans le catalogue, pas
+seulement dans le code — une clé plurielle déjà traduite dans 7 locales est la
+preuve qu'une source existe.
+
+### (b) Trois fois le même piège CI ⇒ c'est le comportement nominal
+
+La suite iOS est en **opt-in** (` — run test` dans le SUJET du commit de tête).
+Sans lui, le job s'appelle `Build app (app + cibles de test)` et **ne fait que
+compiler**, tout en affichant vert.
+
+- 238i l'a subi (premier run tout vert, zéro test).
+- 239i l'a re-subi, **par une main tierce** (tête `17d25455`).
+- 240i l'a subi **une troisième fois**, encore par une fusion tierce : PR
+  **17/17 verte, zéro test exécuté**, alors que l'apport ÉTAIT une garde neuve
+  et quatre tests de pluriel.
+
+Trois occurrences sur trois itérations consécutives : **ce n'est plus un
+accident à consigner, c'est le comportement à ANTICIPER** dès qu'un tiers
+touche une PR iOS.
+
+**Règle opératoire : après CHAQUE poussée sur une PR iOS — surtout celles qu'on
+n'a pas faites soi-même — lire le NOM du check avant sa couleur ; si c'est
+celui de la compile seule, re-pousser avec l'opt-in.** Et jamais par un commit
+vide (proscrit) : embarquer l'opt-in sur un commit qui porte un vrai contenu
+(ici, la mise à jour du plan et du pointeur, légitimement en attente).
+
+### (c) Un rouge de base se PROUVE avant de se déclarer « pas à moi »
+
+240i a d'abord rendu 7762/1, l'unique rouge nommant cinq clés
+`forward.publish-*` étrangères au lot. « Ça ne vient pas de moi » n'est une
+conclusion recevable qu'ADOSSÉE À UNE PREUVE. Trois ont été produites :
+le commit fautif est **ancêtre de la base**, la liste de dette vaut `[]` (rien
+n'est toléré), et le diff de la branche **ne touche aucun fichier `forward`**.
+Alors seulement : signaler en commentaire **avec le patch proposé**, et ne pas
+élargir une PR i18n de compteurs avec les traductions d'une autre feature.
+
+## Leçon 269 — un commentaire de test peut coder une prémisse FAUSSE que personne n'a re-vérifiée contre le comportement serveur actuel (2026-08-24, routine calling, Vague 176)
+
+`CallStateMachine.reduceOffering()` (Android) ignorait un `RingTimeout` reçu en `Offering`,
+justifié par le commentaire du test : « cancelled once the peer joined ». Cette phrase décrivait
+un comportement gateway qui n'existe plus — `CallEventsHandler.ts` documente explicitement,
+depuis un incident antérieur nommé (« Item F follow-up »), que `call:join` NE nettoie PLUS le
+timer de sonnerie précisément pour laisser l'offre SDP circuler pendant l'early-join. Le test
+Android n'a jamais été mis à jour en miroir : il verrouillait un no-op qui a cessé d'être
+correct le jour où le gateway a changé de politique, sans qu'aucun signal ne l'indique côté
+client — les deux bases de code ne partagent ni type ni test.
+
+> Un commentaire de test qui affirme un fait sur le comportement d'un AUTRE service (ici le
+> serveur) est une assertion qui peut expirer sans que le test échoue. Quand un tel commentaire
+> nomme une politique serveur précise (« annulé une fois que X »), la vérifier contre le
+> handler serveur réel fait partie de la lecture du test — pas seulement contre son
+> assertion Kotlin, qui, elle, reste vraie pour toujours puisqu'elle teste le mock de
+> son propre no-op.
+
+Le tell qui a permis de la retrouver : l'énoncé de la fonction miroir (`reduceRinging`) traite
+DÉJÀ `RingTimeout` normalement — c'est l'ASYMÉTRIE entre les deux branches `when` du même FSM,
+sur le même événement, qui aurait dû alerter avant même de lire le commentaire du test. Deux
+états voisins d'un même automate qui divergent sur le traitement d'un événement identique
+méritent une justification explicite ; ici, elle existait mais était fausse.
+
+## Leçon 270 — la protection gardait le CORPS, pas le FIL : un correctif peut être juste et ne couvrir que la moitié qu'on observait (2026-08-24, cycle 123)
+
+**Le constat.** Le cycle 122 a fait descendre le Prisme jusqu'au corps AFFICHÉ de la bannière et
+l'a gardé : un aperçu PROTÉGÉ (éphémère / vue unique / flouté / chiffré) est un placeholder, la
+traduction ne le remplace pas, sous peine de relâcher exactement le texte que la protection
+masque. Cette garde est juste, elle a son témoin, et le témoin est vert.
+
+À côté d'elle, dans la MÊME méthode, une seconde descente alimentait
+`data.translatedContent` / `data.translatedLanguage` — **sans aucune garde**. Pour un message à
+vue unique, la charge remise à APNs portait donc, en clair, la traduction du texte que la
+bannière refusait d'afficher ; puis `createNotification` la persistait dans la ligne
+`Notification`. Mesuré sur les trois éventails (message, réponse, mention).
+
+Et la fuite est ATTEIGNABLE, pas théorique : le pipeline de traduction n'a aucun gate sur
+`isViewOnce` / `isBlurred` / `expiresAt` (`MessageTranslationService.handleNewMessage` ne
+connaît pas ces champs, et `messagePostSaveEffects` ne les lui passe même pas), et les entrées
+produites portent `isEncrypted: false` — rien ne les écartait donc en amont non plus.
+
+> **Le cycle 122 a posé la bonne question et l'a posée à un seul champ.** « Qui AFFICHE ce que le
+> résolveur élit ? » a produit un correctif qui atteint le lecteur ; elle ne dit rien de ce que
+> la même charge transporte À CÔTÉ. La question complète est triple, et chaque cycle en a
+> découvert un tiers : **élit-il le bon rang (121) ? qui affiche ce qu'il élit (122) ? que
+> transporte-t-il à côté de ce qu'il affiche (123) ?**
+
+**Pourquoi le témoin du cycle 122 ne pouvait pas le voir.** Il assertait `push.body` — le bon
+champ pour la moitié qu'il gardait. C'est la leçon 266 retournée : là, le champ observé
+(`translatedContent`) rendait inobservable une règle sur ce qu'on SERT ; ici, le champ observé
+(`body`) rend inobservable une règle sur ce qu'on REFUSE de servir. **Un témoin de
+confidentialité doit asserter sur la charge ENTIÈRE remise au transport, pas sur le champ que la
+protection était censée modifier** — une protection se prouve par ce qui n'est nulle part, et
+« nulle part » ne se vérifie pas champ par champ.
+
+### La cause : deux résolutions parallèles ne restent jamais d'accord
+
+Le défaut n'était pas un oubli de garde, c'était une DUPLICATION. Chaque éventail descendait le
+Prisme deux fois — une pour le corps, une pour les champs du fil — et il a suffi qu'une seule
+des deux reçoive la condition de substitution. Toute garde ajoutée à l'une aurait manqué
+l'autre, indéfiniment.
+
+Le correctif est structurel : **UNE descente par destinataire, dont le corps servi et les champs
+du fil sont deux PROJECTIONS** (`servedPreview` et `servedTranslationFields`, la seconde prenant
+la traduction DÉJÀ ÉLUE plutôt qu'une source). Ce que le fil transporte décrit désormais, par
+construction, ce que la bannière affiche.
+
+> **Quand deux valeurs doivent rester d'accord, la question n'est pas « les a-t-on gardées
+> pareil ? » mais « peuvent-elles être calculées deux fois ? ».** Une seule des deux finira par
+> recevoir un correctif que l'autre n'aura pas — et ce sera celle qu'un témoin observe.
+
+### Corollaire — un booléen ne peut pas dire une troisième forme
+
+`previewIsMessageContent` (cycle 122) était juste pour deux formes d'aperçu et faux pour la
+troisième : la transcription d'un vocal n'est pas « non substituable », elle est substituable par
+une AUTRE carte (`MessageAttachment.translations`). Le booléen la rangeait donc avec le
+placeholder de protection, et c'est ce qui a laissé la bannière d'un VOCAL hors du Prisme —
+absence assumée et nommée par le cycle 122, close ici.
+
+Ajouter une source À CÔTÉ du booléen aurait créé deux knobs capables de se contredire. Le type
+SOMME (`PreviewPrismBasis` : `message-content` | `protected-placeholder` | `transcript` + source)
+les rend exclusifs par construction, et il NOMME ce que l'aperçu est plutôt que ce qu'on a le
+droit d'en faire.
+
+> **Quand un booléen doit accueillir un troisième cas, le cas est presque toujours le signe que
+> le booléen répondait à la mauvaise question.** « Peut-on substituer ? » est une conséquence ;
+> « qu'est-ce que ce texte ? » est la donnée, et elle a autant de formes que le domaine.
+
+### Corollaire — le second verrou n'est pas redondant quand il garde un secret
+
+`previewPrismSource` refuse toute source quand `notificationLocKey` est présent, EN PLUS de la
+base déclarée par l'éventail. Les deux disent la même chose au cas nominal — et un appelant qui
+composerait un placeholder de protection sans déclarer sa base perd alors une traduction, jamais
+le secret. **Une garde de confidentialité échoue en montrant moins**, et c'est la seule famille
+où la redondance se justifie sans discussion.
+
+### Le suivi, MESURÉ
+
+- `prePersistMessage` (NSE iOS) lit `userInfo["content"]`, clé absente du payload push : le
+  message pré-enregistré au démarrage à froid a un corps VIDE jusqu'à la synchro REST. Défaut
+  DISTINCT du Prisme, hérité du cycle 122 et toujours ouvert — Swift, non exerçable ici.
+- La bannière d'un vocal descend `MessageAttachment.translations` ; les PISTES AUDIO traduites
+  (`url` sur la même entrée) ne sont pas attachées à la notification, qui joint toujours le
+  fichier original. Absence nommée, non instruite.
+
+## Leçon 271 — un helper de confidentialité à UN SEUL appelant est un inventaire, pas une garde (2026-08-24, cycle 123 bis)
+
+**Le constat.** Le lot précédent venait de fermer la fuite du fil push sur les trois éventails de
+`messageNotificationFanOut`. La règle de `/services/gateway/CLAUDE.md` — « Cette entité a-t-elle
+une JUMELLE ? à poser au moment où l'on corrige, pas des cycles plus tard » — a été posée dans le
+même lot, et sa réponse tient en une mesure d'une ligne :
+
+> **`protectedPreview()` n'avait qu'UN SEUL appelant de production dans tout le dépôt.**
+
+Trois autres sites copiaient le texte d'un message sans jamais passer par lui, dont deux vers des
+TIERS : le contenu édité poussé aux ENTRANTS d'une mention (`messageMentions:358`), et la
+réécriture qui DÉMASQUE toutes les lignes déjà notifiées à la première édition
+(`reproduceEditedMessageNotifications:158,181,194`). Le troisième — la réaction — sert l'auteur
+lui-même, donc moins cher, et pas nul pour autant.
+
+> **Le compte des appelants d'un helper de sécurité est une mesure de COUVERTURE, et elle
+> s'obtient en une commande.** Un helper à un appelant ne garde pas une règle : il documente
+> qu'un site l'applique. La question n'est pas « la garde est-elle correcte ? » mais « combien de
+> chemins mènent à la donnée qu'elle protège, et combien passent par elle ? ».
+
+C'est la forme « garde » de la leçon 261 (une énumération porte deux affirmations, dont une
+presque jamais vérifiée) : le lot 122 avait écrit noir sur blanc que la substitution était
+tranchée par « l'éventail, qui a COMPOSÉ l'aperçu » — vrai de l'éventail, et muet sur les trois
+producteurs qui composent un aperçu SANS être cet éventail.
+
+### Corollaire — l'ÉDITION est un second producteur, et personne ne la compte
+
+Deux des trois sites sont sur le chemin d'ÉDITION, et ce n'est pas un hasard. Un message protégé
+est masqué à l'ENVOI, une fois, par l'unité qui le sait. L'édition rejoue ensuite la même
+question — quel texte va sur l'écran de qui ? — dans deux unités écrites pour un tout autre
+problème (réconcilier des mentions, rafraîchir une copie dénormalisée), et ni l'une ni l'autre
+n'avait de raison de penser à la protection.
+
+Mesuré au passage : **rien n'interdit d'éditer un message protégé** — `messageEditAdmission` et
+`messageEditContent` ne portent aucune occurrence de `isViewOnce`, `isBlurred`, `effectFlags` ni
+`expiresAt`.
+
+> **Quand une règle s'applique à une DONNÉE, l'énumérer sur les producteurs de cette donnée ne
+> suffit pas : il faut aussi énumérer ce qui la RÉÉCRIT.** Une copie dénormalisée a deux moments
+> — celui où elle naît et celui où elle est rafraîchie — et le second est écrit par quelqu'un qui
+> pense mettre à jour un texte, pas publier un secret.
+
+### Corollaire — une garde de confidentialité se relit CHEZ ELLE, pas dans ses paramètres
+
+Les deux correctifs d'édition relisent les drapeaux depuis la base plutôt que de les recevoir de
+l'appelant, et c'est le point de conception du lot. `MentionTargetMessage` ne porte que
+`expiresAt` ; `EditedMessageRecord` ne porte que l'identité et les deux contenus ; les QUATRE
+transports d'édition les construisent chacun de leur côté.
+
+**Un paramètre dont l'absence désactive une garde est un demi-correctif** — c'est le jumeau exact
+du corollaire du cycle 122 (« un appelant qui oublie le paramètre perd une requête, jamais le
+Prisme »), et il est plus grave ici : là on perdait une traduction, ici on publierait un secret.
+D'où aussi le fail-CLOSED des deux relectures — une lecture qui ne conclut pas répond
+« protégé », à l'inverse du best-effort qui gouverne le reste de ces unités. **Une notification
+appauvrie se rattrape ; un secret poussé, non.**
+
+### Corollaire de harnais — chercher UNE chaîne dans la charge ENTIÈRE
+
+Les témoins de ce lot exercent un secret unique (`le code du coffre est 4242`) et le cherchent
+dans la charge SERVIE entière — corps du push, blob écrit — plutôt que champ par champ. C'est la
+leçon 268 appliquée au harnais : le défaut qu'elle nomme venait précisément d'un témoin qui
+observait le bon champ et un seul. **Pour une règle qui dit « ceci ne doit être NULLE PART »,
+l'assertion doit porter sur le tout ; « nulle part » ne se vérifie pas clé par clé.**
+
+### Corollaire d'outillage — le piège du `| tail` s'est refermé, et il est déjà écrit
+
+`services/gateway/CLAUDE.md` porte la règle depuis le cycle ~103 : « ne jamais passer un gate par
+un pipe quand c'est son code de sortie qu'on interroge — le code de retour d'un pipeline est
+celui de sa DERNIÈRE commande ». Ce lot l'a rejouée : `bun run test:coverage 2>&1 | tail -30`
+lancé en arrière-plan a été rapporté **exit 0** alors que la suite portait **3 fichiers et
+16 témoins ROUGES**. Le `0` était celui de `tail`.
+
+Ce qui l'a rattrapé n'est pas la vigilance mais une HABITUDE : ouvrir le fichier de sortie et
+chercher la ligne `Test Suites:` plutôt que de croire le statut. La forme robuste est de rediriger
+vers un fichier et d'y écrire le code soi-même (`; echo "JEST_EXIT=$?" >> log`).
+
+> **Une règle écrite dans le dépôt n'est pas une règle appliquée.** Celle-ci l'était depuis vingt
+> cycles, dans le fichier que ce lot édite. Un gate ne se lit pas au statut d'un pipeline, et la
+> seule défense qui tienne est de ne jamais construire le pipeline.
+
+## Leçon 272 — Épingler une intention, jamais une graphie ; et un report qu'on rapproche soi-même de la rupture cesse d'être un report
+
+> **Renumérotée 269 → 272 le 2026-08-24.** La piste « calling » (Vague 176) a
+> posé SA leçon 269 en parallèle, et 270/271 étaient déjà pris quand la mienne a
+> atterri. **Les collisions de numéro dans ce fichier sont STRUCTURELLES, pas
+> accidentelles** : le dépôt en portait déjà huit (162, 215, 221, 234, 235, 243,
+> 244, 253) avant celle-ci. Deux documents (`realtime-sync-audit-2026-08-15`,
+> `…-cycle123`) citent « leçon 269 » en visant l'AUTRE — un doublon ne fait donc
+> pas que gêner l'œil, il rend des renvois existants ambigus.
+>
+> **Corollaire opératoire** : relire `grep -o '^## Leçon [0-9]*' | sort -n | tail -1`
+> **juste avant de committer**, jamais au moment de rédiger — l'écart entre les
+> deux est exactement la fenêtre où l'essaim insère la sienne.
+
+
+**Contexte** : itération iOS 241i (PR #3464, mergée `e1522ba0`, 0 échec sur 7803).
+
+### (a) Une garde de source qui pin une GRAPHIE rougit à chaque refactor légitime
+
+241i a fait passer dix valeurs d'accessibilité de `"\(count)"` à
+`LocalizedNumber.exact(count)`. Deux gardes du dashboard sont passées au rouge :
+elles exigeaient **littéralement** `.accessibilityValue("\(health)")` et
+`.accessibilityValue("\(value)")`.
+
+**La garde faisait son travail** — leçon 239i : elle a détecté qu'un appelant de
+la règle changeait, ce qu'on lui demande exactement, et la faire taire aurait
+été le vrai danger.
+
+Mais son ÉNONCÉ, écrit juste à côté, n'a jamais été « interpole » :
+
+> The health gauge must announce the score as its accessibility value.
+> StatRing must announce the **raw (un-abbreviated)** count as its accessibility value.
+
+`LocalizedNumber.exact` sert cet énoncé **mieux** que l'interpolation (entier,
+groupé, dans les chiffres du lecteur). Le rouge ne signalait donc pas une
+régression : il signalait que **l'assertion ne disait pas ce que le test
+voulait dire**.
+
+**Règle : une garde de source épingle une INTENTION, pas une orthographe.** Le
+symptôme distinctif : le message d'échec et l'assertion ne parlent pas de la
+même chose. Quand ça arrive, ne pas recopier la nouvelle graphie à la place de
+l'ancienne — réécrire l'assertion pour qu'elle dise l'énoncé.
+
+Corollaire appliqué ici : `StatRing` a gagné le versant **négatif** qui lui
+manquait — la valeur ne doit **pas** être l'abrégé (`displayValue`). Une
+assertion positive seule (« contient X ») ne protège de rien si la vraie règle
+est « et surtout pas Y ».
+
+### (b) Un report qu'on vient soi-même de rapprocher de la rupture n'est plus un report
+
+La jauge de santé était découpée par un nombre de CARACTÈRES (`prefix(1400)`) —
+l'une des « 3 fenêtres » portées en carry-over par 239i **puis** 240i.
+
+En réparant l'assertion, le motif s'allonge (il nomme sa source) : la marge
+résiduelle tombait à **138 caractères**. C'est exactement le piège que 238i a
+documenté (`prefix(2600)`, marge finale **5**) : un doc-comment pousse la fin du
+motif hors fenêtre et la garde **rougit sur du code qui la satisfait toujours**
+— pire qu'un faux vert, puisqu'elle envoie corriger ce qui n'est pas cassé.
+
+Reporter une 3ᵉ fois aurait été défendable **avant** ce lot. Après l'avoir
+soi-même rapproché de la rupture, c'est le laisser exploser chez le suivant.
+
+**Règle : un carry-over que le lot courant rend PLUS fragile doit être traité
+dans ce lot.** Le critère n'est pas « est-ce dans mon périmètre ? » mais « ai-je
+consommé sa marge ? ».
+
+Remplacé par `functionBody(named:in:)`, jumeau de `structBody` (238i) pour les
+vues rendues depuis un `private func`. Et, comme 238i l'exige, **élargir une
+borne oblige à prouver qu'on ne fabrique pas un faux vert** : un test vérifie la
+borne dans les DEUX sens — elle contient la jauge, et s'arrête **avant**
+`StatRing`, qui porte le même `.accessibilityElement(children: .ignore)` et
+aurait fait passer la garde au vert pour le mauvais élément.
+
+### (c) Compter des occurrences par `grep` surestime dès qu'un commentaire CITE le motif
+
+Contrôle post-merge : « 2 fenêtres `prefix(1400)` attendues », `grep` en rend
+**3**. La 3ᵉ était le doc-comment de `functionBody` **citant** `prefix(1400)`
+pour expliquer pourquoi il le remplace. Même mécanisme que le dépouillement de
+commentaires que les gardes appliquent déjà — mais oublié dans le contrôle
+manuel qui les vérifie. **Un écart de comptage se regarde avant d'être cru :
+ici il ne signalait pas un correctif incomplet, mais un grep naïf.**
+
+---
+
+## Leçon 273 — deux gardes JUSTES peuvent garder une opération que la couche du dessus a déjà rendue sans objet (2026-08-24, cycle 124)
+
+Le cycle 123 venait de fermer le FIL d'un message protégé : sa traduction ne part
+plus sur le canal push, et le lot a raison sur tout ce qu'il énonce. Le CORPS,
+lui, était perdu **une couche plus haut que toute déclaration de base** :
+
+```ts
+const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
+```
+
+`notificationPreview` est le placeholder que `protectedPreview` vient de
+composer. La transcription gagnait INCONDITIONNELLEMENT. Un vocal éphémère / à
+vue unique / flouté / chiffré poussait donc **son texte transcrit entier** sur
+l'écran verrouillé — exactement ce que la protection masque, et le seul écran où
+elle a une raison d'être.
+
+Le dépôt portait alors DEUX gardes contre ce relâchement, posées à deux cycles
+différents, toutes deux justes et toutes deux testées :
+`previewBasis: 'protected-placeholder'` (cycle 123, qui vide la source) et
+`notificationLocKey` (le second verrou). Elles gouvernaient la SUBSTITUTION
+d'une traduction dans l'aperçu. Or l'aperçu lui-même n'était plus le
+placeholder : le texte à protéger avait déjà pris sa place.
+
+> **Un champ de service qui DÉCLARE une restriction ne la fait pas respecter.**
+> La question à poser à toute garde n'est pas « est-elle posée ? » mais **« le
+> texte qu'elle gouverne est-il bien celui qui part ? »**.
+
+C'est la forme du cycle 123 (« le Prisme était ANNONCÉ sans être APPLIQUÉ »)
+avec l'inversion qui la rend pire : là, l'hôte rendait MOINS que ce que le
+résolveur annonçait — un texte non traduit, un désagrément. Ici l'hôte rend
+**PLUS** que ce que le résolveur autorise, et ce plus est précisément ce qu'une
+protection existe pour cacher. **Chercher les deux sens** : un écart entre ce
+qu'un résolveur conclut et ce qu'un hôte rend n'est pas toujours une perte, et
+c'est quand c'est un gain qu'il faut s'inquiéter.
+
+Corollaire de forme, et il n'est pas décoratif : `pushPreviewBasis` élisait
+`transcript` AVANT de regarder la protection. Sans transcription à ce moment-là,
+la base retombe sur `protected-placeholder`, et la carte de l'attachment cesse
+d'être OFFERTE à la descente. **Une garde qui n'a qu'un verrou n'a pas de
+garde ; elle a un pari sur ce verrou.**
+
+### Le défaut ne s'est pas laissé chercher — il s'est laissé OUVRIR
+
+Trois cycles consécutifs (122, 123, 124) ont trouvé leur défaut principal dans
+cette méthode, chacun à un étage différent : le rang élu, ce qui l'affiche, ce
+qui voyage à côté, ce qui arrive en entrée. Aucun n'a été trouvé par une
+recherche ; les trois l'ont été en **ouvrant le site qu'un suivi précédent
+désignait pour une autre raison**.
+
+> Un suivi hérité ne vaut pas seulement par ce qu'il affirme. Il vaut par
+> l'ADRESSE qu'il donne. Aller lire l'adresse est plus rentable que d'instruire
+> l'affirmation — c'est la variante productive de « une piste peut être fausse
+> sur son MOTIF et juste sur son ADRESSE » (cycle 107).
+
+### Un défaut « distinct » peut être plus grand que ce que le suivi en disait
+
+Le second suivi du cycle 122 nommait un corps VIDE : `prePersistMessage` (NSE
+iOS) lit `userInfo["content"]`, que le payload push ne porte pas. Exact. En le
+ré-instruisant, la ligne SUIVANTE du même constructeur portait la même absence :
+
+```swift
+originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en"
+```
+
+Ni l'une ni l'autre clé n'existait sur le fil. La bulle pré-enregistrée au
+démarrage à froid était donc vide **et** étiquetée « en » pour tout le monde — et
+c'est la seconde moitié qui fausse la résolution du Prisme sur cette bulle,
+celle que le suivi ne nommait pas.
+
+> **Un suivi hérité se re-mesure avant d'être traité** (leçon 107), et pas
+> seulement pour savoir s'il est encore vrai : pour savoir s'il est COMPLET. Un
+> cycle qui note un défaut en passant note ce qu'il a VU, pas ce qu'il y avait.
+
+Corollaire de contenu, tranché dans le même lot : ce qui voyage sous `content`
+est l'**ORIGINAL**, jamais la traduction servie dans la bannière.
+`MessageRecord.content` est le champ d'origine et `originalLanguage` son
+étiquette ; y poser le texte traduit ferait mentir le couple, et la traduction a
+déjà son champ et son rang. **Deux champs qui s'étiquettent l'un l'autre se
+remplissent ensemble ou pas du tout.**
+
+Et `PreviewPrismBasis` (cycle 123) a répondu à ce lot **sans être modifié** : le
+type somme qui dit « qu'est-ce qui traduit cet aperçu ? » dit aussi, sans
+ambiguïté, « cet aperçu EST-il le contenu du message ? ». Seul `message-content`
+l'est. **Un type somme bien nommé répond aux questions qu'on ne lui a pas
+posées ; un booléen n'en répond qu'une, et mal.**
+
+### Ce que la convergence a coûté, et ce qu'elle a prouvé
+
+Ce lot et le cycle 123 ont été menés en parallèle le même jour, et ont trouvé la
+MÊME absence (la bannière d'un vocal ne descendait aucun Prisme) avec deux
+conceptions différentes : un second paramètre `previewPrismSource` ici, un type
+somme `PreviewPrismBasis` là. Le second est meilleur — il rend les trois formes
+mutuellement exclusives par construction, là où un booléen et une source séparés
+peuvent se contredire — et il était mergé le premier.
+
+**La résolution n'est pas un compromis : c'est PRENDRE la meilleure en entier**
+et rejouer par-dessus ce que l'autre avait d'unique. Ici les deux défauts que le
+cycle 123 n'avait pas vus : la fuite du corps, et les deux clés du fil.
+Panacher les deux conceptions aurait produit exactement la divergence que la
+leçon 264 dénonce, dans le fichier qui la cite.
+
+
+## Leçon 274 — un contrat entre deux langages dérive dans les DEUX sens, et personne ne le lit jamais en entier (2026-08-24, cycle 124)
+
+> **Rédigée 272, renumérotée 274.** Deux fois de suite `main` a pris le numéro visé pendant que
+> ce lot attendait son vert — 272 pour la leçon 241i, puis 273 pour la leçon jumelle du même
+> cycle 124. Le corollaire opératoire de la leçon 272 vise « l'écart entre rédiger et
+> committer » ; la fenêtre réelle est plus large — **c'est l'ATTENTE DU VERT**, invisible depuis
+> la branche, et elle dure aussi longtemps que la CI.
+
+**Le constat.** Deux cycles de suite ont clos leur lot sur la même ligne, mot pour mot :
+`prePersistMessage` (NSE iOS) lit `userInfo["content"]`, une clé que le payload push ne porte
+pas. Deux fois nommé, deux fois différé au motif « Swift, non exerçable ici ».
+
+Le motif était réel — et il ne couvrait que la moitié Swift. La moitié TypeScript n'avait
+jamais été regardée, et la regarder prend une commande : lister les clés que la NSE LIT, lister
+les clés que la passerelle ÉMET, et faire le diff.
+
+> **Quatre clés lues jamais émises, deux clés émises jamais lues.**
+
+Les deux plus instructives ne sont pas celles du suivi :
+
+- `senderName` était lu par `prePersistMessage` alors que la passerelle émet
+  `senderDisplayName` — que **la ligne 563 du MÊME fichier** lit correctement, pour le cadrage
+  Communication. Deux lecteurs de la même donnée, dans le même fichier, dont un seul connaît le
+  nom réel de la clé.
+- `createdAt` et `messageType` sont émis depuis GW5 avec le commentaire « persistance NSE »,
+  c'est-à-dire pour ce consommateur précis, et **il ne les a jamais lus**. La bulle était
+  ordonnée par l'horloge du device.
+
+> **Un helper à un appelant est un inventaire (leçon 271) ; un CHAMP à zéro lecteur est une
+> intention.** La mesure du cycle 122 — « `translatedContent` n'est lu par aucun client » —
+> passait pour l'anomalie d'un lot. C'est la forme NORMALE d'un contrat dont les deux moitiés
+> vivent dans deux langages qu'aucun type ne relie : chaque côté est relu par des gens qui
+> lisent ce côté-là.
+
+### Corollaire — le correctif évident était le mauvais, et le cycle précédent disait pourquoi
+
+Émettre `content` clôt le suivi en une ligne, et rouvre exactement la fuite que le cycle 123
+venait de fermer : le texte NU d'un message protégé repartirait sur le canal push pendant que
+la bannière affiche son placeholder. La passerelle a RAISON de ne pas l'émettre.
+
+Ce qui débloque n'est pas d'ajouter la donnée manquante mais de remarquer qu'elle est **déjà
+là** : le corps de la bannière EST le texte servi — descendu dans le Prisme, masqué s'il le
+faut. Il ne manquait que sa LANGUE, et le DROIT de le prendre pour le message.
+
+> **Devant un consommateur qui lit une clé absente, la question n'est pas « comment la lui
+> envoyer ? » mais « qu'a-t-il déjà en main qui réponde à son besoin ? ».** La première mène à
+> élargir la charge — donc à rouvrir ce que les gardes de confidentialité viennent de fermer ;
+> la seconde mène à un discriminant.
+
+### Corollaire — la PRÉSENCE d'un champ peut être le discriminant
+
+`messageOriginalLanguage` n'est émise que quand le corps servi EST le contenu du message. Sa
+présence autorise l'enregistrement local ; son absence l'interdit. Aucune énumération sur le
+fil, aucun booléen à contredire, et le consommateur ne peut pas se tromper de branche : il n'a
+pas de branche à choisir.
+
+C'est la troisième projection de `PreviewPrismBasis` — le type du cycle 123 qui dit ce que
+l'aperçu EST — après « qu'est-ce qui le TRADUIT ? » et « que transporte-t-on à CÔTÉ ? ». Un type
+somme bien posé répond à plus de questions que celle pour laquelle on l'a écrit ; le chercher
+avant d'ajouter un drapeau.
+
+### Corollaire — écrire un placeholder dans une base locale n'est pas écrire un texte
+
+Le corps servi peut être « ⏱️ 💬 24h », « 🎵 Audio · 0:34 » ou « Nouveau message ». Affiché
+dans une bannière, chacun est correct ; **écrit dans la ligne `MessageRecord.content`, chacun
+affirme que le message DIT cela** — et la bannière disparaît en trois secondes quand
+l'enregistrement, lui, reste jusqu'à une synchro REST qui peut ne jamais venir.
+
+> **Une bulle sans texte vaut mieux qu'une bulle qui ment.** Le repli d'un cache n'est pas le
+> repli d'un affichage : le second est vu puis oublié, le premier est relu.
+
+Même règle sur la LANGUE : l'ancien code écrivait `"en"` en repli sur un champ que le Prisme du
+lecteur consulte ensuite. Un texte espagnol déclaré anglais n'est pas un défaut d'affichage,
+c'est une fausse déclaration dans une source de vérité.
+
+### La méthode, réutilisable telle quelle
+
+Pour toute frontière entre deux langages (push, deep link, App Group, fichier partagé) :
+
+```
+clés LUES par le consommateur   \
+                                 >  diff, dans les DEUX sens
+clés ÉMISES par le producteur   /
+```
+
+Les deux listes s'obtiennent par `grep`. Le diff est la mesure — et **les deux directions
+comptent** : les clés lues jamais émises sont des pannes, les clés émises jamais lues sont des
+intentions perdues, et rien dans le code ne signale ni les unes ni les autres.
+
+### Corollaire de harnais — ce qu'un script ÉCRIT n'est pas ce qu'on a voulu écrire
+
+Le lot a été poussé avec une erreur de compilation Swift d'un seul caractère : la fin du fichier
+de témoins portait `\n` LITTÉRAL (deux caractères, barre oblique inverse puis « n ») au lieu
+d'une fin de ligne — un `+ "\\n"` d'un script Python lancé en heredoc, où l'échappement est
+consommé DEUX fois (une par le shell pour le heredoc, une par Python).
+
+Elle n'était pas rattrapable ici : aucune chaîne Swift dans le conteneur. Elle l'était en
+revanche par une commande d'une seconde, et c'est elle qu'il fallait passer :
+
+```bash
+tail -c 20 <fichier> | od -c     # ce que le script a VRAIMENT écrit
+```
+
+> **Quand on génère du code par un script plutôt qu'en l'éditant, la relecture ne porte plus sur
+> l'intention mais sur l'OCTET.** Un `Edit` montre son résultat ; un `python3 <<'PY'` ne montre
+> que « appended ». La différence n'est pas cosmétique : c'est la seule couche où l'échappement
+> peut se perdre, et elle est invisible à toute relecture du script lui-même.
+
+La mesure consolante : le build iOS a rendu **2 erreurs, toutes deux ce caractère** — donc le
+helper et ses quatorze témoins compilent. Un gate rouge qui ne nomme qu'une chose est un gate
+qui a tout le reste au vert.
+
+### Corollaire — deux passes qui divergent sur une CONCEPTION ne divergent pas sur la MESURE
+
+Ce lot a convergé avec le cycle 124 (PR #3465), mergé sur `main` pendant qu'il était en CI. Les
+deux passes ont instruit le même suivi, trouvé le même défaut, et posé **le même prédicat**
+(base `message-content` + verrou `notificationLocKey` + garde `showPreview`). Elles ont divergé
+sur une seule question, et c'est celle qui décidait tout :
+
+> **Quel texte la NSE a-t-elle le droit d'enregistrer — celui qui est SERVI, ou celui qui est
+> le message ?**
+
+Cette passe répondait « le servi », et en tirait qu'il ne fallait PAS émettre `content` : le
+texte nu d'un message protégé repartirait sur le canal push. **L'objection était fausse**, et
+#3465 le démontre — le couple n'est posé que sous la garde qui existait déjà. La bonne question
+n'était pas *« ce champ peut-il fuir ? »* mais *« sous quelle garde ? »*.
+
+Et #3465 a raison sur le fond, pour une raison de MODÈLE : `MessageRecord.content` EST le champ
+d'origine, `originalLanguage` son étiquette. Y écrire le texte servi produit un enregistrement
+cohérent mais **faux sur sa propre sémantique** — un message espagnol traduit en français y
+serait enregistré comme un message français.
+
+> **Quand deux passes divergent, comparer d'abord les MESURES, pas les conclusions.** Ici les
+> mesures étaient identiques ; tout l'écart tenait à ce qu'on croit qu'un champ SIGNIFIE. Une
+> divergence de conception qui survit à une mesure commune est presque toujours une divergence
+> sur le sens d'un nom.
+
+**Ce que la passe perdante garde quand même** — et c'est la seule question utile après une
+convergence :
+
+- **la MÉTHODE** : le diff du contrat dans les DEUX sens, dont la moitié « émis, jamais lu »
+  n'était nommée par personne — ni par les deux suivis, ni par #3465 ;
+- **la JUMELLE** : #3465 pose son prédicat EN LIGNE dans `createMessageNotification`, quand les
+  TROIS éventails pré-enregistrent une bulle. Extrait en site partagé, il sert les trois ;
+- **les trois champs restants** (`senderDisplayName`, horodatage serveur, type du fil).
+
+> **Une passe qui perd sa conception ne perd pas son lot.** Reprendre la conception gagnante EN
+> ENTIER, puis se demander ce qui reste vrai par-dessus — c'est presque toujours non vide, et
+> c'est ce qui distingue une convergence d'un abandon.
+
+**Mesure de refactor obligatoire** : après avoir déplacé la garde de #3465 dans le helper
+partagé, la mutation qui la retire fait tomber **7 témoins, dont les 4 de #3465**. Un refactor
+qui déplace une règle doit prouver qu'elle tombe encore DEPUIS SON NOUVEAU SITE — sans quoi on
+a déplacé le code et perdu la garde.
+
+---
+
+## Leçon 275 — une garde de CONFIDENTIALITÉ qui ne garde qu'une chaîne ne garde rien du tout (2026-08-24, cycle 125)
+
+Quatre cycles ont poursuivi le même symptôme dans la couche push : « deux textes pour un même
+message ». Chacun a trouvé son défaut, chacun l'a fermé, chacun a écrit sa garde. Elles sont
+toutes justes :
+
+| garde | ce qu'elle retient |
+|---|---|
+| `protectedPreview` | compose un placeholder à la place du corps |
+| `previewPrismSource` | retient la TRADUCTION d'un contenu masqué |
+| `prePersistedMessageFields` | retient le corps que la NSE enregistrerait localement |
+| cycle 124 — `firstAttachmentTranscript` | retient la TRANSCRIPTION d'un vocal protégé |
+
+Quatre gardes, quatre sites, quatre lots de témoins. **Toutes gardent une chaîne de
+caractères.** Et pendant que la quatrième se posait, douze lignes plus bas dans le même objet,
+sans aucune condition :
+
+```ts
+firstAttachmentUrl: first?.fileUrl || undefined,
+```
+
+La NSE iOS télécharge cette URL et l'attache en `UNNotificationAttachment`. Une photo à VUE
+UNIQUE s'affichait **entière, en grand, sur l'écran verrouillé**, sous une bannière disant
+« 👁️ 🖼️ ». Aucun texte n'avait besoin de fuir pour que le secret parte.
+
+> **Une protection de CONTENU se mesure sur tout ce que la charge TRANSPORTE, jamais sur sa
+> seule chaîne.** Le cycle 123 demandait « que transporte-t-on à CÔTÉ de ce qu'on affiche ? » et
+> répondait en inventoriant les champs de TEXTE. La bonne réponse n'est pas un inventaire de
+> champs : c'est une question sur le MÉDIUM — texte, fichier, nom de fichier, taille, durée,
+> vignette, URL.
+
+### Corollaire — chercher la garde manquante là où l'attention vient de passer
+
+Le défaut n'était pas dans un fichier oublié. Il était dans **l'objet littéral suivant**, écrit
+par la même main, relu dans le même cycle, à douze lignes de la garde qu'on venait de poser. Ce
+n'est pas un hasard de ce lot : une passe qui répare un chemin regarde ce chemin *au niveau
+d'abstraction où elle a trouvé le défaut* — ici « quelle chaîne compose l'aperçu ? » —, et ce
+niveau rend l'objet voisin invisible parce qu'il ne compose aucune chaîne.
+
+La question qui l'attrape se pose au moment du correctif, pas au cycle suivant :
+**« la charge que ce site remet contient-elle autre chose que ce que je viens de garder ? »**
+Elle se répond en lisant l'objet remis, ligne à ligne, sans lire le code qui le construit.
+
+### Corollaire — le niveau de protection qu'un modèle DÉCLARE et qu'aucune requête ne LIT
+
+`MessageAttachment` porte `isViewOnce`, `isBlurred` et `effectFlags` — ses propres drapeaux,
+indépendants de ceux du message. Le `select` de l'éventail n'en lisait aucun : la protection
+d'un média n'était consultée à **aucun** des deux niveaux qui la déclarent.
+
+Mesure honnête, et elle change la qualification sans changer le correctif : **aucun chemin de
+création n'écrit ces deux drapeaux** aujourd'hui (`UploadProcessor`, `tus-handler`,
+`copyAttachments`, `MessageProcessor` n'y posent que `isEncrypted`). Le niveau attachment est
+donc ARMÉ, pas encore atteignable.
+
+> Un champ de protection présent au modèle et absent de toute requête est un **piège armé** : le
+> jour où un chemin de création le pose — une ligne, dans un lot qui parlera d'autre chose — la
+> protection sera considérée comme acquise par tous ceux qui liront le schéma. Le respecter
+> coûte trois champs dans un `select` ; le découvrir plus tard coûte un incident.
+
+### Corollaire — le second verrou se pose sur la clé qui DÉCLARE, pas sur celle qui décrit
+
+`notificationLocKey` a UN SEUL producteur dans tout le dépôt : `protectedPreview`. Sa présence
+sur un contexte de notification n'est donc pas un indice, c'est une **déclaration** — aucun
+appelant ne la pose par accident, et aucun ne la pose pour autre chose.
+
+C'est ce qui en fait un bon second verrou, au même titre que dans `previewPrismSource` et
+`prePersistedMessageFields` : un appelant qui masque le corps sans retirer son média perd le
+rich-push, jamais le secret. **Une garde de confidentialité échoue en montrant MOINS.**
+
+### Ce qu'on n'a pas fait, et pourquoi
+
+La NSE pourrait refuser d'attacher un média quand `notificationLocKey` est présent. Elle n'a pas
+été touchée : la fuite est fermée à la SOURCE, et la source est le seul endroit qui connaisse
+l'état de protection du message. Pour le seul cas où la NSE révèle légitimement un contenu
+protégé (E2EE déchiffré localement), la passerelle ne pousse plus d'URL du tout — la garde
+cliente serait inerte. Une édition Swift non compilable dans ce conteneur achèterait un risque
+de build (leçon 274, corollaire de harnais) contre zéro comportement observable.
+
+> **Ajouter une garde symétrique côté client n'est pas gratuit : elle se paie en risque de build
+> et en code qui ne peut pas tomber.** Une garde qu'aucun témoin ne peut faire échouer est une
+> ligne de commentaire déguisée.
+
+### Corollaire de harnais — un témoin d'ABSENCE passe au vert quand l'unité entière meurt
+
+Le lot a rendu trois rouges dans `MessageProcessor.test.ts` : le fichier fabrique le module
+`NotificationService` à la main (`jest.mock(..., () => ({ NotificationService, protectedPreview }))`)
+et la nouvelle jumelle n'y figurait pas — l'éventail mourait sur
+`maskedAttachment is not a function`, silencieux dans son propre `catch`.
+
+Trois témoins du bloc sont tombés. Un quatrième, `skips regular notification for users with
+mentionsOnly`, est resté **VERT** — parce qu'il assert `not.toHaveBeenCalled()`.
+
+> **Un témoin d'absence ne distingue pas « l'unité a décidé de ne pas appeler » de « l'unité n'a
+> jamais tourné ».** Il passe au vert sur la panne totale du chemin qu'il surveille. Seul son
+> voisinage — les témoins de PRÉSENCE du même bloc — le rattrape ; isolé dans un fichier où tout
+> le reste est aussi une absence, il ne peut plus rien détecter.
+
+Corollaire pratique : quand un `jest.mock(module, factory)` remplace un module de PRODUCTION,
+la fabrique est un **inventaire figé** de ce que le module exportait le jour où on l'a écrite.
+Ajouter un export au module ne la met pas à jour, et l'appelant obtient `undefined`. La forme
+`jest.requireActual` + surcharge ciblée n'a pas ce défaut ; la fabrique littérale, si — et c'est
+exactement la leçon 271 (« un helper à un appelant est un inventaire ») dans le harnais de test.
+
+## Leçon 276 — au rang 1, un court-circuit et la règle juste rendent le MÊME verdict : c'est ce qui rend un résolveur faux indétectable (2026-08-24, cycle 125)
+
+Le cycle 121 a posé la règle : **un témoin de RANG s'écrit sur un rang AUTRE que
+le premier**, parce qu'au rang 1 la règle juste et le raccourci fautif
+s'accordent. Elle était écrite pour le Prisme du CONTENU. Le cycle 124 l'a
+retrouvée sur le Prisme du **CADRAGE** — la langue dans laquelle on ADRESSE un
+lecteur — et cette fois avec la preuve que la règle protège aussi ceux qui la
+connaissent : `AuthHandler.test.ts` portait un témoin dont le commentaire
+AFFIRME que le site appelle `resolveUserLanguage`. Il ne l'appelait pas.
+
+```ts
+// systemLanguage is the highest-priority source in resolveUserLanguage, so
+// the resolved language is 'en' (the user's systemLanguage) …
+expect(connectedUsers.get('user-123')?.language).toBe('en');   // fixture: systemLanguage: 'en'
+```
+
+La fixture posait le rang 1. Le site lisait `user.systemLanguage || 'en'`. Les
+deux lectures coïncident exactement là où le témoin regardait, et **son auteur a
+écrit dans le commentaire le code qu'il croyait tester**. Quatre témoins de
+`resolved-languages-refresh.test.ts` avaient le même défaut, sur le jumeau de ce
+site.
+
+### La conséquence de méthode
+
+> **Un commentaire de témoin qui NOMME la fonction censée être appelée est une
+> affirmation, pas une description** — même famille que « un commentaire qui
+> ÉNONCE une contrainte de schéma est une AFFIRMATION » (cycle 94). Il se vérifie
+> en cherchant l'appel, pas en le relisant.
+
+Et le corollaire opérationnel : **devant une suite dont toutes les fixtures
+posent le rang 1, la question n'est pas « ces témoins passent-ils ? » mais
+« pourraient-ils tomber ? »**. Ici, aucun ne le pouvait.
+
+## Ce que le rang 1 cachait, en trois défauts disjoints
+
+Le même raccourci — `user.systemLanguage || 'xx'` — produit trois pannes qui ne
+se ressemblent pas, et n'en corriger qu'une laisse les deux autres :
+
+1. **RANG.** Un rang 1 vide ne fait pas tomber au rang 2 : il fait tomber au
+   **repli**. Un lecteur qui n'a renseigné que `regionalLanguage: 'es'` reçoit
+   ses e-mails en anglais.
+2. **NORMALISATION.** Les prefs sont persistées verbatim. Quand la langue sert
+   ensuite de **CLÉ** dans une carte de traductions, `'pt-BR'` ne matche rien et
+   le contenu retombe sur la langue de l'AUTEUR — alors qu'une traduction `pt`
+   existe, deux clés plus loin.
+3. **FORMAT.** Une langue résolue ne suffit pas si l'horodatage qui l'accompagne
+   est formaté par un binaire codé en dur
+   (`systemLanguage === 'en' ? 'en-US' : 'fr-FR'`). Un lecteur allemand recevait
+   un titre allemand — `notificationString` normalise, lui — **daté à la
+   française**.
+
+## Le SELECT est le seul des trois qu'aucun témoin de rang ne peut voir
+
+C'est le point à retenir pour la prochaine passe. Un mock Prisma rend ce qu'on
+lui dit **quel que soit le `select`** : un témoin de rang passe donc au vert sur
+un site dont la requête ne ramène pas les colonnes du Prisme, et la descente est
+morte en production sans que rien ne rougisse. Le résolveur reçoit un objet dont
+les rangs 2 à 4 sont `undefined` et rend un rang 1 parfaitement plausible.
+
+> **Quand une règle dépend d'une PROJECTION, la garder exige un témoin qui
+> regarde la REQUÊTE — pas seulement le rendu.** C'est la seule famille de ce lot
+> qui assert sur un appel plutôt que sur une valeur, et c'est justifié : le
+> défaut vit dans l'espace exact que le double de test efface.
+
+## Et la cause de forme : une cérémonie que rien ne tient ensemble
+
+Six sites conformes recopiaient le même passe-plat — la forme du `select`, PUIS
+`resolveUserLanguage(user, { deviceLocale: user.deviceLocale ?? undefined })`.
+Deux choses à ne pas rater, aucune qui rappelle l'autre. Dix-sept sites en ont
+sauté au moins une.
+
+`services/gateway/src/utils/recipient-language.ts` met la forme de la requête et
+la descente dans le MÊME module, pour qu'un appelant qui importe l'une trouve
+l'autre. Généralisation de la leçon 264 : **quand un résolveur exige une
+cérémonie à son site d'appel, la cérémonie finira par être sautée — et le module
+qui la porte doit exposer TOUT ce qu'elle demande, y compris la forme de la
+requête qui l'alimente.**
+
+## Le repli terminal est un PARAMÈTRE, pas un défaut partagé
+
+`resolveUserLanguage` retombe sur `'fr'` ; plusieurs de ces sites retombent
+historiquement sur `'en'`. Le correctif **ajoute la descente sans toucher au
+repli** : le comportement ne change QUE lorsqu'un rang inférieur est renseigné.
+
+Trancher « quelle langue pour un compte sans AUCUNE préférence » est un arbitrage
+PRODUIT. Le mêler à un correctif de Prisme rendrait les deux illisibles — et
+surtout rendrait la mesure invérifiable, puisque tout site changerait de
+comportement, y compris ceux qui n'avaient pas le défaut. **Un lot qui répare une
+règle ne tranche pas, dans le même geste, une question qui n'en relève pas.**
+Exiger le repli à l'appel le rend visible au site plutôt que caché dans un
+défaut ; c'est ce qui permet à la prochaine passe de le trancher pour de bon.
+
+---
+
+---
+
+## Leçon 277 — quand N sites appliquent une règle, celui qu'on ajoute EN DERNIER n'est pas le seul à manquer : c'est le PREMIER qui l'avait (2026-08-24, cycle 125 bis)
+
+Le suivi disait, depuis deux cycles :
+
+> Les éventails RÉPONSE et MENTION composent depuis `notificationPreview` (jamais
+> `…ForPush`) et ne reçoivent aucun `attachmentInfo` — la bannière d'une réponse à un vocal
+> affiche `Message.content`, vide pour un vocal pur.
+
+Deux fois qualifié de « décision produit, pas correction de Prisme ». La formule était juste sur
+un point — la langue ne change pas — et fausse sur ce qui compte :
+
+| destinataire du MÊME message | ce qu'il voyait |
+|---|---|
+| les membres du fil | la transcription, ou « 📷 Photo · 1024×768 » |
+| **celui à qui on répond** | **rien** |
+| **celui qu'on mentionne** | **rien** |
+
+> **Un corps VIDE n'est pas « un autre choix de produit », c'est l'absence de la bannière sous
+> la bannière.** La question « est-ce une décision produit ? » se pose sur ce que l'utilisateur
+> VOIT, pas sur la nature du champ manquant. Aucun produit ne préfère un corps vide.
+
+### Le vrai motif — la composition vivait chez UN des trois
+
+`buildMessageNotificationBodyI18n` — le compositeur qui remplace un texte absent par le libellé
+du premier média — n'était appelé que par `createMessageNotification`. Les deux autres posaient
+`content: this.servedPreview(...)`, une projection plus PAUVRE, et rien ne le signalait :
+`servedPreview` est un helper juste, partagé, testé, et les trois éventails l'appellent.
+
+> **Deux sites qui partagent le sous-helper d'une règle ont l'air de partager la règle.** La
+> divergence ne se voit pas dans « qui appelle quoi » mais dans « qui appelle la COMPOSITION
+> COMPLÈTE ». Compter les appelants du helper le plus BAS de la chaîne rassure à tort — c'est
+> le plus HAUT qu'il faut compter.
+
+### Corollaire — séparer une charge par ce qu'elle FAIT, pas par sa provenance
+
+`attachmentInfo` était un objet unique de douze champs, tous issus de la même lecture Prisma.
+Les trois éventails n'en veulent pas la même chose :
+
+- `attachments`, `firstAttachmentFileSize/Duration/Width/Height` **composent un TEXTE** — les
+  trois en ont besoin ;
+- `firstAttachmentUrl`, `firstAttachmentMimeType`, `hasAttachments`, `firstAttachmentFilename`
+  **transportent un fichier** ou alimentent un inventaire persisté — le message simple seul.
+
+C'est exactement la séparation du cycle 125, vue de l'autre côté : là, confondre les deux a fait
+partir un fichier sous une garde écrite pour une chaîne ; ici, les confondre a fait manquer une
+chaîne à deux éventails qui n'avaient pas besoin du fichier. **Une charge se découpe par l'USAGE
+de ses champs, jamais par la requête qui les a produits** — la requête est un fait d'origine, et
+l'origine commune est précisément ce qui rend le mélange invisible.
+
+### Corollaire — un témoin de fan-out a besoin d'un destinataire ORDINAIRE
+
+Le premier jet du harnais posait trois membres : l'expéditeur, celui à qui on répond, celui
+qu'on mentionne. `createMessageNotification` n'a jamais été appelé — `alreadyNotified` les
+absorbe tous les trois, l'éventail régulier n'avait aucun candidat, et l'assertion de RÉFÉRENCE
+(« la réponse reçoit ce que reçoit le message simple ») comparait à rien.
+
+> Quand un témoin compare une branche à une autre, la branche de RÉFÉRENCE doit avoir de quoi
+> exister. Trois rôles dans une conversation à trois membres n'en laissent aucun au quatrième
+> rôle — celui qui n'en a aucun.
+
+## Leçon 278 — un garde-fou câblé au mauvais MOMENT du cycle de vie est du code mort que la forme du test ne peut pas voir (2026-08-24, routine appels)
+
+`promoteRingingCallToCallKitIfNeeded()` (iOS `CallManager.swift`) existe pour
+un cas précis : un appel entrant qui sonne EN APP (CallKit volontairement
+sauté parce que l'app était au premier plan) doit être promu à CallKit s'il
+passe en arrière-plan avant d'être décroché — sinon iOS peut suspendre l'app
+en plein sonnage, sans carte d'appel verrouillée, et l'appel se perd
+silencieusement. La fonction est correcte, testée, bien gardée. Le seul
+endroit qui l'appelle est l'observateur `didEnterBackgroundNotification`, et
+cet observateur n'était armé QUE par `startBackgroundMonitoring()`, appelée
+depuis un SEUL site : `transitionToConnected()`.
+
+Or la fonction ne fait quelque chose QUE quand l'appel sonne encore
+(`callState == .ringing(isOutgoing: false)`) — c'est-à-dire précisément AVANT
+que `transitionToConnected()` n'ait jamais pu s'exécuter. Les deux conditions
+sont mutuellement exclusives par construction : le garde-fou entier était
+inatteignable, une fenêtre de panne qui existait depuis l'introduction de la
+fonction, en production, sans qu'aucun test ne rougisse.
+
+### Pourquoi trois tests corrects n'ont rien vu
+
+Les trois tests existants (`test_backgroundObserver_promotesStillRingingCallToCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_guardsOnRingingIncomingNotYetOnCallKit`,
+`test_promoteRingingCallToCallKitIfNeeded_neverPromotesInChina_evenWhileRinging`)
+vérifient tous la FORME du code : « l'observateur appelle bien la fonction »,
+« la fonction a bien les bons guards », « le guard régional est bien câblé ».
+Aucun ne vérifie que l'observateur lui-même est un jour ARMÉ pendant que
+l'appel sonne. La fonction et son appelant étaient chacun individuellement
+irréprochables ; c'est la RELATION temporelle entre le moment où on les monte
+et le moment où ils doivent agir qui était rompue — et aucun des trois tests
+ne pose cette question-là.
+
+> **Un test qui vérifie qu'un handler CONTIENT le bon appel ne vérifie pas
+> que le handler est un jour MONTÉ au bon moment.** Pour un garde-fou dont
+> l'utilité dépend d'une fenêtre temporelle (« pendant que X, avant que Y »),
+> le test à écrire n'est pas seulement « la fonction fait-elle le bon geste ? »
+> mais **« le site qui l'arme est-il vivant PENDANT la fenêtre qu'elle
+> couvre ? »** — ici, l'armement au CONNECT ne peut pas couvrir une fenêtre
+> qui se ferme avant le connect.
+
+### Le correctif expose un second défaut latent
+
+Rendre la promotion atteignable a immédiatement révélé un second bug resté
+invisible tant que le premier chemin était mort : `startRingtone()` (jouée en
+app quand CallKit est sauté) ne s'arrêtait jamais au moment de la promotion
+réussie — CallKit joue alors SON PROPRE `ringtoneSound` (même asset
+`Ringtone.caf`) par-dessus la boucle `AVAudioPlayer` encore active, dont la
+session auto-activée (`.playAndRecord`) risque en prime de bloquer le
+`didActivate` de CallKit. **Rendre un chemin mort à nouveau vivant peut
+réveiller un défaut qui dormait DERRIÈRE lui** — le corriger dans le même lot,
+pas dans un suivi, parce que le premier correctif seul aurait été une
+régression (double sonnerie) dans le cas exact qu'il vise à réparer.
+
+## Leçon 279 — un lot qui fait CONVERGER une chaîne laisse derrière tout ce qui la QUALIFIE (2026-08-24, cycle 126)
+
+**Contexte.** Le cycle 125 bis a fait converger le CORPS des trois bannières de
+`messageNotificationFanOut` : réponse et mention reçoivent enfin
+`notificationPreviewForPush`, `pushPreviewBasis` et le résumé de média qui
+compose le texte. Le correctif est juste, testé, et sa leçon (§ 277) nomme
+exactement le motif — « la composition vivait chez UN des trois ».
+
+Deux champs de l'éventail ne l'ont pas suivi, et pour une raison qu'il faut dire
+à voix haute : **ils ne composent aucune chaîne.**
+
+| champ resté derrière | ce qu'il fait | ce que son absence coûtait |
+|---|---|---|
+| `notificationLocKey` | QUALIFIE le placeholder (la NSE le rend depuis sa propre table) et sert de SECOND VERROU à `createNotification` | placeholder non localisé ; le verrou du cycle 125 inapplicable sur ces deux éventails |
+| `messageCreatedAt` / `messageType` | l'horloge SERVEUR de la bulle que la NSE PRÉ-ENREGISTRE | la bulle d'une réponse datée par l'horloge du DEVICE, donc mal rangée dans le fil |
+
+**La règle.**
+
+> **Un lot qui partage une valeur composée doit énumérer ce qui voyage AVEC
+> elle, pas seulement ce qui la compose.** Un champ qui QUALIFIE un texte —
+> une clé de localisation, une horloge, un type, une base — ne se trouve pas en
+> cherchant « qui compose ce texte ? » : par construction, il n'apparaît dans
+> aucune composition.
+
+C'est la forme du cycle 125 (§ 275) rejouée un cran plus haut. Là, quatre gardes
+tenaient une CHAÎNE pendant que le fichier partait dans l'objet voisin ; ici, un
+lot fait converger une CHAÎNE pendant que ce qui la qualifie reste derrière. Le
+même angle mort, la même cause : **le niveau d'abstraction du correctif rend
+invisible ce qui ne participe pas à sa phrase.** La question se pose AU MOMENT du
+correctif, et se répond en lisant l'objet remis LIGNE À LIGNE — pas en relisant le
+code qui le construit.
+
+**Le motif de structure qui l'a rendu possible.** `createMentionNotificationsBatch`
+relayait `commonData` vers `createMentionNotification` **champ par champ** : neuf
+lignes de recopie. Un relais de cette forme retient silencieusement tout ce qu'on
+ajoute en amont — il ne rougit jamais, il ne perd rien de visible, il oublie. Le
+correctif extrait les deux seuls champs RENOMMÉS (`senderId` → `mentionerUserId`,
+`messageContent` → `messagePreview`) et répand le reste :
+
+```ts
+const { senderId, messageContent, ...banner } = commonData;
+… this.createMentionNotification({ ...banner, mentionedUserId, mentionerUserId: senderId, messagePreview: messageContent, prismSource })
+```
+
+> **Un relais qui recopie est un inventaire à tenir à jour ; un relais qui répand
+> n'en est pas un.** Ne recopier que ce qui change de NOM — le reste passe, et un
+> champ ajouté demain arrive à destination sans qu'on ait à s'en souvenir.
+
+**Ce qui n'a PAS été repris, et pourquoi.** Le cycle 125 bis a délibérément gardé
+le rich-push (`firstAttachmentUrl` / `firstAttachmentMimeType` /
+`metadata.attachments`) hors de ces deux éventails : « leur bannière compose
+désormais le bon TEXTE ; y attacher le média inline rouvrirait une surface que le
+cycle 125 vient de resserrer ». Cette décision est CONSERVÉE. Une convergence de
+lots ne se résout pas en prenant l'union des deux : la décision explicite et
+raisonnée du lot mergé en premier l'emporte sur l'argument de cohérence du second
+(§ Note de convergence, `CLAUDE.md`).
+
+**Le témoin qui l'attrape** n'assert ni sur le texte ni sur le rang, mais sur ce
+qui l'accompagne : `replyMentionBannerClock.test.ts` — l'horloge servie, le
+`select` qui la charge (une requête, pas deux), le silence quand la relecture
+fail-open tombe, et les trois choses que le verrou retient (traduction du fil,
+corps pré-enregistré, média).
+
+---
+
+## Leçon 280 — une garde qui protège la population la plus NOMBREUSE peut manquer la plus EXPOSÉE (2026-08-24, cycle 127)
+
+`createMessageNotification` relit l'état du message juste avant de pousser, et
+abandonne quand il a été rappelé ou a expiré dans la fenêtre de l'éventail. Son
+commentaire dit exactement pourquoi, depuis toujours :
+
+```ts
+// If the sender soft-deletes / … / lets the message expire in that window we
+// MUST NOT leak the original content via the banner.
+```
+
+Cette phrase vaut mot pour mot pour les deux autres éventails. Ni
+`createReplyNotification` ni `createMentionNotification` ne portaient la moindre
+garde : un message rappelé entre son commit et l'éventail poussait son texte
+ORIGINAL sur l'écran verrouillé de la personne à qui l'on répond et de tous les
+mentionnés, pendant que les membres ordinaires du fil — protégés — ne voyaient
+rien.
+
+> **Le lot `regular` sert la population la plus NOMBREUSE ; la réponse sert la
+> personne VISÉE, et la mention perce jusqu'à la sourdine.** Une garde posée sur
+> le chemin le plus fréquenté se lit comme une garde posée sur le sujet. Elle ne
+> l'est que sur son chemin.
+
+### La relecture était DÉJÀ LÀ, et c'est ce qui rend le défaut invisible
+
+Les trois éventails relisent la MÊME ligne, dans la MÊME fenêtre. Le lot
+`regular` le fait par `prisma.message.findUnique` ; les deux autres par
+`loadMessagePrismSource`, dont le `select` demandait `translations`,
+`originalLanguage`, `createdAt`, `messageType` — et passait à côté de `deletedAt`
+et `expiresAt`, les deux colonnes qui disent la vie du message.
+
+La garde ne coûtait donc pas une requête : **deux colonnes sur une lecture qui se
+faisait déjà.** Même forme qu'au cycle 126, une question plus loin.
+
+Ce qui a tenu le défaut hors de vue est une phrase de doc-comment, écrite comme
+un contrat alors qu'elle DÉCRIVAIT un défaut :
+
+```ts
+// … pour les éventails dont la lecture n'est PAS un gate d'éligibilité
+```
+
+Elle est vraie du code, et c'est tout ce qu'elle est. Rien dans « ce n'est pas un
+gate » ne dit *pourquoi ça ne devrait pas en être un* — mais posée en tête d'une
+unité, elle se relit comme une décision qu'on n'a pas à instruire. Même famille
+que le commentaire du cycle 91 bis qui scellait la 2FA en l'annonçant.
+
+> Devant un doc-comment qui EXEMPTE une unité d'une règle que sa voisine
+> applique, la question n'est pas « est-ce exact ? » mais **« qu'est-ce qui
+> justifie l'exemption ? »**. Ici : rien.
+
+### Le balayage de rétraction ne rattrape pas ce cas — il ferme la BASE, pas l'ÉCRAN
+
+L'éventail relit le message APRÈS ses trois lots et retire les lignes
+`Notification` d'un message rappelé. Sa démonstration est juste et son raisonnement
+de fenêtre est exact — pour ce qu'il vise. Il retire une LIGNE ; la bannière, elle,
+est déjà sur l'écran verrouillé, et rien ne la rappelle.
+
+> **Une compensation en aval ne remplace pas une garde d'admission quand l'effet
+> qu'elle compense est IRRÉVERSIBLE.** La question à poser à tout nettoyage
+> a-posteriori : *que reste-t-il de fait que ce nettoyage ne défait pas ?*
+
+### Ce qui a été mesuré et NON corrigé, et pourquoi c'est la moitié la plus utile
+
+Le premier correctif traitait une ligne ABSENTE comme une preuve de rappel. Deux
+témoins existants sont tombés — dont un, explicite, qui asserte que la bannière
+d'un message VOLATILISÉ part quand même. Il avait raison, et le dépôt disait déjà
+pourquoi, dans le balayage de rétraction du même éventail :
+
+> `deletedAt` non nul est la SEULE preuve d'un rappel. Une ligne absente ne prouve
+> rien, et aucun chemin de la gateway ne supprime un message physiquement.
+
+Le mécanisme est réel : le message vient d'être committé, et une lecture servie
+par un secondaire en retard sur le jeu de réplicas rend `null` pour un message
+parfaitement vivant. En faire une preuve ferait perdre des annonces qu'aucun
+réessai ne rattrape.
+
+> **Un verdict de garde a trois états, pas deux** : `live`, `gone` (la lecture
+> PROUVE), `unknown` (elle n'a rien prouvé — elle a levé, ou n'a rien rendu). Les
+> deux derniers se ressemblent et s'arbitrent à l'opposé : fail-CLOSED sur la
+> preuve, où c'est un secret qui est en jeu ; fail-OPEN sur l'absence de preuve,
+> où c'est une livraison. C'est la leçon 112 (« un `catch` fail-open couvre aussi
+> la question qu'on a mal posée ») lue dans l'autre sens.
+
+**Et un témoin qui tombe n'a pas forcément tort.** Deux tests rouges ont fait
+CHANGER LA CONCEPTION, pas la fixture : ils portaient une décision antérieure,
+raisonnée et écrite. Le réflexe d'ajuster le double pour retrouver le vert aurait
+retiré une garantie de livraison sans que rien ne le dise. La décision est
+désormais gardée en POSITIF, des deux côtés — les lots qui annoncent quand même,
+et celui qui se tait — pour qu'elle cesse de dépendre de la mémoire d'un cycle.
+
+### Un select mort nommait une garde qui n'a jamais existé
+
+Le commentaire du lot `regular` énumérait TROIS causes d'abandon — rappelé, brûlé,
+expiré — et `isViewOnce` / `viewOnceCount` étaient SÉLECTIONNÉS pour la deuxième.
+Aucune ligne ne les lisait : `NotificationService` était le seul site du dépôt à
+demander `Message.viewOnceCount`, et il n'en faisait rien.
+
+Le correctif est de RETIRER le select, pas d'ajouter la garde, et la raison se
+mesure : `viewOnceCount > 0` dit que QUELQU'UN a consommé, jamais que CE
+destinataire l'a fait — s'y fier ferait taire l'annonce pour tous les autres. Et
+le contenu d'un message à vue unique est de toute façon masqué en amont par
+`protectedPreview`.
+
+> **Une garde ANNONCÉE par un commentaire et PROVISIONNÉE par un `select` se lit
+> comme une garde en place.** C'est la forme du cycle 124 (« annoncée par deux
+> champs, appliquée par aucun ») dans sa variante la plus discrète : ici, le
+> champ provisionné donne au lecteur la preuve matérielle que quelqu'un y a
+> pensé. Vérifier que le champ est LU, pas qu'il est demandé.
+
+## Leçon 281 — un correctif câblé sur UN point d'entrée laisse son JUMEAU exactement où il était (2026-08-24, routine appels)
+
+**Contexte.** La leçon 278 (même jour) a armé `startBackgroundMonitoring()` dans
+`handleIncomingCallNotification()` — le chemin socket d'un appel entrant — parce
+que l'observateur `didEnterBackground` n'était armé qu'à `transitionToConnected()`,
+rendant `promoteRingingCallToCallKitIfNeeded()` inatteignable pendant toute la
+fenêtre de sonnage. Le correctif a été posé au SEUL site inspecté.
+
+**Le défaut.** `reportIncomingVoIPCall()` (`CallManager.swift`) est le JUMEAU exact
+de `handleIncomingCallNotification()` — même forme (`.ringing(isOutgoing: false)`,
+`configureAudioSession()` + `startReliabilityMonitor()` au même endroit), même
+raison d'exister (l'entrée d'un appel entrant via push VoIP plutôt que socket) —
+et n'appelait PAS `startBackgroundMonitoring()`. `promoteRingingCallToCallKitIfNeeded()`
+y est un no-op (`callUsesCallKit = true` inconditionnellement pour ce chemin,
+Apple l'exige), mais l'observateur porte DEUX autres effets, tous les deux vivants
+pour un appel encore sonnant : `applyCameraSuspension(false, cause: "foreground")`
+— le filet de sécurité documenté pour le cas où le signal de fin d'interruption
+caméra n'arrive jamais tant que l'app est en arrière-plan — et l'émission
+`call:backgrounded`/`call:foregrounded` vers le pair. Sans observateur armé, un
+appel vidéo reçu par push VoIP qui se met en arrière-plan avant d'être décroché
+peut entrer en appel connecté avec la caméra restée suspendue, et le pair
+n'apprend jamais que l'appelé est passé en arrière-plan puis revenu.
+
+**Pourquoi ça a survécu au correctif du jour même.** La leçon 278 nommait déjà le
+motif — « l'armement au CONNECT ne peut pas couvrir une fenêtre qui se ferme avant
+le connect » — mais l'a vérifié sur UN SEUL des deux points d'entrée d'appel
+entrant. Le test qui l'a fixé (`test_handleIncomingCallNotification_armsBackgroundMonitoring_...`)
+n'inspecte que le corps de cette fonction ; rien n'énumérait « quels autres sites
+ont la même forme et ont donc besoin du même correctif ».
+
+> **Un correctif vérifié par un test qui n'inspecte QUE le site corrigé ne peut
+> pas voir son jumeau.** Avant de clore un correctif de lifecycle/timing, chercher
+> les AUTRES points d'entrée qui partagent la même forme (`grep` la fonction
+> voisine appelée juste avant/après dans le site corrigé — ici `configureAudioSession()`
+> + `startReliabilityMonitor()`) et vérifier qu'ils reçoivent le même geste. C'est
+> la forme de la leçon 279 (« un lot qui converge une chaîne laisse derrière ce qui
+> la qualifie ») rejouée sur un armement au lieu d'un champ de charge.
+
+**Le correctif.** `startBackgroundMonitoring()` ajouté dans `reportIncomingVoIPCall()`,
+au même point relatif que dans `handleIncomingCallNotification()` (après
+`startReliabilityMonitor()`, avant `joinCallRoomReliably()`). Témoin :
+`test_reportIncomingVoIPCall_armsBackgroundMonitoring_soAStillRingingCallCanRecoverFromBackgrounding`
+(`CallManagerAudioSessionTests.swift`), même forme d'assertion source-string que
+son jumeau.
+
+---
+
+## Leçon 282 — une SSOT de descente n'a de valeur que si on GREPPE ses réécritures ; `.toLowerCase()` n'est pas `normalizeLanguageForDedup` (2026-08-24, itération 262)
+
+Le cycle 118→124 a construit `resolvePrismTranslation()` comme SSOT de la descente du
+Prisme, et `CLAUDE.md` a inscrit la règle : « tout consommateur TS qui doit DIRE dans
+quelle langue il sert l'appelle plutôt que de réécrire la boucle ». La règle était
+écrite ; deux résolveurs de `apps/web` la violaient encore — `findTranslation`
+(posts/commentaires) et `focalServedLanguage` (libellé de langue du fil Focal), tous
+deux en `.trim().toLowerCase()`.
+
+Deux enseignements :
+
+1. **Une règle « appelez la SSOT » ne s'applique pas toute seule — elle se GREPPE.** Le
+   témoin qui attrape une réécriture n'est pas « la SSOT existe-t-elle ? » mais
+   « quelqu'un compare-t-il encore des codes de langue à la main ? » (`grep -rn
+   "toLowerCase" apps/web/hooks apps/web/components | grep -i lang`). L'énumération des
+   sites conformes ne prouve pas l'absence de sites non conformes.
+
+2. **`.toLowerCase()` et `normalizeLanguageForDedup` se ressemblent et divergent sur la
+   région.** Le premier replie la casse ; le second replie la casse ET strippe la région
+   (`'en-US'` → `'en'`). Sur des codes déjà canoniques ils rendent le même verdict — donc
+   un témoin écrit sur `'en'`/`'fr'` ne peut pas les distinguer. Le témoin qui sépare les
+   deux s'écrit sur un code **région-tagué** (`'en-US'` en langue d'origine, `'pt-BR'` en
+   clé de carte), exactement là où le pipeline de traduction et les messages hérités
+   produisent leurs codes. C'est la forme « un témoin de rang s'écrit sur un rang autre
+   que le premier » (leçon 261), transposée à la NORMALISATION : un témoin de région
+   s'écrit sur un code tagué région.
+
+**Corollaire de scope.** La même boucle vivait dans `use-audio-translation.ts`, laissée
+HORS périmètre : y strripper la région **change une sémantique** (une préférence `fr-CA`
+matcherait une piste vocale `fr-FR`), pas seulement un cas d'échec. Router une descente
+de TEXTE vers la SSOT est un refactor ; router une sélection de PISTE l'est moins — la
+région y porte une information (la voix). Distinguer « même défaut de forme » de « même
+décision produit » avant de généraliser un correctif.
+
+---
+
+## Leçon 283 — on reprend le correctif d'une jumelle en cherchant la réponse à SA PROPRE question, et on laisse tout le reste (2026-08-24, cycle 128)
+
+Le corollaire du cycle 85 dit déjà **« quand on reprend le correctif d'une
+jumelle, on le prend en entier »**. Ce cycle mesure le MÉCANISME par lequel on ne
+le fait pas — et il n'a rien d'une inattention.
+
+`POST /user-preferences/communities/reorder` persistait `orderInCategory` et
+n'émettait rien, quand son jumeau `reorderConversationPreferences` diffuse
+`USER_PREFERENCES_REORDERED` sur la room personnelle. La ligne étant par
+UTILISATEUR et non par appareil, un glisser-déposer fait sur l'iPhone n'atteignait
+jamais l'onglet web ouvert — qui tient sa liste en `staleTime: Infinity` avec le
+socket pour source primaire.
+
+**Et le handler fautif CITE le jumeau**, sur dix lignes de commentaire :
+
+```ts
+// L'`upsert` corrige cela et EXIGE en retour le filtre d'appartenance —
+// c'est la raison que porte le jumeau conversation
+// (`reorderConversationPreferences`) …
+```
+
+La jumelle a donc été ouverte, lue, et à moitié reprise. La question qu'on se
+posait ce jour-là était « comment borner cet upsert ? », et la réponse trouvée y
+répondait exactement. La diffusion, elle, ne répondait à aucune question qu'on se
+posait.
+
+> **La question juste n'est pas *« que fait la jumelle pour mon problème ? »*
+> mais *« que fait la jumelle, tout court, APRÈS cette écriture ? »***. Elle se
+> répond en lisant sa suite ligne à ligne — jamais en cherchant un mot-clé, qui
+> par construction ne rend que ce qu'on savait déjà chercher.
+
+C'est la forme du cycle 125 (« la charge que ce site remet contient-elle autre
+chose que ce que je viens de garder ? ») transposée du CORRECTIF au MODÈLE : ce
+qui rend invisible n'est pas la distance, c'est le niveau d'abstraction de la
+question posée.
+
+### Le corollaire d'inventaire : un lot ferme une CLASSE dans SA langue
+
+Le lot F71 avait précisément fermé cette classe de défaut, et son en-tête de test
+le dit : « PUT/DELETE on community preferences didn't emit anything, so a second
+tab/device for the same user never learned … ». Il a énuméré les verbes qui
+**changent une préférence**. Le réordonnancement n'en est pas un dans cette
+langue-là : c'est un geste d'ORDRE. Il écrit pourtant la même ligne, dans le même
+fichier, avec le même coût.
+
+> **L'énumération d'un lot est bornée par la PHRASE qui le décrit**, pas par
+> l'ensemble qu'il croit couvrir (leçon 261). Devant un inventaire de sites,
+> demander : *ce que je viens de nommer est-il la propriété, ou seulement le mot
+> par lequel je l'ai trouvée ?*
+
+### Et la leçon était DÉJÀ ÉCRITE, avec le bon fichier et la bonne règle
+
+C'est le point le plus cher de ce cycle, découvert en résolvant le conflit de ce
+fichier même. **La leçon 28** (itération 104, 2026-07-05) s'intitule :
+
+> F71 soldé : `community-preferences.ts` était une copie figée de
+> `conversation-preferences.ts`, sans la diffusion socket ajoutée après-coup au
+> sibling
+
+Elle nomme la bonne PAIRE de fichiers, diagnostique le bon MÉCANISME (« une copie
+de code initiale figée avant le fix ne le reçoit jamais automatiquement, et rien
+ne le signale »), et prescrit une règle réutilisable. Le réordonnancement est
+passé au travers **treize mois plus tard, dans le fichier qu'elle nomme**.
+
+La raison tient dans la règle prescrite, mot pour mot :
+
+> grep immédiatement les routes SŒURS qui partagent la même forme
+> (`grep -rn "PUT.*preferences" routes/`…)
+
+`POST /user-preferences/communities/reorder` est un **POST**. La commande
+prescrite ne pouvait pas le rendre, et elle a été suivie correctement.
+
+> **Une règle de méthode outillée par un exemple de commande hérite des bornes
+> de cette commande.** L'exemple est ce qu'on relit et ce qu'on exécute ; la
+> phrase générale au-dessus (« les routes sœurs qui partagent la même forme »)
+> est juste et n'est pas ce qui s'exécute. Quand on écrit une règle de balayage,
+> le verbe HTTP, le nom de méthode ou le mot-clé qu'on met dans l'exemple
+> DEVIENT la définition de la famille pour tous ceux qui la reprendront.
+
+C'est pourquoi ce cycle livre un CLIQUET plutôt qu'une règle de plus. Un balayage
+qui part du MODÈLE Prisma (`userConversationPreferences`, `userCommunityPreferences`)
+et non du verbe de la route n'a pas de borne à hériter : il trouve l'écrivain
+quel que soit le geste qui l'amène. **Devant une famille de défauts déjà nommée
+deux fois, la réponse n'est pas de la nommer une troisième — c'est de l'exécuter.**
+
+Les deux fois — `user-deletions.ts` côté conversation, le réordonnancement côté
+communauté — le site fautif n'était pas caché. Il était VOISIN, et il
+n'appartenait simplement pas à la phrase du lot qui a fermé les autres.
+
+### Relever les consommateurs sert à décider s'il faut changer la forme DU TOUT
+
+La règle du cycle 105 dit : avant de changer la forme d'un événement DIFFUSÉ,
+relever ses consommateurs sur les trois clients. Sa suite n'était pas écrite.
+
+Ici la forme naturelle était d'admettre `communityId` dans
+`UserPreferencesReorderedEventData` — même geste, même charge, un discriminant de
+plus, exactement ce que fait `USER_PREFERENCES_UPDATED` avec ses trois scopes.
+Le relevé l'a interdit :
+
+| décodeur | face à un item `{communityId, orderInCategory}` |
+|---|---|
+| iOS — `Update.conversationId: String`, **non optionnel** | décodage de l'ÉVÉNEMENT ENTIER en échec ; les réordonnancements de conversation du même lot partent avec |
+| web — `preferencesMap.has(update.conversationId)` | filtré en silence |
+
+> **Un décodeur STRICT rend l'élargissement plus cher que le nom neuf**, et c'est
+> une mesure, pas un goût. Un événement multi-scope l'est parce qu'il a été CONÇU
+> ainsi, avec des décodeurs qui discriminent ; il ne le devient pas
+> rétroactivement sans casser le cas nominal — et il le casse par le mécanisme le
+> plus discret qui soit, un `catch` de décodage côté client (cycle 92 bis).
+
+`user:preferences-community-reordered` est INERTE pour les deux consommateurs
+existants par construction.
+
+### Et la charge nomme ce qui a été ÉCRIT, jamais ce qui a été DEMANDÉ
+
+Le filtre d'appartenance borne les DEUX ensemble. Diffuser la demande enverrait
+les autres appareils appliquer un ordre que la base ne porte pas — et
+confirmerait au passage l'existence d'une communauté que l'appelant n'a pas le
+droit de nommer. Rien d'écrit ⇒ rien d'émis.
+
+Cliquet : `services/gateway/src/__tests__/preference-writer-sweep.ts`. Il fige les
+SITES D'ÉCRITURE, pas les diffusions — il ne peut pas prouver qu'un site diffuse.
+**Sa valeur est de forcer la question au lot suivant** : une entrée en trop
+signifie « un écrivain neuf est apparu, et celui-là, il diffuse ? ». Son
+collecteur est exercé sur une arborescence FABRIQUÉE, parce qu'un cliquet dont le
+collecteur ne trouve jamais rien reste vert quoi qu'on écrive.
+
+Détail : `tasks/realtime-sync-audit-2026-08-24-cycle128.md`.
+## Leçon 284 — un correctif de résolution se mesure sur tout ce que la charge TRANSPORTE, pas sur sa seule chaîne (2026-08-24, cycle 128)
+
+La leçon 275 disait cela d'une garde de CONFIDENTIALITÉ. Elle vaut identiquement
+d'un correctif de RÉSOLUTION, et le cycle 123 en est l'exemplaire : il a donné à
+la transcription d'un vocal sa propre source de Prisme, si bien que le TEXTE de
+la bannière descend le prisme du lecteur depuis lors. Douze lignes plus bas, dans
+le même objet littéral, le FICHIER attaché est resté `first?.fileUrl` —
+l'original, sans condition, identique pour tous les lecteurs.
+
+Un francophone recevant un vocal anglais voyait donc une bannière **en français**
+au-dessus d'un `UNNotificationAttachment` qui **parle anglais**. Les trois clients
+descendent pourtant déjà le Prisme sur la piste JOUÉE en conversation
+(`AudioTrackLanguageResolver`, `resolveAutoLanguage`, `resolveTranslatedAudio`) :
+l'écran verrouillé était la SEULE surface de la famille AUDIO qui ne le faisait
+pas.
+
+> **La question à poser à un correctif de Prisme n'est pas seulement « sert-il le
+> bon texte ? » mais « qu'est-ce qui part À CÔTÉ du texte qu'il vient de
+> corriger ? »** — et elle se répond en lisant l'objet remis LIGNE À LIGNE. Le
+> niveau d'abstraction du correctif rend l'objet voisin invisible : il ne compose
+> aucune chaîne, donc il n'apparaît dans aucune recherche de « qui traduit ce
+> texte ? ».
+
+Trois corollaires, tous mesurés dans ce lot.
+
+### Le dépouillement partiel d'une source est ce qui laisse le médium derrière
+
+`transcriptTranslationTexts()` est un site UNIQUE, correctement pensé, et il ne
+prend de la carte de traductions que le TEXTE. La MÊME entrée porte l'`url`, le
+`durationMs` et le `format` de la piste TTS — sur une colonne que le `select` de
+l'éventail demande DEPUIS le cycle 123. La garde était donc GRATUITE, comme au
+cycle 127 : deux champs de plus sur une lecture qui se faisait déjà.
+
+**Un site unique de dépouillement ne garantit pas qu'on dépouille TOUT.** Il
+garantit qu'on dépouille pareil. Quand on en écrit un, la question est : *que
+contient encore l'enveloppe que je viens de jeter ?*
+
+Et les deux jumelles ne rendent PAS le même jeu de langues, ce qui est le
+point : une traduction TEXTE peut exister sans que le TTS ait produit sa piste.
+
+### Élire DEUX fois, c'est risquer de servir deux langues
+
+La piste est élue par la langue du TEXTE SERVI, jamais par une descente
+indépendante. Deux descentes parallèles laisseraient la bannière dire « la
+réunion est déplacée » au-dessus d'une piste espagnole — un défaut PIRE que celui
+qu'on corrige, parce qu'il a l'air d'une traduction ratée plutôt que d'une
+traduction absente. Une descente, deux projections : la discipline du cycle 123.
+
+Corollaire de repli : quand l'élection réussit sur le texte et échoue sur le
+médium (TTS manquant), le repli est l'ORIGINAL, et il est fail-OPEN. Le son
+d'origine vaut mieux que le silence, et le texte reste servi traduit.
+
+### Un nom de champ annonce l'unité de sa DESTINATION, jamais celle de sa SOURCE
+
+Le second défaut du lot n'a pas été cherché : il s'est présenté dans le premier
+témoin RED, qui a rendu **« 🎵 Audio · 0:00 »** pour un vocal de 12 unités.
+
+`MessageAttachment.duration` est en MILLISECONDES — `schema.prisma` le dit, et le
+doc-comment de `formatSingleAttachmentLabelI18n` le REDIT. Deux sites de
+`createMessageNotification` la multipliaient par 1000 comme si elle était en
+secondes ; un vocal de 34 s partait annoncé pour 9 h 26, sur le fil push ET dans
+la ligne `Notification` persistée.
+
+> **Deux lectures d'un MÊME champ, dans le MÊME objet littéral, sous deux
+> unités.** Le doc-comment qui dit vrai est à quarante lignes de la ligne qui dit
+> faux, et rien ne les confronte. Ce qui rend la conversion crédible est le NOM
+> du champ d'ARRIVÉE (`…DurationMs`) : il déclare l'unité de la destination, et
+> se relit comme une preuve que la source est dans une autre. **Devant tout
+> `x * 1000` posé sous un nom qui finit par `Ms`, ouvrir le producteur.**
+
+Gravité à dire honnêtement, comme toujours : le champ du FIL n'est lu par aucun
+client (piège armé) ; le champ PERSISTÉ est décodé par le SDK iOS, dont la
+fixture de sa propre suite pose la valeur JUSTE — le contrat était en
+millisecondes et le gateway le violait.
+
+### Et le maillon qu'on oublie de vérifier, c'est la ROUTE
+
+Un correctif qui sert une URL différente n'a d'effet que si le client peut la
+CHERCHER. Cinq maillons ont été vérifiés avant de conclure — résolution d'une URL
+relative côté NSE, allowlist (schéma + hôte, aucun filtre de CHEMIN), route
+gateway (`/attachments/file/*`, wildcard MULTI-segment, sans authentification),
+emplacement du fichier sur disque, et mapping UTI.
+
+Le dernier a changé le correctif : le producteur écrit `format: 'mp3'`
+(extension NUE). Remis tel quel, il rate le `hasPrefix("audio/")` de `fileHints`
+et retombe sur un `typeHint` NUL — pièce jointe rendue en dégradé. La
+normalisation du mime n'est donc pas cosmétique, elle est portante ; et les deux
+producteurs du dépôt divergeant (`'mp3'` / `'audio/mp3'`), le dépouillement
+NORMALISE au lieu de choisir.
+
+> **Vérifier la chaîne jusqu'au pixel n'est pas une formalité de fin de lot :
+> c'est ce qui découvre les contraintes que le correctif doit satisfaire.**
+
+**Note de voisinage (merge avec l'itération 262).** Les deux lots ont porté le
+numéro 282 en parallèle ; celui-ci est renuméroté. Ils se touchent sans se
+contredire : la 282 route les descentes de TEXTE du web vers la SSOT et laisse
+`use-audio-translation.ts` HORS périmètre, en nommant la bonne raison — sur une
+PISTE, la région porte une information (la voix), et la strripper changerait une
+sémantique. Ce cycle-ci ne touche pas cette sélection non plus : il élit la piste
+par la langue que la descente du TEXTE a déjà servie, donc il hérite de la
+sémantique du texte au lieu d'en inventer une seconde.
+## Leçon 285 — un gate posé sur le frère IMMÉDIAT ne garde pas l'opération d'à côté, et le commentaire qui l'énonce se lit comme s'il valait pour les deux (2026-08-24, cycle 125)
+
+Deux appels CONSÉCUTIFS, dans la même méthode, sur le même `userInfo` :
+
+```swift
+prePersistMessage(from: bestAttemptContent.userInfo)   // écrit en base
+postDeliveryReceipt(from: bestAttemptContent.userInfo) // envoie un accusé
+```
+
+Le second porte un gate de type, et son commentaire nomme exactement le cas
+exclu :
+
+> Push types that mean "a new message was delivered to this recipient".
+> **Reactions and social events also carry a messageId, but they do not
+> constitute message delivery, so they are excluded.**
+
+Le premier n'en a jamais eu. Il écrivait donc une ligne `MessageRecord` pour
+TOUT push portant `messageId` + `conversationId` + `senderId` — dont
+`message_reaction`, dont le `messageId` désigne le message RÉAGI (celui que le
+destinataire a le plus souvent ÉCRIT) et le `senderId` le RÉACTEUR. `localId`
+étant la clé primaire et `save()` un UPSERT, recevoir une réaction hors
+application **vidait le texte du message en base, lui réassignait son auteur, le
+rehorodatait à l'instant du push et jetait ses pièces jointes, ses réactions et
+sa citation.**
+
+> **Un invariant écrit chez le voisin conforme ne garde que le voisin** (cycles
+> 83, 85, 97). La variante de ce cycle est la plus retorse : les deux sites sont
+> ADJACENTS. On lit le gate en lisant le défaut, et cette proximité même fait
+> qu'on le lit comme une propriété de la MÉTHODE plutôt que d'un seul appel.
+> La distance n'est ni ce qui protège ni ce qui expose (cycle 98) — mais
+> l'adjacence, elle, ANESTHÉSIE.
+
+### Le discriminant juste n'est pas le type, c'est la NATURE de l'écriture
+
+Refermer le gate de type ne suffisait pas, et s'en contenter aurait été le pari
+que le cycle 124 dénonce (« une garde qui n'a qu'un verrou n'a pas de garde »).
+`user_mentioned` appartient légitimement à la famille « un message arrive » —
+SAUF sur le chemin d'ÉDITION, où `notifyNewlyMentioned` en produit une pour un
+message EXISTANT.
+
+Le second verrou ne parle donc pas du type mais de ce que l'écriture EST : une
+bulle pré-enregistrée est un **PLACEHOLDER** pour la fenêtre qui précède la
+synchro REST.
+
+> **Un placeholder ne remplace jamais une donnée canonique. L'écriture est un
+> INSERT, jamais un UPSERT** — et c'est vrai quel que soit le type qui l'amène,
+> donc vrai des types qu'on n'a pas encore énumérés. Une garde qui tient sur
+> une ÉNUMÉRATION est en retard par construction (cf. l'`include` du
+> `tsconfig`, cycle 105 bis) ; une garde qui tient sur la NATURE de l'opération
+> ne l'est pas.
+
+### « Qui AFFICHE ce que le serveur résout ? » a une jumelle
+
+Le cycle 122 a demandé qui AFFICHE ce que le serveur résout. Le même fil pose
+la question symétrique, et elle se mesure aussi vite :
+
+> **Qui LIT ce que le serveur envoie POUR lui ?**
+
+GW5 pose `createdAt` et `messageType` sur le fil push en les nommant « champs de
+persistance NSE ». Mesuré : `grep` de ces deux noms sur tout
+`apps/ios/MeeshyNotificationExtension/` rend **zéro** occurrence. La bulle était
+horodatée à l'instant de la REMISE (donc rangée au bas de la conversation dès
+qu'un push arrivait en retard) et typée depuis le seul MIME de la pièce jointe
+(donc `text` pour un `location`, et pour tout push où la pièce jointe ne voyage
+pas — `showPreview: false`).
+
+Un champ nommé pour son lecteur se lit comme un champ lu. Il n'y a rien à
+trouver : la clé est là, bien nommée, bien remplie, et personne ne l'ouvre.
+C'est la forme du cycle 96 (`signedPreKey.signature` transportée par quatre
+couches et vérifiée par aucune) appliquée à un contrat de payload.
+
+### Une clé de payload est un contrat à DEUX bouts, et le lire de mémoire produit les deux erreurs symétriques
+
+| cycle | le fil | la NSE | effet |
+|---|---|---|---|
+| 124 | ne porte PAS `content` / `originalLanguage` | les lit | bulle vide, étiquetée « en » |
+| 125 | porte `senderDisplayName` / `senderUsername` / `senderAvatar` | lit `senderName` | bulle ANONYME |
+
+Dans les deux cas la LECTURE compile, ne lève pas, et rend un repli plausible.
+Et dans le cas 125, la lecture JUSTE vit **cent lignes plus bas dans le même
+fichier** (`applyCommunicationIntent`).
+
+> Devant tout `userInfo["…"]` / `data["…"]`, la question n'est pas « ce champ
+> a-t-il un sens ? » mais **« qui l'ÉMET, sous ce nom exact ? »**. Les deux
+> bouts d'un contrat de payload ne se vérifient que l'un CONTRE l'autre — et
+> c'est cher : deux cycles consécutifs ont trouvé leur défaut principal là.
+
+### Corollaire de forme : ce qui se décide sans la base sort de la base
+
+`prePersistMessage` n'était testable par rien — il vit dans une cible
+`app-extension`, hors de `@testable import Meeshy`, et il ouvre un `DatabasePool`.
+Les quatre défauts étaient donc, tous les quatre, dans du code que le dépôt
+n'avait aucun moyen d'interroger.
+
+La décision entière (type, identités, E2EE, horodatage, type de média, noms
+d'expéditeur, langue) est partie dans `NotificationPayloadHelpers` — Foundation
+seul, déjà compilé DANS `MeeshyTests` — avec `now` passée en PARAMÈTRE : la
+seule impureté devient une entrée. Le site d'écriture ne garde plus que le
+verrou qui ne peut pas se décider hors de la base (« cette ligne existe-t-elle
+déjà ? »).
+
+> **Un code que rien ne peut interroger accumule les défauts silencieusement,
+> et la mesure de sa dette est le nombre de défauts qu'on y trouve du premier
+> coup.** Ici : quatre.
+
+### Et un payload push est un `Record<string, string>` : l'absence y voyage comme `''`
+
+`createNotification` pose `|| ''` sur presque toutes ses clés. Lire
+`userInfo["originalLanguage"] as? String ?? "en"` prend donc la chaîne VIDE pour
+une valeur, et l'écrit dans une colonne NOT NULL. Distinguer « absent » de
+« vide » une fois, à la lecture (`nonEmptyString`), est ce qui évite d'avoir à
+y penser à chaque champ — même famille que « `[]` par défaut décide à la place
+du consommateur » (cycle 116), un étage plus bas.
+
+## Un état de position a un JUMEAU, et déplacer l'un sans l'autre les désaccorde (itération 266)
+
+`DoubleRatchet.skipMessageKeys` avançait la clé de chaîne de réception
+(`chainKeyReceive`) de la position courante jusqu'à `until` — mais n'écrivait la
+progression que dans une variable LOCALE, jamais dans `session.messageNumberReceive`.
+La clé de chaîne et le compteur décrivent la MÊME position ; les séparer suffit à
+tout casser en aval. `symmetricRatchet` lit le compteur périmé pour étiqueter la
+clé et poser le prochain « attendu », si bien qu'après un seul message reçu EN
+AVANCE, le message ORDONNÉ suivant retombe dans la branche « en avance », re-saute
+depuis un compteur périmé, et le déchiffrement GCM lève. Un accroc réseau bénin
+rendait la session de réception définitivement indéchiffrable, état persisté.
+
+> **Quand une fonction déplace un état, chercher son JUMEAU de position.** Une
+> clé de chaîne a un numéro ; un curseur a une longueur ; un offset a une page.
+> Le défaut ne se voit pas dans la fonction fautive — elle a l'air complète — mais
+> chez le LECTEUR du jumeau resté en arrière. Le symptôme n'est pas non plus sur
+> l'opération qui saute (le message en avance sort correct) : il est sur
+> l'opération NOMINALE suivante, qui lit le jumeau désaccordé. Chercher le témoin
+> un cran APRÈS le geste anormal.
+
+Corollaire de méthode, hérité de l'itération 245 qui avait NOMMÉ ce défaut en
+dette : **une dette différée au motif « les témoins sont hors CI » se solde
+souvent sans réveiller le sous-arbre exclu.** Le code de production
+`dma-interoperability/` est compilé et importable depuis `src/__tests__/unit/`,
+le chemin que la CI exécute — cinq témoins `dma-*` l'empruntaient déjà. Le témoin
+se pose sur le chemin qui tourne, pas sur celui qui dort ; réveiller le sous-arbre
+reste un lot d'infrastructure séparé, pas un préalable au correctif.
+---
+
+## Leçon 286 — un report propage la DESCRIPTION d'un défaut, jamais sa vérification (2026-08-25, itération 243i)
+
+Une ligne de la liste de suites de 240i, recopiée telle quelle par 241i, 242i
+puis 243i :
+
+> `conversation.view.reply.count.{one,many}` — messagerie, deux branches en
+> Swift, l'arabe y est lésé (6 formes CLDR → 2 branches).
+
+Chaque mot est vrai **du code décrit**. Le correctif attendu était évident et
+deux fois précédenté dans le dépôt (226i, 240i) : une entrée `variations.plural`,
+sept locales, six formes arabes.
+
+Avant de l'écrire, une question que la liste ne pose pas : **qui affiche ça ?**
+
+```
+$ for c in $(git log --all --format=%H -S"replyCountPill" -- apps/ios); do
+    git grep -h "replyCountPill(" $c -- apps/ios | grep -v "func replyCountPill"
+  done
+(vide)
+```
+
+`replyCountPill`, seul site à lire ces deux clés, n'est appelée par **aucun
+commit de l'histoire du dépôt**. Et `conversation.view.reply.count.many` n'est
+dans **aucun** des quatre catalogues : la branche `count ≥ 2` retombait sur son
+`defaultValue`, `"\(count) reponses"` — du français non accentué, en dur, pour
+les sept locales à la fois.
+
+Le défaut réel n'était donc pas « l'arabe est lésé ». C'était « **personne
+n'aurait rien reçu** », et il n'aurait mordu personne, faute de lecteur.
+
+> **Une description se propage seule ; une vérification, non.** Une liste de
+> suites transmet fidèlement ce qu'une itération a VU, et rien de ce qu'elle n'a
+> pas MESURÉ. Trois reprises l'ont fait circuler sans jamais rouvrir le fichier.
+> Avant de corriger une ligne héritée d'un report, poser la question que le
+> report ne pose pas — ici « qui affiche ça ? ». Elle a coûté une mesure et rendu
+> **cinq** fonctions sans site d'appel dans la même surface.
+
+### Le corollaire d'outillage : deux gardes qui se croisent laissent un trou entre elles
+
+Les trois clés retirées passaient les DEUX gardes i18n du dépôt :
+
+| garde | question posée | verdict |
+|---|---|---|
+| `LocalizationConsistencyTests` dir. 1 | cette clé citée en code existe-t-elle au catalogue ? | ✓ |
+| `LocalizationConsistencyTests` dir. 2 | cette clé du catalogue est-elle citée en code ? | ✓ |
+| — | **le code qui la cite s'exécute-t-il ?** | *personne ne demandait* |
+
+Une bidirectionnalité a l'air exhaustive : elle ferme le cycle
+code ↔ catalogue. Elle ne dit rien de l'axe perpendiculaire — l'**atteignabilité**
+du site qui cite. C'est le trou où trois traductions × sept locales ont vécu.
+
+> **Deux gardes qui se répondent l'une l'autre décrivent un cycle, pas une
+> couverture.** Demander ce qu'aucune des deux n'interroge, plutôt que de
+> conclure de leur symétrie qu'il n'y a plus rien à voir.
+
+### Et une garde d'atteignabilité MESURE ses faux positifs avant d'asserter
+
+La première mesure signalait `makeUIViewController` / `updateUIViewController` :
+des conformances `UIViewControllerRepresentable`, appelées par le FRAMEWORK et
+par rien d'autre. Elles sortent par un ensemble de **noms de contrat**, jamais
+par la liste des exceptions — un contrat couvre d'avance toute conformance
+future, une liste d'exceptions attend qu'on y pense.
+
+Second point load-bearing : le **dépouillement des commentaires**. Ce dépôt
+retire son code mort en laissant une épitaphe qui le NOMME (précédent
+`focalOverlayPreview`). Sans dépouillement, ces épitaphes compteraient comme des
+références et rendraient la garde aveugle à exactement le défaut qu'elle vient
+de figer.
+
+### Corollaire d'exécution — un opt-in de CI se pose sur le SUJET du commit, et le NOM du check est ce qui l'atteste
+
+Le premier push de 243i portait le sujet sans son suffixe ` — run test`.
+`Portée du run` a résolu `run_tests=false`, et le check s'est nommé
+**« Build app (app + cibles de test) »** au lieu de « Build app + tests
+unitaires ». La suite neuve — **toute la valeur de l'itération** — aurait
+compilé sans jamais s'exécuter.
+
+Deux détails qui se paient :
+
+- Le workflow lit `git log -1 --pretty=%s` de la **tête de branche**. Un mot-clé
+  enfoui dans le CORPS du message ne compte pas (« le corps sert à expliquer, le
+  sujet à décider », `.github/workflows/ios.yml`). Et jamais le commit de merge
+  synthétique d'un event `pull_request`, dont le sujet est toujours « Merge … ».
+- Le NOM du check est le SEUL signal, dans l'interface de la PR, qui distingue
+  un vert qui a **bâti** d'un vert qui a **bâti ET exécuté**. Le workflow le dit
+  dans son propre commentaire.
+
+> **Lire le nom du check fait partie du gate, pas de l'après-coup.** Un « iOS
+> Tests : vert » se lit comme « les tests passent » alors que la plupart des runs
+> n'en exécutent aucun.
+
+Et la forme du défaut mérite d'être nommée : la phrase « gate réel = CI iOS
+Tests, suite complète via l'opt-in ` — run test` » était écrite **dans le tableau
+de vérification de cette itération même**, une ligne au-dessus du premier
+contrôle — et le commit est parti sans. C'est la leçon 242i (*connaître un piège
+ne protège pas d'y tomber : il faut l'appliquer AU BANC D'ESSAI*) d'un cran plus
+haut : citer une doctrine dans sa propre documentation ne l'applique pas
+davantage que la citer dans un doc-comment.
+
+### Corollaire de banc d'essai — un écrivain différé ORPHELIN transforme une clé de cache partagée en variable globale de test
+
+L'unique rouge de la CI 243i (8223/8229) :
+
+```
+FeedViewModelTests/test_loadMoreIfNeeded_afterFreshCacheOnlySession_stillFetchesDespiteNilCursor
+XCTAssertEqual failed: ("0") is not equal to ("10")
+```
+
+Le test vide `CacheCoordinator.shared.feed`, y sème 10 posts, lit — et trouve 0.
+
+```swift
+// FeedViewModel.swift:1508
+cacheSaveTask = Task {
+    try? await Task.sleep(for: .seconds(2))
+    guard !Task.isCancelled else { return }
+    try? await CacheCoordinator.shared.feed.savePreservingFreshness(…, for: "main-feed")
+}
+```
+
+Un `Task` **se retient lui-même** tant qu'il tourne. La seule annulation est
+`cacheSaveTask?.cancel()` au prochain appel sur la **même instance** — or chaque
+test fabrique son `FeedViewModel` et le laisse mourir. Le sommeil de 2 s survit
+donc à la désallocation, puis écrit son instantané (souvent vide) dans la clé de
+PROCESSUS `"main-feed"`, pendant qu'un autre test tourne.
+
+> **Un `Task` différé qu'aucune fin de vie n'annule ne meurt pas avec son
+> propriétaire : il devient un écrivain anonyme sur l'état global.** Si sa cible
+> est une clé partagée, toute suite qui la lit devient order-dependent — et
+> rougit chez la PR suivante qui déplace le minutage, jamais chez celle qui a
+> introduit la course.
+
+Deux conséquences de méthode :
+
+- **« Flake » n'est pas un diagnostic ; « course » l'est.** La différence tient
+  à ce qu'on peut NOMMER : ici, l'écrivain (`debouncedCacheSave`), le délai
+  (2 s), la clé (`"main-feed"`), et pourquoi l'annulation ne couvre pas le cas
+  (par instance, pas par processus). Tant qu'on ne peut pas écrire cette phrase,
+  on n'a pas fini de chercher.
+- **Le partage se fait au PÉRIMÈTRE, pas au symptôme.** Ce qui était à nous —
+  cinq balayages du corpus source là où un seul suffit — a été corrigé. La
+  course, qui vit dans un autre sous-système, a été SIGNALÉE avec son correctif
+  proposé plutôt que réparée en élargissant la PR. Rendre le test « robuste »
+  côté test l'aurait masquée.
+
+## « Le remonter » — une consigne spatiale qui n'en était pas une (2026-08-25)
+
+**Correction reçue.** L'utilisateur écrit : « Lorsqu'une notification utilisateur
+existe est fait il faut le remonter... ». Le contexte immédiat était géométrique
+(la phrase précédente demandait de remonter la SyncPill de 3× sa hauteur), et
+j'ai lu « le remonter » comme un troisième déplacement vertical — j'ai même
+annoncé cette lecture. Elle était fausse : il fallait entendre **faire remonter
+l'information JUSQU'À l'utilisateur**. La règle visée n'était pas un décalage de
+quelques points, mais « tout ce qui constitue une notification doit se signaler
+in-app, sauf la conversation ouverte » — un audit de couverture sur quatre
+gardes, sans le moindre pixel à déplacer.
+
+**Ce qui a marché.** Avoir DIT ma lecture à voix haute (« je l'interprète comme :
+la SyncPill se décale quand un toast est présent ») plutôt que de l'appliquer en
+silence. La correction est arrivée avant la première ligne de code.
+
+**La règle.** Quand une consigne courte hérite du champ lexical de la phrase
+d'à côté, ce voisinage est un PIÈGE, pas un indice : un verbe polysémique
+(« remonter », « pousser », « descendre », « sortir ») s'y aimante au sens
+spatial. Énoncer l'interprétation retenue, en une ligne, avant d'agir — et la
+placer là où elle sera lue, pas en fin de message.
+
+**Le corollaire, plus coûteux.** Ma lecture fausse était aussi la plus PETITE :
+déplacer une vue de 66 pt au lieu d'auditer quatre gardes de suppression et la
+couverture de types d'un éventail entier. Devant deux lectures d'une consigne
+ambiguë, se méfier de celle qui tient en un `.padding()` : l'ambiguïté se
+résout rarement du côté du moindre effort.
+---
+
+## Leçon 287 — une garde d'atteignabilité trouve la FEUILLE ; seule son itération trouve l'ARBRE (2026-08-25, itération 244i)
+
+243i avait écrit, dans le doc-comment de sa propre garde, ce qu'elle
+n'attrapait pas :
+
+> Une fonction citée uniquement par une autre fonction elle-même morte reste
+> verte. La garde attrape la FEUILLE de l'arbre mort, pas l'arbre.
+
+244i l'a validé **par l'exemple, sur le dépôt lui-même**. Retirer deux feuilles
+mortes de `StoryViewerView+Content` — `storyTextContent`, `mediaOverlay` — a
+fait apparaître **quatre** branches qui n'étaient appelées que par elles :
+`fontForStyle`, `textAlignmentFor`, `compositeAlignment`,
+`coloredMediaFallback`.
+
+> **Un retrait de code mort n'est pas un événement, c'est une ITÉRATION.**
+> Chaque suppression change le graphe d'appel et peut en détacher un morceau.
+> Relancer la mesure APRÈS chaque tour, jusqu'au point fixe — sinon on livre
+> l'arbre en autant de lots qu'il a d'étages, un par itération.
+
+Corollaire d'inventaire, découvert au même endroit : **élargir une garde d'un
+cran élargit aussi son inventaire**. Ajouter le répertoire `ViewModels/` au
+balayage a fait apparaître six fonctions que la première mesure, bornée à
+`Views/`, ne voyait pas. Ne jamais présumer propre un périmètre voisin.
+
+### Le corollaire le plus cher : le code TESTÉ et le code EXPÉDIÉ peuvent différer
+
+`FeedViewModel.likePost` et `.bookmarkPost` sont largement couvertes par
+`FeedViewModelTests` — et appelées par **aucun** code de production. `FeedView`
+a réécrit leur logique en ligne ; ses propres commentaires l'avouent (« same one
+`FeedViewModel.likePost` already uses », « Mirror the pre-fix behaviour from
+FeedViewModel.bookmarkPost »). La vue porte le toggle optimiste, l'appel socket,
+le repli REST, la file hors-ligne et l'observation d'issue ; l'implémentation
+canonique ne tourne jamais.
+
+> **Une suite verte sur du code que personne n'appelle n'atteste rien du
+> produit : elle mesure une seconde implémentation que personne ne rend.**
+> C'est la forme la plus coûteuse de « code mort testé vert » — les autres
+> retirent de la confiance, celle-ci en ACHÈTE.
+
+Le symptôme se repère à une phrase, dans un commentaire de vue : *« mirrors »*,
+*« same one X already uses »*, *« pre-fix behaviour from X »*. Un commentaire
+qui dit qu'un code en COPIE un autre nomme une divergence à venir.
+
+### Et le partage entre retirer et inscrire
+
+La mesure brute proposait quinze suppressions. Sept auraient cassé la suite
+(leur seul appelant est un test), deux auraient laissé de l'état orphelin —
+dont `markProgrammaticScroll`, unique écrivain d'un drapeau que deux sites
+LISENT encore. **Retirer ce qui est mort de bout en bout ; inscrire nommément,
+avec sa raison, ce qui est vivant d'un côté.** Une allowlist commentée est une
+dette VUE ; une suppression hâtive est une dette DÉPLACÉE.
+## Leçon 287 — un prédicat de validation se mesure sur TOUTES les formes de son entrée, pas la seule famille qu'on avait en tête (2026-08-25, itération 267)
+
+`packages/shared/types/attachment.ts` exposait six type-guards MIME agrégés par
+`isAcceptedMimeType` — la porte accept/reject des pièces jointes. Deux gardes
+(audio, vidéo) NETTOYAIENT les paramètres MIME avant de comparer
+(`audio/webm;codecs=opus` → `audio/webm`) ; les quatre autres (image, texte,
+document, code) faisaient une comparaison exacte. Résultat : **la même forme
+d'entrée était classée différemment selon sa seule famille média**.
+`isAcceptedMimeType('audio/webm;codecs=opus')` → true ;
+`isAcceptedMimeType('text/plain; charset=utf-8')` → **false** — alors que
+`; charset=utf-8` est le paramètre que `fetch`/`axios`/tout serveur HTTP ajoute
+par défaut à un `Content-Type` texte/JSON. Un upload JSON légitime était rejeté,
+et `getAttachmentType('application/json; charset=utf-8')` tombait au défaut
+`'document'` au lieu de `'code'`.
+
+> **Le nettoyage a été ajouté là où le symptôme est apparu (AUDIO/VIDÉO, où
+> `MediaRecorder` émet un paramètre), et jamais généralisé.** C'est la forme, à
+> une frontière de validation, de la règle du dépôt : *une protection se mesure
+> sur tout ce que la charge TRANSPORTE* — ici l'ensemble des formes d'entrée
+> (avec/sans paramètre), pas la seule famille qu'on regardait. Jumelle directe
+> de l'It. 266 (`isPrivateIp` ne connaissait que l'IPv4) et de l'It. 260
+> (`isIpInRange` hors plage).
+
+Deux corollaires de méthode :
+
+- **Le témoin qui l'attrape s'écrit sur la famille AUTRE que celle qui marche.**
+  Les tests audio/vidéo EXERÇAIENT déjà le cas paramétré (prouvant l'INTENTION
+  du dépôt : tolérer les paramètres) ; image/texte/document/code n'étaient
+  testés qu'avec des MIME nus, donc le trou était invisible. Comme la leçon 276
+  (« un témoin de rang s'écrit sur un rang autre que le premier »), transposée à
+  une famille.
+- **Une divergence entre N implémentations de la même règle se supprime en
+  extrayant UN site.** Le correctif n'ajoute pas le nettoyage quatre fois : il
+  factorise `stripMimeParameters()` et remplace les DEUX copies in-line
+  existantes — le mécanisme même qui empêche la prochaine divergence.
+
+## Leçon 288 — une donnée gatée fuit par SÉLECTION autant que par CHAMP ; et un inventaire qui cherche « qui sert le champ ? » ne le voit pas (2026-08-25, chantier confidentialité de la présence)
+
+Le chantier a commencé par un inventaire à trois agents (gateway, iOS, web+Android) qui
+a rendu douze sites de service et « quatre trous sans gate ». Les lots d'exécution en ont
+trouvé TROIS de plus — tous relevés par les agents en travaillant sur le site voisin,
+aucun par l'inventaire :
+
+1. `conversation:stats.onlineUsers` — une LISTE D'IDENTITÉS en ligne (`id`, `username`,
+   prénom, nom), calculée depuis les sockets connectés et émise à chaque `conversation:join`.
+   Le champ s'appelle `onlineUsers`, pas `isOnline` : un grep de `isOnline|lastActiveAt`
+   ne le rend pas, et le type `ConversationOnlineUser` ne porte AUCUN drapeau de présence —
+   **l'appartenance à la liste EST la présence.**
+2. `GET …/participants?onlineOnly=true` — le filtre s'applique EN BASE
+   (`whereConditions.isOnline = true`) AVANT la porte de présence, qui masque ensuite
+   `isOnline` sur chaque ligne servie. Un non-ami reçoit exactement les participants en
+   ligne, chacun étiqueté `isOnline: false`. La porte est juste ; c'est la SÉLECTION
+   qui parle.
+3. Le repli « entrée absente de la carte » écrit trois fois, avec deux sémantiques.
+
+> **Une porte de confidentialité gouverne un CHAMP. Mais la donnée qu'elle garde
+> participe aussi à des SÉLECTIONS (filtres `where`, tris, listes « qui est en ligne »,
+> compteurs nominatifs) qui ne passent par aucun champ.** La question « qui sert
+> `isOnline` ? » trouve les portes manquantes ; elle ne trouve pas les fuites où la
+> présence est devenue une FORME (la composition d'une liste, l'ordre d'un tri, le
+> résultat d'un filtre). La question qui les trouve : **« quelles réponses CHANGENT
+> quand la présence d'un tiers change ? »** — et se répond en cherchant `where …
+> isOnline`, `orderBy lastActiveAt`, `getConnectedUserIds()`, `onlineOnly`, `sort=`,
+> pas le nom du champ.
+
+Corollaires :
+- **Une sélection sur une donnée gatée doit être restreinte au SOUS-ENSEMBLE que le
+  viewer a le droit de voir AVANT d'être appliquée** (ici : ids des amis + soi, puis
+  `isOnline`), puis re-filtrée sur la valeur SERVIE (ferme le bloqué / la préférence).
+  Appliquer la porte APRÈS la sélection ne masque que l'étiquette.
+- **Un inventaire de « sites de service » énumère des CHAMPS ; l'exécution rencontre des
+  FORMES.** Prévoir, dans tout chantier de confidentialité, une lentille de complétude
+  qui balaie les prédicats (`where`/`orderBy`/`filter`) et les charges composées
+  (`*Users`, `*Ids`, `stats`), pas seulement les `select`.
+- **Le lot qui touche un site est le meilleur détecteur du site VOISIN** : les trois
+  trouvailles viennent d'agents qui, ayant fermé une porte, ont demandé « et cette autre
+  liste, qui la sert ? ». Demander explicitement à chaque lot, dans son rapport, « ce que
+  tu as vu à côté » — c'est la section (f) qui a rendu les trois.
+
+### Addendum (revue adversariale du même chantier, 2026-08-26) — cinq formes de plus, aucune « qui sert le champ ? »
+
+La revue à 8 lentilles opus (84 agents) a rendu 28 constats confirmés, dédoublonnés en 8
+correctifs. Classés par la QUESTION qui les trouve — jamais « qui sert `isOnline` ? » :
+
+| forme | exemple | question qui l'attrape |
+|---|---|---|
+| champ VOISIN dans le même objet | `links/retrieval.ts` : `isOnline` gaté l. 250, `lastActiveAt: joinedAt` brut l. 251 | « qu'est-ce qui part À CÔTÉ de ce que je viens de garder ? » (leçon 275/284) |
+| colonnes de la LIGNE par `include` + schéma ouvert | `POST /communities/…/conversations/:id` : `include: { participants }` rend `Participant.isOnline`, `sessionTokenHash`, `anonymousSession` ; `additionalProperties: true` les laisse passer ; le gate ne réécrit que `row.user` | « le schéma est-il FERMÉ ? un `include` sur une relation rend TOUTES ses colonnes » |
+| site sans aucun gate, hors de tout inventaire | `GET /affiliate/stats` : `referredUser.isOnline` à tout parrain | grep `isOnline: true` dans TOUS les `select` du dépôt et suivre chaque hit jusqu'au fil |
+| sélection / ordre sur route ADMIN à rôles mixtes | `/admin/users?lastActiveAfter=&sortBy=lastActiveAt` pour MODERATOR/AUDIT ; `sortBy` sans liste blanche | « quel rôle peut ENTRER ici, et quel rôle peut VOIR ce qu'on y filtre ? » |
+| ordre + TRONCATURE | mentions : co-participants classés par `lastActiveAt`, coupés à 10 | « quelles réponses CHANGENT quand la présence d'un tiers change ? » |
+| défaut FAIL-OPEN d'une option facultative | `serializeConversationParticipant(row, {})` révèle ; `PresenceTarget.deactivatedAt?` ⇒ un désactivé passe | « que fait ce site quand on OMET l'option de garde ? » — une garde facultative est une garde absente pour le prochain appelant |
+| client qui GARDE ce que le serveur retire | web `mergeParticipants` : `lastActiveAt: null` reçu ⇒ `incomingTime = 0` ⇒ charge rejetée, ancienne présence conservée ≤ 5 min | « quand le serveur cesse de servir, le client REVIENT-il à rien ? » — la lentille clients a réfuté « aucune modification client » |
+
+> **« Aucune modification client requise » est une affirmation à RÉFUTER, pas à relire.**
+> L'inventaire l'avait établie en cherchant qui FABRIQUE une présence ; personne ne
+> fabriquait. Mais garder une valeur que le serveur vient de retirer est une fabrication
+> par inertie — et elle ne se voit qu'en jouant la séquence « servi puis masqué ».
+
+Mécanique qui a marché : 2 sceptiques par constat (correction / reproduction par les tests) — les
+6 réfutés étaient tous des sites que W3a/W3c avaient corrigés PENDANT la revue ; aucun faux
+positif n'a survécu, aucun vrai n'a été perdu (les doublons entre lentilles confirment plutôt
+qu'ils ne coûtent).
+### Corollaire 245i — une garde d'analyse de source est adaptée à une FORME DE FICHIER, pas à un langage
+
+La suite naturelle de 244i était « étendre la garde d'atteignabilité au reste de
+l'app ». Mesuré avant d'asserter — comme la leçon 287 l'exige — le balayage rend
+**355 fonctions sur 190 fichiers**, et ce nombre est **dominé par des faux
+positifs structurels** :
+
+1. **Exigences de protocole.** Un nom déclaré dans un `protocol` PUIS implémenté
+   apparaît deux fois ; l'arithmétique `usages − déclarations` retombe donc à
+   zéro **même quand le protocole est appelé**. `StoryComposerProviding` en
+   fabrique huit à lui seul.
+2. **Conformances de délégué** (`DropDelegate`, `UIScrollViewDelegate`…) :
+   appelées par le framework, jamais nommées par le dépôt.
+3. **Sièges de test** (`…ForTesting`, `…ForTest`), légitimes par construction.
+
+> **La garde de 243i/244i n'est pas générale : elle est adaptée aux fichiers
+> d'EXTENSION de vue SwiftUI**, où les conformances de protocole sont rares.
+> Elle a trouvé treize vraies fonctions mortes là ; ailleurs, son arithmétique
+> ne discrimine plus.
+
+Deux conséquences :
+
+- **Une allowlist de NOMS ne rattrape pas un défaut de FORME.** `frameworkInvoked`
+  énumère une douzaine de contrats à la main ; il en faudrait des centaines. Ce
+  qu'il faut est une exclusion STRUCTURELLE — ne pas compter une déclaration
+  écrite dans un corps de `protocol`, reconnaître une conformance `: XxxDelegate`.
+- **Le bon geste, quand une mesure rend un nombre trop gros, est de demander ce
+  que l'outil confond**, pas de trier 355 entrées à la main. Ici la réponse
+  tenait en deux `grep` : un `protocol` et un `DropDelegate`.
+
+## Leçon 288 — un double qui n'émet JAMAIS laisse le FIL d'un sink hors de toute mesure ; et un invariant logé derrière la porte du premier boot ne s'applique jamais à une base peuplée (2026-08-26, crash « Find nearby »)
+
+**Le crash.** Sur l'iPhone comme au simulateur, l'écran « À proximité » mourait
+quelques secondes après le tap : `SIGTRAP` dans `_dispatch_assert_queue_fail`,
+file `com.apple.root.utility-qos`, trame `closure #1 in
+NearbyDiscoveryViewModel.observeNetwork`. `NetworkMonitor.isOfflinePublisher`
+débounce sur `DispatchQueue.global(qos: .utility)` et LIVRE sur cette file ; la
+fermeture du `sink` appartient à une classe `@MainActor`, et le runtime vérifie
+l'exécuteur à son entrée. `SyncPillViewModel`, l'autre abonné, posait
+`.receive(on: DispatchQueue.main)` ; celui-ci non.
+
+**Pourquoi 37 tests étaient verts.** `FakeNetworkMonitor` héritait du publisher
+par défaut du protocole — `Empty(completeImmediately: false)`. Il n'émettait
+JAMAIS : aucun test ne pouvait exercer la fermeture, ni le fil sur lequel elle
+est appelée. La suite était verte **par omission**, exactement la forme de la
+leçon « ce qui ne s'exécute pas ne se signale pas », portée à un PUBLISHER.
+
+> **Un double de publisher doit savoir ÉMETTRE, et émettre depuis l'ordonnanceur
+> du vrai.** Sans quoi tout `sink` reste un code jamais exécuté par la suite.
+> Et la question à poser à chaque `.sink` d'un type isolé à un acteur : « sur
+> quelle file ce publisher LIVRE-t-il ? » — la réponse est dans sa déclaration
+> (`debounce(scheduler:)`, `receive(on:)`), jamais dans son nom.
+
+**Le diagnostic, sans rapport de crash.** L'appareil n'avait aucun `.ips` du
+crash (sous débogueur, rien n'est écrit). Chemin qui a marché : reproduire au
+simulateur ; le process disparaît sans `.ips` non plus → demander à
+RunningBoard la raison (`log show --predicate 'process == "SpringBoard"'` →
+`Process exited: … code:SIGTRAP(5)`) ; relancer l'app, `lldb --batch -p PID -o
+continue -k "bt 70"` — les `-k` s'exécutent au trap et rendent la pile exacte.
+
+**Le second défaut, derrière le premier.** Une fois l'app vivante, les deux
+routes rendaient 500 : `$geoNear requires a 2d or 2dsphere index`.
+`InitService.ensurePostGeoIndex()` — dont le commentaire disait « inconditionnel,
+à chaque boot » — n'était appelé que dans `initializeDatabase()`, que `server.ts`
+ne lance que si `shouldInitialize()` est vrai, c'est-à-dire sur une base VIDE.
+Une base peuplée ne recevait jamais l'index. **C'est l'APPELANT qui décide de
+la fréquence d'un invariant, pas le commentaire de la méthode** (forme de la
+mémoire « un commentaire qui affirme plus que son correctif »). Un invariant de
+schéma se pose AVANT la porte du premier boot, jamais derrière.
+
+## Leçon 289 — un secret PRÉSENT n'est pas une chaîne d'authentification qui MARCHE ; un workflow jamais vert se lit comme jamais exécuté (2026-08-26, release 1.0.6)
+
+`ios-fastlane-release.yml` portait tout ce qu'il faut sur le papier : `MATCH_GIT_URL`,
+`MATCH_DEPLOY_KEY`, un agent SSH armé, `MATCH_PASSWORD`. Il n'avait pourtant **jamais
+été vert** (2 runs, 2 échecs) — et chaque run mourait un cran plus loin que le
+précédent, ce qui donne l'illusion d'un progrès :
+
+1. 22/07 : `bundle install` → le `Gemfile.lock` ne connaissait que `arm64-darwin-25`
+   et le runner `macos-15` est `darwin-23`.
+2. 26/08 : `match` → clone en **HTTPS** sans identifiant. `MATCH_GIT_URL` ET le défaut
+   du Matchfile sont des URL `https://`, donc la clé de déploiement chargée trois
+   lignes plus haut n'était **jamais sollicitée**. Et derrière ce défaut, un second :
+   `isopen-io/meeshy-certificates` n'a AUCUNE clé de déploiement enregistrée, et
+   l'organisation a « Deploy keys are disabled » — la clé du secret n'aurait pu servir
+   nulle part, sous aucun transport.
+
+> **Un secret dit qu'une valeur existe, pas qu'elle est BRANCHÉE.** La question à
+> poser à toute chaîne d'auth CI : « quel transport le client utilise-t-il, et le
+> credential chargé est-il celui de CE transport ? » (URL `https://` ⇒ token ; URL
+> `git@` ⇒ clé). Puis : « la contrepartie ACCEPTE-t-elle ce credential ? » (clé
+> enregistrée, politique d'org). Les deux se vérifient AVANT de relancer un run de
+> 20 minutes : `gh api repos/<org>/<repo>/keys`, et la forme de l'URL dans le log
+> (`git_url | ***` masqué — regarder l'ERREUR, pas le tableau : `could not read
+> Username for 'https://github.com'` nomme le transport).
+
+**Et un workflow jamais vert n'est pas « un pipeline qui a un bug » — c'est un
+pipeline qui n'a jamais existé.** Le lire comme tel change le plan : chercher le
+chemin qui a RÉELLEMENT livré (ici : runs Xcode Cloud #1790–#1799 tous VALID, et la
+lane `release` en LOCAL avec `apps/ios/.env`), plutôt que corriger un cran de plus
+d'un chemin dont personne ne connaît la fin. Le correctif de transport a quand même
+été poussé (insteadOf limité au dépôt de certificats) : il est juste, mais il ne
+suffira qu'avec un PAT `MATCH_GIT_BASIC_AUTHORIZATION` ou le retour des deploy keys —
+deux gestes du user.
+---
+
+## Leçon 288 — j'ai publié un mécanisme faux en croyant avoir mesuré (2026-08-25, itération 246i, correction de 245i)
+
+245i a conclu que les 355 signalements de la garde d'atteignabilité étaient
+« dominés par des faux positifs structurels », et a nommé les **exigences de
+protocole** comme première cause :
+
+> chaque nom apparaît deux fois (l'exigence + l'implémentation), donc
+> l'arithmétique `usages − déclarations` retombe à zéro **même quand le
+> protocole est appelé**
+
+**C'est faux, et la faute se voit en posant l'arithmétique.** Un appel ajoute
+une occurrence SANS ajouter de déclaration : `protocol P { func foo() }` +
+`class C: P { func foo() {} }` + `p.foo()` donne 3 occurrences / 2 déclarations
+⇒ net 1 ⇒ non signalé. Une exigence de protocole ne peut donc pas, à elle
+seule, produire un faux positif.
+
+Vérifié sur le cas que j'avais cité : `bringForward` a **3 occurrences / 3
+déclarations** en production (l'exigence + DEUX implémentations) et **zéro appel
+de production** — ses seuls appelants vivent dans `MeeshySDK/Tests/`, que le
+corpus de la garde exclut.
+
+### Ce que la mesure JUSTE rend
+
+| bucket | nombre |
+|---|---|
+| appelées **uniquement par les tests** | **241** (68 %) |
+| aucun appelant nulle part | **115** (32 %) |
+
+**La conclusion de 245i s'inverse.** Le signal n'est pas noyé : les deux tiers
+des signalements sont le résultat le plus intéressant du lot — la
+généralisation, à l'échelle de l'app, du constat `likePost`/`bookmarkPost` de
+244i. Et le correctif que 245i spécifiait (« ne pas compter les déclarations
+d'un corps de `protocol` ») **ne change rien** : retirer l'exigence des deux
+côtés donne 2/2, toujours zéro.
+
+> **« Mesurer avant d'asserter » n'est pas satisfait par un `grep` de
+> plausibilité.** J'ai vu un `protocol` et un `DropDelegate` dans la liste, j'ai
+> reconnu deux motifs connus, et j'ai extrapolé un mécanisme à 355 entrées sans
+> jamais compter combien relevaient de chacun. La leçon 287 exigeait la mesure ;
+> je l'ai citée en la sous-traitant à une intuition.
+
+Le contrôle qui l'aurait attrapé tient en une ligne : **poser l'arithmétique sur
+un cas concret avant de généraliser son mécanisme.** Trois occurrences, deux
+déclarations — l'histoire ne tenait pas.
+
+Et un corollaire de conception, gagné au passage : **le bucket « appelée
+seulement par un test » ne doit pas être EXCLU mais CLASSÉ.** Une garde qui
+l'exclut jette son meilleur résultat ; une garde qui le nomme rend un inventaire
+exploitable.
+## Leçon 288 — un témoin de parité doit couvrir les N miroirs, pas N−1 (2026-08-25, itération 269)
+
+La table de réduction de langue (`ISO_639_3_TO_1` + `LEGACY_ISO_639_1`) vit en
+TROIS exemplaires, un par client : TS (SSOT), Swift (iOS/SDK), Kotlin (Android).
+`language-normalize-swift-parity.test.ts` prouvait leur égalité — mais seulement
+TS↔Swift. Kotlin n'avait JAMAIS reçu `LEGACY_ISO_639_1` (`iw→he`, `in→id`,
+`ji→yi`), et rien ne pouvait rougir. Résultat : un utilisateur Android sur locale
+hébraïque, dont `java.util.Locale.getLanguage()` émet `iw`, voyait son fil rester
+dans la langue de l'expéditeur — la traduction `he` restant introuvable. La
+plateforme même dont la JVM ÉMET les codes dépréciés était la seule à ne pas les
+réduire.
+
+> **Un témoin de parité qui couvre N−1 des N sites d'une règle dupliquée ne
+> réduit pas le risque de dérive, il le DÉPLACE sur le site non couvert** — et
+> l'y rend invisible, puisqu'on croit la règle gardée. La question à poser à tout
+> test de parité n'est pas « prouve-t-il l'égalité ? » mais « énumère-t-il TOUS
+> les exemplaires de la règle ? ». Le nom du fichier (`…-swift-parity`) le
+> disait : il ne parlait que d'un des deux miroirs.
+
+Corollaire de méthode : **le site non couvert se trouve en comptant les
+implémentations, pas en lisant le test.** Le test paraissait complet (il
+comparait deux tables réelles, avec contre-épreuve de taille) ; sa lacune n'était
+visible qu'en recensant les clients — TS, iOS, Android — et en constatant que le
+troisième n'apparaissait nulle part. Jumelle directe de la leçon 261 (« une
+énumération de sites affirme aussi *ce sont les sites où la règle s'applique* —
+presque jamais vérifié ») appliquée à une énumération de MIROIRS. Correctif :
+renommer en `…-mirror-parity`, ajouter l'extraction Kotlin ; le témoin lit
+désormais les trois tables et tombe au ROUGE dès qu'une entrée diverge sur l'un
+quelconque des trois sites.
+## Leçon 289 — une règle qui vit en DEUX copies dérive dès que l'une est durcie, et le durcissement ne se propage pas tout seul (2026-08-25, itération 269)
+
+> Coordination : une session sœur (#3517) réserve « leçon 288 » (aliases ISO 639-1
+> Android). Cette leçon-ci est disjointe et numérotée 289 pour éviter la collision
+> au merge de `tasks/lessons.md`.
+
+Le gateway portait DEUX `normalizeDisplayName` — l'une exportée
+(`utils/normalize.ts`, inscription/profil), l'autre privée
+(`utils/contact-identifiers.ts`, synchro du carnet d'adresses). Jumelles par le
+nom et le but (nom d'affichage, une seule ligne), divergentes par le contrat
+(SUPPRIMER vs REMPLACER par un espace ; bornée vs non). La jumelle exportée a été
+durcie deux fois — it. 266b (jeu complet des séparateurs de ligne Unicode) et sa
+garantie « une seule ligne » — pendant que la copie du carnet n'en recevait
+AUCUNE et portait en plus une troncature `.slice(0, 200)` qui coupait au milieu
+d'une paire de substituts UTF-16 (défaut jumeau de l'it. 268, `truncate`).
+
+> **Un durcissement appliqué à UNE copie d'une règle laisse l'autre exactement où
+> elle était.** Le correctif ne rougit nulle part ailleurs : la seconde copie
+> compile, ses tests passent (ils n'exerçaient que l'ASCII nu), et la dérive ne se
+> voit qu'à l'entrée exacte que la copie durcie couvre désormais et que la copie
+> restée en arrière ne couvre pas.
+
+Trois corollaires, tous mesurés dans ce lot :
+
+- **Le témoin qui l'attrape s'écrit sur la forme d'entrée que la copie ratée ne
+  couvre pas** — un émoji à la frontière de coupe, un `U+2028` dans le nom —
+  jamais sur l'ASCII que les deux traitent pareil. Même famille que la leçon 287
+  (« le témoin s'écrit sur la famille AUTRE que celle qui marche ») et la
+  leçon 276 (« un témoin de rang s'écrit sur un rang autre que le premier »).
+
+- **On supprime la divergence en extrayant la RÈGLE, pas en fusionnant les
+  fonctions.** Les deux `normalizeDisplayName` gardent leur contrat distinct ; ce
+  qui devient unique est le seul morceau qui avait dérivé — le JEU de caractères
+  de rupture de ligne (`LINE_BREAKING_CHARS_SOURCE`), dont chaque site dérive sa
+  propre regex (supprimer d'un côté, remplacer par un espace de l'autre). C'est la
+  leçon 287 (extraire UN site) appliquée à un fragment de règle, pas à une
+  fonction entière : fusionner aurait cassé un des deux contrats.
+
+- **Un durcissement de sécurité/rendu a des JUMELLES qui ne portent pas son nom.**
+  L'it. 268 a fermé `SecuritySanitizer.truncate` (« troncateur ») ; le second
+  troncateur du dépôt s'appelle `normalizeDisplayName` et ne se serait jamais
+  présenté à une recherche de « truncate ». La question « cette entité a-t-elle une
+  jumelle ? » (cycle 85) se pose donc aussi à un DURCISSEMENT : *quel AUTRE site
+  fait la même opération sous un autre nom ?* — ici « borner une longueur de texte
+  utilisateur » et « garantir une seule ligne », chacun présent deux fois.
+
+## Leçon 290 — une garde qui épingle une SYNTAXE est contournée par une FONCTION, et le contournement précède la garde (2026-08-26, itération 247i)
+
+**Contexte.** 241i a fermé la famille « nombre servi à VoiceOver » **par la
+forme**, avec cette promesse écrite dans son propre doc-comment : « peu importe
+quel compteur naît demain, s'il interpole son nombre dans une valeur
+d'accessibilité, il tombe ici ». L'extracteur reconnaît un **littéral
+interpolé** :
+
+```swift
+#"\.accessibilityValue\(\s*"[^"\n]*\\\([^\n]*"#
+```
+
+**Le défaut.** Onze sites de l'app servaient à VoiceOver un nombre gravé en
+chiffres latins **sans jamais écrire de littéral**. Le motif fautif —
+`String(format: "%d:%02d", …)` — vivait un cran plus bas, dans le corps d'un
+`private func`, et ressortait au site d'appel sous la forme la plus innocente
+qui soit :
+
+```swift
+.accessibilityValue(formattedDuration)   // un identifiant. rien à signaler.
+```
+
+La garde était **verte sur ces onze sites depuis le jour de sa pose**, et sa
+promesse — vraie sur la forme qu'elle nomme — se lisait comme si la famille
+entière était close.
+
+**Ce qui rend la leçon générale, et non un oubli.** Le contournement est
+**antérieur** à la garde : les onze formateurs privés datent de 2025, la garde
+de 2026. Elle n'a rien laissé passer — elle a été posée sur une surface qui ne
+contenait déjà plus le motif qu'elle cherche. **Relire son propre diff ne
+pouvait pas l'attraper ; relire les sites qu'elle prétend couvrir non plus,
+puisqu'ils sont propres.**
+
+> **La question à poser à toute garde de forme : *ce que j'interdis peut-il
+> traverser une fonction avant d'atteindre le site que j'inspecte ?*** Si oui,
+> aller chercher le motif à sa **SOURCE**, là où il redevient un littéral — pas
+> à son point d'usage, où il est devenu un identifiant.
+
+**Corollaire, forme du cycle 122 rejouée.** 206i, 210i et 211i avaient traité la
+MOITIÉ du même défaut : elles ont donné son LIBELLÉ à une valeur d'accessibilité
+nue (« Durée de l'appel ») et l'ont documenté dans les vues — puis se sont
+arrêtées là, laissant la valeur qu'elles introduisent dans son orthographe
+d'horloge. Résultat mesurable : `MagicLinkView` annonçait **« Le lien expire
+dans 4 heures 32 »** pour un compte à rebours de quatre minutes et demie, «~4:32~»
+étant l'orthographe d'une heure pour le synthétiseur. **Un libellé nomme la
+mesure ; il ne corrige pas l'orthographe de ce qu'il introduit.** Trois
+itérations ont relu ces lignes exactes en s'arrêtant au contexte manquant.
+
+**Et le versant inverse — ne pas confondre la famille avec sa forme.** Un
+douzième site rendait le même `String(format: "%02d:%02d", …)` :
+`NotificationSettingsView.formattedDndTime`, qui grave « HH:mm » pour la
+**PERSISTANCE** (relu par `UserNotificationPreferences.isInDoNotDisturbWindow`).
+Le localiser corromprait la donnée. Il est le seul site du dépôt où les chiffres
+latins sont la bonne réponse — et il est **allowlisté NOMMÉMENT dans la garde,
+avec sa raison**, jamais toléré en silence. Une garde de forme doit dire
+pourquoi elle épargne, sinon la prochaine itération « corrigera » la donnée.
+
+## Leçon 291 — une règle à N miroirs sans témoin de parité est un « N−1 » où N vaut zéro (2026-08-26, itération 270)
+
+> Coordination : les numéros 288/289/290 ont été posés par des itérations sœurs.
+> Cette leçon-ci est disjointe et numérotée 291 pour éviter la collision au merge
+> de `tasks/lessons.md`.
+
+L'itération 269 a fermé un trou de parité en le décrivant comme « N−1 des N
+sites » (leçon 288) : le témoin langue couvrait TS↔Swift mais pas Kotlin. En
+appliquant sa question — *ce test énumère-t-il TOUS les exemplaires de la
+règle ?* — à une AUTRE règle à trois miroirs (le barème de présence 1/3/5, TS
+`PRESENCE_*_WINDOW_MS` · Swift `state(now:)` · Kotlin `Presence.*_WINDOW_MS`),
+la réponse n'était pas « N−1 » mais **« zéro sur N »** : aucun test cross-plateforme
+n'existait. L'invariant ne tenait que par des consignes en commentaire
+(« miroir Android `Presence.kt` », « toute évolution touche les trois sites »).
+
+> **Le trou de parité le plus dangereux n'est pas le témoin qui couvre N−1 sites,
+> c'est la règle à N miroirs qui n'a AUCUN témoin — parce qu'aucun test ne rougit
+> pour signaler son absence.** Un témoin partiel se trouve en lisant le test ; un
+> témoin absent se trouve en RECENSANT les règles dupliquées documentées et en
+> demandant, pour chacune, « laquelle a un `*-mirror-parity` ? ». CLAUDE.md nomme
+> lui-même ces règles (« miroirs plateforme », « toute évolution touche les trois
+> sites ») : chaque occurrence de cette formule est une règle à auditer.
+
+Trois corollaires, mesurés dans ce lot :
+
+- **Un témoin de parité peut lire un miroir SANS l'obliger à extraire des
+  constantes nommées.** iOS déclare ses seuils en littéraux inline (`elapsed <= 60
+  { return .online }`) ; Kotlin et TS en constantes. Le témoin ancre son
+  extraction Swift sur l'ÉTAT RETOURNÉ (`{ return .online }`), pas sur une forme
+  de déclaration — il garde donc la parité sans exiger de toucher la source
+  iOS/Android (non compilable ici). La parité se mesure là où chaque plateforme
+  DÉCLARE la valeur, quelle que soit sa forme.
+
+- **La contre-épreuve d'un témoin de parité s'ancre sur la valeur ATTENDUE, pas
+  seulement sur l'égalité mutuelle.** Trois extractions qui rendraient toutes `0`
+  seraient mutuellement égales : le test compare aussi le barème TS à `{online:60,
+  away:180, idle:300}` en dur, pour qu'une extraction cassée tombe au lieu de
+  passer. Même rôle que l'ancrage de taille (`length > 50`) du témoin langue.
+
+- **Un sous-invariant caché voyage avec la règle principale.** Le chemin `isOnline`
+  de Swift porte un `$0 <= 300` qui DOIT égaler le seuil idle (sinon un flag
+  serveur périmé survit plus longtemps sur iOS qu'ailleurs). Le témoin le garde
+  séparément : une règle à seuils a souvent une garde ANNEXE réglée sur l'un de
+  ses seuils, et cette garde dérive indépendamment. Forme des cycles 123–126
+  (« que transporte la charge À CÔTÉ de ce qu'elle affiche ? ») appliquée à un
+  barème plutôt qu'à un contenu.
+## Cycle 269 — Un correctif de garde a des JUMEAUX à son propre niveau d'abstraction
+
+Le cycle 268 a fermé la coupe UTF-16 non sûre de `SecuritySanitizer.truncate`
+(un piège armé SANS appelant de production) et a noté que les troncateurs
+homonymes (`truncateMessage` / `truncatePreview` / `truncateMessagePreview`)
+étaient « distincts » — les laissant hors du lot.
+
+En posant à ces homonymes la question du 268 — *coupent-ils un point de code ou
+une unité de code UTF-16 ?* — **sept** troncateurs de contenu utilisateur SERVI
+portaient le même défaut, cette fois en production active, sur le chemin le plus
+sensible du dépôt : le corps de la bannière push (`pushBody`), la traduction
+poussée (`servedTranslationFields`), les `details` d'e-mail, et trois aperçus
+persistés. Un `😀` à cheval sur la frontière de coupe ⇒ substitut haut orphelin
+⇒ `�` sur l'écran verrouillé.
+
+> **Fermer une garde à un endroit ne ferme pas sa CLASSE.** Le 268 avait la
+> classe sous les yeux — il a NOMMÉ les homonymes — et les a écartés parce
+> qu'ils étaient « distincts » (noms différents, fichiers différents). Distinct
+> par le NOM n'est pas distinct par le DÉFAUT : les sept faisaient
+> `str.substring(0, N)` sur du contenu émoji. La question qui les attrape n'est
+> pas « ce site est-il le même ? » mais **« ce site applique-t-il la même
+> OPÉRATION sur le même espace d'entrée ? »**.
+
+Deux corollaires de forme :
+
+- **La duplication est le vecteur qui répand un défaut de garde.** Les deux
+  `truncatePreview` (messaging / posts) étaient byte-identiques ; les cinq autres
+  étaient des `.substring` in-line. Il n'existait AUCUN site unique à corriger,
+  donc le même bug vivait en sept exemplaires. Le correctif n'ajoute pas la
+  sûreté sept fois : il extrait UNE SSOT (`truncateByCodePoints`,
+  `utils/truncate-text.ts`, `Array.from` → points de code) et supprime les copies
+  — c'est le mécanisme même qui empêche la prochaine divergence (leçon 245i).
+
+- **Le correctif est un sur-ensemble strict de correction, donc invisible aux
+  fixtures ASCII.** Pour toute entrée ASCII (unités de code == points de code),
+  la sortie est identique ; elle ne diffère QUE là où l'ancien code produisait un
+  substitut orphelin. Les témoins existants (`endsWith('…')`, `length ≤ 101`)
+  restaient verts sur le défaut — le témoin qui l'attrape s'écrit sur du hors-BMP,
+  jamais sur l'ASCII (jumeau de la leçon 261 « un témoin de rang s'écrit sur un
+  rang AUTRE que le premier »).
+## Leçon 292 — un état posé à la RACINE d'un pager coûte à chaque page réalisée, et le prix ne se voit qu'après vingt swipes (2026-08-25, galerie média iOS)
+
+La galerie plein écran d'une conversation (`ConversationMediaGalleryView`)
+freezait au défilement, et — c'est le détail qui nomme la cause — **le
+ralentissement s'AGGRAVAIT avec le nombre de médias traversés**. Une lenteur
+constante accuse un rendu trop cher ; une lenteur qui CROÎT accuse quelque chose
+qu'on accumule sans jamais le rendre.
+
+Trois causes, toutes de la même famille : **de l'état vivant à la racine que
+seule UNE page consomme.**
+
+| état à la racine | qui le lit | ce qu'il coûtait |
+|---|---|---|
+| `scale` / `offset` (zoom, glissement) | la page VISIBLE, elle seule | réécrits à la fréquence d'affichage pendant un geste → invalidation racine → pager → **toutes** les pages réalisées, à chaque frame |
+| `currentIndex` (`@State` + `firstIndex(where:)`) | l'habillage bas | une écriture d'état et un balayage linéaire par page traversée, pour une valeur DÉRIVABLE en O(1) |
+| `.animation(value: showControls)` sur le `ZStack` racine | l'habillage | une transaction animée installée sur TOUT l'arbre à chaque bascule |
+
+Et par-dessus, la propriété du `LazyHStack` que sa paresse fait oublier : **il
+réalise à la demande mais ne libère JAMAIS**. Après vingt swipes, vingt images
+plein format restaient décodées, vingt pages vidéo gardaient leurs trois
+abonnements Combine — et chacune avait résolu sa disponibilité puis lancé son
+auto-téléchargement au passage. Traverser une conversation de vingt vidéos en
+téléchargeait vingt.
+
+> **« Lazy » décrit quand une vue NAÎT, jamais quand elle MEURT.** La question à
+> poser à tout conteneur paresseux n'est pas « combien de pages sont montées à
+> l'écran ? » mais **« combien en restent vivantes après un parcours complet, et
+> que fait chacune ? »**. La réponse par défaut est *toutes*, et *tout ce que sa
+> `.task` fait*.
+
+Les trois règles du correctif, dans l'ordre où elles portent :
+
+1. **L'état de transformation appartient à la PAGE.** Un pincement ne peut alors
+   plus invalider que sa propre page.
+2. **Chaque page est `Equatable` et montée en `.equatable()`.** Sans quoi une
+   réévaluation de la racine re-rend toutes les pages réalisées, fenêtre de
+   rendu ou pas : la fenêtre borne le TRAVAIL, la comparaison borne les
+   RÉVEILS, et aucune des deux ne remplace l'autre.
+3. **Une fenêtre de rendu bornée** (`GalleryRenderWindow`, ±1) : au-delà, la
+   page rend un aperçu et sa `.task` sort immédiatement. Le coût devient
+   constant, quel que soit le nombre de médias.
+
+Corollaire de vérification, et c'est là que la leçon se paie : **un
+ralentissement ne se lit sur aucune valeur de retour.** Un `@State` remonté à la
+racine par mégarde compile, s'exécute et se voit correct — la régression est
+invisible à toute assertion de comportement. D'où l'extraction des deux règles
+en types PURS (`GalleryRenderWindow`, `FilmstripMetrics`), testables pour ce
+qu'elles décident, doublée d'une garde de source pour ce qui reste structurel
+(« pas de `@State` de transformation dans la vue racine », « les deux types de
+page sont montés en `.equatable()` », « la tâche de la page vidéo sort hors
+fenêtre »). C'est la seule forme sous laquelle une propriété de coût peut
+rougir.
+
+### Et la géométrie d'une tête de lecture se DÉMONTRE
+
+La pellicule ajoutée sous les détails de l'auteur pose une règle produit —
+*le média le plus à DROITE est celui affiché en plein écran* — qui repose sur
+une coïncidence arithmétique entre deux ancrages différents : le `viewAligned`
+(qui aligne sur le bord de contenu de tête) et le `scrollPosition(anchor:
+.trailing)` (qui lit le bord droit). Ils ne tombent sur la même grille que
+parce que la marge de tête vaut `largeur − vignette − marge de queue`.
+
+> **Une intention de mise en page qui repose sur une égalité arithmétique n'est
+> pas une intention : c'est un théorème, et il se teste.** Retoucher une marge
+> sans retoucher l'autre ferait diverger les deux ancrages d'un reste — la bande
+> s'immobiliserait sur un média coupé, et « le plus à droite » deviendrait
+> ambigu sans qu'aucune ligne ne change de sens. `FilmstripMetrics` rend cette
+> égalité vérifiable à toute largeur de fenêtre et à tout nombre de médias, aux
+> deux extrémités de la course.
+
+## Leçon 292 — le trou de parité « N−1 » n'est pas hypothétique : le site non couvert avait DÉJÀ dérivé (2026-08-26, itération 271)
+
+> Coordination : lecons 288-291 posées par des itérations sœurs. Celle-ci est
+> disjointe, numérotée 292 pour éviter la collision au merge de `tasks/lessons.md`.
+
+La leçon 291 dit qu'une règle à N miroirs sans témoin de parité est le trou le
+plus dangereux. L'itération 271 a appliqué sa question — *quelles règles à
+« miroirs plateforme » n'ont AUCUN témoin de parité ?* — à la couleur d'accent de
+conversation (`DynamicColorGenerator`, un algorithme documenté « faithful port »
+en Swift/Kotlin, mirroir TS vérifié). Un fichier de vecteurs partagé
+(`accent.vectors.json`, 24 cas) était rejoué par TS **et** iOS ; Android n'en
+rejouait **aucun** (une poignée d'exemples à la main). Trou « zéro sur N » — mais
+la découverte a livré plus que l'absence de test :
+
+**Le site non couvert avait déjà dérivé, et la dérive était un bug visible.**
+L'adaptateur Android `ConversationAccent.accentColorPalette()` mappait le `type`
+du fil par un `when { … else -> ConversationType.DIRECT }` — au lieu de la table
+canonique `WIRE_TYPE_TO_CONTEXT_TYPE` (TS/iOS) qui fait retomber
+`public`/`global`/`broadcast` sur `community`. Résultat : un salon public ou
+broadcast rendait un accent **corail (direct)** sur Android et **violet
+(community)** sur web/iOS. Le témoin manquant n'était pas une assurance contre un
+risque futur : il aurait rougi le jour où l'adaptateur a été écrit.
+
+> **Quand une règle à N miroirs n'a aucun témoin de parité, ne pas présumer que
+> les miroirs coïncident encore — l'absence de témoin est précisément la
+> condition sous laquelle l'un a pu dériver sans bruit.** Le premier geste après
+> avoir trouvé le trou n'est pas « ajouter le test qui les gardera » mais
+> « rejouer le contrat sur le site non couvert et REGARDER s'il passe ». Ici il
+> ne passait pas.
+
+Deux corollaires de forme :
+
+- **Un adaptateur avec une branche `else -> DÉFAUT` cache un mapping partiel.**
+  `else -> DIRECT` avait l'air exhaustif (« tout le reste est direct ») alors
+  qu'il avalait trois types qui ont une couleur PROPRE ailleurs. Un `else`
+  fourre-tout sur une valeur du domaine (pas une vraie sentinelle d'erreur) est un
+  endroit à confronter à la table canonique, jamais à lire comme « les cas
+  restants n'ont pas d'opinion ».
+
+- **Le miroir le plus fidèle rejoue le contrat par le MÊME chemin que la
+  production.** Le test iOS passe par `MeeshyConversation.computeColorPalette`
+  (l'adaptateur réel), jamais par un switch recopié dans le test ; le test Android
+  passe par `DynamicColorGenerator.paletteForWire`, le chemin qu'emprunte
+  `ApiConversation.accentColorPalette()`. Un test qui réimplémente la
+  normalisation qu'il prétend garder ne garde que sa propre copie. Le correctif a
+  donc dû D'ABORD créer le chemin réel (`paletteForWire`, miroir de
+  `conversationAccentPalette`), puis y router l'adaptateur ET le test.
+
+## Leçon 293 — Un identifiant de lot n'est pas un nom (2026-08-26)
+
+**Contexte.** Le pilotage GitHub (11 milestones, 86 issues) a d'abord été créé en
+recopiant les identifiants internes des trackers : « Composer v2 — Vague A ·
+gateway P1 », « T2.1 — … », « Lot 0 — … », « RC-4 », « L1-02 (ii) ». Le porteur a
+corrigé aussitôt : *les milestones doivent avoir des noms sémantiques clairs, idem
+pour les tâches, jalons et phases — pas A, B, C.*
+
+> **Un code (vague, lot, T2.1, RC-4) est une clé de JOINTURE entre documents, jamais
+> un titre.** Il ne dit rien à qui n'a pas lu le plan qui l'a frappé, et un
+> tableau de pilotage est lu précisément par ceux qui ne l'ont pas lu. Le titre
+> énonce le RÉSULTAT attendu (« Une story ne peut plus partir deux fois »,
+> « Android émet les scènes v3 ») ; le code vit dans le corps, en « référence
+> interne », pour que la traçabilité vers `tasks/` et la planche survive.
+
+Deux corollaires :
+
+- **La règle vaut pour ce qu'on ÉCRIRA** : phases d'une roadmap, jalons, noms de
+  vagues. « Vague A → B → C » est une séquence, pas trois noms ; la séquence se
+  dit par l'ordre des milestones et leurs dépendances, pas par une lettre.
+- **Renommer après coup coûte moins que ça n'en a l'air** (61 titres en une
+  passe scriptée, codes conservés dans les corps) — mais le premier jet aurait dû
+  être sémantique : le tracker interne parle en codes parce qu'il est écrit par
+  ceux qui les connaissent ; le tableau public ne l'est pas.
+
+## Leçon 295 — Un artifact n'est pas un tableau de bord, et « ça marche » n'est pas « livré » (2026-08-26)
+
+**Contexte.** En une journée, trois sessions ont ouvert des pages publiées pour
+SUIVRE l'avancement : une page « composer-v2-progress » à côté de la planche, une
+« Roadmap Meeshy 2026-2027 » présentée comme dashboard produit, un instantané
+« Reliquats de branches » — pendant qu'un projet GitHub « Meeshy — pilotage »
+(milestones, 200+ issues, champs Status/Priorité/Horizon) venait d'être créé pour
+exactement cela. Le porteur a tranché : *gérer exclusivement le développement de
+Meeshy par GitHub Project ; les artifacts sont faits pour des brouillons, du design
+et des comptes rendus de communication.*
+
+> **L'état d'une tâche vit à UN endroit, et cet endroit est l'issue.** Une page
+> publiée qui affiche un état en fabrique une COPIE, datée du jour où on l'a
+> republiée ; deux sessions plus tard la copie ment, et elle ment avec l'autorité
+> d'une belle mise en page. Un artifact est légitime pour ce qui n'a PAS d'état à
+> tenir : un brouillon qu'on fait valider, un design qu'on regarde, un compte rendu
+> qu'on lit une fois. Dès qu'on veut y cocher quelque chose, c'est une issue.
+
+La seconde moitié de la directive fixe ce que « livré » veut dire : *un produit
+très optimisé sans lenteur, hyper fluide, aéré, agréable visuellement et
+fonctionnellement, avec une maturité sur plusieurs dimensions pour toutes ses
+features* — treize, nommées : sécurité, performance, mémoire, fluidité, facilité
+d'accès, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité,
+maintenabilité, simplicité d'usage, complétude.
+
+> **« Ça marche » est le rang 1 d'une échelle à treize barreaux.** Une feature qui
+> rend le bon résultat en 2 s là où le cache l'avait, qui saccade au scroll, qu'un
+> lecteur d'écran ne voit pas ou que personne n'ose modifier n'est pas livrée — elle
+> est *partielle*, et « partiel » est un Status d'issue, pas un livrable. Et **la
+> complexité se paie dans le code, jamais chez l'utilisateur** : on complexifie
+> volontiers l'implémentation (résolution automatique, pré-calcul, cache, inférence)
+> pour que l'usage n'exige rien.
+
+Corollaires :
+
+- **Fermer une issue, c'est dire quelles dimensions sont mûres** — et ouvrir une
+  issue par dimension qui ne l'est pas. Le commentaire de clôture est le seul
+  compte rendu d'avancement qui ne périme pas, parce qu'il vit avec l'état.
+- **Une lenteur est un bug, pas une dette** : elle a au moins la priorité de la
+  feature qu'elle dégrade. Cache-First, Optimistic Updates, Zero Unnecessary
+  Re-render ne sont pas des principes d'architecture — ce sont les mécanismes par
+  lesquels les dimensions 2, 4, 7, 8 et 12 se réalisent.
+- **La règle est inscrite dans les 9 `CLAUDE.md`** (racine : § « Pilotage du
+  développement » et § « Roadmap — treize dimensions » ; chaque sous-répertoire :
+  § « Pilotage & maturité » avec ses témoins propres). `tasks/todo*.md` ne se
+  crée plus ; `tasks/lessons.md` reste le seul tracker de fichier maintenu.
+
+## Leçon 293 — « one-for-one mirror » écrit dans un en-tête de test n'est pas un témoin de parité (2026-08-26, itération 272)
+
+> Coordination : suite directe des leçons 291/292 (couleur d'accent). Numérotée
+> 293 pour éviter la collision au merge de `tasks/lessons.md`.
+
+La leçon 292 a appliqué « quelles règles à N miroirs n'ont AUCUN témoin de
+parité ? » à la couleur d'accent. L'itération 272 l'a appliquée à la règle
+produit CENTRALE de Meeshy — la résolution du Prisme sur l'aperçu de dernier
+message (`resolveLastMessagePreview`, trois miroirs TS/iOS/Android nommés source
+de vérité par CLAUDE.md). Trou « zéro sur trois » : douze contrats de vecteurs
+partagés vivent dans `fixtures/reading-modes/` (accent, bridge, sections, sort…),
+mais AUCUN pour le Prisme.
+
+Ce qui rendait le trou traître : **chacune des trois suites écrites à la main se
+DÉCLARAIT « one-for-one mirror » des deux autres dans son en-tête.** Android :
+« One-for-one mirror of `resolve-last-message-preview.test.ts` and of
+`ConversationPrismeResolutionTests.swift` ». iOS pareil. La parité était donc
+AFFIRMÉE, noir sur blanc, à trois endroits — et vérifiée par rien. Trois copies
+parallèles de cas de test, entretenues à la main, qu'aucun build ne force à
+couvrir le même espace ni à s'accorder sur les résultats.
+
+> **Une phrase dans un en-tête de test qui AFFIRME la parité (« mirror of »,
+> « kept in sync with », « same cases as ») est un aveu qu'il n'existe pas de
+> témoin machine — sinon elle citerait le témoin, pas la copie sœur.** Cette
+> phrase est un marqueur à chercher : là où trois fichiers se citent mutuellement
+> comme miroirs, il y a trois copies et zéro contrat.
+
+Contrairement à l'accent (cycle 271, où le site non couvert avait DÉJÀ dérivé en
+un bug visible), les trois miroirs du Prisme s'accordaient réellement à la lecture
+— la parité était vraie AUJOURD'HUI, il lui manquait sa garde. Le geste 292
+(« rejouer le contrat sur le site non couvert et REGARDER ») reste obligatoire :
+c'est lui qui distingue « parité réelle, garde manquante » (ajouter le témoin
+suffit) de « parité rompue » (corriger d'abord). Ne jamais présumer l'un ou
+l'autre.
+
+Corollaire de méthode, tiré du même lot : **le contrat s'écrit sur l'INTERSECTION
+vérifiée des miroirs, et ce qui diffère entre eux s'EXCLUT explicitement.** Ici,
+une carte à deux clés canonisant vers la même langue (`{'pt', 'pt-BR'}`, prisme
+`['pt']`) : TS retient la première entrée, Android/iOS la dernière. Cas impossible
+en production (le gateway n'émet qu'une clé canonique par langue) — l'encoder
+déclarerait un miroir « en faute » sur un cas qui n'arrive jamais. Un vecteur de
+contrat ne doit jamais trancher un désaccord que la production ne produit pas ;
+il le documente comme hors-périmètre.
+
+## Leçon 294 — Un indice de connectivité n'est pas un verdict, et une relation REQUISE fait échouer la requête entière (2026-08-26, « bandeau hors ligne permanent »)
+
+**Contexte.** « Les appels ne passent plus, les sockets temps réel du web non plus,
+la pastille est rouge tout le temps et le bandeau hors ligne est permanent. » Le
+serveur était SAIN — prouvé par une sonde Socket.IO depuis la même IP publique
+(377 ms, `authenticated`) puis par une reproduction Playwright du build déployé
+(session fraîche verte). Traefik montrait pourtant **deux sockets de ce même
+compte authentifiés depuis 40 minutes** pendant que l'onglet affichait « Vous
+êtes hors ligne ». Le bandeau et la puce lisaient `navigator.onLine` comme un
+VERDICT ; le socket vivant ne pesait rien.
+
+> **Un signal heuristique du navigateur (`navigator.onLine`) ne peut pas
+> contredire une preuve directe (un socket authentifié qui reçoit des
+> événements).** `isOnline = navigator.onLine || socketConnected` : l'indice ne
+> compte que tant que la preuve manque. Et un événement `online`/`offline`
+> RESYNCHRONISE l'état depuis les diagnostics au lieu de le forcer — forcer
+> `isSocketConnected=false` sur `offline` puis ne rien relire sur `online`
+> laissait un socket survivant annoncé mort, ce qui armait les boucles de
+> `reconnect()` (qui commence par DÉCONNECTER).
+
+Second défaut, trouvé par la même chaîne de logs : à CHAQUE reconnexion de ce
+compte, `_emitUnreadCountsSnapshot` levait `Inconsistent query result: Field
+conversation is required` — une seule ligne `Participant` de 2025 pointait vers
+une conversation supprimée, et le `select` imbriqué sur la relation REQUISE
+faisait tomber les 118 compteurs vivants avec elle.
+
+> **Une relation requise dans un `select`/`include` Prisma transforme UNE ligne
+> orpheline en échec de TOUTE la requête.** Lire la table cible À PART (`findMany
+> where id in`) exclut naturellement l'orpheline, la rend visible (log) et ne
+> demande aucun `try/catch` de repli. Corollaire de diagnostic : un `WARN` répété
+> à chaque reconnexion d'un seul compte est une donnée corrompue, pas un flake.
+
+Méthode qui a tranché, dans l'ordre : logs serveur du compte (le symptôme est-il
+côté serveur ?) → sonde protocolaire depuis la machine du plaignant (le réseau ?)
+→ reproduction du build déployé en session fraîche (le code ?) → historique
+Traefik de l'IP (l'état de CET onglet). Chaque étape a éliminé une couche avant
+de lire le code du client — et c'est la dernière qui a désigné `navigator.onLine`.
+
+Sites : `apps/web/hooks/use-connection-status.ts` (`deriveStatus`),
+`services/gateway/src/socketio/MeeshySocketIOManager.ts` (`_emitUnreadCountsSnapshot`).

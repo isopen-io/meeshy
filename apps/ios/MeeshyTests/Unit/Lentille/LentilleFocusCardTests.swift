@@ -220,29 +220,198 @@ final class LentilleFocusCardTests: XCTestCase {
         XCTAssertEqual(text, "AUTO · Focal")
     }
 
-    /// Le point d'appel réel (`LentilleFocusCard.notchText`) doit lire
-    /// `conversation.bridge?.suggestedMode` — jamais un recalcul propre à la
-    /// carte. Garde de SOURCE (comme `test_focusCard_delegatesNotchTextTo
-    /// LentilleModeLabels` ci-dessus), pour que le câblage lui-même reste
-    /// prouvé même sans toolchain pour exécuter la vue.
-    func test_focusCard_passesConversationBridgeSuggestedModeToNotchText() throws {
-        let source = try modeSources().first { $0.name == "LentilleFocusCard.swift" }
-        let code = try XCTUnwrap(source?.code, "LentilleFocusCard.swift introuvable dans Lentille/Mode/.")
+    // MARK: - 2bis. Il n'y a plus de CARTE — la magnification EST la rangée
+    //
+    // **SUPERSÈDE** la famille de témoins qui gardait `LentilleFocusCard`
+    // comme VUE (`test_ringOpacity_…`, `test_focusCard_paintsTheConversation_…`,
+    // `test_cardHost_followsTheScrollRelay_…`, `test_localY_…`,
+    // `test_conversationList_mountsTheCardHostOnce_…`). Ils attestaient une
+    // couche peinte PAR-DESSUS la rangée élue ; deux directives produit du
+    // 2026-08-23 l'ont dissoute :
+    //
+    // 1. « Pas de bordure, on complète juste les informations, directement sur
+    //    le row existant. »
+    // 2. « … qu'elle hérite des features du mode normal […] le mode
+    //    magnificence doit permettre le swipe gauche et droite comme le mode
+    //    normal. »
+    //
+    // Une couche posée SUR la rangée ne peut pas tenir les deux : transparente
+    // aux touches, ses pastilles ne sont pas actionnables ; opaque, elle avale
+    // swipe, glisser-déposer et appui long. Les témoins ci-dessous attestent
+    // l'état NOUVEAU — la magnification est un PARAMÈTRE de la rangée — plutôt
+    // que de disparaître en silence.
+
+    /// Moitié POSITIVE de la garde (sans elle, supprimer un fichier ferait
+    /// passer toutes les assertions négatives qui suivent).
+    func test_magnification_isAParameterOfTheRow_notAViewAboveIt() throws {
+        let row = try rowSource("LentilleConversationRow.swift")
         XCTAssertTrue(
-            normalizedCode(code).contains("suggestedMode: conversation.bridge?.suggestedMode"),
-            "R6-5 — l'encoche doit passer `conversation.bridge?.suggestedMode` à " +
-            "`LentilleModeLabels.notchText` — c'est le SEUL branchement attendu au point d'appel."
+            row.contains("var magnification: LentilleMagnification? = nil"),
+            "La rangée reçoit la magnification en paramètre : c'est elle qui se rend magnifiée, " +
+            "et c'est ce qui lui fait hériter de TOUTES ses features sans recopie."
+        )
+        XCTAssertTrue(row.contains("private var isMagnified: Bool { magnification != nil }"))
+
+        let gate = try modeSource("LentilleMagnification.swift")
+        XCTAssertTrue(
+            gate.contains("scene.level > 0 && election.electedId == conversationId"),
+            "Le portillon d'élection décide QUI est magnifié, et seulement pendant la scène."
+        )
+        XCTAssertTrue(gate.contains("@ObservedObject var election: LentilleFocusElection"))
+        XCTAssertTrue(gate.contains("@ObservedObject var scene: LentilleSceneActivity"))
+    }
+
+    /// Moitié NÉGATIVE : rien de la carte ne revient — ni la vue, ni son hôte,
+    /// ni son chrome.
+    func test_noCardView_noCardHost_noCardChrome_anywhereInMode() throws {
+        for source in try modeSources() {
+            // Code NORMALISÉ : la prose d'un commentaire qui NOMME la règle
+            // (l'en-tête de `LentilleFocusCard.swift` raconte précisément la
+            // dissolution de la carte) ne doit pas la déclencher.
+            let code = normalizedCode(source.code)
+            for forbidden in ["LentilleFocusCardHost", "strokeBorder(accent", ".shadow(", "MeeshyColors.backgroundSecondary("] {
+                XCTAssertFalse(
+                    code.contains(forbidden),
+                    "\(source.name) réintroduit « \(forbidden) » — la carte de magnification a été " +
+                    "dissoute le 2026-08-23 (pas de bordure, pas d'ombre, pas de fond de carte, " +
+                    "pas de couche au-dessus de la rangée)."
+                )
+            }
+        }
+        let list = normalizedCode(try listViewSource())
+        XCTAssertEqual(
+            occurrences(of: "LentilleFocusCardHost(", in: list), 0,
+            "L'hôte de carte n'est plus monté : la rangée porte sa propre magnification."
+        )
+        XCTAssertTrue(
+            list.contains("LentilleFocusElectionHost("),
+            "L'hôte d'ÉLECTION, lui, reste — c'est lui qui désigne la rangée à magnifier."
         )
     }
 
-    // MARK: - 2bis. Reduce motion ⇒ fond seul (ring)
-
-    func test_ringOpacity_isZero_underReduceMotion_oneOtherwise() {
-        XCTAssertEqual(LentilleFocusCard.ringOpacity(reduceMotion: true), 0)
-        XCTAssertEqual(LentilleFocusCard.ringOpacity(reduceMotion: false), 1)
+    /// « L'objet reste le même » : la magnification réutilise la géométrie de
+    /// la rangée au lieu de l'agrandir, et sa hauteur de LAYOUT ne bouge pas —
+    /// sinon magnifier pousserait de 16 pt tout ce qui suit, à chaque
+    /// changement d'élu, en pleine inertie de défilement.
+    @MainActor
+    func test_magnification_neverChangesTheLayoutHeight_soTheListNeverJumps() throws {
+        let row = try rowSource("LentilleConversationRow.swift")
+        XCTAssertTrue(
+            row.contains(".frame(height: isMagnified ? LentilleMetrics.FocusInline.height : LentilleMetrics.Row.height)\n        .frame(height: LentilleMetrics.Row.height)"),
+            "DEUX cadres : hauteur VISUELLE (100 magnifié / 84 au repos) puis hauteur de LAYOUT " +
+            "constante. Le second est ce qui interdit le relayout (R2)."
+        )
+        XCTAssertEqual(
+            LentilleMetrics.FocusInline.height,
+            LentilleMetrics.Row.height + 2 * LentilleMetrics.Row.marginVertical,
+            "La magnification déborde d'exactement une marge de chaque côté…"
+        )
+        XCTAssertEqual(
+            LentilleMetrics.FocusCard.breathing, LentilleMetrics.Row.marginVertical,
+            "… et la respiration écarte les voisines d'exactement autant : elle ne mord jamais."
+        )
+        XCTAssertEqual(LentilleMetrics.FocusInline.paddingVertical, LentilleMetrics.Row.paddingVertical)
+        XCTAssertEqual(LentilleMetrics.FocusInline.avatarContext.size, LentilleMetrics.Avatar.context.size)
+        XCTAssertLessThan(
+            LentilleMetrics.FocusInline.height, LentilleMetrics.FocusCard.height,
+            "La magnification en place déborde MOINS que l'ancienne carte : elle complète, elle n'agrandit plus."
+        )
     }
 
-    // MARK: - 3. Garde de source — Lentille/Mode/
+    /// Les trois affordances demandées le 2026-08-23, chacune à sa place —
+    /// et chacune un CONTRÔLE, jamais un décor.
+    func test_theThreeMagnifiedAffordances_areMountedAndActionable() throws {
+        let row = try rowSource("LentilleConversationRow.swift")
+        // Catégorie + étiquettes : AU-DESSUS du titre.
+        let header = try XCTUnwrap(row.range(of: "headerLine"))
+        let top = try XCTUnwrap(row.range(of: "LentilleMagnifiedTopLine("))
+        XCTAssertLessThan(
+            top.lowerBound, header.lowerBound,
+            "« La catégorie actionnable est au-dessus du titre à gauche, avant le listing ; " +
+            "à la suite les tags si disponibles. »"
+        )
+        // Mode + effectif : sur la ligne de date, là où ils étaient déjà.
+        XCTAssertTrue(row.contains("LentilleModePill("), "le pill de mode reste exactement où il est")
+        XCTAssertTrue(row.contains("LentilleMemberCountChip("), "… avec l'effectif à côté")
+
+        let mode = try modeSource("LentilleMagnification.swift")
+        XCTAssertTrue(mode.contains("Button(action: onShowParticipants)"), "l'effectif OUVRE la liste des participants")
+        XCTAssertTrue(mode.contains("onMoveToSection(section.id)"), "la catégorie DÉPLACE la conversation")
+        XCTAssertTrue(mode.contains("onFilterByTag(tag.name)"), "l'étiquette filtre la liste — son seul écrivain")
+        XCTAssertTrue(mode.contains("onRemoveTag(tag)"))
+        XCTAssertTrue(
+            mode.contains("suggestedMode: conversation.bridge?.suggestedMode"),
+            "R6-5 — le pill lit le mode suggéré du pont, jamais un recalcul propre à lui"
+        )
+        XCTAssertTrue(
+            mode.contains("LentilleModeLabels.notchText("),
+            "… et délègue son texte à la source unique, jamais une seconde formule de « AUTO · … »"
+        )
+    }
+
+    /// La magnification HÉRITE des features de la rangée parce qu'elle EST la
+    /// rangée : rien de ce que la rangée sait faire n'est recopié dans
+    /// `Lentille/Mode/`. Ce témoin garde l'absence de recopie — c'est elle qui
+    /// interdit les deux vues de diverger (le ❤️ favori absent en
+    /// magnification, la pastille de présence oubliée, l'anneau story perdu :
+    /// trois régressions vécues du temps de la carte).
+    func test_modeFolder_neverRepaintsWhatTheRowAlreadyPaints() throws {
+        for source in try modeSources() {
+            let code = normalizedCode(source.code)
+            for painted in ["MeeshyAvatar(", "conversation.displayName", "resolvedLastMessagePreview(", "LentilleBridgeLine("] {
+                XCTAssertFalse(
+                    code.contains(painted),
+                    "\(source.name) repeint « \(painted) », que `LentilleConversationRow` peint déjà. " +
+                    "La magnification doit HÉRITER de la rangée, jamais la dupliquer."
+                )
+            }
+        }
+    }
+
+    /// La date garde sa place ; seule sa PRÉCISION change.
+    func test_theDateKeepsItsPlace_onlyItsPrecisionChanges() throws {
+        let row = try rowSource("LentilleConversationRow.swift")
+        XCTAssertTrue(row.contains("LentilleFocusCard.fullTimestamp("), "date complète sous la loupe")
+        XCTAssertTrue(row.contains("LentilleRowTimestamp(date: conversation.lastMessageAt)"), "relatif court au repos")
+        let dateLine = try XCTUnwrap(row.range(of: "private var dateLine: some View {"))
+        let after = row[dateLine.upperBound...].prefix(1200)
+        XCTAssertTrue(after.contains("Spacer(minLength: 0)"), "la date reste poussée à droite, magnifiée ou non")
+    }
+
+    /// L'aperçu coule sur DEUX lignes sous la loupe, une seule au repos.
+    func test_thePreviewFlowsOnTwoLines_onlyWhenMagnified() throws {
+        let row = try rowSource("LentilleConversationRow.swift")
+        XCTAssertTrue(row.contains(".lineLimit(isMagnified ? 2 : 1)"))
+        XCTAssertTrue(
+            row.contains("(senderPrefix + Text(resolvedPreviewText)"),
+            "« Auteur : texte » reste UN seul texte — deux `Text` côte à côte tronquaient le message avant le bord."
+        )
+    }
+
+    /// Le portillon `.equatable()` doit voir la magnification, sinon la rangée
+    /// élue resterait figée dans son état précédent ; il ne doit PAS voir les
+    /// fermetures, sinon il raterait à chaque passe de body de la liste.
+    @MainActor
+    func test_theEquatableGateSeesTheMagnification_butNeverItsClosures() throws {
+        let row = try rowSource("LentilleConversationRow.swift")
+        XCTAssertTrue(row.contains("LentilleMagnification.rendersIdentically(lhs.magnification, rhs.magnification)"))
+
+        var a = LentilleMagnification(isAnonymous: false, categories: [], activeTagFilter: nil)
+        var b = LentilleMagnification(isAnonymous: false, categories: [], activeTagFilter: nil)
+        a.onShowParticipants = { }
+        b.onFilterByTag = { _ in }
+        XCTAssertTrue(
+            LentilleMagnification.rendersIdentically(a, b),
+            "Deux magnifications aux mêmes DONNÉES rendent pareil, quelles que soient leurs fermetures."
+        )
+        XCTAssertFalse(LentilleMagnification.rendersIdentically(a, nil))
+        XCTAssertFalse(
+            LentilleMagnification.rendersIdentically(a, LentilleMagnification(isAnonymous: false, activeTagFilter: "MAIN")),
+            "Le filtre actif change le rendu d'une chip : il doit passer le portillon."
+        )
+    }
+
+    // MARK: - 3. Garde de source — Lentille/Mode/ et Lentille/Row/
 
     private static var iosRoot: URL {
         URL(fileURLWithPath: #filePath)
@@ -256,9 +425,12 @@ final class LentilleFocusCardTests: XCTestCase {
         iosRoot.appendingPathComponent("Meeshy/Features/Main/Lentille/Mode")
     }
 
+    private static var rowDirectory: URL {
+        iosRoot.appendingPathComponent("Meeshy/Features/Main/Lentille/Row")
+    }
+
     /// Découverte DYNAMIQUE (leçon 257) — jamais une liste de noms recopiée :
-    /// un fichier ajouté demain (la vue `LentilleModeMenu`, un sélecteur de
-    /// plus) entre automatiquement dans le périmètre.
+    /// un fichier ajouté demain entre automatiquement dans le périmètre.
     private func modeSources() throws -> [(name: String, code: String)] {
         let entries = try FileManager.default.contentsOfDirectory(
             at: Self.modeDirectory, includingPropertiesForKeys: nil
@@ -269,65 +441,13 @@ final class LentilleFocusCardTests: XCTestCase {
             .map { ($0.lastPathComponent, try String(contentsOf: $0, encoding: .utf8)) }
     }
 
-    private func occurrences(of needle: String, in haystack: String) -> Int {
-        haystack.components(separatedBy: needle).count - 1
+    private func modeSource(_ file: String) throws -> String {
+        try String(contentsOf: Self.modeDirectory.appendingPathComponent(file), encoding: .utf8)
     }
 
-    func test_guardDiscoversAtLeastOneModeFile_neverSilentlyEmpty() throws {
-        XCTAssertFalse(
-            try modeSources().isEmpty,
-            "La garde n'a chargé AUCUN fichier depuis `\(Self.modeDirectory.path)` — elle " +
-            "passerait alors au vert sans rien vérifier (leçon 257)."
-        )
+    private func rowSource(_ file: String) throws -> String {
+        try String(contentsOf: Self.rowDirectory.appendingPathComponent(file), encoding: .utf8)
     }
-
-    /// Critère d'acceptation I-071, mot pour mot : « garde source (hauteur :
-    /// aucun `frame(height:` dans les fichiers de carte) ». La carte est un
-    /// fond/overlay du rang élu — imposer une hauteur LUE depuis le layout
-    /// serait la porte d'entrée du relayout que le contrat interdit.
-    /// Code NORMALISÉ (commentaires retirés, même patron que
-    /// `LentillePerspectiveCurveTests.test_perspective_neverTouchesLayout`) :
-    /// ce sont des gardes de PATRON de code, pas de littéraux R15 — la prose
-    /// d'un commentaire qui nomme la règle (comme celui-ci) ne doit pas la
-    /// déclencher.
-    func test_modeFiles_neverHardcodeFrameHeight() throws {
-        for source in try modeSources() {
-            XCTAssertEqual(
-                occurrences(of: "frame(height:", in: normalizedCode(source.code)), 0,
-                "\(source.name) contient « frame(height: » — la carte doit contraindre sa " +
-                "hauteur via `.frame(width:height:)` (les deux, jamais `height:` seul), " +
-                "sur la constante `LentilleMetrics.Row.height`, jamais une mesure de layout."
-            )
-        }
-    }
-
-    /// Règle dure du workshop : « Button(.plain) jamais .onTapGesture ».
-    func test_modeFiles_neverUseOnTapGesture() throws {
-        for source in try modeSources() {
-            XCTAssertEqual(
-                occurrences(of: ".onTapGesture", in: normalizedCode(source.code)), 0,
-                "\(source.name) contient « .onTapGesture » — l'encoche et toute action de " +
-                "`Lentille/Mode/` doivent être des `Button` en style `.plain`, jamais un " +
-                "geste de tap nu (accessibilité : un `.onTapGesture` n'est pas exposé comme " +
-                "un contrôle au VoiceOver)."
-            )
-        }
-    }
-
-    /// La carte doit déléguer son texte à `LentilleModeLabels` — jamais une
-    /// seconde formule de « AUTO · … » écrite en dur dans la vue.
-    func test_focusCard_delegatesNotchTextToLentilleModeLabels() throws {
-        let source = try modeSources().first { $0.name == "LentilleFocusCard.swift" }
-        let code = try XCTUnwrap(source?.code, "LentilleFocusCard.swift introuvable dans Lentille/Mode/.")
-        XCTAssertTrue(
-            code.contains("LentilleModeLabels.notchText(decision:"),
-            "`LentilleFocusCard` doit appeler `LentilleModeLabels.notchText(decision:" +
-            "preference:)` — le texte de l'encoche est calculé UNE fois, réutilisé partout " +
-            "(menu, aperçu, chip)."
-        )
-    }
-
-    // MARK: - 4. Montage — un seul hôte, derrière le drapeau, sans lecture directe de l'élu
 
     private func listViewSource() throws -> String {
         try String(
@@ -343,140 +463,80 @@ final class LentilleFocusCardTests: XCTestCase {
             .joined(separator: " ")
     }
 
-    func test_conversationList_mountsTheCardHostOnce_behindTheFlag_besideTheElectionHost() throws {
-        let code = normalizedCode(try listViewSource())
+    private func occurrences(of needle: String, in haystack: String) -> Int {
+        haystack.components(separatedBy: needle).count - 1
+    }
 
+    func test_guardDiscoversAtLeastOneModeFile_neverSilentlyEmpty() throws {
+        XCTAssertFalse(
+            try modeSources().isEmpty,
+            "La garde n'a chargé AUCUN fichier depuis `\(Self.modeDirectory.path)` — elle " +
+            "passerait alors au vert sans rien vérifier (leçon 257)."
+        )
+    }
+
+    /// Critère d'acceptation I-071, mot pour mot : « garde source (hauteur :
+    /// aucun `frame(height:` dans les fichiers de carte) ». La hauteur de la
+    /// magnification est une constante lue depuis `LentilleMetrics`, posée par
+    /// la RANGÉE — `Lentille/Mode/` n'en pose aucune.
+    func test_modeFiles_neverHardcodeFrameHeight() throws {
+        for source in try modeSources() {
+            XCTAssertEqual(
+                occurrences(of: "frame(height:", in: normalizedCode(source.code)), 0,
+                "\(source.name) contient « frame(height: » — la hauteur appartient à la rangée, " +
+                "sur la constante `LentilleMetrics.FocusInline.height`, jamais une mesure de layout."
+            )
+        }
+    }
+
+    /// Règle dure du workshop : « Button(.plain) jamais .onTapGesture » — un
+    /// `.onTapGesture` posé sur un contrôle interne à la rangée se fait AVALER
+    /// par l'appui long du conteneur (régression #3010 WS-4), et n'est pas
+    /// exposé comme un contrôle à VoiceOver.
+    func test_modeFiles_neverUseOnTapGesture() throws {
+        for source in try modeSources() {
+            XCTAssertEqual(
+                occurrences(of: ".onTapGesture", in: normalizedCode(source.code)), 0,
+                "\(source.name) contient « .onTapGesture »."
+            )
+        }
+    }
+
+    func test_modePills_areNativeMenusOrButtons_neverAPopover() throws {
+        let code = try modeSource("LentilleMagnification.swift")
+        XCTAssertTrue(code.contains("Menu {"), "les pastilles de mode/catégorie/étiquette sont des `Menu` natifs")
+        XCTAssertFalse(code.contains(".popover("), "plus jamais de `.popover` : feuille plein écran sur iPhone")
+    }
+
+    /// Un seul contour sur toute la magnification : le liseré BLANC qui dit
+    /// quelle étiquette filtre la liste. Aucun contour d'accent nulle part —
+    /// « pas de bordure ».
+    func test_theOnlyBorder_isTheWhiteHairlineOfTheActiveTagFilter() throws {
+        let code = try modeSource("LentilleMagnification.swift")
+        XCTAssertTrue(code.contains("Color.white.opacity(isFiltering ? 0.95 : 0)"))
         XCTAssertEqual(
-            occurrences(of: "LentilleFocusCardHost(", in: code), 1,
-            "UN seul hôte de carte : deux hôtes peindraient deux cartes concurrentes sur le " +
-            "même élu."
-        )
-        XCTAssertTrue(
-            code.contains(
-                "if LentilleFeatureFlag.isLentilleListEnabled { LentilleFocusElectionHost("
-            ),
-            "L'hôte de carte doit rester dans le MÊME bloc `if` que l'hôte d'élection — pas " +
-            "un second garde-fou de drapeau qui pourrait diverger du premier."
-        )
-        XCTAssertTrue(
-            code.contains("LentilleFocusCardHost( election: focusElection,"),
-            "L'hôte de carte reçoit le magasin PAR RÉFÉRENCE (`election: focusElection`) — " +
-            "jamais une valeur déjà lue (`focusElection.electedId`) : c'est lui, dans SON " +
-            "fichier, qui doit lire l'élu."
+            occurrences(of: "strokeBorder", in: code), 1,
+            "UN seul `strokeBorder` dans toute la magnification, et c'est celui-là."
         )
     }
 
     /// Redite volontaire de la garde `FocusCardElectionTests
-    /// .test_electedState_neverLivesInTheListBody` : ce lot AJOUTE du code à
+    /// .test_electedState_neverLivesInTheListBody` : ce lot TOUCHE
     /// `ConversationListView.swift` et doit prouver qu'il n'a pas réintroduit
-    /// la lecture directe que cette garde interdit.
+    /// la lecture directe que cette garde interdit — c'est elle qui empêche la
+    /// liste entière de se ré-évaluer à chaque élection.
     func test_conversationListView_stillNeverReadsTheElectedIdDirectly() throws {
         let code = normalizedCode(try listViewSource())
         XCTAssertEqual(
             occurrences(of: "focusElection.electedId", in: code), 0,
             "`ConversationListView.swift` ne doit JAMAIS lire `focusElection.electedId` : " +
-            "la carte comme l'élection le lisent chacun dans LEUR hôte."
+            "le magasin est passé PAR RÉFÉRENCE, et c'est le portillon d'élection " +
+            "(`LentilleMagnifiableRow`) qui le lit, dans son fichier à lui."
         )
-    }
-}
-
-// MARK: - Carte MAGNIFIÉE (2026-08-21) — suit la rangée, menu natif, contenu réel
-
-extension LentilleFocusCardTests {
-
-    private static var repoRoot: URL {
-        iosRoot
-            .deletingLastPathComponent()   // .../apps
-            .deletingLastPathComponent()   // repo
-    }
-
-    private func modeSource(_ file: String) throws -> String {
-        try String(contentsOf: Self.modeDirectory.appendingPathComponent(file), encoding: .utf8)
-    }
-
-    /// La hauteur de la carte vient d'un token partagé (R17) — et elle DÉBORDE
-    /// de la rangée (64) : c'est la loupe, jamais un agrandissement de la rangée.
-    @MainActor
-    func test_focusCardHeight_isTheMagnifiedToken_andExceedsTheRow() throws {
-        let tokensURL = Self.repoRoot.appendingPathComponent("packages/shared/design/lentille-tokens.json")
-        let data = try Data(contentsOf: tokensURL)
-        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let list = try XCTUnwrap(root["list"] as? [String: Any])
-        let focusCard = try XCTUnwrap(list["focusCard"] as? [String: Any])
-        XCTAssertEqual(Double(LentilleMetrics.FocusCard.height), focusCard["height"] as? Double)
-        let avatarSize = Double(LentilleMetrics.FocusCard.avatarContext.size)
-        XCTAssertEqual(avatarSize, focusCard["avatarSize"] as? Double)
-        XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
-    }
-
-    /// **SUPERSÉDÉ le 2026-08-22 (soir).** La directive du 2026-08-21 avait
-    /// GRAVÉ ici l'encoche de catégorie, la ligne basse à quatre objets, le
-    /// nom original en haut. Le retour produit du lendemain la renverse :
-    /// « la conversation magnifiée semble trop surchargée avec des espaces
-    /// compliqués ; les éléments autour doivent être plus discrets ou
-    /// enlevés ». La carte passe de CINQ ancrages de bord à DEUX, de six
-    /// capsules bordées d'accent à UNE. Ce témoin atteste donc l'état
-    /// NOUVEAU — recalibré, jamais supprimé en silence.
-    ///
-    /// Le DANGER qu'il gardait est conservé et même resserré : la carte reste
-    /// MUETTE (elle ne touche pas au store), la date reste la date COMPLÈTE de
-    /// la loi du fil, et le dernier expéditeur s'affiche toujours pour toutes
-    /// les conversations. S'y ajoute le fait neuf : plus d'un seul contrôle
-    /// bordé sur la carte.
-    func test_focusCard_keepsOneControl_theTagsAndTheCount_andTheFullTimestamp() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-
-        // Ce qui RESTE, et pourquoi.
-        XCTAssertTrue(code.contains(".overlay(alignment: .bottomLeading) {"), "UN seul ancrage de bord bas")
-        XCTAssertTrue(code.contains("onFilterByTag(tag.name)"), "le filtre par étiquette n'a pas d'autre domicile dans l'app")
-        XCTAssertTrue(code.contains("onFilterByTag(nil)"))
-        XCTAssertTrue(code.contains("onRemoveTag(tag)"))
-        XCTAssertTrue(code.contains("FocalFocusTimestamp.listLabel("), "la date complète vient de la loi du fil")
-        XCTAssertFalse(code.contains("RelativeTimeFormatter.shortString"), "plus de relatif court sur la carte")
-        XCTAssertFalse(
-            code.contains("conversation.type != .direct,\n               let sender"),
-            "le dernier expéditeur s'affiche pour toutes les conversations"
-        )
-
-        // Ce qui est PARTI, et qui ne doit pas revenir sans une décision.
-        XCTAssertFalse(code.contains(".overlay(alignment: .topLeading) {"), "plus d'encoche de catégorie")
-        XCTAssertFalse(code.contains(".overlay(alignment: .top) {"), "plus de nom original au centre du bord haut")
-        XCTAssertFalse(code.contains("Button(action: onForceSync)"), "plus de bouton « synchroniser maintenant »")
-        XCTAssertFalse(code.contains("Button(action: onShowParticipants)"), "l'effectif est une information, plus un contrôle")
-    }
-
-    /// L'identité GAGNE la ligne : c'est la date qui cède. L'inverse faisait
-    /// tronquer le NOM sur une carte dont le seul métier est de le montrer en
-    /// plus gros — la magnification rétrécissait l'identité.
-    func test_focusCard_theNameOutranksTheDate_onTheHeaderLine() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        let name = try XCTUnwrap(code.range(of: "Text(conversation.displayName)"))
-        let date = try XCTUnwrap(code.range(of: "Text(Self.fullTimestamp("))
-        let namePriority = try XCTUnwrap(code.range(of: ".layoutPriority(2)", range: name.upperBound..<code.endIndex))
-        XCTAssertLessThan(namePriority.lowerBound, date.lowerBound, "la priorité 2 appartient au NOM, avant la date")
         XCTAssertTrue(
-            code[date.upperBound...].contains(".layoutPriority(0)"),
-            "la date cède la première"
+            code.contains("focusElection: focusElection,"),
+            "… mais il le PASSE bien, sans quoi aucune rangée ne saurait qu'elle est élue."
         )
-    }
-
-    /// Un seul contour d'ACCENT sur la carte : son anneau, et l'encoche de
-    /// mode. L'étiquette — l'élément le moins important — portait le trait le
-    /// plus fort ; son filtre actif se dit désormais par un liseré blanc.
-    func test_focusCard_accentBorder_isTheExclusivityOfTheCardAndItsModeNotch() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertFalse(
-            code.contains("strokeBorder(\n                            accent,"),
-            "l'étiquette ne porte plus de contour d'accent"
-        )
-        XCTAssertTrue(code.contains("Color.white.opacity(isFiltering ? 0.95 : 0)"), "le filtre actif se dit en blanc")
-    }
-
-    /// 2026-08-22 : la carte porte la pastille de présence de la rangée plate.
-    func test_focusCard_paintsThePresenceDot_fromTheSameSourceAsTheFlatRow() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains("presenceState: presenceState,"), "l'avatar de la carte reçoit la présence")
-        XCTAssertTrue(code.contains("presenceState: presenceFor(conversation)"), "l'hôte la relit pour l'élu")
     }
 
     /// Respiration (2026-08-22) : les voisines s'écartent de la ligne de
@@ -495,51 +555,6 @@ extension LentilleFocusCardTests {
         XCTAssertEqual(LentilleFocusBreathing.push(distance: far, level: 0, reduceMotion: false), 0, "au repos, rien")
     }
 
-    /// **SUPERSÉDÉ le 2026-08-22 (soir)** — voir la note du témoin
-    /// `test_focusCard_keepsOneControl_…` ci-dessus. Ce qui reste vrai et
-    /// qu'aucun autre témoin ne dit : la ligne 2 reste « Auteur : texte » en
-    /// UN SEUL texte sur deux lignes, et la carte ne touche jamais au store.
-    /// Les trois autres assertions (bouton de synchronisation, bouton
-    /// d'effectif, nom original) sont désormais portées EN NÉGATIF par le
-    /// témoin ci-dessus : elles ne peuvent pas revenir en silence.
-    func test_focusCard_theSecondLineIsOneTextAndTheCardNeverTouchesTheStore() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains("(senderPrefix + Text(previewText)"), "« Auteur : texte » en un seul texte sur deux lignes")
-        XCTAssertFalse(code.contains("store.flushOutbox()"), "la carte ne touche pas au store : la liste câble le VM")
-    }
-
-    func test_notch_isANativeMenu_neverAPopover() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains("Menu {"), "l'encoche doit être un `Menu` natif")
-        XCTAssertFalse(code.contains(".popover("), "plus jamais de `.popover` : feuille plein écran sur iPhone")
-    }
-
-    /// La carte peint la conversation (nom, heure, aperçu Prisme / pont ✦),
-    /// pas un cadre vide posé sur la rangée.
-    func test_focusCard_paintsTheConversation_notAnEmptyFrame() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains("conversation.displayName"))
-        XCTAssertTrue(code.contains("resolvedLastMessagePreview(preferredLanguages:"))
-        XCTAssertTrue(code.contains("LentilleBridgeLine("))
-        XCTAssertTrue(code.contains("MeeshyAvatar("))
-    }
-
-    /// L'hôte suit le défilement : abonné au MÊME relais que l'élection, il
-    /// relit le `midY` vivant de l'élu à chaque tick. Sans cela la carte dérivait
-    /// jusqu'à une demi-bande (45 pt) de la rangée entre deux élections.
-    func test_cardHost_followsTheScrollRelay_andReadsTheLiveRowPosition() throws {
-        let code = try modeSource("LentilleFocusCard.swift")
-        XCTAssertTrue(code.contains("@ObservedObject var relay: ScrollOffsetRelay"))
-        XCTAssertTrue(code.contains("registry.midYById[conversation.id]"))
-    }
-
-    /// Rangée sortie de l'écran (plus dans le registre) ⇒ pas de carte : elle
-    /// ne flotte jamais dans le vide en fin de liste.
-    func test_localY_isNil_whenTheRowIsNoLongerMounted() {
-        XCTAssertNil(LentilleFocusCardHost.localY(rowMidY: nil, hostMinY: 100))
-        XCTAssertEqual(LentilleFocusCardHost.localY(rowMidY: 640, hostMinY: 100), 540)
-    }
-
     /// Le pont ✦ ne remplace l'aperçu que s'il reste des non-lus — même règle
     /// que la rangée plate.
     func test_showsBridge_requiresUnreadAndABridge() {
@@ -547,5 +562,23 @@ extension LentilleFocusCardTests {
         XCTAssertTrue(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: bridge))
         XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 0, bridge: bridge))
         XCTAssertFalse(LentilleFocusCard.showsBridge(unreadCount: 3, bridge: nil))
+    }
+
+    /// La hauteur de l'ANCIENNE carte reste le miroir fidèle du token partagé
+    /// que la peau WEB consomme toujours — la peau iOS ne le peint plus, mais
+    /// le retirer du miroir ferait diverger les deux en silence.
+    @MainActor
+    func test_focusCardToken_stillMirrorsTheSharedDesignFile_forTheWebSkin() throws {
+        let tokensURL = Self.iosRoot
+            .deletingLastPathComponent()   // .../apps
+            .deletingLastPathComponent()   // repo
+            .appendingPathComponent("packages/shared/design/lentille-tokens.json")
+        let data = try Data(contentsOf: tokensURL)
+        let root = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let list = try XCTUnwrap(root["list"] as? [String: Any])
+        let focusCard = try XCTUnwrap(list["focusCard"] as? [String: Any])
+        XCTAssertEqual(Double(LentilleMetrics.FocusCard.height), focusCard["height"] as? Double)
+        XCTAssertEqual(Double(LentilleMetrics.FocusCard.avatarContext.size), focusCard["avatarSize"] as? Double)
+        XCTAssertGreaterThan(LentilleMetrics.FocusCard.height, LentilleMetrics.Row.height)
     }
 }

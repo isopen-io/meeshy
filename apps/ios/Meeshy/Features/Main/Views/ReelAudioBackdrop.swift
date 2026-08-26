@@ -44,7 +44,14 @@ struct ReelAudioBackdrop: View, Equatable {
         }
         .onAppear { if isActive { startAnimating() } }
         .adaptiveOnChange(of: isActive) { _, active in
-            if active { startAnimating() }
+            if active {
+                startAnimating()
+            } else {
+                // Coupe la boucle repeatForever quand le réel perd l'élection
+                // autoplay — les barres retombent sur leur profil statique mais
+                // l'animation, elle, continuait de tourner à vide chaque frame.
+                withTransaction(Transaction(animation: nil)) { phase = 0 }
+            }
         }
         // Fond purement décoratif : le contenu sémantique du réel est porté par ReelFeedCard.
         .accessibilityDecorative()

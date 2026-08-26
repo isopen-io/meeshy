@@ -55,5 +55,10 @@ Le service utilise `LangGraph` pour gérer le flux de décision:
 ---
 *Dernière mise à jour: Mars 2026*
 
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : latence de réponse perçue, fenêtre de contexte bornée (mémoire), garde des prompts et des données utilisateur (sécurité), utilité MESURÉE par les analytics d'activation — le maintien de ce service est un arbitrage ouvert de la roadmap (issue `décision-produit`).
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
+
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

@@ -1,7 +1,7 @@
 {
   "terms": {
     "title": "Conditions d'Utilisation",
-    "lastUpdated": "Dernière mise à jour : 25 octobre 2025",
+    "lastUpdated": "Dernière mise à jour : 23 août 2026",
     "backHome": "Retour à l'accueil",
     "print": "Imprimer",
     "intro": "Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :",
@@ -28,7 +28,8 @@
       "title": "Contenu Utilisateur",
       "ownership": "Vous conservez la propriété de votre contenu",
       "license": "Vous accordez à Meeshy une licence pour utiliser votre contenu dans le but de fournir le service",
-      "responsibility": "Vous êtes responsable du contenu que vous publiez"
+      "responsibility": "Vous êtes responsable du contenu que vous publiez",
+      "attribution": "En contrepartie, nous nous engageons à créditer l'auteur de tout contenu publié, y compris lorsqu'il est transféré ou republié, partout où son origine peut être tracée. Cet engagement est de moyens : la mention peut être absente ou incomplète si nos systèmes ne conservent pas ce lien, ou si les réglages de confidentialité des personnes concernées, y compris ceux de l'auteur, s'y opposent."
     },
     "termination": {
       "title": "Résiliation",

@@ -414,6 +414,22 @@ final class CallManagerAudioSessionTests: XCTestCase {
         )
     }
 
+    /// Isolates the `.newDeviceAvailable` case body, bounded by the NEXT case
+    /// label rather than a character count — a fixed-width window here is
+    /// exactly the "ticking time bomb" this repo has already been bitten by
+    /// once (cycle 238i): a doc-comment added above this case, or the one it
+    /// precedes, shifts the body past a magic offset and rots the guard on an
+    /// unrelated change, without the code it protects ever regressing.
+    private func newDeviceAvailableCaseBody(in fnBody: String) throws -> String {
+        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
+            XCTFail(".newDeviceAvailable case not found"); return ""
+        }
+        guard let oldDevRange = fnBody.range(of: "case .oldDeviceUnavailable:", range: newDevRange.upperBound..<fnBody.endIndex) else {
+            XCTFail(".oldDeviceUnavailable case not found after .newDeviceAvailable"); return ""
+        }
+        return String(fnBody[newDevRange.lowerBound ..< oldDevRange.lowerBound])
+    }
+
     func test_callManager_audioRouteChange_newDeviceAvailable_setsSpeakerFalse() throws {
         // P0-8, revised: when a Bluetooth/headset device connects (.newDeviceAvailable),
         // iOS routes audio to it automatically. We sync isSpeaker = false so the
@@ -435,11 +451,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
             fnBody.contains("case .newDeviceAvailable:"),
             "handleAudioRouteChange must handle .newDeviceAvailable"
         )
-        guard let newDevRange = fnBody.range(of: "case .newDeviceAvailable:") else {
-            XCTFail(".newDeviceAvailable case not found"); return
-        }
-        let newDevEnd = fnBody.index(newDevRange.upperBound, offsetBy: 300, limitedBy: fnBody.endIndex) ?? fnBody.endIndex
-        let newDevBody = String(fnBody[newDevRange.lowerBound ..< newDevEnd])
+        let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
 
         XCTAssertTrue(
             newDevBody.contains("isSpeaker = false"),
@@ -449,6 +461,34 @@ final class CallManagerAudioSessionTests: XCTestCase {
             newDevBody.contains("applySpeakerRoute()"),
             ".newDeviceAvailable must call applySpeakerRoute() after clearing isSpeaker, to clear any " +
             "standing `.speaker` RTCAudioSession override left over from before the accessory connected."
+        )
+    }
+
+    func test_callManager_audioRouteChange_newDeviceAvailable_revertsSpeakerFlagOnApplyFailure() throws {
+        // Audit finding — mirrors the fix already applied to toggleSpeaker() (§7.8):
+        // overrideOutputAudioPort can throw (e.g. `insufficientPriority` when the
+        // just-connected Bluetooth headset itself holds route priority), and
+        // applySpeakerRoute() surfaces that as a `false` return. The
+        // .newDeviceAvailable branch discarded this result: isSpeaker was left at
+        // `false` even when the override never actually applied, desyncing the
+        // speaker-toggle UI from the real audio route — the same failure class
+        // toggleSpeaker() already guards against, left unguarded on this sibling
+        // call site that performs the identical optimistic flip.
+        let source = try callManagerSource()
+
+        guard let fnRange = source.range(of: "private func handleAudioRouteChange(") else {
+            XCTFail("handleAudioRouteChange not found in CallManager.swift"); return
+        }
+        let endIdx = source.index(fnRange.lowerBound, offsetBy: 1500, limitedBy: source.endIndex) ?? source.endIndex
+        let fnBody = String(source[fnRange.lowerBound ..< endIdx])
+
+        let newDevBody = try newDeviceAvailableCaseBody(in: fnBody)
+
+        XCTAssertTrue(
+            newDevBody.contains("if !applySpeakerRoute()"),
+            ".newDeviceAvailable must check applySpeakerRoute()'s result and revert isSpeaker on " +
+            "failure — same discipline as toggleSpeaker(), otherwise a route-priority failure leaves " +
+            "isSpeaker desynced from the real audio route."
         )
     }
 
@@ -1959,6 +1999,91 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "in-app — Apple's Guideline 5 (MIIT) rejection requires CallKit inactive there unconditionally")
     }
 
+    /// `promoteRingingCallToCallKitIfNeeded()` only fires from the
+    /// `didEnterBackground` observer registered by `startBackgroundMonitoring()`
+    /// — but until this fix that registration happened EXCLUSIVELY inside
+    /// `transitionToConnected()`. A call ringing in-app (CallKit skipped because
+    /// the app was foreground, see `handleIncomingCallNotification`) is by
+    /// definition NOT YET connected, so no observer existed to promote it —
+    /// the entire safety net was unreachable dead code. It must also be armed
+    /// at the RINGING entry point, where the gap actually lives.
+    func test_handleIncomingCallNotification_armsBackgroundMonitoring_soAStillRingingCallCanBePromoted() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func handleIncomingCallNotification(callId:") else {
+            XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "private func performLocalMediaStart")?.lowerBound else {
+            XCTFail("Could not find handleIncomingCallNotification boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("startBackgroundMonitoring()"),
+            "handleIncomingCallNotification must call startBackgroundMonitoring() while the call is " +
+            "still ringing — waiting for transitionToConnected() means an unanswered call that " +
+            "backgrounds mid-ring has NO observer to promote it to CallKit, and iOS can suspend the " +
+            "app with no lock-screen call card, silently dropping the inbound call")
+    }
+
+    /// `reportIncomingVoIPCall` is the VoIP-push twin of
+    /// `handleIncomingCallNotification` (both deliver an incoming call while
+    /// still `.ringing`), but only the latter was armed with
+    /// `startBackgroundMonitoring()` above. Left unarmed here, a VoIP-push
+    /// call that backgrounds mid-ring has no observer to run the
+    /// `applyCameraSuspension(false, cause: "foreground")` safety net
+    /// documented in `startBackgroundMonitoring()` — if a capture
+    /// interruption's end signal never arrives while backgrounded (Apple's
+    /// own documented risk), the peer stays stuck on the frozen frame straight
+    /// into the connected call, and the peer never learns the call was
+    /// backgrounded/foregrounded while ringing.
+    func test_reportIncomingVoIPCall_armsBackgroundMonitoring_soAStillRingingCallCanRecoverFromBackgrounding() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "func reportIncomingVoIPCall(callId:") else {
+            XCTFail("reportIncomingVoIPCall not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "// MARK: - VoIP Push Freshness Check")?.lowerBound else {
+            XCTFail("Could not find reportIncomingVoIPCall boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        XCTAssertTrue(
+            fnBody.contains("startBackgroundMonitoring()"),
+            "reportIncomingVoIPCall must call startBackgroundMonitoring() while the call is still " +
+            "ringing, exactly like handleIncomingCallNotification does — otherwise a VoIP-push call " +
+            "that backgrounds mid-ring has no observer armed to recover camera suspension or notify " +
+            "the peer of the background/foreground transition")
+    }
+
+    /// Once `promoteRingingCallToCallKitIfNeeded()` is actually reachable (see
+    /// the test above), its success path exposes a second, previously-latent
+    /// bug: `startRingtone()` (played by `handleIncomingCallNotification` when
+    /// CallKit was skipped) keeps looping through an `AVAudioPlayer` that holds
+    /// the session in `.playAndRecord`/self-activated. CallKit's own
+    /// `config.ringtoneSound` ("Ringtone.caf" — the SAME asset) then plays on
+    /// top of it, and the still-active self-owned session risks CallKit never
+    /// observing `didActivate`. The promotion must stop the in-app loop the
+    /// instant CallKit takes over.
+    func test_promoteRingingCallToCallKitIfNeeded_stopsInAppRingtoneOnSuccessfulPromotion() throws {
+        let source = try callManagerSource()
+        guard let fnRange = source.range(of: "private func promoteRingingCallToCallKitIfNeeded()") else {
+            XCTFail("promoteRingingCallToCallKitIfNeeded not found in CallManager.swift"); return
+        }
+        let afterFn = String(source[fnRange.upperBound...])
+        guard let fnEnd = afterFn.range(of: "private func startBackgroundMonitoring")?.lowerBound else {
+            XCTFail("Could not find promoteRingingCallToCallKitIfNeeded boundary"); return
+        }
+        let fnBody = String(afterFn[..<fnEnd])
+        guard let successRange = fnBody.range(of: "} else {") else {
+            XCTFail("Could not find the reportNewIncomingCall success branch"); return
+        }
+        let successBranch = String(fnBody[successRange.upperBound...])
+        XCTAssertTrue(
+            successBranch.contains("ringbackPlayer.stopRingtone()"),
+            "on successful late-promotion the in-app ringtone loop must stop — otherwise it plays " +
+            "on top of CallKit's own ringtoneSound (same asset, doubled), and the self-activated " +
+            "AVAudioSession it holds risks blocking CallKit's own didActivate")
+    }
+
     /// Le retour en avant-plan reste un déclencheur — comme GARDE-FOU.
     /// `AVCaptureSession.h` documente la fin d'interruption comme survenant
     /// « when your app comes back to foreground » : un signal de fin peut donc
@@ -2003,43 +2128,63 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             "does not bleed into the next call (singleton lifecycle)")
     }
 
-    /// When the VideoSurvivalController has already suspended outbound video
-    /// (weak network), the foreground observer must NOT re-signal the peer with
-    /// `call:media-toggled true` — doing so would falsely indicate our camera is
-    /// active while we're still not sending frames.
-    func test_foregroundObserver_guardsSurvivalSuspended_beforeRestoringPeer() throws {
+    /// Bornes du corps de l'observateur `willEnterForeground` — de sa ligne
+    /// `forName:` jusqu'à la fermeture de `startBackgroundMonitoring()` (le
+    /// premier `\n    }`, l'intérieur de l'observateur étant indenté plus
+    /// profond). Bornage SÉMANTIQUE et ÉTROIT : le témoin remplacé scrutait
+    /// `source[fgRange.upperBound...]`, soit tout le reste du FICHIER — il était
+    /// satisfait par une expression vivant 1200 lignes plus bas (le resync de
+    /// reconnexion socket), jamais par l'observateur qu'il prétendait garder.
+    private func foregroundObserverBody() throws -> String {
         let source = try callManagerSource()
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
+        guard let fgRange = source.range(of: "UIApplication.willEnterForegroundNotification") else {
+            XCTFail("willEnterForegroundNotification observer not found"); return ""
         }
-        // Find the block that emits call:media-toggled true on foreground.
-        let afterFg = String(source[fgRange.upperBound...])
-        // The restoration condition must check `!self.isVideoSuspended` in
-        // addition to `self.isVideoEnabled` so that a network-survival suspension
-        // in progress before the background is not prematurely cleared.
-        XCTAssertTrue(
-            afterFg.contains("!self.isVideoSuspended"),
-            "willEnterForeground restore must guard on !isVideoSuspended: if the " +
-            "VideoSurvivalController already suspended video before we backgrounded, " +
-            "emitting call:media-toggled true would signal the peer that our camera is " +
-            "active while frames are still paused — showing a frozen/stale feed instead " +
-            "of the correct avatar placeholder.")
+        let after = String(source[fgRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not bound the willEnterForeground observer"); return ""
+        }
+        return String(after[..<end])
     }
 
-    /// Validates that the foreground restore emits `call:media-toggled true`
-    /// only when BOTH conditions hold: user intent (isVideoEnabled) AND no
-    /// network suspension (isVideoSuspended is false).
-    func test_foregroundObserver_combinesVideoEnabledAndNotSuspendedGuard() throws {
-        let source = try callManagerSource()
-        guard let fgRange = source.range(of: "willEnterForegroundNotification") else {
-            XCTFail("willEnterForegroundNotification observer not found"); return
-        }
-        let afterFg = String(source[fgRange.upperBound...])
-        // The compound condition must appear together before the emit call.
+    /// Le retour en avant-plan ne parle au pair QUE par le point de passage
+    /// unique `applyCameraSuspension(_:cause:)` — il ne recompose jamais sa
+    /// propre condition d'émission. C'est ce qui garantit que drapeau et signal
+    /// ne divergent pas (cf. `test_cameraSuspension_clearsTheFlagOnTheSamePathAsItSetsIt`).
+    func test_foregroundObserver_restoresThroughTheSingleCameraSuspensionFunnel() throws {
+        let body = try foregroundObserverBody()
         XCTAssertTrue(
-            afterFg.contains("isVideoEnabled") && afterFg.contains("!self.isVideoSuspended"),
-            "willEnterForeground restore must combine isVideoEnabled && !isVideoSuspended " +
-            "before calling emitCallToggleVideo(enabled:true)")
+            body.contains("self.applyCameraSuspension(false, cause: \"foreground\")"),
+            "Le retour en avant-plan doit lever la suspension par applyCameraSuspension(false:) — " +
+            "le point de passage unique du signal caméra, qui porte les gardes."
+        )
+        XCTAssertFalse(
+            body.contains("emitCallToggleVideo"),
+            "L'observateur ne doit PAS émettre lui-même : une seconde condition d'émission " +
+            "diverge inévitablement de celle du point de passage unique."
+        )
+    }
+
+    /// L6-1 (2026-08-25) — RENVERSEMENT. Ce témoin exigeait `!self.isVideoSuspended`
+    /// dans la condition de reprise : le gel réseau y valait « pas de caméra ».
+    /// Depuis L6-1 le gel ne relâche PLUS la capture (encodeur au plancher, piste
+    /// et capture intactes), donc il ne dit rien sur la vie de la caméra ; l'y
+    /// garder faisait TAIRE un vrai signal caméra (une interruption de capture
+    /// survenant pendant un épisode dégradé). Garde NÉGATIVE : elle rougit si le
+    /// drapeau est réintroduit dans la garde du point de passage unique.
+    func test_cameraSuspensionFunnel_doesNotGuardOnSurvivalFreeze() throws {
+        let body = try cameraSuspensionBody()
+        XCTAssertTrue(
+            body.contains("guard isVideoEnabled, !isVideoSuspendedByHold else { return }"),
+            "La garde d'émission doit combiner l'intention utilisateur (isVideoEnabled) et le seul " +
+            "état OS qui coupe vraiment la caméra sans passer par ce point (isVideoSuspendedByHold)."
+        )
+        XCTAssertFalse(
+            body.contains("!isVideoSuspended,"),
+            "La garde ne doit PAS inclure isVideoSuspended (gel réseau) : depuis L6-1 la capture " +
+            "tourne pendant tout le gel, donc l'y lire comme « caméra absente » ferait taire une " +
+            "VRAIE interruption de capture survenant pendant un épisode dégradé."
+        )
     }
 }
 
@@ -2054,7 +2199,14 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 /// backgrounded), the peer would incorrectly show our frozen last frame.
 ///
 /// The reconnect sink must re-emit `call:media-toggled` reflecting the effective
-/// video state: `isVideoEnabled && !isVideoSuspended && !isVideoSuspendedByCaptureInterruption`.
+/// video state: `isVideoEnabled && !isVideoSuspendedByCaptureInterruption
+/// && !isVideoSuspendedByHold`.
+///
+/// L6-2 (2026-08-25) — the network-survival freeze was REMOVED from that
+/// expression. A socket reconnect is most likely precisely DURING a degraded
+/// episode, so folding the freeze in re-emitted the very
+/// `media-toggled(video,false)` the actuator had stopped sending: the peer
+/// destroyed the last frame anyway, one layer down.
 @MainActor
 final class CallManagerSocketReconnectVideoTests: XCTestCase {
 
@@ -2081,21 +2233,40 @@ final class CallManagerSocketReconnectVideoTests: XCTestCase {
             "without this, a dropped connection leaves the peer showing stale video state")
     }
 
-    func test_socketReconnect_computesEffectiveVideoStateFromAllSources() throws {
+    /// Bornes de l'EXPRESSION seule — de `let effectiveVideoOn` à l'émission
+    /// qui la consomme. Volontairement PAS « tout ce qui suit socket.didReconnect » :
+    /// cette borne-là ratissait le reste du fichier (elle était satisfaite par
+    /// n'importe quelle occurrence, commentaire compris), et la garde négative
+    /// ci-dessous doit lire du CODE, jamais le commentaire qui nomme
+    /// délibérément le drapeau retiré.
+    private func reconnectEffectiveVideoExpression() throws -> String {
         let source = try callManagerSource()
-        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
-            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        guard let assignRange = source.range(of: "let effectiveVideoOn =") else {
+            XCTFail("effectiveVideoOn assignment not found in CallManager.swift"); return ""
         }
-        let afterReconnect = String(source[reconnectRange.upperBound...])
-        // The effective video state must consider all three suppression sources:
-        // user toggle, survival controller, and background suspension.
-        XCTAssertTrue(
-            afterReconnect.contains("isVideoSuspended") &&
-            afterReconnect.contains("isVideoSuspendedByCaptureInterruption"),
-            "socket.didReconnect video resync must factor in isVideoSuspended " +
-            "(survival controller) and isVideoSuspendedByCaptureInterruption (app backgrounded) " +
-            "to compute the effective video-on/off state for the peer")
+        guard let end = source.range(
+            of: "MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: effectiveVideoOn)",
+            range: assignRange.upperBound..<source.endIndex
+        )?.lowerBound else {
+            XCTFail("Could not bound the effectiveVideoOn expression"); return ""
+        }
+        return String(source[assignRange.lowerBound..<end])
     }
+
+    func test_socketReconnect_computesEffectiveVideoStateFromRealCaptureStops() throws {
+        let expression = try reconnectEffectiveVideoExpression()
+        XCTAssertTrue(
+            expression.contains("isVideoSuspendedByCaptureInterruption"),
+            "socket.didReconnect video resync must factor in isVideoSuspendedByCaptureInterruption " +
+            "(app backgrounded / OS capture interruption)")
+        XCTAssertTrue(
+            expression.contains("isVideoSuspendedByHold"),
+            "…and isVideoSuspendedByHold (CallKit hold) — the two states where the capture really " +
+            "stopped, so the peer must be told")
+    }
+    // La garde NÉGATIVE correspondante (le gel de survie ne doit jamais revenir
+    // dans cette expression) vit dans CallManagerSurvivalFreezeSourceTests —
+    // `test_reconnectResync_ignoresSurvivalFreeze`, avec le reste du lot L6-2.
 }
 
 // MARK: - Camera Permission Denied — All Call Entry Points
@@ -2662,6 +2833,165 @@ final class CallManagerJoinRaceTests: XCTestCase {
             source.contains("timingOut(after:"),
             "emitCallJoinWithAck must use socket.emitWithAck with timingOut to prevent " +
             "hanging indefinitely if the gateway is slow or the call has already ended")
+    }
+}
+
+/// Guards Vague 162 — before this fix, `socket.didReconnect` awaited only the
+/// boolean-collapsed `emitCallJoinWithAck` and, on a rejected ACK, logged
+/// "proceeding anyway" without ever transitioning `callState`. If the call had
+/// actually ended server-side while the socket was down (and the `call:ended`
+/// broadcast that would normally say so was itself dropped by that same
+/// outage), the app was left frozen on the active-call screen forever — no
+/// retry offered, no indication anything ended. The fix reads the full ack
+/// (`emitCallJoinWithAckDetailed`) and, on `errorCode == "CALL_ENDED"`, routes
+/// through the canonical `handleRemoteEnd` path with the real `endReason`.
+@MainActor
+final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func socketManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func reconnectSinkBody(_ source: String) throws -> String {
+        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
+            XCTFail("socket.didReconnect sink not found in CallManager.swift")
+            return ""
+        }
+        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let storeRange = afterReconnect.range(of: ".store(in: &cancellables)") else {
+            XCTFail("Could not find .store(in:) after socket.didReconnect")
+            return ""
+        }
+        return String(afterReconnect[..<storeRange.lowerBound])
+    }
+
+    /// The reconnect rejoin must read the full ack (join success + error
+    /// detail), not the boolean-only convenience — otherwise a `CALL_ENDED`
+    /// rejection is indistinguishable from a plain ACK timeout.
+    func test_socketReconnect_usesDetailedAck() throws {
+        let sinkBody = try reconnectSinkBody(try callManagerSource())
+        XCTAssertTrue(
+            sinkBody.contains("emitCallJoinWithAckDetailed"),
+            "socket.didReconnect must call emitCallJoinWithAckDetailed rather than the " +
+            "boolean-only emitCallJoinWithAck — a CALL_ENDED rejection must be " +
+            "distinguishable from a plain ACK timeout so the app can offer retry " +
+            "instead of hanging on a zombie active-call screen")
+    }
+
+    /// A `CALL_ENDED` ack rejection must route through the canonical
+    /// remote-end path, carrying the real `endReason` so a transient cause
+    /// (connectionLost/heartbeatTimeout) still offers « Réessayer ».
+    func test_socketReconnect_callAlreadyEnded_routesThroughHandleRemoteEnd() throws {
+        let sinkBody = try reconnectSinkBody(try callManagerSource())
+        XCTAssertTrue(
+            sinkBody.contains("ackResult.errorCode == \"CALL_ENDED\""),
+            "socket.didReconnect must detect a CALL_ENDED ack rejection")
+        XCTAssertTrue(
+            sinkBody.contains("self.handleRemoteEnd(callId: callId, rawReason: ackResult.endReason)"),
+            "a CALL_ENDED ack rejection must forward the real endReason into " +
+            "handleRemoteEnd — hardcoding a reason (or omitting it) would silently " +
+            "defeat the retry offer for a transient cause, the exact defect this " +
+            "guards (parallel to Vague 161's web-side fix for the same rejoin path)")
+    }
+
+    /// The CALL_ENDED branch must `return` before falling through to
+    /// ICE-flush / media-resync / TURN-refresh — those all assume a live call
+    /// and must never fire for a call the reconnect handler just discovered
+    /// has already ended.
+    func test_socketReconnect_callAlreadyEnded_returnsBeforeIceFlush() throws {
+        let sinkBody = try reconnectSinkBody(try callManagerSource())
+        guard let callEndedRange = sinkBody.range(of: "ackResult.errorCode == \"CALL_ENDED\"") else {
+            XCTFail("CALL_ENDED branch not found"); return
+        }
+        let afterCallEnded = String(sinkBody[callEndedRange.upperBound...])
+        guard let returnRange = afterCallEnded.range(of: "return") else {
+            XCTFail("No return statement after the CALL_ENDED branch"); return
+        }
+        guard let iceFlushRange = afterCallEnded.range(of: "flushPendingIceCandidates()") else {
+            XCTFail("flushPendingIceCandidates() not found after the CALL_ENDED branch"); return
+        }
+        XCTAssertLessThan(
+            returnRange.lowerBound, iceFlushRange.lowerBound,
+            "the CALL_ENDED branch must return before flushPendingIceCandidates() — " +
+            "otherwise a call the gateway just confirmed as ended still gets its ICE " +
+            "candidates flushed and its media state re-synced to a dead peer")
+    }
+
+    /// The SDK ack result must expose the raw server error detail (code +
+    /// endReason) — collapsing to a bare Bool is exactly what hid this defect.
+    func test_messageSocketManager_declaresCallJoinAckResultWithErrorDetail() throws {
+        let source = try socketManagerSource()
+        guard let structRange = source.range(of: "struct CallJoinAckResult") else {
+            XCTFail("CallJoinAckResult struct not found in MessageSocketManager.swift"); return
+        }
+        guard let closeBraceRange = source.range(of: "}", range: structRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find closing brace of CallJoinAckResult"); return
+        }
+        let structBody = String(source[structRange.upperBound..<closeBraceRange.lowerBound])
+        XCTAssertTrue(structBody.contains("let joined: Bool"))
+        XCTAssertTrue(
+            structBody.contains("let errorCode: String?"),
+            "CallJoinAckResult must expose the ack's error code so callers can " +
+            "distinguish CALL_ENDED from a plain timeout")
+        XCTAssertTrue(
+            structBody.contains("let endReason: String?"),
+            "CallJoinAckResult must expose the raw endReason so the app layer can map " +
+            "it to CallEndReason (via CallEndReasonMapper) and offer retry on a " +
+            "transient cause")
+    }
+
+    /// `emitCallJoinWithAckDetailed` must actually read `error.code`/
+    /// `error.endReason` from the ack payload — declaring the fields on
+    /// CallJoinAckResult without populating them would leave every caller
+    /// silently starved of the detail.
+    func test_messageSocketManager_detailedAck_readsErrorCodeAndEndReason() throws {
+        let source = try socketManagerSource()
+        guard let funcRange = source.range(of: "func emitCallJoinWithAckDetailed(callId: String)") else {
+            XCTFail("emitCallJoinWithAckDetailed not found in MessageSocketManager.swift"); return
+        }
+        guard let funcEndRange = source.range(of: "\n    public func emitCallJoinWithAck(callId: String)", range: funcRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not bound emitCallJoinWithAckDetailed body"); return
+        }
+        let funcBody = String(source[funcRange.upperBound..<funcEndRange.lowerBound])
+        XCTAssertTrue(funcBody.contains("error?[\"code\"] as? String"))
+        XCTAssertTrue(funcBody.contains("error?[\"endReason\"] as? String"))
+    }
+
+    /// `emitCallJoinWithAck` must delegate to the detailed variant instead of
+    /// duplicating the ack-parsing logic — two independent parses of the same
+    /// wire payload is exactly how this kind of gap (one call site reads a
+    /// field the sibling doesn't) recurs across this codebase (Vagues 158-161).
+    func test_messageSocketManager_boolJoin_delegatesToDetailedVariant() throws {
+        let source = try socketManagerSource()
+        guard let funcRange = source.range(of: "public func emitCallJoinWithAck(callId: String) async -> Bool {") else {
+            XCTFail("emitCallJoinWithAck not found in MessageSocketManager.swift"); return
+        }
+        guard let closeBraceRange = source.range(of: "}", range: funcRange.upperBound..<source.endIndex) else {
+            XCTFail("Could not find closing brace of emitCallJoinWithAck"); return
+        }
+        let funcBody = String(source[funcRange.upperBound..<closeBraceRange.lowerBound])
+        XCTAssertTrue(
+            funcBody.contains("emitCallJoinWithAckDetailed(callId: callId).joined"),
+            "emitCallJoinWithAck must delegate to emitCallJoinWithAckDetailed rather than " +
+            "re-parsing the ack payload independently")
     }
 }
 
@@ -3548,10 +3878,14 @@ final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
 // MARK: - Socket-reconnect video re-sync correctness
 
 /// Source-analysis guards ensuring the video state re-synced to the peer on
-/// socket reconnect accounts for ALL suspension sources: survival controller,
-/// background, AND CallKit hold. Before this fix, a hold-suspended call that
-/// survived a socket reconnect would incorrectly report video as active to the
-/// peer while iOS was blocking camera access.
+/// socket reconnect accounts for every state where the capture REALLY stopped:
+/// background/capture interruption AND CallKit hold. Before this fix, a
+/// hold-suspended call that survived a socket reconnect would incorrectly
+/// report video as active to the peer while iOS was blocking camera access.
+///
+/// L6-2 (2026-08-25) — the network-survival freeze was removed from that set:
+/// it stops nothing, so announcing it to the peer is a lie that costs the last
+/// frame.
 @MainActor
 final class CallManagerReconnectVideoSyncTests: XCTestCase {
 
@@ -3594,9 +3928,19 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
         XCTAssertTrue(
             exprLines.contains("isVideoSuspendedByCaptureInterruption"),
             "Socket-reconnect effectiveVideoOn must also check isVideoSuspendedByCaptureInterruption")
-        XCTAssertTrue(
-            exprLines.contains("isVideoSuspended"),
-            "Socket-reconnect effectiveVideoOn must also check isVideoSuspended (survival controller)")
+        // L6-2 — the survival freeze is deliberately NOT in this expression any
+        // more (see CallManagerSocketReconnectVideoTests for the reasoning).
+        // Negative guard: strip the two qualified names — of which the bare flag
+        // is a prefix — then assert the bare flag is gone.
+        let bare = exprLines
+            .replacingOccurrences(of: "isVideoSuspendedByCaptureInterruption", with: "")
+            .replacingOccurrences(of: "isVideoSuspendedByHold", with: "")
+        XCTAssertFalse(
+            bare.contains("isVideoSuspended"),
+            "Socket-reconnect effectiveVideoOn must NOT read isVideoSuspended: since L6-1 the " +
+            "survival layer freezes the encoder without stopping the capture, so re-emitting " +
+            "media-toggled(video,false) on reconnect would make the peer drop the last frame for " +
+            "a camera that never went away.")
     }
 }
 
@@ -3649,10 +3993,23 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
         )
     }
 
-    func test_cameraSuspensionRestore_guardsOnSurvivalControllerSuspension() throws {
+    /// L6-1 — RENVERSEMENT du témoin précédent, qui exigeait `isVideoSuspended,`
+    /// dans la garde. Le gel de survie ne relâche plus la caméra ; l'y lire
+    /// comme « caméra absente » ferait TAIRE une vraie interruption de capture
+    /// survenant pendant un épisode dégradé. Garde NÉGATIVE : elle rougit à la
+    /// réintroduction du drapeau dans la garde (le corps extrait commence APRÈS
+    /// la signature, donc aucun commentaire ne peut la satisfaire).
+    func test_cameraSuspensionRestore_doesNotGuardOnSurvivalFreeze() throws {
+        let body = try cameraSuspensionBody()
         XCTAssertTrue(
-            try cameraSuspensionBody().contains("isVideoSuspended,"),
-            "La reprise doit toujours vérifier isVideoSuspended (contrôleur de survie)."
+            body.contains("!isVideoSuspendedByHold"),
+            "La garde doit conserver !isVideoSuspendedByHold — un hold CallKit coupe vraiment la " +
+            "caméra et n'est pas levé par un retour en avant-plan."
+        )
+        XCTAssertFalse(
+            body.contains("isVideoSuspended,"),
+            "La garde ne doit PLUS lire isVideoSuspended (gel réseau) : depuis L6-1 la capture " +
+            "tourne pendant tout le gel, donc l'y lire ferait taire un VRAI signal caméra."
         )
     }
 }
@@ -3730,9 +4087,11 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// Background entry must NOT emit a second "camera off" to the peer when hold
-    /// or the survival controller has already done so.  The fix: emit only when
-    /// !isVideoSuspendedByHold && !isVideoSuspended.
+    /// Background entry must NOT emit a second "camera off" to the peer when a
+    /// CallKit hold has already done so. The fix: emit only when
+    /// !isVideoSuspendedByHold. (L6-1 dropped the survival freeze from that
+    /// condition — it emits nothing at all any more, so it can duplicate
+    /// nothing.)
     func test_backgroundEntry_doesNotEmitVideoOff_whenHoldAlreadySentIt() throws {
         let source = try callManagerSource()
 
@@ -3753,20 +4112,30 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
             "prouve rien sur l'état réel de la capture"
         )
 
-        // Le point de passage unique porte les deux gardes anti-doublon.
+        // Le point de passage unique porte la garde anti-doublon. Borné
+        // SÉMANTIQUEMENT (jusqu'à la fermeture de la fonction) et non par une
+        // largeur fixe de 900 caractères, qui débordait sur la fonction suivante.
         guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
             XCTFail("applyCameraSuspension not found"); return
         }
-        let body = String(source[fnRange.upperBound...].prefix(900))
+        let after = String(source[fnRange.upperBound...])
+        guard let end = after.range(of: "\n    }")?.upperBound else {
+            XCTFail("Could not find applyCameraSuspension boundary"); return
+        }
+        let body = String(after[..<end])
         XCTAssertTrue(
             body.contains("isVideoSuspendedByHold"),
             "L'émission doit être gardée sur !isVideoSuspendedByHold pour ne pas " +
             "doubler le « caméra coupée » déjà envoyé par le hold"
         )
-        XCTAssertTrue(
+        // L6-1 — le gel de survie N'ÉMET plus rien (il ne coupe rien), donc il
+        // n'y a plus de doublon à éviter de ce côté : l'y garder ferait taire
+        // une vraie interruption de capture pendant un épisode dégradé.
+        XCTAssertFalse(
             body.contains("isVideoSuspended,"),
-            "L'émission doit être gardée sur !isVideoSuspended (contrôleur de survie) " +
-            "pour ne pas doubler le signal qu'il a déjà envoyé"
+            "L'émission ne doit PLUS être gardée sur !isVideoSuspended : depuis L6-1 le gel réseau " +
+            "n'envoie aucun call:media-toggled, donc il n'y a rien à dédoubler — et la garde " +
+            "masquerait un vrai signal caméra."
         )
     }
 }

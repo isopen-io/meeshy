@@ -3,10 +3,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
+import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 
@@ -144,7 +143,11 @@ export function registerLeaveRoutes(
         // bas), ce qui laisse son propre acquittement inchangé.
         const remaining = await prisma.participant.findMany({
           where: { conversationId: id, isActive: true },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : ce sont les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), et le fanout doit
+          // les connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
+          // présentation, et c'était la plafonnée, pour tout le monde.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         })
         // Le partant ferme la chaîne, et c'est le MÊME argument qu'au-dessus
         // appliqué à celui qu'il excluait. La room de conversation « porte le
@@ -162,7 +165,14 @@ export function registerLeaveRoutes(
         // Une seule chaîne, pas un second `emit` : un appareil du partant resté
         // dans la room de conversation recevrait sinon deux copies.
         const audience = [...remaining, { id: participant.id, userId }]
-        emitToConversationParticipants({
+        // Compte ABSOLU, gratuit — `remaining` est déjà chargé pour nommer les
+        // rooms. Un client qui soustrait 1 ne converge pas : l'événement manqué
+        // (hors ligne, trou de reconnexion) laisse une dérive que rien ne
+        // rattrape, et que les deux clients PERSISTENT (cache disque iOS,
+        // `staleTime: Infinity` web). Un total se rattrape au suivant — encore
+        // faut-il que ce total soit celui auquel le lecteur a droit, d'où les
+        // deux chaînes disjointes de `emitConversationMemberCountEvent`.
+        emitConversationMemberCountEvent({
           io,
           conversationId: id,
           participants: audience,
@@ -172,13 +182,8 @@ export function registerLeaveRoutes(
             userId,
             displayName: participant.displayName,
             leftAt: now.toISOString(),
-            // Compte ABSOLU, gratuit — `remaining` est déjà chargé pour nommer
-            // les rooms. Un client qui soustrait 1 ne converge pas : l'événement
-            // manqué (hors ligne, trou de reconnexion) laisse une dérive que
-            // rien ne rattrape, et que les deux clients PERSISTENT (cache disque
-            // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
-            ...presentMemberCount(remaining.length),
           },
+          memberCount: remaining.length,
         })
 
         // La clôture GLOBALE, quand la branche créateur l'a prononcée. Elle est

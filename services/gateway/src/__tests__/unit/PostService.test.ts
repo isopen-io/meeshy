@@ -50,6 +50,11 @@ function createMockPrisma() {
       upsert: jest.fn(),
       deleteMany: jest.fn(),
       groupBy: jest.fn(),
+      // `unlikeComment` lit la pile TRIÉE avant de retirer (2026-08-25) :
+      // l'emoji demandé la restreint, son absence la laisse entière, et la tête
+      // est la cible — c'est ce qui rend « retirer la DERNIÈRE posée » possible.
+      // Défaut vide : sans cible, le retrait est un no-op idempotent.
+      findMany: jest.fn().mockResolvedValue([]),
       // Plafond des cinq réactions (2026-08-20) : `PostCommentService.likeComment`
       // consulte `findFirst` (l'émoji est-il déjà posé ?) puis, si non, `count`
       // (place encore disponible ?) AVANT toute purge/upsert. Défauts « personne
@@ -203,6 +208,26 @@ describe('PostService', () => {
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
     });
 
+    it('grave le RANG de chaque média = sa position dans mediaIds', async () => {
+      // `PostMedia.order` est `@default(0)` et le handler TUS ne l'écrit pas :
+      // sans ce site, les N médias d'un post arrivent tous à 0, et la lecture
+      // (`orderBy: { order: 'asc' }`) rend l'ordre d'ACHÈVEMENT des uploads
+      // parallèles, pas celui de la sélection. L'aperçu optimiste du composer
+      // est juste, puis le refetch le mélange.
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost({ ...basePostData, mediaIds: ['media-1', 'media-2'] }, 'user-1');
+
+      const orderWrites = prisma.postMedia.updateMany.mock.calls
+        .map((call: any[]) => call[0])
+        .filter((args: any) => args.data?.order !== undefined);
+      expect(orderWrites).toEqual([
+        { where: { id: 'media-1', postId: 'post-1' }, data: { order: 0 } },
+        { where: { id: 'media-2', postId: 'post-1' }, data: { order: 1 } },
+      ]);
+    });
+
     it('does not query postMedia when no mediaIds are provided', async () => {
       prisma.post.create.mockResolvedValue(makePost());
 
@@ -285,6 +310,59 @@ describe('PostService', () => {
       );
       // No audio media → no transcription update
       expect(prisma.postMedia.update).not.toHaveBeenCalled();
+    });
+
+    it('writes alt text only for media ids present in mediaIds', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        {
+          ...basePostData,
+          mediaIds: ['media-1', 'media-2'],
+          mediaAlt: { 'media-1': 'A cat on a windowsill', 'media-foreign': 'not requested' },
+        },
+        'user-1',
+      );
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+        where: { id: 'media-1', postId: 'post-1' },
+        data: { alt: 'A cat on a windowsill' },
+      });
+      // `media-foreign` never appeared in `mediaIds` — never touched.
+      expect(prisma.postMedia.updateMany).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ id: 'media-foreign' }) }),
+      );
+    });
+
+    it('clears alt (null) when the client sends an empty string', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        { ...basePostData, mediaIds: ['media-1'], mediaAlt: { 'media-1': '   ' } },
+        'user-1',
+      );
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+        where: { id: 'media-1', postId: 'post-1' },
+        data: { alt: null },
+      });
+    });
+
+    it('never touches postMedia for alt when mediaAlt is omitted', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, 'user-1');
+
+      // Le COMPTE d'appels ne dit plus « alt » depuis que la réclamation est
+      // suivie du RANG (`applyMediaOrder`) : c'est l'absence d'écriture
+      // PORTANT `alt` qui exprime l'intention de ce témoin.
+      const altWrites = prisma.postMedia.updateMany.mock.calls
+        .map((call: any[]) => call[0])
+        .filter((args: any) => args.data && 'alt' in args.data);
+      expect(altWrites).toEqual([]);
     });
   });
 
@@ -2004,6 +2082,21 @@ describe('PostService', () => {
         expect(claim.data).toEqual({ postId: 'post-1' });
       });
 
+      it('grave le RANG des médias ajoutés par une édition', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', { mediaIds: ['new-m1', 'new-m2'] });
+
+        const orderWrites = prisma.postMedia.updateMany.mock.calls
+          .map((call: any[]) => call[0])
+          .filter((args: any) => args.data?.order !== undefined);
+        expect(orderWrites).toEqual([
+          { where: { id: 'new-m1', postId: 'post-1' }, data: { order: 0 } },
+          { where: { id: 'new-m2', postId: 'post-1' }, data: { order: 1 } },
+        ]);
+      });
+
       it('adding media to a STORY counts as a content edit (engagement reset)', async () => {
         prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
         prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
@@ -2039,6 +2132,35 @@ describe('PostService', () => {
         expect(claim.where.id).toEqual({ in: ['new-m1'] });
         expect(claim.where.uploaderId).toBe('user-1');
         expect(claim.data).toEqual({ postId: 'post-1' });
+      });
+
+      it('writes alt text for a newly attached media id', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', {
+          mediaIds: ['new-m1'],
+          mediaAlt: { 'new-m1': 'A sunset over the bay' },
+        });
+
+        expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+          where: { id: 'new-m1', postId: 'post-1' },
+          data: { alt: 'A sunset over the bay' },
+        });
+      });
+
+      it('ignores mediaAlt entries for ids not in this mediaIds request (already-attached media)', async () => {
+        prisma.post.findFirst.mockResolvedValue(makePost({ authorId: 'user-1', type: 'STORY', media: [{ id: 'already-attached' }] }));
+        prisma.post.update.mockResolvedValue(makePost({ type: 'STORY' }));
+
+        await service.updatePost('post-1', 'user-1', {
+          mediaIds: ['new-m1'],
+          mediaAlt: { 'already-attached': 'sneaky rewrite', 'new-m1': 'ok' },
+        });
+
+        expect(prisma.postMedia.updateMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ where: expect.objectContaining({ id: 'already-attached' }) }),
+        );
       });
     });
   });
@@ -2395,6 +2517,10 @@ describe('PostCommentService', () => {
 
     it('deletes the reaction row and syncs counters from the table', async () => {
       prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      // `unlikeComment` lit d'abord la pile TRIÉE : l'emoji demandé la restreint,
+      // son absence la laisse entière, et la tête est la cible. Sans ce double,
+      // aucune cible n'est trouvée et rien n'est supprimé.
+      prisma.commentReaction.findMany.mockResolvedValue([{ emoji: '❤️' }]);
       prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
       prisma.commentReaction.groupBy.mockResolvedValue([{ emoji: '❤️', _count: { emoji: 1 } }]);
       const updatedComment = makeComment({ likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } });
@@ -2411,11 +2537,14 @@ describe('PostCommentService', () => {
           data: { likeCount: 1, reactionCount: 1, reactionSummary: { '❤️': 1 } },
         }),
       );
-      expect(result).toEqual(updatedComment);
+      // `removedEmoji` voyage AVEC le commentaire : la route diffuse ce que le
+      // serveur a FAIT, jamais ce que le client a demandé.
+      expect(result).toEqual({ ...updatedComment, removedEmoji: '❤️' });
     });
 
     it('drops the emoji key (and zeroes counters) when the table is empty', async () => {
       prisma.postComment.findFirst.mockResolvedValue(makeComment());
+      prisma.commentReaction.findMany.mockResolvedValue([{ emoji: '❤️' }]);
       prisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
       prisma.commentReaction.groupBy.mockResolvedValue([]);
       prisma.postComment.update.mockResolvedValue(makeComment());

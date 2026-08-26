@@ -167,16 +167,50 @@ nonisolated enum FocalScrollPerspective {
     /// tête de groupe, `Row.groupTopPadding` de plus en haut : la carte
     /// mange ces rembourrages asymétriques pour encadrer le message avec
     /// les mêmes espaces qu'en Script (directive user 2026-08-21).
-    static let focusCardInnerMargin: CGFloat = 4
+    ///
+    /// 4 → 9 le 2026-08-24 : « dans la bulle, l'espace entre le contenu et les
+    /// bords doit être exactement le même que pour le premier message d'un
+    /// groupe ; les messages suivants sont collés aux bordures ». La cause de
+    /// l'écart est ailleurs — en tête de groupe, `FocalIdentityHeader` occupe
+    /// sa hauteur réservée (`Focus.avatarSize`) même effacé en focus, et la
+    /// carte l'englobe : elle paraît aérée en haut. Une rangée de SUITE n'a
+    /// pas cet en-tête, son contenu commence au bord. Élargir la marge donne
+    /// à toutes la respiration que seule la tête de groupe avait par accident.
+    ///
+    /// **Plafonnée par `Row.paddingVertical`.** La carte dépasse le bloc de
+    /// cette marge ; au-delà du rembourrage que la rangée porte, elle mordrait
+    /// sur ses voisines — et `focusCardInsets` produirait des valeurs
+    /// négatives, que le `max(0, …)` masque sans les rendre justes.
+    /// Portée à 9 le 2026-08-24 pour aérer la carte, ramenée le même jour :
+    /// la CI a montré le conflit. Aérer DAVANTAGE demande d'écarter le contenu
+    /// à l'intérieur de la carte, pas d'agrandir la carte — ce qui touche la
+    /// hauteur de rangée et sort du périmètre.
+    static let focusCardInnerMargin: CGFloat = FocalMetrics.Row.paddingVertical
     /// Teintes de la carte et de ses chips (fond SwiftUI de la rangée en
     /// focus) — nommées ici, dans `Core/`, parce que le garde des littéraux
     /// de loi (`scripts/check-law-literals.sh`) interdit `0.45`/`0.40`/`0.35`
     /// en dur dans les fichiers de peau.
     static let focusCardFillOpacityDark: Double = 0.16
     static let focusCardFillOpacityLight: Double = 0.10
-    static let focusCardBorderOpacityDark: Double = 0.55
-    static let focusCardBorderOpacityLight: Double = 0.40
-    static let focusChipRingOpacity: Double = 0.45
+
+    /// Teinte de fond d'une chip posée sur la carte.
+    ///
+    /// **Directive 2026-08-24 — plus de cadre, donc plus d'anneau.** Le trait
+    /// qui encadrait la carte a disparu, et avec lui celui des chips : la
+    /// magnificence tient au FOND à la couleur de la conversation, pas à un
+    /// contour. Restait un point à réparer plutôt qu'à supprimer — le drapeau
+    /// de la langue AFFICHÉE ne se distinguait que par son anneau plus épais.
+    /// Sa marque passe donc au fond : nettement plus dense au repos, sans
+    /// renverser le contraste comme le ferait un fond plein (réservé, lui, à
+    /// « j'ai réagi »).
+    static func focusChipFillOpacity(isDark: Bool, isActive: Bool) -> Double {
+        switch (isDark, isActive) {
+        case (true, false): return 0.18
+        case (false, false): return 0.14
+        case (true, true): return 0.42
+        case (false, true): return 0.34
+        }
+    }
 
     static func focusCardInsets(isFirstInGroup: Bool) -> UIEdgeInsets {
         let top = FocalMetrics.Row.paddingVertical + (isFirstInGroup ? FocalMetrics.Row.groupTopPadding : 0) - focusCardInnerMargin
@@ -195,13 +229,17 @@ nonisolated enum FocalScrollPerspective {
 
     @MainActor
     final class FocusCardView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         override init(frame: CGRect) {
             super.init(frame: frame)
             isUserInteractionEnabled = false
             autoresizingMask = [.flexibleWidth, .flexibleHeight]
             layer.cornerRadius = FocalScrollPerspective.focusCardCornerRadius
             layer.cornerCurve = .continuous
-            layer.borderWidth = 1
         }
         required init?(coder: NSCoder) { nil }
     }
@@ -221,8 +259,7 @@ nonisolated enum FocalScrollPerspective {
         }()
         card.frame = contentView.bounds.inset(by: insets)
         card.alpha = 1
-        card.backgroundColor = accent.withAlphaComponent(isDark ? 0.16 : 0.10)
-        card.layer.borderColor = accent.withAlphaComponent(isDark ? 0.55 : 0.40).cgColor
+        card.backgroundColor = accent.withAlphaComponent(isDark ? focusCardFillOpacityDark : focusCardFillOpacityLight)
     }
 
     @MainActor
@@ -235,5 +272,59 @@ nonisolated enum FocalScrollPerspective {
         guard !CATransform3DIsIdentity(layer.transform) || layer.opacity != 1 else { return }
         layer.transform = CATransform3DIdentity
         layer.opacity = 1
+    }
+}
+
+// MARK: - Quand la magnificence s'arme (directive user 2026-08-24)
+
+/// **La magnificence ne s'arme pas au premier pixel défilé.**
+///
+/// Le mode Focal élisait un message dès que la liste bougeait : un pouce qui
+/// ripe, un rebond, un ajustement de deux points suffisaient à poser la carte
+/// et à faire apparaître les chips. La magnificence est une mise en avant —
+/// elle doit répondre à une intention de PARCOURIR, pas à un frôlement.
+///
+/// Deux portes, l'une ou l'autre :
+/// - **la vitesse** : un défilement franc, dès le premier événement, dit déjà
+///   qu'on cherche quelque chose ;
+/// - **la durée** : un défilement lent mais SOUTENU finit par dire la même
+///   chose, passé `sustainedMs`.
+///
+/// **Une fois armée, elle le reste.** Le désarmement au moindre repos ferait
+/// clignoter la carte à chaque pause de lecture — or c'est précisément à
+/// l'arrêt qu'on lit le message élu. L'état repart à zéro quand la scène
+/// Focal elle-même repart (changement de mode, retour à l'écran).
+///
+/// Les deux seuils passeront aux préférences utilisateur ; ils sont nommés ici
+/// pour n'avoir qu'un endroit à brancher le jour venu.
+///
+/// Loi PURE — aucune horloge murale, aucun `Date()` : la peau injecte
+/// l'instant, comme pour [`ScrollTimePillLaw`].
+nonisolated enum FocalMagnificationLaw {
+
+    /// Défilement soutenu au-delà duquel la magnificence s'arme, en ms.
+    static let sustainedScrollMs: Double = 4000
+
+    /// Vitesse (points/seconde, valeur absolue) au-delà de laquelle elle
+    /// s'arme immédiatement.
+    static let highVelocityThreshold: CGFloat = 1200
+
+    /// - Parameters:
+    ///   - alreadyArmed: l'état courant — armé, on le reste.
+    ///   - scrollStartedAt: début du défilement en cours (ms), `nil` au repos.
+    ///   - now: instant de l'événement (ms).
+    ///   - velocity: vitesse verticale du geste, points/seconde, signe libre.
+    static func isArmed(
+        alreadyArmed: Bool,
+        scrollStartedAt: Double?,
+        now: Double,
+        velocity: CGFloat,
+        sustainedMs: Double = sustainedScrollMs,
+        velocityThreshold: CGFloat = highVelocityThreshold
+    ) -> Bool {
+        if alreadyArmed { return true }
+        if abs(velocity) >= velocityThreshold { return true }
+        guard let scrollStartedAt else { return false }
+        return now - scrollStartedAt >= sustainedMs
     }
 }

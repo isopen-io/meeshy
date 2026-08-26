@@ -155,20 +155,91 @@ describe('resolveFocalMessageDisplay — texte + langue RÉELLEMENT servie', () 
     };
     expect(resolveFocalMessageDisplay(message, ['gl'])).toEqual({ text: 'Olá', language: 'gl' });
   });
+
+  // Le texte a TOUJOURS été servi (resolveLastMessagePreview normalise déjà les
+  // deux côtés via normalizeLanguageForDedup) : c'est le LIBELLÉ de langue qui
+  // divergeait. `focalServedLanguage` rapprochait les clés par un simple
+  // `.toLowerCase()` — `pt-BR` → `pt-br` ne matchait jamais la préférence `pt`,
+  // et le libellé retombait sur la langue ORIGINALE alors que le texte affiché
+  // était la traduction portugaise. La descente UNIQUE (resolvePrismTranslation)
+  // rend la paire { langue, texte } cohérente, région-taguée comprise.
+  it('nomme la langue SERVIE avec sa clé région-taguée stockée (pt-BR) pour une préférence pt', () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en',
+      translations: [makeTranslation('pt-BR', 'Olá')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['pt'])).toEqual({ text: 'Olá', language: 'pt-BR' });
+  });
+
+  // Règle 3 du Prisme, direction OPPOSÉE : une langue d'origine région-taguée
+  // (`en-US`) concourt à son rang normalisé (`en`). Au rang 1, l'original gagne —
+  // la traduction française d'un rang inférieur ne le supplante pas.
+  it("laisse l'original gagner à son rang même quand sa langue est région-taguée (en-US)", () => {
+    const message = {
+      content: 'Hello',
+      originalLanguage: 'en-US',
+      translations: [makeTranslation('fr', 'Bonjour')],
+    };
+    expect(resolveFocalMessageDisplay(message, ['en', 'fr'])).toEqual({ text: 'Hello', language: 'en-US' });
+  });
 });
 
 describe('isFirstInFocalGroup', () => {
+  // Heure LOCALE (sans `Z`) : jour calendaire indépendant du fuseau du runner.
+  // `Message.createdAt` est typé `Date` — on construit des Date, pas des chaînes.
+  const J1_MATIN = new Date('2026-08-25T09:00:00');
+  const J1_SOIR = new Date('2026-08-25T22:00:00');
+  const J2_MATIN = new Date('2026-08-26T08:00:00');
+
   it('vrai quand il n\'y a pas de message précédent', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u1' }, null)).toBe(true);
-    expect(isFirstInFocalGroup({ senderId: 'u1' }, undefined)).toBe(true);
+    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }, null)).toBe(true);
+    expect(isFirstInFocalGroup({ senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }, undefined)).toBe(true);
   });
 
   it('vrai quand l\'expéditeur change', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u2' }, { senderId: 'u1' })).toBe(true);
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u2', messageSource: 'user', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }
+      )
+    ).toBe(true);
   });
 
-  it('faux quand le même expéditeur enchaîne', () => {
-    expect(isFirstInFocalGroup({ senderId: 'u1' }, { senderId: 'u1' })).toBe(false);
+  it('faux quand le même expéditeur enchaîne le même jour', () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }
+      )
+    ).toBe(false);
+  });
+
+  it("ouvre un groupe quand le même expéditeur reprend le lendemain — la bulle sous la capsule de date porte son identité", () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'user', createdAt: J2_MATIN },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_SOIR }
+      )
+    ).toBe(true);
+  });
+
+  it("ouvre un groupe après l'avis d'arrivée DU MÊME auteur — un message système n'est pas une prise de parole", () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'system', createdAt: J1_MATIN }
+      )
+    ).toBe(true);
+  });
+
+  it('ouvre un groupe pour un message système lui-même', () => {
+    expect(
+      isFirstInFocalGroup(
+        { senderId: 'u1', messageSource: 'system', createdAt: J1_SOIR },
+        { senderId: 'u1', messageSource: 'user', createdAt: J1_MATIN }
+      )
+    ).toBe(true);
   });
 });
 

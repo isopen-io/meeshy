@@ -266,11 +266,12 @@
       "video": "vidéo",
       "audio": "audio"
     },
-    "storyVisibility": {
+    "publicationVisibility": {
+      "label": "Audience",
       "public": "Public",
       "friends": "Amis",
       "community": "Communauté",
-      "except": "Tous sauf…",
+      "except": "Amis sauf…",
       "only": "Seulement…",
       "private": "Privé"
     },
@@ -281,17 +282,50 @@
       "empty": "Aucun résultat",
       "remove": "Retirer"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Format de publication",
+        "post": "Post",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Statut"
+      },
+      "media": {
+        "limitReached": "Vous pouvez joindre jusqu'à {max} médias.",
+        "limitPartial": "Vous pouvez joindre jusqu'à {max} médias. Seuls {added} ont été ajoutés."
+      },
+      "repost": {
+        "title": "Repartager",
+        "quote": "Citer",
+        "contentLabel": "Contenu de la citation",
+        "posting": "Publication en cours..."
+      },
+      "edit": {
+        "title": "Modifier le post",
+        "contentLabel": "Modifier le contenu du post",
+        "removeMedia": "Retirer ce média"
+      }
+    },
     "postComposer": {
       "contentLabel": "Contenu du post",
       "addPhoto": "Ajouter une photo",
       "addVideo": "Ajouter une vidéo",
+      "addAudio": "Ajouter un audio",
       "changeVisibility": "Changer la visibilité",
-      "visibility": {
-        "public": "Public",
-        "friends": "Amis",
-        "except": "Amis sauf...",
-        "only": "Seulement...",
-        "private": "Privé"
+      "mediaAlt": {
+        "label": "Texte alternatif",
+        "placeholder": "Décrivez ce média pour les lecteurs d’écran"
+      },
+      "soundExtraction": {
+        "label": "Autoriser la reprise du son",
+        "caption": "D’autres personnes pourront réutiliser la bande-son des vidéos de ce post dans leurs propres publications."
+      },
+      "audio": {
+        "start": "Démarrer l’enregistrement",
+        "stop": "Arrêter l’enregistrement",
+        "retry": "Recommencer",
+        "confirm": "Utiliser cet enregistrement",
+        "error": "Accès au micro refusé. Autorisez l’accès au micro et réessayez."
       },
       "reelToggle": {
         "groupLabel": "Type de publication",
@@ -324,7 +358,10 @@
         "SILENT": "Silencieux",
         "PINNED": "Épinglé"
       }
-    }
+    },
+    "repost": "Repartager",
+    "repostAsPost": "Garder sur mon fil",
+    "storyLocationHere": "Ici"
   },
   "copied": "Copié",
   "never": "Jamais",

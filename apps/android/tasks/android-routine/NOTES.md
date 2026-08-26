@@ -5,6 +5,657 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-26 — the scope gate must diff against `origin/main`, not the local `main` ref (slice `story-element-context-menu`)
+Branching with `git checkout -B <slice> origin/main` bases the slice on the freshly-fetched remote, but the LOCAL `main`
+ref stays wherever it last was — here dozens of commits behind. So `git diff main...HEAD` (or `git diff --cached main`)
+listed `.github/workflows/*`, `CLAUDE.md`, and a pile of `core/model` files that this slice never touched: they are simply
+NEWER on `origin/main` than on the stale local ref, and the diff shows every commit the local ref is missing as if the
+slice deleted/reverted them. That would fail the "apps/android only" merge gate for a phantom reason. **Always verify scope
+with `git diff --cached --name-only origin/main`** (the real base), or `git fetch origin main && git branch -f main origin/main`
+first. The clean run showed the true 9-file `apps/android`-only diff. Cheap lesson, but it turns a 3-second panic into a
+non-event next time.
+
+## 2026-08-26 — a context-menu resolver earns behavioural tests by being tied to the reducer it fronts (slice `story-element-context-menu`)
+A "which menu rows are enabled?" resolver is trivially tautology-bait: `assertThat(resolve(backElement).sendToBack.enabled).isFalse()`
+just restates the code. The non-tautological form asserts the resolver AGREES WITH THE REDUCER it gates:
+`assertThat(menu.isEnabled(action)).isEqualTo(deck.reorderTextElement(id, action.zOrder!!) !== deck)` — the row is enabled
+exactly when the op is not inert, proven against the real `reorderTextElement`/`duplicateTextElement` inert-ness rather than
+against a hand-set expectation. This also future-proofs the menu: if the reducer's inert conditions ever change, the property
+test fails until the resolver follows. Keep the enum→op mapping (`StoryElementAction.zOrder`) a SINGLE projection so the menu
+and the reducer physically cannot drift, and mutation-prove it (force every row `enabled = true` → only the position/cap
+behavioural tests redden, never the shape/mapping ones).
+
+## 2026-08-26 — closing an author→reader loop: the pure conversion is the INVERSE of the reader's, and the "missing" datum is captured where it's uniquely available (slice `story-composer-background-image-transform`)
+The reader slice below made Android HONOUR a background image's `x`/`y`/`scale` framing; this slice made the composer
+WRITE it, so a story an Android author frames renders framed everywhere (its own reader included). Three reusable moves:
+
+- **Author-side conversion is the reader-side conversion run backwards, and a round-trip test proves it.** The reader
+  reads `offsetFraction = x - 0.5` (then × canvas size); the composer writes `x = 0.5 + offsetX / canvasWidth`. Rather
+  than eyeball the algebra, one test feeds a `StoryCanvasTransform` through `toBackgroundFraming` → a `StoryMediaObject`
+  → the reader's `StoryBackgroundObjectTransform.from` and asserts the offset survives. That single test is the loop's
+  guarantee; it caught nothing here only because the two halves were written to match — which is exactly what it exists
+  to keep true as either half changes.
+- **The "wrinkle" (a datum not retained in the VM) dissolves once you ask where it is UNIQUELY available.** NOTES flagged
+  "canvas width isn't retained at publish". The fix wasn't a new measurement intent — it was noticing that the ONLY way
+  to produce a non-identity transform is `onCanvasTransform`, which is HANDED the canvas size on every gesture. So the
+  size that produced an offset is always in scope to invert it; capture it there. When a needed value seems missing,
+  look at the one code path that could have created the state that needs it — the value is usually passing through.
+- **Float→Double: divide in Double, don't widen a Float quotient.** `(200f / 1920f).toDouble()` differs from
+  `200.0 / 1920.0` by ~2.5e-9 — enough to redden a 1e-9 test. `offset.toDouble() / size.toDouble()` is exact. When a
+  pure conversion feeds a wire `Double`, do the arithmetic in Double from the start.
+- **A guard the reader doesn't need, the author does: frame only the media the canvas actually SHOWED.** The composer
+  canvas previews (and pans) the slide's FIRST attachment, but the author may designate a DIFFERENT attachment as the
+  background. Projecting the pan onto a differently-designated background would mis-frame an image the author never
+  touched — so `resolveBackgroundFraming` returns IDENTITY unless the designated id IS the first resolved slide media.
+  (Corollary follow-up surfaced, not taken: the canvas SHOULD preview the designated background, not the first media.)
+
+## 2026-08-26 — a background object carries the SAME transform fields as a foreground one but the reader converts them DIFFERENTLY (slice `story-viewer-background-media-transform`)
+The Android viewer drew any background image as a plain `ContentScale.Crop` fill, dropping the pan/zoom framing an
+author put on the background `StoryMediaObject`. The trap was assuming a background's `x`/`y`/`scale` mean what a
+foreground object's do. They do NOT: iOS's `StoryCanvasUIView+Rendering.swift` aspect-FILLS the background as a base,
+then applies `scale` + a pixel offset **FROM CENTRE** `((x-0.5)*W, (y-0.5)*H)` + `rotation` ON TOP, clipped — an
+"Instagram zoom inside the background". A foreground object instead uses `x`/`y` as an anchored POSITION and
+`aspectRatio`/`anchor` to size a discrete box (`StoryMediaLayer`); a background ignores `anchor`/`aspectRatio`
+entirely. So the port is a distinct pure conversion (`StoryBackgroundObjectTransform.from`), not a reuse of the
+foreground projection. Kept the offset as a canvas FRACTION (`x-0.5`) so the Compose `graphicsLayer` multiplies by
+its own measured `size` — resolution-independent, no canvas dims threaded into the VM. Confirmed the split by reading
+iOS first (an Explore subagent) BEFORE porting: the alternative reading (background = aspect-fill only, transform is
+a phantom) would have shipped a no-op — the recurring "don't port a non-functional iOS toggle" trap, avoided here by
+reading the RENDER path, not just the model.
+
+Reader-first is deliberate and has precedent: the colour/gradient background shipped reader-side
+(`story-slide-background-value`) as its OWN slice before composer authoring (`story-composer-slide-background`). This
+slice is the reader half; it is NOT a dead end — it renders framing that iOS/web/backend ALREADY publish and Android
+users view cross-client. The standing authoring debt (the author→reader loop, per the 08-25 note below): the composer
+holds framing as a per-slide `StoryCanvasTransform` in **viewport pixels** (scale + offsetX/Y px), while the wire
+wants **normalised** `x`/`y`. Closing the loop needs a px→fraction conversion (`x = 0.5 + offsetX/canvasWidth`) that
+requires the canvas width at publish — not currently retained in the VM. That is the real wrinkle for the follow-up,
+noted so it is not re-discovered. Video-background framing was scoped OUT (separate player render path) and kept at
+IDENTITY, so no regression to the existing video path.
+
+## 2026-08-25 — an authoring designation must produce the exact wire object the reader ALREADY reads (slice `story-composer-background-media`)
+The Android composer published slide media as a flat `mediaIds` list and emitted **no** `effects.mediaObjects` — so
+the reader's rich background path (`resolveBackgroundMedia` → `firstOrNull { it.isBackground }`, and the
+`StorySlideDuration` `bgVideoDur`/`bgAudioDur` loop-extend) was only ever exercised by RAW-publish/legacy wire
+shapes, never by an Android-composed story, which fell back to "first video else first image". Letting the author
+DESIGNATE the background is therefore not just a bit of state — it only becomes real by producing the one
+`StoryMediaObject { isBackground = true }` the reader already consumes. Two things that make the wire correct rather
+than merely present: (1) the composer holds only a media **id**, but the reader needs a **URL + kind + duration** —
+resolve the id against the uploaded-media the VM already tracks (`resolveBackgroundMedia`), keeping the pure mapping
+(`StoryBackgroundMedia.toMediaObject`) unit-testable and off the upload state; (2) only a **video** background feeds
+the duration branch, so carry duration onto `duration`/`intrinsicDuration` for video and OMIT it for an image —
+otherwise an image would spuriously stretch the slide. Corollary invariant: a "designate one" reducer must also
+**clear the pointer when the pointed-at media is removed** (`removeMedia`), or a stale id survives its media.
+Deferred the AUDIO half honestly — the composer has no audio-track surface yet, so `audioPlayerObjects[].isBackground`
+has nothing to designate; a half-slice that shipped a dead audio toggle would be worse than a scoped one.
+
+## 2026-08-25 — a reader gate is only half a feature: the author→reader loop, and the `toTextObject` field census (slice `story-composer-element-timing`)
+The prior slice made the reader HONOUR a text element's `startTime`/`duration` window, but nothing on Android could
+WRITE those fields: `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` yet omitted `startTime`/`duration`, so the
+only stories that ever carried a per-element window were iOS/back-end authored. **A resolution/reader slice leaves a
+standing authoring debt — the loop closes only when the composer can produce the very wire field the reader now
+consumes.** The tell is mechanical and worth running after any reader-gate slice: read the projection function
+(`toTextObject`) field by field against the wire model (`StoryTextObject`) and list which wire fields it never sets —
+each omission is either intentional (server-owned) or a missing authoring control. Mirror the nearest existing
+authored field's shape exactly (here `StoryTextFade` → `StoryElementTiming`: same flat-pair value type, same
+tap-cycle ladder, same `takeIf { it > 0 }?.toDouble()` omit-a-zero serialisation matching iOS's `$0 > 0 ? … : nil`)
+so the new control is coherent with what shipped, not a new idiom.
+
+## 2026-08-25 — "carried" is not "honoured": a wire field can ride the projection and still change nothing (slice `story-element-timing-window-gate`)
+`StoryTextObjectView`/`StoryForegroundMediaView` already carried `startTime`/`duration` and even fed them to the
+fade envelope — so a grep for the field name reads as "supported". But the fade resolver returns `null` outside the
+window (caller keeps base opacity), so an element with a timing window BUT no authored fade stayed fully visible the
+whole slide. iOS gates it hard via `StoryRenderer.shouldRender` (a sharp on/off cut, separate from the fade). The
+lesson generalises the "which wire field does the client still not consume?" heuristic: **a field being decoded and
+projected does not mean its SEMANTICS are enforced — ask what OBSERVABLE behaviour the field is supposed to drive,
+then check that path exists.** Here the field drove a fade ramp but not the visibility cut. Two behaviours, one field;
+one was wired, one wasn't.
+
+- **Convention when porting a `T?`-vs-`0` distinction iOS keeps but the wire projection has flattened.** iOS's
+  `shouldRender` reads `duration.map { start + $0 } ?? .infinity` — a PRESENT `0` → zero-length window (never
+  visible), `nil` → infinity (always). Android's projection collapses absent→`0.0`, losing that distinction. The
+  right port is NOT the literal iOS formula (it would hide every untimed element) but the module's ESTABLISHED
+  reading of `duration <= 0` as open-ended (`StoryMediaFadeResolver`, the clip-transition path). Match the codebase's
+  existing convention for the flattened value, not the foreign source's, and document the deviation at the site.
+- **Fail-open on a degenerate clock.** A visibility gate fed a non-finite playhead should return `true`, never hide
+  everything — a slice that can blank the canvas on a NaN is worse than the gap it closes. Made it a tested branch.
+
+## 2026-08-25 — find the reader gap by asking which wire field the client still doesn't consume (slice `story-slide-background-value`)
+The PROGRESS "Next" pointed at two composer-side pieces (per-element duration, background-designation) that both
+need a media-OBJECT authoring foundation the composer doesn't have yet — a big slice, not a thin one. Rather than
+force it, I turned the question around: **the wire model (`StoryEffects`) is richer than what the Android reader
+renders — which of its fields does the viewer still ignore?** `effects.background` (a slide's serialised colour
+backdrop) was the answer: the viewer painted background media but dropped the author's solid/gradient colour, so a
+text-only iOS/backend story showed the generic accent→black fallback instead of its chosen backdrop. A real,
+user-visible parity gap and a complete, thin READER-side vertical (parse SSOT → projection → screen), no
+authoring foundation required.
+- **A reader-side gap is often a cleaner thin slice than the composer-side "Next".** When the next authoring step
+  needs infrastructure that doesn't exist, look for an existing wire field the reader under-consumes — it ships a
+  complete vertical against REAL backend/iOS data with no dead ends, and it usually fixes a live bug.
+- **Kotlin `String.split` ≠ Swift `split(separator:)`.** Swift omits empty subsequences by default; Kotlin keeps
+  them. Porting a `gradient:A:B` colon-split faithfully means `.split(":").filter { it.isNotEmpty() }`, else
+  `gradient:A::B` diverges between clients. Made this a mutation-proven test so the filter can't silently rot.
+- **Keep the hex→Color bridge in the glue, the parse in `:core:model`.** `StoryBackgroundValue` stays pure (hex
+  strings, no `Color`); the Composable maps to a `Brush`/`SolidColor` via the existing `hexColor` SSOT and falls
+  back to accent→black when a degraded hex won't resolve — the slide is never blank.
+
+## 2026-08-25 — the AUTHORING bound is a second SSOT, distinct from the reader SSOT (slice `story-composer-slide-duration-pin`)
+The reader honours `effects.timelineDuration`; the composer had no way to write it, so Android could only
+*read back* a pin an iOS author or the backend set. Closing the loop needs a SECOND single source: not the
+duration *rule* (`StorySlideDuration`, reader-side) but the duration *bound* — what an author is allowed to pin.
+- **Port the setter's clamp, not just the getter's rule.** iOS `StoryComposerViewModel.currentSlideDuration`
+  (StoryComposerViewModel+Slides.swift) bounds the write with `max(2, min(600, newValue))`. That `[2, 600]`s
+  bound is its own parity claim → `StoryDurationPin.clamp` (`:core:model`, pure) owns it in one place, and the
+  deck/draft/VM all route through it. A magic `2`/`600` scattered across the composer would drift from iOS the
+  moment either bound moved.
+- **`coerceIn` propagates NaN; guard it at the bound.** Android's slider hands a `Float`; a degenerate gesture
+  can produce `NaN`, and `NaN.coerceIn(2,600)` stays `NaN` (Swift's `max/min` do too, but iOS never feeds a
+  slider `Float` here). Guard `if (seconds.isNaN()) return MIN` so a bad pin can never persist a non-finite
+  duration. `±∞` are fine — `coerceIn` maps them to the ceiling/floor.
+- **The composer's displayed value reuses the READER SSOT for its fallback.** `selectedSlideDurationSeconds` =
+  `pin ?? StorySlideDuration.contentDerivedSeconds(...)` — the same function the viewer uses — so the "auto"
+  value the slider shows can never diverge from what the reader will actually play. Feed it the publishable text
+  elements; the background-media branch lights up for free when that pipeline lands.
+- **A pin alone must materialise `StoryEffects`.** The draft's `storyEffects()` early-returned null when there
+  were no textObjects/stickers/filter; a duration-only story would then have dropped its pin. Add
+  `durationSecondsPin == null` to that guard, else the one field the reader honours never reaches the wire.
+- **SDK bootstrap this run: `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs)** — identical to the entry
+  below: pristine `android-37.0` auto-installed, first `./gradlew` hash-errored on `android-37`, the four-edit
+  copy→patch keeping android-37.0 ALONGSIDE resolved it. Two THIRD-mode runs in a row on this container.
+
+## 2026-08-25 — a duration/timing constant is a PARITY CLAIM; port the SSOT, don't reuse the magic number (slice `story-viewer-slide-duration`)
+The story viewer auto-advanced on a hardcoded `SLIDE_DURATION_MS = 5000`. iOS has ONE authority for slide
+duration (`StorySlide.computedTotalDuration()`, StoryModels.swift) that is content-aware and defaults to **6s**.
+The Android constant was therefore wrong twice: wrong DEFAULT (5s vs 6s) and blind to per-slide timing. Lesson:
+a bare timing/size constant that "mirrors iOS" is a claim to verify against the iOS SOURCE, not a value to copy.
+- **Port the authority function, make it the SSOT.** `StorySlideDuration` (`:core:model`, pure) now owns the
+  whole rule; the screen no longer holds a duration constant — it reads `StorySlideView.autoAdvanceMillis`,
+  resolved once at projection. Priority-0 `effects.timelineDuration` (author-pinned) wins over content; the
+  legacy `effects.slideDuration` is IGNORED (arbitrary backend values), exactly as iOS documents.
+- **`split(" ")` ≠ Swift `split(separator:)`.** Swift omits empty subsequences by default; Kotlin's `split(" ")`
+  keeps them, so `"a  b"` counts 3 not 2. Match iOS with `.split(" ").count { it.isNotEmpty() }` — it changes the
+  long-text threshold branch.
+- **One consumer, TWO reads.** The per-slide duration feeds BOTH the countdown tween AND the keyframe
+  `playheadSeconds` — miss the second and animations desync from the (now different) slide length. Grep every use
+  of the constant you're replacing, not just the obvious one.
+- **A resolver that DROPS a field is a silent parity gap.** `StoryEffects.rendering` (v3→v1 bridge) never mapped
+  `SceneV3.timelineDuration`, so a timeline-pinned v3 story lost its author duration on decode. Found only by
+  tracing what the new SSOT reads back to every producer of that field.
+- **SDK bootstrap this run: `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+  auto-installed but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+  (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`)
+  keeping android-37.0 ALONGSIDE resolved it. (Flipped from the previous entry's pristine-alone — recipe still
+  varies per container; try pristine first, then copy→patch, then both-dirs.)
+
+## 2026-08-25 — a realtime EDIT into a Room-cache surface is READ-MERGE-WRITE; reuse the existing merge law (slice `story-updated-realtime-tray`)
+A realtime `story:updated` into the Room-cache-driven tray is folded by READING the cached copy
+(`StoryCacheSource.findLocal` ← `StoryDao.getById`), MERGING the edit onto it, and WRITING it back
+(`upsertLocal`) — the cache-first stream then repaints. This is the EDIT twin of the delete seam (`deleteLocal`),
+and the same principle: the Room cache is the single source of truth; no in-memory overlay.
+- **Reuse the merge law, don't re-implement it.** The tray-edit merge (`StoryUpdateMerge`) delegates its
+  preserve-path to the already-tested `PostUpdateMerge.merge` (the feed's `post:updated` fold) — same
+  reader-personal-field preservation, one source of truth. The story merge only ADDS the `engagementReset`
+  branch on top.
+- **A broadcast can't be personalized, so viewer-owned fields are MONOTONE with one escape.** `isViewedByMe` in a
+  `story:updated` reflects the broadcaster's/default view, not the reader's — preserving the reader's seen state is
+  the default (monotone: once seen, stays seen). The ONE escape is `engagementReset` (a content edit wiped
+  views/reactions server-side → the ring legitimately reverts to unseen), and the exception to THAT is the AUTHOR
+  (`isOwnStory`): the server never records the author's own view of their own story, so it survives a reset. Mirror
+  of iOS `isOwnGroup || (!engagementReset && shouldKeepLocalViewed(...))`.
+- **Android reads the flag; iOS reads a timestamp.** iOS's `shouldKeepLocalViewed(localViewedAt, contentEditedAt)`
+  compares timestamps because its REST path lacks the flag; Android's wire model exposes no `contentEditedAt`, and
+  the socket event carries `engagementReset` explicitly — so the Android merge reads the flag directly. Same rule,
+  simpler signal.
+- **SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` alone worked** (no copy→patch, no
+  both-dirs). First `./gradlew` mapped compileSdk 37 → android-37.0 with no hash error. Recipe still flips per
+  container.
+
+## 2026-08-25 — fold a realtime removal into the AUTHORITATIVE cache, not an in-memory overlay (slice `story-deleted-realtime-tray`)
+A Room-cache-driven surface (the story tray, `StoriesViewModel` ← `StoryRepository.storiesStream()`) folds a
+realtime `story:deleted` by DELETING the row from the cache — `StoryDao.deleteById` → `StoryCacheSource.deleteLocal`
+→ `StoryRepository.removeCachedStory` — and letting the cache-first stream repaint. NOT by keeping an in-memory
+`Set<deletedId>` overlay and re-triggering an emission: the cache is the single source of truth, and an overlay
+would drift the moment a background revalidation re-fetched the (now server-deleted) row. Bonus correctness for
+free: an unknown id is a 0-row DELETE, so Room emits nothing → an over-broadcast delivery (a friend's feed room
+gets deletes for stories never cached) causes no spurious repaint. Own-echo guard: NONE for a deletion (unlike a
+reaction) — a story deleted anywhere must vanish for its author too (iOS `purgeDeadStories`). Test the VM fold by
+backing the mocked `storiesStream` with a `MutableStateFlow` and having the fake `removeCachedStory` mutate it —
+a faithful stand-in for Room re-emitting, so the assertion is end-to-end (socket → cache → tray) not a bare
+`coVerify`. RED-proof: neuter the subscription (collect-but-don't-remove) → exactly the new VM tests redden.
+
+## 2026-08-25 — scout before believing a "Next" pointer: STATUS realtime was already DONE
+The prior run's "Next" offered STATUS realtime folds as an alternative to the story tray. Scouting first
+(`grep statusCreated|statusUpdated|… StatusesViewModel`) showed `subscribeToSocketEvents` already folds all five
+status events. A "Next" pointer is a hypothesis, not a fact — verify the gap still exists before branching. Cost
+of the check: one grep. Cost of skipping it: a slice that reinvents a done fold.
+
+## 2026-08-25 — re-project a realtime whole-object swap through the LOAD-TIME mapper, not a bespoke one (slice `story-updated-realtime-viewer`)
+`story:updated` carries the COMPLETE edited story (`ApiPost`), exactly like the initial `list()` load. The
+temptation is to hand-map the payload's changed fields into the existing slide. Don't: the viewer already has
+ONE canonical wire→slide path — `ApiPost.toStoryItem()` (`:sdk-core/StoryGrouping.kt`, was `private`) →
+`StoryItem.toSlideView()` (the VM's projector, which also repopulates `rawItems`, the single source of truth
+`emit()` re-projects the current slide from). Promoting `toStoryItem()` to `public` and routing the update
+through the SAME two calls guarantees the edited slide is projected byte-identically to a freshly-loaded one —
+media, text objects, audio, translations all handled, no field silently dropped. A second mapper would drift.
+**The pure engine method stays dumb on purpose**: `StoryPlayback.replacingSlide(newSlide)` just swaps a slide
+by id and keeps the cursor — all the projection richness lives in the (already-tested) `toSlideView`, so the
+new pure logic is a tiny, fully-discriminated container op.
+
+**The `engagementReset` flag is the ONLY behavioural fork, and it lives in the reaction-count cache, not the
+slide.** `seededReactionState` reads `reactionStates[storyId]` first (a live count from prior deltas), falling
+back to the slide's `reactionCount`. So after a `replacingSlide`, a stale `reactionStates` entry would mask the
+fresh story's count. Purge it ONLY on `engagementReset: true` (a content edit wiped engagement server-side → 0);
+a metadata-only update (visibility) must KEEP the live count. The test that proves the fork is the metadata-only
+arm: fire a `reacted` delta (count→3), then a non-reset update carrying the old count (2) → assert it stays 3.
+Without the flag check, that test reddens — it's the witness the two arms diverge.
+
+## 2026-08-24 — a broadcast can reach a client via a room it never explicitly joins (slice `story-deleted-realtime-viewer`)
+`story:deleted` is emitted by `emitToFriends` to `ROOMS.feed(id)` — NOT the post room the story viewer joins
+(`joinPostRoom`). So the first instinct — "the viewer joins the post room, therefore it can fold post-room
+events" — undercounts what actually arrives: `broadcastStoryReacted` uses `emitToUserFeedAndPostRoom` (both
+rooms), but `story:deleted` is feed-room only. **The event still reaches the viewer**, because the gateway
+auto-joins every socket to its OWN `feed:{userId}` room on auth (`AuthHandler.ts:235`, `socket.join(ROOMS.feed(user.id))`).
+Before deciding a realtime fold is an orphan ("the client isn't in that room"), trace BOTH the broadcast target
+(`emitToFriends` vs `emitToUserFeedAndPostRoom` — read the handler, not the event name) AND the client's
+implicit room memberships (the personal feed room is always joined). The `story:deleted` broadcast targets
+friends' feed rooms, every client is in its own feed room, so a friend's deletion reaches it.
+
+SDK bootstrap THIS run: `dl.google.com` **200**; pristine `android-37.0` auto-installed by AGP, first `./gradlew`
+hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel 37.0→37, `package.xml`
+`<api-level>` + `path=`, BOTH `build.prop` `sdk_full` fields) with android-37.0 kept ALONGSIDE resolved it
+("THIRD mode"). `meeshy.sh check` then BUILD SUCCESSFUL, 973 tasks.
+
+## 2026-08-24 — before wiring an "ignored" realtime event, prove it is a BROADCAST with a RENDER surface (slice `feed-post-reposted-realtime`)
+The Next pointer listed four still-ignored social events. A read-only scout killed three and shipped one — the
+discriminator each time was NOT "does iOS fold it?" but **"is it broadcast, and does Android render what it
+carries?"**. `post:reaction-added`/`-removed`: iOS folds the ABSOLUTE per-emoji count into `reactionSummary`,
+but the Android FEED card renders reactions as a HEART + count only (only STATUSES render `reactionSummary`
+chips via `StatusBarPresentation`), so folding it = orphan/dead-end code the routine forbids. `comment:reaction-sync`
+/`post:reaction-sync`: NOT broadcasts at all — the iOS SDK `SocialSocketManager` has an explicit comment where
+`socket.on("…reaction-sync")` would be, saying the gateway never emits it; it is the ACK to a `*-request-sync`
+emit. Only `post:reposted` passed both gates: it IS broadcast (`SocialEventsHandler.broadcastPostReposted`) and
+a repost already renders as a normal feed card (`RepostEmbedBuilder`). **A repost is itself a new feed post**, so
+it needs no new fold logic — route `data.repost` through the SAME `FeedRealtimeReducer.accept` seam `post:created`
+uses (dedup vs cache + head, prepend, bump banner). Mirror of iOS `FeedSocketHandler` → `handlePostUpsert(data.repost)`.
+General rule: **a list of "events iOS folds that we don't" is a list of CANDIDATES, not work — verify each is a
+broadcast (not an ACK) landing on a surface Android already renders before spending a slice on it.**
+
+## 2026-08-24 — a broadcast fold of a WHOLE entity must preserve the reader's OWN per-viewer fields (slice `feed-post-updated-realtime-merge`)
+`post:updated` rebroadcasts the COMPLETE edited post `{ post }` to every feed/post room — ONE object, shared
+by all recipients, so it cannot be personalized. Its viewer-owned fields (`isLikedByMe`, `isBookmarkedByMe`,
+`isViewedByMe`, `currentUserReactions`) are therefore the broadcaster's/default view, NOT the reader's.
+Folding it in wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. The pure
+`PostUpdateMerge.merge(previous, updated)` adopts every AUTHORITATIVE field from the edit while carrying those
+four personal fields across from the cached copy. **iOS preserves only `isLiked`; Android preserves all four
+its model exposes — do-better parity, not a copy.** The witness that catches a regression here is NOT "content
+updated" (that passes even with zero preservation) but "the reader's like survives an edit whose wire payload
+says un-liked" — RED-proof: dropping the preservation reddened exactly the 4 preservation/inert-discrimination
+tests, the 2 content-only tests stayed green. General rule for ANY realtime fold of a broadcast entity: **list
+the per-viewer fields the wire cannot personalize, and preserve every one — the diff a content-only test can't
+see.** No-op guard: `merge` returns `null` when the result equals `previous` (re-broadcast / nothing visible
+changed), so `_feedCache` never re-emits for free.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `android-37.0` auto-installed but the first `./gradlew`
+HASH-ERRORED on `android-37`.** The four-edit copy→patch (`source.properties` ApiLevel, `package.xml`
+`<api-level>` + `path=`, BOTH `build.prop` `ro.build.version.sdk_full` AND `ro.system.build.version.sdk_full`),
+keeping android-37.0 alongside, resolved it (NOTES "THIRD mode"). The recipe still flips per container — read
+the first `./gradlew` outcome, don't assume last run's branch.
+
+## 2026-08-24 — the caption sibling landed exactly where the last note predicted; reuse an existing model type as a socket-payload field (slice `post-translation-updated-realtime-merge`)
+The prior note ended "Caption has the same shape (`post:translation-updated`), a likely next Android viewer
+gap." It was — the scout confirmed iOS wires it (`FeedViewModel.applyPostTranslation`), the gateway broadcasts
+it, Android had no handler. Shipped as the POST caption sibling of the story overlay merge.
+
+Two reusable moves from this slice: **(a) when a socket payload's object field has the SAME shape as an
+existing `@Serializable` model, decode straight into that type — don't mint a bespoke payload struct.** The
+`post:translation-updated` `translation` object is `{text, translationModel?, confidenceScore?, createdAt?}`,
+byte-identical to `ApiPostTranslationEntry`, so `SocketPostTranslationUpdatedData.translation:
+ApiPostTranslationEntry`. Fewer types, and the merge takes the entry directly. **(b) A push-side merge must
+PRESERVE the metadata the pull-side string merge drops.** The existing `PostTranslationMerge.mergeTranslation(
+post, lang, text:String)` stored `ApiPostTranslationEntry(text=…)` only — fine for the on-demand pull (the
+translator returns a bare string), but the PUSH carries model/confidence. Added an entry overload; a
+metadata-only change is deliberately NOT a no-op (else richer server data silently vanishes). Test that with a
+"same text, different model → stored" case — it's the witness that the overload isn't just the string one.
+
+**No override forced on a realtime push** (same as the story slice, same as iOS): merging into `_feedCache` is
+enough; the projection's preferred-language chain surfaces it iff the language is in the reader's prisme. An
+override is for an EXPLICIT user tap (`requestOnDemandTranslation` sets it), never for a server push.
+
+**SDK bootstrap this run: `dl.google.com` 200; pristine `sdkmanager --channel=3 "platforms;android-37.0"`
+alone worked** (AGP 8.13.0 mapped compileSdk 37 → android-37.0 first `./gradlew`). "Try pristine first" held.
+
+## 2026-08-24 — a Prisme resolver lives SERVER-SIDE too: realtime pushed translations, not just on-demand pulls (slice `story-text-object-translation-realtime-merge`)
+When a §E "Next" pointer says "X translates only the caption on demand — scout iOS parity before building an
+N-call overlay pull", the scout's real question is **"where does the OTHER content get its translation from?"**
+For story text overlays the answer was NOT an on-demand pull at all: the **gateway** translates the overlay
+server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex, translations}`). iOS
+merges it into the open viewer; Android had no handler — a whole realtime Prisme channel on the floor. Lesson:
+before assuming a missing feature is an on-demand-pull gap, grep the gateway for a `*:translation-updated`
+broadcast for that content type — the pull may not exist because a PUSH already covers it. Caption has the
+same shape (`post:translation-updated`), a likely next Android viewer gap.
+
+Mechanics that recurred and are worth reusing verbatim: (a) a realtime merge into `rawItems` only repaints if
+`emit()` re-projects the current slide **unconditionally** — the viewer had gated re-projection behind an
+active exploration override, so a no-override realtime merge never reached the view; generalising it is safe
+because the override=null path reproduces `toSlideView`'s own resolver calls exactly. (b) Kotlin `copy` on the
+`StoryItem`/`StoryEffects`/`StoryTextObject` data classes makes the iOS "preserve every field" regression pin
+trivially true — no memberwise-init field-drop hazard to guard, though a field-preservation test is still cheap
+insurance. (c) RED-proof a multi-part slice PER PIECE: neuter the pure fn (`return item`) for the logic tests,
+comment the socket `listen` for the wiring tests, and revert ONLY the emit change to isolate that the chip test
+(reads `rawItems` directly) does NOT depend on it while the repaint test does.
+
+SDK bootstrap THIS run: `dl.google.com` **200**; `platforms;android-37` is not downloadable; `sdkmanager
+--channel=3 "platforms;android-37.0"` installed the preview and AGP mapped compileSdk 37 → android-37.0 on the
+first `./gradlew` — **pristine alone, no copy→patch, no both-dirs** (matches the 2026-08-23 entry below).
+
+## 2026-08-23 — this container: `dl.google.com` REACHABLE, pristine `android-37.0` alone worked (slice `story-media-fade-envelope`)
+Egress to `dl.google.com` returned **200** this run (unlike the containers the CI-reality note describes,
+where it's 403), so the local gate WAS available. Full bootstrap ran clean: `commandlinetools`, then
+`sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"`, then
+`sdkmanager --channel=3 "platforms;android-37.0"` for the preview compileSdk 37 — **pristine alone**, no
+copy→patch, no both-dirs mode. `./gradlew :feature:stories:help` resolved `android-37` on the first run;
+full `assembleDebug testDebugUnitTest` **BUILD SUCCESSFUL** (973 tasks, 4m11s). Confirms the "try pristine
+first" net rule. Practical timing on this image: config ~1m40s cold, targeted module test ~2m30s, full
+check ~4m10s — background the gradle invocations and wait on a `grep -qE 'BUILD (SUCCESSFUL|FAILED)'`
+until-loop; `--console=plain … | tail -N` buffers, so the output file stays empty until the run exits.
+
+## 2026-08-23 — opacity fold precedence for foreground clips is `fade ?? keyframeOpacity ?? base`, THEN × transition (NOT all-multiply)
+Porting `StoryRenderer.fadeOpacity`: iOS composes the media layer's opacity as
+`base = fade ?? kfOverrides.opacity ?? 1.0; layer.opacity = base × transitionFactor`
+(`StoryRenderer.swift:246-247`, comment "fade envelope (écrase) > opacité keyframes > 1"). So a live
+fadeIn/fadeOut envelope **overrides** an authored keyframe opacity — it does NOT multiply with it — and
+only the clip-transition factor multiplies. Android `StoryForegroundMediaView.animated()` mirrors this:
+`opacityBase = fadeEnvelope ?: base.opacity; opacity = opacityBase * transitionOpacity`. Easy to get wrong
+by multiplying all three; the mutation `fadeEnvelope ?: base.opacity → base.opacity` (drop the override)
+is the RED-proof for it. Same not-in-ItemSignature reasoning as the transition factor: the envelope is a
+per-tick post-pass, so on Android it belongs in the pure `animated()` fold, never baked into the projection.
+
+## 2026-08-23 — SDK recipe THIRD mode: NEITHER dir alone works, BOTH `android-37` + `android-37.0` present does
+
+Slice `story-clip-transition-opacity`. On this image *both* single-dir recipes the earlier notes record
+FAILED identically with **`Failed to find target with hash string 'android-37'`**:
+- Pristine `android-37.0` alone (the "let AGP map compileSdk 37 → android-37.0" recipe) → hash error, and
+  the first `./gradlew` also printed `Installing Android SDK Platform 37.0` (AGP re-materialised it) yet
+  still failed — so that install line is NOT a reliable success signal.
+- The full four-edit copy→patch `android-37` alone (`source.properties` ApiLevel, `package.xml`
+  `<api-level>` + `path=`, `build.prop` `sdk_full` incl. `ro.system.build.version.sdk_full`) → same hash
+  error, NO "inconsistent location" line, descriptor demonstrably correct (`<api-level>37</api-level>`,
+  `<base-extension>true</base-extension>`, `path="platforms;android-37"`, `sdk_full=37`, and
+  `sdkmanager --list_installed` showing `platforms;android-37 | 2 | ... | platforms/android-37`).
+  Clearing `.gradle`/config-cache + `--stop` + `-Pandroid.builder.sdkDownload=false` did not help.
+
+**What worked: keep BOTH dirs.** After the copy→patch `android-37` was in place, `sdkmanager --channel=3
+"platforms;android-37.0"` to reinstall the pristine dir *alongside* it — so `platforms/` holds both
+`android-37` AND `android-37.0` — and `./gradlew` resolved on the next run (BUILD SUCCESSFUL, 973 tasks).
+```bash
+# after the four-edit copy→patch of android-37 (see entries below):
+sdkmanager --channel=3 "platforms;android-37.0"   # reinstall pristine ALONGSIDE the patched dir
+ls $ANDROID_SDK/platforms   # must list BOTH android-37 and android-37.0
+```
+**Net rule (updated): the recipe is image-dependent and now has THREE modes — pristine-only, patched-only,
+and both-together. Try pristine first (cheapest); if it hash-errors, add the four-edit copy→patch; if THAT
+still hash-errors, reinstall the pristine so both coexist. Read the first `./gradlew` outcome and escalate.**
+
+## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the copy→patch `android-37` FAILS, pristine `android-37.0` WORKS (opposite of the previous entry)
+
+Slice `story-keyframe-interpolation`. The full four-edit copy→patch (`source.properties` ApiLevel,
+`package.xml` `<api-level>` + `path=`, `build.prop` `sdk_full` — even the extra
+`ro.system.build.version.sdk_full`) produced a folder whose `package.xml` was demonstrably correct
+(`path="platforms;android-37"`, `<api-level>37</api-level>`, `AndroidVersion.ApiLevel=37`), yet EVERY
+`./gradlew` still died with **`Failed to find target with hash string 'android-37'`** — with a fresh
+daemon, with `-Pandroid.builder.sdkDownload=false`, with android-37.0 removed. AGP 8.13.0 on this
+image simply would not load the hand-patched `android-37` as a target.
+
+What worked instead: install the **pristine** platform and leave it as-is —
+```bash
+sdkmanager --channel=3 "platforms;android-37.0"   # let AGP map compileSdk 37 → android-37.0
+# do NOT create android-37; do NOT patch anything
+```
+`assembleDebug testDebugUnitTest` was then BUILD SUCCESSFUL (973 tasks). NB the very first build with
+this present will print `Installing Android SDK Platform 37.0` (AGP re-materialises it) and then
+succeed — that install line is NOT the failure, unlike the copy→patch runs where it preceded the hash
+error. **Net rule: the recipe is image-dependent and flips between runs. Try pristine `android-37.0`
+FIRST (cheapest, no patching); only fall back to the copy→patch if pristine yields the hash error.**
+Read the first `./gradlew` outcome and pick the branch — do not assume the last run's recipe holds.
+
+## 2026-08-23 — Float easing → widen interpolation-value test tolerances to ~1e-4, not 1e-9
+
+Same slice. `KeyframeChannelSample.easing.eased(u)` returns a **Float**; a fraction like `0.2f`
+carries ~3e-7 absolute error, and scaled by a delta of 100–200 the interpolated Double lands
+~1e-5 off. A `Truth.isWithin(1e-9)` assertion on such a value fails on a CORRECT implementation
+(caught here: `interpolate([(0,0),(10,100)], at=2f)` gave 20.0000003). Use `isWithin(1e-4)` for any
+value that passes through Float easing — still tight enough to catch a wrong curve (whole-unit
+differences). Endpoint/`eased()` assertions on exact fractions (0, 0.5, 0.25, 0.75) stay at `1e-6f`.
+
+## 2026-08-23 — `android-37` copy→patch needs `build.prop`'s `ro.build.version.sdk_full` too (4th edit); and NEVER run two file-mutating gradle jobs at once
+
+Slice `story-text-element-rtl-direction`. Ran the documented three-edit copy→patch (`source.properties`
+ApiLevel + `package.xml` `<api-level>` + `path=`) and it STILL died with **`Failed to find target with hash
+string 'android-37'`** — this time with NO "inconsistent location" line, so the `path=` was already right.
+Cause: AGP 8.13.0 also reads `build.prop`, whose `ro.build.version.sdk_full=37.0` still declared the
+minor-versioned id. The 4th edit that fixed it:
+```bash
+sed -i 's/^ro.build.version.sdk_full=.*/ro.build.version.sdk_full=37/' android-37/build.prop
+rm -rf $ANDROID_SDK/platforms/android-37.0   # keep only android-37 to avoid any ambiguity
+```
+Full recipe THIS image needed (four edits): `source.properties` ApiLevel, `package.xml` `<api-level>`,
+`package.xml` `path=`, AND `build.prop` `ro.build.version.sdk_full`. Read the first `./gradlew` error:
+if it says `'android-37'` with no "inconsistent location", the `sdk_full` in `build.prop` is the one still
+lying. After the fix: `:feature:stories:testDebugUnitTest` BUILD SUCCESSFUL, full `assembleDebug
+testDebugUnitTest` green.
+
+**Process lesson (cost me ~4 wasted gradle runs): a mutation RED-proof that `cp`→`sed`→gradle→restore MUST run
+as a single isolated job, and you MUST wait for its REAL completion notification before starting another.** I
+mis-read a between-gradle-runs `pgrep` gap as "job done", restored the file, and launched a second mutation
+job while the first was still alive — two scripts editing the SAME `.kt` + `.bak` concurrently produced
+garbage `failures=0` results and a half-restored file. Also `--rerun-tasks` leaves a STALE result XML until it
+actually finishes, so reading the XML while gradle is mid-run reports the PREVIOUS run's counts. Rule: one
+mutation job at a time; confirm the task-completion notification (not `pgrep`); confirm the restore line in the
+job's own captured output; then `find apps/android -name '*.bak' -o -name '*.origbak'` before trusting the tree.
+
+## 2026-08-23 — copy+patch needs the `package.xml` `path=` attribute too, not only `<api-level>` (else "inconsistent location")
+
+Slice `story-text-element-fade-timing`. Ran the full copy+patch below (patched `source.properties` **and**
+`package.xml`'s `<api-level>37.0</api-level>`→`37`) — and the first `./gradlew` STILL died with
+**`Failed to find target with hash string 'android-37'`**, this time with the telltale line
+*"Observed package id 'platforms;android-37.0' in inconsistent location '.../android-37' (Expected
+'.../android-37.0')"*. Cause: the copied dir's `package.xml` still carried `path="platforms;android-37.0"`,
+so AGP treated the `android-37` folder as a misplaced `android-37.0` and refused it. The missing patch:
+```bash
+sed -i 's|path="platforms;android-37.0"|path="platforms;android-37"|' android-37/package.xml
+```
+With `<api-level>` **and** `path=` **and** `source.properties` all patched, `assembleDebug testDebugUnitTest`
+was BUILD SUCCESSFUL (973 tasks). Net: on THIS image the copy+patch needs THREE edits (source.properties
+ApiLevel, package.xml `<api-level>`, package.xml `path=`). The earlier 08-23 notes patched only the first two
+and worked — the images differ; patch all three to be safe, and read the first `./gradlew` error: an
+"inconsistent location" line means the `path=` attribute is the one still lying.
+
+## 2026-08-23 — copy+patch needs `package.xml` too, not only `source.properties` (else the hash-string failure persists)
+
+Slice `story-text-element-font-size`. Ran the documented copy+patch (below) but patched **only**
+`source.properties` (`AndroidVersion.ApiLevel=37`) — and the first `./gradlew` STILL died with
+**`Failed to find target with hash string 'android-37'`**, with a telltale warning: *"Observed package id
+'platforms;android-37.0' in inconsistent location '.../android-37'"*. Cause: AGP 8.13.0 reads the platform's
+**`package.xml`**, whose `<api-level>37.0</api-level>` still declared the minor-versioned id. Patching
+`source.properties` alone is not enough. Full recipe that worked this run:
+```bash
+sdkmanager --channel=3 "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+cd $ANDROID_SDK/platforms && cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+sed -i 's|<api-level>37.0</api-level>|<api-level>37</api-level>|'     android-37/package.xml   # ← the missing step
+```
+With both patched, `assembleDebug testDebugUnitTest` was BUILD SUCCESSFUL (973 tasks). The 08-21/earlier notes'
+`source.properties`-only sed may have sufficed on other images; on THIS one, `package.xml` is the file AGP
+actually reads for the hash — patch both to be safe.
+
+## 2026-08-23 — SDK recipe flipped AGAIN: on THIS container the `cp→android-37` patch works, pristine `android-37.0` FAILS (opposite of the 08-21 note)
+
+Slice `story-text-element-outline`. The 2026-08-21 NOTES said "install pristine `android-37.0`, patch NOTHING,
+let AGP map `compileSdk 37 → android-37.0`". This run that FAILED: the first `./gradlew` died with
+**`Failed to find target with hash string 'android-37'`** against the pristine dir — AGP 8.13.0 here looks up the
+integer hash `android-37`, not `android-37.0`. The recipe that worked (and that the three 2026-08-23 PROGRESS
+entries already used) is the **copy+patch**:
+```bash
+sdkmanager --channel=3 "platforms;android-37.0" "build-tools;36.0.0" "platform-tools"
+cd $ANDROID_SDK/platforms && cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+```
+Net lesson: the two recipes flip-flop between container images, so **don't trust either note blindly** — run the
+first `./gradlew` and read the hash string in its error. `'android-37'` → do the copy+patch (this run); a
+diagnostic naming `37.0` → leave pristine. Both dirs coexisting is harmless. `build-tools;35.0.0` still gets
+auto-installed by a module that pins it — let it. UTF-8 locale (`LANG=C.utf8`) still mandatory for `:sdk-core`.
+
+## 2026-08-23 — Background Bash runs from the SESSION cwd (repo root), not `apps/android` — use `gradlew -p`
+
+A **background** Bash command (`run_in_background: true`) executes from the session working directory
+(`/home/user/meeshy`), even though foreground calls in the same session may have `cd`'d into
+`apps/android` earlier — that `cd` does **not** carry into background invocations. `./apps/android/meeshy.sh`
+and a bare `./gradlew` both resolve against repo root and die with *"No such file or directory"* (there is no
+gradlew at repo root; it lives at `apps/android/gradlew`). I burned four backgrounded attempts on this.
+The robust form, cwd-independent, is:
+
+```bash
+/home/user/meeshy/apps/android/gradlew -p /home/user/meeshy/apps/android assembleDebug testDebugUnitTest
+```
+
+Absolute path to the wrapper + `-p <projectDir>`. Works identically foreground or background. (Foreground
+`cd /home/user/meeshy/apps/android && ./gradlew …` also works but only because the `cd` sticks for that one
+compound command.)
+
+## 2026-08-23 — Mutation RED-proof of a DELEGATING projection: mutate to the absent value, expect PARTIAL failure
+
+`feed-repost-embed-location`'s builder just delegates: `location = FeedPostLocationBuilder.build(repost.location)`.
+To prove the 3 new wiring tests aren't tautological, I forced `location = null` in the builder and re-ran the
+class. The right signal is **partial**: exactly the 2 positive-projection tests failed, and
+`absentLocationBecomesNull` stayed green (it asserts null for null input, so a null mutation can't break it).
+A blanket all-red would have meant my "absent" test was really just re-asserting the mutation. Partial,
+discriminating failure = the tests pin the behaviour, not the implementation. The label-resolution branches
+themselves stay covered where they live (`FeedPostLocationBuilderTest`), so the wiring tests don't re-test the
+delegate — they only prove the projection is wired.
+
+## 2026-08-23 — Before adding a model to `Post.kt`, grep for it: `SharedPlace` already existed
+
+Building `feed-post-location-sticker`, I nearly re-declared `SharedPlace` inside `Post.kt` (I had grepped
+`class ApiRepostOf`/`ApiRepostOf(` and it didn't surface it). It already lives in its **own** file
+`:core:model/SharedPlace.kt` — the composer's outgoing-location slice created it. A duplicate `data class`
+in the same package would have been a hard compile error, but the deeper trap is the shape drift: the
+existing `SharedPlace` is `{latitude, longitude, name, address, category}` (mirrors the **gateway**), with
+**no `id`** — iOS's has `id`, and I'd have copied iOS's. Lesson: before declaring any model type, `grep -rn
+"class <Name>"` across `apps/android`, and when a type exists, MIRROR THE ANDROID SSOT's shape, not iOS's.
+Corollary confirmed this slice: a field can be plumbed OUT (composer attaches `SharedPlace`) yet dropped on
+the way IN (`ApiPost` had no `location`) — "the model exists" ≠ "the field round-trips"; check the specific
+API struct.
+
+## 2026-08-22 — SDK bootstrap: the `android-37` symlink is NO LONGER enough — copy + rewrite ApiLevel
+
+The prior note's symlink fix (`ln -sf android-37.0 android-37`) **stopped working** this run. AGP does not
+derive the platform hash from the directory *name*: it reads `AndroidVersion.ApiLevel` from the platform's
+`source.properties`. The `platforms;android-37.0` package ships `AndroidVersion.ApiLevel=37.0`, so AGP computes
+the hash `android-37.0` regardless of a dir renamed/symlinked to `android-37`, and `compileSdk = 37` still dies:
+```
+> Failed to find target with hash string 'android-37' in: /root/android-sdk
+```
+(Confirmed: a baseline `assembleDebug` failed on exactly this **with the symlink in place**.) The fix that
+actually works — make a **real** `android-37` platform whose `source.properties` claims the integer API level:
+```bash
+cd "$HOME/android-sdk/platforms"
+rm -f android-37                       # drop the symlink if present
+cp -r android-37.0 android-37
+sed -i 's/^AndroidVersion\.ApiLevel=.*/AndroidVersion.ApiLevel=37/' android-37/source.properties
+```
+After that, full `assembleDebug testDebugUnitTest` = BUILD SUCCESSFUL (973 tasks). This is a **local-env only**
+fix (`$HOME/android-sdk`, never committed; `local.properties` stays gitignored). CI is unaffected — it runs
+`android-actions/setup-android` and lets AGP resolve/download the platform it wants, so this hand-patch is only
+for the reachable-`dl.google.com` local gate.
+
+## 2026-08-22 — SDK bootstrap: `android-37` is now MINOR-versioned; symlink after install
+
+The routine's recipe `sdkmanager --channel=3 "platforms;android-37.0"` now installs a **minor-versioned**
+platform: the dir is `$HOME/android-sdk/platforms/android-37.0` and its `source.properties` reads
+`AndroidVersion.ApiLevel=37.0`. But AGP 8.13 with `compileSdk = 37` looks up the hash string **`android-37`**
+(no minor), so Gradle dies before compiling with:
+```
+> Failed to find target with hash string 'android-37' in: /root/android-sdk
+```
+One-line fix, then everything builds:
+```bash
+ln -sf android-37.0 "$HOME/android-sdk/platforms/android-37"
+```
+(Alternative not tried: `sdkmanager "platforms;android-37"` on the stable channel — but only `android-37.0`,
+`37.1`, `37.2-betaN` are published, all minor-versioned, so the symlink is the reliable move.) After it, the
+full `assembleDebug testDebugUnitTest` ran locally, BUILD SUCCESSFUL (973 tasks). `local.properties` stays
+`sdk.dir=$HOME/android-sdk` and gitignored. Reusable habit: **when `dl.google.com` is reachable, the local
+gate is worth the ~5 min** — it's the fastest way to prove a Compose/UI wiring change compiles before pushing.
+
+## 2026-08-22 — Reuse the feed's building blocks in post-detail, don't reinvent
+
+The post-detail repost/quote slice added ZERO new value models or strings: it routes through the existing
+`RepostCommand` SSOT, reuses `QuoteComposerState` + `QuoteComposerSheet` (widened `private → internal`), and
+the existing `feed_action_repost`/`feed_action_quote` strings. Both surfaces (feed card + full-screen detail)
+now fold their "what to send" decision through one tested pure function — so the root-target fix and the
+blank-quote degradation are guaranteed identical on both, and a future gateway change touches one SSOT. When
+a second surface needs a behaviour the first already has, widen visibility and share the value model; a
+parallel re-implementation is where the two drift.
+
+## 2026-08-22 — One deep-link route, one entry ViewModel: unify what iOS split across views
+
+iOS routes an authenticated share-link tap (`RootView.resolveShareLinkEntry`, `isAuthenticated: true`)
+and an unauthenticated one through **two separate views**. Android's `GUEST_JOIN` nav destination is a
+single composable reached in both states, so the SOTA move is to unify the whole decision behind ONE
+`ShareLinkEntryViewModel` that reads the auth flag itself (a `fun interface` seam over
+`AuthRepository.isAuthenticated`) and branches internally — no duplicated presentation to drift.
+
+Two reusable habits confirmed this run:
+- **Gate the expensive fact behind the flag that needs it.** `knownConversationIds` only matters when
+  authenticated (the `isAlreadyMember` check), so read the conversation cache ONLY in that branch. A guest
+  never pays a needless cache read — and a test asserting the known-ids seam's call count is `0` for a
+  guest locks that in behaviourally (not an implementation-detail assertion: it's observable work avoided).
+- **A prompt state must be actionable or it is a dead end.** `ChooseIdentity` shipped with `chooseAccount()`
+  / `chooseAnonymous()` intents in the same slice; a "which identity?" screen with no way to answer would
+  have been orphan UI. Test the actions, not just the prompt.
+
+Testing shape that paid off: drive the VM with the **real** `ShareLinkEntryResolver` over faked LEAF seams
+(preview / store / join / auth / known-ids). The whole resolve→policy→navigation reduction is exercised end
+to end through the public `state`, and no test mocks the resolver's own output — so a policy regression would
+surface here too, not hide behind a canned mock.
+
+## 2026-08-22 — A "resolver" that does I/O + consults device state is app-side, NOT `:sdk-core`
+- Last slice's PROGRESS "Next" proposed a `:sdk-core` `ShareLinkEntryResolver`. That was a hypothesis,
+  and re-scouting iOS before committing proved it wrong — the routine's "parity notes are hypotheses"
+  warning earning its keep. iOS's `ShareLinkEntryResolver.swift` lives in
+  `apps/ios/Meeshy/Features/Main/Navigation/` (**app**, not `MeeshySDK`), and its own doc-comment says:
+  "App-side et non SDK : elle appelle un service réseau et consulte l'état de l'app."
+- The grain test decides: the resolver fetches a preview (network I/O) AND reads the guest-session store
+  (device state) → product orchestration → `:feature:*`/`:app`. Only the **pure decision**
+  (`ShareLinkEntryPolicy`: facts in, intent out, no I/O) is SDK-grade and stays in `:core:model`. Split
+  the two: a resolver that gathers facts + a pure policy that judges them. Landed the resolver in
+  `:feature:auth` (the guest-join flow already lives there).
+- Testability without the SDK penalty: give the resolver a `fun interface` seam for its one network read
+  (`ShareLinkPreviewProviding`) instead of injecting the concrete `AnonymousSessionRepository`. Fake the
+  seam with a lambda + record calls; use `InMemoryAnonymousSessionStore` for the store. Fully JVM-testable,
+  no Robolectric, no MockK-on-final-class friction. The consumer binds the seam to `repository::preview`.
+- Android store divergence to remember: the guest-session store is **single-valued** (one session per
+  device), whereas iOS keys `AnonymousSessionStore.load(linkId:)`. So "stored session for THIS link" is
+  `store.load()?.linkId == identifier`, not "any session exists". A session opened on a different link
+  must not resume here — worth an explicit test (mutation-provable).
+
+## 2026-08-22 — A JWT endpoint on a `conversations/…` path belongs on `ConversationApi`, not `ShareLinkApi`
+- `joinAuthenticated` = `POST /conversations/join/{linkId}`, JWT-authed, empty body. Tempting to drop it
+  on `ShareLinkApi` beside `joinAnonymously` (both are "share-link joins") — but `ShareLinkApi` is
+  documented as the **no-JWT** anonymous surface, and the path is `conversations/…`. The auth regime +
+  the path resource both point at `ConversationApi`. The interceptor decides JWT-vs-session, not the
+  interface — so "it's a share-link thing" is not a reason to co-locate it with the anonymous endpoints.
+- Cost of choosing `ConversationApi`: every hand-written stub of it must gain the new override. There are
+  exactly **three** in `:sdk-core` tests (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+  `ConversationAnalysisRepositoryTest`), each with one abstract base stub (`StubConversationApi` /
+  `StubStatsApi` / `StubAnalysisApi`) — the concrete recording fakes extend the base, so it's one line +
+  one import per file, not per fake. Grep `override suspend fun banParticipant` to find the base stubs.
+- Orphaned-model tell, again: `JoinAuthenticatedResponse` was already in `ShareLink.kt` with ZERO
+  consumers (grep). A defined-but-unconsumed DTO is unbuilt — wiring API + repository around it is a clean
+  vertical slice. (Same pattern as `AgentAnalysis.kt` last week.)
+- Empty-body POST in Retrofit = `@POST("…")` with **no `@Body`** (the `markRead` precedent). Don't invent
+  an `EmptyBody` DTO like iOS does.
+
 ## 2026-08-22 — An umbrella "…-mode / …-flow" parity box is several slices; find the pure brain first
 - The `[ ]` "Anonymous-session conversation mode; guest join-via-share-link flow" box LOOKED like
   a big unstarted feature, but recon showed Android had already ported ~90% of it (permission core,
@@ -1418,3 +2069,111 @@ across calls — a `cd /home/user/meeshy` earlier will make `./gradlew` (which l
   dashboard, avoids a double-fetch of the same endpoint, and keeps the chat header uncluttered. The
   existing Empty tests stayed green precisely because they carried no profiles — verify that before
   relying on it.
+
+## 2026-08-23 — Confirm a gateway payload field is on the wire via the iOS SDK decoder
+
+Several §F candidates were parked as "needs gateway payload confirmation first" (mood emoji / location in
+the repost embed). The cheap, reliable confirmation **without touching or running the gateway**: check whether
+the iOS SDK model *decodes* the field. If `packages/MeeshySDK/.../PostModels.swift` declares
+`public let moodEmoji: String?` on `APIRepostOf` and its `init(from:)` does
+`decodeIfPresent(String.self, forKey: .moodEmoji)`, then a shipping iOS client already receives it — i.e. the
+gateway serializes it — and Android is simply dropping it. That turns an "unverified-backend, model-plumbing"
+risk into a pure Android model+projection gap (add the `@Serializable` field, project it, render it), diff stays
+`apps/android`-only. Applied for `feed-repost-embed-mood-emoji` (iOS `PostModels.swift:87,281`). The mirror still
+open — `ApiRepostOf.location` — is confirmable the same way (`APIRepostOf.location: SharedPlace?` is on the wire).
+
+## 2026-08-24 — a viewer layer that ports iOS's canvas render should reuse the SAME two reader resolvers; only the transition arm differs (slice `story-text-object-viewer-projection`)
+Text objects and media clips share iOS's canvas render precedence `fade ?? keyframeOpacity ?? base`, so the
+Android `StoryTextObjectView.animated()` is `StoryForegroundMediaView.animated()` minus one arm: text objects
+never join a `StoryClipTransition`, so there is no transition ramp to fold and no `duration==0` degenerate-window
+guard to carry — the whole `clipTransitions`/`transitionOpacity` block simply drops out. Reusing `StoryKeyframeResolver`
++ `StoryMediaFadeResolver` verbatim meant the pure core was two small files and the mutation proof reused the same
+"drop the fade override" trick. Lesson: when a second canvas layer arrives, diff its iOS render against the layer
+already ported and port only the *delta* — don't re-derive keyframe/fade math that a shared resolver already owns.
+
+Prisme for a `Map<String,String>` translations field (text objects) is NOT the list-based `LanguageResolver.preferredTranslation`
+(that keys on `TranslationLike.targetLanguage`). iOS `StoryTextObject.resolvedText` walks preferred languages and, per
+language, tries an exact map key then a normalized-key match. Port `base(code)` as `LanguageCodeNormalizer.normalize(code)
+?: code.split('-','_').first().lowercase()` (the shared normalizer IS the Android mirror of `MeeshyUser.normalizeLanguageCode`),
+and apply it to BOTH the preferred code and the map key so `"fr-FR"`/`"FR"`/`"fra"` collapse onto `"fr"`. Exact-key-before-normalized
+preserves a `"pt-BR"` override over its `"pt"` sibling.
+
+## 2026-08-24 — SDK recipe flipped AGAIN: pristine `android-37.0` hash-errored, copy→patch `android-37` + keep-both worked (slice `story-text-object-exploration-override`)
+`dl.google.com` **200** again this run, so the local gate was available. But the cheapest path (pristine
+`android-37.0` alone) HASH-ERRORED here: `sdkmanager "platforms;android-35" "build-tools;35.0.0"
+"platform-tools"` installed fine, then `:feature:stories:testDebugUnitTest` died `Failed to find target
+with hash string 'android-37'` (AGP even re-materialised `android-37.0` on that first run, then still
+failed). The four-edit copy→patch fixed it: `cp -r android-37.0 android-37`, then patch
+`source.properties` `AndroidVersion.ApiLevel=37`, `package.xml` `<api-level>37</api-level>` + `path=
+"platforms;android-37"`, `build.prop` both `ro.build.version.sdk_full=37` and
+`ro.system.build.version.sdk_full=37`; KEEP the pristine `android-37.0` alongside the patched `android-37`
+(both dirs present). `./gradlew --stop` then re-run → BUILD SUCCESSFUL (973 tasks). Net: the "recipe is
+image-dependent and flips between runs" rule holds — try pristine first (cost one failed run here), fall
+back to copy→patch+keep-both when it hash-errors.
+
+## 2026-08-24 — the exploration override is a PREPEND, not a new resolver (slice `story-text-object-exploration-override`)
+When a reader-side view already resolves content through an ordered preferred-language chain, the ephemeral
+"Exploration" language pick is NOT a separate code path — it is the chain with the override prepended
+(`listOf(override) + preferredLanguages`). This mirrors `StoryContentResolver`'s documented contract
+("tried FIRST, without removing the preference chain") and gives the override, for free, whatever matching
+the base resolver already does (here the text-object resolver's exact-then-normalized per-language walk),
+plus automatic fall-through to normal Prisme resolution when the override has no matching translation. Keep
+the empty-guard on the EFFECTIVE list (`languages.isEmpty()`), not `preferredLanguages.isEmpty()`, so an
+override still resolves for a reader with no configured chain (e.g. anonymous). A blank/null override must
+be inert. Wire it by threading an optional `overrideLanguage` param (default `null`) so 2-arg call sites
+stay byte-identical, and re-project from the RAW item in `emit()`'s override branch — the projected view
+was built once with default prefs.
+
+## 2026-08-24 — a Prisme gap can live one rung EARLIER than the resolver: the OFFER surface (slice `story-language-bar-text-object-translations`)
+
+Cycles 118-120 (and the two prior Android story slices) all fixed *resolvers* — the code that RENDERS
+content in the reader's language. This slice's gap was upstream of any resolver: the story language bar
+(`StoryViewerViewModel.availableLanguagesFor`) derived its "present" chips from the CAPTION
+(`item.translations`) alone, so an overlay translation the caption lacked was fully resolvable
+(`StoryTextObjectProjection` already honoured the override, wired the prior slice) but **the strip never
+offered a chip to trigger it**. The rendering was correct; the *affordance to reach it* was missing.
+Net rule: when a §Cohérence "Prisme applies to ALL content" audit turns up a resolver family, also ask
+**"what OFFERS the languages, and does the offer enumerate the same content set the resolver can render?"**
+A resolver that can render N languages behind a strip that only lists M<N of them is a silent gap — the
+missing languages look like "not translated" when they are translated-but-unoffered. Fix: union caption +
+`storyEffects.textObjects[].translations` keys (blank-filtered, case-insensitive dedup), caption-first.
+
+## 2026-08-24 — SDK recipe: pristine `android-37.0` auto-installed by gradle STILL hash-errors; four-edit copy→patch + keep-both worked again (same slice)
+
+Confirms the immediately-prior slice on this image family. First `./gradlew` (after only `platforms;android-35`)
+died `Failed to find target with hash string 'android-37'` and gradle auto-installed pristine `android-37.0`
+(channel 3) on the way — which by itself still hash-errored. The fix that worked: `cp -r android-37.0 android-37`
+then patch all four (`source.properties` ApiLevel=37, `package.xml` `<api-level>`, `package.xml` `path=`,
+`build.prop` `ro.build.version.sdk_full=37`), keep BOTH dirs. Green on the next run. Try the copy→patch first
+on this image family rather than betting on pristine.
+
+## 2026-08-24 — `main` was RED before the slice; the bootstrap check is what caught it, and the fix came first (slice `comment-updated-realtime-merge`)
+
+`meeshy.sh check` on a fresh branch off `origin/main` failed to compile `:feature:chat` —
+`ConversationMembersViewModel` passed `event.userId: String?` into `MemberRoster.withoutUser(String)`.
+Root cause: `bb99e9bd` made `ParticipantLeftEvent`/`ParticipantBannedEvent.userId` nullable but never
+updated the one consumer. `actions_list(android.yml, branch=main)` confirmed **Android CI red on main
+since `11f0c31e`** (last green `fb7afd47`). Because `assembleDebug` compiles ALL modules, no android PR —
+including this routine's — could go green until fixed.
+
+Three lessons:
+- **The local `check` is a main-health probe, not just a slice probe.** A red compile in a module you never
+  touched means `main` is broken; verify against `origin/main` CI (`actions_list`) rather than assuming your
+  diff caused it, then fix it FIRST — a red main blocks every merge.
+- **Fix it as a dedicated hotfix PR, not folded into the feature slice.** Kept `comment-updated` clean:
+  hotfix = `fix-members-nullable-participant` (#3479), merged before the feature. Verify the feature locally
+  by merging the hotfix branch in temporarily, then reset the feature branch to comment-only and rebase after
+  the hotfix lands.
+- **The right fix often COMPLETES the intent of the change that broke compilation.** `bb99e9bd`'s title was
+  "un visiteur sans compte expulsable"; making `userId` nullable was step one, and the missing step was for
+  the VM to remove by `userId ?: participantId`. So the compile fix and the product intent were the same edit.
+
+## 2026-08-24 — before taking a "Next" pointer, scout that its render surface EXISTS (media field killed `comment:media-updated`)
+
+The Next pointer named `comment:media-updated` as the thin fold. A read-only scout killed it: Android's
+`ApiPostComment` has **no `media` field** (iOS's `APIPostComment` does), and no comment-audio render surface
+exists — wiring the event would store media nothing reads and render nothing, i.e. orphan/dead-end code the
+routine forbids. Rule: a realtime-fold slice is only thin when the merged data already has a place to live AND
+a surface that displays it. When it doesn't, the fold is blocked on a UI slice (here: add `ApiPostComment.media`
++ a comment audio player), and the cheaper sibling is the next in the same family — `comment:updated` (a full
+in-place row replace, no new model field, existing thread host).

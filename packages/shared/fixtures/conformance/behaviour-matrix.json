@@ -32,7 +32,7 @@
   {
     "id": "L06",
     "surface": "list",
-    "behaviour": "Le badge rouge 99+ (unreadBadgeBackground) et le timestamp rouge sur non-lu sont supprimés, remplacés par un point accent 8 px et le pont ✦ ; l'heure reste tertiaire au même format (RelativeTimestampText/TimelineView conservé, seul le format change).",
+    "behaviour": "AMENDÉ 2026-08-22 (lot 2, décision produit) — le badge rouge chiffré (unreadBadgeBackground) est RÉTABLI sur la ligne de titre du rang plat, via l'atome partagé UnreadCountBadge, et c'est le point accent 8 px qui est supprimé (doublon strict : même donnée unreadCount > 0). Le timestamp rouge sur non-lu reste supprimé et l'heure reste tertiaire au même format (RelativeTimestampText/TimelineView conservé) — mais elle vit désormais sur une LIGNE À ELLE, en bas à droite du contenu, SANS bulle ni contour — même place au repos et sous la loupe. RÉ-AMENDÉ 2026-08-23 (décision produit) : la bulle d'aperçu introduite par le lot 2 est RETIRÉE (« les derniers messages de conversation ne doivent pas être dans des bulles ! ») ; l'heure ne partage plus sa bande, ni avec le nom, ni avec l'aperçu. L08 redevient VRAIE du même geste : l'effectif quitte le rang plat et n'existe plus que sur la focus card, où il devient une chip-BOUTON vers la liste des participants — le lot 2 avait violé L08 sans l'amender, ce retrait la restaure plutôt qu'il ne l'exceptionne. La pastille de non-lus est ROUGE des DEUX côtés : elle l'était déjà sur le rang plat (atome partagé), elle l'est désormais aussi sur la focus card, qui la peignait à l'accent de la conversation.",
     "source": "vol5 §5.3"
   },
   {
@@ -50,7 +50,7 @@
   {
     "id": "L09",
     "surface": "list",
-    "behaviour": "Le glyphe hasPendingSync (outbox) est conservé tel quel : arrow.triangle.2.circlepath en accent à 70 %.",
+    "behaviour": "AMENDÉ 2026-08-22 (lot 2, décision produit) — le glyphe hasPendingSync (arrow.triangle.2.circlepath) est RETIRÉ du rang plat : le renvoi automatique par l'outbox est conservé côté mécanique et l'état reste annoncé à VoiceOver (accessibility.pending_sync), seule l'affordance visuelle de la liste disparaît. Sa place en queue de ligne de titre revient à la pastille de non-lus chiffrée (cf. L06 amendé).",
     "source": "vol5 §5.3"
   },
   {

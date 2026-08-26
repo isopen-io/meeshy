@@ -13,9 +13,10 @@ import XCTest
 //
 // 2. Reprise d'un brouillon — un SEUL écrivain de `pendingDraftId` : les
 //    handlers `.resumeDraft` passent par `StoryViewModel.openComposer(
-//    resumingDraftId:)` (qui pose l'id AVANT de présenter), et le cover racine
-//    adopte puis remet à `nil` au dismiss. Le bug d'origine : la mini-trail
-//    épinglée écrivait un `@State` local jamais lu → composer VIERGE.
+//    resumingDraftId:)` (qui pose l'id AVANT de présenter), le cover racine le
+//    remet au meuble (`MeeshyComposerHost`) qui l'adopte, puis le cover remet
+//    l'id à `nil` au dismiss. Le bug d'origine : la mini-trail épinglée
+//    écrivait un `@State` local jamais lu → composer VIERGE.
 //
 // Gardes ancrées sur les sites d'invocation (jamais de fenêtre de caractères
 // fixe), bornes dynamiques, commentaires retirés via
@@ -89,12 +90,29 @@ final class StoryTrayWiringGuardTests: XCTestCase {
         )
     }
 
-    func test_composerCover_adoptsPendingDraft_andResetsOnDismiss() throws {
+    /// V3-2 — la chaîne d'adoption a GAGNÉ un maillon, elle n'a rien perdu.
+    ///
+    /// Le cover ne construit plus le ViewModel du composer : il monte le meuble
+    /// (`MeeshyComposerHost`), qui construit le sien et lui fait adopter le
+    /// brouillon dès sa construction. L'invariant est le même, et son enjeu
+    /// aussi — sans adoption, l'autosave écrit sous un id NEUF et le brouillon
+    /// repris reste intact à côté, en double.
+    ///
+    /// La garde suit donc les DEUX maillons : la porte passe l'id, le meuble
+    /// l'adopte. Ne lire que le premier laisserait le meuble arrêter d'adopter
+    /// sans que rien ne rougisse ; ne lire que le second laisserait la porte
+    /// arrêter de le passer.
+    func test_composerCover_handsThePendingDraftToTheHost_whichAdoptsIt_andResetsOnDismiss() throws {
         let actions = try source("Meeshy/Features/Main/Views/StoryTrayActions.swift")
+        let host = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
 
         XCTAssertTrue(
-            actions.contains("composer.adoptDraft(id: draftId)"),
-            "Le cover racine doit adopter le brouillon à reprendre — sans adoption, l'autosave écrit sous un id neuf et duplique le brouillon"
+            actions.contains("draftId: viewModel.pendingDraftId"),
+            "Le cover racine doit REMETTRE au meuble le brouillon à reprendre — sans lui, le meuble ouvre une session neuve et le brouillon repris reste orphelin"
+        )
+        XCTAssertTrue(
+            host.contains("composer.adoptDraft(id: draftId)"),
+            "Le meuble doit adopter le brouillon reçu — sans adoption, l'autosave écrit sous un id neuf et duplique le brouillon"
         )
         XCTAssertTrue(
             actions.contains("viewModel.pendingDraftId = nil"),

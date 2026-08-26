@@ -5,8 +5,7 @@ import {
   resolveUserLanguagesOrdered
 } from '@meeshy/shared/utils/conversation-helpers';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { resolveVisibleLastMessages } from '../../services/resolveVisibleLastMessage';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -17,6 +16,7 @@ import {
 import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sharedPlaceFromMetadata } from '../../services/location/sharedPlace';
 import {
@@ -217,10 +217,15 @@ export function registerSearchRoutes(
               isActive: true,
               ...(isAnonymousViewer ? { id: userId } : { userId })
             },
-            select: { conversationId: true }
+            // `role` en plus, pour rien de plus : c'est le titre qui ouvre
+            // l'effectif ENTIER (creator/admin de la conversation) sur la
+            // ligne servie plus bas, et cette lecture est la seule du chemin
+            // qui connaisse le lecteur conversation par conversation.
+            select: { conversationId: true, role: true }
           })
         : [];
       const memberConversationIds = new Set(memberships.map(p => p.conversationId));
+      const memberRoleByConversation = new Map(memberships.map(p => [p.conversationId, p.role]));
 
       const unreadCountMap = conversationIds.length > 0
         ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
@@ -247,9 +252,14 @@ export function registerSearchRoutes(
           })
         : [];
 
-      // Présence des expéditeurs de lastMessage : gate showOnlineStatus —
-      // même règle que GET /conversations (cf. core.ts).
-      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des expéditeurs de lastMessage : régime STRICT (2026-08-25),
+      // même règle que GET /conversations (cf. core.ts) — soi/ADMIN+/ami seuls,
+      // jamais la seule co-participation. La carte ne porte une entrée que
+      // pour un `User.id` ; le sort d'une entrée ABSENTE est celui de
+      // `presenceFor` (presence-gate) — masqué, sauf ADMIN+.
+      const searchPresenceViewer = viewerFromRequest(request);
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        searchPresenceViewer,
         conversations
           .map((conversation) => (conversation.messages[0]?.sender as any)?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -304,9 +314,12 @@ export function registerSearchRoutes(
             username: sender.user?.username ?? null,
             displayName: resolveParticipantDisplayName(sender),
             avatar: resolveParticipantAvatar(sender),
-            isOnline: senderPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false),
+            // Un expéditeur sans compte n'a pas de `user.isOnline` : cette
+            // projection ne charge aucune présence pour lui, donc même révélé
+            // (ADMIN), rien à servir.
+            isOnline: presenceFor(searchPresenceViewer, senderPresenceVis, sender.userId).showOnline
+              ? (sender.user?.isOnline ?? false)
+              : false,
           } : null,
           attachments: msg.attachments || [],
           _count: (msg as any)._count,
@@ -322,9 +335,14 @@ export function registerSearchRoutes(
           banner: conversation.banner,
           isActive: conversation.isActive,
           communityId: conversation.communityId,
-          // Cap 199+ : même présentation que la liste et le détail.
+          // Cap 199+ : même présentation ET même droit que la liste et le
+          // détail — ADMIN/BIGBOSS/MODERATOR plateforme, OU creator/admin de
+          // CETTE conversation (`memberRoleByConversation`, déjà lu ci-dessus).
           ...presentMemberCount((conversation as any)._count?.participants ?? 0, {
-            viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+            viewerSeesExactCount: canViewExactMemberCount({
+              platformRole: authRequest.authContext.registeredUser?.role ?? null,
+              conversationRole: memberRoleByConversation.get(conversation.id) ?? null
+            })
           }),
           // Signal d'appartenance officiel du filtre client (sélecteur de
           // transfert iOS/web) : il remplace une heuristique qui lisait le

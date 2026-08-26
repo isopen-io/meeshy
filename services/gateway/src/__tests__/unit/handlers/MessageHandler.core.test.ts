@@ -481,12 +481,17 @@ describe('MessageHandler.handleMessageSend', () => {
     expect(cb).toHaveBeenCalledWith(expect.objectContaining({ success: false, error: 'Too long' }));
   });
 
-  it('skips length validation when encryptedPayload is set', async () => {
+  // RECALIBRÉ, JUMEAU de celui de `socketio/handlers/__tests__/MessageHandler.test.ts` :
+  // ce témoin nommait `encryptedPayload`, le nom que le handler lisait sur le
+  // `data` BRUT et qu'aucun client n'émet. Il attestait donc l'exemption sur
+  // une charge que la production ne voit jamais. L'exemption reste gardée ;
+  // c'est son déclencheur qui devient celui du fil — `encryptedContent`, VALIDÉ.
+  it('skips length validation when the wire carries an encrypted body', async () => {
     mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Too long' });
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket('socket-1');
     const cb = jest.fn();
-    const data = makeValidSendData({ encryptedPayload: { ciphertext: 'abc' } });
+    const data = makeValidSendData({ encryptedContent: 'Y2lwaGVydGV4dA==' });
     mockValidateSocketEvent.mockReturnValue({ success: true, data });
 
     const messagingService = makeMockMessagingService();

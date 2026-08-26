@@ -1,6 +1,7 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ConversationBridge } from '@meeshy/shared/types/conversation-bridge';
 import { bridgeComputed, bridgeNotComputed } from './unreadBridgeField.js';
+import type { ServerEmitIO } from './serverEmit';
 
 /**
  * A conversation participant, reduced to what the unread fan-out reads.
@@ -19,9 +20,7 @@ export interface UnreadRecipient {
  * typed server, the manager's `getIO()` (which is nullable during boot) and a
  * test double alike.
  */
-export interface UnreadCountEmitter {
-  to(room: string): { emit(event: string, payload: unknown): void };
-}
+export type UnreadCountEmitter = ServerEmitIO;
 
 export interface UnreadCountReader {
   getUnreadCountsForParticipants(

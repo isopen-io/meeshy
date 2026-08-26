@@ -106,6 +106,25 @@ describe('postsService', () => {
 
       expect(mockApi.post).toHaveBeenCalledWith('/posts', body);
     });
+
+    // Repêchage C7b : `allowSoundExtraction` était déclaré côté gateway
+    // (schéma, persistance, `mediaCaptureTracks`) mais aucun client ne
+    // l'envoyait jamais. `mediaAlt` est le canal manquant pour l'écriture de
+    // `PostMedia.alt` (le champ existe déjà en base et se lit).
+    it('forwards allowSoundExtraction and mediaAlt when the body carries them', async () => {
+      const body = {
+        type: 'REEL' as const,
+        visibility: 'PUBLIC' as const,
+        mediaIds: ['media-1'],
+        allowSoundExtraction: true,
+        mediaAlt: { 'media-1': 'A cat on a windowsill' },
+      };
+      mockApi.post.mockResolvedValue({ success: true, data: { id: 'new-1', ...body } });
+
+      await postsService.createPost(body);
+
+      expect(mockApi.post).toHaveBeenCalledWith('/posts', body);
+    });
   });
 
   describe('updatePost', () => {
@@ -149,6 +168,36 @@ describe('postsService', () => {
       expect(mockApi.put).toHaveBeenCalledWith('/posts/post-1', {
         mentions: [{ userId: 'u-a', display: 'NOTE' }],
       });
+    });
+
+    it('forwards mediaAlt for a freshly attached media id', async () => {
+      mockApi.put.mockResolvedValue({ success: true });
+      const body: import('@/services/posts.service').UpdatePostRequest = {
+        mediaIds: ['new-m1'],
+        mediaAlt: { 'new-m1': 'A sunset over the bay' },
+      };
+
+      await postsService.updatePost('post-1', body);
+
+      expect(mockApi.put).toHaveBeenCalledWith('/posts/post-1', body);
+    });
+
+    it('omits allowSoundExtraction from the body when the caller does not touch it', async () => {
+      mockApi.put.mockResolvedValue({ success: true });
+      const body: import('@/services/posts.service').UpdatePostRequest = { content: 'Updated' };
+
+      await postsService.updatePost('post-1', body);
+
+      expect(mockApi.put.mock.calls[0][1]).not.toHaveProperty('allowSoundExtraction');
+    });
+
+    it('forwards allowSoundExtraction: false to turn extraction off', async () => {
+      mockApi.put.mockResolvedValue({ success: true });
+      const body: import('@/services/posts.service').UpdatePostRequest = { allowSoundExtraction: false };
+
+      await postsService.updatePost('post-1', body);
+
+      expect(mockApi.put).toHaveBeenCalledWith('/posts/post-1', { allowSoundExtraction: false });
     });
   });
 

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
+import { isIpInRange } from '../utils/ip-range';
 import { SecuritySanitizer } from '../utils/sanitize';
 import { generateNickname } from '../utils/anonymous-nickname';
 import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
@@ -63,32 +65,13 @@ function extractCountryFromIP(ipAddress: string): string | null {
   return 'FR'; // Defaut France
 }
 
-// Helper pour verifier si une IP est dans une plage
-function isIpInRange(ip: string, range: string): boolean {
-  // Implementation basique pour les CIDR et plages d'IP
-  if (range.includes('/')) {
-    // Format CIDR (ex: 192.168.1.0/24)
-    const [networkIp, prefixLength] = range.split('/');
-    // Implementation simplifiee - en production utiliser une librairie dediee
-    return ip.startsWith(networkIp.split('.').slice(0, Math.floor(parseInt(prefixLength) / 8)).join('.'));
-  } else if (range.includes('-')) {
-    // Format plage (ex: 192.168.1.1-192.168.1.100)
-    const [startIp, endIp] = range.split('-');
-    // Implementation simplifiee
-    return ip >= startIp && ip <= endIp;
-  } else {
-    // IP exacte
-    return ip === range;
-  }
-}
-
 export async function anonymousRoutes(fastify: FastifyInstance) {
   /**
    * Resout l'ID de ConversationShareLink reel a partir d'un identifiant (peut etre un ObjectID ou un identifier)
    */
   async function resolveShareLinkId(identifier: string): Promise<string | null> {
     // Si c'est deja un ObjectID valide (24 caracteres hexadecimaux), le retourner directement
-    if (/^[0-9a-fA-F]{24}$/.test(identifier)) {
+    if (isValidMongoId(identifier)) {
       return identifier;
     }
 
@@ -207,34 +190,34 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         // que rien ne produit — `violations` est celui que l'enveloppe porte.
         400: { description: 'Validation error', ...validationErrorResponseSchema },
         403: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             message: { type: 'string', description: 'Access denied (region, IP, language, or account restriction)' },
-            requiresAccount: { type: 'boolean', description: 'True if account is required' }
+            requiresAccount: { type: 'boolean', description: 'True if account is required' },
           }
         },
         404: errorResponseSchema,
         409: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             message: { type: 'string', description: 'Username already taken' },
-            suggestedNickname: { type: 'string', description: 'Alternative username suggestion' }
+            suggestedNickname: { type: 'string', description: 'Alternative username suggestion' },
           }
         },
         410: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' },
           }
         },
         429: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Nombre maximum d\'utilisateurs concurrent atteint' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Nombre maximum d\'utilisateurs concurrent atteint' },
           }
         },
         500: errorResponseSchema
@@ -306,11 +289,19 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
-      // Verifier langues autorisees (case-insensitive : body.language est normalise
-      // lowercase, allowedLanguages peut avoir ete configure en casse mixte)
+      // Verifier langues autorisees. `body.language` est deja canonicalise au
+      // boundary Zod via `normalizeLanguageForDedup` (casse repliee, region
+      // strippee, 3-lettres/legacy reduits). Les `allowedLanguages` viennent de
+      // la BASE, configurees a la main par le createur du lien : elles peuvent
+      // porter un tag de region (`fr-FR`), un code 3-lettres (`fra`) ou une casse
+      // mixte. Un `.toLowerCase()` brut sur ce cote-la les fait diverger de la
+      // forme canonique du joignant et REFUSE un acces qui doit etre accorde —
+      // decision d'acces, severite superieure a un defaut d'affichage. On
+      // canonicalise donc les DEUX cotes via la meme SSOT (suivi #1 de l'iter.
+      // 247).
       if (
         shareLink.allowedLanguages.length > 0 &&
-        !shareLink.allowedLanguages.some((l) => l.toLowerCase() === body.language)
+        !shareLink.allowedLanguages.some((l) => normalizeLanguageForDedup(l) === body.language)
       ) {
         return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }
@@ -560,17 +551,17 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         },
         400: { description: 'Invalid data', ...validationErrorResponseSchema },
         401: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Session invalide ou expiree' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Session invalide ou expiree' },
           }
         },
         410: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Link expired or deactivated' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', description: 'Link expired or deactivated' },
           }
         },
         500: errorResponseSchema
@@ -684,10 +675,10 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
         },
         404: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Session introuvable' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Session introuvable' },
           }
         },
         500: errorResponseSchema
@@ -807,17 +798,17 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           }
         },
         404: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Lien de conversation introuvable' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Lien de conversation introuvable' },
           }
         },
         410: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', description: 'Link expired, inactive, or max uses reached' },
           }
         },
         500: errorResponseSchema

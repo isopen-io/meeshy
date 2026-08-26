@@ -9,7 +9,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { toast } from 'sonner';
-import { AttachmentService } from '@/services/attachmentService';
+import { resolveAttachmentTransport, type AttachmentUploadContext } from '@/services/attachmentTransport';
 import { compressMultipleFiles, needsCompression } from '@/utils/media-compression';
 import {
   UploadedAttachmentResponse,
@@ -33,6 +33,13 @@ interface BatchProgress {
 interface UseAttachmentUploadOptions {
   /** Token d'authentification */
   token?: string;
+  /**
+   * Contexte d'upload — ABSENT (défaut) = transport MESSAGE, inchangé.
+   * Un composer de publication (post/reel/story/status) le déclare pour que
+   * ses médias voyagent en `PostMedia` (via TUS) plutôt qu'en
+   * `MessageAttachment` : voir `services/attachmentTransport.ts`.
+   */
+  uploadContext?: AttachmentUploadContext;
   /** Limite maximale d'attachments */
   maxAttachments?: number;
   /** Callback quand les attachments changent */
@@ -214,11 +221,24 @@ function getFileSignature(file: File): string {
 }
 
 /**
- * Réconcilie les fichiers envoyés avec les attachments effectivement échoués
- * par la réponse serveur. Nécessaire car `UploadProcessor.uploadMultiple`
- * avale les échecs par fichier et renvoie un tableau `attachments` plus court
- * (voire vide) sous `success: true` — la route `/attachments/upload` répond
- * toujours `sendSuccess`, donc `response.success` seul ne détecte rien.
+ * Le fichier envoyé et l'attachment qu'il est devenu — l'appariement dont
+ * DEUX questions dépendent, et qui n'existait qu'en creux dans une seule
+ * d'entre elles : « qui a échoué ? » (rollback) et « qui l'utilisateur
+ * a-t-il retiré pendant qu'il volait ? » (relâchement serveur).
+ */
+type UploadPairing = {
+  readonly paired: ReadonlyArray<{ file: File; attachment: UploadedAttachmentResponse }>;
+  readonly failed: readonly File[];
+};
+
+/**
+ * Apparie les fichiers envoyés aux attachments que le serveur a réellement
+ * rendus — et, ce faisant, nomme ceux qui ont ÉCHOUÉ. Nécessaire car
+ * `UploadProcessor.uploadMultiple` avale les échecs par fichier et renvoie un
+ * tableau `attachments` plus court (voire vide) sous `success: true` — la
+ * route `/attachments/upload` répond toujours `sendSuccess`, donc
+ * `response.success` seul ne détecte rien. Le transport POST rend la même
+ * forme, pour la même raison (`uploadFilesSettled`).
  *
  * Apparie chaque fichier envoyé au premier attachment retourné dont
  * `originalName` correspond (par ordre, une seule consommation par match) ;
@@ -228,19 +248,25 @@ function getFileSignature(file: File): string {
  * uniques dans une même sélection) ; en cas d'homonymes, l'appariement par
  * ordre reste déterministe et conservateur (jamais un match fantaisiste).
  */
-function reconcileUploadFailures(
+function pairUploads(
   files: readonly File[],
   succeededAttachments: readonly UploadedAttachmentResponse[],
-): File[] {
-  const remainingNames = succeededAttachments.map((attachment) => attachment.originalName);
-  return files.filter((file) => {
-    const matchIndex = remainingNames.indexOf(file.name);
+): UploadPairing {
+  const pool = [...succeededAttachments];
+  const paired: Array<{ file: File; attachment: UploadedAttachmentResponse }> = [];
+  const failed: File[] = [];
+
+  files.forEach((file) => {
+    const matchIndex = pool.findIndex((attachment) => attachment.originalName === file.name);
     if (matchIndex === -1) {
-      return true;
+      failed.push(file);
+      return;
     }
-    remainingNames.splice(matchIndex, 1);
-    return false;
+    paired.push({ file, attachment: pool[matchIndex] });
+    pool.splice(matchIndex, 1);
   });
+
+  return { paired, failed };
 }
 
 /**
@@ -262,12 +288,19 @@ function generateTextFileName(): string {
  */
 export function useAttachmentUpload({
   token,
+  uploadContext,
   maxAttachments = MAX_ATTACHMENTS_DEFAULT,
   onAttachmentsChange,
   t = (key: string) => key,
   batchSize = 10,
   onUploadError,
 }: UseAttachmentUploadOptions = {}): UseAttachmentUploadReturn {
+  // `uploadContext` ABSENT ⇒ transport MESSAGE — un enrobage littéral des
+  // appels `AttachmentService` d'aujourd'hui. C'est le défaut : tout composer
+  // qui ne le déclare pas (le composer de message) ne traverse aucune ligne
+  // neuve. Voir `attachmentTransport.ts`.
+  const transport = useMemo(() => resolveAttachmentTransport(uploadContext), [uploadContext]);
+
   // États
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadedAttachments, setUploadedAttachments] = useState<UploadedAttachmentResponse[]>([]);
@@ -290,6 +323,17 @@ export function useAttachmentUpload({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadedAttachmentsRef = useRef<UploadedAttachmentResponse[]>([]);
   const lastNotifiedIdsStringRef = useRef<string>('');
+  /**
+   * Les fichiers que l'utilisateur a RETIRÉS pendant que leur téléversement
+   * volait encore. À ce moment-là leur id n'existe pas : `handleRemoveFile`
+   * n'a rien à relâcher et la vignette part seule — puis l'arrivée du lot
+   * ajoutait TOUT, retiré compris, et le média retiré était PUBLIÉ. Ces
+   * fichiers sont donc écartés à l'arrivée, et leur ligne relâchée.
+   *
+   * Un `Set` de `File` : l'identité de l'objet, jamais un index — les index
+   * bougent sous les retraits suivants.
+   */
+  const inFlightRemovalsRef = useRef<Set<File>>(new Set());
 
   // Sync ref avec state
   useEffect(() => {
@@ -318,13 +362,59 @@ export function useAttachmentUpload({
     lastNotifiedIdsStringRef.current = attachmentIdsString;
   }, [attachmentIdsString, onAttachmentsChange]);
 
+  /**
+   * Ce qu'un lot arrivé donne réellement à l'écran.
+   *
+   * Deux choses que « pousser les attachments » ne dit pas :
+   * - un fichier RETIRÉ pendant son vol ne doit pas entrer (il serait publié
+   *   alors que sa vignette a disparu de l'écran) ;
+   * - sa ligne serveur, elle, EXISTE déjà — il faut la relâcher, sans quoi
+   *   elle reste orpheline (le balayage quotidien du gateway est le filet de
+   *   sécurité, pas le premier recours).
+   *
+   * Ne pousse RIEN lui-même : l'ordre d'insertion dans `uploadedAttachments`
+   * est celui de la SÉLECTION, et seul l'appelant sait quand il le tient (les
+   * lots parallèles s'achèvent dans le désordre).
+   */
+  const settleUploadedBatch = useCallback(
+    (files: readonly File[], succeededAttachments: readonly UploadedAttachmentResponse[]) => {
+      const { paired, failed } = pairUploads(files, succeededAttachments);
+      const removals = inFlightRemovalsRef.current;
+
+      const kept: UploadedAttachmentResponse[] = [];
+      paired.forEach(({ file, attachment }) => {
+        if (!removals.has(file)) {
+          kept.push(attachment);
+          return;
+        }
+        removals.delete(file);
+        void transport.remove(attachment.id, token).catch((error) => {
+          console.error('❌ Relâchement du média retiré en vol impossible:', error);
+        });
+      });
+
+      return { kept, failed };
+    },
+    [token, transport],
+  );
+
   // Upload en lots PARALLÈLES bornés.
   //
   // Les lots partaient en séquence : 199 fichiers = 20 requêtes l'une après
   // l'autre, chacune attendant la précédente. `MAX_CONCURRENT_UPLOADS` lots
   // volent désormais ensemble (le même plafond que le service TUS), ce qui
   // divise l'attente sans ouvrir 20 connexions d'un coup.
-  const uploadFilesInBatches = useCallback(async (files: File[], additionalMetadata?: AttachmentSelectionMetadataList) => {
+  const uploadFilesInBatches = useCallback(async (
+    files: File[],
+    additionalMetadata: AttachmentSelectionMetadataList | undefined,
+    /**
+     * Index de CE lot dans `selectedFiles` — les surfaces lisent
+     * `uploadProgress[index]` avec l'index de la VIGNETTE, jamais celui du
+     * fichier dans l'appel. Sans ce décalage, la deuxième sélection écrase la
+     * progression des vignettes de la première.
+     */
+    progressBase: number,
+  ) => {
     const totalFiles = files.length;
     const batches = chunk(files, batchSize).map((batchFiles, batchIndex) => {
       const start = batchIndex * batchSize;
@@ -350,23 +440,17 @@ export function useAttachmentUpload({
       MAX_CONCURRENT_UPLOADS,
       async (batch, batchIndex) => {
         try {
-          const response = await AttachmentService.uploadFiles(
+          const response = await transport.upload(
             batch.files,
             token,
             batch.metadata,
-            (percentage) => {
-              // La progression d'un lot vaut pour CHAQUE fichier qu'il porte :
-              // une requête multipart n'expose pas de granularité par fichier.
-              // Ce callback indexait par numéro de LOT alors que la pastille de
-              // chaque vignette lit `uploadProgress[indexDuFichier]` — seule la
-              // première vignette bougeait, les autres restaient vides.
-              setUploadProgress(prev => {
-                const next = { ...prev };
-                for (let offset = 0; offset < batch.files.length; offset++) {
-                  next[batch.start + offset] = percentage;
-                }
-                return next;
-              });
+            (fileIndex, percentage) => {
+              // Le transport MESSAGE fait déjà suivre le même pourcentage à
+              // CHAQUE fichier du lot (une requête multipart n'expose pas de
+              // granularité par fichier) ; le transport POST relaie une
+              // progression PAR fichier (TUS). Dans les deux cas, l'index
+              // reçu porte sur CE lot — décalé par `batch.start` ici.
+              setUploadProgress(prev => ({ ...prev, [progressBase + batch.start + fileIndex]: percentage }));
             }
           );
 
@@ -377,8 +461,9 @@ export function useAttachmentUpload({
           // UploadProcessor.uploadMultiple a avalé des échecs par fichier et
           // renvoyé un tableau plus court — response.success seul ne le
           // détecte pas. Réconcilier par nom pour purger précisément les
-          // fichiers de CE lot qui n'ont pas d'attachment correspondant.
-          const failedFiles = reconcileUploadFailures(batch.files, succeededAttachments);
+          // fichiers de CE lot qui n'ont pas d'attachment correspondant, et
+          // écarter au passage ceux que l'utilisateur a retirés en vol.
+          const { kept, failed: failedFiles } = settleUploadedBatch(batch.files, succeededAttachments);
           if (failedFiles.length > 0) {
             console.warn(`⚠️ Batch ${batchIndex + 1}: ${failedFiles.length}/${batch.files.length} fichier(s) non uploadé(s) (réponse serveur incomplète)`, response);
             const message = withReduceAttachmentsHint(
@@ -391,7 +476,7 @@ export function useAttachmentUpload({
             setSelectedFiles(prev => prev.filter((f) => !failedFiles.includes(f)));
           }
 
-          return succeededAttachments;
+          return kept;
         } catch (error) {
           console.error(`❌ Batch ${batchIndex + 1} upload error:`, error);
           const message = withReduceAttachmentsHint(
@@ -418,7 +503,8 @@ export function useAttachmentUpload({
     );
 
     // `mapWithConcurrency` rend les résultats dans l'ordre des lots : les
-    // pièces restent dans l'ordre de sélection malgré le parallélisme.
+    // pièces restent dans l'ordre de sélection malgré le parallélisme — et cet
+    // ordre est celui que `mediaIds` porte jusqu'à `PostMedia.order`.
     const allUploadedAttachments = perBatchAttachments.flat();
     if (allUploadedAttachments.length > 0) {
       setUploadedAttachments(prev => [...prev, ...allUploadedAttachments]);
@@ -431,7 +517,7 @@ export function useAttachmentUpload({
       currentBatch: 0,
       totalBatches: 0,
     });
-  }, [batchSize, token, onUploadError, t]);
+  }, [batchSize, token, onUploadError, t, transport, settleUploadedBatch]);
 
   // Ajouter des fichiers
   const handleFilesSelected = useCallback(async (files: File[], additionalMetadata?: any) => {
@@ -497,8 +583,9 @@ export function useAttachmentUpload({
       return;
     }
 
-    // Valider les fichiers
-    const validation = AttachmentService.validateFiles(uniqueFiles);
+    // Valider les fichiers — les règles DIFFÈRENT selon le transport (le
+    // plafond de nombre, pas la taille : voir `attachmentTransport.ts`).
+    const validation = transport.validate(uniqueFiles);
     if (!validation.valid) {
       console.error('❌ Validation échouée:', validation.errors);
       validation.errors.forEach(error => {
@@ -538,6 +625,13 @@ export function useAttachmentUpload({
       }
     }
 
+    // Index de la PREMIÈRE vignette de cette sélection. Les surfaces lisent
+    // `uploadProgress[index]` avec l'index de la vignette dans `selectedFiles` ;
+    // les transports, eux, comptent à partir de 0 sur les fichiers de LEUR
+    // appel. Sans ce décalage, la deuxième sélection écrit sa progression sur
+    // les vignettes de la première.
+    const progressBase = selectedFiles.length;
+
     // Update UI avec les fichiers
     setSelectedFiles(prev => [...prev, ...uniqueFiles]);
     setIsUploading(true);
@@ -552,37 +646,31 @@ export function useAttachmentUpload({
 
       if (uniqueFiles.length > batchSize) {
         console.log(`📦 Upload en batches: ${uniqueFiles.length} fichiers (${Math.ceil(uniqueFiles.length / batchSize)} batches)`);
-        await uploadFilesInBatches(uniqueFiles, metadataForUpload);
+        await uploadFilesInBatches(uniqueFiles, metadataForUpload, progressBase);
       } else {
-        const response = await AttachmentService.uploadFiles(
+        const response = await transport.upload(
           uniqueFiles,
           token,
           metadataForUpload,
-          (percentage, loaded, total) => {
-            // Même correction que sur le chemin multi-lot : la progression
-            // vaut pour chaque vignette de la requête, pas seulement l'index 0.
-            setUploadProgress(prev => {
-              const next = { ...prev };
-              for (let index = 0; index < uniqueFiles.length; index++) {
-                next[index] = percentage;
-              }
-              return next;
-            });
-            if (percentage % 25 === 0) {
-              const totalSizeMB = total / (1024 * 1024);
-              if (totalSizeMB > 50) {
-                console.log(`📊 ${percentage}% - ${(loaded / (1024 * 1024)).toFixed(1)}/${totalSizeMB.toFixed(1)}MB`);
-              }
-            }
+          (fileIndex, percentage) => {
+            // Le transport MESSAGE fait déjà suivre le même pourcentage à
+            // CHAQUE fichier (une requête multipart n'expose pas de
+            // granularité par fichier) ; le transport POST relaie une
+            // progression PAR fichier (TUS) — `fileIndex` sert dans les
+            // deux cas.
+            setUploadProgress(prev => ({ ...prev, [progressBase + fileIndex]: percentage }));
           }
         );
 
         // Support both { attachments: [...] } and { data: { attachments: [...] } } response formats
         const attachments = response.attachments || (response as any).data?.attachments;
         const succeededAttachments = response.success && attachments ? attachments : [];
-        if (succeededAttachments.length > 0) {
-          console.log(`✅ Upload réussi: ${succeededAttachments.length} fichier(s)`);
-          setUploadedAttachments(prev => [...prev, ...succeededAttachments]);
+        // Écarte les fichiers retirés PENDANT leur vol (et relâche leur ligne
+        // serveur) avant de pousser quoi que ce soit à l'écran.
+        const { kept, failed: failedFiles } = settleUploadedBatch(uniqueFiles, succeededAttachments);
+        if (kept.length > 0) {
+          console.log(`✅ Upload réussi: ${kept.length} fichier(s)`);
+          setUploadedAttachments(prev => [...prev, ...kept]);
         }
 
         // La route /attachments/upload répond toujours success:true (sendSuccess),
@@ -591,7 +679,6 @@ export function useAttachmentUpload({
         // envoyés (voire aucun) — `response.success` seul ne détecte donc pas
         // cette perte silencieuse. Réconcilier par nom pour purger précisément
         // les fichiers sans attachment correspondant (Task 7 review, Important #2).
-        const failedFiles = reconcileUploadFailures(uniqueFiles, succeededAttachments);
         if (failedFiles.length > 0) {
           console.warn('⚠️ Upload partiellement ou totalement échoué côté serveur:', response);
           const message = withReduceAttachmentsHint(
@@ -626,9 +713,15 @@ export function useAttachmentUpload({
       // unique — voir plus haut) ne dérive pas après un échec réseau.
       setSelectedFiles(prev => prev.filter((f) => !uniqueFiles.includes(f)));
     } finally {
+      // Cette sélection est SOLDÉE : plus aucune arrivée ne peut porter ses
+      // fichiers. `settleUploadedBatch` n'efface la note que des fichiers
+      // APPARIÉS — un lot qui rejette en bloc n'apparie rien, et la note
+      // resterait collée à l'objet `File`, écartant en silence toute nouvelle
+      // tentative avec le même.
+      uniqueFiles.forEach((file) => inFlightRemovalsRef.current.delete(file));
       setIsUploading(false);
     }
-  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches, onUploadError]);
+  }, [token, selectedFiles, uploadedAttachments, maxAttachments, t, batchSize, uploadFilesInBatches, onUploadError, transport, settleUploadedBatch]);
 
   // Créer un attachment texte
   const handleCreateTextAttachment = useCallback(async (text: string) => {
@@ -641,9 +734,14 @@ export function useAttachmentUpload({
 
       setSelectedFiles(prev => [...prev, textFile]);
 
-      const response = await AttachmentService.uploadText(text, token);
-      if (response.success && response.attachment) {
-        setUploadedAttachments(prev => [...prev, response.attachment]);
+      // Par le TRANSPORT, comme l'upload et la suppression : `uploadText` crée
+      // un `MessageAttachment`, dont l'id serait irréclamable par `mediaIds`
+      // et introuvable par la route de relâchement `PostMedia`. Le transport
+      // de publication refuse donc explicitement — mieux qu'une pièce jointe
+      // qui disparaît en silence à la publication.
+      const attachment = await transport.createTextAttachment(text, token);
+      if (attachment) {
+        setUploadedAttachments(prev => [...prev, attachment]);
       }
     } catch (error) {
       console.error('❌ Erreur création text attachment:', error);
@@ -651,28 +749,54 @@ export function useAttachmentUpload({
     } finally {
       setIsUploading(false);
     }
-  }, [token]);
+  }, [token, transport]);
 
   // Supprimer un fichier
   const handleRemoveFile = useCallback(async (index: number) => {
     const attachmentToDelete = uploadedAttachments[index];
+    const fileToRemove = selectedFiles[index];
 
     if (attachmentToDelete?.id) {
       try {
-        await AttachmentService.deleteAttachment(attachmentToDelete.id, token);
+        await transport.remove(attachmentToDelete.id, token);
       } catch (error) {
         console.error('❌ Erreur suppression attachment:', error);
         toast.error('Impossible de supprimer le fichier');
         return;
       }
+    } else if (fileToRemove) {
+      // Retrait EN VOL : l'id n'existe pas encore ici, donc il n'y a rien à
+      // relâcher MAINTENANT. Sans cette note, l'arrivée du lot rajoutait le
+      // fichier retiré à `uploadedAttachments` — donc à `mediaIds` — et le
+      // média disparu de l'écran était PUBLIÉ. Voir `settleUploadedBatch`.
+      inFlightRemovalsRef.current.add(fileToRemove);
     }
 
     setSelectedFiles(prev => prev.filter((_, i) => i !== index));
     setUploadedAttachments(prev => prev.filter((_, i) => i !== index));
-  }, [uploadedAttachments, token]);
+    // Les clés de progression indexent les VIGNETTES : elles doivent glisser
+    // avec elles, sans quoi le pourcentage d'un fichier s'affiche sur son
+    // voisin dès le premier retrait.
+    setUploadProgress(prev => {
+      const shifted: Record<number, number> = {};
+      Object.entries(prev).forEach(([key, percentage]) => {
+        const position = Number(key);
+        if (position === index) return;
+        shifted[position > index ? position - 1 : position] = percentage;
+      });
+      return shifted;
+    });
+  }, [uploadedAttachments, selectedFiles, token, transport]);
 
   // Effacer tous les attachments
   const clearAttachments = useCallback(() => {
+    // Ne relâche RIEN côté serveur, volontairement : les trois composers
+    // n'appellent `clearAttachments` que DANS `handlePublish`, juste après
+    // avoir remis `mediaIds` — relâcher là courrait après la publication qu'on
+    // vient de demander. Les médias qu'un composer abandonne sans publier sont
+    // moissonnés côté gateway (`sweepPendingPostMedia`, balayage journalier) :
+    // c'est le seul endroit qui survive à un onglet fermé ou un réseau coupé.
+    inFlightRemovalsRef.current.clear();
     setSelectedFiles([]);
     setUploadedAttachments([]);
     setUploadProgress({});

@@ -1111,11 +1111,29 @@ public struct StoryAudioVariant: Codable, Sendable {
     }
 }
 
+// MARK: - Story Sticker Kind
+
+/// Ce qu'un sticker EST, pour que la condition « image ou emoji » ne soit pas
+/// réécrite à chaque site d'appel. Dérivé de `postMediaId` : sur un sticker
+/// image, `emoji` reste rempli — comme repli de compatibilité, pas comme
+/// contenu — et ne peut donc pas servir à trancher.
+public enum StoryStickerKind: String, Sendable {
+    case emoji
+    case image
+}
+
 // MARK: - Story Sticker
 
 public struct StorySticker: Codable, Identifiable, Sendable {
     public var id: String
     public var emoji: String
+    /// Image INTÉGRÉE à l'entité publiée : même espace d'ids que tout autre
+    /// média du post (cf. `StoryMediaObject.postMediaId`). Vide = sticker emoji.
+    /// Aucune URL tierce n'entre ici : l'asset est hébergé par la plateforme.
+    public var postMediaId: String
+    /// Origine de l'asset — "genmoji", "bitmoji", "thirdParty", "library".
+    /// Métadonnée de PROVENANCE : elle ne pilote aucun chargement.
+    public var provider: String?
     public var x: Double
     public var y: Double
     public var scale: Double
@@ -1134,14 +1152,26 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     public var fadeIn: Double?
     public var fadeOut: Double?
 
+    /// Repli affiché par un lecteur qui ne sait pas rendre l'image du sticker.
+    public static let imageFallbackEmoji = "\u{1F5BC}\u{FE0F}"
+
+    public var kind: StoryStickerKind { postMediaId.isEmpty ? .emoji : .image }
+
+    /// Emoji tel qu'il doit partir au fil. Un lecteur ancien rend `null` quand
+    /// `emoji` est vide (`CanvasV3Scene.tsx`) : un sticker image y
+    /// disparaîtrait en silence, d'où le repli.
+    public var wireEmoji: String { emoji.isEmpty ? Self.imageFallbackEmoji : emoji }
+
     enum CodingKeys: String, CodingKey {
-        case id, emoji, x, y, scale, rotation, zIndex
+        case id, emoji, postMediaId, provider, x, y, scale, rotation, zIndex
         case baseSize, anchor
         case startTime, duration, fadeIn, fadeOut
     }
 
     public init(id: String = UUID().uuidString,
                 emoji: String,
+                postMediaId: String = "",
+                provider: String? = nil,
                 x: Double = 0.5, y: Double = 0.5,
                 scale: Double = 1.0,
                 rotation: Double = 0,
@@ -1153,6 +1183,7 @@ public struct StorySticker: Codable, Identifiable, Sendable {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil) {
         self.id = id; self.emoji = emoji
+        self.postMediaId = postMediaId; self.provider = provider
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
         self.zIndex = zIndex
         self.baseSize = baseSize
@@ -1167,10 +1198,14 @@ public struct StorySticker: Codable, Identifiable, Sendable {
     //   - baseSize: absent in legacy payloads — fallback to 140
     //   - anchor: absent in legacy payloads — fallback to center (0.5, 0.5)
     //   - timing fields: absent in legacy payloads — fallback to nil
+    //   - postMediaId/provider: absent in every document written before the
+    //     imported sticker existed — fallback to "" / nil
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
         emoji = try c.decode(String.self, forKey: .emoji)
+        postMediaId = try c.decodeIfPresent(String.self, forKey: .postMediaId) ?? ""
+        provider = try c.decodeIfPresent(String.self, forKey: .provider)
         x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
         y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
         scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
@@ -1194,6 +1229,10 @@ public struct StorySticker: Codable, Identifiable, Sendable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(emoji, forKey: .emoji)
+        // Omis quand vides : un brouillon emoji déjà sur disque se réencode
+        // alors exactement comme avant.
+        if !postMediaId.isEmpty { try c.encode(postMediaId, forKey: .postMediaId) }
+        try c.encodeIfPresent(provider, forKey: .provider)
         try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
         try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
         try c.encode(zIndex, forKey: .zIndex)
@@ -2539,9 +2578,13 @@ extension APIPost {
         guard (type ?? "").uppercased() == "STATUS", let emoji = moodEmoji else { return nil }
         // Attribution "via @X" : un status republié pointe la source via
         // `repostOf` (single source of truth — pas de colonne `viaUsername`
-        // dédiée côté gateway). On dérive donc l'attribution de l'auteur du
-        // repost quand le champ direct est absent.
-        let via = viaUsername ?? repostOf?.author.username
+        // dédiée côté gateway, et il n'y en a jamais eu : `git log -S
+        // "viaUsername" -- services/gateway packages/shared` est vide sur
+        // toute l'histoire du dépôt). `APIPost.viaUsername` reste décodé
+        // (compat descendante d'un champ jamais servi) mais N'EST PLUS lu
+        // ici : le préférer à `repostOf.author` offrirait à une charge
+        // falsifiée le droit de renommer l'auteur d'une source republiée.
+        let via = repostOf?.author.username
         return StatusEntry(id: id, userId: author.id, username: author.name,
                            avatarColor: DynamicColorGenerator.colorForName(author.name),
                            moodEmoji: emoji, content: content, audioUrl: audioUrl, createdAt: createdAt,
@@ -2564,6 +2607,13 @@ public enum ReplyContext {
         }
     }
 
+    /// `authorAvatarUrl` reste nil aux DEUX branches, et ce n'est pas un oubli :
+    /// `ReplyContext` porte bien un `authorId`, mais aucune URL d'avatar — son
+    /// producteur unique tient l'avatar (`StoryGroup.avatarURL`) sans le lui
+    /// passer. Consequence produit ASSUMEE : une citation de story ou d'humeur
+    /// n'expose PAS de porte vers le profil de l'auteur ; elle saute au post.
+    /// Le jour ou le produit voudra cette porte, la donnee est atteignable —
+    /// il faudra elargir `ReplyContext`, pas ce fichier seul.
     public var toReplyReference: ReplyReference {
         switch self {
         case .story(let storyId, _, let authorName, let preview, let publishedAt, let reactionCount, let commentCount, let thumbnailUrl):
@@ -2585,6 +2635,34 @@ public enum ReplyContext {
 public struct ReactionRequest: Encodable {
     public let emoji: String
     public init(emoji: String) { self.emoji = emoji }
+}
+
+/// Corps de `POST /posts/from-attachment` — publier une pièce jointe DÉJÀ
+/// reçue en conversation, sans la retélécharger.
+///
+/// Miroir de `PublishAttachmentSchema` (services/gateway/src/routes/posts/types.ts).
+/// Les trois champs optionnels sont OMIS quand ils sont nils : le serveur
+/// applique les mêmes défauts, et une clé absente vaut mieux qu'une
+/// affirmation sans contenu.
+public struct PublishAttachmentRequest: Encodable {
+    /// La pièce jointe à publier. L'appartenance à sa conversation est vérifiée
+    /// serveur : un identifiant seul n'autorise rien.
+    public let attachmentId: String
+    /// `nil` ⇒ la règle partagée choisit d'après le type MIME. Une STORY ne
+    /// sort jamais de cette déduction — elle expire, donc elle se demande.
+    public let target: String?
+    /// Le mot que l'utilisateur ajoute à la publication.
+    public let content: String?
+    /// Le média sort de la caméra ou du micro de l'app. Le serveur ne s'en sert
+    /// pas pour décider — il le journalise.
+    public let capturedInApp: Bool?
+
+    public init(attachmentId: String, target: String? = nil, content: String? = nil, capturedInApp: Bool? = nil) {
+        self.attachmentId = attachmentId
+        self.target = target
+        self.content = content
+        self.capturedInApp = capturedInApp
+    }
 }
 
 public struct RepostRequest: Encodable {
@@ -2698,6 +2776,45 @@ extension StoryItem {
     ///   ou si le fond est un `StoryMediaObject isBackground:true` (traité en amont
     ///   par `renderBackground`), de sorte qu'on ne fournit jamais un post id au
     ///   resolver keyé sur `FeedMedia.id`.
+    /// TRANSITOIRE — lecture de la forme legacy « média seul » (2026-08-22).
+    ///
+    /// Un client qui n'annonce pas `X-Canvas-Caps` reçoit d'une story canvas
+    /// v3 une forme dégradée : `storyEffects` OMIS, le média porteur seul dans
+    /// `media[0]` (gateway, `negotiateWireStoryEffects`, « règle 5 »). Les
+    /// stories publiées avant le canvas ont la même forme. Historiquement ce
+    /// média partait dans `slide.mediaURL`, que `StoryRenderer.renderBackground`
+    /// peint comme une IMAGE — un `.mov` finissait dans ImageIO et l'écran
+    /// restait vide (constat du 2026-08-22, story `6a894bd8…`).
+    ///
+    /// Plutôt que d'enseigner la vidéo à la route legacy, on MIGRE la forme
+    /// legacy vers le modèle unique : un `StoryMediaObject` de fond, que le
+    /// lecteur sait déjà jouer (AVPlayer, piste son, durée, placeholder
+    /// ThumbHash). L'image legacy garde sa route historique, qui fonctionne.
+    ///
+    /// **Code à retirer** avec la route `slide.mediaURL` de `renderBackground`
+    /// le jour où plus aucun client legacy ne lit de story — le modèle unique
+    /// est le canvas v3, et cette fonction n'a pas vocation à grandir.
+    static func legacyVideoCarrier(in media: [FeedMedia]) -> StoryMediaObject? {
+        guard let carrier = media.first, let url = carrier.url, !url.isEmpty else { return nil }
+        // `mimeType` est DÉCLARÉ par le client qui téléverse, jamais vérifié :
+        // l'extension de l'URL corrige un type absent ou contradictoire.
+        guard StoryMediaStoreRouter.effectiveKind(declaredType: carrier.type, urlString: url) == .video else {
+            return nil
+        }
+        return StoryMediaObject(
+            id: "legacy-bg-\(carrier.id)",
+            postMediaId: carrier.id,
+            mediaURL: url,
+            mediaType: FeedMediaType.video.rawValue,
+            aspectRatio: carrier.aspectRatio ?? 1.0,
+            isBackground: true,
+            loop: true,
+            intrinsicDuration: carrier.duration.map(Double.init),
+            duration: carrier.duration.map(Double.init),
+            thumbHash: carrier.thumbHash
+        )
+    }
+
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         // R10 — chaîne complète (et plus seulement `.first`) : un viewer
         // fr→es voit la traduction es si la fr manque, au lieu de l'original.
@@ -2783,6 +2900,11 @@ extension StoryItem {
                 }
             }
             legacyMediaURL = self.media.first(where: { !referencedIds.contains($0.id) })?.url
+        } else if let carrier = Self.legacyVideoCarrier(in: self.media) {
+            // TRANSITOIRE — forme legacy « média seul ». À SUPPRIMER quand le
+            // parc ne sert plus que le canvas v3 (voir `legacyVideoCarrier`).
+            effects.mediaObjects = [carrier]
+            legacyMediaURL = nil
         } else {
             legacyMediaURL = self.media.first?.url
         }

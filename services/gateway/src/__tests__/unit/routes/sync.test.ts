@@ -98,6 +98,18 @@ async function buildApp(
 
 const SINCE = '2026-07-01T00:00:00.000Z';
 
+/**
+ * Ce que `syncMessageSelect` rend TOUJOURS et qu'une rangée de témoin ne peut
+ * pas omettre : une relation sélectionnée revient en tableau VIDE, jamais en
+ * `undefined`.
+ *
+ * Les rangées de cette suite l'omettaient tant que rien ne les lisait — la
+ * charge utile traversait telle quelle. Le sérialiseur de réponse, lui, les
+ * lit. C'est la question qui départage un témoin d'une fiction : non pas « à
+ * quoi ressemble cette réponse ? » mais « que rend la REQUÊTE ? ».
+ */
+const CHANGED_ROW_RELATIONS = { attachments: [] as unknown[] };
+
 describe('GET /sync — validation', () => {
   it('400 when `since` is missing', async () => {
     const app = await buildApp(makePrisma());
@@ -127,9 +139,9 @@ describe('GET /sync — messages collection', () => {
     prisma.message.findMany
       // first call = changed (non-deleted)
       .mockResolvedValueOnce([
-        { id: 'm-old', conversationId: 'c1', senderId: 'u', content: 'edited',
+        { ...CHANGED_ROW_RELATIONS, id: 'm-old', conversationId: 'c1', senderId: 'u', content: 'edited',
           createdAt: new Date('2026-06-01T00:00:00Z'), updatedAt: new Date('2026-07-02T00:00:00Z') },
-        { id: 'm-new', conversationId: 'c1', senderId: 'u', content: 'fresh',
+        { ...CHANGED_ROW_RELATIONS, id: 'm-new', conversationId: 'c1', senderId: 'u', content: 'fresh',
           createdAt: new Date('2026-07-02T10:00:00Z'), updatedAt: new Date('2026-07-02T10:00:00Z') },
       ])
       // second call = deleted tombstones
@@ -213,7 +225,13 @@ describe('GET /sync — contrat de rendabilité du select messages', () => {
     const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
     const added = res.json().data.collections.messages.added[0];
 
-    expect(added.translations).toEqual({ fr: { text: 'Bonjour' } });
+    // Ce témoin assertait la CARTE Mongo telle quelle — il codifiait la forme
+    // de la BASE, écrite à un moment où la réponse n'était gouvernée par aucun
+    // schéma et où toute forme y était donc « juste ». Le contrat, lui, est un
+    // tableau, et c'est ce que les clients décodent.
+    expect(added.translations).toEqual([
+      expect.objectContaining({ targetLanguage: 'fr', translatedContent: 'Bonjour' }),
+    ]);
     expect(added.originalLanguage).toBe('en');
     expect(added.attachments).toHaveLength(1);
     expect(added.sender).toEqual({ id: 's1', displayName: 'Ana' });
@@ -253,9 +271,9 @@ describe('GET /sync — contrat de rendabilité du select messages', () => {
     const prisma = makePrisma();
     prisma.message.findMany
       .mockResolvedValueOnce([
-        { id: 'm1', conversationId: 'c1', senderId: 's1', content: '', translations: null,
+        { ...CHANGED_ROW_RELATIONS, id: 'm1', conversationId: 'c1', senderId: 's1', content: '', translations: null,
           createdAt: new Date('2026-07-02T10:00:00Z'), updatedAt: new Date('2026-07-02T10:00:00Z') },
-        { id: 'm2', conversationId: 'c1', senderId: 's1', content: '', translations: null,
+        { ...CHANGED_ROW_RELATIONS, id: 'm2', conversationId: 'c1', senderId: 's1', content: '', translations: null,
           createdAt: new Date('2026-07-02T11:00:00Z'), updatedAt: new Date('2026-07-02T11:00:00Z') },
       ])
       .mockResolvedValueOnce([]);
@@ -346,6 +364,7 @@ function keysetMessageStore(
 describe('GET /sync — cursor pagination (A3.2)', () => {
   const rows = (n: number) =>
     Array.from({ length: n }, (_, k) => ({
+      ...CHANGED_ROW_RELATIONS,
       id: `m${k}`,
       conversationId: 'c1',
       senderId: 'u',
@@ -373,11 +392,11 @@ describe('GET /sync — cursor pagination (A3.2)', () => {
   it('paginates the full changed set with no overlap and no gap (incl. an updatedAt tie)', async () => {
     const T = (s: string) => new Date(s);
     const dataset = [
-      { id: 'a', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:01Z') },
-      { id: 'b1', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:02Z') },
-      { id: 'b2', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:02Z') }, // tie w/ b1
-      { id: 'c', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:03Z') },
-      { id: 'd', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:04Z') },
+      { ...CHANGED_ROW_RELATIONS, id: 'a', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:01Z') },
+      { ...CHANGED_ROW_RELATIONS, id: 'b1', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:02Z') },
+      { ...CHANGED_ROW_RELATIONS, id: 'b2', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:02Z') }, // tie w/ b1
+      { ...CHANGED_ROW_RELATIONS, id: 'c', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:03Z') },
+      { ...CHANGED_ROW_RELATIONS, id: 'd', conversationId: 'c1', senderId: 'u', content: '', createdAt: T('2026-06-01T00:00:00Z'), updatedAt: T('2026-07-02T00:00:04Z') },
     ];
     const prisma = makePrisma({ message: { findMany: keysetMessageStore(dataset) } });
     const app = await buildApp(prisma);
@@ -501,18 +520,100 @@ describe('GET /sync — checkpoint watermark', () => {
     await app.close();
   });
 
-  it('applies the same watermark on the gap path, which returns no items at all', async () => {
+});
+
+// ─── Cycle 117 ───────────────────────────────────────────────────────────────
+//
+// Le `checkpoint` n'est pas un horodatage, c'est une AFFIRMATION : « tout ce
+// qui a changé jusqu'ici t'a été livré ». Le client le renvoie en `since`, et
+// la borne serveur est STRICTE (`updatedAt > since`) — une affirmation fausse
+// creuse donc un trou DÉFINITIF, ce que le docblock de `SYNC_CHECKPOINT_LAG_MS`
+// écrit déjà mot pour mot.
+//
+// Le dépôt tenait cette règle pour la TRONCATURE (§ checkpoint vs truncation,
+// juste en dessous) et l'énonçait dans son commentaire : une page qui n'a livré
+// qu'une PARTIE de la fenêtre tient le watermark à `since`, sans quoi le client
+// « perdrait tout l'arriéré d'un coup, définitivement ».
+//
+// Elle ne la tenait sur AUCUNE des deux réponses qui n'en livrent RIEN. Une
+// couverture partielle retenait le watermark, une couverture NULLE l'avançait —
+// deux `describe` voisins, deux règles contraires sur le même invariant.
+describe('GET /sync — le checkpoint AFFIRME une couverture', () => {
+  // Le témoin que ce bloc remplace s'intitulait « applies the same watermark on
+  // the gap path, which returns no items at all » : il NOMMAIT le défaut
+  // (« returns no items at all ») et le gelait sous une uniformité qui n'a pas
+  // lieu d'être — la seule chose que le chemin de gap partage avec les autres
+  // est de ne rien avoir couvert.
+  it('holds the watermark at `since` on the gap path, which served nothing at all', async () => {
     const prisma = makePrisma({
       userEventSeq: { findUnique: jest.fn<any>().mockResolvedValue({ lastSeq: 50_000 }) },
     });
     const app = await buildApp(prisma);
 
-    const beforeMs = Date.now();
     const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&seq=1` });
-    const afterMs = Date.now();
     const body = res.json().data;
 
     expect(body.hasGap).toBe(true);
+    expect(body.gapAction).toBe('full_resync_required');
+    // La fenêtre `since → now` n'a JAMAIS été lue : sur le chemin de gap la
+    // route court-circuite la requête messages. Avancer le watermark ici est
+    // strictement pire que sur une page tronquée — celle-là laissait un
+    // arriéré, celle-ci laisse la fenêtre ENTIÈRE.
+    expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  // `gapAction` est une INSTRUCTION. Une réponse ne doit pas dépendre de ce que
+  // son destinataire en fera pour rester sûre : la resync complète peut être
+  // différée, échouer hors ligne, ou — c'est l'état du dépôt aujourd'hui —
+  // n'être lue par AUCUN client (`hasGap` / `gapAction` n'ont zéro
+  // consommateur sur les trois clients). Le watermark tenu est ce qui rend
+  // l'oubli rattrapable.
+  it('leaves the gap response re-askable — the same `since` comes back untouched', async () => {
+    const prisma = makePrisma({
+      userEventSeq: { findUnique: jest.fn<any>().mockResolvedValue({ lastSeq: 50_000 }) },
+    });
+    const app = await buildApp(prisma);
+
+    const first = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&seq=1` });
+    const second = await app.inject({
+      method: 'GET',
+      url: `/sync?since=${encodeURIComponent(first.json().data.checkpoint)}&collections=messages&seq=1`,
+    });
+
+    expect(second.json().data.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  // Deuxième façon de ne rien couvrir, et elle ne passe pas par `hasGap` :
+  // `collections` est validé par `z.string().min(1)`, donc `','` franchit la
+  // validation, se réduit à `[]` après `filter(Boolean)`, ne déclenche aucun
+  // `UNSUPPORTED_COLLECTION` — et `hasMore` sur zéro collection vaut `false`.
+  it('holds the watermark at `since` when not one collection was served', async () => {
+    const app = await buildApp(makePrisma());
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=,` });
+    const body = res.json().data;
+
+    expect(res.statusCode).toBe(200);
+    expect(body.collections).toEqual({});
+    expect(body.checkpoint).toBe(new Date(SINCE).toISOString());
+    await app.close();
+  });
+
+  // Le pendant NÉGATIF : la règle ne doit pas geler le watermark en général.
+  // Une page complète, servie, sans gap, l'avance — sans quoi le client ne
+  // progresserait jamais et relirait la même fenêtre indéfiniment.
+  it('still advances on a served, complete, gap-free page', async () => {
+    const app = await buildApp(makePrisma());
+
+    const beforeMs = Date.now();
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const afterMs = Date.now();
+    const body = res.json().data;
+
+    expect(body.hasGap).toBe(false);
+    expect(body.hasMore).toBe(false);
     const checkpointMs = new Date(body.checkpoint).getTime();
     expect(checkpointMs).toBeLessThanOrEqual(afterMs - SYNC_CHECKPOINT_LAG_MS);
     expect(checkpointMs).toBeGreaterThanOrEqual(beforeMs - SYNC_CHECKPOINT_LAG_MS);
@@ -529,6 +630,7 @@ describe('GET /sync — checkpoint vs truncation', () => {
   // règle que `SyncWatermark.advancedAfterDeltaPage` côté SDK iOS.
   function backlog(count: number) {
     return Array.from({ length: count }, (_, n) => ({
+      ...CHANGED_ROW_RELATIONS,
       id: `m${String(n).padStart(4, '0')}`,
       conversationId: 'c1',
       senderId: 's1',
@@ -748,6 +850,7 @@ describe('GET /sync — plafond de POIDS de la page', () => {
    * schéma.
    */
   const heavy = (id: string, bytes: number, seconds: number) => ({
+    ...CHANGED_ROW_RELATIONS,
     id,
     conversationId: 'c1',
     senderId: 'u',
@@ -1175,5 +1278,330 @@ describe('GET /sync — le plancher ILLISIBLE ne se dégrade pas en silence', ()
     expect(prisma.message.findMany.mock.calls[0]![0]!.where.conversationId).toEqual({ in: ['c2'] });
     expect(res.json().data.collections.messages.truncated).toBe(true);
     await app.close();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LE CONTRAT DE RÉPONSE (cycle 95)
+//
+// Jusqu'ici cette suite mesurait le `select` — « la projection charge-t-elle
+// bien les clés rendables ? » — et jamais la RÉPONSE. Les deux ne disent pas la
+// même chose : entre la ligne Prisma et le fil il y a `fast-json-stringify`,
+// qui ne laisse passer que le DÉCLARÉ. Tant que `/sync` n'avait aucun
+// `schema.response`, la distinction était sans objet — rien n'était gouverné,
+// donc rien n'était faux. Gouverner crée la possibilité même du désaccord, et
+// les témoins ci-dessous sont les désaccords qui étaient là depuis le début.
+//
+// Ils assertent sur les VALEURS servies, jamais sur `statusCode` : la route
+// rendait 200 pendant toute la vie des deux défauts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const READER_PARTICIPANT_ID = '507f1f77bcf86cd799439bbb';
+
+/**
+ * La ligne que rend RÉELLEMENT `prisma.message.findMany` sous `syncMessageSelect`.
+ *
+ * `translations` y est une CARTE (`schema.prisma` : colonne `Json?`, « map:
+ * langue -> données »), et `attachments[].reactions` la relation BRUTE que
+ * `attachmentMediaSelect` charge. C'est la question qui départage un témoin
+ * d'une fiction : non pas « à quoi ressemble cette réponse ? » mais « que rend
+ * la requête, et que passe le gestionnaire au sérialiseur ? ».
+ */
+const syncMessageRow = () => ({
+  id: 'm-contract-1',
+  conversationId: 'c1',
+  senderId: 'p-sender',
+  content: 'bonjour',
+  clientMessageId: 'cid_9f1c',
+  originalLanguage: 'fr',
+  translations: {
+    en: {
+      text: 'hello',
+      translationModel: 'basic',
+      confidenceScore: 0.93,
+      createdAt: '2026-07-02T10:05:00.000Z',
+    },
+  },
+  messageType: 'audio',
+  messageSource: 'user',
+  metadata: { postReplyTo: { id: 'post-1' } },
+  isEdited: true,
+  editedAt: new Date('2026-07-02T10:30:00.000Z'),
+  replyToId: 'm-parent',
+  reactionSummary: { '❤️': 2 },
+  reactionCount: 2,
+  validatedMentions: ['bob'],
+  createdAt: new Date('2026-07-02T10:00:00.000Z'),
+  updatedAt: new Date('2026-07-02T10:30:00.000Z'),
+  attachments: [
+    {
+      id: 'att-1',
+      messageId: 'm-contract-1',
+      fileName: 'voix.m4a',
+      originalName: 'voix.m4a',
+      mimeType: 'audio/mp4',
+      fileSize: 20480,
+      fileUrl: 'https://cdn/voix.m4a',
+      thumbnailUrl: null,
+      thumbHash: 'AQIDBA==',
+      imageVariants: null,
+      width: null,
+      height: null,
+      duration: 4200,
+      bitrate: 64000,
+      sampleRate: 48000,
+      codec: 'aac',
+      channels: 1,
+      fps: null,
+      videoCodec: null,
+      pageCount: null,
+      lineCount: null,
+      metadata: { waveform: [1, 2, 3] },
+      uploadedBy: 'u-sender',
+      isAnonymous: false,
+      createdAt: new Date('2026-07-02T10:00:00.000Z'),
+      transcription: { type: 'audio', text: 'bonjour', language: 'fr', confidence: 0.9, source: 'whisper' },
+      // Les traductions d'une pièce jointe restent une CARTE par langue —
+      // c'est leur forme canonique, à ne pas confondre avec celle du message.
+      // Ses trois clés obligatoires (`type`, `transcription`, `createdAt`) ne
+      // sont pas décoratives : `messageAttachmentSchema` les déclare `required`,
+      // et fast-json-stringify REFUSE de sérialiser une entrée qui en manque
+      // une. Une charge inventée l'aurait découvert en 500, pas en assertion.
+      translations: {
+        en: {
+          type: 'audio',
+          transcription: 'hello',
+          url: 'https://cdn/voix-en.m4a',
+          durationMs: 4200,
+          createdAt: '2026-07-02T10:05:00.000Z',
+        },
+      },
+      reactions: [
+        { emoji: '👍', participantId: READER_PARTICIPANT_ID },
+        { emoji: '👍', participantId: 'p-other' },
+      ],
+    },
+  ],
+  sender: {
+    id: 'p-sender',
+    userId: 'u-sender',
+    displayName: 'Emetteur',
+    avatar: null,
+    type: 'user',
+    role: 'member',
+    language: 'fr',
+    user: { id: 'u-sender', username: 'emetteur', displayName: 'Emetteur', avatar: null },
+  },
+});
+
+/** Le lecteur EST participant de `c1` — sa ligne porte l'id que les réactions
+ *  de pièce jointe doivent reconnaître comme « les siennes ». */
+const readerMembership = () => ({
+  id: READER_PARTICIPANT_ID,
+  conversationId: 'c1',
+  joinedAt: new Date('2026-06-15T00:00:00Z'),
+  shareLinkId: null,
+  permissions: null,
+  anonymousSession: null,
+});
+
+async function fetchSyncPage(): Promise<any> {
+  const prisma = makePrisma();
+  prisma.participant.findMany = jest.fn<any>().mockResolvedValue([readerMembership()]);
+  prisma.message.findMany = jest
+    .fn<any>()
+    .mockResolvedValueOnce([syncMessageRow()])
+    .mockResolvedValueOnce([
+      { id: 'm-gone', conversationId: 'c1', deletedAt: new Date('2026-07-02T12:00:00.000Z') },
+    ]);
+  const app = await buildApp(prisma);
+  const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+  await app.close();
+  return JSON.parse(res.body);
+}
+
+describe('GET /sync — l’enveloppe réelle', () => {
+  it('sert exactement les clés que le gestionnaire compose, aucune de moins', async () => {
+    const body = await fetchSyncPage();
+
+    expect(body.success).toBe(true);
+    expect(Object.keys(body.data).sort()).toEqual([
+      'checkpoint', 'checkpointSeq', 'collections', 'gapAction', 'hasGap', 'hasMore', 'nextCursor',
+    ]);
+    expect(Object.keys(body.data.collections.messages).sort()).toEqual([
+      'added', 'deleted', 'modified', 'nextCursor', 'truncated',
+    ]);
+  });
+
+  it('ne perd aucune colonne que `syncMessageSelect` charge', async () => {
+    const body = await fetchSyncPage();
+    const served = new Set(Object.keys(body.data.collections.messages.added[0]));
+
+    const composed = Object.keys(syncMessageRow());
+    expect(composed.filter((k) => !served.has(k))).toEqual([]);
+  });
+
+  it('sert le bloc expéditeur et son utilisateur imbriqué', async () => {
+    const body = await fetchSyncPage();
+    const { sender } = body.data.collections.messages.added[0];
+
+    expect(sender).toMatchObject({ id: 'p-sender', displayName: 'Emetteur', type: 'user', language: 'fr' });
+    expect(sender.user).toMatchObject({ id: 'u-sender', username: 'emetteur' });
+  });
+
+  /**
+   * `/sync` sert le profil d'un TIERS — l'expéditeur — et n'a AUCUN gate de
+   * présence. La règle du dépôt n'autorise que deux issues, et c'est la seconde
+   * qui est prise ici : ni le `select` ni le schéma ne portent `isOnline` /
+   * `lastActiveAt`, donc rien à garder. C'est fail-closed, la posture du
+   * cycle 93 — un gate sur une donnée que personne ne charge est du code mort
+   * qui se périme, l'omission déclarée ne se périme pas.
+   *
+   * Ce témoin garde une PORTE, pas un bug : le jour où quelqu'un ajoute la
+   * présence au `select` du rattrapage, il tombe et l'oblige à poser le gate
+   * dans le MÊME lot — c'est la règle du cycle 84, et c'est ce qu'un piège armé
+   * doit faire.
+   */
+  it('ne sert AUCUN champ de présence de l’expéditeur — ni au select, ni au schéma', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([readerMembership()]);
+    const leaky = syncMessageRow();
+    (leaky.sender as Record<string, unknown>).isOnline = true;
+    (leaky.sender as Record<string, unknown>).lastActiveAt = new Date('2026-07-02T09:00:00Z');
+    prisma.message.findMany = jest.fn<any>()
+      .mockResolvedValueOnce([leaky])
+      .mockResolvedValueOnce([]);
+    const app = await buildApp(prisma);
+
+    const res = await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+    const { sender } = res.json().data.collections.messages.added[0];
+    await app.close();
+
+    // Le schéma est la garde : même posée sur l'objet, la présence ne sort pas.
+    expect(sender).not.toHaveProperty('isOnline');
+    expect(sender).not.toHaveProperty('lastActiveAt');
+
+    // Et le select ne la demande pas — les deux moitiés, séparément.
+    const senderSelect = prisma.message.findMany.mock.calls[0]![0]!.select.sender.select as Record<string, unknown>;
+    expect(senderSelect.isOnline).toBeUndefined();
+    expect(senderSelect.lastActiveAt).toBeUndefined();
+  });
+
+  it('conserve `metadata` et `reactionSummary`, deux objets de FORME LIBRE', async () => {
+    const body = await fetchSyncPage();
+    const message = body.data.collections.messages.added[0];
+
+    // Sans `additionalProperties`, fast-json-stringify en vide le contenu en
+    // silence — le piège que `messageSchema.metadata` documente déjà.
+    expect(message.metadata).toEqual({ postReplyTo: { id: 'post-1' } });
+    expect(message.reactionSummary).toEqual({ '❤️': 2 });
+  });
+
+  it('garde la tombstone entière — un client qui perd `deletedAt` ne sait plus dater la disparition', async () => {
+    const body = await fetchSyncPage();
+
+    expect(body.data.collections.messages.deleted[0]).toEqual({
+      id: 'm-gone',
+      conversationId: 'c1',
+      deletedAt: '2026-07-02T12:00:00.000Z',
+    });
+  });
+});
+
+describe('GET /sync — `translations` a la forme du CONTRAT', () => {
+  /**
+   * Le défaut jumeau de celui que le cycle 94 bis a corrigé sur
+   * `GET /messages/:messageId`, et il vivait ici pour la même raison : rien
+   * n'était gouverné. `APIMessage.translations` se décode côté iOS avec un
+   * `try` NON tolérant — une carte y fait échouer le décodage du message
+   * ENTIER, pas seulement de ses traductions.
+   */
+  it('sert un TABLEAU, jamais la carte Mongo', async () => {
+    const body = await fetchSyncPage();
+    const { translations } = body.data.collections.messages.added[0];
+
+    expect(Array.isArray(translations)).toBe(true);
+    expect(translations).toHaveLength(1);
+  });
+
+  it('sert la forme que produit `transformTranslationsToArray`', async () => {
+    const body = await fetchSyncPage();
+    const [translation] = body.data.collections.messages.added[0].translations;
+
+    expect(translation).toMatchObject({
+      id: 'm-contract-1-en',
+      messageId: 'm-contract-1',
+      targetLanguage: 'en',
+      translatedContent: 'hello',
+      translationModel: 'basic',
+    });
+    expect(translation).not.toHaveProperty('text');
+  });
+});
+
+describe('GET /sync — pièces jointes à la forme du fil', () => {
+  /**
+   * `attachmentMediaSelect` charge la relation `reactions` BRUTE
+   * (`{emoji, participantId}`) ; le contrat de fil est `reactionSummary` +
+   * `currentUserReactions`, produits par une agrégation serveur. Tant que la
+   * réponse n'était pas gouvernée, la relation brute partait telle quelle —
+   * une forme qu'aucun client ne décode, et qui fuite en prime QUI a réagi.
+   */
+  it('agrège les réactions par pièce jointe et retire les lignes brutes', async () => {
+    const body = await fetchSyncPage();
+    const [attachment] = body.data.collections.messages.added[0].attachments;
+
+    expect(attachment.reactionSummary).toEqual({ '👍': 2 });
+    expect(attachment).not.toHaveProperty('reactions');
+  });
+
+  it('reconnaît les réactions DU LECTEUR — par son `Participant.id` de CETTE conversation', async () => {
+    const body = await fetchSyncPage();
+    const [attachment] = body.data.collections.messages.added[0].attachments;
+
+    expect(attachment.currentUserReactions).toEqual(['👍']);
+  });
+
+  /**
+   * Le témoin ci-dessus ne peut pas tomber tout seul : le double Prisma rend sa
+   * ligne d'appartenance quel que soit le `select`, donc `id` y est présent même
+   * si la requête cesse de le demander. C'est la REQUÊTE qui porte le contrat —
+   * mesuré : retirer `id: true` du select laisse le témoin de valeur VERT.
+   */
+  it('DEMANDE le `Participant.id` à Prisma — sans lui, aucune réaction n’est « la mienne »', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findMany = jest.fn<any>().mockResolvedValue([readerMembership()]);
+    const app = await buildApp(prisma);
+
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages` });
+
+    const select = prisma.participant.findMany.mock.calls[0]![0]!.select as Record<string, unknown>;
+    expect(select.id).toBe(true);
+    await app.close();
+  });
+
+  it('conserve le rendable — codecs, thumbHash, transcription et traductions audio', async () => {
+    const body = await fetchSyncPage();
+    const [attachment] = body.data.collections.messages.added[0].attachments;
+
+    expect(attachment).toMatchObject({
+      id: 'att-1',
+      mimeType: 'audio/mp4',
+      fileUrl: 'https://cdn/voix.m4a',
+      thumbHash: 'AQIDBA==',
+      duration: 4200,
+      codec: 'aac',
+      sampleRate: 48000,
+      channels: 1,
+    });
+    expect(attachment.transcription.text).toBe('bonjour');
+    // La carte par langue est ici la forme CANONIQUE — la déclarer en tableau
+    // aurait détruit le Prisme audio en croyant réparer le Prisme texte.
+    expect(attachment.translations.en).toMatchObject({
+      type: 'audio',
+      transcription: 'hello',
+      url: 'https://cdn/voix-en.m4a',
+    });
+    expect(attachment.metadata).toEqual({ waveform: [1, 2, 3] });
   });
 });

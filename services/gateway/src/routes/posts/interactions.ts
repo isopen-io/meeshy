@@ -7,12 +7,15 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
-import { LikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
-import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict } from '../../utils/response';
+import { LikeSchema, UnlikeSchema, RepostSchema, PostParams, EngagementBatchSchema, RecordDownloadsSchema } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced';
+import { safeBroadcast } from '../../socketio/serverEmit';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
+import { MutationInFlight } from '../../services/MutationLogService';
 import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
@@ -82,13 +85,24 @@ export function registerInteractionRoutes(
 
       // Idempotent via clientMutationId. `likePost` is naturally
       // idempotent at the storage layer (the reaction set keeps a
-      // single entry per (userId, postId)), but we still record the
-      // mutation so replays don't double-fire notifications.
+      // single entry per (userId, postId)), d'où `replayCost: 'converges'`.
+      //
+      // ATTENTION — ce commentaire promettait « so replays don't double-fire
+      // notifications ». C'est FAUX et ça l'a toujours été : la diffusion et
+      // `createPostLikeNotification` vivent APRÈS le journal, sans condition,
+      // donc un rejeu les refait. Le verrou ne garde que ce qu'il ENVELOPPE.
+      // Le remède existe depuis 2026-08-25 — `withMutationOutcome`, dont le
+      // verdict `replayed` retient les effets de bord, appliqué juste en
+      // dessous sur le repost — mais il n'a PAS été porté ici : la route like
+      // est hors du fil rouge du repost et sa suite de tests mocke le helper.
+      // Dette nommée, pas invariant tenu.
       const post = await withMutationLog({
         request,
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'toggleLikePost',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
           const res = await postService.likePost(targetPostId, authContext.registeredUser.id, emoji);
           if (!res) throw new Error('POST_NOT_FOUND');
@@ -153,7 +167,7 @@ export function registerInteractionRoutes(
             emoji,
             ...counters,
           }, post.authorId, target.visibility, target.visibilityUserIds,
-          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: broadcast post liked failed'));
+          ).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: broadcast post liked failed', { err }));
         }
       }
 
@@ -169,7 +183,7 @@ export function registerInteractionRoutes(
           postPreview: (post as { content?: string | null }).content?.slice(0, 80) ?? undefined,
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-        }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/like]: notify post like failed'));
+        }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: notify post like failed', { err }));
       }
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
@@ -180,7 +194,7 @@ export function registerInteractionRoutes(
       if (error instanceof ConflictError) {
         return sendConflict(reply, error.message, { code: error.code });
       }
-      fastify.log.error(`[POST /posts/:postId/like] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -196,6 +210,21 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
+
+      // QUELLE réaction part. Le corps est optionnel — aucun client déployé
+      // n'en envoie — mais quand il en envoie un, c'est une DÉSIGNATION, pas
+      // une suggestion : un emoji hors format se refuse (400) au lieu d'être
+      // silencieusement remplacé par un autre retrait. Le jumeau `POST` peut
+      // se permettre un défaut ('❤️') parce qu'il CRÉE ; ici un défaut
+      // rendrait le repli « la plus récente » inatteignable (cf.
+      // `UnlikeSchema`). Pas de `schema.response` ajouté au passage : cette
+      // route n'en a jamais eu, et `fast-json-stringify` retirerait en SILENCE
+      // tout champ non déclaré.
+      const parsed = UnlikeSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid emoji', { code: 'VALIDATION_ERROR' });
+      }
+      const requestedEmoji = parsed.data.emoji;
 
       // Retirer reste une interaction avec le post — même garde et même
       // redirection repost simple → racine que la pose (`resolveInteractionTarget`),
@@ -222,8 +251,10 @@ export function registerInteractionRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'toggleLikePost',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: async () => {
-          const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id);
+          const res = await postService.unlikePost(targetPostId, authContext.registeredUser.id, requestedEmoji);
           if (!res) throw new Error('POST_NOT_FOUND');
           return { ...res, post: withMentions(res.post, wireReaderFromRequest(request as UnifiedAuthRequest)) };
         },
@@ -277,13 +308,13 @@ export function registerInteractionRoutes(
             emoji: removedEmoji,
             ...counters,
           }, post.authorId, target.visibility, target.visibilityUserIds,
-          ).catch((err) => fastify.log.warn({ err }, '[DELETE /posts/:postId/like]: broadcast post unliked failed'));
+          ).catch((err) => enhancedLogger.warn('[DELETE /posts/:postId/like]: broadcast post unliked failed', { err }));
         }
       }
 
       return sendSuccess(reply, { liked: false, reactionSummary: post.reactionSummary });
     } catch (error) {
-      fastify.log.error(`[DELETE /posts/:postId/like] Error: ${error}`);
+      enhancedLogger.error('[DELETE /posts/:postId/like]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -303,13 +334,19 @@ export function registerInteractionRoutes(
       // Sync temps réel (perso) : le feed et le reel viewer réhydratent
       // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
       // compteur survivent à la fermeture/réouverture, sans reload.
-      fastify.socialEvents?.broadcastPostBookmarked(
-        { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
-        authContext.registeredUser.id,
-      );
+      // Le favori est ÉCRIT : plus rien de ce qui suit n'a le droit de faire
+      // échouer la requête. Sans cette porte, une panne d'émission rendait 500
+      // sur une opération réussie, et le client effaçait de l'écran un favori
+      // bien présent en base.
+      safeBroadcast('post:bookmarked', () => {
+        fastify.socialEvents?.broadcastPostBookmarked(
+          { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
+          authContext.registeredUser.id,
+        );
+      });
       return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/bookmark]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -326,13 +363,15 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      fastify.socialEvents?.broadcastPostBookmarked(
-        { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
-        authContext.registeredUser.id,
-      );
+      safeBroadcast('post:unbookmarked', () => {
+        fastify.socialEvents?.broadcastPostBookmarked(
+          { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
+          authContext.registeredUser.id,
+        );
+      });
       return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
     } catch (error) {
-      fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
+      enhancedLogger.error('[DELETE /posts/:postId/bookmark]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -359,7 +398,7 @@ export function registerInteractionRoutes(
       // éviter de rejouer la requête à chaque impression répétée du feed.
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
-        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/view]: mark post notifications as read failed'));
+        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err) => enhancedLogger.warn('[POST /posts/:postId/view]: mark post notifications as read failed', { err }));
       }
 
       // If this is a story, broadcast the view to the story author
@@ -379,18 +418,20 @@ export function registerInteractionRoutes(
         // plus diverger.
         const post = await postService.getPostById(postId, viewerId);
         if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
-          socialEvents.broadcastStoryViewed({
-            storyId: postId,
-            viewerId: authContext.registeredUser.id,
-            viewerUsername: authContext.registeredUser.username ?? '',
-            viewCount: post.viewCount,
-          }, post.authorId);
+          safeBroadcast('story:viewed', () => {
+            socialEvents.broadcastStoryViewed({
+              storyId: postId,
+              viewerId: authContext.registeredUser.id,
+              viewerUsername: authContext.registeredUser.username ?? '',
+              viewCount: post.viewCount,
+            }, post.authorId);
+          });
         }
       }
 
       return sendSuccess(reply, { viewed: true });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/view] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/view]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -416,7 +457,7 @@ export function registerInteractionRoutes(
       const counted = await postService.recordAnonymousOpen(postId, sessionKey);
       return sendSuccess(reply, { counted });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/anonymous-view] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/anonymous-view]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -479,7 +520,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, { recorded: true });
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/impression] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/impression]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -586,7 +627,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {
-      fastify.log.error(`[POST /posts/impressions/batch] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/impressions/batch]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -623,7 +664,7 @@ export function registerInteractionRoutes(
       );
       return sendSuccess(reply, { recorded });
     } catch (error) {
-      fastify.log.error(`[POST /posts/engagement/batch] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/engagement/batch]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -693,7 +734,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, payload);
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/share]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -718,7 +759,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, link);
     } catch (error) {
-      fastify.log.error(`[GET /posts/:postId/share] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/share]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -757,7 +798,7 @@ export function registerInteractionRoutes(
 
       return sendSuccess(reply, result);
     } catch (error) {
-      fastify.log.error(`[POST /posts/:postId/downloads] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/downloads]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -783,7 +824,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can pin this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[POST /posts/:postId/pin] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/pin]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -809,7 +850,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can unpin this post', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[DELETE /posts/:postId/pin] Error: ${error}`);
+      enhancedLogger.error('[DELETE /posts/:postId/pin]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -842,7 +883,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can view this list', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[GET /posts/:postId/views] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/views]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -875,7 +916,7 @@ export function registerInteractionRoutes(
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
       }
-      fastify.log.error(`[GET /posts/:postId/interactions] Error: ${error}`);
+      enhancedLogger.error('[GET /posts/:postId/interactions]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -895,10 +936,44 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      const republished = await postService.republishStory(postId, authContext.registeredUser.id);
-      if (!republished) {
+
+      // Mécanisme 2 de la chaîne du repost, et le seul dont le rejeu DÉTRUIT.
+      // `republishStory` ne crée rien — il fait repartir la MÊME ligne — mais
+      // il supprime `postView`/`postReaction`/`postImpression` et remet sept
+      // compteurs à zéro. Rejouer après un timeout de réponse détruit une
+      // SECONDE fois l'engagement acquis entre les deux appels et refanne
+      // `story:created`. La remise à zéro est un choix produit ; sa répétition
+      // sur un aléa réseau n'en est pas un. `diverges` parce que « rejouer
+      // l'op » ne converge PAS : il détruit à nouveau.
+      type RepublishResult = NonNullable<Awaited<ReturnType<typeof postService.republishStory>>>;
+      const outcome = await withMutationOutcome<RepublishResult>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'republishStory',
+        replayCost: 'diverges',
+        op: async () => {
+          const r = await postService.republishStory(postId, authContext.registeredUser.id);
+          if (!r) throw new Error('STORY_NOT_FOUND');
+          return r as RepublishResult & { id: string };
+        },
+        onDuplicate: async (resultId) => {
+          const r = await postService.getPostById(resultId, authContext.registeredUser.id);
+          return r ? (r as unknown as RepublishResult & { id: string }) : null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'STORY_NOT_FOUND') return null;
+        throw err;
+      });
+
+      if (!outcome) {
         return sendNotFound(reply, 'Story not found', { code: 'POST_NOT_FOUND' });
       }
+      if (outcome.status === 'gone') {
+        return sendGone(reply, 'Republish already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      const republished = outcome.result;
+      const isFreshRepublish = outcome.status === 'applied';
 
       // Une republication garde ses lignes `PostMention` : servie sous le nom
       // de la RELATION, l'app qui la reçoit n'y lit aucune référence. Même
@@ -908,21 +983,32 @@ export function registerInteractionRoutes(
       const payload = withMentions(republished, wireReaderFromRequest(request as UnifiedAuthRequest));
       const broadcastPayload = withMentions(republished, WIRE_BROADCAST);
 
+      // Un rejeu resert la story ; il ne la republie pas. Refanner
+      // `story:created` la ferait remonter une seconde fois en tête des trays
+      // de tous les destinataires pour une seule republication.
       const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
+      if (socialEvents && isFreshRepublish) {
         socialEvents.broadcastStoryCreated(broadcastPayload as unknown as Post, authContext.registeredUser.id)
-          .catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/republish]: broadcast story created failed'));
+          .catch((err) => enhancedLogger.warn('[POST /posts/:postId/republish]: broadcast story created failed', { err }));
       }
 
       return sendSuccess(reply, payload);
     } catch (error) {
+      // Une requête JUMELLE applique déjà ce cmid. Ni résultat à resservir, ni
+      // op à rejouer : 409, que la file durable iOS traite comme retentable
+      // (409 est délibérément EXCLU de `permanentRejectionStatusCodes`). Sans
+      // ce traitement, la route rendait 500 — « le serveur est cassé » pour
+      // une situation parfaitement saine.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Republish already in flight', { code: 'MUTATION_IN_FLIGHT' });
+      }
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Only the author can republish a story', { code: 'FORBIDDEN' });
       }
       if (error instanceof Error && error.message === 'NOT_A_STORY') {
         return sendBadRequest(reply, 'Only stories can be republished', { code: 'NOT_A_STORY' });
       }
-      fastify.log.error(`[POST /posts/:postId/republish] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/republish]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
@@ -937,23 +1023,93 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
+      // Loi 5 — « le repost miroite ». Ce `safeParse` retombait sur
+      // `{ isQuote: false }` en cas d'échec, ce qui jette D'UN COUP
+      // `targetType`, `content` ET `visibility` : le service appliquait alors
+      // son repli `?? PostType.POST` et une source ÉPHÉMÈRE (story, status)
+      // repartait en post PERMANENT, sans le moindre signal. Une citation de
+      // 5001 caractères, ou un `targetType` hors énumération (`MOOD` est une
+      // valeur réelle de `Post.type` que `RepostSchema` n'accepte pas),
+      // suffisaient à le déclencher. Un corps invalide se REFUSE — c'est la
+      // garde même que `RepostPostPayload.targetType` (obligatoire dans la
+      // file durable iOS) existe pour ne jamais avoir à contourner.
       const parsed = RepostSchema.safeParse(request.body ?? {});
-      const data = parsed.success ? parsed.data : { isQuote: false };
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+      const data = parsed.data;
 
-      const repost = await postService.repostPost(
-        postId,
-        authContext.registeredUser.id,
-        {
-          targetType: data.targetType as PostType | undefined,
-          content: data.content,
-          isQuote: data.isQuote,
-          visibility: ('visibility' in data ? data.visibility : undefined) as PostVisibility | undefined,
+      // Idempotent via clientMutationId (lot 7, tâche 7.1) : `repostPost`
+      // n'est PAS naturellement idempotent — chaque appel `prisma.post.create`
+      // fabrique un Post neuf (contrairement à `likePost`/`unlikePost`, dont
+      // l'idempotence vit dans l'ensemble de réactions). Sans ce verrou, un
+      // rejeu réseau (retry client, double-tap, flush d'outbox après un
+      // timeout de réponse) republie le même contenu en double.
+      //
+      // `replayCost: 'diverges'` est la DEUXIÈME moitié du verrou, et elle
+      // n'est pas décorative : sans elle, `withMutationLog` retombait sur son
+      // filet « rejoue op() » dès que `onDuplicate` ne retrouvait rien —
+      // c'est-à-dire dès que l'auteur avait supprimé son repost entre l'envoi
+      // et le rejeu. Le repost SUPPRIMÉ renaissait alors sous un id neuf. La
+      // route rend désormais 410 : la mutation a bien eu lieu, son résultat
+      // n'est plus là, il n'y a rien à refaire.
+      //
+      // `withMutationOutcome` (et non `withMutationLog`) parce que la
+      // republication ne voyage pas SEULE : un `post:reposted` et une
+      // notification partent juste en dessous. Un verrou qui ne garde que la
+      // CRÉATION laisse partir l'annonce en double à chaque rejeu — deux
+      // bannières pour un repost unique (`createNotification` fait un
+      // `prisma.notification.create` sec, sans clé d'idempotence). Le verdict
+      // les garde.
+      //
+      // Même patron que `like`/`unlike` juste au-dessus dans ce fichier : op()
+      // lève une erreur MESSAGE-matchée sur un 404 métier plutôt que de
+      // renvoyer `null` (le type `T & { id: string }` ne laisse pas passer
+      // `null`), et le `.catch()` qui l'entoure la reconvertit en verdict
+      // « introuvable ». La ligne `MutationLog` n'est écrite qu'APRÈS le succès
+      // de `op()` (`MutationLogService.recordOrReturn`) : un repost 404 ne
+      // consomme donc PAS le cmid, et le client peut le rejouer une fois
+      // l'original redevenu accessible.
+      type RepostResult = NonNullable<Awaited<ReturnType<typeof postService.repostPost>>>;
+      const outcome = await withMutationOutcome<RepostResult>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'repostPost',
+        replayCost: 'diverges',
+        op: async () => {
+          const r = await postService.repostPost(
+            postId,
+            authContext.registeredUser.id,
+            {
+              targetType: data.targetType as PostType | undefined,
+              content: data.content,
+              isQuote: data.isQuote,
+              visibility: data.visibility as PostVisibility | undefined,
+            },
+          );
+          if (!r) throw new Error('POST_NOT_FOUND');
+          return r as RepostResult & { id: string };
         },
-      );
+        onDuplicate: async (resultId) => {
+          const r = await postService.getPostById(resultId, authContext.registeredUser.id);
+          return r ? (r as unknown as RepostResult & { id: string }) : null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
 
-      if (!repost) {
+      if (!outcome) {
         return sendNotFound(reply, 'Original post not found', { code: 'POST_NOT_FOUND' });
       }
+      if (outcome.status === 'gone') {
+        return sendGone(reply, 'Repost already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
+      const repost = outcome.result;
+      // Un rejeu resert le repost ; il ne REFAIT rien. Ce booléen gouverne les
+      // deux effets qui voyagent AVEC la republication, et eux seuls.
+      const isFreshRepost = outcome.status === 'applied';
 
       // Même aplatissement que partout ailleurs : la clé exposée est `mentions`,
       // y compris sur un repost qui n'en porte aucune — une clé absente et une
@@ -964,16 +1120,16 @@ export function registerInteractionRoutes(
       // Broadcast repost via Socket.IO — F3 : blob tel quel pour l'audience
       // hétérogène, chaque client négocie sa forme au premier fetch REST.
       const socialEvents = fastify.socialEvents;
-      if (socialEvents) {
+      if (socialEvents && isFreshRepost) {
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: broadcastPayload as unknown as Post,
-        }, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: broadcast post reposted failed'));
+        }, authContext.registeredUser.id).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: broadcast post reposted failed', { err }));
       }
 
       // Notify original post author
       const notifService = fastify.notificationService;
-      if (notifService && repost.repostOfId) {
+      if (notifService && repost.repostOfId && isFreshRepost) {
         // Même garde que la route de traduction : sans le viewer, le lookup
         // applique le filtre anonyme et ne retrouve pas une story réservée aux
         // contacts — l'auteur d'une story repartagée n'était alors jamais
@@ -989,16 +1145,24 @@ export function registerInteractionRoutes(
             postPreview: (original as { content?: string | null }).content?.slice(0, 80) ?? undefined,
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
-          }).catch((err) => fastify.log.warn({ err }, '[POST /posts/:postId/repost]: notify post repost failed'));
+          }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/repost]: notify post repost failed', { err }));
         }
       }
 
       return sendSuccess(reply, payload, { statusCode: 201 });
     } catch (error) {
+      // Une requête JUMELLE applique déjà ce cmid. Ni résultat à resservir, ni
+      // op à rejouer : 409, que la file durable iOS traite comme retentable
+      // (409 est délibérément EXCLU de `permanentRejectionStatusCodes`). Sans
+      // ce traitement, la route rendait 500 — « le serveur est cassé » pour
+      // une situation parfaitement saine.
+      if (error instanceof MutationInFlight) {
+        return sendConflict(reply, 'Repost already in flight', { code: 'MUTATION_IN_FLIGHT' });
+      }
       if (error instanceof Error && (error as any).statusCode === 403) {
         return sendForbidden(reply, error.message);
       }
-      fastify.log.error(`[POST /posts/:postId/repost] Error: ${error}`);
+      enhancedLogger.error('[POST /posts/:postId/repost]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });

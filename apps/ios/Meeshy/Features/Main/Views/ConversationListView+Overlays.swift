@@ -4,6 +4,55 @@ import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
+/// Le catalogue « Déplacer vers… », écrit UNE fois.
+///
+/// Deux `Menu` natifs le consomment : le sous-menu du menu contextuel de la
+/// rangée (ci-dessous) et l'encoche de catégorie de la carte de focus
+/// (`LentilleFocusCard`, réintroduite le 2026-08-22). Un second catalogue
+/// divergerait sur les deux conventions qui ne se voient pas : `""` signifie
+/// « aucune catégorie » (= « Mes conversations ») côté view model, et toucher
+/// la catégorie COURANTE l'en retire au lieu de la ré-appliquer.
+///
+/// Le retour haptique appartient au point d'appel, pas au catalogue : la
+/// carte de focus le déclenche déjà dans la fermeture que la liste lui câble,
+/// et un second appel ici doublerait la vibration.
+///
+/// Hors périmètre : le panneau custom < iOS 26 (`ConversationContextMenuView
+/// .movePanel`) dessine des `actionRow` maison, pas des items de `Menu` — une
+/// autre primitive de rendu pour la même action de view model.
+struct ConversationMoveToSectionMenuItems: View {
+
+    let categories: [ConversationSection]
+    let currentSectionId: String?
+    let onMove: (String) -> Void
+
+    var body: some View {
+        ForEach(categories) { category in
+            let isCurrentCategory = currentSectionId == category.id
+            Button {
+                onMove(isCurrentCategory ? "" : category.id)
+            } label: {
+                if isCurrentCategory {
+                    Label("\(category.name) \u{2713}", systemImage: category.icon)
+                } else {
+                    Label(category.name, systemImage: category.icon)
+                }
+            }
+        }
+        if !categories.isEmpty {
+            Divider()
+        }
+        Button {
+            onMove("")
+        } label: {
+            Label(
+                String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
+                systemImage: "tray.fill"
+            )
+        }
+    }
+}
+
 extension ConversationListView {
 
     // MARK: - Menu d'appui long — deux chemins par version d'OS
@@ -183,36 +232,17 @@ extension ConversationListView {
             )
         }
 
-        // Déplacer vers une catégorie
+        // Déplacer vers une catégorie — catalogue PARTAGÉ avec l'encoche de
+        // la carte de focus (voir `ConversationMoveToSectionMenuItems`).
         Menu {
-            ForEach(conversationViewModel.userCategories) { category in
-                let isCurrentCategory = conversation.userState.sectionId == category.id
-                Button {
+            ConversationMoveToSectionMenuItems(
+                categories: conversationViewModel.userCategories,
+                currentSectionId: conversation.userState.sectionId,
+                onMove: { sectionId in
                     HapticFeedback.light()
-                    conversationViewModel.moveToSection(
-                        conversationId: conversation.id,
-                        sectionId: isCurrentCategory ? "" : category.id
-                    )
-                } label: {
-                    if isCurrentCategory {
-                        Label("\(category.name) \u{2713}", systemImage: category.icon)
-                    } else {
-                        Label(category.name, systemImage: category.icon)
-                    }
+                    conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: sectionId)
                 }
-            }
-            if !conversationViewModel.userCategories.isEmpty {
-                Divider()
-            }
-            Button {
-                HapticFeedback.light()
-                conversationViewModel.moveToSection(conversationId: conversation.id, sectionId: "")
-            } label: {
-                Label(
-                    String(localized: "context.my_conversations", defaultValue: "Mes conversations", bundle: .main),
-                    systemImage: "tray.fill"
-                )
-            }
+            )
         } label: {
             Label(
                 String(localized: "context.move_to", defaultValue: "Déplacer vers...", bundle: .main),
@@ -285,8 +315,8 @@ extension ConversationListView {
             // aucun drapeau (jamais `select()`, jamais `LentilleFeatureFlag
             // .setForDebug`, jamais `BetaFeaturesPreference.setEnabled`).
             // Gardé par `BetaFeaturesPreference.isEnabled` (préférence
-            // utilisateur « Activer les bêta », défaut ON — réglages,
-            // SettingsView) — indépendant de `reading_modes` : allumer ce
+            // utilisateur « Activer les bêta » — réglages, SettingsView)
+            // — indépendant de `reading_modes` : allumer ce
             // dernier globalement re-déciderait la vue de TOUTES LES AUTRES
             // conversations (mode AUTO), ce que ce chantier interdit.
             // RETRAIT FOCAL iOS (2026-08-18) : l'item « Focal (bêta) »
@@ -555,7 +585,6 @@ extension ConversationListView {
                         isBlockableDM: conversation.type == .direct && conversation.participantUserId != nil,
                         isBlocked: conversation.participantUserId.map { BlockService.shared.isBlocked(userId: $0) } ?? false,
                         canRename: conversation.type != .direct,
-                        isFocalBetaPreviewEnabled: BetaFeaturesPreference.isEnabled,
                         onPin: { Task { await conversationViewModel.togglePin(for: conversation.id) } },
                         onMute: { Task { await conversationViewModel.toggleMute(for: conversation.id) } },
                         onMarkReadToggle: {
@@ -860,6 +889,11 @@ enum ChipAutoScroll {
 /// re-fire pas sans mouvement du doigt).
 @MainActor
 final class ChipAutoScrollDriver {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     weak var scrollView: UIScrollView?
     /// Rebranché à chaque verrouillage de la chip, relâché par `stop()` (le
     /// closure capture la View : le garder à demeure lierait le cycle

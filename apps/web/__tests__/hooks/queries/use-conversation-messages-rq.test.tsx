@@ -599,9 +599,12 @@ describe('useConversationMessagesRQ', () => {
       jest.useRealTimers();
     });
 
-    // The catch-up now runs on window focus / socket reconnect only — opening a
-    // conversation goes through the always-on refetch instead (see
-    // "Open conversation → always revalidate").
+    // Le rattrapage a TROIS déclencheurs : focus, reconnexion socket, et le
+    // CHANGEMENT de conversation à hôte monté (2026-08-25). Ce dernier a été
+    // ajouté parce que la phrase qui vivait ici — « ouvrir une conversation
+    // passe par le refetch toujours-actif » — était fausse : `refetchOnMount`
+    // n'est lu qu'à la souscription, et l'hôte ne se démonte jamais entre deux
+    // conversations.
     async function triggerFocusCatchUp() {
       jest.useFakeTimers();
       act(() => {
@@ -613,6 +616,56 @@ describe('useConversationMessagesRQ', () => {
       });
       jest.useRealTimers();
     }
+
+    // LE GESTE RAPPORTÉ PAR L'UTILISATEUR : « j'ouvre la conversation, même
+    // après 1h, et il manque des messages récents — alors que la LISTE a bien
+    // le dernier ».
+    //
+    // `ConversationLayout` ne se démonte JAMAIS entre deux conversations
+    // (route catch-all + sélection par état local avec `replaceState`).
+    // Changer de conversation n'est donc qu'un changement de `queryKey` :
+    // `refetchOnMount` n'est lu qu'à la SOUSCRIPTION, et un changement de clé
+    // passe par `shouldFetchOptionally` → `isStale` → `isStaleByTime(Infinity)`
+    // = FAUX. Sur un cache encore chaud, RIEN n'était relu.
+    it('changer de conversation à hôte MONTÉ déclenche le rattrapage — c’est le geste qui manquait', async () => {
+      const cacheChaudB = [
+        createMockMessage('b-vieux', 'déjà vu', new Date('2024-01-03T00:00:00.000Z')),
+      ];
+      const manqueB = createMockMessage('b-neuf', 'arrivé pendant mon absence', new Date('2024-01-05T00:00:00.000Z'));
+
+      const { wrapper, queryClient } = createPersistedWrapper();
+      // Le cache de B est CHAUD — on y est déjà passé dans cette session.
+      queryClient.setQueryData(['messages', 'list', 'conv-B', 'infinite'], {
+        pages: [{ messages: cacheChaudB, hasMore: false, total: 1 }],
+        pageParams: [1],
+      });
+
+      mockGetMessages.mockResolvedValue({ messages: [manqueB], hasMore: false, total: 1 });
+
+      const { rerender } = renderHook(
+        ({ id }: { id: string }) => useConversationMessagesRQ(id, mockUser),
+        { wrapper, initialProps: { id: 'conv-A' } }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalled();
+      });
+      mockGetMessages.mockClear();
+
+      // L'utilisateur bascule sur B. Aucune souscription neuve : seule la clé change.
+      rerender({ id: 'conv-B' });
+
+      // Un rattrapage DOIT partir pour B, avec un watermark — sinon le fil
+      // reste sur son cache périmé et `b-neuf` n'apparaît jamais.
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalled();
+      });
+      const appelsB = mockGetMessages.mock.calls.filter(([id]) => id === 'conv-B');
+      expect(appelsB.length).toBeGreaterThan(0);
+      // Le 6e argument est le watermark `after` : c'est ce qui distingue un
+      // rattrapage incrémental d'une relecture destructrice.
+      expect(appelsB.some((call) => typeof call[5] === 'string' && call[5].length > 0)).toBe(true);
+    });
 
     it('fetches only messages newer than the cached watermark on focus and merges them without replacing pages', async () => {
       const cachedOld = [
@@ -1191,6 +1244,255 @@ describe('useConversationMessagesRQ', () => {
 
       await waitFor(() => {
         expect(mockGetMessages).toHaveBeenCalledWith('conv-2', 1, 20, null, expect.anything());
+      });
+    });
+  });
+  /**
+   * DÉFAUT A, moitié 2 — `addMessage` sortait sur `if (!old) return old;`.
+   *
+   * Un cache ABSENT n'est pas un cache À JOUR : le message reçu par socket
+   * pendant la lecture initiale était jeté pour toute la session (la couche
+   * socket marque son id « vu » 5 min, `staleTime: Infinity` ne relit jamais).
+   * Les trois témoins ci-dessous tiennent les trois moitiés de la réponse :
+   * le message survit, la page semée ne prétend PAS être complète, et une
+   * lecture repart quand aucune n'est en vol.
+   */
+  // Ces deux témoins montent la clé sur un ObjectId RÉSOLU (24 hex), et non sur
+  // « conv-1 ». Ce n'est pas un détail de fixture : la graine n'accepte qu'une
+  // attribution VÉRIFIABLE — `meeshySocketIOService.onNewMessage` est un
+  // abonnement GLOBAL, il délivre les messages de toutes les conversations
+  // rejointes, et semer sans comparer afficherait celui d'une AUTRE. Un écran
+  // clé-é sur un SLUG ne peut rien attribuer sur un cache vide ; il est couvert
+  // à part, par `bubble-stream-page.realtime-cache-gap.test.tsx`.
+  const CONV_RESOLUE = '65a1b2c3d4e5f60718293a4b';
+
+  describe('Message socket reçu alors que le cache est encore VIDE', () => {
+    it('sème la première page, et la lecture serveur qui atterrit ensuite ne l’efface pas', async () => {
+      let resolveRead: ((value: unknown) => void) | null = null;
+      mockGetMessages.mockImplementation(
+        () => new Promise((resolve) => { resolveRead = resolve; })
+      );
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ(CONV_RESOLUE, mockUser),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => {
+        expect(resolveRead).not.toBeNull();
+      });
+
+      const fromSocket = {
+        ...createMockMessage('msg-socket', 'Reçu pendant le chargement', new Date('2024-01-09')),
+        conversationId: CONV_RESOLUE,
+      };
+
+      act(() => {
+        expect(result.current.addMessage(fromSocket)).toBe(true);
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toContain('msg-socket');
+      });
+
+      // La lecture serveur se termine SANS ce message — le serveur ne le
+      // connaît pas encore, c'est précisément pourquoi il est arrivé par socket.
+      await act(async () => {
+        resolveRead?.({ messages: mockMessages, hasMore: false, total: 3 });
+        await Promise.resolve();
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toContain('msg-socket');
+      });
+      expect(result.current.messages.map((m) => m.id)).toEqual(
+        expect.arrayContaining(['msg-1', 'msg-2', 'msg-3'])
+      );
+    });
+
+    it('ne déclare JAMAIS l’historique complet : la page semée reste paginable', async () => {
+      mockGetMessages.mockImplementation(() => new Promise(() => {}));
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ(CONV_RESOLUE, mockUser),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => {
+        expect(mockGetMessages).toHaveBeenCalled();
+      });
+
+      act(() => {
+        result.current.addMessage({
+          ...createMockMessage('msg-socket', 'Reçu pendant le chargement', new Date('2024-01-09')),
+          conversationId: CONV_RESOLUE,
+        });
+      });
+
+      // Le risque de l'option « semer » est de fabriquer une page que la
+      // pagination croirait complète — un TROU définitif dans l'historique.
+      await waitFor(() => {
+        expect(result.current.hasMore).toBe(true);
+      });
+    });
+
+    it('redemande l’historique au serveur quand AUCUNE lecture n’est en vol', async () => {
+      mockGetMessages.mockRejectedValueOnce(new Error('réseau coupé'));
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ('conv-1', mockUser),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => {
+        expect(result.current.error).not.toBeNull();
+      });
+
+      const readsBefore = mockGetMessages.mock.calls.length;
+      mockGetMessages.mockResolvedValue(mockMessagesResponse);
+
+      act(() => {
+        result.current.addMessage(
+          createMockMessage('msg-socket', 'Reçu hors lecture', new Date('2024-01-09'))
+        );
+      });
+
+      await waitFor(() => {
+        expect(mockGetMessages.mock.calls.length).toBeGreaterThan(readsBefore);
+      });
+    });
+
+    // La JUMELLE du témoin ci-dessous, et elle est indispensable : celui-là ne
+    // garde que la moitié NÉGATIVE (« la graine ne prend pas de rang »), qui
+    // reste satisfaite si l'on refuse de semer SANS rien rattraper. Or ce qui
+    // délivre la valeur sur ce chemin est `besoinDeRevalider` : sans lui, le
+    // message est perdu en silence, et aucune assertion ne bouge.
+    it('chemin ANONYME : le message refusé par la graine est RATTRAPÉ par une relecture', async () => {
+      const pageAvec = {
+        messages: [createMockMessage('msg-socket', 'Reçu pendant le chargement', new Date('2024-01-09'))],
+        hasMore: false,
+        total: 1,
+      };
+      let resolveLectureInitiale: ((value: unknown) => void) | null = null;
+      let lectureInitialeEmise = false;
+      mockLoadMessages.mockImplementation(() => {
+        if (lectureInitialeEmise) return Promise.resolve(pageAvec);
+        lectureInitialeEmise = true;
+        // La lecture initiale ne connaît PAS le message : c'est précisément
+        // pourquoi il est arrivé par socket.
+        return new Promise((resolve) => { resolveLectureInitiale = resolve; });
+      });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ(CONV_RESOLUE, null, { linkId: 'link-123', limit: 20 }),
+        { wrapper: createWrapper() }
+      );
+
+      await waitFor(() => {
+        expect(resolveLectureInitiale).not.toBeNull();
+      });
+
+      act(() => {
+        result.current.addMessage({
+          ...createMockMessage('msg-socket', 'Reçu pendant le chargement', new Date('2024-01-09')),
+          conversationId: CONV_RESOLUE,
+        });
+      });
+
+      // La lecture en vol retombe SANS le message. La dette de relecture doit
+      // alors se solder — le serveur, lui, l'a déjà persisté avant de le
+      // diffuser.
+      await act(async () => {
+        resolveLectureInitiale?.({ messages: [], hasMore: false, total: 0 });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toContain('msg-socket');
+      });
+    });
+
+    it('chemin ANONYME : la graine ne consomme PAS le rang de la vraie page 1 du serveur', async () => {
+      // La pagination anonyme est par OFFSET (`loadMessages(limit, offset)`) et
+      // `getNextPageParam` en dérive `allPages.length + 1`. Une page semée
+      // localement — un seul message venu du socket — occuperait donc le rang 1,
+      // et la suite partirait à l'offset `limit` : la VRAIE première page du
+      // serveur ne serait jamais demandée et tout ce qu'elle portait deviendrait
+      // inatteignable (en production `staleTime: Infinity` ne la redemande pas).
+      const pageServeur1 = {
+        messages: [
+          createMockMessage('anon-p1-a', 'page 1 récente', new Date('2024-01-08')),
+          createMockMessage('anon-p1-b', 'page 1 ancienne', new Date('2024-01-07')),
+        ],
+        hasMore: true,
+        total: 40,
+      };
+      // Contenu DISTINCT par offset : servir la même page aux deux offsets
+      // rendrait l'assertion « la page 1 est là » vraie pour la mauvaise raison.
+      const pageServeur2 = {
+        messages: [createMockMessage('anon-p2-a', 'page 2', new Date('2024-01-06'))],
+        hasMore: false,
+        total: 40,
+      };
+
+      let resolveLectureInitiale: ((value: unknown) => void) | null = null;
+      let lectureInitialeEmise = false;
+      mockLoadMessages.mockImplementation((_limit: number, offset: number) => {
+        if (offset !== 0) return Promise.resolve(pageServeur2);
+        if (lectureInitialeEmise) return Promise.resolve(pageServeur1);
+        lectureInitialeEmise = true;
+        return new Promise((resolve) => { resolveLectureInitiale = resolve; });
+      });
+
+      const { result } = renderHook(
+        () => useConversationMessagesRQ(CONV_RESOLUE, null, { linkId: 'link-123', limit: 20 }),
+        { wrapper: createWrapper() }
+      );
+
+      // La lecture initiale est EN VOL — la fenêtre exacte que la graine vise.
+      await waitFor(() => {
+        expect(resolveLectureInitiale).not.toBeNull();
+      });
+      expect(mockLoadMessages).toHaveBeenNthCalledWith(1, 20, 0);
+
+      act(() => {
+        result.current.addMessage({
+          ...createMockMessage('msg-socket', 'Reçu pendant le chargement', new Date('2024-01-09')),
+          conversationId: CONV_RESOLUE,
+        });
+      });
+
+      // Laisser l'observateur React Query RENDRE ce que `addMessage` vient
+      // d'écrire. `notifyManager` n'est pas une microtâche : sans cette
+      // macrotâche, `loadMore` serait lu sur un rendu PÉRIMÉ, ne partirait
+      // pas, et le témoin serait vert pour une mauvaise raison (mesuré :
+      // `hasMore` reste `false` et `messages` reste vide).
+      await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+      // L'utilisateur remonte le fil pendant que la lecture initiale traîne.
+      await act(async () => {
+        await result.current.loadMore();
+      });
+
+      // L'ASSERTION QUI PORTE LE TÉMOIN. La seule lecture serveur est la VRAIE
+      // première page (offset 0) ; la graine n'a pris aucun rang. Avec le
+      // défaut remis, on lit `[0, 20]` : la suite est partie à l'offset 20 et
+      // les vingt lignes de la page 1 ne seront demandées par personne.
+      const offsets = mockLoadMessages.mock.calls.map(([, offset]) => offset);
+      expect(offsets).toEqual([0]);
+
+      // CONTRÔLE (vert des deux côtés, par construction) : refuser de semer ne
+      // doit pas couper la lecture anonyme — la page 1 atterrit et s'affiche.
+      // Il ne remplace pas l'assertion ci-dessus, il en borne le correctif.
+      await act(async () => {
+        resolveLectureInitiale?.(pageServeur1);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      await waitFor(() => {
+        expect(result.current.messages.map((m) => m.id)).toEqual(
+          expect.arrayContaining(['anon-p1-a', 'anon-p1-b'])
+        );
       });
     });
   });

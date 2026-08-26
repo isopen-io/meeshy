@@ -7,6 +7,7 @@ import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { NOT_DELETED } from './posts/postIncludes';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { applyMediaOrder } from './posts/mediaOrder';
 import { qualifiesAsReel } from '@meeshy/shared/utils/reel-composition';
 import { ephemeralExpiresAt } from './posts/ephemeralPosts';
 import { buildPostVisibilityOrFilter, isEphemeralPostType } from './posts/postVisibility';
@@ -134,6 +135,8 @@ export class PostService {
     audioUrl?: string;
     audioDuration?: number;
     mediaIds?: string[];
+    /** Texte alternatif par média — clé = un id de `mediaIds`, ignoré sinon. */
+    mediaAlt?: Record<string, string>;
     mobileTranscription?: MobileTranscription;
     repostOfId?: string;
     /** Opt-in auteur : extraction de la bande-son des VIDÉOS vers la bibliothèque de sons. */
@@ -315,6 +318,11 @@ export class PostService {
           postId: post.id, authorId: userId, requested: data.mediaIds.length,
         });
       }
+
+      await this.applyMediaAlt(post.id, data.mediaIds, data.mediaAlt);
+      // L'ordre de `mediaIds` EST l'ordre de sélection de l'utilisateur : le
+      // seul site qui le connaisse. Voir `posts/mediaOrder.ts`.
+      await applyMediaOrder(this.prisma, post.id, data.mediaIds);
 
       // Locate the first audio PostMedia for transcription processing
       const audioMedia = await this.prisma.postMedia.findFirst({
@@ -904,6 +912,41 @@ export class PostService {
   }
 
   /**
+   * Applique le texte alternatif (accessibilité) fourni par le client aux
+   * médias qu'il vient RÉELLEMENT de rattacher à `postId`.
+   *
+   * Deux gardes, pas une :
+   * - `mediaAlt` est filtré aux clés présentes dans `requestedMediaIds` — un
+   *   id absent de la carte de la requête est ignoré, jamais interprété
+   *   comme « touche un média que l'appelant n'a pas nommé » ;
+   * - le `where` porte `postId` (déjà réécrit par le claim qui précède cet
+   *   appel) — un id dont le claim a échoué (propriété refusée) garde son
+   *   ancien `postId` et cette clause ne le trouve pas, donc ne le modifie
+   *   pas. Pas de second contrôle de propriété à dupliquer ici.
+   *
+   * Une chaîne vide EFFACE `alt` (`null`) plutôt que de laisser une valeur
+   * strictement vide sur le fil : cohérent avec `caption`/`content`, où le
+   * client retire un texte en envoyant `''`, jamais en omettant la clé.
+   */
+  private async applyMediaAlt(
+    postId: string,
+    requestedMediaIds: string[] | undefined,
+    mediaAlt: Record<string, string> | undefined,
+    client: Pick<PrismaClient, 'postMedia'> = this.prisma,
+  ): Promise<void> {
+    if (!mediaAlt || !requestedMediaIds?.length) return;
+    const requested = new Set(requestedMediaIds);
+    const entries = Object.entries(mediaAlt).filter(([id]) => requested.has(id));
+    if (entries.length === 0) return;
+    await Promise.all(entries.map(([id, alt]) =>
+      client.postMedia.updateMany({
+        where: { id, postId },
+        data: { alt: alt.trim().length > 0 ? alt : null },
+      }),
+    ));
+  }
+
+  /**
    * Pistes de capture COMPLÈTES d'un post : celles du blob `storyEffects`
    * (composer riche) + celles synthétisées depuis ses médias attachés (posts
    * vocaux sans blob, vidéos sous opt-in d'extraction). Les médias déjà
@@ -970,6 +1013,8 @@ export class PostService {
     type?: PostType;
     removeMediaIds?: string[];
     mediaIds?: string[];
+    /** Texte alternatif par média — clé = un id de `mediaIds`, ignoré sinon. */
+    mediaAlt?: Record<string, string>;
     /** Opt-in extraction bande-son vidéo — `undefined` = inchangé. */
     allowSoundExtraction?: boolean;
     /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
@@ -1006,7 +1051,7 @@ export class PostService {
 
     // The edit-only fields are handled explicitly below; keep them out of the
     // blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, location: locationUpdate, ...rest } = data;
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, mediaAlt, location: locationUpdate, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -1170,6 +1215,8 @@ export class PostService {
         if (shortfall) {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
+        await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
+        await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {
         await tx.postView.deleteMany({ where: { postId } });
@@ -1416,11 +1463,26 @@ export class PostService {
   }
 
   /**
-   * Retire la réaction du lecteur sur un post.
+   * Retire UNE réaction du lecteur sur un post.
+   *
+   * `emoji` FOURNI ⇒ c'est celui-là qui part, exactement — le client connaît
+   * sa propre pile. ABSENT ⇒ la PLUS RÉCENTE part, ce que la règle produit
+   * appelle « la dernière posée » : re-toucher pèle la pile une par une,
+   * jusqu'à n'en plus avoir.
+   *
+   * Le tri n'est donc pas cosmétique, c'est la règle elle-même. Sans lui,
+   * `userReactions[0]` prenait un élément d'un ensemble NON ORDONNÉ — en
+   * pratique l'ordre naturel de la collection, donc la PLUS ANCIENNE — et cet
+   * emoji alimente ensuite `post:unliked` / `story:unreacted` /
+   * `status:unreacted` : un client optimiste qui retirait un pouce s'entendait
+   * annoncer le départ d'un cœur, et se désynchronisait sur un geste RÉUSSI.
+   * Le `findMany` SUIVANT de cette même fonction portait déjà son `orderBy` :
+   * l'omission était ISOLÉE.
    *
    * Rend `null` si le post n'existe pas ; sinon une enveloppe
    * `{ id, post, removedEmoji }` où `removedEmoji` est la réaction RÉELLEMENT
-   * retirée, ou `null` quand il n'y en avait aucune (le geste est idempotent).
+   * retirée, ou `null` quand il n'y en avait aucune à retirer — pile vide, ou
+   * emoji désigné que le lecteur n'a pas posé. Le geste reste idempotent.
    *
    * L'enveloppe existe pour ce seul champ : `foundEmoji` ne se lit qu'ICI,
    * avant la suppression de la ligne `PostReaction`, et il n'est reconstructible
@@ -1428,16 +1490,21 @@ export class PostService {
    * elle en fabriquait un ('❤️') faute de l'avoir. `id` est repris du post :
    * c'est l'identité que `withMutationLog` journalise (`T & { id: string }`).
    */
-  async unlikePost(postId: string, userId: string) {
+  async unlikePost(postId: string, userId: string, emoji?: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
       include: postInclude,
     });
     if (!post) return null;
 
+    // L'emoji demandé restreint la pile ; son absence la laisse entière. Dans
+    // les deux cas le tri décroissant fait de la tête la réaction à retirer :
+    // la désignée, ou la plus récente.
+    const requestedEmoji = emoji?.trim();
     const userReactions = await this.prisma.postReaction.findMany({
-      where: { postId, userId },
+      where: { postId, userId, ...(requestedEmoji ? { emoji: requestedEmoji } : {}) },
       select: { userId: true, emoji: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (userReactions.length === 0) return { id: post.id, post, removedEmoji: null };
@@ -2201,8 +2268,9 @@ export class PostService {
     // Reposter crée un POST, quel que soit le type de l'original (2026-08-19).
     //
     // Le défaut était `?? original.type` : le repost HÉRITAIT du type de sa
-    // source. Or presque aucun site d'appel ne renseigne `targetType` — seul
-    // le viewer de story passe `.post` —, si bien que republier une story
+    // source. À l'époque (2026-08-19), presque aucun site d'appel ne
+    // renseignait `targetType` — seul le viewer de story passait `.post` —,
+    // si bien que republier une story
     // depuis le fil, le profil ou le détail fabriquait une STORY : elle
     // atterrissait dans le tray du reposteur et jamais dans son fil, alors
     // que le geste demandait « partager dans mon fil ». Et comme
@@ -2218,6 +2286,20 @@ export class PostService {
     // (`POST /posts/:postId/republish`), auteur uniquement, type STORY, date
     // fraîche. `targetType` reste au protocole : ce chemin-là et un futur
     // « reposter en story » en dépendent.
+    //
+    // ÉTAT AU 2026-08-24 — à lire avant de toucher au `??` ci-dessous. La
+    // prémisse « presque aucun site ne renseigne `targetType` » ne vaut PLUS,
+    // et le repli a changé de NATURE sans changer de valeur. iOS le passe
+    // partout depuis `92529dac5` (loi du miroir, `RepostTargeting`) — zéro
+    // site de production n'écrit `targetType: nil`, une garde de source le
+    // vérifie (`ComposerIntentTests.swift:553-584`) — et le web depuis
+    // `1214afbcb` : ses dix sites de repost le passent tous.
+    //
+    // `?? PostType.POST` n'est donc plus le chemin NORMAL : c'est le FILET des
+    // clients anciens, et rien d'autre. Deux conséquences pour la suite : ne
+    // pas le durcir en `throw` tant que le parc n'est pas à jour, et ne pas le
+    // relire comme une intention produit — l'intention arrive maintenant
+    // explicitement, et c'est l'appelant qui la porte.
     const targetType = opts.targetType ?? PostType.POST;
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;

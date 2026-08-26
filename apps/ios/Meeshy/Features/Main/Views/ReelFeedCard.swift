@@ -429,21 +429,13 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
-            Text(Self.compactCount(count)).font(.caption2.weight(.medium))
-        }
-        .foregroundColor(.white.opacity(0.85))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityValue("\(count)")
-    }
-
-    /// Compact count format (1.2k / 3.4M) — mirrors the reel viewer's badge.
-    static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        ReachMetricLabel(
+            icon: icon,
+            count: count,
+            label: a11yLabel,
+            tint: .white.opacity(0.85),
+            iconFont: MeeshyFont.relative(10, weight: .semibold)
+        )
     }
 
     private var actionsRow: some View {
@@ -563,18 +555,23 @@ struct ReelFeedCard: View, Equatable {
     /// the current user has participated (liked / reposted / bookmarked) — the
     /// outline symbol overlaid in the post accent traces the glyph edge. Never a
     /// circle around it.
+    ///
+    /// Délègue à `EngagementGlyph` (MeeshyUI) : ce composant vivait ici en
+    /// `private func` et en trois copies inline dans `FeedPostCard`, ce qui
+    /// explique qu'il soit resté absent de toutes les autres surfaces.
     private func actionGlyph(outline: String, filled: String, tint: Color, participated: Bool) -> some View {
-        ZStack {
-            Image(systemName: participated ? filled : outline)
-                .font(MeeshyFont.relative(18))
-                .foregroundColor(participated ? tint : .white)
-            if participated {
-                Image(systemName: outline)
-                    .font(MeeshyFont.relative(18))
-                    .foregroundColor(Color(hex: accentHex))
-            }
-        }
-        .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        EngagementGlyph(
+            outline: outline,
+            filled: filled,
+            participated: participated,
+            accentHex: accentHex,
+            activeTint: tint,
+            // Fond MÉDIA : le repos est blanc, et l'ombre porte la lisibilité
+            // par-dessus la vidéo.
+            inactiveTint: .white,
+            size: 18,
+            shadowed: true
+        )
     }
 
     // Bouton like dédié : cœur plein dès qu'il y a des likes (rouge si moi, blanc
@@ -603,7 +600,7 @@ struct ReelFeedCard: View, Equatable {
         .contentShape(Rectangle())
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-        .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), displayLikeCount))
+        .accessibilityValue(PostStatAccessibility.likesLabel(displayLikeCount))
         .accessibilityAddTraits(isLiked ? .isSelected : [])
     }
 

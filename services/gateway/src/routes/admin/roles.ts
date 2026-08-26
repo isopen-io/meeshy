@@ -12,6 +12,7 @@ import { errorResponseSchema, validationErrorResponseSchema } from '@meeshy/shar
 import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
+import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -82,18 +83,18 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         401: errorResponseSchema,
         403: {
           description: 'Insufficient permissions or cannot modify this user',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Vous ne pouvez pas modifier le role de cet utilisateur' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Vous ne pouvez pas modifier le role de cet utilisateur' },
           }
         },
         404: {
           description: 'User not found',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Utilisateur non trouve' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Utilisateur non trouve' },
           }
         },
         500: errorResponseSchema
@@ -209,18 +210,18 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
         401: errorResponseSchema,
         403: {
           description: 'Insufficient permissions or cannot modify this user',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Vous ne pouvez pas modifier le statut de cet utilisateur' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Vous ne pouvez pas modifier le statut de cet utilisateur' },
           }
         },
         404: {
           description: 'User not found',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string', example: 'Utilisateur non trouve' }
+            ...errorResponseSchema.properties,
+            message: { type: 'string', example: 'Utilisateur non trouve' },
           }
         },
         500: errorResponseSchema
@@ -271,6 +272,18 @@ export async function registerRoleRoutes(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(id)); } catch { /* best-effort */ }
+
+      // Un compte desactive est masque pour TOUS : ses sockets tombent, apres
+      // l'ecriture. Best-effort par construction (`disconnectRevokedSessions`
+      // ne leve jamais) — la ligne est deja posee.
+      if (!body.isActive) {
+        await disconnectRevokedSessions({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId: id,
+          reason: 'admin_revoke',
+          onError: (err) => fastify.log.warn({ err, userId: id }, '[ADMIN] socket fanout failed on user deactivation'),
+        });
+      }
 
       return sendSuccess(reply, updatedUser, { message: body.isActive ? 'Utilisateur active' : 'Utilisateur desactive' });
 

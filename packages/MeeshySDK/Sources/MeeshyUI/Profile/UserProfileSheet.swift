@@ -66,7 +66,7 @@ public struct UserProfileSheet: View {
     /// Signed scroll offset feeding `ProfileHeaderMetrics.progress`. Negative
     /// while scrolling content down. Updated by the iOS 16-17 preference path
     /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
-    @State var scrollOffset: CGFloat = 0
+    @State var scrollRelay = ScrollOffsetRelay()
     @State private var internalFullUser: MeeshyUser?
     @State private var internalUserStats: UserStats?
     @State private var internalConversations: [MeeshyConversation] = []
@@ -165,7 +165,7 @@ public struct UserProfileSheet: View {
     private var blockedLayout: some View {
         VStack(spacing: 0) {
             bannerSection
-            identitySection
+            identitySection(offset: 0)
                 .padding(.top, -40)
             blockedByMeCard
                 .padding(.horizontal, 20)
@@ -182,13 +182,17 @@ public struct UserProfileSheet: View {
     private var collapsibleLayout: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                bigCollapsibleHeader
+                ScrollOffsetReader(relay: scrollRelay) { offset in
+                    bigCollapsibleHeader(offset: offset)
+                }
 
                 Section {
                     tabContent
                         .padding(.top, 16)
                 } header: {
-                    pinnedTabBar
+                    ScrollOffsetReader(relay: scrollRelay) { offset in
+                        pinnedTabBar(offset: offset)
+                    }
                 }
 
                 Color.clear.frame(height: 40)
@@ -203,18 +207,20 @@ public struct UserProfileSheet: View {
             .frame(height: 0)
         }
         .coordinateSpace(name: "profileScroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }
-        .trackScrollContentOffset { scrollOffset = -$0 }
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }
         .background(theme.backgroundPrimary)
         .ignoresSafeArea(edges: .top)
         .overlay(alignment: .top) {
-            compactPinnedBar
-                .opacity(Double(ProfileHeaderMetrics.progress(offset: scrollOffset)))
-                .allowsHitTesting(ProfileHeaderMetrics.progress(offset: scrollOffset) > 0.5)
-                // Hide the compact identity from VoiceOver while the header is
-                // still mostly expanded — the expanded identity is the primary
-                // and reads name/@username; avoids a duplicate identity element.
-                .accessibilityHidden(ProfileHeaderMetrics.progress(offset: scrollOffset) <= 0.5)
+            ScrollOffsetReader(relay: scrollRelay) { offset in
+                compactPinnedBar
+                    .opacity(Double(ProfileHeaderMetrics.progress(offset: offset)))
+                    .allowsHitTesting(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
+                    // Hide the compact identity from VoiceOver while the header is
+                    // still mostly expanded — the expanded identity is the primary
+                    // and reads name/@username; avoids a duplicate identity element.
+                    .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) <= 0.5)
+            }
         }
         // Always-on close affordance over the (reduced) banner, top-leading.
         .overlay(alignment: .topLeading) {

@@ -17,6 +17,11 @@ import os
 /// Les rafales de gaps sont coalescées par un débounce (une seule resync).
 @MainActor
 final class NotificationGapResyncCoordinator {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = NotificationGapResyncCoordinator()
 
     private let debounce: TimeInterval

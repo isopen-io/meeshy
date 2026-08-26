@@ -1,7 +1,8 @@
 /**
  * Tests for ReelPlayer's Repost action (Task 4, point 1).
- * RepostModal + useRepostMutation already exist and are used by PostCard —
- * ReelPlayer never exposed an entry point on its action rail.
+ * The repost mechanism lives above ReelPlayer, in the screen that mounts it
+ * (`useComposerRepost` + `MeeshyComposer`, since W8/W9 — `RepostModal.tsx` is
+ * retired) — ReelPlayer never exposed an entry point on its action rail.
  */
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ReelPlayer } from '@/components/feed/ReelPlayer';

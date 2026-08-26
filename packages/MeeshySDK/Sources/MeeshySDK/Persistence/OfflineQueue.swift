@@ -453,6 +453,28 @@ public protocol OfflineQueueing: Sendable {
 
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
 
+    /// **Une ligne de ce `kind`, rangée sous cette `anchor`, est-elle encore en
+    /// ROUTE ?** — la question qu'un appelant doit pouvoir poser à la file
+    /// AVANT d'enfiler, quand une seconde ligne visant la même chose ne serait
+    /// pas une mutation de plus mais un DOUBLON.
+    ///
+    /// La file répond ; elle ne DÉCIDE pas. Quels kinds se dédupliquent par
+    /// ancre est une règle de PRODUIT (« deux taps sur la même carte ne font
+    /// qu'une republication »), et elle vit chez l'écrivain qui la porte —
+    /// `RepostPublisher`, côté app — jamais ici : ce protocole ne sait pas ce
+    /// qu'un repost, un like ou un signalement veulent dire.
+    ///
+    /// **« En route » = `.pending`, `.inflight` ou `.failed`.** Une ligne qui a
+    /// ABOUTI quitte la table : elle ne peut donc pas retenir un geste neuf, et
+    /// republier-supprimer-republier reste faisable. Une ligne `.exhausted` ne
+    /// compte PAS non plus — le flusher a renoncé, elle n'ira nulle part sans
+    /// une reprise manuelle, et la faire compter rendrait le bouton INERTE
+    /// jusqu'à ce que l'auteur vide sa pastille de synchro.
+    ///
+    /// Rend `false` quand aucun pool n'est câblé : sans magasin il n'y a aucune
+    /// ligne, donc rien à retenir.
+    func hasUnsentRow(kind: OutboxKind, anchor: String) async -> Bool
+
     /// U1b — durable write-ahead enqueue for an OFFLINE media post. Relocates the
     /// source files + inserts the `.createPost` row referencing them; the
     /// dispatcher replays the TUS upload on reconnect. On the protocol so
@@ -469,13 +491,51 @@ public protocol OfflineQueueing: Sendable {
     /// qu'il croyait.
     func enqueuePostMedia(
         sourceMediaURLs: [URL],
+        /// Le MIME **DÉCLARÉ** de chaque fichier, aligné par INDEX sur
+        /// `sourceMediaURLs`. `nil` ⇒ le dispatcher le re-dérive de
+        /// l'extension, comme avant ce champ.
+        ///
+        /// Sur la REQUIREMENT, et SANS défaut : le site d'envoi d'un vocal
+        /// CONNAÎT le MIME (il l'a servi à `ReelComposition` pour élire le
+        /// type) et ne l'emportait pas. Ce que le dispatcher re-dérivait alors
+        /// pouvait valoir `application/octet-stream` — et le gateway ne
+        /// reconnaît un média audio qu'à `mimeType.startsWith('audio/')`.
+        sourceMediaMimeTypes: [String]?,
         clientMutationId: String,
         content: String?,
         visibility: String,
+        /// Destinataires nommés d'une audience EXCEPT/ONLY. Le payload
+        /// persisté les portait déjà (`CreatePostPayload.visibilityUserIds`,
+        /// relu au flush) — rien ne les y METTAIT : un post hors-ligne à
+        /// audience nommée partait donc sans sa liste, et le gateway le
+        /// refusait (`CreatePostSchema`).
+        visibilityUserIds: [String]?,
         originalLanguage: String?,
         type: String?,
         location: SharedPlace?,
-        mentions: [PostMentionInput]?
+        mentions: [PostMentionInput]?,
+        /// Le SECOND opt-in de position (spec du 2026-08-02 §2). Il fait le
+        /// MÊME trajet que `location`, et pour la même raison : `location`
+        /// survivait déjà au flush pendant que le consentement se perdait
+        /// entre le composer et la file, si bien qu'un média posté hors ligne
+        /// avec « trouvable à proximité » coché arrivait non trouvable.
+        /// Sur la REQUIREMENT et non en défaut concret : un défaut sur
+        /// l'implémentation ne satisfait pas une exigence de protocole, et le
+        /// mock l'aurait jeté en silence.
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        /// Ce qui QUALIFIE un enregistrement vocal : le texte transcrit SUR
+        /// L'APPAREIL. Le gateway le persiste sur le premier `PostMedia` audio
+        /// et évite la re-transcription Whisper ; sans lui, la transcription
+        /// que l'auteur a relue avant d'envoyer est jetée en silence et refaite
+        /// côté serveur, avec un résultat qui peut différer.
+        ///
+        /// Sur la REQUIREMENT, et SANS défaut nulle part — ni ici ni sur
+        /// l'implémentation concrète. C'est le filet compile-time : un défaut
+        /// ferait disparaître ce champ d'un site d'appel sans casser la moindre
+        /// compilation, ce qui est exactement le mécanisme par lequel
+        /// `CreatePostPayload` avait perdu trois champs sur la branche hors
+        /// ligne de `setStatus`.
+        mobileTranscription: MobileTranscriptionPayload?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 
     /// Draft recovery — returns the most recent unsent `.createPost` row whose
@@ -1353,6 +1413,40 @@ public actor OfflineQueue {
         return outboxId
     }
 
+    /// See `OfflineQueueing.hasUnsentRow(kind:anchor:)`.
+    ///
+    /// Lecture SEULE, et volontairement sans effet de bord : c'est une question
+    /// posée à la file, pas une réservation. Ce qu'elle rend est vrai de la
+    /// table SQLite — donc du magasin qui survit à la mort de l'app —, jamais
+    /// d'un état de processus.
+    ///
+    /// `.exhausted` est EXCLU des statuts comptés : le flusher a renoncé sur
+    /// cette ligne, elle n'ira nulle part sans une reprise manuelle depuis la
+    /// pastille de synchro. La compter figerait le geste de l'auteur sur une
+    /// ligne morte.
+    public func hasUnsentRow(kind: OutboxKind, anchor: String) async -> Bool {
+        guard let pool = outboxPool else { return false }
+        let enRoute = [
+            OutboxStatus.pending.rawValue,
+            OutboxStatus.inflight.rawValue,
+            OutboxStatus.failed.rawValue
+        ]
+        do {
+            return try await pool.read { db in
+                try OutboxRecord
+                    .filter(Column("kind") == kind.rawValue)
+                    .filter(Column("conversationId") == anchor)
+                    .filter(enRoute.contains(Column("status")))
+                    .fetchCount(db) > 0
+            }
+        } catch {
+            // Une panne de LECTURE ne doit pas retenir un geste : rendre `true`
+            // par prudence avalerait un repartage que personne n'a doublé.
+            logger.error("hasUnsentRow(\(kind.rawValue, privacy: .public)) read failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
     /// Whether the given `OutboxKind` should coalesce-on-enqueue: every new
     /// row for the same conversationId anchor supersedes earlier
     /// `.pending` / `.failed` rows of the same kind. Reserved for kinds
@@ -1831,21 +1925,43 @@ public actor OfflineQueue {
     /// `enqueueMedia` (messages). Computes the pending paths, inserts the
     /// `.createPost` row referencing them via the generic enqueue (write-ahead),
     /// then copies each source under `Documents/pending-media/<cmid>/` (extension
-    /// preserved so the dispatcher derives the MIME per file). A copy failure is
-    /// permanent → the row is flipped `.exhausted` + cleaned + a terminal signal
-    /// emitted (S6), rather than retried against a missing file. The dispatcher
-    /// (U1b ST1) replays `localMediaPaths` via TUS on flush. Until the caller
-    /// (ST2b) wires it, this has no caller, so no row can mis-dispatch.
+    /// preserved, ce qui reste le REPLI du dispatcher pour dériver le MIME —
+    /// mais le MIME DÉCLARÉ, quand l'appelant en a un, voyage désormais dans la
+    /// charge : une extension inconnue de la table retombait sur
+    /// `application/octet-stream` et faisait perdre au gateway la nature audio
+    /// du fichier). A copy failure is permanent → the row is flipped
+    /// `.exhausted` + cleaned + a terminal signal emitted (S6), rather than
+    /// retried against a missing file. The dispatcher (U1b ST1) replays
+    /// `localMediaPaths` via TUS on flush.
     @discardableResult
     public func enqueuePostMedia(
         sourceMediaURLs: [URL],
+        /// SANS défaut, délibérément — voir la REQUIREMENT du protocole. Un
+        /// site qui n'a aucun MIME sous la main passe `nil` en toutes lettres.
+        sourceMediaMimeTypes: [String]?,
         clientMutationId cmid: String,
         content: String?,
         visibility: String,
+        /// Destinataires nommés d'une audience EXCEPT/ONLY. Le payload
+        /// persisté les portait déjà (`CreatePostPayload.visibilityUserIds`,
+        /// relu au flush) — rien ne les y METTAIT : un post hors-ligne à
+        /// audience nommée partait donc sans sa liste, et le gateway le
+        /// refusait (`CreatePostSchema`).
+        ///
+        /// Défaut `nil` : une audience nommée est l'EXCEPTION. Sans lui, ce
+        /// paramètre — glissé avant des paramètres à valeur par défaut —
+        /// casserait tout appelant existant, ce que le build de l'app n'a pas
+        /// vu (les appelants vivent dans les tests du PACKAGE, compilés à part).
+        visibilityUserIds: [String]? = nil,
         originalLanguage: String? = nil,
         type: String? = nil,
         location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil
+        mentions: [PostMentionInput]? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil,
+        /// SANS défaut, délibérément — voir la REQUIREMENT du protocole. Tout
+        /// appelant DÉCLARE s'il a une transcription embarquée ou non ; un
+        /// média visuel passe `nil` en toutes lettres.
+        mobileTranscription: MobileTranscriptionPayload?
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -1861,8 +1977,12 @@ public actor OfflineQueue {
             originalLanguage: originalLanguage,
             localMediaPaths: relativePaths,
             type: type,
+            visibilityUserIds: visibilityUserIds,
             location: location,
-            mentions: mentions
+            mentions: mentions,
+            discoverabilityPrecision: discoverabilityPrecision,
+            mobileTranscription: mobileTranscription,
+            localMediaMimeTypes: sourceMediaMimeTypes
         )
 
         // Phase A — write-ahead INSERT of the `.createPost` row (referencing the

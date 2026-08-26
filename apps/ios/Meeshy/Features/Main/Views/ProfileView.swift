@@ -40,7 +40,7 @@ struct ProfileView: View {
     @State private var bannerItem: PhotosPickerItem?
     @State private var bannerImageForEditor: UIImage?
     @State private var isUploadingBanner = false
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     private let accentColor = MeeshyColors.purple500Hex
 
@@ -146,9 +146,12 @@ struct ProfileView: View {
     // MARK: - Header
 
     private var header: some View {
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
         CollapsibleHeader(
             title: String(localized: "profile.title", bundle: .main),
-            scrollOffset: scrollOffset,
+            scrollOffset: offset,
             onBack: {
                 if isEditing {
                     isEditing = false
@@ -182,6 +185,7 @@ struct ProfileView: View {
                 }
             }
         )
+        }
     }
 
     // MARK: - Scroll Content
@@ -224,8 +228,8 @@ struct ProfileView: View {
             .padding(.top, 0)
         }
         .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }      // iOS 16–17
-        .trackScrollContentOffset { scrollOffset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 
     // MARK: - Banner & Avatar Section
@@ -802,6 +806,28 @@ struct ProfileView: View {
         current == (original ?? "") ? nil : current
     }
 
+    /// Merges a self-profile server response onto the local user instead of
+    /// replacing it wholesale. No self-only gateway route can carry
+    /// `voicePublic` — it lives on the `voiceModel` relation, which
+    /// `formatUserResponse()` never joins — so assigning the response verbatim
+    /// to `authManager.currentUser` blanks the flag and silently turns the
+    /// public voice off in the UI.
+    ///
+    /// Only `voicePublic` is carried over. The other fields the response omits
+    /// (blockedUserIds, deviceLocale, timezone, registrationCountry,
+    /// signalIdentityKeyPublic, voiceSample*) are measured always-nil on
+    /// `currentUser` today — the moment any of them becomes live server-side,
+    /// it must be added HERE, not assumed handled. The server still wins when
+    /// it does carry `voicePublic`.
+    ///
+    /// `static` + non-`private` (like `changedOrNil`) so it can be exercised
+    /// directly from `MeeshyTests` via `@testable import Meeshy` without
+    /// instantiating the SwiftUI view.
+    static func mergingServerUser(_ server: MeeshyUser, onto local: MeeshyUser?) -> MeeshyUser {
+        guard server.voicePublic == nil, let voicePublic = local?.voicePublic else { return server }
+        return server.withProfileChanges(voicePublic: voicePublic)
+    }
+
     private func saveProfile() {
         guard let original = authManager.currentUser else { return }
 
@@ -868,7 +894,7 @@ struct ProfileView: View {
         Task {
             do {
                 let updatedUser = try await UserService.shared.updateProfile(request)
-                authManager.currentUser = updatedUser
+                authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
             } catch {
                 // Rollback to the pre-edit snapshot so the user can fix the issue.
                 authManager.currentUser = original
@@ -887,7 +913,7 @@ struct ProfileView: View {
                 let compressed = await ImageCompressor.compressOffMain(image, maxSizeKB: 500)
                 let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "avatar.jpg")
                 let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
-                authManager.currentUser = updatedUser
+                authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.avatar.updated", bundle: .main))
             } catch {
@@ -907,7 +933,7 @@ struct ProfileView: View {
                 let compressed = await ImageCompressor.compressOffMain(image, maxSizeKB: 800)
                 let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "banner.jpg")
                 let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
-                authManager.currentUser = updatedUser
+                authManager.currentUser = Self.mergingServerUser(updatedUser, onto: authManager.currentUser)
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", bundle: .main))
             } catch {
@@ -934,11 +960,19 @@ struct ProfileView: View {
 
 // MARK: - Optimistic Profile Builder
 
-private extension MeeshyUser {
+extension MeeshyUser {
     /// Returns a copy with the supplied fields overridden. Used by the
     /// profile editor to apply optimistic local updates before the server
     /// response lands. Only fields that the editor can touch are exposed;
-    /// everything else is carried over verbatim.
+    /// everything else is carried over verbatim — which means every stored
+    /// property must appear in the `MeeshyUser(...)` call below: an omitted
+    /// argument takes the `= nil` default of `MeeshyUser.init` and ERASES the
+    /// field instead of carrying it (that is how the thumb hashes, the device
+    /// locale and the whole voice profile used to be wiped by a bio edit).
+    ///
+    /// Non-`private` (like `ProfileView.changedOrNil`) so the carry-over
+    /// contract can be exercised from `MeeshyTests` via `@testable import
+    /// Meeshy` without instantiating the SwiftUI view.
     func applyingProfileEdits(
         firstName: String? = nil,
         lastName: String? = nil,
@@ -957,7 +991,9 @@ private extension MeeshyUser {
             displayName: displayName ?? self.displayName,
             bio: bio ?? self.bio,
             avatar: avatar,
+            avatarThumbHash: avatarThumbHash,
             banner: banner,
+            bannerThumbHash: bannerThumbHash,
             role: role,
             systemLanguage: systemLanguage ?? self.systemLanguage,
             regionalLanguage: regionalLanguage ?? self.regionalLanguage,
@@ -975,10 +1011,15 @@ private extension MeeshyUser {
             phoneVerifiedAt: phoneVerifiedAt,
             customDestinationLanguage: customDestinationLanguage ?? self.customDestinationLanguage,
             autoTranslateEnabled: autoTranslateEnabled,
+            deviceLocale: deviceLocale,
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
-            signalIdentityKeyPublic: signalIdentityKeyPublic
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality
         )
     }
 }

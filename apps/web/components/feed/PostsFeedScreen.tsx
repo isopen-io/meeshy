@@ -5,13 +5,19 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useI18n } from '@/hooks/use-i18n';
-import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer, StatusComposer } from '@/components/v2';
+import { Button, useToast, PostCard, StoryTray, StatusBar, StoryViewer, StoryComposer } from '@/components/v2';
 import type { StoryVisibility } from '@/components/v2';
-import { PostComposer, type PostPublishPayload } from '@/components/v2/PostComposer';
-import { PostEditor } from '@/components/v2/PostEditor';
-import { RepostModal } from '@/components/v2/RepostModal';
-import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
+import { Dialog, DialogBody, DialogHeader } from '@/components/v2/Dialog';
 import { Skeleton } from '@/components/v2/Skeleton';
+import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
+import { composerFormatOf, type ComposerDoor } from '@/lib/composer-door';
+import type {
+  ComposerDocumentPayload as PostPublishPayload,
+  ComposerDocumentEditPayload,
+  ComposerRepostPayload,
+} from '@/components/composer/payload';
+import type { ComposerStatusPayload } from '@/components/composer/ComposerMoodSurface';
+import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
 
 // Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
@@ -25,21 +31,42 @@ import { postToStatusItem } from '@/lib/status-transforms';
 
 // Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
-import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
+import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { useCreateCommentMutation } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useImpressionTracking } from '@/hooks/use-impression-tracking';
 
 import { useAuthStore } from '@/stores/auth-store';
-import { TusUploadService } from '@/services/tusUploadService';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
-import type { MobileTranscription } from '@/services/posts.service';
-import type { Post, PostVisibility } from '@meeshy/shared/types/post';
+import type { Post, PostMedia, PostType, PostVisibility } from '@meeshy/shared/types/post';
+import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
 import { classifyRelativeTime } from '@meeshy/shared/utils/relative-time';
 import { shareLink } from '@/lib/share-utils';
+
+// ─── Portes du meuble (Task W7) ─────────────────────────────────────────
+//
+// Identités STABLES, hors composant : `MeeshyComposer` re-sème son format
+// quand la CLÉ de la porte change (`doorKeyOf`, `MeeshyComposer.tsx`), qui
+// ne dépend que de `door.kind` — recréer l'objet à chaque rendu n'aurait
+// donc aucun effet fonctionnel, mais le hisser au module dit, en le lisant,
+// qu'aucun état de CET écran ne doit jamais faire varier ces deux portes.
+const FEED_COMPOSER_DOOR: ComposerDoor = { kind: 'feedComposer' };
+const MOOD_DOOR: ComposerDoor = { kind: 'moodChip' };
+
+/**
+ * La coquille du mood appartient à l'HÔTE : `ComposerMoodSurface` ne peint
+ * aucun titre, là où `StatusComposer` peignait le sien. Sans cet identifiant
+ * relié par `aria-labelledby`, le `role="dialog"` n'aurait AUCUN nom
+ * accessible — et `statusComposer.title`, traduite dans les quatre
+ * catalogues, n'aurait plus aucun site de rendu.
+ */
+const MOOD_DIALOG_TITLE_ID = 'mood-composer-title';
+/** Même rôle que `MOOD_DIALOG_TITLE_ID`, pour les portes `edit` et `repost` (W8). */
+const EDIT_DIALOG_TITLE_ID = 'edit-composer-title';
+const REPOST_DIALOG_TITLE_ID = 'repost-composer-title';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -129,6 +156,7 @@ export function PostsFeedScreen() {
   const currentUser = useAuthStore((s) => s.user);
   const currentUserId = currentUser?.id ?? '';
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
   const { preferences: storyPrefs } = useStoryPreferences();
 
   // ─── Posts ────────────────────────────────────────────────────────────
@@ -165,13 +193,55 @@ export function PostsFeedScreen() {
   const translateMutation = useTranslatePostMutation();
   const deletePostMutation = useDeletePostMutation();
   const pinPostMutation = usePinPostMutation();
-  const repostMutation = useRepostMutation();
   const updatePostMutation = useUpdatePostMutation();
+  // W8 — le site UNIQUE de la charge repost (`{ isQuote, targetType, content? }`) ;
+  // ce fil, `ReelsFeedScreen`, les deux pages de détail et le geste direct du
+  // viewer de story le partagent tous — voir `useComposerRepost.ts`.
+  const { repost: submitRepost, isPending: isReposting } = useComposerRepost();
 
   // Edit + Repost + Audio modals
-  const [editingPost, setEditingPost] = useState<{ id: string; content: string; visibility: string } | null>(null);
-  const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
-  const [audioComposerOpen, setAudioComposerOpen] = useState(false);
+  const [editingPost, setEditingPost] = useState<
+    | {
+        postId: string;
+        content: string;
+        visibility: PostVisibility;
+        visibilityUserIds: readonly string[];
+        media: readonly PostMedia[];
+        postType: PostType;
+      }
+    | null
+  >(null);
+  /**
+   * Le `type` est transporté DÈS l'ouverture de la modale : la loi du miroir
+   * exige le format de la source au moment d'envoyer, et le retrouver plus tard
+   * demanderait de re-chercher le post dans le fil — qui a pu bouger entretemps.
+   *
+   * Il est REQUIS, et non optionnel : c'est précisément en le laissant absent de
+   * cet état que les deux gestes ont émis `undefined` puis rien, et que le fil a
+   * fabriqué des POST à partir de réels. Requis, la construction ne peut plus
+   * l'oublier — le compilateur tient la loi à la place de la relecture.
+   *
+   * `targetId` se nomme ainsi parce qu'il n'est PAS l'id de la carte : c'est la
+   * racine de sa chaîne de reposts (`repostTargetId`), résolue à l'ouverture
+   * pour la même raison que le format. Le nommer `id` ferait mentir la lecture.
+   */
+  const [repostingPost, setRepostingPost] = useState<
+    { targetId: string; author?: string; content?: string; type: PostType } | null
+  >(null);
+  // Task W7 — le bouton rond du fil n'ouvre plus un dialogue audio séparé :
+  // il ARME l'outil micro de `MeeshyComposer` (`armCaptureToken`). Un JETON,
+  // pas un booléen — refermer le panneau puis re-taper le bouton doit le
+  // RÉ-ouvrir, ce qu'un `true` déjà `true` ne redéclenche jamais. `undefined`
+  // ⇒ jamais armé (état initial, avant tout tap).
+  const [captureArmToken, setCaptureArmToken] = useState<number | undefined>(undefined);
+  // Le jeton se CONSOMME dès que l'outil l'a servi. Sans cet effacement il
+  // reste posé pour toute la vie de l'écran, et comme l'outil n'est monté que
+  // sous l'expansion de la surface, chacun de ses remontages (publier replie
+  // la surface ; changer de format la démonte) rouvrait le panneau
+  // d'enregistrement que personne n'avait redemandé. Repasser par `undefined`
+  // ne coûte rien au ré-armement : le tap suivant repose `1`, et `undefined →
+  // 1` est bien un changement de valeur.
+  const handleCaptureArmed = useCallback(() => setCaptureArmToken(undefined), []);
 
   // Constat 2 (F7c) — état muet du lecteur LOCAL du badge B3.3-6, par post
   // (la carte ne possède aucun lecteur : ce bouton reste cosmétique tant que
@@ -260,10 +330,11 @@ export function PostsFeedScreen() {
     return group ? group.map(postToStoryData) : [];
   }, [activeStoryAuthorId, storyGroups]);
 
-  // PostService.repostPost (gateway) 403s on any non-PUBLIC original, and the
-  // web default story visibility is FRIENDS (user-preferences-store.ts) — the
-  // "Republier" entry is withheld unless every story in the open session is
-  // PUBLIC, or it fails into "Couldn't repost" in the common case.
+  // PostService.repostPost (gateway) 403s on any non-PUBLIC original. Stories
+  // now DEFAULT to PUBLIC (règle produit 2026-08-23,
+  // DEFAULT_PUBLICATION_VISIBILITY) but the author can still narrow the
+  // audience per story — the "Republier" entry stays withheld unless every
+  // story in the open session is PUBLIC, or it fails into "Couldn't repost".
   const activeStoryGroupIsRepostable = useMemo(() => {
     if (!activeStoryAuthorId) return false;
     const group = storyGroups.find((g) => g[0]?.authorId === activeStoryAuthorId);
@@ -361,17 +432,44 @@ export function PostsFeedScreen() {
     [activeStoryData, showToast, t],
   );
 
-  const handleRepostStory = useCallback(
-    (storyId: string) => {
-      repostMutation.mutate(
-        { postId: storyId, data: { isQuote: false } },
+  /**
+   * Loi du miroir (directive 2026-08-23). Second site éphémère du web, avec la
+   * page `/story/[postId]` : sans `targetType`, le gateway retombait sur
+   * `?? POST` et repartager une story depuis le tray du fil fabriquait un post
+   * PERMANENT. Le miroir et l'ancrage partent ensemble — livrer le premier seul
+   * donnerait 20 h là où l'on obtenait du définitif, sans recours.
+   */
+  const repostStory = useCallback(
+    (storyId: string, targetType: PostType) => {
+      // La scène VUE, jamais la racine de sa chaîne — même règle que le viewer
+      // de la page `/story/[postId]` et que le jumeau iOS
+      // (`StoryViewerView.repostAsPostDirect` envoie `story.id`, quand les
+      // surfaces de CARTE passent par `RepostTargeting`) : une source éphémère
+      // est recopiée dans son repost, donc autonome, et grimper vers une
+      // racine dont l'échéance est passée ferait échouer le geste. `story.id`
+      // n'est PAS `repostTargetId()` — voir `packages/shared/utils/repost-target.ts`,
+      // § « où cette loi ne s'applique pas ».
+      submitRepost(
+        { targetId: storyId, targetType, isQuote: false },
         {
           onSuccess: () => showToast(t('toast.reposted', 'Reposted!'), 'success'),
           onError: () => showToast(t('toast.error', 'Error'), 'error'),
         },
       );
     },
-    [repostMutation, showToast, t],
+    [submitRepost, showToast, t],
+  );
+
+  /** Le miroir — la story repartagée reste éphémère. */
+  const handleRepostStory = useCallback(
+    (storyId: string) => repostStory(storyId, 'STORY'),
+    [repostStory],
+  );
+
+  /** L'ANCRAGE — « garder ça pour de bon ». */
+  const handleRepostStoryAsPost = useCallback(
+    (storyId: string) => repostStory(storyId, 'POST'),
+    [repostStory],
   );
 
   const handleStoryViewerClose = useCallback(() => {
@@ -407,6 +505,21 @@ export function PostsFeedScreen() {
           mediaIds: data.mediaIds,
           optimisticMedia: data.optimisticMedia,
           ...(data.mentions ? { mentions: data.mentions } : {}),
+          // C7-UI — les deux champs d'accessibilité collectés par
+          // `MediaAccessibilityFields` (monté par `ComposerDocumentSurface`
+          // depuis W7 ; `PostComposer` ne l'est plus par cet écran) meurent ici
+          // s'ils ne sont pas relayés : le transport les accepte déjà
+          // (`CreatePostRequest.mediaAlt` / `.allowSoundExtraction`,
+          // `apps/web/services/posts.service.ts`), mais rien ne les portait
+          // du composer jusqu'à la mutation. Relais CONDITIONNEL des deux
+          // côtés : `mediaAlt` absent (jamais `{}`) quand aucun texte n'a été
+          // saisi, `allowSoundExtraction` absent (jamais `false`) tant que
+          // l'auteur n'a pas touché l'interrupteur — un `false` fabriqué
+          // écraserait un choix serveur que personne n'a révoqué.
+          ...(data.mediaAlt ? { mediaAlt: data.mediaAlt } : {}),
+          ...(data.allowSoundExtraction === undefined
+            ? {}
+            : { allowSoundExtraction: data.allowSoundExtraction }),
         },
         {
           onSuccess: () => showToast(t('toast.postPublished', 'Published!'), 'success', t('toast.postPublishedDesc', 'Your post has been shared.')),
@@ -536,19 +649,24 @@ export function PostsFeedScreen() {
   const handleEditPost = useCallback(
     (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (post) setEditingPost({ id: post.id, content: post.content ?? '', visibility: post.visibility });
+      if (post) {
+        setEditingPost({
+          postId: post.id,
+          content: post.content ?? '',
+          visibility: post.visibility,
+          visibilityUserIds: post.visibilityUserIds ?? [],
+          media: post.media ?? [],
+          postType: post.type,
+        });
+      }
     },
     [posts],
   );
 
   const handleSaveEdit = useCallback(
-    (data: { content: string; visibility: string }) => {
-      if (!editingPost) return;
+    (payload: ComposerDocumentEditPayload) => {
       updatePostMutation.mutate(
-        {
-          postId: editingPost.id,
-          data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
-        },
+        { postId: payload.postId, data: payload.data },
         {
           onSuccess: () => {
             setEditingPost(null);
@@ -558,46 +676,42 @@ export function PostsFeedScreen() {
         },
       );
     },
-    [editingPost, updatePostMutation, showToast, t],
+    [updatePostMutation, showToast, t],
   );
 
   const handleRepostOpen = useCallback(
     (postId: string) => {
       const post = posts.find((p) => p.id === postId);
-      if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+      if (post)
+        setRepostingPost({
+          targetId: repostTargetId(post),
+          author: post.author?.displayName ?? post.author?.username,
+          content: post.content ?? undefined,
+          type: post.type,
+        });
     },
     [posts],
   );
 
-  const handleRepost = useCallback(() => {
-    if (!repostingPost) return;
-    repostMutation.mutate(
-      { postId: repostingPost.id, data: { isQuote: false } },
-      {
-        onSuccess: () => {
-          setRepostingPost(null);
-          showToast(t('toast.reposted', 'Reposted!'), 'success');
-        },
-        onError: () => showToast(t('toast.error', 'Error'), 'error'),
-      },
-    );
-  }, [repostingPost, repostMutation, showToast, t]);
-
-  const handleQuote = useCallback(
-    (content: string) => {
+  // Loi du miroir + loi de l'ancrage (§ loi 5) : `payload.targetType` porte le
+  // format ACTUELLEMENT sélectionné dans l'éventail de `ComposerRepostSurface`
+  // — celui de la carte agie par défaut, celui de l'ancrage si l'auteur l'a
+  // choisi. `submitRepost` est le site UNIQUE (`useComposerRepost.ts`).
+  const handleRepostSubmit = useCallback(
+    (payload: ComposerRepostPayload) => {
       if (!repostingPost) return;
-      repostMutation.mutate(
-        { postId: repostingPost.id, data: { content, isQuote: true } },
+      submitRepost(
+        { targetId: repostingPost.targetId, targetType: payload.targetType, isQuote: payload.isQuote, content: payload.content },
         {
           onSuccess: () => {
             setRepostingPost(null);
-            showToast(t('toast.quoted', 'Quoted!'), 'success');
+            showToast(t(payload.isQuote ? 'toast.quoted' : 'toast.reposted', payload.isQuote ? 'Quoted!' : 'Reposted!'), 'success');
           },
           onError: () => showToast(t('toast.error', 'Error'), 'error'),
         },
       );
     },
-    [repostingPost, repostMutation, showToast, t],
+    [repostingPost, submitRepost, showToast, t],
   );
 
   const handleDismissNewPosts = useCallback(() => {
@@ -605,52 +719,30 @@ export function PostsFeedScreen() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const handleAudioPublish = useCallback(
-    async (data: {
-      audioFile: File;
-      transcription: MobileTranscription | null;
-      content?: string;
-      visibility: PostVisibility;
-      visibilityUserIds?: string[];
-    }) => {
-      try {
-        const tusService = new TusUploadService();
-        const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
-        const media = results[0];
-        if (!media?.id) throw new Error('Upload failed');
-
-        createPostMutation.mutate(
-          {
-            content: data.content,
-            type: 'POST',
-            visibility: data.visibility,
-            visibilityUserIds: data.visibilityUserIds,
-            mediaIds: [media.id],
-            mobileTranscription: data.transcription ?? undefined,
-            originalLanguage: data.transcription?.language,
-            optimisticMedia: [{
-              id: media.id,
-              mimeType: media.mimeType,
-              fileUrl: media.fileUrl,
-              thumbnailUrl: media.thumbnailUrl,
-              duration: media.duration,
-              order: 0,
-            }],
-          },
-          {
-            onSuccess: () => {
-              setAudioComposerOpen(false);
-              showToast(t('toast.audioPublished', 'Audio post published!'), 'success');
-            },
-            onError: () => showToast(t('toast.error', 'Error'), 'error', t('toast.publishError', "Couldn't publish.")),
-          },
-        );
-      } catch {
-        showToast(t('toast.uploadError', 'Upload error'), 'error', t('toast.uploadErrorDesc', "Couldn't upload the audio."));
-      }
-    },
-    [createPostMutation, showToast, t],
-  );
+  // Task W7 — le micro n'est plus un dialogue séparé avec son PROPRE service
+  // d'upload en deux temps : c'est désormais un OUTIL de
+  // `ComposerDocumentSurface`, dont le fichier produit entre dans le MÊME
+  // pool que photo/vidéo (`useAttachmentUpload`). Le fichier publie donc par
+  // `handlePublish`, comme n'importe quel autre média — l'ancien relais audio
+  // n'a plus de raison d'exister, et avec lui les deux champs qu'il posait
+  // (transcription mobile, langue d'origine devinée) : `ComposerDocumentPayload`
+  // ne les déclare plus (voir la note « Aucune langue d'origine n'y figure »
+  // de `components/composer/payload.ts`).
+  //
+  // DETTE SOLDÉE (lot W7bis, 2026-08-25) — cette note décrivait le défaut
+  // inverse ; elle est conservée au PASSÉ pour que la prochaine lecture ne
+  // rouvre pas la question. `useAttachmentUpload` passait par
+  // `POST /attachments/upload`, qui crée des `MessageAttachment`, pendant que
+  // `PostService.createPost` ne réclame que des `PostMedia` : aucun média
+  // n'était rattaché et aucune transcription ne partait. Le correctif est
+  // dans le TRANSPORT, comme annoncé : `services/attachmentTransport.ts`
+  // résout un `uploadContext` en transport, et `ComposerDocumentSurface`
+  // déclare `uploadContext: 'post'`. Le fichier voyage donc par TUS
+  // (`uploadcontext: 'post'` → `isPostMediaUploadContext` →
+  // `prisma.postMedia.create`), `mediaIds` désigne bien des `PostMedia`, et
+  // `postMedia.findFirst({ mimeType: { startsWith: 'audio/' } })` déclenche
+  // Whisper — `ComposerDocumentPayload` ne porte AUCUN `mobileTranscription`,
+  // donc la condition `audioMedia && !data.mobileTranscription` est vraie.
 
   // ─── Status / mood ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
@@ -661,13 +753,15 @@ export function PostsFeedScreen() {
   );
 
   const handleStatusPublish = useCallback(
-    (status: { moodEmoji: string; content?: string; mentions?: readonly PostReferenceInput[] }) => {
+    (status: ComposerStatusPayload) => {
       setStatusComposerOpen(false);
       createStatusMutation.mutate(
         {
           moodEmoji: status.moodEmoji,
           content: status.content,
           originalLanguage: userLanguage,
+          visibility: status.visibility,
+          ...(status.visibilityUserIds ? { visibilityUserIds: status.visibilityUserIds } : {}),
           ...(status.mentions ? { mentions: status.mentions } : {}),
         },
         {
@@ -708,6 +802,7 @@ export function PostsFeedScreen() {
             onStatusPress={handleStatusPress}
             onAddStatus={() => setStatusComposerOpen(true)}
             userLanguage={userLanguage}
+            preferredLanguages={preferredLanguages}
             isLoading={statusesQuery.isLoading}
             className="mb-6"
           />
@@ -718,14 +813,29 @@ export function PostsFeedScreen() {
           <h2 className="sr-only">{t('sections.compose', 'Compose a post')}</h2>
           <div className="flex gap-3 items-start mb-6">
             <div className="flex-1">
-              <PostComposer
+              <MeeshyComposer
+                door={FEED_COMPOSER_DOOR}
                 currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
                 onPublish={handlePublish}
+                /* La porte `feedComposer` OFFRE `story` (table partagée) et le
+                   meuble sait la peindre : ces DEUX props ne sont donc pas
+                   optionnelles ICI. Sans `onPublishStory`, le bouton Publier
+                   de la surface story est le no-op silencieux que la doc de
+                   prop de `MeeshyComposer.tsx` décrit — la surface se démonte
+                   et le brouillon part avec elle. Sans
+                   `storyDefaultVisibility`, la MÊME story naît PUBLIC par
+                   cette porte et `storyPrefs.defaultVisibility` par le
+                   dialogue hérité : deux audiences pour un même contenu, sur
+                   le contrôle le plus sensible. */
+                onPublishStory={handleStoryPublish}
+                storyDefaultVisibility={storyPrefs.defaultVisibility}
+                armCaptureToken={captureArmToken}
+                onCaptureArmed={handleCaptureArmed}
                 disabled={createPostMutation.isPending}
               />
             </div>
             <button
-              onClick={() => setAudioComposerOpen(true)}
+              onClick={() => setCaptureArmToken((token) => (token ?? 0) + 1)}
               className="mt-3 flex-shrink-0 w-12 h-12 rounded-full bg-[var(--gp-terracotta)] text-white flex items-center justify-center hover:opacity-90 transition-opacity"
               aria-label={t('audioPostLabel', 'Record an audio post')}
             >
@@ -812,10 +922,12 @@ export function PostsFeedScreen() {
                       name: post.author?.displayName ?? post.author?.username ?? t('unknownAuthor', 'Unknown'),
                       avatar: post.author?.avatar ?? undefined,
                     }}
+                    authorId={post.authorId ?? post.author?.id}
                     lang={post.originalLanguage ?? 'unknown'}
                     content={post.content ?? ''}
                     translations={postToTranslations(post)}
                     userLanguage={userLanguage}
+                    preferredLanguages={preferredLanguages}
                     time={formatRelativeTime(post.createdAt, t)}
                     likes={post.likeCount}
                     comments={post.commentCount}
@@ -891,6 +1003,7 @@ export function PostsFeedScreen() {
           onReport={handleReportStory}
           onShare={handleShareStory}
           onRepost={activeStoryGroupIsRepostable ? handleRepostStory : undefined}
+          onRepostAsPost={activeStoryGroupIsRepostable ? handleRepostStoryAsPost : undefined}
         />
       )}
 
@@ -902,45 +1015,70 @@ export function PostsFeedScreen() {
         defaultVisibility={storyPrefs.defaultVisibility}
       />
 
-      {/* Status Composer */}
-      <StatusComposer
+      {/* Status Composer — porte moodChip (Task W7). L'hôte fournit la
+          coquille (Dialog) ; ComposerMoodSurface peint son propre bouton
+          Publier. `onPublish` reste requis par le contrat mais n'est jamais
+          servi par ce format — voir MeeshyComposer.tsx, § Ce que ce fichier
+          ne peint pas. */}
+      <Dialog
         open={statusComposerOpen}
         onClose={() => setStatusComposerOpen(false)}
-        onPublish={handleStatusPublish}
-      />
+        labelledBy={MOOD_DIALOG_TITLE_ID}
+        /* `ComposerMoodSurface` a grandi par rapport au composer hérité (six
+           puces d'audience, plus un sélecteur de personnes sous EXCEPT/ONLY)
+           et peint son bouton Publier en bas : la coquille doit défiler,
+           comme le note déjà `StoryComposer` sur le dialogue voisin. */
+        className="max-h-[85vh] overflow-y-auto"
+      >
+        <DialogHeader>
+          <h2 id={MOOD_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+            {t('statusComposer.title')}
+          </h2>
+        </DialogHeader>
+        <DialogBody>
+          <MeeshyComposer door={MOOD_DOOR} onPublish={handlePublish} onPublishStatus={handleStatusPublish} />
+        </DialogBody>
+      </Dialog>
 
-      {/* Audio Post Composer */}
-      <AudioPostComposer
-        open={audioComposerOpen}
-        currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
-        onPublish={handleAudioPublish}
-        onClose={() => setAudioComposerOpen(false)}
-        disabled={createPostMutation.isPending}
-      />
-
-      {/* Post Editor */}
+      {/* Post Editor — porte `edit` (Task W8). */}
       {editingPost && (
-        <PostEditor
-          open
-          initialContent={editingPost.content}
-          initialVisibility={editingPost.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE'}
-          onSave={handleSaveEdit}
-          onClose={() => setEditingPost(null)}
-          saving={updatePostMutation.isPending}
-        />
+        <Dialog open onClose={() => setEditingPost(null)} labelledBy={EDIT_DIALOG_TITLE_ID}>
+          <DialogHeader>
+            <h2 id={EDIT_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+              {t('composer.edit.title')}
+            </h2>
+          </DialogHeader>
+          <DialogBody>
+            <MeeshyComposer
+              door={{ kind: 'edit', documentFormat: composerFormatOf(editingPost.postType) }}
+              onPublish={handlePublish}
+              editSource={editingPost}
+              onSaveEdit={handleSaveEdit}
+              disabled={updatePostMutation.isPending}
+            />
+          </DialogBody>
+        </Dialog>
       )}
 
-      {/* Repost Modal */}
+      {/* Repost — porte `repost` (Task W8). */}
       {repostingPost && (
-        <RepostModal
-          open
-          originalAuthor={repostingPost.author}
-          originalContent={repostingPost.content}
-          onRepost={handleRepost}
-          onQuote={handleQuote}
-          onClose={() => setRepostingPost(null)}
-          saving={repostMutation.isPending}
-        />
+        <Dialog open onClose={() => setRepostingPost(null)} labelledBy={REPOST_DIALOG_TITLE_ID}>
+          <DialogHeader>
+            <h2 id={REPOST_DIALOG_TITLE_ID} className="text-base font-semibold text-[var(--gp-text-primary)]">
+              {t('composer.repost.title')}
+            </h2>
+          </DialogHeader>
+          <DialogBody>
+            <MeeshyComposer
+              door={{ kind: 'repost', sourceFormat: composerFormatOf(repostingPost.type) }}
+              onPublish={handlePublish}
+              repostSource={{ author: repostingPost.author, content: repostingPost.content }}
+              onRepost={handleRepostSubmit}
+              disabled={isReposting}
+              repostSaving={isReposting}
+            />
+          </DialogBody>
+        </Dialog>
       )}
     </DashboardLayout>
   );

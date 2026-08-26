@@ -22,34 +22,34 @@ extension ConversationView {
             previewText: preview,
             isMe: msg.isMe,
             authorColor: msg.senderColor,
+            // Le message cite est sous le doigt de l'utilisateur : son avatar
+            // est deja resolu. On le grave pour que la citation nee de ce geste
+            // le porte de bout en bout, banniere du composeur comprise.
+            authorAvatarUrl: msg.senderAvatarURL,
             attachmentType: attType,
-            attachmentThumbnailUrl: attThumb
+            attachmentThumbnailUrl: attThumb,
+            // Le message cite est sous le doigt : sa protection est CONNUE.
+            // La banniere du composeur repond de la meme loi que la citation
+            // rendue dans le fil — un media a vue unique n'y montre pas plus sa
+            // vignette qu'ailleurs.
+            attachmentIsProtected: firstAttachment.map { $0.isViewOnce || $0.isBlurred }
         )
         isTyping = true
         HapticFeedback.medium()
     }
 
-    func scrollToAndHighlight(_ targetId: String, proxy: ScrollViewProxy) {
-        let messageExists = viewModel.messages.contains { $0.id == targetId }
-        guard messageExists else {
-            FeedbackToastManager.shared.show(String(localized: "conversation.message.unavailable", defaultValue: "Message non disponible", bundle: .main), type: .error)
-            return
-        }
-        viewModel.markProgrammaticScroll()
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            proxy.scrollTo(targetId, anchor: .center)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            withAnimation(.easeIn(duration: 0.2)) {
-                scrollState.highlightedMessageId = targetId
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                withAnimation(.easeOut(duration: 0.5)) {
-                    scrollState.highlightedMessageId = nil
-                }
-            }
-        }
-    }
+    // `scrollToAndHighlight(_:proxy:)` a vécu ici sans qu'aucun commit du dépôt
+    // ne l'appelle. C'était le saut-vers-le-message de l'époque où le fil était
+    // une `ScrollView` SwiftUI (`ScrollViewProxy`) ; la liste est passée à
+    // `MessageListViewController`, et le saut vivant y est
+    // `scrollToMessage(localId:)` / `scrollToMessageFast(localId:)`, dont le
+    // `flashCell(at:)` fait le surlignage. Les six sites vivants passent tous
+    // par `scrollState.scrollToMessageId`.
+    //
+    // Sa dépouille emportait `conversation.message.unavailable` — une chaîne
+    // traduite en sept locales pour un toast qu'aucun geste ne pouvait
+    // déclencher — et `scrollState.highlightedMessageId`, dont elle était le
+    // seul écrivain non nul et que RIEN ne lisait.
 
     // MARK: - Search Overlay
 
@@ -184,7 +184,6 @@ extension ConversationView {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""
-            scrollState.highlightedMessageId = nil
         }
         viewModel.searchNextCursor = nil as String?
         isSearchFocused = false
@@ -408,44 +407,22 @@ extension ConversationView {
     }
 
     // MARK: - Reply Count
-
-    func replyCountFor(messageId: String) -> Int? {
-        let count = viewModel.replyCountMap[messageId] ?? 0
-        return count > 0 ? count : nil
-    }
-
-    func replyCountPill(count: Int, isMe: Bool, parentMessageId: String) -> some View {
-        let accent = Color(hex: accentColor)
-        let label = count == 1
-            ? String(localized: "conversation.view.reply.count.one", defaultValue: "1 reponse", bundle: .main)
-            : String(localized: "conversation.view.reply.count.many", defaultValue: "\(count) reponses", bundle: .main)
-        return Button {
-            HapticFeedback.light()
-            if let firstReply = viewModel.messages.first(where: { $0.replyToId == parentMessageId }) {
-                scrollState.scrollToMessageId = firstReply.id
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: "arrowshape.turn.up.left.2.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
-                Text(label)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
-            }
-            .foregroundColor(accent)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(accent.opacity(isDark ? 0.12 : 0.08))
-                    .overlay(
-                        Capsule()
-                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
-                    )
-            )
-        }
-        .accessibilityLabel(label)
-        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller à la première réponse de ce message", bundle: .main))
-    }
+    //
+    // Il n'y en a plus. `replyCountFor` / `replyCountPill` ont vécu ici sans
+    // qu'AUCUN commit du dépôt ne les appelle — vérifié sur toute l'histoire de
+    // `apps/ios`. La pastille n'a jamais rendu un pixel, et ses deux clés
+    // (`conversation.view.reply.count.{one,many}`) figuraient pourtant en
+    // report d'itération depuis 240i comme « défaut i18n : l'arabe est lésé ».
+    //
+    // Le fil de réponses reste atteignable, et par un seul chemin vivant :
+    // appui long → `MessageMoreSheet` → `onThread` → `ThreadView`
+    // (`ConversationView.swift`). C'est ce chemin qui porte la fonctionnalité ;
+    // la pastille en était un doublon mort-né.
+    //
+    // La DÉCOUVRABILITÉ de ce chemin (trois gestes avant de voir qu'un message
+    // a des réponses) est une vraie question produit — mais c'en est une, pas
+    // une dette de traduction. Elle se tranche au simulateur, sous une bulle
+    // dont les stickers de réaction débordent déjà de quelques points.
 }
 
 // MARK: - Quick Reaction Bar Placement

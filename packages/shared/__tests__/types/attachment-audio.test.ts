@@ -9,6 +9,8 @@ import {
   toSocketIOTranslations,
   toSocketIOAudio,
   toSocketIOAudios,
+  transcriptTranslationTexts,
+  transcriptTranslationTracks,
 } from '../../types/attachment-audio';
 import type {
   AttachmentTranslation,
@@ -302,5 +304,133 @@ describe('toSocketIOTranslations', () => {
     const translations = { fr: undefined } as unknown as AttachmentTranslations;
     const result = toSocketIOTranslations('att-1', translations);
     expect(result).toEqual([]);
+  });
+});
+
+/**
+ * Cycle 123 — la bannière d'un VOCAL descend son propre Prisme.
+ *
+ * `resolvePrismTranslation` consomme `langue → texte`. Les traductions d'une
+ * transcription arrivent, elles, dans l'enveloppe de stockage d'un attachment
+ * (`{ type, transcription, url, deletedAt? }`) et depuis une colonne `Json`,
+ * donc en `unknown`. Ce dépouillement est le site UNIQUE de la conversion.
+ */
+describe('transcriptTranslationTexts', () => {
+  it('dépouille l\'enveloppe de stockage en langue → texte', () => {
+    const result = transcriptTranslationTexts({
+      fr: { type: 'audio', transcription: 'Salut', url: '/a.mp3', createdAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', createdAt: new Date() },
+    });
+
+    expect(result).toEqual({ fr: 'Salut', es: 'Hola' });
+  });
+
+  it('écarte une entrée soft-supprimée — aucun lecteur ne doit la servir', () => {
+    const result = transcriptTranslationTexts({
+      fr: { type: 'audio', transcription: 'Salut', createdAt: new Date(), deletedAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', createdAt: new Date() },
+    });
+
+    expect(result).toEqual({ es: 'Hola' });
+  });
+
+  it('écarte un texte vide — il effacerait la bannière au lieu de la traduire', () => {
+    const result = transcriptTranslationTexts({
+      fr: { type: 'audio', transcription: '   ', createdAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', createdAt: new Date() },
+    });
+
+    expect(result).toEqual({ es: 'Hola' });
+  });
+
+  it('tolère une colonne Json absente ou informe — c\'est une frontière de désérialisation', () => {
+    expect(transcriptTranslationTexts(null)).toEqual({});
+    expect(transcriptTranslationTexts(undefined)).toEqual({});
+    expect(transcriptTranslationTexts('pas un objet')).toEqual({});
+    expect(transcriptTranslationTexts({ fr: null })).toEqual({});
+    expect(transcriptTranslationTexts({ fr: { type: 'audio' } })).toEqual({});
+  });
+});
+
+/**
+ * Cycle 128 — la JUMELLE du dépouillement ci-dessus, pour le MÉDIUM.
+ *
+ * `transcriptTranslationTexts` ne prend de la carte de traductions que le TEXTE.
+ * La MÊME entrée porte la piste TTS de la langue (`url`, `durationMs`, `format`)
+ * — la bannière d'un vocal servait donc la bonne langue en texte et attachait le
+ * fichier ORIGINAL en son.
+ */
+describe('transcriptTranslationTracks', () => {
+  it('dépouille l\'enveloppe en langue → piste servable', () => {
+    const result = transcriptTranslationTracks({
+      fr: {
+        type: 'audio', transcription: 'Salut', url: '/api/v1/attachments/file/translated/a_fr.mp3',
+        durationMs: 5200, format: 'mp3', createdAt: new Date(),
+      },
+    });
+
+    expect(result).toEqual({
+      fr: { url: '/api/v1/attachments/file/translated/a_fr.mp3', mimeType: 'audio/mp3', durationMs: 5200 },
+    });
+  });
+
+  /**
+   * Les DEUX producteurs de `format` divergent — `'mp3'` sur le chemin message
+   * (`audioMimeType.replace('audio/', '')`), `'audio/mp3'` sur le chemin post.
+   * Le dépouillement NORMALISE plutôt que de choisir : un `typeHint` UTI faux
+   * fait rejeter la pièce jointe par la NSE, silencieusement.
+   */
+  it('normalise `format` que le producteur l\'ait écrit nu ou en mime complet', () => {
+    const bare = transcriptTranslationTracks({
+      fr: { type: 'audio', transcription: 'Salut', url: '/a_fr.m4a', format: 'm4a', createdAt: new Date() },
+    });
+    const full = transcriptTranslationTracks({
+      fr: { type: 'audio', transcription: 'Salut', url: '/a_fr.m4a', format: 'audio/m4a', createdAt: new Date() },
+    });
+
+    expect(bare.fr?.mimeType).toBe('audio/m4a');
+    expect(full.fr?.mimeType).toBe('audio/m4a');
+  });
+
+  it('rend une piste SANS mime quand le producteur n\'a pas dit son format', () => {
+    // Fail-open sur l'étiquette, jamais sur le fichier : la NSE sait déduire un
+    // UTI de l'extension. Inventer `audio/mp3` sur un `.m4a` serait pire.
+    const result = transcriptTranslationTracks({
+      fr: { type: 'audio', transcription: 'Salut', url: '/a_fr.m4a', createdAt: new Date() },
+    });
+
+    expect(result.fr).toEqual({ url: '/a_fr.m4a' });
+  });
+
+  it('écarte une entrée soft-supprimée — même règle que son texte', () => {
+    const result = transcriptTranslationTracks({
+      fr: { type: 'audio', transcription: 'Salut', url: '/a_fr.mp3', createdAt: new Date(), deletedAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', url: '/a_es.mp3', createdAt: new Date() },
+    });
+
+    expect(Object.keys(result)).toEqual(['es']);
+  });
+
+  /**
+   * Le cas qui SÉPARE les deux jumelles : une traduction TEXTE peut exister sans
+   * que le TTS ait produit sa piste. L'entrée concourt alors pour le texte et
+   * PAS pour le son — c'est ce qui fait retomber l'élection sur le fichier
+   * original plutôt que sur une URL vide.
+   */
+  it('écarte une entrée sans url — le texte existe, la piste non', () => {
+    const source = {
+      fr: { type: 'audio', transcription: 'Salut', createdAt: new Date() },
+      es: { type: 'audio', transcription: 'Hola', url: '  ', createdAt: new Date() },
+    };
+
+    expect(transcriptTranslationTracks(source)).toEqual({});
+    expect(transcriptTranslationTexts(source)).toEqual({ fr: 'Salut', es: 'Hola' });
+  });
+
+  it('tolère une colonne Json absente ou informe — même frontière', () => {
+    expect(transcriptTranslationTracks(null)).toEqual({});
+    expect(transcriptTranslationTracks(undefined)).toEqual({});
+    expect(transcriptTranslationTracks('pas un objet')).toEqual({});
+    expect(transcriptTranslationTracks({ fr: null })).toEqual({});
   });
 });

@@ -51,10 +51,6 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 jest.mock('@/services/posts.service', () => ({
@@ -72,7 +68,7 @@ jest.mock('@/hooks/social/use-stories', () => ({
 }));
 jest.mock('@/hooks/social/use-stories-realtime', () => ({ useStoriesRealtime: jest.fn() }));
 jest.mock('@/stores/user-preferences-store', () => ({
-  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'FRIENDS' } }),
+  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'PUBLIC' } }),
 }));
 jest.mock('@/hooks/social/use-statuses', () => ({
   useStatusesFeedQuery: () => ({ isLoading: false }),
@@ -146,7 +142,7 @@ jest.mock('@/hooks/queries/use-comment-mutations', () => ({
 jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
   usePostSocketCacheSync: jest.fn(),
 }));
-jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr' }));
+jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'] }));
 jest.mock('@/hooks/use-impression-tracking', () => ({
   useImpressionTracking: () => ({ observe: jest.fn() }),
 }));

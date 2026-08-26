@@ -2,7 +2,7 @@
 <resources>
     <string name="legal_terms_title">Terms of Service</string>
     <string name="legal_privacy_title">Privacy Policy</string>
-    <string name="legal_terms_last_updated">Last updated: February 24, 2026</string>
+    <string name="legal_terms_last_updated">Last updated: August 23, 2026</string>
     <string name="legal_privacy_last_updated">Last updated: February 24, 2026</string>
 
     <string name="legal_tos_acceptance_title">Acceptance of Terms</string>
@@ -12,7 +12,7 @@
     <string name="legal_tos_user_conduct_title">User Conduct</string>
     <string name="legal_tos_user_conduct_body">You agree not to use Meeshy to send spam, illegal content, harassment, or content that infringes on others\' rights. Any abuse will result in account suspension or termination.</string>
     <string name="legal_tos_content_title">Content</string>
-    <string name="legal_tos_content_body">You retain ownership of your content. By using Meeshy, you grant us a limited license to transmit and store your content to provide our services.</string>
+    <string name="legal_tos_content_body">You retain ownership of your content. By using Meeshy, you grant us a limited license to transmit and store your content to provide our services. In return, we undertake to credit the author of any published content, including content that is forwarded or reshared, wherever its origin can be traced. This is a best-efforts commitment: the credit may be missing or incomplete where our systems do not retain that link, or where the privacy settings of the people concerned, including the author’s, prevent it.</string>
     <string name="legal_tos_account_termination_title">Account Termination</string>
     <string name="legal_tos_account_termination_body">You may delete your account at any time. We reserve the right to suspend or terminate accounts that violate these terms.</string>
     <string name="legal_tos_disclaimer_title">Disclaimer</string>

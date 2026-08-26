@@ -13,14 +13,14 @@
  * CommentReactionHandler delegates join/leave to the same shared room.
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket, MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostReactionService } from '../../services/PostReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
-import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { AckOf, AckResponseOf } from '@meeshy/shared/types/socketio-events';
+import type { PostReactionUpdateEventData } from '@meeshy/shared/types/post';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
@@ -33,6 +33,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
 import { resolveInteractionTarget, resolveConsumptionTarget } from '../../services/posts/postVisibility.js';
 import { SocialEventsHandler } from './SocialEventsHandler';
+import { emitServerEvent } from '../serverEmit';
 
 /** Emoji canonique du "like" — aligné REST (`interactions.ts`) + web (`HEART_EMOJI`). */
 const HEART_EMOJI = '❤️';
@@ -96,7 +97,11 @@ export class PostReactionHandler {
     emoji: string,
     action: 'add' | 'remove',
     userId: string,
-    updateEvent: unknown
+    // Cycle 101 — `unknown` ici ANNULAIT le contrat pour les deux sites
+    // d'émission ci-dessous : la garde d'un `MeeshySocket` ne vaut que jusqu'au
+    // premier paramètre non typé (leçon du cycle 100, `SocialEventsHandler`).
+    // `createUpdateEvent` rend déjà exactement cette forme.
+    updateEvent: PostReactionUpdateEventData
   ): Promise<void> {
     if (emoji === HEART_EMOJI) {
       const post = await this.prisma.post.findUnique({
@@ -120,7 +125,7 @@ export class PostReactionHandler {
       }
     }
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
-    this.io.to(ROOMS.post(postId)).emit(event, updateEvent);
+    emitServerEvent(this.io.to(ROOMS.post(postId)), event, updateEvent);
   }
 
   /**
@@ -129,7 +134,7 @@ export class PostReactionHandler {
   async handleAddReaction(
     socket: Socket,
     data: { postId: string; emoji: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'post:reaction-add'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketPostReactionAddSchema, data);
@@ -141,7 +146,7 @@ export class PostReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'post:reaction-add'> = {
           success: false,
           error: 'User not authenticated',
         };
@@ -155,7 +160,7 @@ export class PostReactionHandler {
       const isAnonymous = user?.isAnonymous || false;
 
       if (isAnonymous) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'post:reaction-add'> = {
           success: false,
           error: 'Only registered users can react',
         };
@@ -196,7 +201,7 @@ export class PostReactionHandler {
       });
 
       if (!reaction) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'post:reaction-add'> = {
           success: false,
           error: 'Failed to add reaction',
         };
@@ -216,7 +221,7 @@ export class PostReactionHandler {
       // `post:reaction-added`. Le web ignore `data` (lit seulement success/error),
       // l'iOS le décode en `SocketPostReactionUpdateEvent`. Renvoyer la `reaction`
       // brute (sans action/aggregation) cassait le décodage iOS (malformedResponse).
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'post:reaction-add'> = {
         success: true,
         data: updateEvent,
       };
@@ -250,7 +255,7 @@ export class PostReactionHandler {
         .catch(err => this.logger.error('post reaction notification failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
       this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'post:reaction-add'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add reaction',
       };
@@ -264,7 +269,7 @@ export class PostReactionHandler {
   async handleRemoveReaction(
     socket: Socket,
     data: { postId: string; emoji: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'post:reaction-remove'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketPostReactionRemoveSchema, data);
@@ -276,7 +281,7 @@ export class PostReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'post:reaction-remove'> = {
           success: false,
           error: 'User not authenticated',
         };
@@ -290,7 +295,7 @@ export class PostReactionHandler {
       const isAnonymous = user?.isAnonymous || false;
 
       if (isAnonymous) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'post:reaction-remove'> = {
           success: false,
           error: 'Only registered users can react',
         };
@@ -330,7 +335,16 @@ export class PostReactionHandler {
         // instead of an error, which the client would treat as a failed un-react
         // and roll the optimistic removal back, re-showing a reaction that is
         // gone. Mirrors ReactionHandler.handleReactionRemove (message reactions).
-        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
+        //
+        // SANS `data`, et c'est la règle « ACK == broadcast » appliquée à la
+        // lettre : rien n'a changé, donc AUCUN `updateEvent` n'est diffusé, donc
+        // il n'y a rien à refléter dans l'accusé. Ce site portait
+        // `{ message: 'Reaction already absent' }` — une phrase anglaise que le
+        // décodeur iOS de `Socket*ReactionUpdateEvent` rejette, sur le chemin
+        // que déclenche exactement le double-tap qu'un accusé idempotent existe
+        // pour absorber. Les deux autres familles portaient la même, recopiée du
+        // même endroit ; c'est la porte typée (`AckOf<…>`) qui les a nommées.
+        if (callback) callback({ success: true });
         return;
       }
 
@@ -343,7 +357,7 @@ export class PostReactionHandler {
 
       // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
       // identique au broadcast `post:reaction-removed`, au lieu d'un simple {message}.
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'post:reaction-remove'> = {
         success: true,
         data: updateEvent,
       };
@@ -365,7 +379,7 @@ export class PostReactionHandler {
       ).catch(err => this.logger.error('post reaction notification retraction failed', err, { postId: targetPostId }));
     } catch (error: unknown) {
       this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'post:reaction-remove'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to remove reaction',
       };
@@ -379,7 +393,7 @@ export class PostReactionHandler {
   async handleRequestSync(
     socket: Socket,
     data: { postId: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'post:reaction-request-sync'>
   ): Promise<void> {
     try {
       // Validate at the socket boundary like every sibling method — otherwise a
@@ -395,7 +409,7 @@ export class PostReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'post:reaction-request-sync'> = {
           success: false,
           error: 'User not authenticated',
         };
@@ -436,14 +450,14 @@ export class PostReactionHandler {
         currentUserId: userId,
       });
 
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'post:reaction-request-sync'> = {
         success: true,
         data: reactionSync,
       };
       if (callback) callback(successResponse);
     } catch (error: unknown) {
       this.logger.error('Failed to sync post reactions', error, { userId: this.socketToUser.get(socket.id) });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'post:reaction-request-sync'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to sync reactions',
       };
@@ -458,7 +472,7 @@ export class PostReactionHandler {
   async handleJoinPost(
     socket: Socket,
     data: { postId: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'post:join'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketPostRoomActionSchema, data);
@@ -506,7 +520,7 @@ export class PostReactionHandler {
       callback?.({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'post:join'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to join post room',
       };
@@ -521,7 +535,7 @@ export class PostReactionHandler {
   async handleLeavePost(
     socket: Socket,
     data: { postId: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'post:leave'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketPostRoomActionSchema, data);
@@ -560,7 +574,7 @@ export class PostReactionHandler {
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'post:leave'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to leave post room',
       };

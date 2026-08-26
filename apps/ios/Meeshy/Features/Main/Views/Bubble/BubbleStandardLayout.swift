@@ -90,6 +90,14 @@ struct BubbleStandardLayout: View {
     let onReplyTap: ((String) -> Void)?
     let onStoryReplyTap: ((String) -> Void)?
     let onMediaTap: ((MessageAttachment) -> Void)?
+    /// LOI DES ZONES (2026-08-24) — ZONE 1 de la citation : l'avatar de
+    /// l'auteur cite ouvre son profil. Resolution hote
+    /// (`MessageListViewController.openQuotedAuthorProfile`), comme
+    /// `onMediaTap`. `nil` ⇒ zone non armee, le tap retombe sur la zone 3.
+    let onQuotedAuthorTap: ((ReplyReference) -> Void)?
+    /// LOI DES ZONES — ZONE 2 : la miniature ou l'icone de lecture ouvre le
+    /// media cite en plein ecran (`openQuotedMedia`). Meme regle de nullite.
+    let onQuotedMediaTap: ((ReplyReference) -> Void)?
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     /// BUG2 A' — réaction par-image (attachmentId, emoji). Threadé jusqu'à BubbleGridCell.
     let onReactToAttachment: ((String, String) -> Void)?
@@ -394,6 +402,39 @@ struct BubbleStandardLayout: View {
         return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
+    /// **LOI DES ZONES — la moitié VoiceOver.** Les zones 1 (avatar → profil) et
+    /// 2 (miniature / icône de lecture → plein écran) sont des gestes posés
+    /// DANS `BubbleQuotedReply`. Deux lignes plus haut, cette rangée pose
+    /// `.accessibilityElement(children: .combine)` — elle devient UN seul
+    /// élément — puis `.accessibilityLabel(messageAccessibilityLabel)`, qui
+    /// REMPLACE le libellé composé des enfants. Le trait de bouton, l'indice et
+    /// le libellé que la citation pose sur son avatar et sur sa miniature ne
+    /// sont donc jamais prononcés, et VoiceOver n'a ni tap localisé ni appui
+    /// long pour les atteindre : sans action nommée, les deux capacités sont
+    /// indisponibles au lecteur d'écran.
+    ///
+    /// Même parade que `BubbleSystemViews.joinNotice` (« VoiceOver n'a pas
+    /// d'appui long : l'action lui est offerte explicitement »). Les actions
+    /// suivent l'ARMEMENT, jamais la présence à l'écran : une action nommée qui
+    /// ne déclenche rien serait un contrôle qui ment (loi 4 du dépôt), pire ici
+    /// qu'ailleurs puisque le rotor la RÉCITE. Les deux clés sont celles que la
+    /// citation emploie déjà — zéro clé neuve, zéro clé morte.
+    @ViewBuilder
+    private var quotedZoneAccessibilityActions: some View {
+        if let reference = content.reply?.reference {
+            if let onQuotedAuthorTap, reference.offersAuthorGate {
+                Button(String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main)) {
+                    onQuotedAuthorTap(reference)
+                }
+            }
+            if let onQuotedMediaTap, reference.offersMediaGate {
+                Button(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main)) {
+                    onQuotedMediaTap(reference)
+                }
+            }
+        }
+    }
+
     /// Mentions d'accessibilité des contenus non média : lieu + fichiers.
     /// Pure et testable. Le lieu se déclenche sur `message.location` (voie
     /// serveur actuelle, `hasSharedPlace`) OU sur une ancienne pièce jointe
@@ -482,14 +523,15 @@ struct BubbleStandardLayout: View {
                     BubblePinnedIndicator()
                 }
 
-                // Forwarded indicator — le nom de la conversation source passe
-                // par ForwardBadgePolicy : groupes nommés, tête-à-tête anonymes.
+                // Forwarded indicator — la vue ne choisit plus qui nommer :
+                // ForwardBadgePolicy tranche (groupe au moins public nommé,
+                // cercle privé et type inconnu anonymes, tête-à-tête par
+                // l'auteur), la bulle ne fait que rendre.
                 if content.isForwarded {
                     BubbleForwardedIndicator(
                         isMe: isMe,
                         isDark: isDark,
-                        senderName: message.forwardedFrom?.senderName,
-                        conversationName: ForwardBadgePolicy.conversationName(for: message.forwardedFrom)
+                        attribution: ForwardBadgePolicy.attribution(for: message.forwardedFrom)
                     )
                 }
 
@@ -523,6 +565,21 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
+                // Les effets du message se posent sur LA BULLE, jamais sur la
+                // rangée. Ils ont vécu montés sur `BubbleStandardLayout(...)`
+                // depuis `ThemedMessageBubble` — c'est-à-dire sur le `HStack`
+                // ci-dessous, qui contient l'avatar, la bulle, le strip de
+                // réactions ET tout l'espace vide jusqu'au bord de l'écran.
+                // Le liseré arc-en-ciel encadrait donc du vide sur la moitié
+                // de sa longueur, et aucun réglage d'animation ne pouvait
+                // rattraper ça.
+                //
+                // Ce `ZStack` a exactement la largeur intrinsèque du contenu :
+                // le cap de `bubbleMaxWidth` est appliqué PLUS HAUT, sur le
+                // `VStack` parent. Posé ici — et avant l'overlay de réactions,
+                // pour que les pastilles restent au-dessus du liseré — le
+                // contour épouse la bulle réelle.
+                .messageEffects(message.effects)
                 // Reactions sit at the BOTTOM corner of the bubble, sur le
                 // cote OPPOSE au bord d'ecran. Une bulle recue (a gauche)
                 // a son strip ancre en bottom-TRAILING (deborde vers la
@@ -572,6 +629,7 @@ struct BubbleStandardLayout: View {
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
+        .accessibilityActions { quotedZoneAccessibilityActions }
         .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
             // Local mirror — toggles `hasPlayingInlineVideo` to drive the
             // footer overlay visibility. Doesn't re-render on time ticks.
@@ -1252,7 +1310,9 @@ struct BubbleStandardLayout: View {
             parentIsMe: content.isMe,
             accentHex: contactColor,
             isDark: isDark,
-            mentionDisplayNames: mentionDisplayNames
+            mentionDisplayNames: mentionDisplayNames,
+            onQuotedAuthorTap: onQuotedAuthorTap,
+            onQuotedMediaTap: onQuotedMediaTap
         )
         .equatable()
     }
@@ -1374,6 +1434,8 @@ struct BubbleStandardLayout: View {
                 parentIsMe: isMe,
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
+                onQuotedAuthorTap: onQuotedAuthorTap,
+                onQuotedMediaTap: onQuotedMediaTap,
                 onPlayAudio: onPlayAudio,
                 conversationName: conversationName,
                 audioQueueTailProvider: audioQueueTailProvider,
@@ -1651,6 +1713,11 @@ struct BubbleBodyFooterLayout: Layout {
 /// the main queue; the flush closure re-enters via `assumeIsolated`.
 @MainActor
 final class BubbleHeightCache {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = BubbleHeightCache(observeSystemEvents: true)
 
     private struct Entry {

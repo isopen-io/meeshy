@@ -5,6 +5,19 @@
 
 export type QueuedMessagePayload = {
   readonly messageId: string;
+  /**
+   * `Conversation.id` — un ObjectId, et le seul champ de l'entrée que le drain
+   * AGRÈGE : `_dropEndedMemberships` (le gate d'autorisation du rejeu) et la
+   * résolution des accusés de remise construisent chacun un unique
+   * `conversationId: { in: [...] }` portant TOUT le lot.
+   *
+   * Le type l'affirme à l'écriture seulement. À la relecture il sort d'un
+   * `JSON.parse(…) as QueuedMessagePayload` sur des octets vieux de 48 h au plus
+   * (`DELIVERY_QUEUE_TTL_SECONDS`), et un id que la colonne ne peut pas porter y
+   * fait lever la requête pour le lot ENTIER. Le drain le vérifie donc AVANT
+   * d'interroger — `isAddressableConversationId`
+   * (`services/gateway/src/socketio/queuedEventContract.ts`).
+   */
   readonly conversationId: string;
   readonly payload: Record<string, unknown>;
   readonly enqueuedAt: string;

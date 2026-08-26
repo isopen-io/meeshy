@@ -269,6 +269,56 @@ public struct RepostStoryPayload: Codable, Sendable, Equatable {
     }
 }
 
+/// Fil rouge du repost (lot 7, tâche 7.5) — payload du kind `.repostPost`,
+/// pour `POST /posts/:postId/repost` (repost PUBLIC, sur le fil). Distinct de
+/// `RepostStoryPayload` (repost PRIVÉ dans une conversation, `targetConversationId`)
+/// et de `CreatePostPayload` (porte 3 — `POST /posts { repostOfId }`, un autre
+/// mécanisme serveur, cf. `PostService.repostPost` vs `PostService.createPost`).
+public struct RepostPostPayload: Codable, Sendable, Equatable {
+    public let clientMutationId: String
+    /// L'id du post/story/status source à reposter.
+    public let postId: String
+    /// Type CIBLE du repost (`"POST" | "STORY" | "STATUS" | "REEL"`, valeurs
+    /// `PostType` côté gateway) — OBLIGATOIRE, jamais optionnel. Loi 5 (« le
+    /// repost miroite ; changer de format est l'ancrage », spec
+    /// 2026-08-23 §Loi 5) : le format doit être porté explicitement jusqu'au
+    /// bout de la file, jamais laissé au repli serveur `?? PostType.POST`.
+    /// C'est exactement ce repli qui, pour l'appelant historique sans
+    /// `targetType`, transforme une story repartagée en post permanent sans
+    /// que personne ne l'ait demandé.
+    ///
+    /// **Cet appelant historique EXISTE ENCORE** —
+    /// `StoryService.repost(storyId:)` (`Services/StoryService.swift`), sans
+    /// `targetType`, donc droit sur le repli. Il n'a aucun appelant de
+    /// production (seul un test l'invoque) et il décode `[String: String]` là
+    /// où la route rend un Post complet, donc il lève même quand le serveur
+    /// réussit : mort ET menteur. Son retrait est une DETTE ouverte, pas un
+    /// fait accompli — ne pas relire cette ligne comme si elle l'était.
+    public let targetType: String
+    /// Commentaire de citation (`isQuote == true`). `nil` pour un repost simple.
+    public let content: String?
+    public let isQuote: Bool
+    /// Audience choisie par le reposteur. `nil` ⇒ le serveur hérite de
+    /// l'audience de l'original (`PostService.repostPost`).
+    public let visibility: String?
+
+    public init(
+        clientMutationId: String,
+        postId: String,
+        targetType: String,
+        content: String? = nil,
+        isQuote: Bool = false,
+        visibility: String? = nil
+    ) {
+        self.clientMutationId = clientMutationId
+        self.postId = postId
+        self.targetType = targetType
+        self.content = content
+        self.isQuote = isQuote
+        self.visibility = visibility
+    }
+}
+
 // MARK: - Posts & comments
 
 public struct CreatePostPayload: Codable, Sendable, Equatable {
@@ -323,6 +373,85 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// cette file. Une déclaration absente du payload persisté serait perdue au
     /// premier redémarrage — et silencieusement, même en ligne.
     public let mentions: [PostMentionInput]?
+    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : le grain de
+    /// découvrabilité géographique DEMANDÉ au serveur, indépendant du badge
+    /// gouverné par `location` ci-dessus.
+    ///
+    /// Porté ici pour la même raison que `location` et `mentions`, et c'est ici
+    /// que cela compte le plus : un post TEXTE + lieu — le cas nominal de
+    /// cette fonctionnalité — n'emprunte JAMAIS `PostService.create`, il part
+    /// par cette file (`FeedViewModel.isDurableTextOnly`). Sans ce champ,
+    /// l'utilisateur coche « trouvable à proximité », voit sa publication
+    /// partir, et son consentement disparaît au flush — silencieusement, même
+    /// en ligne.
+    ///
+    /// `nil` — le défaut — vaut « non découvrable » : le gateway laisse alors
+    /// `geoPoint`/`geoPrecision` nuls. Optionnel aussi pour que toute ligne
+    /// persistée avant ce champ continue de décoder.
+    ///
+    /// Rien ici n'arrondit `location` : la coordonnée est persistée puis
+    /// envoyée telle qu'elle a été reçue, le serveur seul quantifie.
+    public let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// La publication que celle-ci REPARTAGE. **Seul porteur de l'attribution
+    /// dans cette charge** : il n'y a pas de `viaUsername` sur le fil, et il
+    /// n'y en a jamais eu que le gateway lise — `CreatePostSchema` ne le
+    /// déclare pas, et un `z.object()` écarte les clés inconnues en silence. Le
+    /// « via @X » qu'un composer affiche est un fait LOCAL d'affichage, jamais
+    /// une écriture. Ne pas rouvrir ce champ-là en croyant compléter celui-ci.
+    ///
+    /// Porté ici parce que le chemin HORS LIGNE de `StatusViewModel.setStatus`
+    /// est le seul des deux à ne pas l'avoir : republier un mood sans réseau
+    /// publiait un mood ORIGINAL, sans sa source — un contenu attribué à
+    /// quelqu'un d'autre par omission. `nil` — le cas immensément majoritaire —
+    /// vaut « publication d'origine ». Optionnel aussi pour que toute ligne
+    /// persistée avant ce champ continue de décoder.
+    public let repostOfId: String?
+    /// La transcription faite SUR L'APPAREIL, telle que l'auteur l'a relue
+    /// avant d'envoyer. Le gateway la persiste sur le premier `PostMedia` audio
+    /// et **évite alors la re-transcription Whisper** (`PostService.createPost`).
+    ///
+    /// Sans elle ici, un vocal routé par la file durable arrivait sans son
+    /// texte : le serveur re-transcrivait, le travail de l'appareil était jeté
+    /// en silence, et le résultat pouvait différer de celui qui avait été
+    /// affiché. C'est ce qui QUALIFIE un enregistrement, pas ce qui le compose
+    /// — et c'est précisément ce genre de champ qu'un lot de convergence laisse
+    /// derrière lui.
+    ///
+    /// Sa graphie est celle du serveur (`duration_ms`, `speaker_id`,
+    /// `MobileTranscriptionSchema`) : elle est portée par les `CodingKeys` du
+    /// type lui-même, jamais réécrite ici.
+    public let mobileTranscription: MobileTranscriptionPayload?
+    /// Le type MIME **DÉCLARÉ** de chaque fichier de `localMediaPaths`, aligné
+    /// par INDEX sur lui. `nil` (ou un index absent) ⇒ le dispatcher le
+    /// re-dérive de l'extension, ce qui est le comportement des lignes écrites
+    /// avant ce champ.
+    ///
+    /// Il existe parce que l'extension NE SUFFIT PAS. La file relocalise les
+    /// fichiers « extension préservée pour que le dispatcher en dérive le
+    /// MIME » — un contrat qui tient tant que la table des extensions connaît
+    /// le conteneur. Un vocal importé depuis Fichiers en `.caf` / `.aiff` /
+    /// `.opus` retombait sur `application/octet-stream`, et le gateway ne
+    /// reconnaît un média audio qu'à `mimeType.startsWith('audio/')` : le
+    /// message partait sans sa transcription embarquée ET sans
+    /// re-transcription. Le site d'envoi, LUI, connaissait le MIME depuis le
+    /// début — il ne l'emportait simplement pas.
+    ///
+    /// C'est un champ de QUALIFICATION, pas de composition : il ne dit rien de
+    /// ce que la publication CONTIENT, seulement de la façon dont ses octets
+    /// doivent être annoncés. Un lot de convergence est exactement ce qui les
+    /// laisse derrière.
+    public let localMediaMimeTypes: [String]?
+
+    /// Le MIME que ce média a DÉCLARÉ, ou `nil` si la ligne n'en portait pas
+    /// (écrite avant ce champ, ou site d'envoi qui n'en connaît aucun).
+    ///
+    /// Un accès par index sur un tableau parallèle est une lecture hors bornes
+    /// en puissance : la lire à UN endroit, ici, vaut mieux que de la répéter
+    /// chez chaque consommateur.
+    public func declaredMimeType(at index: Int) -> String? {
+        guard let mimes = localMediaMimeTypes, mimes.indices.contains(index) else { return nil }
+        return mimes[index]
+    }
 
     public init(
         clientMutationId: String,
@@ -337,7 +466,11 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         audioDuration: Int? = nil,
         visibilityUserIds: [String]? = nil,
         location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil
+        mentions: [PostMentionInput]? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil,
+        repostOfId: String? = nil,
+        mobileTranscription: MobileTranscriptionPayload? = nil,
+        localMediaMimeTypes: [String]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
@@ -352,6 +485,10 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
         self.visibilityUserIds = visibilityUserIds
         self.location = location
         self.mentions = mentions
+        self.discoverabilityPrecision = discoverabilityPrecision
+        self.repostOfId = repostOfId
+        self.mobileTranscription = mobileTranscription
+        self.localMediaMimeTypes = localMediaMimeTypes
     }
 }
 
@@ -361,11 +498,24 @@ public struct ToggleLikePostPayload: Codable, Sendable, Equatable {
     /// `true` = like, `false` = unlike. Encoded explicitly (not as presence)
     /// so the offline replay is deterministic regardless of server state.
     public let liked: Bool
+    /// Emoji de la réaction, `nil` pour un like simple.
+    ///
+    /// Une réaction à une story n'a pas de route à elle : elle emprunte
+    /// `POST /posts/:id/like`, que le gateway journalise sous le même
+    /// `kind: 'toggleLikePost'` qu'un like de post. Un `OutboxKind` dédié
+    /// dupliquerait une mutation que le serveur traite déjà comme une seule —
+    /// l'emoji est le seul élément qui manquait au voyage.
+    ///
+    /// Optionnel aussi pour les lignes DÉJÀ en file : encodées avant ce champ,
+    /// elles doivent continuer à se décoder, sinon la mise à jour ferait perdre
+    /// des mutations en attente.
+    public let emoji: String?
 
-    public init(clientMutationId: String, postId: String, liked: Bool) {
+    public init(clientMutationId: String, postId: String, liked: Bool, emoji: String? = nil) {
         self.clientMutationId = clientMutationId
         self.postId = postId
         self.liked = liked
+        self.emoji = emoji
     }
 }
 

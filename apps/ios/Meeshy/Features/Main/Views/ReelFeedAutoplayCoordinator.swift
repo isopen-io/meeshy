@@ -14,6 +14,11 @@ import MeeshyUI
 /// ne serait jamais rappelé et le réel continuerait de jouer pendant l'appel.
 @MainActor
 final class ReelFeedAutoplayCoordinator: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var activeReelId: String?
 
     private let isCallActive: () -> Bool

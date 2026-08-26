@@ -65,7 +65,11 @@ let mockPostMentionFindMany: jest.Mock;
 let mockPrisma: PrismaClient;
 
 beforeEach(() => {
-  mockPostFindMany = jest.fn();
+  // Défaut `[]` comme tous les autres mocks du fichier : sans lui, un mock non
+  // configuré rend `undefined`, et toute requête AJOUTÉE à une méthode déjà
+  // testée casse ses témoins par un `TypeError` — un faux rouge qui ne parle
+  // pas du comportement mesuré.
+  mockPostFindMany = jest.fn().mockResolvedValue([]);
   mockPostReactionFindMany = jest.fn();
   mockFriendRequestFindMany = jest.fn().mockResolvedValue([]);
   mockParticipantFindMany = jest.fn().mockResolvedValue([]);
@@ -904,6 +908,90 @@ describe('PostFeedService.getUserPosts', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Parité des flags d'action PERSONNELS
+//
+// `isLikedByMe` / `isBookmarkedByMe` / `isRepostedByMe` décrivent le LECTEUR,
+// pas le post. Ils n'ont donc de sens que servis ENSEMBLE : un client qui reçoit
+// l'un et pas les autres décode les absents en `false` (SDK :
+// `isBookmarkedByMe ?? false`) et affiche « pas en favori » d'un post qui l'est.
+//
+// Le défaut mesuré le 2026-08-25 : seul `getFeed` posait les trois. L'onglet
+// Posts d'un profil (`getUserPosts`) n'annonçait ni le favori ni le repost, et
+// `getBookmarks` — la liste des favoris — ne disait pas que ses propres posts
+// étaient en favori.
+// ---------------------------------------------------------------------------
+
+describe('PostFeedService — parité des flags personnels', () => {
+  beforeEach(() => {
+    mockPostReactionFindMany.mockResolvedValue([]);
+  });
+
+  it('getUserPosts sert isBookmarkedByMe et isRepostedByMe', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([makePost('pf-1'), makePost('pf-2')])
+      .mockResolvedValueOnce([{ repostOfId: 'pf-2' }]);
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'pf-1' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', 'viewer-1');
+
+    const [first, second] = result.items as any[];
+    expect(first.isBookmarkedByMe).toBe(true);
+    expect(first.isRepostedByMe).toBe(false);
+    expect(second.isBookmarkedByMe).toBe(false);
+    expect(second.isRepostedByMe).toBe(true);
+  });
+
+  it('getUserPosts sert les flags à false — jamais absents — pour un lecteur sans favori', async () => {
+    mockPostFindMany.mockResolvedValueOnce([makePost('pf-3')]).mockResolvedValueOnce([]);
+    mockPostBookmarkFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', 'viewer-1');
+
+    const item = result.items[0] as any;
+    expect(item).toHaveProperty('isBookmarkedByMe', false);
+    expect(item).toHaveProperty('isRepostedByMe', false);
+  });
+
+  it('getUserPosts anonyme sert les flags à false sans interroger la base', async () => {
+    mockPostFindMany.mockResolvedValue([makePost('pf-4')]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getUserPosts('author-1', undefined);
+
+    const item = result.items[0] as any;
+    expect(item.isBookmarkedByMe).toBe(false);
+    expect(item.isRepostedByMe).toBe(false);
+    expect(mockPostBookmarkFindMany).not.toHaveBeenCalled();
+  });
+
+  it('getBookmarks dit que ses propres posts SONT en favori', async () => {
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'bm-1', post: makePost('bm-1') }]);
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getBookmarks('viewer-1');
+
+    expect((result.items[0] as any).isBookmarkedByMe).toBe(true);
+  });
+
+  it('getCommunityFeed sert isBookmarkedByMe et isRepostedByMe', async () => {
+    mockPostFindMany
+      .mockResolvedValueOnce([makePost('cf-1')])
+      .mockResolvedValueOnce([]);
+    mockPostBookmarkFindMany.mockResolvedValue([{ postId: 'cf-1' }]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getCommunityFeed('community-1', 'viewer-1');
+
+    const item = result.items[0] as any;
+    expect(item.isBookmarkedByMe).toBe(true);
+    expect(item).toHaveProperty('isRepostedByMe', false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PostFeedService.getCommunityFeed — currentUserReactions enrichment
 // ---------------------------------------------------------------------------
 
@@ -1246,6 +1334,56 @@ describe('PostFeedService.getReels', () => {
 
     expect(result.items).toHaveLength(1);
     expect((result.items[0] as any).id).toBe('r-1');
+  });
+
+  // Prisme rank 4 (deviceLocale) alimente l'affinité de langue du reel viewer.
+  // Un lecteur SANS préférence in-app (nouveau compte : le seul signal de langue
+  // est la locale appareil, cas nominal de la règle 2 du Prisme) recevait un
+  // ensemble `viewerLanguages` VIDE — donc AUCUN reel n'était boosté par la
+  // langue lue, et le classement du fil « Pour toi » était dégradé pour toute
+  // cette population. `getViewerLanguages` doit descendre le prisme ORDONNÉ
+  // complet (`resolveUserLanguagesOrdered`), deviceLocale comprise.
+  it('booste un reel dans la langue de la locale appareil quand aucune préférence in-app n\'est posée', async () => {
+    const esReel = makePost('r-es', {
+      type: 'REEL',
+      authorId: 'author-x',
+      originalLanguage: 'es',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    const deReel = makePost('r-de', {
+      type: 'REEL',
+      authorId: 'author-x',
+      originalLanguage: 'de',
+      createdAt: new Date('2025-01-01T00:00:00Z'),
+    });
+    // Pool : le reel espagnol d'abord — sans boost de langue, l'égalité de score
+    // préserve l'ordre d'entrée (tri stable). Le reel allemand ne remonte que si
+    // la locale appareil `de` entre dans `viewerLanguages`.
+    mockPostFindMany.mockResolvedValue([esReel, deReel]);
+    mockUserFindUnique.mockResolvedValue({
+      systemLanguage: null,
+      regionalLanguage: null,
+      customDestinationLanguage: null,
+      deviceLocale: 'de-DE',
+    });
+    mockPostReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    const result = await service.getReels('user-1', { limit: 10 });
+
+    expect(result.items.map((p: any) => p.id)).toEqual(['r-de', 'r-es']);
+  });
+
+  it('charge deviceLocale pour l\'affinité de langue du reel viewer', async () => {
+    mockPostFindMany.mockResolvedValue([]);
+
+    const service = new PostFeedService(mockPrisma);
+    await service.getReels('user-1');
+
+    const call = mockUserFindUnique.mock.calls.find(
+      (c: any) => c?.[0]?.where?.id === 'user-1'
+    );
+    expect(call?.[0]?.select?.deviceLocale).toBe(true);
   });
 });
 

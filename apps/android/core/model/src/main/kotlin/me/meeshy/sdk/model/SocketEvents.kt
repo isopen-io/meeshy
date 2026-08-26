@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** Mirrors iOS MessageSocketManager event payloads (Sockets/MessageSocketManager.swift). */
@@ -164,24 +165,67 @@ data class ConversationUpdatedSocketEvent(
     val updatedAt: String? = null,
 )
 
+/**
+ * `conversation:participant-left`.
+ *
+ * `userId` est NULLABLE, et ce n'est pas une précaution : un visiteur venu par
+ * un lien partagé n'a aucune ligne `User`, donc la passerelle émet `null`. Tant
+ * que ce champ était déclaré `String`, kotlinx échouait à décoder le document
+ * ENTIER — l'événement n'atteignait aucun collecteur, en silence. Même famille
+ * que `ParticipantRoleUpdatedEvent`, dont le `role` de premier niveau n'a jamais
+ * existé sur le fil.
+ *
+ * `participantId` est la seule identité TOUJOURS servie : c'est sur elle qu'on
+ * retire la bonne ligne. Elle reste optionnelle pour tolérer une passerelle
+ * antérieure au contrat, où seuls les départs de comptes étaient annoncés.
+ */
 @Serializable
 data class ParticipantLeftEvent(
     val conversationId: String,
-    val userId: String,
-)
+    val userId: String? = null,
+    val participantId: String? = null,
+) {
+    /** La personne nommée est-elle [identity] ? Un compte se reconnaît par son
+     *  `User.id`, un visiteur de lien par son `Participant.id`. */
+    fun names(identity: String): Boolean =
+        identity.isNotEmpty() && (identity == userId || identity == participantId)
+}
 
+/** `conversation:participant-banned` — voir [ParticipantLeftEvent] pour la
+ *  nullabilité de `userId`. `closedShareLinkId` nomme le lien que ce
+ *  bannissement a fermé : bannir sort de la conversation ET invalide la porte
+ *  empruntée. `null` quand il n'y avait pas de lien à fermer. */
 @Serializable
 data class ParticipantBannedEvent(
     val conversationId: String,
-    val userId: String,
+    val userId: String? = null,
+    val participantId: String? = null,
     val bannedAt: String? = null,
-)
+    val closedShareLinkId: String? = null,
+) {
+    fun names(identity: String): Boolean =
+        identity.isNotEmpty() && (identity == userId || identity == participantId)
+}
 
+/**
+ * `participant:role-updated`.
+ *
+ * Le rang voyage sous **`newRole`** au premier niveau — c'est ce que la
+ * passerelle émet depuis toujours. Ce champ s'appelait ici `role` sans
+ * `@SerialName`, donc absent de la charge utile : NON-optionnel et sans défaut,
+ * il faisait lever `MissingFieldException` à chaque événement, avalée par le
+ * `runCatching` du listener. Aucun changement de rang n'atteignait le
+ * trombinoscope, en silence.
+ *
+ * Ne PAS lire le `participant.role` imbriqué à sa place : il porte le rôle
+ * GLOBAL (`USER|ADMIN|…`) depuis le cycle 92 bis, le rang de conversation étant
+ * passé sous `participant.conversationRole`.
+ */
 @Serializable
 data class ParticipantRoleUpdatedEvent(
     val conversationId: String,
     val userId: String,
-    val role: String,
+    @SerialName("newRole") val role: String,
 )
 
 /**
@@ -254,6 +298,35 @@ data class SocketPostCreatedData(
     val clientMutationId: String? = null,
 )
 
+/**
+ * `post:updated` — the author edited a post (caption, media, mood, ...) and the gateway
+ * broadcast the COMPLETE new post to every feed/post room. The broadcast is a single
+ * unpersonalized object shared by all recipients, so its viewer-specific fields
+ * ([ApiPost.isLikedByMe] etc.) are NOT the recipient's own state — the fold preserves
+ * those from the cached copy via [PostUpdateMerge]. Mirror of iOS `SocketPostUpdatedData`
+ * (which nests the post under a `post` key), and the content-edit sibling of
+ * [SocketPostCreatedData] / [SocketPostTranslationUpdatedData].
+ */
+@Serializable
+data class SocketPostUpdatedData(
+    val post: ApiPost,
+)
+
+/**
+ * `post:reposted` — a user reposted (or quote-reposted) a post; the gateway broadcast the
+ * repost as a COMPLETE new post ([repost], authored by the reposter, embedding the original
+ * under [ApiPost.repostOf]) to every visibility-filtered feed room. [originalPostId] names
+ * the post that was reposted. The feed folds [repost] onto the head exactly like a
+ * `post:created` arrival — a repost is itself a new feed post. Mirror of iOS
+ * `SocketPostRepostedData` (`{ originalPostId, repost }`), the arrival sibling of
+ * [SocketPostCreatedData].
+ */
+@Serializable
+data class SocketPostRepostedData(
+    val originalPostId: String,
+    val repost: ApiPost,
+)
+
 @Serializable
 data class SocketPostLikedData(
     val postId: String,
@@ -292,6 +365,18 @@ data class SocketCommentAddedData(
     val postId: String,
     val comment: ApiPostComment,
     val commentCount: Int = 0,
+)
+
+/**
+ * `comment:updated` — a comment was edited server-side (content, effects, regenerated
+ * translations). Carries the COMPLETE new comment so the client replaces the matched row
+ * in place, idempotent by id — the edit sibling of [SocketCommentAddedData]. Mirror of iOS
+ * `SocketCommentUpdatedData` (both nest the full [ApiPostComment] under `comment`).
+ */
+@Serializable
+data class SocketCommentUpdatedData(
+    val postId: String,
+    val comment: ApiPostComment,
 )
 
 @Serializable
@@ -338,6 +423,20 @@ data class SocketCommentReactionUpdateData(
 data class SocketStoryCreatedData(
     val story: ApiPost,
     val clientMutationId: String? = null,
+)
+
+/**
+ * `story:updated` — an author edited a story; carries the COMPLETE new story under
+ * [story] (the edit sibling of [SocketStoryCreatedData]). [engagementReset] is `true`
+ * when the edit wiped views/reactions server-side (a content edit) — the open viewer
+ * then re-seeds the slide's reaction count from the fresh story; `false`/absent on a
+ * metadata-only change (e.g. visibility) leaves any live reaction count in place.
+ * Mirror of iOS `SocketStoryUpdatedData`.
+ */
+@Serializable
+data class SocketStoryUpdatedData(
+    val story: ApiPost,
+    val engagementReset: Boolean? = null,
 )
 
 @Serializable
@@ -395,6 +494,65 @@ data class SocketStoryUnreactedData(
     val storyId: String,
     val userId: String,
     val emoji: String,
+)
+
+/**
+ * `story:deleted` — an author removed a story. The gateway broadcasts it to every
+ * friend's feed room (over-broadcast is safe: a recipient who never had the story
+ * ignores it), so an open viewer folds it out live. Mirror of iOS
+ * `SocketStoryDeletedData`; [authorId] defaults to empty for forward-compatible decoding.
+ */
+@Serializable
+data class SocketStoryDeletedData(
+    val storyId: String,
+    val authorId: String = "",
+)
+
+/**
+ * `story:translation-updated` — the gateway translated a story's on-canvas text
+ * overlay and broadcasts the new translations for the object at [textObjectIndex]
+ * (the flat index into the story's translatable texts). Mirror of iOS
+ * `SocketStoryTranslationUpdatedData`. [translations] is a language→text map;
+ * an empty map is a no-op the merge ignores.
+ */
+@Serializable
+data class SocketStoryTranslationUpdatedData(
+    val postId: String,
+    val textObjectIndex: Int,
+    val translations: Map<String, String> = emptyMap(),
+)
+
+/**
+ * `post:translation-updated` — the gateway translated a post's text into [language]
+ * server-side and broadcasts the finished entry so an open feed card can switch to it
+ * without a refetch (the caption sibling of [SocketStoryTranslationUpdatedData], which
+ * carries per-overlay maps instead). Mirror of iOS `SocketPostTranslationUpdatedData`.
+ * [translation] has the same shape as [ApiPostTranslationEntry] — text plus optional
+ * model/confidence/timestamp — so it decodes straight into one; a blank text is a no-op
+ * the [PostTranslationMerge] ignores.
+ */
+@Serializable
+data class SocketPostTranslationUpdatedData(
+    val postId: String,
+    val language: String,
+    val translation: ApiPostTranslationEntry,
+)
+
+/**
+ * `comment:translation-updated` — the gateway translated a comment's text into [language]
+ * server-side and broadcasts the finished entry so an open comment thread can switch that
+ * row to it without a refetch (the comment-keyed sibling of
+ * [SocketPostTranslationUpdatedData], one rung over: it carries [commentId] too). Mirror of
+ * iOS `SocketCommentTranslationUpdatedData`. [translation] has the same shape as
+ * [ApiPostTranslationEntry] — text plus optional model/confidence/timestamp — so it decodes
+ * straight into one; a blank text is a no-op the [PostTranslationMerge] ignores.
+ */
+@Serializable
+data class SocketCommentTranslationUpdatedData(
+    val postId: String,
+    val commentId: String,
+    val language: String,
+    val translation: ApiPostTranslationEntry,
 )
 
 /**

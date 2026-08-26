@@ -8,6 +8,17 @@ import MeeshyUI
 // MARK: - Feed Post Card
 struct FeedPostCard: View {
     let post: FeedPost
+    /// « Voir près d'ici » sur le badge de position du post (spec du
+    /// 2026-08-02 §4 — points d'entrée). Fermeture OPTIONNELLE, jamais un
+    /// `@EnvironmentObject` : cette carte est une feuille `.equatable()` et
+    /// n'observe rien. Les hôtes qui ont un routeur la branchent ; les autres
+    /// (aperçus, listes de profil) restent valides sans rien changer, et le
+    /// menu ne s'affiche simplement pas.
+    ///
+    /// L'action est INDÉPENDANTE de l'opt-in de découvrabilité : c'est un
+    /// raccourci vers une coordonnée DÉJÀ affichée publiquement, pas une
+    /// autorisation.
+    var onSeeNearby: ((SharedPlace) -> Void)? = nil
     var isCommentsExpanded: Bool = false
     /// Socket-driven liked state. When nil, falls back to post.isLiked (legacy path).
     var isLiked: Bool? = nil
@@ -98,13 +109,6 @@ struct FeedPostCard: View {
     private var isAuthor: Bool {
         guard let me = AuthManager.shared.currentUser?.id else { return false }
         return me == post.authorId
-    }
-
-    /// Compact count (1.2k / 3.4M).
-    static func compactCount(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
     }
 
     /// Compact preview descriptor for the media carried by a reposted POST/STATUS
@@ -302,9 +306,14 @@ struct FeedPostCard: View {
 
     /// Document canvas v3 PROPRE au post (Task E3) — distinct du canvas d'un
     /// REPOST de story (`isStoryRepost`), qui reste rendu par
-    /// `StoryRepostEmbedCell` (hors périmètre E3). `nil` tant que le fil ne
-    /// sert que du legacy v1 : arrivée INERTE, `CANVAS_V3_WRITE_STRICT` est
-    /// OFF en prod à ce jour (spec rév. 8) — aucun écrivain n'émet encore v3.
+    /// `StoryRepostEmbedCell` (hors périmètre E3). Les DEUX écrivains émettent
+    /// désormais du v3 natif en production : `StoryEffects.encode(to:)` passe
+    /// TOUJOURS par `CanvasV3(migrating:)` (`StoryModels.swift:1889-1890`) côté
+    /// iOS, et le composer web construit `{ v: 3, scenes: [...] }` directement
+    /// (`StoryComposer.tsx:288`). `X-Canvas-Caps: 3` est posé depuis
+    /// `cf05538d9` (2026-08-22, `ClientInfoProvider.swift:77`), donc le
+    /// gateway sert ce v3 natif au lieu de la sentinelle. `nil` reste le cas
+    /// d'un post SANS storyEffects (post média simple, sans canvas).
     private var cardSceneDocument: CanvasV3? { post.storyEffects?.canvasV3 }
 
     /// Largeur plafonnée — même convention que `StoryRepostEmbedCell` (un
@@ -571,17 +580,20 @@ struct FeedPostCard: View {
                 // largeur + texte en overlay quand la position est le seul
                 // contenu visuel, sinon sticker compact — cliquables tous deux.
                 if let place = post.location {
-                    if isLocationOnlyPost {
-                        FeedPostLocationMapCard(
-                            place: place,
-                            overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
-                            onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
-                        )
-                    } else {
-                        FeedPostLocationSticker(place: place) {
-                            fullscreenPlace = BubbleFullscreenPlace(place: place)
+                    Group {
+                        if isLocationOnlyPost {
+                            FeedPostLocationMapCard(
+                                place: place,
+                                overlayText: effectiveContent.isEmpty ? nil : effectiveContent,
+                                onOpen: { fullscreenPlace = BubbleFullscreenPlace(place: place) }
+                            )
+                        } else {
+                            FeedPostLocationSticker(place: place) {
+                                fullscreenPlace = BubbleFullscreenPlace(place: place)
+                            }
                         }
                     }
+                    .modifier(SeeNearbyContextMenu(place: place, onSeeNearby: onSeeNearby))
                 }
 
                 // Actions bar (not inside the tap target)
@@ -830,16 +842,21 @@ struct FeedPostCard: View {
                     if isAuthor {
                         Text("·").font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
-                            Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.impressionCount)).font(.caption2.weight(.medium))
-                            Text("·").font(.caption2)
-                            Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                            Text(Self.compactCount(post.viewCount)).font(.caption2.weight(.medium))
+                            ReachMetricLabel(
+                                icon: "chart.bar.fill",
+                                count: post.impressionCount,
+                                label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                                tint: theme.textMuted
+                            )
+                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                .accessibilityHidden(true)
+                            ReachMetricLabel(
+                                icon: "eye.fill",
+                                count: post.viewCount,
+                                label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                                tint: theme.textMuted
+                            )
                         }
-                        .foregroundColor(theme.textMuted)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main))
-                        .accessibilityValue("\(post.impressionCount) · \(post.viewCount)")
                     }
                 }
             }
@@ -1082,7 +1099,7 @@ struct FeedPostCard: View {
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel(String(localized: "a11y.feed.post.like", defaultValue: "Aimer", bundle: .main))
-            .accessibilityValue(String(format: String(localized: "a11y.feed.post.like.value", defaultValue: "%d j'aime", bundle: .main), effectiveLikeCount))
+            .accessibilityValue(PostStatAccessibility.likesLabel(effectiveLikeCount))
             .accessibilityAddTraits(effectiveIsLiked ? .isSelected : [])
 
             Spacer()
@@ -1266,8 +1283,9 @@ struct FeedPostCard: View {
                     .padding(.horizontal, 16)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(topComments.enumerated()), id: \.element.id) { index, comment in
-                        topCommentRow(comment: comment, isLast: index == topComments.count - 1)
+                    let comments = topComments
+                    ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
+                        topCommentRow(comment: comment, isLast: index == comments.count - 1)
                     }
 
                     // "See all comments" link
@@ -1415,7 +1433,7 @@ struct FeedPostCard: View {
                                     .font(.caption2)
                                     .foregroundColor(theme.accentText(accentColor).opacity(0.7))
                                     .accessibilityHidden(true)
-                                Text(String(localized: "feed.post.comment.replies_count", defaultValue: "\(comment.replies) réponses", bundle: .main))
+                                Text(PostStatAccessibility.repliesLabel(comment.replies))
                                     .font(.caption.weight(.medium))
                                     .foregroundColor(theme.textMuted)
                             }

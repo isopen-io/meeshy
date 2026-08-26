@@ -8,6 +8,7 @@
  * @jest-environment node
  */
 
+import type { ReadStatusUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 import {
   emitToConversationParticipants,
   participantUserRooms,
@@ -26,6 +27,30 @@ function makeEmitter() {
 
 const conversationId = 'c_1';
 
+/**
+ * La charge RÉELLE de `read-status:updated`, copiée clé par clé.
+ *
+ * Les fixtures de ce fichier étaient des esquisses (`{ any: 'thing' }`, et huit
+ * fois `{}`), ce que `payload: unknown` acceptait. Depuis que ce fan-out est
+ * générique sur le nom de l'événement (cycle 104), la charge est vérifiée contre
+ * `ServerToClientEvents` — chez les appelants comme ici. Ce que ces témoins
+ * gardent (les ROOMS atteintes) est inchangé ; ce qui change, c'est qu'ils ne
+ * peuvent plus l'attester sur une charge que personne n'émettrait.
+ */
+function makeReadStatusPayload(
+  overrides: Partial<ReadStatusUpdatedEventData> = {},
+): ReadStatusUpdatedEventData {
+  return {
+    conversationId,
+    participantId: 'p_registered',
+    userId: 'u_registered',
+    type: 'received',
+    updatedAt: new Date('2026-08-23T10:00:00.000Z'),
+    summary: { totalMembers: 2, deliveredCount: 1, readCount: 0 },
+    ...overrides,
+  };
+}
+
 describe('emitToConversationParticipants', () => {
   it('addresses an accountless participant by its participant id', () => {
     const { io, to } = makeEmitter();
@@ -38,7 +63,7 @@ describe('emitToConversationParticipants', () => {
         { id: 'p_anonymous', userId: null },
       ],
       event: 'read-status:updated',
-      payload: { any: 'thing' },
+      payload: makeReadStatusPayload(),
     });
 
     expect(to.mock.calls.map((c) => c[0])).toEqual([
@@ -50,7 +75,7 @@ describe('emitToConversationParticipants', () => {
 
   it('emits the event exactly once onto the chained emitter', () => {
     const { io, emit } = makeEmitter();
-    const payload = { conversationId, type: 'received' };
+    const payload = makeReadStatusPayload({ type: 'received' });
 
     emitToConversationParticipants({
       io,
@@ -80,7 +105,7 @@ describe('emitToConversationParticipants', () => {
         { id: 'p_3', userId: null },
       ],
       event: 'read-status:updated',
-      payload: {},
+      payload: makeReadStatusPayload(),
     });
 
     expect(to.mock.calls.map((c) => c[0])).toEqual([
@@ -98,7 +123,7 @@ describe('emitToConversationParticipants', () => {
       conversationId,
       participants: [{ id: 'p_1', userId: null }],
       event: 'read-status:updated',
-      payload: {},
+      payload: makeReadStatusPayload(),
     });
 
     expect(rooms).toEqual(['conversation:c_1', 'user:p_1']);
@@ -112,7 +137,7 @@ describe('emitToConversationParticipants', () => {
       conversationId,
       participants: [],
       event: 'read-status:updated',
-      payload: {},
+      payload: makeReadStatusPayload(),
     });
 
     expect(to).toHaveBeenCalledWith('conversation:c_1');
@@ -120,7 +145,7 @@ describe('emitToConversationParticipants', () => {
   });
 
   /**
-   * `exceptRoom` — la moitié qui permet à un émetteur de servir DEUX payloads
+   * `exceptRooms` — la moitié qui permet à un émetteur de servir DEUX payloads
    * sans jamais en livrer deux au même socket.
    *
    * Un accusé de lecture porte, pour l'acteur seul, sa frontière de lecture et
@@ -130,7 +155,7 @@ describe('emitToConversationParticipants', () => {
    * sans qu'il reçoive l'événement deux fois — la room de conversation
    * l'atteindrait sinon quand il regarde le fil.
    */
-  describe('exceptRoom', () => {
+  describe('exceptRooms', () => {
     it('drops the excluded room from the chain AND hands it to except()', () => {
       const { io, to, except } = makeEmitter();
 
@@ -142,8 +167,8 @@ describe('emitToConversationParticipants', () => {
           { id: 'p_peer', userId: 'u_peer' },
         ],
         event: 'read-status:updated',
-        payload: {},
-        exceptRoom: 'user:u_actor',
+        payload: makeReadStatusPayload(),
+        exceptRooms: ['user:u_actor'],
       });
 
       expect(to.mock.calls.map((c) => c[0])).toEqual([
@@ -163,8 +188,8 @@ describe('emitToConversationParticipants', () => {
         conversationId,
         participants: [{ id: 'p_actor', userId: null }],
         event: 'read-status:updated',
-        payload: {},
-        exceptRoom: 'user:p_actor',
+        payload: makeReadStatusPayload(),
+        exceptRooms: ['user:p_actor'],
       });
 
       expect(rooms).toEqual(['conversation:c_1']);
@@ -181,7 +206,7 @@ describe('emitToConversationParticipants', () => {
         conversationId,
         participants: [{ id: 'p_1', userId: 'u_1' }],
         event: 'read-status:updated',
-        payload: {},
+        payload: makeReadStatusPayload(),
       });
 
       expect(rooms).toEqual(['conversation:c_1', 'user:u_1']);
@@ -196,7 +221,7 @@ describe('emitToConversationParticipants', () => {
         conversationId,
         participants: [{ id: 'p_1', userId: 'u_1' }],
         event: 'read-status:updated',
-        payload: {},
+        payload: makeReadStatusPayload(),
       })
     ).toEqual([]);
   });

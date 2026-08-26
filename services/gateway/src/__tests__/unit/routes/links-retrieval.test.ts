@@ -112,8 +112,15 @@ const mockShareLink = {
 
 // ─── App factory ──────────────────────────────────────────────────────────────
 
-async function buildApp(hybridRequest: any = {}): Promise<FastifyInstance> {
-  mockAuthMiddleware.mockImplementation(async () => {});
+// `authContext` gouverne `viewerFromRequest` (présence anonyme, directive
+// produit 2026-08-25) — indépendant de `hybridRequest`, qui gouverne l'accès
+// (`createLegacyHybridRequest`). Par défaut ABSENT : la plupart des scénarios
+// de ce fichier portent sur l'accès, jamais sur la présence, et un
+// `authContext` absent résout `viewer = null` (visiteur non privilégié).
+async function buildApp(hybridRequest: any = {}, authContext?: any): Promise<FastifyInstance> {
+  mockAuthMiddleware.mockImplementation(async (req: any) => {
+    if (authContext) req.authContext = authContext;
+  });
   mockCreateLegacyHybridRequest.mockReturnValue(hybridRequest);
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -289,7 +296,12 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
     expect(member.user).toMatchObject({ id: USER_ID, username: 'alice', displayName: 'Alice' });
   });
 
-  it('returns anonymous participant identities', async () => {
+  // Directive produit 2026-08-25 — TROU #4. Cette route est CONSULTABLE SANS
+  // AUTHENTIFICATION : le visiteur de ce bloc est anonyme (`isAuthenticated:
+  // false`), donc `viewer = null` — jamais privilégié. `isOnline` masque à
+  // `false` même si le participant est réellement en ligne (fixture:
+  // `isOnline: true`) : co-partager le lien n'est pas une amitié.
+  it('masque la présence du participant anonyme pour un visiteur non privilégié', async () => {
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
     const [participant] = res.json().data.anonymousParticipants;
     expect(participant).toMatchObject({
@@ -299,11 +311,18 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
       lastName: 'One',
       displayName: 'Guest One',
       language: 'es',
-      isOnline: true,
+      isOnline: false,
       canSendMessages: true,
       canSendFiles: false,
       canSendImages: true,
     });
+  });
+
+  it("compte `stats.onlineAnonymousParticipants` à 0 pour ce même visiteur — pas un 0 fabriqué, la loi appliquée à l'agrégat", async () => {
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.json().data.stats.onlineAnonymousParticipants).toBe(0);
+    // Le total, lui, N'EST PAS de la présence — il reste exact.
+    expect(res.json().data.stats.totalAnonymousParticipants).toBe(1);
   });
 
   it('never leaks the anonymous session envelope', async () => {
@@ -311,6 +330,179 @@ describe('GET /links/:identifier — identity payloads survive serialization', (
     expect(res.payload).not.toContain('sessionTokenHash');
     expect(res.payload).not.toContain('deviceFingerprint');
     expect(res.json().data.anonymousParticipants[0].anonymousSession).toBeUndefined();
+  });
+});
+
+// Directive produit 2026-08-25 — TROU #4, quatre témoins. Un participant
+// anonyme n'a pas de `userId` (pas de ligne `User`) : ni amitié ni
+// préférences à résoudre, seul le bypass ADMIN/BIGBOSS inconditionnel de la
+// directive s'applique. Ce lien est consultable SANS authentification, donc
+// « visiteur non privilégié » couvre à la fois l'anonyme ET l'utilisateur
+// enregistré non-admin.
+// `joinedAt` et `lastActiveAt` sont DISTINCTS à dessein : le site servait
+// `lastActiveAt: participant.joinedAt` — une date d'arrivée déguisée en
+// dernière activité — et deux `new Date()` pris dans la même milliseconde
+// n'auraient jamais rougi sur cette substitution.
+const ANONYMOUS_JOINED_AT = new Date('2026-08-01T10:00:00.000Z');
+const ANONYMOUS_LAST_ACTIVE_AT = new Date('2026-08-20T12:34:56.000Z');
+
+describe('GET /links/:identifier — présence des participants anonymes (directive produit 2026-08-25)', () => {
+  const shareLinkWithAnonymousPeer = () => ({
+    ...mockShareLink,
+    conversation: {
+      ...mockShareLink.conversation,
+      participants: [
+        ...mockShareLink.conversation.participants,
+        {
+          id: 'part-2', type: 'anonymous', userId: null, isActive: true, role: 'member',
+          joinedAt: ANONYMOUS_JOINED_AT, displayName: 'Guest One', avatar: null,
+          language: 'es', isOnline: true, lastActiveAt: ANONYMOUS_LAST_ACTIVE_AT, user: null,
+          permissions: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+          anonymousSession: {
+            profile: { firstName: 'Guest', lastName: 'One', username: 'guest', email: null, birthday: null },
+          },
+        },
+      ],
+    },
+  });
+
+  it('USER authentifié non-ami ⇒ présence masquée (co-visiter un lien public n’est pas une relation)', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: 'other-user-id', username: 'bob', firstName: 'Bob', lastName: 'Jones', displayName: 'Bob', systemLanguage: 'en' } },
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: 'other-user-id', registeredUser: { id: 'other-user-id', role: 'USER' } },
+    );
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.json().data.anonymousParticipants[0].isOnline).toBe(false);
+    expect(res.json().data.stats.onlineAnonymousParticipants).toBe(0);
+    await app.close();
+  });
+
+  it('ADMIN authentifié ⇒ présence visible — entitlement inconditionnel de la directive', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: 'admin-id', username: 'root', firstName: 'Root', lastName: 'Admin', displayName: 'Root', systemLanguage: 'en' } },
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: 'admin-id', registeredUser: { id: 'admin-id', role: 'ADMIN' } },
+    );
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.json().data.anonymousParticipants[0].isOnline).toBe(true);
+    expect(res.json().data.stats.onlineAnonymousParticipants).toBe(1);
+    await app.close();
+  });
+
+  it('BIGBOSS authentifié ⇒ présence visible', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: 'boss-id', username: 'boss', firstName: 'Big', lastName: 'Boss', displayName: 'Big Boss', systemLanguage: 'en' } },
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: 'boss-id', registeredUser: { id: 'boss-id', role: 'BIGBOSS' } },
+    );
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.json().data.anonymousParticipants[0].isOnline).toBe(true);
+    await app.close();
+  });
+
+  // Le bypass de ce site suit `isGlobalAdmin` — « Admin et supérieur » — et
+  // jamais `isGlobalModerator` : MODERATOR est le seul rang où les deux
+  // prédicats divergent, donc le seul témoin qui rougit si le site rétrograde.
+  it('MODERATOR authentifié ⇒ masqué, comme un utilisateur ordinaire', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(
+      { isAuthenticated: true, isAnonymous: false, user: { id: 'mod-id', username: 'mod', firstName: 'Mo', lastName: 'Derator', displayName: 'Mod', systemLanguage: 'en' } },
+      { type: 'user', isAuthenticated: true, isAnonymous: false, userId: 'mod-id', registeredUser: { id: 'mod-id', role: 'MODERATOR' } },
+    );
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.json().data.anonymousParticipants[0].isOnline).toBe(false);
+    expect(res.json().data.stats.onlineAnonymousParticipants).toBe(0);
+    await app.close();
+  });
+
+  it('visiteur totalement anonyme (aucun `authContext`, aucun jeton) ⇒ masqué', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
+    const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
+    expect(res.json().data.anonymousParticipants[0].isOnline).toBe(false);
+    expect(res.json().data.stats.onlineAnonymousParticipants).toBe(0);
+    await app.close();
+  });
+});
+
+// Revue adversariale 2026-08-26 (F2, constat 1). Le gate ci-dessus masquait
+// `isOnline` et laissait, LIGNE SUIVANTE du même objet, `lastActiveAt:
+// participant.joinedAt` sans condition — pour les anonymes comme pour les
+// membres inscrits (`isOnline: false` en dur, `lastActiveAt: member.joinedAt`).
+// Le web (`participant-mapper.ts` → `StreamSidebar.UserItem`) dérive une
+// pastille de `lastActiveAt` via `getUserPresenceStatus` : la présence
+// masquée sur un champ ressortait par son voisin. Directive : hors amitié /
+// soi / ADMIN+, ni `isOnline` NI `lastActiveAt` d'un autre ; et `joinedAt`
+// n'est PAS une dernière activité — l'ADMIN reçoit la valeur RÉELLE
+// (`Participant.lastActiveAt`, écrite par `StatusService`), jamais un
+// substitut fabriqué.
+describe('GET /links/:identifier — dernière activité (`lastActiveAt`) gatée comme `isOnline` (F2, 2026-08-26)', () => {
+  const shareLinkWithAnonymousPeer = () => ({
+    ...mockShareLink,
+    conversation: {
+      ...mockShareLink.conversation,
+      participants: [
+        ...mockShareLink.conversation.participants,
+        {
+          id: 'part-2', type: 'anonymous', userId: null, isActive: true, role: 'member',
+          joinedAt: ANONYMOUS_JOINED_AT, displayName: 'Guest One', avatar: null,
+          language: 'es', isOnline: true, lastActiveAt: ANONYMOUS_LAST_ACTIVE_AT, user: null,
+          permissions: { canSendMessages: true, canSendFiles: false, canSendImages: true },
+          anonymousSession: {
+            profile: { firstName: 'Guest', lastName: 'One', username: 'guest', email: null, birthday: null },
+          },
+        },
+      ],
+    },
+  });
+
+  const registered = (id: string, role: string) => [
+    { isAuthenticated: true, isAnonymous: false, user: { id, username: id, firstName: 'X', lastName: 'Y', displayName: id, systemLanguage: 'en' } },
+    { type: 'user', isAuthenticated: true, isAnonymous: false, userId: id, registeredUser: { id, role } },
+  ] as const;
+
+  it('USER authentifié non-ami ⇒ `lastActiveAt: null` sur les DEUX listes', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(...registered('other-user-id', 'USER'));
+    const { data } = (await app.inject({ method: 'GET', url: `/links/${LINK_ID}` })).json();
+    expect(data.anonymousParticipants[0].lastActiveAt).toBeNull();
+    expect(data.members[0].user.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it('visiteur totalement anonyme ⇒ `lastActiveAt: null` sur les DEUX listes', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp({ isAuthenticated: false, isAnonymous: false, user: null });
+    const { data } = (await app.inject({ method: 'GET', url: `/links/${LINK_ID}` })).json();
+    expect(data.anonymousParticipants[0].lastActiveAt).toBeNull();
+    expect(data.members[0].user.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  it('MODERATOR ⇒ `lastActiveAt: null`, comme un utilisateur ordinaire', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(...registered('mod-id', 'MODERATOR'));
+    const { data } = (await app.inject({ method: 'GET', url: `/links/${LINK_ID}` })).json();
+    expect(data.anonymousParticipants[0].lastActiveAt).toBeNull();
+    expect(data.members[0].user.lastActiveAt).toBeNull();
+    await app.close();
+  });
+
+  // Même prédicat que `isOnline` : l'ADMIN lit la dernière activité RÉELLE du
+  // participant anonyme — pas sa date d'arrivée. Les membres inscrits gardent
+  // le choix plus strict du site (`isOnline: false` pour tous) : `lastActiveAt`
+  // y est `null` aussi, jamais `joinedAt`.
+  it('ADMIN ⇒ la dernière activité RÉELLE de l’anonyme (≠ `joinedAt`) ; `null` pour les inscrits', async () => {
+    mockFindShareLinkByIdentifier.mockResolvedValue(shareLinkWithAnonymousPeer());
+    const app = await buildApp(...registered('admin-id', 'ADMIN'));
+    const { data } = (await app.inject({ method: 'GET', url: `/links/${LINK_ID}` })).json();
+    expect(data.anonymousParticipants[0].lastActiveAt).toBe(ANONYMOUS_LAST_ACTIVE_AT.toISOString());
+    expect(data.anonymousParticipants[0].lastActiveAt).not.toBe(ANONYMOUS_JOINED_AT.toISOString());
+    expect(data.anonymousParticipants[0].joinedAt).toBe(ANONYMOUS_JOINED_AT.toISOString());
+    expect(data.members[0].user.lastActiveAt).toBeNull();
+    expect(data.members[0].joinedAt).toEqual(expect.any(String));
+    await app.close();
   });
 });
 

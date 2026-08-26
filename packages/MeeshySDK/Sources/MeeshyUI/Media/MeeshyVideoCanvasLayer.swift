@@ -10,6 +10,11 @@ import Foundation
 /// transforms). This atom keeps that architecture intact while sharing
 /// the AVPlayer wiring with the SwiftUI side (`MeeshyVideoSurface`).
 public final class MeeshyVideoCanvasLayer: CALayer {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// The AVPlayerLayer that renders the video. Public so callers can
     /// observe `isReadyForDisplay` if needed.

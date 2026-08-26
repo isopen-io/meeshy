@@ -73,6 +73,11 @@ COVERAGE=false
 # Phase 0 du gate `test` : suite du package MeeshySDK. Exécutée par défaut —
 # `--skip-sdk` ne la saute que pour une itération rapide sur du code app.
 SKIP_SDK_TESTS=false
+# Phase 3 (état connecté) sans DEMO_USER/DEMO_PASSWORD tourne en XCTSkip et
+# reste verte : par défaut le gate reste vert malgré tout (postes locaux sans
+# creds). `--require-connected` fait échouer le gate si la phase 3 a été
+# sautée — pour CI, qui a les creds et doit vérifier l'état connecté.
+REQUIRE_CONNECTED=false
 LOG_STREAM_PID=""
 CRASH_MONITOR_PID=""
 LOGFILE=""
@@ -1739,7 +1744,9 @@ do_test() {
         demo_user=$(grep -m1 '^DEMO_USER=' fastlane/.env | cut -d= -f2-)
         demo_password=$(grep -m1 '^DEMO_PASSWORD=' fastlane/.env | cut -d= -f2-)
     fi
+    local phase3_skipped=false
     if [ -z "$demo_user" ] || [ -z "$demo_password" ]; then
+        phase3_skipped=true
         warn "DEMO_USER/DEMO_PASSWORD introuvables (fastlane/.env) — phase 3 sautée côté test (XCTSkip), l'app restera déconnectée"
     fi
 
@@ -1754,7 +1761,18 @@ do_test() {
     [ "$p0" -eq 0 ] && ok "Phase 0 (package MeeshySDK) : verte" || err "Phase 0 (package MeeshySDK) : échec (exit $p0) — voir $TEST_OUTPUT_DIR/phase0-sdk.xcresult"
     [ "$p1" -eq 0 ] && ok "Phase 1 (isolées) : verte" || err "Phase 1 (isolées) : échec (exit $p1) — voir $TEST_OUTPUT_DIR/phase1-isolated.xcresult"
     [ "$p2" -eq 0 ] && ok "Phase 2 (connexion & contenu) : verte" || err "Phase 2 (connexion & contenu) : échec (exit $p2) — voir $TEST_OUTPUT_DIR/phase2-content.xcresult"
-    [ "$p3" -eq 0 ] && ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test" || err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
+    local p3_require_fail=0
+    if [ "$phase3_skipped" = true ]; then
+        warn "Phase 3 (état connecté) : SAUTÉE — DEMO_USER absent, XCTSkip, état connecté NON vérifié"
+        if [ "$REQUIRE_CONNECTED" = true ]; then
+            p3_require_fail=1
+            err "--require-connected : phase 3 sautée, état connecté non vérifié — échec du gate"
+        fi
+    elif [ "$p3" -eq 0 ]; then
+        ok "Phase 3 (état connecté) : verte — l'app est connectée au compte de test"
+    else
+        err "Phase 3 (état connecté) : échec (exit $p3) — voir $TEST_OUTPUT_DIR/phase3-connected.xcresult"
+    fi
 
     if [ "$UI_TESTS" = true ]; then
         log "Running UI tests..."
@@ -1785,7 +1803,7 @@ do_test() {
         head -20 "$TEST_OUTPUT_DIR/coverage.txt"
     fi
 
-    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 ? 1 : 0 ))
+    return $(( porphan != 0 || p0 != 0 || p1 != 0 || p2 != 0 || p3 != 0 || p3_require_fail != 0 ? 1 : 0 ))
 }
 
 # ─── Setup ───────────────────────────────────────────────────────────────────
@@ -1915,6 +1933,7 @@ usage() {
     echo -e "    ${YELLOW}--skip-tests${NC}             Skip unit tests before release"
     echo -e "    ${YELLOW}--ui${NC}                     Include UI tests"
     echo -e "    ${YELLOW}--skip-sdk${NC}               Skip phase 0 (MeeshySDK package suite)"
+    echo -e "    ${YELLOW}--require-connected${NC}      Fail the gate if phase 3 (connected state) was skipped (no DEMO_USER)"
     echo -e "    ${YELLOW}--coverage${NC}               Generate coverage report"
     echo -e "    ${YELLOW}--deep${NC}                   Deep clean (global Xcode caches)"
     echo ""
@@ -1975,6 +1994,7 @@ while [[ $# -gt 0 ]]; do
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
         --skip-sdk)       SKIP_SDK_TESTS=true; shift ;;
+        --require-connected) REQUIRE_CONNECTED=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
         --iphone)         PLATFORM="iphone"; shift ;;

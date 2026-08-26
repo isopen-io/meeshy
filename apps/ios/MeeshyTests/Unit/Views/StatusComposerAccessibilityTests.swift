@@ -1,72 +1,107 @@
 import XCTest
 @testable import Meeshy
 
-/// The status composer's publish affordance lives in the navigation bar and swaps
-/// its label for a bare `ProgressView` while the mood is being published. A button
-/// whose only child is an unlabelled `ProgressView` has no accessible name, so
-/// VoiceOver announced nothing at the exact moment the action was running.
+/// La flèche de publication du mood échangeait son libellé contre un
+/// `ProgressView` nu pendant l'envoi. Un bouton dont l'unique enfant est un
+/// `ProgressView` sans nom n'a AUCUN nom accessible : VoiceOver n'annonçait donc
+/// rien à l'instant précis où l'action tournait.
 ///
-/// The fix pins the accessible name to the action (`status.composer.publish`) and
-/// carries the transient/blocked states as value + hint — the same shape as the
-/// create-tracking-link button.
+/// Le correctif d'origine épinglait le nom à l'ACTION et portait les états
+/// transitoire et bloqué en `accessibilityValue` + `accessibilityHint`.
+///
+/// **RE-VISÉE au lot 4.8**, avec sa raison d'origine intacte. Elle lisait
+/// `StatusComposerView.swift`, retiré par ce lot ; l'affordance livrée est
+/// `MeeshyComposerHost.publishButton`, la flèche du socle, qui sert les six
+/// déclencheurs du mood depuis le lot 4.6. La laisser sur l'ancien chemin
+/// l'aurait fait ÉCHOUER à la lecture ; la supprimer aurait perdu la seule
+/// mesure qui interdit de réintroduire l'échange de libellé.
+///
+/// Ce qu'elle mesure et que `MeeshyComposerHostGuardTests
+/// .test_laFlecheDuSocle_porteSonEtatAccessible` ne mesure pas : le NOM que le
+/// bouton garde pendant l'envoi. Cette garde-là vérifie la valeur et l'indice ;
+/// elle est verte sur un bouton devenu anonyme.
 @MainActor
 final class StatusComposerAccessibilityTests: XCTestCase {
 
-    private func composerSource() throws -> String {
+    private func hostSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/StatusComposerView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    /// The vicinity following a source anchor, so an assertion targets the modifiers
-    /// attached to that construct rather than any same-key occurrence elsewhere.
-    private func vicinity(after anchor: String, in source: String, span: Int = 700) throws -> String {
-        guard let range = source.range(of: anchor) else {
-            XCTFail("StatusComposerView must contain \(anchor)")
+    /// Le CORPS d'une déclaration, par appariement d'accolades — et non une
+    /// fenêtre de N caractères : la flèche du socle est suivie d'autres membres,
+    /// et une fenêtre les avalerait, si bien qu'un modificateur posé sur le
+    /// voisin satisferait une assertion portant sur elle.
+    private func declarationBody(startingAt anchor: String, in source: String) throws -> String {
+        guard let start = source.range(of: anchor) else {
+            XCTFail("MeeshyComposerHost doit contenir \(anchor) — la garde ne mesurerait RIEN.")
             return ""
         }
-        let end = source.index(range.upperBound, offsetBy: span, limitedBy: source.endIndex) ?? source.endIndex
-        return String(source[range.upperBound ..< end])
+        guard let open = source[start.upperBound...].firstIndex(of: "{") else { return "" }
+        var depth = 0
+        var index = open
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" {
+                depth -= 1
+                if depth == 0 { return String(source[open ... index]) }
+            }
+            index = source.index(after: index)
+        }
+        return ""
     }
 
-    /// Anchored on the `disabled(...)` line of the publish button, which is unique
-    /// in the file and immediately precedes the accessibility modifiers.
-    private func publishButtonModifiers() throws -> String {
-        let source = try composerSource()
-        return try vicinity(after: ".disabled(selectedEmoji == nil || isPublishing)", in: source, span: 1000)
+    private func publishButtonBody() throws -> String {
+        try declarationBody(startingAt: "private var publishButton: some View", in: try hostSource())
     }
 
     func test_publishButton_keepsAccessibleNameWhilePublishing() throws {
+        let body = try publishButtonBody()
         XCTAssertTrue(
-            try publishButtonModifiers().contains(".accessibilityLabel(String(localized: \"status.composer.publish\""),
-            "The publish button must carry an explicit accessibilityLabel: while isPublishing its label " +
-            "is a bare ProgressView, which leaves the button with no accessible name."
+            body.contains("Text(\"composer.socle.publish\""),
+            "La flèche doit porter un libellé TEXTE issu du catalogue : c'est lui qui lui donne son nom " +
+            "accessible, et il ne change pas pendant l'envoi."
+        )
+        XCTAssertFalse(
+            body.contains("ProgressView"),
+            "La flèche échange son libellé contre un `ProgressView` nu : le bouton perd son nom accessible " +
+            "à l'instant précis où il est occupé — le défaut que l'écran historique du mood avait corrigé, " +
+            "et que le socle ne doit pas réintroduire. L'état en vol est porté par `accessibilityValue`."
         )
     }
 
     func test_publishButton_announcesPublishingState() throws {
         XCTAssertTrue(
-            try publishButtonModifiers().contains("a11y.status.publish.in-progress"),
-            "The publish button must expose the in-flight state as an accessibility value so the busy " +
-            "state is conveyed by more than the spinner's appearance."
+            try publishButtonBody().contains("ComposerSocleCopy.publishInProgress"),
+            "La flèche doit exposer son état EN VOL en `accessibilityValue` : sans lui, l'occupation n'est " +
+            "portée que par la teinte."
+        )
+        XCTAssertTrue(
+            try hostSource().contains("a11y.status.publish.in-progress"),
+            "… et cette valeur passe par le catalogue : un littéral posé ici échapperait au cliquet de " +
+            "complétude et ne serait jamais traduit."
         )
     }
 
     func test_publishButton_explainsWhyItIsDisabled() throws {
-        let modifiers = try publishButtonModifiers()
         XCTAssertTrue(
-            modifiers.contains("a11y.status.publish.disabled.hint"),
-            "The publish button is disabled until an emoji is picked; that requirement must be stated " +
-            "as an accessibility hint, since the dimmed gradient alone conveys it visually only."
+            try publishButtonBody().contains(".accessibilityHint(publishBlockedHint)"),
+            "La flèche doit dire POURQUOI elle refuse : le dégradé éteint ne le porte que visuellement."
+        )
+        let hint = try declarationBody(startingAt: "private var publishBlockedHint: String", in: try hostSource())
+        XCTAssertTrue(
+            hint.contains("guard !canPublishDocument"),
+            "L'indice doit être CONDITIONNEL au refus, sinon il est annoncé sur une flèche actionnable."
         )
         XCTAssertTrue(
-            modifiers.contains("selectedEmoji == nil"),
-            "The disabled hint must be conditional on the missing emoji, so it is not announced once " +
-            "the button is actionable."
+            try hostSource().contains("a11y.status.publish.disabled.hint"),
+            "La phrase du refus vient du catalogue, et c'est celle du mood — la seule déjà traduite dans " +
+            "les sept locales."
         )
     }
 

@@ -84,6 +84,12 @@ struct iPadRootView: View {
     /// U1 inc.2 — namespace zoom tray→viewer (parité RootView iPhone).
     @Namespace var storyZoomNamespace
 
+    /// C4b — rupture cliente, jumeau de `RootView`. Rév. 2 du plan, remarque
+    /// G6 : l'iPad a sa racine PROPRE. Sans cette observation-là, un iPad prend
+    /// des 426 bruts en pleine publication et ne voit JAMAIS l'écran de mise à
+    /// jour — les deux racines ne partagent pas une ligne.
+    @StateObject private var upgradeGate = UpgradeGateController()
+
     private var isConversationOpen: Bool {
         activeConversation != nil
     }
@@ -130,14 +136,30 @@ struct iPadRootView: View {
                     onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
                 )
             }
+            // Lot 4.7 — même câblage que `RootView`, et il doit le rester : deux
+            // racines de fenêtre qui republieraient différemment seraient deux
+            // produits. La porte PORTE son format ; le meuble lit `repostOfId`
+            // depuis elle, la graine ne le double pas.
+            //
+            // Mêmes DEUX moitiés livrées qu'en fenêtre iPhone depuis le
+            // 2026-08-25 : le MIROIR repart en `STATUS`, et l'ANCRAGE en post
+            // atteint un écran — le plateau est monté par le `body` du meuble
+            // sous `ComposerFormatFanPlacement`, et la porte du mood aiguille
+            // sur le format. Même dette résiduelle, aussi : ce site ne sème pas
+            // `visibility:`, faute que `APIPost.toStatusEntry()` la transmette.
+            // Voir le commentaire jumeau de `RootView` et la garde
+            // `ComposerDocumentSurfaceTests`
+            // `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint`.
             .sheet(item: $republishStatusEntry) { entry in
-                StatusComposerView(
-                    viewModel: statusViewModel,
-                    initialEmoji: entry.moodEmoji,
-                    initialText: entry.content,
-                    viaUsername: entry.username,
-                    repostOfId: entry.id,
-                    repostAudioUrl: entry.audioUrl
+                MoodComposerDoor(
+                    intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),
+                    seed: ComposerMoodSeed(
+                        emoji: entry.moodEmoji,
+                        text: entry.content,
+                        viaUsername: entry.username,
+                        audioUrl: entry.audioUrl
+                    ),
+                    viewModel: statusViewModel
                 )
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -271,10 +293,17 @@ struct iPadRootView: View {
                 // budget de reprise (cf. StoryPublishService.setExecutor).
                 StoryPublishService.shared.setExecutor(storyViewModel)
 
-                await storyViewModel.loadStories()
-                await statusViewModel.loadStatuses()
-                await conversationViewModel.loadConversations()
-                await notificationManager.refreshUnreadCount()
+                // Parallélisés comme sur RootView (iPhone) : les 4 chargements
+                // sont indépendants — en série, l'écran visible (conversations)
+                // attendait derrière stories et statuses.
+                // C4b — plancher de version lu au démarrage, best-effort et
+                // silencieux (miroir de RootView).
+                async let versionFloor: Void = upgradeGate.checkFloor()
+                async let storiesLoad: Void = storyViewModel.loadStories()
+                async let statusesLoad: Void = statusViewModel.loadStatuses()
+                async let conversationsLoad: Void = conversationViewModel.loadConversations()
+                async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
+                _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
                 if let conversation = notification.object as? Conversation {
@@ -346,6 +375,15 @@ struct iPadRootView: View {
                 handleDeepLink(newValue)
             }
         )
+        // C4b — la rupture, posée PAR-DESSUS `applyingSheets` : elle recouvre
+        // les feuilles de l'iPad, elle ne passe pas derrière. Binding CONSTANT
+        // — le contrôleur n'expose aucun retour à `nil` et un `fullScreenCover`
+        // sur constante n'a aucun geste de fermeture.
+        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+            if let requirement = upgradeGate.requirement {
+                UpgradeGateView(requirement: requirement)
+            }
+        }
     }
 
     // MARK: - Left Column

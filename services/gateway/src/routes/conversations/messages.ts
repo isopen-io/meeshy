@@ -13,6 +13,8 @@ import {
   POST_REPLY_SNAPSHOT_SELECT,
 } from '../../services/messaging/postReplySnapshot';
 import { sharedPlaceFromMetadata, hoistLocationOnto } from '../../services/location/sharedPlace';
+import { resolveForwardSourceGateForReader } from '../../services/preferences/forward-source-visibility.js';
+import { redactForwardedAttachmentUrlsIn } from '../../services/preferences/forwarded-attachment-urls.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { historyFloorFor } from '../../services/shareLinkHistoryFloor';
@@ -55,6 +57,8 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 import { ConversationBridgeService } from '../../services/ConversationBridgeService';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
@@ -86,6 +90,13 @@ function isStaleCursorMessageId(params: {
 // `/sync`, qui ne peut pas importer ce module de routes) et reste ré-exporté ici
 // pour les appelants historiques.
 import { messageSenderUserSelect } from './utils/message-sender-select';
+import {
+  ENCRYPTION_ENVELOPE_SHAPE,
+  noSilentDowngrade,
+  NO_SILENT_DOWNGRADE_ISSUE,
+  toEncryptedPayload,
+} from '../../validation/encryption-envelope.js';
+import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 export { messageSenderUserSelect };
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
@@ -120,25 +131,11 @@ export const SendMessageBodySchema = z.object({
   // sans `forwardedFromId` ni marque de transfert sur les copies. Voir
   // `services/messaging/copyAttachments.ts`.
   copyAttachmentsFromMessageId: z.string().optional(),
-  encryptedContent: z.string().optional(),
-  // Le mode arrive avec la casse du client : iOS émet « E2EE », et la
-  // description OpenAPI de cette route annonçait « e2e » — deux valeurs que
-  // l'enum rejetait en 400, sur un champ dont le jeu est pourtant connu.
-  // Normalisé à la frontière d'écriture, comme le code de langue l'est déjà
-  // (`normalizeLanguageForDedup`). Le jeu de valeurs reste FERMÉ : la
-  // normalisation corrige la casse, elle n'ouvre aucune valeur nouvelle.
-  encryptionMode: z
-    .string()
-    .transform((v) => v.toLowerCase())
-    .pipe(z.enum(['e2ee', 'server', 'hybrid']))
-    .optional(),
-  encryptionMetadata: z.record(z.string(), z.unknown())
-    .refine(
-      (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
-      { message: 'encryptionMetadata exceeds 8KB serialized' }
-    )
-    .optional(),
-  isEncrypted: z.boolean().optional(),
+  // Enveloppe de chiffrement — déclarée dans `validation/encryption-envelope.ts`.
+  // Elle vivait ICI, et ici seulement : le transport SOCKET, pourtant le chemin
+  // d'envoi PRIMAIRE, n'en portait aucun champ et perdait donc tout chiffré.
+  // Les deux transports lisent désormais la même déclaration.
+  ...ENCRYPTION_ENVELOPE_SHAPE,
   // Même plafond que le schéma socket et que `MessageValidator` — ce tableau
   // n'était borné nulle part sur le chemin REST.
   attachmentIds: z.array(z.string()).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
@@ -147,7 +144,10 @@ export const SendMessageBodySchema = z.object({
   effectFlags: z.number().int().optional(),
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
-  mentionedUserIds: z.array(z.string()).optional(),
+  // Liste explicite de mentionnés — déclarée dans `validation/mention-list.ts`,
+  // la MÊME que celle des deux schémas socket. Elle vivait ici seule ; le
+  // transport SOCKET, qui porte le trafic, la strippait.
+  ...MENTIONED_USER_IDS_SHAPE,
   // Lieu partagé — champ dédié, JAMAIS un `metadata` brut (cf.
   // services/location/sharedPlace.ts). Validation stricte déléguée à
   // `parseSharedPlace`, appelé côté `MessageProcessor.saveMessage`.
@@ -160,17 +160,16 @@ export const SendMessageBodySchema = z.object({
     Boolean(data.copyAttachmentsFromMessageId) ||
     Boolean(data.encryptedContent),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
-).refine(
-  (data) => !data.isEncrypted || Boolean(data.encryptedContent),
-  {
-    message:
-      "encryptedContent est requis quand isEncrypted vaut true — le serveur ne rétrograde jamais en clair un message déclaré chiffré",
-    path: ['encryptedContent'],
-  },
-);
+).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
+
+// Présence de l'EXPÉDITEUR sur une charge servie PAR DESTINATAIRE (liste,
+// épinglés, recherche) : le viewer est connu, donc la loi descend pour LUI —
+// `resolveForTargets(viewer, ids)` — et le sort d'une entrée ABSENTE (expéditeur
+// SANS COMPTE, ou inscrit non résolu) est UN site, `presenceMissingEntryPolicy`
+// (presence-gate) : masqué, sauf viewer ADMIN/BIGBOSS.
 
 /**
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
@@ -1051,10 +1050,12 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Présence des expéditeurs : soumise aux préférences showOnlineStatus/
-      // showLastSeen — même règle que le broadcast user:status et le
-      // presence:snapshot (co-participation = accès déjà garanti).
-      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des expéditeurs : régime STRICT (2026-08-25) — self/ADMIN+/
+      // ami seuls, jamais la seule co-participation.
+      const listPresenceViewer = viewerFromRequest(request);
+      const listMissingEntry = presenceMissingEntryPolicy(listPresenceViewer);
+      const senderPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        listPresenceViewer,
         messages
           .map((message: any) => message.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -1155,25 +1156,25 @@ export function registerMessagesRoutes(
             const anonymousIdentity = message.sender.type === 'anonymous'
               ? resolveAnonymousSenderIdentity(message.sender)
               : null;
-            return {
-            ...senderData,
-            username: anonymousIdentity?.username
-              ?? message.sender.user?.username ?? message.sender.username ?? null,
-            // T16 — firstName/lastName were serialized but read by no client and
-            // are no longer fetched (messageSenderUserSelect trims them).
-            // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
-            // ano_ descend en handle (`username` ci-dessus).
-            displayName: anonymousIdentity && anonymousIdentity.displayName
-              ? anonymousIdentity.displayName
-              : resolveParticipantDisplayName(message.sender),
-            avatar: resolveParticipantAvatar(message.sender),
-            isOnline: senderPresenceVis.get(message.sender.userId ?? '')?.showOnline === false
-              ? false
-              : (message.sender.user?.isOnline ?? message.sender.isOnline ?? null),
-            lastActiveAt: senderPresenceVis.get(message.sender.userId ?? '')?.showLastSeenTimestamp === false
-              ? null
-              : (message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null),
-          };
+            return applyPresenceVisibilityAsOffline(
+              {
+                ...senderData,
+                username: anonymousIdentity?.username
+                  ?? message.sender.user?.username ?? message.sender.username ?? null,
+                // T16 — firstName/lastName were serialized but read by no client and
+                // are no longer fetched (messageSenderUserSelect trims them).
+                // Auteur sans compte : le nom DONNÉ au formulaire prime, le pseudo
+                // ano_ descend en handle (`username` ci-dessus).
+                displayName: anonymousIdentity && anonymousIdentity.displayName
+                  ? anonymousIdentity.displayName
+                  : resolveParticipantDisplayName(message.sender),
+                avatar: resolveParticipantAvatar(message.sender),
+                isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
+                lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
+              },
+              message.sender.userId ? senderPresenceVis.get(message.sender.userId) : undefined,
+              { onMissingEntry: listMissingEntry },
+            );
           })() : null,
           attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
           _count: message._count
@@ -1221,6 +1222,25 @@ export function registerMessagesRoutes(
       if (forwardedIds.length > 0) {
         const uniqueForwardedIds = [...new Set(forwardedIds)] as string[];
 
+        // Réciprocité de la SOURCE : elle n'est enrichie que si l'auteur du
+        // transfert ET le lecteur l'autorisent. Résolue AVANT la construction,
+        // pas après : ce qui n'est pas construit ne peut pas fuiter, alors
+        // qu'un objet construit puis « filtré » n'attend qu'un chemin de
+        // sortie oublié. L'auteur du transfert est l'expéditeur du message
+        // PORTEUR — ses préférences sont déjà chaudes dans le cache module,
+        // la liste ayant lu celles de tous les expéditeurs de la page.
+        const forwardSourceGate = await resolveForwardSourceGateForReader(
+          prisma,
+          userId,
+          // Les DEUX porteurs, pas seulement `forwardedFromId` : un message
+          // qui ne nomme que sa conversation source a lui aussi un auteur dont
+          // la volonté compte, et c'est justement le NOM DE GROUPE que la
+          // directive ajoute à la portée de la règle.
+          mappedMessages
+            .filter((m: any) => m.forwardedFromId || m.forwardedFromConversationId)
+            .map((m: any) => m.sender?.userId ?? null)
+        );
+
         const forwardedMessages = await prisma.message.findMany({
           where: { id: { in: uniqueForwardedIds } },
           select: {
@@ -1260,6 +1280,19 @@ export function registerMessagesRoutes(
 
         // Enrichir chaque message forwardé
         for (const msg of mappedMessages) {
+          // Les DEUX objets nommants tombent ensemble ou pas du tout : les
+          // trois politiques clientes nomment le groupe à partir du seul
+          // `forwardedFromConversation` et l'auteur d'origine à partir du seul
+          // `forwardedFrom.sender`. N'en taire qu'un laisse l'autre nommer.
+          if (!forwardSourceGate(msg.sender?.userId ?? null)) {
+            // Taire le NOM ne suffit pas : la copie de transfert réutilise le
+            // chemin de stockage de l'original, qui porte le `User.id` de son
+            // auteur. La même réponse livrait l'identité qu'elle refusait de
+            // nommer. Les pièces jointes passent donc à l'adressage par
+            // identifiant — mêmes octets, même autorisation, aucun chemin.
+            msg.attachments = redactForwardedAttachmentUrlsIn(msg.attachments);
+            continue;
+          }
           if (msg.forwardedFromId) {
             const original = forwardedMap.get(msg.forwardedFromId);
             if (original) {
@@ -1824,11 +1857,7 @@ export function registerMessagesRoutes(
         // le compte comme porteur de contenu), et le drapeau sans le chiffré
         // faisait mentir le `!` puis écrivait le message EN CLAIR. Le schéma
         // refuse désormais le second cas ; ici on sert le premier.
-        encryptedPayload: encryptedContent ? {
-          ciphertext: encryptedContent,
-          mode: (encryptionMode ?? 'e2ee') as any,
-          ...encryptionMetadata as any
-        } : undefined,
+        encryptedPayload: toEncryptedPayload({ encryptedContent, encryptionMode, encryptionMetadata }),
         metadata: {
           source: 'rest' as const,
           requestId: request.id
@@ -2383,8 +2412,9 @@ export function registerMessagesRoutes(
     try {
       const authRequest = request as UnifiedAuthRequest;
       const { id } = request.params;
-      const limit = Math.min(parseInt(request.query.limit || '50', 10), 100);
-      const offset = parseInt(request.query.offset || '0', 10);
+      // SSOT guard: a malformed `?limit`/`?offset` (string schema, no AJV
+      // coercion) would otherwise reach Prisma as `take: NaN` → HTTP 500.
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 50, maxLimit: 100 });
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
@@ -2477,7 +2507,11 @@ export function registerMessagesRoutes(
         )
       });
 
-      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls.
+      const pinnedPresenceViewer = viewerFromRequest(request);
+      const pinnedMissingEntry = presenceMissingEntryPolicy(pinnedPresenceViewer);
+      const pinnedPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        pinnedPresenceViewer,
         pinnedMessages
           .map((message: any) => message.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -2518,19 +2552,21 @@ export function registerMessagesRoutes(
           ),
           createdAt: message.createdAt,
           updatedAt: message.updatedAt,
-          sender: sender ? {
-            id: sender.id,
-            userId: sender.userId,
-            displayName: resolveParticipantDisplayName(sender),
-            avatar: resolveParticipantAvatar(sender),
-            type: sender.type,
-            username: sender.user?.username ?? null,
-            firstName: sender.user?.firstName ?? null,
-            lastName: sender.user?.lastName ?? null,
-            isOnline: pinnedPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false)
-          } : null,
+          sender: sender ? applyPresenceVisibilityAsOffline(
+            {
+              id: sender.id,
+              userId: sender.userId,
+              displayName: resolveParticipantDisplayName(sender),
+              avatar: resolveParticipantAvatar(sender),
+              type: sender.type,
+              username: sender.user?.username ?? null,
+              firstName: sender.user?.firstName ?? null,
+              lastName: sender.user?.lastName ?? null,
+              isOnline: sender.user?.isOnline ?? false
+            },
+            sender.userId ? pinnedPresenceVis.get(sender.userId) : undefined,
+            { onMissingEntry: pinnedMissingEntry },
+          ) : null,
           attachments: message.attachments || [],
           reactionCount: message._count?.reactions ?? 0,
           replyCount: message._count?.replies ?? 0,
@@ -2753,7 +2789,14 @@ export function registerMessagesRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
-      const searchLimit = Math.min(parseInt(limitStr, 10) || 20, 50);
+      // Route the page size through the pagination SSOT (as the paged
+      // `GET .../messages` above already does). The querystring schema declares
+      // `limit` as a bare string with no numeric bounds, so the inline
+      // `parseInt(limitStr) || 20` used to reintroduce the exact defect
+      // `validatePagination` documents killing: `limit=0` falsy-coerced to a
+      // full page instead of the floor of 1, and `limit=-5` flowed through as a
+      // NEGATIVE Prisma `take`. Search is cursor-based, so only the limit is used.
+      const { limit: searchLimit } = validatePagination('0', limitStr, { maxLimit: 50 });
 
       const conversationId = await resolveConversationId(prisma, id);
       if (!conversationId) {
@@ -2874,7 +2917,11 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
-      const searchPresenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls.
+      const msgSearchPresenceViewer = viewerFromRequest(request);
+      const searchMissingEntry = presenceMissingEntryPolicy(msgSearchPresenceViewer);
+      const searchPresenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        msgSearchPresenceViewer,
         results
           .map((msg: any) => msg.sender?.userId)
           .filter((uid: string | null | undefined): uid is string => !!uid)
@@ -2889,16 +2936,18 @@ export function registerMessagesRoutes(
         // top-level — un résultat de recherche géolocalisé le perdait sinon.
         return hoistLocationOnto({
           ...msg,
-          sender: sender ? {
-            id: sender.id,
-            userId: sender.userId,
-            displayName: resolveParticipantDisplayName(sender),
-            avatar: resolveParticipantAvatar(sender),
-            username: sender.user?.username ?? null,
-            isOnline: searchPresenceVis.get(sender.userId ?? '')?.showOnline === false
-              ? false
-              : (sender.user?.isOnline ?? false)
-          } : null,
+          sender: sender ? applyPresenceVisibilityAsOffline(
+            {
+              id: sender.id,
+              userId: sender.userId,
+              displayName: resolveParticipantDisplayName(sender),
+              avatar: resolveParticipantAvatar(sender),
+              username: sender.user?.username ?? null,
+              isOnline: sender.user?.isOnline ?? false
+            },
+            sender.userId ? searchPresenceVis.get(sender.userId) : undefined,
+            { onMissingEntry: searchMissingEntry },
+          ) : null,
           translations: msg.translations
             ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
             : undefined

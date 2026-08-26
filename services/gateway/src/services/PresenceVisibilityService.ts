@@ -1,5 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isGlobalModerator } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
@@ -7,19 +7,22 @@ import { PrivacyPreferencesService } from './PrivacyPreferencesService';
 
 export type PresenceViewer = { readonly userId: string; readonly role: GlobalUserRoleType } | null;
 export type PresenceTarget = { readonly id: string; readonly deactivatedAt?: Date | null };
-export type ResolvePresenceOptions = { readonly allowConversationContext?: boolean };
 
 const HIDDEN: PresenceVisibility = { showOnline: false, showLastSeenTimestamp: false };
 const FULL: PresenceVisibility = { showOnline: true, showLastSeenTimestamp: true };
 
 /**
  * Résout la visibilité de la présence (lastActiveAt/isOnline) d'une cible pour
- * un observateur donné. Orchestration I/O (blocage, amitié, co-participation,
- * préférences) déléguée à la politique pure resolvePresenceVisibility.
+ * un observateur donné. Orchestration I/O (blocage, amitié, préférences)
+ * déléguée à la politique pure resolvePresenceVisibility.
  *
  * Seule une amitié acceptée (FriendRequest status=accepted) compte comme
- * "connecté" — une relation d'affiliation/parrainage seule ne suffit plus à
- * révéler isOnline/lastActiveAt à un non-ami.
+ * "connecté" — une relation d'affiliation/parrainage seule ne suffit pas à
+ * révéler isOnline/lastActiveAt à un non-ami, et depuis le 2026-08-25 le
+ * partage d'une conversation n'en est plus une non plus (voir la directive
+ * gravée dans `resolvePresenceVisibility` et `services/gateway/decisions.md`).
+ * Le bypass suit désormais `isGlobalAdmin` (ADMIN/BIGBOSS) — MODERATOR a
+ * perdu son accès privilégié.
  *
  * @see docs/superpowers/specs/2026-06-30-profile-last-seen-visibility-design.md
  */
@@ -29,31 +32,22 @@ export class PresenceVisibilityService {
     private readonly privacy: PrivacyPreferencesService,
   ) {}
 
-  async resolveForTarget(
-    viewer: PresenceViewer,
-    target: PresenceTarget,
-    opts?: ResolvePresenceOptions,
-  ): Promise<PresenceVisibility> {
+  async resolveForTarget(viewer: PresenceViewer, target: PresenceTarget): Promise<PresenceVisibility> {
     if (target.deactivatedAt) return HIDDEN;
 
     const isSelf = !!viewer && viewer.userId === target.id;
-    if (isSelf || (viewer && isGlobalModerator(viewer.role))) return FULL;
+    if (isSelf || (viewer && isGlobalAdmin(viewer.role))) return FULL;
     if (!viewer) return HIDDEN;
 
     if (await this.isBlockedEitherWay(viewer.userId, target.id)) return HIDDEN;
 
     const areConnected = await this.areConnected(viewer.userId, target.id);
-    const sharesConversation =
-      !areConnected && (opts?.allowConversationContext ?? false)
-        ? await this.sharesConversation(viewer.userId, target.id)
-        : false;
     const prefs = await this.privacy.getPreferences(target.id);
 
     return resolvePresenceVisibility({
       isSelf: false,
       viewerRole: viewer.role,
       areConnected,
-      sharesConversation,
       targetShowOnlineStatus: prefs.showOnlineStatus,
       targetShowLastSeen: prefs.showLastSeen,
       targetIsDeactivated: false,
@@ -65,11 +59,7 @@ export class PresenceVisibilityService {
    * Version batchée pour les listes (/users/presence, search). Requêtes
    * groupées pour N cibles au lieu de N appels individuels.
    */
-  async resolveForTargets(
-    viewer: PresenceViewer,
-    ids: string[],
-    opts?: ResolvePresenceOptions,
-  ): Promise<Map<string, PresenceVisibility>> {
+  async resolveForTargets(viewer: PresenceViewer, ids: string[]): Promise<Map<string, PresenceVisibility>> {
     const result = new Map<string, PresenceVisibility>();
     const uniqueIds = [...new Set(ids)];
     if (uniqueIds.length === 0) return result;
@@ -87,13 +77,13 @@ export class PresenceVisibilityService {
       targetRows.filter((r: { deactivatedAt: Date | null }) => r.deactivatedAt != null).map((r: { id: string }) => r.id),
     );
 
-    // Deactivation is resolved "en amont" of the moderator/self privilege bypass
+    // Deactivation is resolved "en amont" of the admin/self privilege bypass
     // (design §8 + the pure policy's `targetIsDeactivated → HIDDEN` guard, which
     // runs before privilege). resolveForTarget already hides a deactivated target
-    // from everyone; the batch list path MUST match it, else a moderator browsing
+    // from everyone; the batch list path MUST match it, else an admin browsing
     // a presence list leaks a deactivated user's online status / last-seen while
     // their single profile view correctly hides it.
-    if (isGlobalModerator(viewer.role)) {
+    if (isGlobalAdmin(viewer.role)) {
       for (const id of uniqueIds) result.set(id, deactivated.has(id) ? HIDDEN : FULL);
       return result;
     }
@@ -126,27 +116,6 @@ export class PresenceVisibilityService {
       connected.add(f.senderId === viewerId ? f.receiverId : f.senderId);
     }
 
-    let sharesConvo = new Set<string>();
-    if (opts?.allowConversationContext) {
-      const viewerConversations = await this.prisma.participant.findMany({
-        where: { userId: viewerId, isActive: true },
-        select: { conversationId: true },
-      });
-      if (viewerConversations.length > 0) {
-        const coParticipants = await this.prisma.participant.findMany({
-          where: {
-            userId: { in: uniqueIds },
-            isActive: true,
-            conversationId: { in: viewerConversations.map((c: { conversationId: string }) => c.conversationId) },
-          },
-          select: { userId: true },
-        });
-        sharesConvo = new Set(
-          coParticipants.map((p: { userId: string | null }) => p.userId).filter((u: string | null): u is string => !!u),
-        );
-      }
-    }
-
     const prefsMap = await this.privacy.getPreferencesForUsers(
       uniqueIds.map((id) => ({ id, isAnonymous: false })),
     );
@@ -159,7 +128,6 @@ export class PresenceVisibilityService {
           isSelf: id === viewerId,
           viewerRole: viewer.role,
           areConnected: connected.has(id),
-          sharesConversation: sharesConvo.has(id),
           targetShowOnlineStatus: prefs?.showOnlineStatus ?? true,
           targetShowLastSeen: prefs?.showLastSeen ?? true,
           targetIsDeactivated: deactivated.has(id),
@@ -171,23 +139,31 @@ export class PresenceVisibilityService {
   }
 
   /**
-   * Prefs-only pour les listes où l'accès est déjà garanti par le contexte
-   * (co-participants d'une conversation, co-membres d'une communauté) : la
-   * présence est montrable, on applique seulement showOnlineStatus/showLastSeen.
+   * Les `User.id` avec qui `userId` est LIÉ par une amitié acceptée — la seule
+   * relation que la directive du 2026-08-25 tient pour une autorisation.
+   *
+   * Même forme de requête que {@link PresenceVisibilityService.areConnected},
+   * privée de sa seconde borne : là où celle-ci répond « ces deux-là ? », ici
+   * on demande « lesquels ? », parce qu'un ÉVENTAIL de présence
+   * (`_broadcastUserStatus`) doit nommer son audience avant de connaître ses
+   * membres. Le coût reste borné par le nombre d'amis du sujet — jamais par la
+   * population connectée de la passerelle, dont l'énumération avait déjà fait
+   * grossir ce chemin avec le serveur plutôt qu'avec la question posée.
    */
-  async resolvePrefsOnly(userIds: string[]): Promise<Map<string, PresenceVisibility>> {
-    const result = new Map<string, PresenceVisibility>();
-    const uniqueIds = [...new Set(userIds)];
-    if (uniqueIds.length === 0) return result;
-    const prefsMap = await this.privacy.getPreferencesForUsers(
-      uniqueIds.map((id) => ({ id, isAnonymous: false })),
+  async acceptedFriendIds(userId: string): Promise<Set<string>> {
+    const rows = await this.prisma.friendRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [{ senderId: userId }, { receiverId: userId }],
+      },
+      select: { senderId: true, receiverId: true },
+    });
+
+    return new Set(
+      rows
+        .map((row) => (row.senderId === userId ? row.receiverId : row.senderId))
+        .filter((friendId) => friendId !== userId),
     );
-    for (const id of uniqueIds) {
-      const p = prefsMap.get(id);
-      if (p && !p.showOnlineStatus) result.set(id, HIDDEN);
-      else result.set(id, { showOnline: true, showLastSeenTimestamp: p ? p.showLastSeen : true });
-    }
-    return result;
   }
 
   private async isBlockedEitherWay(a: string, b: string): Promise<boolean> {
@@ -215,24 +191,6 @@ export class PresenceVisibilityService {
       select: { id: true },
     });
     return !!friend;
-  }
-
-  private async sharesConversation(a: string, b: string): Promise<boolean> {
-    const viewerConversations = await this.prisma.participant.findMany({
-      where: { userId: a, isActive: true },
-      select: { conversationId: true },
-    });
-    if (viewerConversations.length === 0) return false;
-
-    const shared = await this.prisma.participant.findFirst({
-      where: {
-        userId: b,
-        isActive: true,
-        conversationId: { in: viewerConversations.map((c: { conversationId: string }) => c.conversationId) },
-      },
-      select: { id: true },
-    });
-    return !!shared;
   }
 }
 

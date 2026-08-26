@@ -68,8 +68,8 @@ public protocol ConversationServiceProviding: Sendable {
     func deleteForMe(conversationId: String) async throws
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation]
     func findDirectWith(userId: String) async throws -> APIConversation?
-    func removeParticipant(conversationId: String, participantId: String) async throws
-    func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws
+    func removeParticipant(conversationId: String, key: String) async throws
+    func updateParticipantRole(conversationId: String, userId: String, role: String) async throws
     func update(
         conversationId: String,
         title: String?,
@@ -82,8 +82,8 @@ public protocol ConversationServiceProviding: Sendable {
         autoTranslateEnabled: Bool?
     ) async throws -> APIConversation
     func leave(conversationId: String) async throws
-    func banParticipant(conversationId: String, userId: String) async throws
-    func unbanParticipant(conversationId: String, userId: String) async throws
+    func banParticipant(conversationId: String, key: String) async throws
+    func unbanParticipant(conversationId: String, key: String) async throws
 }
 
 public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
@@ -248,17 +248,40 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         )
     }
 
-    public func removeParticipant(conversationId: String, participantId: String) async throws {
+    /// Retire un membre de la conversation.
+    ///
+    /// `key` est un **`User.id` OU un `Participant.id`** : le gateway résout la
+    /// cible sous les deux colonnes, ce qui rend expulsable un visiteur venu par
+    /// un lien partagé — il n'a aucune ligne `User`, et son `Participant.id` est
+    /// sa seule identité.
+    ///
+    /// Le paramètre s'appelait `userId` et n'acceptait que la première forme ;
+    /// l'écriture passait alors par un `updateMany` qui, ne trouvant aucune
+    /// ligne, **répondait 200 sans avoir rien fait**. Elle passe désormais par un
+    /// `update` sur la ligne résolue : une expulsion qui ne trouve pas sa cible
+    /// échoue au lieu de mentir.
+    public func removeParticipant(conversationId: String, key: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)",
+            endpoint: "/conversations/\(conversationId)/participants/\(key)",
             method: "DELETE"
         )
     }
 
-    public func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {
+    /// Change le rang d'un membre. Le segment d'URL est un **`User.id`**, jamais
+    /// un `Participant.id` : le gateway filtre sur `where: { conversationId,
+    /// userId }`, et un `Participant.id` y répond 404 « Participant not found ».
+    ///
+    /// Le paramètre s'appelait `participantId`, et c'est ce nom qui a produit
+    /// l'erreur : la voisine `updateParticipantRights` attend, elle, un vrai
+    /// `Participant.id`. Les deux natures coexistent à un segment près — le nom
+    /// du paramètre est le seul endroit où la différence peut se lire.
+    ///
+    /// Un visiteur SANS COMPTE n'a pas de `User.id` et n'est donc pas
+    /// promouvable : ses droits passent par `updateParticipantRights`.
+    public func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {
         struct RoleBody: Encodable { let role: String }
         let _: APIResponse<[String: String]> = try await api.patch(
-            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/role",
+            endpoint: "/conversations/\(conversationId)/participants/\(userId)/role",
             body: RoleBody(role: role)
         )
     }
@@ -323,16 +346,29 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         )
     }
 
-    public func banParticipant(conversationId: String, userId: String) async throws {
+    /// Bannit un participant : le sort de la conversation ET **ferme le lien de
+    /// partage par lequel il est entré**. Sortir quelqu'un sans fermer sa porte
+    /// ne protège de rien — il revient par le même lien sous un autre
+    /// pseudonyme, et un visiteur sans compte n'a que ce chemin.
+    ///
+    /// Ce qui est fermé, c'est la porte, pas la salle : les personnes déjà
+    /// entrées par ce lien restent membres.
+    ///
+    /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
+    public func banParticipant(conversationId: String, key: String) async throws {
         let _: APIResponse<BanParticipantResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(userId)/ban",
+            endpoint: "/conversations/\(conversationId)/participants/\(key)/ban",
             method: "PATCH"
         )
     }
 
-    public func unbanParticipant(conversationId: String, userId: String) async throws {
+    /// Lève le bannissement. Le lien fermé par le bannissement n'est PAS rouvert :
+    /// c'est une décision séparée, qui se prend sur l'écran des liens.
+    ///
+    /// `key` : `User.id` OU `Participant.id` — voir `removeParticipant`.
+    public func unbanParticipant(conversationId: String, key: String) async throws {
         let _: APIResponse<UnbanParticipantResponse> = try await api.request(
-            endpoint: "/conversations/\(conversationId)/participants/\(userId)/unban",
+            endpoint: "/conversations/\(conversationId)/participants/\(key)/unban",
             method: "PATCH"
         )
     }

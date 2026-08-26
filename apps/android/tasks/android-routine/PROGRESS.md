@@ -2,6 +2,2653 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-26 **the composer gathers every per-element action behind ONE long-press context menu** (slice
+> `story-element-context-menu`, feature-parity E. Stories — the "Multi-element context menu" line, its LAST open
+> piece → the whole line is now `[x]`). Before this, an element's edit/duplicate/reorder/delete lived as scattered
+> buttons on the floating `TextStyleToolbar`; there was no single gesture that gathered them, and nothing told the
+> author which reorder directions were even possible from the element's current stacking position — the toolbar
+> buttons fired inert reducers silently at the extremes.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → empty; no `apps/android` collision. Prior
+> slice (`story-composer-safe-zone-overlay`) is on `main` (HEAD `e39cda78`). Branched off freshly-fetched
+> `origin/main`. (Local `main` ref was stale — many commits behind `origin/main` — so scope was verified with
+> `git diff --cached --name-only origin/main`, which is the real base; diffing against local `main` falsely showed
+> web/ios/gateway files that are simply newer on the remote. Noted so a future run trusts `origin/main`, not the
+> local ref, for the scope gate.)
+>
+> **The fix — one pure resolver + one VM triad + Compose glue.** (1) `StoryElementMenu.resolve(deck, elementId)`
+> (`:feature:stories`) → `StoryElementContextMenu?` (null when the id is absent from the SELECTED slide, so no menu
+> shows). Each of the seven `StoryElementMenuItem`s carries an `enabled` flag computed from the SAME rules the deck
+> reducers enforce: EDIT/DELETE always on; DUPLICATE iff the slide is below `MAX_TEXT_ELEMENTS_PER_SLIDE` (exactly
+> when `duplicateTextElement` would clone); the four reorder rows iff the element is not already at that extreme
+> (exactly when `reorderTextElement` would restack). `StoryElementAction.zOrder` is the ONE projection onto
+> `StoryZOrder`, so the menu and the reducer can never drift. (2) VM: `onOpenElementMenu` (selects the element +
+> opens, inert when off-slide), `onDismissElementMenu`, `onElementMenuAction` (routes to the existing
+> duplicate/reorder/remove/select intents then closes; a disabled or stale action leaves the deck same-instance and
+> still closes). A derived `StoryComposerUiState.elementContextMenu` resolves lazily so the screen stays glue.
+> (3) `TextElementLayer` gains a long-press (`detectTapGestures(onLongPress=…, onTap=…)`) that opens the menu and a
+> `DropdownMenu` anchored to the element, each row greyed per `enabled`, dispatching `onElementMenuAction`.
+>
+> **Tests: +22** (14 pure `StoryElementMenuTest` + 8 `StoryComposerViewModelTest`). The core promise is asserted
+> non-tautologically: each reorder row's `enabled` is checked `isEqualTo(deck.reorderTextElement(id, op) !== deck)`
+> and duplicate against `duplicateTextElement(...) !== deck` — the menu is proven to agree with the real reducer,
+> not with a restated constant. VM tests assert observable outcomes (DUPLICATE grows the slide by one and closes;
+> DELETE empties it and closes; BRING_TO_FRONT lands the element last and closes; a disabled SEND_TO_BACK on a
+> single-element slide is `isSameInstanceAs` the prior deck yet still closes; an action with no menu open is a
+> same-instance no-op). **Mutation-RED-proven**: forcing every row `enabled = true` reddens EXACTLY the 6
+> position/cap behavioural tests, the shape/order/mapping tests staying green.
+>
+> **SDK bootstrap — `dl.google.com` 200; the documented copy→patch (android-37.0 → android-37, keep BOTH).**
+> `sdkmanager` installed android-35 + build-tools 35 + platform-tools; AGP auto-installed pristine `android-37.0`;
+> the first `./gradlew` hash-errored on bare `android-37`; `cp -r android-37.0 android-37` + `source.properties`
+> `AndroidVersion.ApiLevel=37.0→37`, keeping BOTH dirs, resolved it (the recipe in NOTES).
+>
+> **Verified**: targeted `StoryElementMenuTest` + `StoryComposerViewModelTest` green, the mutation proof, then full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 5m 15s**. Reviewer PASS. Diff is `apps/android` only (9 files: 1 new resolver + 1 new test
+> + amended VM/screen/VM-test + 4 strings + tracking docs). Verdict: **PASS** — a pure resolver reused by a Compose
+> `DropdownMenu` glue; behavioural tests through the public API tied to the real reducers; no production logic
+> outside `apps/android`.
+>
+> **Next**: §E "Multi-element context menu" is now fully `[x]`. Candidates for the next-highest unchecked §E item:
+> the **"background designation toggle" AUDIO half** (mark one audio track per slide as background) is still blocked
+> on the composer gaining an audio-track authoring surface — so prefer either **Repost flow** (clone source story +
+> locked attribution badge), **Draft save/restore with media persistence + lost-media detection**, or the remaining
+> **offline publish** pieces (preview-before-publish, RAW background publish-all). Scout `feature-parity.md`
+> read-only before branching.
+
+> On 2026-08-26 **the composer draws the persistent safe-zone + rule-of-thirds overlay while dragging** (slice
+> `story-composer-safe-zone-overlay`, feature-parity E. Stories — the "Frosted-glass text backdrops; safe-zone
+> overlay; …" line, its LAST open piece → the whole line is now `[x]`). Before this, dragging an element lit only
+> the transient snap guide line(s) NEAR the drag (`StorySnapResolver` feedback); there was no persistent
+> composition frame, so an author had no on-canvas cue for where the viewer's top chrome / bottom reply-bar will
+> clip content. iOS shows exactly such a frame (`SafeZoneOverlay`, `if isDragging`) with ASYMMETRIC insets.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → four PRs, all iOS/gateway/shared
+> (#3854 iOS scroll, #3750 gateway reel-affinity, #3749 iOS TaskTimeout, #3619 shared Prisme-preview contract) —
+> none a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision. Prior slice
+> (`story-viewer-text-backdrop`) merged as #3748 (`main` HEAD before this run `f266d7ad`). Branched off
+> freshly-fetched `origin/main`.
+>
+> **The fix — one pure geometry resolver + canvas glue.** (1) `StorySafeZoneGrid.geometry(width, height)`
+> (`:feature:stories`) → `SafeZoneGeometry(safeLeft/Top/Right/Bottom, verticalThirds, horizontalThirds)` ports
+> iOS `StorySafeZone` exactly: asymmetric `TOP_INSET 0.18` / `BOTTOM_INSET 0.25` / `HORIZONTAL_INSET 0.05` (the
+> viewer's progress bars + header up top and reply bar + scrim at the bottom eat unequal margins) plus the
+> rule-of-thirds fractions `[1/3, 2/3]` — the centre (0.5) is OMITTED so the persistent grid never double-draws
+> the transient centre snap guide. A non-finite/non-positive dimension collapses to an `isEmpty` geometry
+> (zeroed rect + empty lists) so an unmeasured or zero canvas draws nothing. (2) The composer drag `Canvas`
+> (already gated on `snapFeedback != null`, i.e. shown only while dragging) strokes the dashed safe rect + faint
+> thirds lines at `primary@35%` BENEATH the existing accent snap guides — declarative glue over the resolver.
+>
+> **Tests: +9** (all pure/JVM `StorySafeZoneGridTest`): unit-rect equals the iOS insets; per-axis denormalisation
+> (1080×1920); the two thirds lines per axis (900×1800 → x 300/600, y 600/1200); centre-omission (a 1000px axis
+> must not list 500); and every degenerate guard — zero width, zero height, negative dimension, non-finite width,
+> non-finite height. **Mutation-RED-proven**: replacing the degenerate guard with `if (false)` reddened EXACTLY
+> the zero/non-finite tests (4) while the negative-dimension test correctly stayed green (a negative width makes
+> `safeRight < safeLeft`, so `isEmpty` is true geometrically without the guard).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StorySafeZoneGridTest` 9/9 green, the mutation proof, then full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 4m 43s**. Reviewer PASS. Diff is `apps/android` only (1 new resolver + 1 amended composer
+> screen for the glue + 1 new test + tracking docs). Verdict: **PASS** — a pure geometry resolver reused by a
+> Compose `Canvas` glue; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: §E "Frosted-glass … safe-zone … snap-to-guide" is now fully `[x]`. Advance to the next-highest
+> unchecked §E item — the **single unified multi-element long-press context menu** (consolidating the already-shipped
+> edit/duplicate/reorder/delete per-element actions into one menu — feature-parity "Multi-element context menu"
+> line, `[~]`), or the "Per-element + per-slide duration; background designation toggle" remainders (the
+> background-designation toggle sub-piece). Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-26 **the viewer honours a text element's frosted-glass / solid BACKDROP** (slice
+> `story-viewer-text-backdrop`, feature-parity E. Stories — "Frosted-glass text backdrops … " line, the
+> reader-render half whose author half the composer already shipped). Before this, the composer authored a
+> text element's backing (`StoryTextElement.background` → `toTextObject` emits the `backgroundStyle` tagged
+> union, and the composer canvas painted it live), but the VIEWER dropped it entirely: `StoryTextObjectProjection.project`
+> never resolved `backgroundStyle`/`textBg`, and `StoryTextObjectView` carried no backing field — so an
+> iOS/web/backend-authored `.solid(hex)` or `.glass(radius)` text backdrop rendered on Android as plain
+> floating glyphs. A real cross-client parity gap, the exact "reader honours X" shape of the background-media
+> slices below.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3619 (`claude/brave-archimedes-wwkr4u`,
+> a `packages/shared` + cross-platform-test Prisme-preview contract) — not a `claude/apps/android/<slice-id>`
+> routine slice, no `apps/android` collision. Prior slice (`story-composer-background-video-transform`) is on
+> `main` (HEAD `dfa05c89`). Branched off freshly-fetched `origin/main`.
+>
+> **The fix — one pure resolver + one projection field + one viewer glue.** (1) `StoryTextBackground.resolve(backgroundStyle,
+> textBg)` (`:feature:stories`) ports iOS `StoryTextObject.resolvedBackgroundStyle` exactly — priority modern
+> `backgroundStyle` > legacy `textBg`→`Solid` > `None`, the modern style winning even when it resolves to `None`
+> (an explicit `type:"none"` suppresses a stale legacy hex), making it the exact inverse of the existing
+> `toStyleWire`. Decodes TOLERANTLY (Solid with no usable hex / unknown `type` / blank legacy hex → `None`;
+> Glass with absent/non-finite/non-positive radius keeps the glass intent and clamps the sigma to
+> `DEFAULT_GLASS_RADIUS`). (2) `StoryTextObjectView.background` (default `None`), set once in `project()`. (3)
+> The viewer's `StoryTextObjectLayer` wraps the glyphs in a backing Box — rounded solid fill (honouring an
+> 8-digit alpha hex via a reader-local parser, since the shared `hexColor` is 6-digit-only) or a translucent
+> frosted scrim for glass — mirroring the composer's `storyTextBacking` so author and reader agree on the look.
+>
+> **Tests: +19** (+1 net vs the routine's counting convention; all pure/JVM). 14 `StoryTextBackgroundTest.resolve`
+> covering every priority + tolerant-decay branch (none/solid/glass/explicit-none-wins/legacy-hex/blank-legacy/
+> null-hex/blank-hex/missing-radius→default/non-positive→default/NaN→default/unknown-type + a toStyleWire
+> round-trip); 4 projection (none/glass/solid/legacy). Mutation-RED-proven ×2: forcing `project()`'s background
+> to `None` reddened EXACTLY the 3 non-None projection tests (the None test stayed green); dropping the glass
+> radius guard (`?: DEFAULT` without the finite/positive `takeIf`) reddened EXACTLY the 2 non-positive/non-finite
+> tests (missing-radius stayed green).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StoryTextBackgroundTest` + `StoryTextObjectProjectionTest` green, both mutation proofs,
+> then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL in 4m 49s** [PR CI = the merge gate]. Reviewer PASS. Diff is `apps/android` only (3 amended
+> prod files: resolver + view/projection + viewer screen; 2 amended test files; tracking docs). Verdict: **PASS**
+> — a pure resolver reused by a projection + a viewer `Box` glue mirroring the composer; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the last open piece of the "Frosted-glass text backdrops" line is the **persistent safe-zone overlay
+> grid** (composer): a static rule-of-thirds/safe-margin overlay while dragging, distinct from the transient
+> snap-guide feedback already shipped. Alternatively advance to the next-highest unchecked §E item (e.g. the
+> "Multi-element context menu" unified long-press menu, or "Per-element + per-slide duration" remainders). Scout
+> `feature-parity.md` read-only before branching.
+
+> On 2026-08-26 **the composer AUTHORS a background VIDEO's framing** (slice
+> `story-composer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
+> video", the WRITE half that closes the author→reader loop the reader-video slice opened, and the last open
+> piece of §E "Backgrounds"). This was the explicit "Next" from the prior entry. Before this, the composer
+> resolved the canvas pan/zoom onto ANY designated background (`resolveBackgroundFraming` is type-agnostic) but
+> `StoryBackgroundMedia.toMediaObject` still forced IDENTITY for a video — so a video an Android author framed
+> published with the bare centred defaults and rendered UN-framed on every client (its own reader, which now
+> honours video framing, included).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice
+> (`story-viewer-background-video-transform`, merged) is `main`'s HEAD `2e5fe179`. Branched off freshly-fetched
+> `origin/main`.
+>
+> **The fix — drop ONE guard.** `toMediaObject` no longer special-cases a video for framing: it emits the author's
+> `framing.x/y/scale` for a video exactly as for an image, now that the reader's video branch converts them back via
+> the same `StoryBackgroundObjectTransform.from`. `loop`/`intrinsicDuration`/`duration` stay strictly video-only and
+> ride alongside the framing unclobbered (asserted). The VM and its type-agnostic `resolveBackgroundFraming` were
+> already correct — only the wire-mapping's stale scoped-out guard remained. Two doc-comments (VM + model) updated
+> to record that framing now applies to a video and an image alike.
+>
+> **Tests: +3 net** (2 replace the two now-obsolete `video ignores/never carries framing` tests that asserted the
+> closed scoped-out behaviour — a behaviour change, not a weakening; +1 new unframed-video edge). Draft:
+> `a video background carries the author's framing as normalised x, y and scale` (x=0.75/y=0.25/scale=2.5 +
+> loop=true & intrinsicDuration=4.0 regression), `an unframed video background serialises the bare centred defaults`.
+> VM: `publishing a panned and zoomed video background carries the framing onto the wire object` (through the public
+> `publish()` API: x=0.5+200/1080, y=0.5+100/1920, scale=2.0, loop=true). Mutation-RED-proven: re-introducing the
+> `if (isVideo) IDENTITY` guard reddened EXACTLY the two framed-video tests (verified via the FAILED set) while the
+> unframed-video test and every other suite stayed green.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror
+> gate) **BUILD SUCCESSFUL in 6m 1s** with the correct code, then the mutation proof, then restored [RESULT PENDING —
+> see run log]. Reviewer PASS. Diff is `apps/android` only (1 amended prod model + 1 amended prod VM doc + 2 amended
+> test files + tracking docs). Verdict: **PASS** — removing a stale wire-mapping guard now that its downstream reader
+> honours the value; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: §E "Backgrounds" is closed author→reader on both image and video. Move to the next-highest unchecked
+> §E item (e.g. the master `[~]` "Backgrounds: random pastel, colour/gradient palette, …" line still carries a
+> partial marker — audit which of its sub-pieces remain), or advance the build order toward the next area. Scout
+> `feature-parity.md` read-only before branching.
+
+> On 2026-08-26 **the viewer honours a background VIDEO's framing transform** (slice
+> `story-viewer-background-video-transform`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
+> video", the reader-render half that was the explicit "Next" from the two prior background slices). Before this,
+> the viewer's video branch drew any background video through a plain fill, silently dropping the pan/zoom/rotation
+> an iOS/web/backend author placed on a background VIDEO `StoryMediaObject` (`x`/`y`/`scale`/`rotation`) — the last
+> cross-client parity gap in §E backgrounds: a story framed on iOS rendered un-framed on Android.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3525 (`claude/brave-archimedes-nu4voa`,
+> web message-grouping) and #3523 (`feat/presence-privacy`, gateway/web/iOS) — neither a `claude/apps/android/<slice-id>`
+> slice from this routine, no `apps/android` collision. Prior slice (`story-composer-background-image-transform`, #3527)
+> already merged (it is on `main`). Branched off freshly-fetched `origin/main` (`35c1061e`).
+>
+> **The fix — one VM projection + one screen `graphicsLayer`, reusing the existing pure conversion.** The reader
+> already had `StoryBackgroundObjectTransform.from(StoryMediaObject)` (fully unit-tested, shipped for the IMAGE
+> slice). This slice makes the VIDEO branch of `StoryViewerViewModel.resolveBackgroundMedia` project it onto
+> `StorySlideView.backgroundTransform` — gated on the background object's OWN `mediaURL` producing the resolved url
+> (`it.mediaURL != null && resolvedUrl != null`), so a legacy/flat fallback video (object == null, or object with a
+> null url) keeps IDENTITY and the framing never steals an unrelated fallback item's pixels. The image branch is
+> untouched. The viewer's video branch applies the transform to the `ReelVideoSurface` via `graphicsLayer`
+> (`scaleX/Y = scale`, `rotationZ`, `translationX/Y = offsetFraction × measured size`), the exact mirror of the
+> image branch — iOS's "zoom inside the background", clipped by the 9:16 frame.
+>
+> **Tests: +4** (all in `StoryViewerViewModelTest`, driven through the public VM API): (1) a background VIDEO with
+> author framing projects the transform (`x=0.8/scale=2.0` → `offsetXFraction=0.3`, `scale=2.0`, not identity) —
+> this REPLACES the prior slice's placeholder test `…is not reframed this slice (identity)`, which asserted the
+> now-closed deferred scope (a behaviour change, not a weakened assertion); (2) a background VIDEO with default
+> framing → IDENTITY; (3) a legacy video-only story (no `storyEffects`) → IDENTITY; (4) a background VIDEO object
+> with a null own-url but a matching fallback video → IDENTITY (the guard). Mutation-RED-proven: forcing the video
+> branch back to IDENTITY reddened EXACTLY the one framed-video test (verified via the JUnit XML `<failure>` set)
+> while the three IDENTITY-expecting tests stayed green.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP then auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on bare `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (the FULL key), keeping BOTH
+> dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted `StoryViewerViewModelTest` green, mutation proof, then full `./apps/android/meeshy.sh check`
+> (assembleDebug + testDebugUnitTest, the CI-mirror gate) **BUILD SUCCESSFUL** before any push [RESULT PENDING — see
+> run log]. Reviewer PASS. Diff is `apps/android` only (2 amended prod files: VM + screen; 1 amended test file; 2
+> tracking docs). Verdict: **PASS** — a VM projection reusing a covered pure conversion + a screen `graphicsLayer`
+> mirroring the image branch; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: composer AUTHORING of framing onto a background VIDEO — the last open piece of §E "Backgrounds". The
+> composer currently frames images only (`StoryBackgroundMedia.toMediaObject` emits `x`/`y`/`scale` for an image,
+> IDENTITY for a video); extend it to a video background now that the reader honours it. Scout `feature-parity.md`
+> read-only before branching.
+
+> On 2026-08-26 **the composer AUTHORS a background IMAGE's framing** (slice
+> `story-composer-background-image-transform`, feature-parity E. Stories — "Backgrounds: … image", the WRITE half
+> that closes the author→reader loop the prior slice opened). Before this, the composer persisted the background's
+> pan/zoom as a per-slide `StoryCanvasTransform` (viewport **pixels**: scale + offsetX/Y px) but published the
+> background `StoryMediaObject` with the bare `x`/`y`/`scale` defaults — a story an Android author framed rendered
+> UN-framed on every client, its own reader (shipped the prior slice) included. This was the explicit "Next" from
+> the reader-slice entry below.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3525 (`claude/brave-archimedes-nu4voa`,
+> web message-grouping) and #3523 (`feat/presence-privacy`, gateway/web/iOS) — neither a `claude/apps/android/<slice-id>`
+> slice from this routine, no `apps/android` collision. Prior slice (`story-viewer-background-media-transform`, #3524)
+> already merged (it is `main`'s HEAD `4b9acd3f`). Branched off freshly-fetched `origin/main`.
+>
+> **The fix — one pure conversion + one wire-mapping field + one VM capture/projection.** (1) `StoryBackgroundFraming`
+> (`:feature:stories`, pure value `{x,y,scale}` + `IDENTITY` matching `StoryMediaObject`'s field defaults) and
+> `StoryCanvasTransform.toBackgroundFraming(w,h)` — projects the pixel offset onto the wire's NORMALISED coords
+> (`x = 0.5 + offsetX / canvasWidth`), the exact inverse of the reader's `StoryBackgroundObjectTransform.from`
+> (proven by a round-trip test). Total on degenerate input (not-yet-measured/non-finite canvas → centred axis;
+> non-finite offset → centre; non-finite/non-positive scale → 1×). Division done in DOUBLE precision (a float
+> divide-then-widen lost >1e-9, reddening the two degenerate-axis tests on the first run — fixed by
+> `offset.toDouble() / size.toDouble()`). (2) `StoryBackgroundMedia.framing` (default IDENTITY); `toMediaObject()`
+> emits `x`/`y`/`scale` from it **only for an image** (a video keeps IDENTITY — the reader's video render path is
+> still the scoped-out follow-up, so authoring framing onto a video would be a wire value no client honours). (3)
+> The NOTES wrinkle — canvas width not retained in the VM — closed by capturing the measured size in
+> `onCanvasTransform` (the SOLE producer of a non-identity transform, so the size that made the offset is always the
+> size that inverts it) onto `StoryComposerUiState.canvasWidthPx/HeightPx`; `resolveBackgroundFraming` projects it
+> only when the designated background IS the media the canvas frames (its first resolved attachment), so a pan
+> applied to one image never mis-frames a differently-designated background.
+>
+> **Tests: +14** — 11 `StoryBackgroundFramingTest` (identity; pan-right +x; pan-left/up −x/−y; zoom→scale; degenerate
+> width→centred x; degenerate height→centred y; non-finite scale→1×; non-positive scale→1×; non-finite offset→centre;
+> isIdentity component sweep; reader round-trip), 3 `StoryComposerDraftTest` (image carries framing; unframed image→
+> defaults; video ignores framing), 4 `StoryComposerViewModelTest` (publish framed image; publish unframed; designated≠
+> framed→identity; video→identity after a gesture). Mutation-RED-proven ×3: forcing `x=0.5` reddened EXACTLY the
+> offset+round-trip tests (5 failed) while scale/degenerate-scale stayed green; `framed = framing` (dropping the
+> image-only guard) reddened EXACTLY the 2 video tests; neutering the designated-vs-framed guard reddened EXACTLY
+> that 1 test.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** `sdkmanager` installed android-35;
+> AGP then auto-installed pristine `android-37.0`; the first `./gradlew` hash-errored on `android-37`; `cp -r
+> android-37.0 android-37` + `source.properties` `AndroidVersion.ApiLevel=37.0→37` (note the FULL key, not bare
+> `ApiLevel`), keeping BOTH dirs, resolved it (the documented recipe).
+>
+> **Verified**: targeted suites green (`StoryBackgroundFramingTest`/`StoryComposerDraftTest`/`StoryComposerViewModelTest`/
+> `StoryCanvasTransformTest`), then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973
+> tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 5m 21s** before any push. Reviewer PASS. Diff is `apps/android`
+> only (1 new prod file +
+> 2 amended prod files + 1 amended prod VM + 2 amended test files + 1 new test file + tracking docs). Verdict:
+> **PASS** — a pure px→normalised conversion + a wire-map field + a VM capture/projection; behavioural tests through
+> the public API; no production logic outside `apps/android`.
+>
+> **Next**: background VIDEO framing at render (the video player path) — the last pending piece of §E "Backgrounds";
+> the composer already frames only images, so this is a reader-side slice (honour a video background object's
+> `x`/`y`/`scale`/`rotation` on the ExoPlayer surface). Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-26 **the viewer honours a background IMAGE's framing transform** (slice
+> `story-viewer-background-media-transform`, feature-parity E. Stories — "Backgrounds: … image", the reader half of
+> the pending "background IMAGE with transform" item). Before this, the viewer drew any background image as a plain
+> `ContentScale.Crop` fill, silently dropping the pan/zoom framing an iOS/web/backend author placed on the
+> background `StoryMediaObject` (`x`/`y`/`scale`/`rotation`) — a real cross-client parity gap: a story framed on
+> iOS rendered un-framed on Android.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3523 (`feat/presence-privacy`,
+> gateway/web/iOS) — not a `claude/apps/android/<slice-id>` slice from this routine, no `apps/android` collision.
+> Prior slice (`story-composer-background-video-loop`) already merged. Branched off freshly-fetched `origin/main`
+> (`4b8200db`).
+>
+> **Investigated iOS FIRST (Explore subagent) before porting** — to avoid shipping a no-op if the transform were a
+> phantom. Finding: iOS's `StoryCanvasUIView+Rendering.swift` aspect-FILLS the background as a base, then applies
+> the object's `scale` + a pixel offset FROM CENTRE `((x-0.5)*W, (y-0.5)*H)` + `rotation` ON TOP, clipped
+> (`masksToBounds`) — an "Instagram zoom inside the background". A background IGNORES `anchor`/`aspectRatio`
+> (unlike a foreground object, which uses `x`/`y` as an anchored position and `aspectRatio` to size a box). So the
+> port is a DISTINCT conversion, not a reuse of the foreground projection.
+>
+> **The fix — one pure conversion + one VM projection + one screen `graphicsLayer`.** (1) `StoryBackgroundObjectTransform`
+> (`:feature:stories`, pure): `from(StoryMediaObject)` → `(scale, offsetXFraction=(x-0.5), offsetYFraction=(y-0.5),
+> rotationDegrees)`, offset kept as a canvas FRACTION so it is resolution-independent. Decays TOLERANTLY — a
+> non-finite/non-positive `scale` → neutral 1× (a 0/negative scale would vanish the background), a non-finite
+> position/rotation → its neutral component. (2) `StoryViewerViewModel.resolveBackgroundMedia` projects it onto
+> `StorySlideView.backgroundTransform` for an IMAGE background ONLY, and only when the resolved image is the
+> background object's OWN url (a legacy/flat thumbnail fallback keeps IDENTITY); a video keeps IDENTITY (its player
+> render path is a scoped-out follow-up, no regression). (3) The viewer's image branch applies it via `graphicsLayer`
+> (offset fractions × measured `size`, `rotationZ`, clipped by the 9:16 frame).
+>
+> **Tests: +14** — 10 `StoryBackgroundObjectTransformTest` (identity; right-of-centre +x; left/above −x/−y; scale
+> passthrough; rotation passthrough; non-positive scale → 1×; non-finite scale → 1×; non-finite position → 0
+> offset; non-finite rotation → 0; isIdentity only-when-all-neutral), 4 `StoryViewerViewModelTest` (framed image
+> projects the transform; default-framed image → IDENTITY; framed VIDEO → IDENTITY; no background media → IDENTITY).
+> Mutation-RED-proven twice: dropping the `-0.5` centre offset reddened EXACTLY the 4 offset tests while
+> scale/rotation stayed green; forcing the VM projection to IDENTITY reddened EXACTLY the framed-image test.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** AGP auto-installed pristine
+> `android-37.0`; the first `./gradlew` hash-errored on `android-37`; `cp -r android-37.0 android-37` +
+> `source.properties` ApiLevel 37.0→37, keeping BOTH dirs, resolved it (documented recipe).
+>
+> **Verified**: targeted suites green, then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 6m 5s** before any push. Reviewer PASS. Diff is `apps/android`
+> only (1 new prod file + 2 amended prod files + 1 new test file + 1 amended test file + 2 tracking docs). Verdict:
+> **PASS** — a pure render-conversion + a VM projection + a screen `graphicsLayer`; behavioural tests through the
+> public API; no production logic outside `apps/android`.
+>
+> **Next**: close the author→reader loop — the composer AUTHORING half. The composer already persists framing as a
+> per-slide `StoryCanvasTransform` (viewport **pixels**: scale + offsetX/Y px) but publishes the background object
+> with default `x`/`y`/`scale`. Closing it needs a px→normalised conversion (`x = 0.5 + offsetX/canvasWidth`) that
+> requires the canvas width at publish — NOT currently retained in the VM (the real wrinkle; see NOTES). Also
+> pending: background VIDEO framing at render (the video player path). Scout `feature-parity.md` read-only before
+> branching.
+
+> On 2026-08-25 **the composer AUTHORS whether a background VIDEO loops** (slice
+> `story-composer-background-video-loop`, feature-parity E. Stories — "Backgrounds: … looping/non-looping
+> video", the pending half of that item). Before this, `StoryBackgroundMedia.toMediaObject()` hard-coded
+> `loop = true` on EVERY designated background: an Android author could not publish a background video that
+> plays ONCE. iOS distinguishes them — `ClipInspector.supportsLoop(kind:isBackground:)` returns true only for a
+> **video/audio background** (never image/text/sticker); this ports the video half (audio-track authoring still
+> absent, as in the prior slice).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3520 (gateway `normalizeDisplayName`),
+> #3519 (docs), #3517 (`claude/brave-archimedes-*`, Android `core:model` legacy-ISO — a *different* routine's
+> PR, not a `claude/apps/android/<slice-id>` slice), #3515 (iOS). None a slice from THIS routine. Prior slice
+> (`story-composer-background-media`, #3518) already merged. Branched off freshly-fetched `origin/main`
+> (`f4b43ad6`).
+>
+> **The fix — one wire-mapping field + one slide field/reducer + one VM intent/derivation + one screen toggle.**
+> (1) `StoryBackgroundMedia.loop: Boolean = true`; `toMediaObject()` emits `loop = if (isVideo) loop else true`
+> — the author's choice reaches the wire ONLY for a video, so a stale `loop = false` never rides onto an image
+> object (the reader's image branch is unconditionally looping; its video branch reads
+> `backgroundObject?.loop ?: true`). (2) `StorySlide.backgroundLoop: Boolean = true`;
+> `StorySlideDeck.setSelectedBackgroundLoop(loop)` (inert when the selected slide has NO designated background —
+> a loop pref without a background is a no-op control — or on an equal value) + `selectedSlideBackgroundLoop`;
+> a FRESH designation (`toggleSelectedBackgroundMedia`) and a background-clearing `removeMedia` both RESET
+> `backgroundLoop` to the default, so an off-state never leaks to a newly-designated background. (3) VM
+> `onSetSlideBackgroundLoop`, derived `selectedSlideBackgroundLoop` + `selectedSlideBackgroundIsVideo` (resolves
+> the designated id against the uploaded attachments' MIME), and the publish resolver now carries `slide.backgroundLoop`.
+> (4) A `Loop` toggle badge on the designated-background thumbnail, shown **only when it is a video** (tinted
+> `primary` when looping), localised en/fr/es/pt.
+>
+> **Tests: +13** — 7 `StorySlideDeckTest` (default-loops; set-off on designated slide; inert with no bg; inert
+> on equal; only-selected-slide; redesignating a different media resets loop; removeMedia of the bg resets
+> loop), 2 `StoryComposerDraftTest` (non-looping video → `loop = false`; image with loop off → `loop = true`),
+> 4 `StoryComposerViewModelTest` (`onSetSlideBackgroundLoop` turns it off; publishing a non-looping video emits
+> `loop = false`; `selectedSlideBackgroundIsVideo` true only for a designated video, false for none/image).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** AGP auto-installed pristine
+> `android-37.0`; the first `./gradlew` failed `Failed to find target with hash string 'android-37'`. The
+> copy→patch (`cp -r android-37.0 android-37`, `source.properties` ApiLevel 37.0→37) keeping android-37.0
+> ALONGSIDE android-37 resolved it — the documented THIRD mode.
+>
+> **Verified**: targeted `:feature:stories` suites (`StorySlideDeckTest`/`StoryComposerDraftTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 5m 46s** before any push.
+> Mutation-RED proven: forcing `loop = true` in `toMediaObject()` reddened EXACTLY the 2 loop-false tests
+> (video serialises loop-false / VM publish loop-false) while image-always-loops stayed green — genuine
+> discrimination, not an assertion echo. Reviewer PASS. Diff is `apps/android` only (4 amended prod files in
+> :feature:stories + 4 strings.xml, +3 amended test files, tracking docs). Verdict: **PASS** — a pure wire-map
+> field + a pure loop reducer + a VM intent/derivation + a screen toggle; behavioural tests through the public
+> API; no production logic outside `apps/android`.
+>
+> **Next**: background IMAGE with per-slide transform (the remaining pending piece of §E "Backgrounds"), OR the
+> AUDIO half of the background-designation item — still blocked until the composer gains an audio-track
+> authoring surface (borrowed sound / voice-over), so scout that first. Scout `feature-parity.md` read-only
+> before branching.
+
+> On 2026-08-25 **the composer AUTHORS which media is a slide's looping background** (slice
+> `story-composer-background-media`, feature-parity E. Stories — "background designation toggle (1 visual +
+> 1 audio/slide)"). Before this, an Android-composed multi-media slide had **no way to say which media is the
+> background**: every media rode as a flat `mediaIds` list and the reader fell back to "first video, else first
+> image" as the background. iOS designates exactly one canvas media object `isBackground: true` per slide; this
+> slice ports the **visual** half of that (audio-background deferred — the composer has no audio track yet), so
+> the author picks the background and the reader's `resolveBackgroundMedia` (`firstOrNull { it.isBackground }`)
+> and `StorySlideDuration` `bgVideoDur` branch honour exactly that pick.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3517 (`claude/brave-archimedes-*`,
+> Android `core:model` legacy-ISO fix), #3515 (`feat/ios-alignment-*`, iOS), #3514 (`claude/intelligent-noether-*`,
+> docs/shared) — none a `claude/apps/android/<slice-id>` slice from THIS routine. Prior slice
+> (`story-composer-element-timing`, #3512) already merged into main. Branched off freshly-fetched `origin/main`
+> (`0b6a6e9e`).
+>
+> **The fix — one pure wire-mapping value + one slide field/reducer + one VM intent/resolver + one screen toggle.**
+> (1) `StoryBackgroundMedia` (`:feature:stories`, pure `data class` — the resolved `(mediaId, url, mimeType,
+> durationSeconds)` of a designated background) with `toMediaObject()` producing the `isBackground` +
+> `loop = true` `StoryMediaObject`: `mediaType` from the MIME (`video/*` → `"video"`), and a **video** carries
+> its duration onto both `duration` and `intrinsicDuration` (feeding the reader's `bgVideoDur` loop-extend) while
+> an **image** carries none. (2) `StorySlide.backgroundMediaId: String?`; `StorySlideDeck.toggleSelectedBackgroundMedia`
+> (at most one per slide — designating replaces the prior, re-designating clears it, inert on an id not attached
+> to the selected slide) + `selectedSlideBackgroundMediaId`/`isSelectedBackgroundMedia`; `removeMedia` now
+> **clears the designation when it removes the background media** (no orphan pointer). (3) VM intent
+> `onToggleSlideBackgroundMedia` + `resolveBackgroundMedia(id, attachments)` that maps the id to its uploaded
+> URL/MIME/duration on publish (returns `null` for a still-pending upload — no server URL yet — so it publishes
+> as a plain flat-media slide until the upload lands). (4) A `Wallpaper` toggle badge on each real media
+> thumbnail, tinted `primary` when it is the background, localised in 4 locales (en/fr/es/pt).
+>
+> **Tests: +21** — 8 `StorySlideDeckTest` (fresh=no designation; designate; replace prior=at-most-one; toggle
+> off; inert on unattached id; only the selected slide; removeMedia clears the bg designation; removeMedia keeps
+> a different media's designation), 5 `StoryComposerDraftTest` (image bg → one `isBackground` object with
+> URL/type/loop; video bg carries duration onto `duration`+`intrinsicDuration`; image bg carries no duration even
+> when present; a bg-media-alone materialises effects; no designation ⇒ `mediaObjects` null), 5
+> `StoryComposerViewModelTest` (designate attached media; toggle off; inert unknown id; publishing a designated
+> **video** bg emits an `isBackground` object resolved from attachments with its duration; no designation ⇒ no
+> media objects).
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37) keeping android-37.0 ALONGSIDE android-37 resolved it — same THIRD mode
+> as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StorySlideDeckTest`/`StoryComposerDraftTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL in 4m 43s** before any push. Mutation-RED
+> proven: neutering `toggleSelectedBackgroundMedia` to `return this` reddened exactly 4 `StorySlideDeckTest`
+> assertions (designate / replace-prior / toggle-off / a removeMedia case that sets up via the toggle) while the
+> fresh-no-designation, inert-unattached-id, and remove-different-media-keeps-designation ones stayed green —
+> genuine discrimination, not an assertion echo. Reviewer PASS. Diff is `apps/android` only (1 new prod file + 3
+> amended prod files + 1 screen glue + 4 strings.xml in :feature:stories, +3 amended test files, tracking docs).
+> Verdict: **PASS** — a pure background-designation reducer + a pure wire-mapping value + a VM intent/resolver + a
+> screen toggle; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the AUDIO half of the same background-designation item (mark one borrowed-sound / audio track per
+> slide as the looping background → `audioPlayerObjects[].isBackground`, the other input the reader's
+> `StorySlideDuration` `bgAudioDur` branch reads) — blocked until the composer gains an audio-track authoring
+> surface (borrowed sound / voice-over), so scout that first. Adjacent §E backlog: background IMAGE with per-slide
+> transform, looping/non-looping video designation. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the composer AUTHORS a text element's per-element visibility timing** (slice
+> `story-composer-element-timing`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
+> slice (`story-element-timing-window-gate`, #3512) gave the *reader* a per-element `[start, start+duration)`
+> window gate; this one gives Android's own composer the controls that *write* `startTime`/`duration`, closing
+> the author→reader loop. Before this, an Android-authored text element could never carry a per-element window:
+> `StoryTextElement.toTextObject` set `fadeIn`/`fadeOut` but never `startTime`/`duration`, so the reader gate had
+> nothing local to honour. Ports iOS's `StoryTextEditorView` start/duration fields (`0…30 s`, a `0` folded back
+> to `nil`) into the same tap-cycle shape the fade authoring already ships.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3515 (`feat/ios-alignment-*`, iOS),
+> #3514 (`claude/intelligent-noether-*`, docs/shared) — neither a `claude/apps/android/*` slice from THIS
+> routine. Prior slice (`story-element-timing-window-gate`, #3512) already merged into main. Branched off
+> freshly-fetched `origin/main` (`d4401986`).
+>
+> **The fix — one pure value type + one element field/serialiser + two VM intents + two screen controls.**
+> (1) `StoryElementTiming` (`:feature:stories`, pure `data class`) mirrors `StoryTextFade` exactly:
+> `(startSeconds, durationSeconds)` flat pair (two independent ends, iOS binds each to its own control),
+> `NONE_SECONDS = 0f`, `hasStart`/`isTimed`/`isActive` predicates, `cycledStart()`/`cycledDuration()` delegating
+> to `StoryElementTimingCycle.advance` (discrete ladder `[1,2,3,5,10,15,30]`, all within iOS's `0…30 s` range,
+> `firstOrNull { it > current } ?: NONE_SECONDS` wrap). (2) `StoryTextElement.timing` field; `toTextObject`
+> serialises `startTime = timing.startSeconds.takeIf { it > NONE_SECONDS }?.toDouble()` and `duration` likewise
+> — matching iOS's `$0 > 0 ? Double($0) : nil` and the `fadeIn`/`fadeOut` omit-a-zero convention beside it.
+> (3) `onTextElementCycleStart(id)`/`onTextElementCycleDuration(id)` advance each end independently through
+> `updateTextElement` (inert on unknown id). (4) Two toolbar `IconButton`s in `TextStyleToolbar` (clock =
+> `Schedule` for start, `Timelapse` for duration; tinted `primary` when `hasStart`/`isTimed`), wired to the VM,
+> localised in 4 locales (en/fr/es/pt).
+>
+> **Tests: +18** — 10 `StoryElementTimingTest` (fresh=inactive; positive start active; positive duration active;
+> cycledStart/cycledDuration touch only their end; advance visits every step then wraps; between-steps jumps
+> higher; past/beyond longest wraps to none; the offered steps within 30 s), 4 added to `StoryTextElementTest`
+> (fresh no-timing; `toTextObject` omits both when unset; start-only onto `startTime`; duration-only onto
+> `duration`; both ends), 4 added to `StoryComposerViewModelTest` (start/duration advance the edited element;
+> wrap; unknown-id inert on each). **Mutation-RED-proven isolated**: neutering `StoryElementTimingCycle.advance`
+> to a constant reddened EXACTLY the 9 advance/cycle/VM-advance assertions while the model-shape
+> (fresh/positive-start/positive-duration/steps-list) and inert-id tests stayed green — genuine discrimination,
+> not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37, `build.prop` `sdk_full`/`sdk` fields) keeping android-37.0 ALONGSIDE
+> android-37 resolved it — same THIRD mode as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StoryElementTimingTest`/`StoryTextElementTest`/
+> `StoryComposerViewModelTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (1 new prod file + 3 amended prod files + 4 strings.xml in :feature:stories, +1 new test
+> file + 2 amended, tracking docs). Verdict: **PASS** — a pure timing SSOT mirroring `StoryTextFade`, an element
+> serialiser, two VM intents, and two screen controls; behavioural tests through the public API; no production
+> logic outside `apps/android`.
+>
+> **Next**: the background-designation toggle (mark one visual + one audio per slide as the looping background,
+> feeding the content-derived `bgVideoDur` branch the reader duration SSOT already reads) — the last unchecked
+> piece of feature-parity E's "Per-element + per-slide duration; background designation toggle" item. It shares
+> the media-OBJECT authoring foundation the composer still lacks (`mediaObjects` with `isBackground`). Adjacent
+> §E backlog: background IMAGE with per-slide transform. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the viewer honours a timed element's own visibility WINDOW** (slice
+> `story-element-timing-window-gate`, feature-parity E. Stories — "Per-element + per-slide duration"). The prior
+> slices gave the composer per-SLIDE duration authoring; this one closes a distinct, foundational reader gap: a
+> text overlay or foreground media clip that authored its OWN `[startTime, startTime + duration)` window was
+> **never gated** on Android — it stayed on screen the entire slide, regardless of its window — while iOS's
+> `StoryRenderer.shouldRender(item:at:mode:)` drops the layer entirely outside that window in `.play` mode. Found
+> by asking of the reader "which wire field does the Android canvas still not honour?": `startTime`/`duration`
+> WERE carried onto `StoryTextObjectView`/`StoryForegroundMediaView` and fed the fade envelope, but nothing
+> enforced a HARD visibility cut when no fade was authored.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3511/#3509/#3508, all
+> shared/ios/gateway branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-composer-slide-background`, #3510) already
+> merged into main (`610d9ca6`). Branched off freshly-fetched `origin/main` (`610d9ca6`).
+>
+> **The fix — one pure resolver + two view delegators + a render-loop guard.** (1) `StoryElementVisibility`
+> (`:feature:stories`, pure `object`) ports iOS `shouldRender` EXACTLY: `isVisible(startTime, duration,
+> currentTime)` → `currentTime ∈ [start, end)`, inclusive start / exclusive end, a **sharp** on/off cut (the
+> smooth ramp stays in `StoryMediaFadeResolver`, applied only while on screen). Deliberate, documented deviation
+> from iOS's literal `duration.map { start + $0 }`: a non-positive/non-finite `duration` = OPEN-ENDED (`end =
+> +∞`), because the Android wire projection collapses an ABSENT duration to `0.0` — matching how
+> `StoryMediaFadeResolver` and the clip-transition path already read `duration <= 0` across the module; a
+> non-finite playhead **fails open** (never blanks the canvas on a clock glitch); a non-finite `startTime` → `0`.
+> (2) `StoryTextObjectView.isVisible(atSeconds)` and `StoryForegroundMediaView.isVisible(atSeconds)` delegate to
+> it (Float→Double). (3) The viewer canvas render loop (`StoryViewerScreen`) computes the playhead once and skips
+> a `foregroundMedia`/`textObjects` entry whose `isVisible(playhead)` is false — the previously-always-drawn
+> layer now respects its window.
+>
+> **Tests: +16** — 12 `StoryElementVisibilityTest` (untimed=always-visible; before/inside/after; inclusive
+> start; exclusive end; start-only open-ended; negative duration open-ended; negative start opens earlier;
+> infinite duration; non-finite playhead fail-open; non-finite start→0), 2 added to `StoryTextObjectViewTest`
+> and 2 to `StoryForegroundFadeTest` (untimed always-visible + timed gated-to-window, per view). **RED-proof
+> isolated**: neutering `isVisible` to a constant `true` reddened EXACTLY the 6 hiding assertions (before/after
+> window, exclusive end, negative-start end, start-open-ended pre-open, non-finite-start post-window) while the 6
+> always-visible tests stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the copy→patch
+> (`source.properties` ApiLevel 37.0→37, `build.prop` `sdk_full` fields) keeping android-37.0 ALONGSIDE
+> android-37 resolved it — same THIRD mode as prior runs.
+>
+> **Verified**: targeted `:feature:stories` suites (`StoryElementVisibilityTest`/`StoryTextObjectViewTest`/
+> `StoryForegroundFadeTest`) green, then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push (one transient KSP daemon-collision flake
+> on the first run — `StreamCorruptedException` from a stray parallel daemon — cleared by `--stop` + cache clean;
+> the clean rerun is green). Reviewer PASS. Diff is `apps/android` only (1 new prod file + 2 amended prod files +
+> 1 glue file in :feature:stories, +1 new test file + 2 amended, tracking docs). Verdict: **PASS** — a pure
+> visibility SSOT mirroring iOS's authority, two view delegators, and a render-loop guard; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: per-ELEMENT duration AUTHORING — a composer control that WRITES a text element's
+> `startTime`/`duration` (serialised to `StoryTextObject.startTime`/`duration`, the very fields this slice's
+> reader gate now honours), closing the author→reader loop exactly as the slide-duration pin did. Adjacent §E
+> backlog: background IMAGE with transform, looping/non-looping background-video designation, and the media-OBJECT
+> authoring foundation those share. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the composer AUTHORS a per-slide colour/gradient/random-pastel backdrop** (slice
+> `story-composer-slide-background`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
+> palette, …"). The prior slice (`story-slide-background-value`) made the *reader* honour
+> `effects.background`; this one gives Android's own composer the control that *writes* it, closing the
+> author→reader loop (today only iOS-authored / back-end stories carried a colour backdrop). Ports iOS's
+> authoring SSOT `StoryBackgroundPalette`
+> (`packages/MeeshySDK/.../MeeshyUI/Story/StoryComposerSupportTypes.swift`) + `applyBackgroundColorToCurrentSlide`.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3509/#3508, both iOS/gateway
+> branches (`claude/intelligent-noether-*`, `claude/brave-archimedes-*`), none a `claude/apps/android/*`
+> slice from THIS routine. Prior slice (`story-slide-background-value`, `1fdeff70`) already merged into main.
+> Branched off freshly-fetched `origin/main` (`ae52866a`).
+>
+> **The fix — a pure palette SSOT + a slide field/reducer + a draft serialiser + a VM intent + a screen picker.**
+> (1) `StoryBackgroundPalette` (`:core:model`, pure `object`) ports iOS exactly: `SOLID_COLORS` (17 preset
+> hex, no `#`), `GRADIENTS` (6 `(start,end)` pairs), `presets()` projecting solids as `StoryBackgroundValue.Hex`
+> then gradients as `.Gradient`, `hsbToHex(h,s,b)` (pure HSB→uppercase-6-hex matching UIColor + `Int(x*255)`
+> truncation), and `randomPastelHex(random: Random)` (injectable RNG, saturation 0.14–0.24 / brightness
+> 0.93–0.98, looping until the pick is not a preset). (2) `StorySlide.background: StoryBackgroundValue?`;
+> `StorySlideDeck.setSelectedBackground(value)` writes the selected slide only, inert (same instance) when the
+> value already equals the slide's backdrop, clears on `null`; `selectedSlideBackground` reads it back. (3)
+> `StoryComposerDraft.background` serialises onto `StoryEffects.background` via `StoryBackgroundValue.serialized()`
+> (a backdrop alone now materialises effects). (4) `StoryComposerViewModel.onSlideBackgroundChange` +
+> `selectedSlideBackground`, and the backdrop flows per-slide through `publishPlans`. (5) A "Background" swatch
+> picker in the Effets band (Compose glue, exempt) — a None chip, one tappable swatch per preset (painted with
+> the reader's `hexColor` SSOT so swatch = publish), and a "Random" pastel button; localised in 4 locales.
+>
+> **Tests: +23** — 10 `StoryBackgroundPaletteTest` (pure: 17 solids / 6 gradients / 23 presets; `hsbToHex`
+> primary hues + grey ramp; `randomPastelHex` valid-hex / brightness band / saturation band / never-a-preset;
+> `randomPastel` wraps the hex), 7 `StorySlideDeckBackgroundTest` (fresh slide has none; write selected-only;
+> gradient stored; clear; inert on equal; inert clear-of-blank; survives selection change), 4 new
+> `StoryComposerDraftTest` (solid → bare hex; gradient → `gradient:…:…` wire; backdrop alone materialises
+> effects; no backdrop → null), 3 new `StoryComposerViewModelTest` (intent sets through public state; clears;
+> backdrop rides into the wire request on publish). **RED-proof isolated**: neutering `hsbToHex` to a constant
+> reddened EXACTLY the 4 conversion-dependent tests (primary hues, grey ramp, brightness band, saturation
+> band) while the list/valid-hex/preset-avoidance/wrap tests stayed green; neutering the `setSelectedBackground`
+> inert guard reddened EXACTLY the 2 inert tests while the 5 write/clear/gradient/selection tests stayed green —
+> genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `path=`, BOTH `build.prop` `sdk_full` fields) keeping
+> android-37.0 ALONGSIDE resolved it — same THIRD mode as the prior runs.
+>
+> **Verified**: targeted `:core:model` (`StoryBackgroundPaletteTest`) + `:feature:stories`
+> (`StorySlideDeckBackgroundTest` / `StoryComposerDraftTest` / `StoryComposerViewModelTest`) suites green, then
+> full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate)
+> **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is `apps/android` only (1 new prod file in
+> :core:model, 4 prod files + 4 strings.xml in :feature:stories, +2 new test files + 2 amended, tracking docs).
+> Verdict: **PASS** — a pure palette SSOT mirroring iOS's authority, a deck reducer, a draft serialiser, a VM
+> intent, and a screen picker; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the two remaining pieces of feature-parity E's background item — background **IMAGE** with a
+> per-slide transform (pan/zoom/rotation, `StoryBackgroundTransform`), and the **looping/non-looping background
+> video designation** (mark one visual as the looping background, feeding the content-derived `bgVideoDur`
+> branch the reader duration SSOT already reads). Both share a media-OBJECT authoring foundation the composer
+> still lacks (`mediaObjects` with `isBackground`). Adjacent: per-ELEMENT duration. Scout `feature-parity.md`
+> read-only before branching.
+
+> On 2026-08-25 **the viewer honours a slide's serialised COLOUR background** (slice
+> `story-slide-background-value`, feature-parity E. Stories — "Backgrounds: random pastel, colour/gradient
+> palette, …"). The viewer already painted a slide's background MEDIA (image/video) but IGNORED
+> `StoryEffects.background`, the serialised colour backdrop, so a text-only iOS/backend story published with a
+> solid colour or a `gradient:RRGGBB:RRGGBB` two-colour gradient rendered on Android as the generic
+> accent→black fallback — the author's chosen backdrop silently dropped. A real, user-visible reader-side
+> parity gap, found by asking of the composer-side "Next" (per-element / background-designation, both of which
+> need a media-OBJECT authoring foundation the composer lacks): *which existing wire field does the Android
+> reader still not consume?* — `effects.background`.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3506/#3504/#3502/#3500/#3498/#3497,
+> all gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-composer-slide-duration-pin`, #3505)
+> already merged into main (`27d79477`). Branched off freshly-fetched `origin/main` (`27d79477`).
+>
+> **The fix — a pure parse SSOT + a projection + a screen consumer.** (1) `StoryBackgroundValue` (`:core:model`,
+> pure sealed `Hex(hex)` / `Gradient(start,end)`) ports iOS's SSOT
+> `StoryBackgroundValue.parse` (`packages/MeeshySDK/.../Models/StoryBackgroundValue.swift`) EXACTLY: a
+> `gradient:` prefix carrying exactly two six-digit hex colours → `Gradient`, everything else decays TOLERANTLY
+> to `Hex(rawWhole)` so the renderer keeps its solid-colour path (iOS's historical invalid-value behaviour).
+> Interior empty colour runs are dropped to mirror Swift `split(separator:)` (`omittingEmptySubsequences`) —
+> Kotlin's `split` keeps them, so the port filters, and the filter is mutation-proven load-bearing.
+> `serialized()` is the exact inverse for a valid value (round-trip tested, ready for the composer slice).
+> (2) `StoryViewerViewModel.toSlideView` projects `StorySlideView.background` ONCE (null when the slide has no
+> or a blank background string → the viewer keeps its accent→black fallback), preserved through the translation
+> re-projection's `copy`. (3) `StoryViewerScreen`'s no-media branch paints a solid colour or a
+> top-leading→bottom-trailing `linearGradient` (iOS `storyBackgroundStyle` convention) via `slideBackgroundBrush`,
+> reusing the `hexColor` SSOT and falling back gracefully when a degraded hex cannot resolve (never blank).
+>
+> **Tests: +18** — 14 `StoryBackgroundValueTest` (pure, every branch: bare hex; well-formed gradient; gradient &
+> hex round-trips; colon-wire serialise; one/three-colour & non-hex & short & bare-prefix decays; comma-form not
+> a gradient; hash-prefixed solid not a gradient; double-colon iOS-split parity; lowercase hex), 4
+> `StoryViewerViewModelTest` (gradient projects a `Gradient`; solid projects a `Hex`; absent → null; blank →
+> null). **RED-proof isolated (twice)**: neutering the gradient-recognition branch reddened EXACTLY the 4
+> gradient tests while the tolerant-fallback/hex tests stayed green; dropping the empty-filter reddened EXACTLY
+> the double-colon parity test; neutering the projection reddened EXACTLY the 2 positive VM tests while the
+> null-path tests stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it — same THIRD mode as the prior two runs.
+>
+> **Verified**: targeted `:core:model` (`StoryBackgroundValueTest`) + `:feature:stories`
+> (`StoryViewerViewModelTest`) suites green, then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (1 new prod file in :core:model, 2 prod files in :feature:stories, +1 new test file + 1
+> amended, tracking docs). Verdict: **PASS** — a pure parse SSOT mirroring iOS's authority, a projection, and a
+> screen consumer; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the composer AUTHORING of a slide backdrop — a control that WRITES `effects.background` (solid
+> colour picker, gradient palette, and a random-pastel generator, closing the author→reader loop this slice's
+> reader half opened, exactly as `story-composer-slide-duration-pin` did for the duration pin). Adjacent §E
+> backlog: background IMAGE with transform, looping/non-looping background-video designation, per-ELEMENT
+> duration, and the media-OBJECT authoring foundation those last two share. Scout `feature-parity.md`
+> read-only before branching.
+
+> On 2026-08-25 **the composer AUTHORS a per-slide duration pin** (slice `story-composer-slide-duration-pin`,
+> feature-parity E. Stories — "Per-element + per-slide duration"). The prior slice made the *reader* honour
+> `effects.timelineDuration`; this one gives Android's own composer a control that *writes* it, closing the
+> author→reader loop (today only iOS-authored / back-end stories carried the pin). Ports iOS
+> `StoryComposerViewModel.currentSlideDuration` (StoryComposerViewModel+Slides.swift): clamp `[2, 600]`s, write
+> the authoritative `timelineDuration`; the getter falls back to the content-derived duration when unpinned.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3504/#3502/#3500/#3498/#3497, all
+> gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-viewer-slide-duration`, #3503) already
+> merged into main (`5f20c529`). Branched off freshly-fetched `origin/main` (`5f20c529`).
+>
+> **The fix — a pure clamp SSOT + a deck field/reducer + a draft serialiser + a VM intent + a screen slider.**
+> (1) `StoryDurationPin` (`:core:model`, pure, no state) owns the one bound — `clamp(seconds)` →
+> `coerceIn(2.0, 600.0)` with a NaN→MIN guard the `Float` slider could otherwise feed through — the authoring
+> counterpart of the reader SSOT `StorySlideDuration`. (2) `StorySlide` (deck) gains `durationSecondsPin: Double?`;
+> `StorySlideDeck.setSelectedDuration(seconds)` clamps via the SSOT, writes the pin on the selected slide only,
+> and is inert (same instance) when the clamped value already equals the pin; `selectedSlideDurationSeconds`
+> resolves `pin ?? contentDerived` by delegating the fallback to `StorySlideDuration.contentDerivedSeconds`
+> (fed the publishable text elements, mirroring iOS's `timelineDuration ?? computedTotalDuration()`). (3)
+> `StoryComposerDraft` carries `durationSecondsPin` and serialises it onto `StoryEffects.timelineDuration`
+> (a pin alone now materialises effects). (4) `StoryComposerViewModel.onSlideDurationChange` + the pin flows
+> per-slide through `publishPlans`; `selectedSlideDurationSeconds` is exposed on the UiState. (5) A "Slide
+> duration" slider in the Effets band (Compose glue, exempt) with a live seconds label, wired end-to-end.
+>
+> **Tests: +21** — 8 `StoryDurationPinTest` (pure: inside-range unchanged; below-floor & above-ceiling clamp;
+> exact bounds preserved; bounds are 2/600; ±∞ clamp; NaN→MIN), 10 `StorySlideDeckDurationTest` (fresh slide has
+> no pin; set pins selected slide only; selection preserved; clamp below/above; inert on equal pin; inert when a
+> below-floor request equals a floor pin; effective duration default 6s / follows the content rule for a long
+> caption / blank element does not extend / pin wins over content), 3 new `StoryComposerDraftTest` (pin serialises
+> to `timelineDuration`; a pin alone materialises effects with empty textObjects; no pin → null effects), 3 new
+> `StoryComposerViewModelTest` (intent pins through public state; clamps out-of-range; pin rides into the wire
+> request on publish). **RED-proof isolated**: neutering `StoryDurationPin.clamp` to return `seconds` reddened
+> EXACTLY the 5 clamp-behaviour tests (below/above/±∞/NaN) while the 3 non-clamp tests (within-range, exact
+> bounds, bounds-are-2/600) stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + BOTH dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it — same THIRD mode as the `story-viewer-slide-duration` run.
+>
+> **Verified**: targeted `:core:model` (`StoryDurationPinTest`) + `:feature:stories` (`StorySlideDeckDurationTest`
+> / `StoryComposerDraftTest` / `StoryComposerViewModelTest`) suites green, then full `./apps/android/meeshy.sh
+> check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push.
+> Reviewer PASS. Diff is `apps/android` only (1 new prod file in :core:model, 4 prod files + 4 strings.xml in
+> :feature:stories, +2 new test files + 2 amended, tracking docs). Verdict: **PASS** — a pure clamp SSOT
+> mirroring iOS's authority, a deck reducer, a draft serialiser, a VM intent, and a screen slider; behavioural
+> tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the two remaining pieces of feature-parity E's duration/background item — **per-ELEMENT duration**
+> (a text/media element carries its own on-screen window `startTime`/`duration`, distinct from the slide's) and
+> the **background-designation toggle** (mark 1 visual + 1 audio per slide as the looping background, feeding the
+> content-derived `bgVideoDur`/`bgAudioDur` branch the reader SSOT already reads). Scout `feature-parity.md`
+> read-only before branching.
+
+> On 2026-08-25 **the story viewer honours per-slide duration** (slice `story-viewer-slide-duration`,
+> feature-parity E. Stories — "Timed auto-advance" + "Per-element + per-slide duration"). The viewer's
+> auto-advance ran a HARDCODED 5s (`SLIDE_DURATION_MS`) for every slide; iOS has a single source of truth
+> (`StorySlide.computedTotalDuration()`, StoryModels.swift) that is content-aware and defaults to **6s**,
+> not 5s — so Android was both wrong on the default and blind to per-slide timing.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3502/#3500/#3498/#3497, all
+> gateway/ios/shared branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-updated-realtime-tray`) already merged
+> into main (`c4a3d517`). Branched off freshly-fetched `origin/main` (`c4a3d517`).
+>
+> **The fix — a pure SSOT + a projection + a screen consumer.** (1) `StorySlideDuration` (`:core:model`,
+> pure, no clock/IO) ports iOS's rule EXACTLY: priority-0 `effects.timelineDuration` (> 0, author-pinned via
+> the timeline editor) wins over content; otherwise content-derived — background video/audio looped up to ≥
+> the target (`period < target → ceil(target/period)*period`), long caption text (> 30 cumulative words)
+> extends 1s per 6 words past 30, 6s static default. The legacy `effects.slideDuration` is DELIBERATELY
+> ignored (old backend stories carry arbitrary 12s values the composer wrote per publish, bypassing the
+> rule) — same reasoning as iOS. `computeMillis` rounds to whole ms. (2) `StorySlideView.autoAdvanceMillis`
+> is resolved ONCE at projection (`StoryViewerViewModel.toSlideView`) from the slide's `storyEffects`.
+> (3) `StoryViewerScreen` drops the `SLIDE_DURATION_MS` constant and drives BOTH the countdown tween and the
+> keyframe playhead (`playheadSeconds`) from `slideDurationMs`, keyed into the auto-advance `LaunchedEffect`
+> so a realtime slide-replace re-times. (4) Latent v3 gap fixed: `SceneV3.timelineDuration` was silently
+> dropped by `StoryEffects.rendering` — now mapped, so a timeline-pinned v3 story honours its author duration.
+>
+> **Tests: +20** — 17 `StorySlideDurationTest` (pure, every branch: null/empty → 6s; short vs long text +
+> multi-object cumul + multi-space split parity with Swift `split(separator:)`; bg video ≥/< target loop; bg
+> audio loop; non-bg media/audio data windows; near-zero period ignored; image-bg no-loop; timelineDuration
+> positive override vs 0/negative fallthrough; legacy slideDuration ignored; millis conversion), 1
+> `CanvasV3ProjectionTest` (v3 `timelineDuration` traverses the bridge), 2 `StoryViewerViewModelTest` (no
+> effects → 6s default; author-pinned 3s → 3000ms through the public state). **RED-proof isolated**: neutering
+> the priority-0 branch reddened EXACTLY `un timelineDuration positif l'emporte sur le contenu` (17 tests, 1
+> failed) while the other 16 stayed green; neutering the VM projection reddened EXACTLY the author-pinned VM
+> test (75 tests, 1 failed) — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` 200; THIRD mode (copy→patch + both dirs).** Pristine `android-37.0`
+> auto-installed by AGP but the first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch
+> (`source.properties` ApiLevel 37.0→37, `package.xml` `<api-level>` + `path=`, BOTH `build.prop` `sdk_full`
+> fields) keeping android-37.0 ALONGSIDE resolved it.
+>
+> **Verified**: targeted `:core:model` + `:feature:stories` suites green, then full `./apps/android/meeshy.sh
+> check` (assembleDebug + testDebugUnitTest, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any
+> push. Reviewer PASS. Diff is `apps/android` only (2 prod + 1 new prod in :core:model, 2 prod in
+> :feature:stories, +3 test files, tracking docs). Verdict: **PASS** — a pure SSOT mirroring iOS's authority
+> function, a projection, a screen consumer, and a v3-bridge fix; behavioural tests through the public API;
+> no production logic outside `apps/android`.
+>
+> **Next**: the composer-side AUTHORING of per-slide duration — a control that writes
+> `effects.timelineDuration` (the timeline editor "pin duration"), so the reader-side SSOT this slice built
+> gets fed by Android's own composer (today only iOS-authored/back-end stories carry it). Adjacent backlog:
+> per-ELEMENT duration + the background-designation toggle (1 visual + 1 audio/slide, feature-parity E), or
+> the V2 timeline editor foundation. Scout `feature-parity.md` read-only before branching.
+
+> On 2026-08-25 **the story TRAY folds a realtime `story:updated`** (slice `story-updated-realtime-tray`,
+> feature-parity Story realtime) — the viewed-monotonicity MERGE, and the LAST STORY-realtime gap. STORY realtime
+> is now fully at parity (viewer: reactions/overlay-tx/delete/update; tray: delete/update).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3500/#3498/#3497, all gateway/ios
+> production-logic branches (`claude/brave-archimedes-*`, `claude/intelligent-noether-*`), none a
+> `claude/apps/android/*` slice from THIS routine. Prior slice (`story-deleted-realtime-tray`) already merged into
+> main. Branched off freshly-fetched `origin/main` (`36b9921b`).
+>
+> **The gap — the tray kept a stale ring after an edit made elsewhere.** The `story:updated` viewer fold (prior
+> run) swapped the slide only in the OPEN viewer; the TRAY (`StoriesViewModel`) is driven entirely by
+> `StoryRepository.storiesStream()` (Room-backed, cache-first), so an edit — a content change, or a content edit
+> that RESET engagement (views/reactions wiped, ring should revert to unseen) — left the old ring painted until the
+> next background revalidation. iOS folds it in `StoryViewModel.storyUpdated` with a `shouldKeepLocalViewed`
+> viewed-monotonicity guard + the `engagementReset` flag; the `SocketStoryUpdatedData` DTO + `storyUpdated` flow
+> already existed (viewer slice) — this slice needed the Room-cache MERGE seam.
+>
+> **The fix — a pure merge + a read-merge-write cache seam + a repository fold + a tray VM subscription.**
+> (1) `StoryUpdateMerge.merge(previous, updated, engagementReset, isOwnStory)` in `:core:model`: `engagementReset
+> && !isOwnStory` → adopt the fresh (unseen) story wholesale (server wiped engagement); otherwise delegate to
+> `PostUpdateMerge` (monotone seen — one source of truth for reader-personal-field preservation). The AUTHOR is
+> the exception to the reset (their own seen is client-only, the server never records it), mirroring iOS
+> `isOwnGroup ||`. Android reads the explicit `engagementReset` flag, not iOS's `contentEditedAt` timestamp (absent
+> from the wire model). (2) `StoryDao.getById(id)` + `StoryCacheSource.findLocal`/`upsertLocal` (single-writer seam,
+> re-deriving the `createdAt` ordering column; no `sync_meta` touch — a realtime fold is not a revalidation).
+> (3) `StoryRepository.applyStoryUpdate(updated, engagementReset, currentUserId)` reads the cached copy, computes
+> `isOwnStory = updated.author?.id == currentUserId`, merges, upserts; inert (`false`) for an unknown id
+> (over-broadcast) or a no-op merge. (4) `StoriesViewModel.observeStoryUpdates` forwards every `story:updated`,
+> resolving the reset flag (`?: false`) and `sessionRepository.currentUserId`.
+>
+> **Tests: +14** — 6 `StoryUpdateMergeTest` (pure, every branch: non-owner reset reverts to unseen; author keeps
+> seen through a reset; metadata edit keeps monotone seen; metadata adopts an authoritative reaction summary; inert
+> on the reset path; inert on the metadata path), 2 `StoryDaoTest` (real Room: `getById` returns the row / null for
+> an absent id), 3 `StoryRepositoryTest` (real Room folds: an edit repaints; a non-owner reset reverts to unseen;
+> a metadata edit keeps seen; author keeps seen; inert unknown id; inert no-op — 6 cases across the block), 3
+> `StoriesViewModelTest` (the VM forwards the flag + current user; an absent flag folds as `false`; a behavioural
+> repaint reverts an author's ring `hasUnviewed` false→true via a fake stream mirroring Room re-emitting).
+> **RED-proof isolated**: neutering the reset branch (`return PostUpdateMerge.merge(...)` unconditionally) reddened
+> EXACTLY `a non-owner content edit reverts the ring to unseen on an engagement reset` (6 tests, 1 failed) while
+> the other 5 preserve-path cases stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` alone worked** (no copy→patch, no
+> both-dirs; AGP mapped compileSdk 37 → android-37.0 on the first `./gradlew`). The recipe still flips per
+> container (per NOTES) — this one was the pristine mode.
+>
+> **Verified**: targeted `:core:model`/`:core:database`/`:sdk-core`/`:feature:stories` unit suites **BUILD
+> SUCCESSFUL** (all four touched suites green), then full `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, the CI-mirror gate) — see run log for the result. Reviewer PASS. Diff is `apps/android` only
+> (1 new prod file + 3 prod files across :core:model/:core:database/:sdk-core/:feature:stories, +2 test files,
+> tracking docs). Verdict: **PASS** — a pure merge reusing the established `PostUpdateMerge` law, a read-merge-write
+> Room seam mirroring the delete seam, a repository fold, and a tray VM subscription mirroring the delete
+> subscription; behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: STORY realtime is complete. Move to the next feature-parity area in build order — candidates from the
+> Story/editor backlog (per-clip inspector, timeline transport) or advancing the CALLS area. Scout `feature-parity.md`
+> for the highest-value unchecked box before committing, and read-only before branching.
+
+> On 2026-08-25 **the story TRAY folds a realtime `story:deleted`** (slice `story-deleted-realtime-tray`,
+> feature-parity Story realtime) — the TRAY sibling of the viewer-scoped `story:deleted` fold (cycle before last),
+> and the first of the two remaining TRAY realtime folds the prior "Next" pointer flagged.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3497 (gateway/e2ee, branch
+> `claude/brave-archimedes-mu8dvk`): not a `claude/apps/android/*` slice from THIS routine, touches production logic
+> outside `apps/android`. Prior slice (`story-updated-realtime-viewer`) already merged into main. Branched off
+> freshly-fetched `origin/main` (`e91b3d19`).
+>
+> **Scout — STATUS realtime was already DONE, so the pointer's alt option was moot.** The prior "Next" offered
+> either the TRAY fold or STATUS realtime folds; scouting found `StatusesViewModel.subscribeToSocketEvents`
+> already folds all five status events (`created`/`updated`/`deleted`/`reacted`/`unreacted`), so STATUS needed
+> nothing. That left the TRAY fold as the highest-value thin slice; mirroring how the VIEWER folds were sequenced
+> (delete before update), I took the deletion half — smaller than the update half (which needs the
+> viewed-monotonicity merge).
+>
+> **The gap — the viewer fold dropped a deleted story only from the OPEN viewer.** The story TRAY
+> (`StoriesViewModel`) is driven entirely by `StoryRepository.storiesStream()` (Room-backed, cache-first), so a
+> `story:deleted` arriving while the tray was on screen left the deleted ring painted until the next background
+> revalidation pruned it. The `SocketStoryDeletedData` DTO + `SocialSocketManager.storyDeleted` flow already
+> existed (viewer slice) — this slice only needed the authoritative Room-cache removal seam + the tray VM
+> subscription.
+>
+> **The fix — a DAO delete-by-id + a cache-source passthrough + a repository fold + a tray VM subscription.**
+> (1) `StoryDao.deleteById(id)` = `DELETE FROM stories WHERE id = :id`. (2) `StoryCacheSource.deleteLocal(storyId)`
+> delegates to it (single writer of the cache). (3) `StoryRepository.removeCachedStory(storyId)` folds the delete
+> into the cache so the cache-first stream re-emits without the row — an unknown id is an inert 0-row delete, so
+> Room emits nothing and an over-broadcast delivery (a friend's feed room gets deletes for stories never cached)
+> causes no repaint. (4) `StoriesViewModel` now injects `SocialSocketManager`; `observeStoryDeletions` forwards
+> every `story:deleted` to `removeCachedStory` UNCONDITIONALLY — no own-echo guard (unlike a reaction), mirroring
+> iOS `purgeDeadStories`: a story deleted on another device must vanish for its author too. Single-source-of-truth:
+> the Room cache is authoritative, the reactive stream repaints — no in-memory overlay of deleted ids.
+>
+> **Tests: +4** — 2 `StoryDaoTest` (real in-memory Room via Robolectric: `deleteById` removes exactly the matched
+> row leaving the rest ordered; `deleteById` on an absent id leaves the table unchanged), 2 `StoriesViewModelTest`
+> (a realtime deletion drops the story from the tray — the fake `removeCachedStory` mutates a `MutableStateFlow`
+> stream to mirror Room re-emitting, and the tray drops the ring; a realtime deletion of the current user's OWN
+> story is folded too, proving no own-echo guard). **RED-proof isolated**: neutering `observeStoryDeletions` to
+> collect-but-not-remove reddened EXACTLY the 2 new VM tests (17 completed, 2 failed) while the other 15 stayed
+> green — genuine discrimination, not an assertion echo. The DAO tests are compile-RED without `deleteById`.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the first
+> `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel 37.0→37 +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping android-37.0 alongside,
+> resolved it ("THIRD mode", per NOTES).
+>
+> **Verified**: targeted `:core:database:StoryDaoTest` + `:feature:stories:StoriesViewModelTest` **BUILD
+> SUCCESSFUL** (both suites green), then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest,
+> all modules, 973 tasks, the CI-mirror gate) **BUILD SUCCESSFUL** before any push. Reviewer PASS. Diff is
+> `apps/android` only (3 prod files across :core:database + :sdk-core + :feature:stories, +4 tests across 2 files,
+> tracking docs). Verdict: **PASS** — a DAO delete-by-id, a cache-source passthrough, a repository fold reusing the
+> established cache-first stream, and a tray VM subscription mirroring the existing status folds; behavioural tests
+> through the public API; no production logic outside `apps/android`.
+>
+> **Next**: the LAST STORY-realtime slice is the TRAY fold of `story:updated` — the viewed-monotonicity merge
+> (iOS `shouldKeepLocalViewed`: keep a locally-viewed ring viewed unless the story's content was edited AFTER the
+> local view, i.e. `engagementReset`). It needs a Room-cache MERGE seam (read the existing cached `ApiPost`, upsert
+> the incoming one preserving `isViewedByMe` when `!engagementReset`), a pure merge function worth TDD, and the tray
+> VM subscription to `storyUpdated`. After that, STORY realtime is fully at parity (viewer: reactions/overlay-tx/
+> delete/update; tray: delete/update). Scout read-only before committing.
+
+> On 2026-08-25 **the open story viewer folds a realtime `story:updated`** (slice
+> `story-updated-realtime-viewer`, feature-parity Story realtime) — the EDIT sibling of the `story:deleted`
+> fold shipped the prior run, and the last remaining VIEWER-scoped STORY realtime gap.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]` (empty). Prior slice
+> (`story-deleted-realtime-viewer`) already merged into main. My routine branch `claude/fervent-darwin-2bdo9z`
+> sat exactly at `origin/main` (`9ac1f0f7`, 0/0). Branched off freshly-fetched `origin/main`.
+>
+> **The gap — the edit twin of `story:deleted`.** The gateway broadcasts a story edit as the COMPLETE new
+> story (`{ story, engagementReset }`) to every visibility-filtered feed room via
+> `SocialEventsHandler.broadcastStoryUpdated`; `engagementReset: true` when the edit wiped views/reactions
+> (a content edit), false/absent on a metadata-only change (visibility). iOS folds it via
+> `StoryViewModel.storyUpdated`. On Android the event decoded nowhere: `SocialSocketManager` had no
+> `storyUpdated` flow, `SocketEvents.kt` no DTO, `StoryViewerViewModel` no subscriber — an edit made on
+> another device never reached the open viewer until it was reloaded.
+>
+> **Scout — why the VIEWER, not the tray.** iOS lands `story:updated` in the TRAY (`storyGroups`) with a
+> `shouldKeepLocalViewed` viewed-monotonicity guard (a stale story mustn't revert the ring to "unseen"). The
+> Android tray (`StoriesViewModel`) is Room-cache-driven — no in-memory fold seam — so a tray fold is a
+> larger, distinct slice. The VIEWER already consumes story socket events (`reacted`/`translation`/`deleted`)
+> into an in-memory `StoryPlayback` + `rawItems` seam, giving a clean, orphan-free fold: the viewer-scoped
+> half of the gap, sized exactly like the three folds before it. The tray half is deferred (noted in
+> feature-parity).
+>
+> **The fix — a DTO + a socket flow + a PURE in-place slide-swap engine method + a VM subscriber reusing the
+> load-time projection.** (1) New `SocketStoryUpdatedData(story: ApiPost, engagementReset: Boolean? = null)`
+> in `:core:model` (mirror of iOS, defaulted flag for forward-compatible decoding). (2)
+> `SocialSocketManager.storyUpdated` flow + `listen("story:updated", …)`. (3) New pure
+> `StoryPlayback.replacingSlide(newSlide)` — swaps the slide sharing `newSlide`'s id in place, keeping every
+> group's order and the cursor on the SAME slot (unknown id → inert `this`). (4)
+> `StoryViewerViewModel.observeStoryUpdates` re-projects the payload through the SAME
+> `toStoryItem().toSlideView` conversion the initial load used (repopulating `rawItems`, the single source of
+> truth for the current-slide re-projection in `emit()`), swaps it via `replacingSlide`, and — only on
+> `engagementReset` — purges `reactionStates[storyId]` so the count re-seeds from the fresh story; a
+> metadata-only update leaves any live reaction count in place. `ApiPost.toStoryItem()` promoted from
+> `private` to `public` in `:sdk-core` (`StoryGrouping.kt`) so the viewer re-projects through the ONE
+> canonical wire→item mapper rather than a second copy — SDK-pure (a stateless mapper).
+>
+> **Tests: +11** — 5 `StoryPlaybackTest` (`replacingSlide`: unknown-id inert, swap current keeping cursor,
+> swap a non-current slide in the current group, swap a slide in another group untouched-cursor, every other
+> slide preserved), 4 `StoryViewerViewModelTest` (current-slide content swap; engagement-reset wipes the
+> reaction count to 0; metadata-only update KEEPS a live reaction count from a prior delta — the arm that
+> distinguishes the flag; an update for a story not in the viewer is inert), 2 `SocialSocketManagerTest`
+> (decodes story + engagementReset:true; decodes with a null flag when absent). **RED-proof isolated**:
+> stubbing `replacingSlide` to `return this` reddened EXACTLY the 3 structural `StoryPlaybackTest` cases
+> (36 completed, 3 failed) while the unknown-id inert case (correctly expecting `this`) and the
+> preserve-others case stayed green — genuine discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping android-37.0 alongside,
+> resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:stories` unit tests **BUILD SUCCESSFUL** (the three
+> touched suites green), then full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all
+> modules, the CI-mirror gate) run before any push. Reviewer PASS. Diff is `apps/android` only (4 prod files
+> edited across :core:model + :sdk-core + :feature:stories, 1 pure engine method, +11 tests across 3 files,
+> tracking docs). Verdict: **PASS** — a DTO mirroring an existing type, a socket event mirroring the existing
+> story events, a pure in-place slide-swap engine method, and a VM subscriber reusing the established
+> socket-fold + `toSlideView` + `emit()` seam; behavioural tests through the public API; no production logic
+> outside `apps/android`.
+>
+> **Next**: STORY realtime VIEWER folds now cover reactions, overlay translations, DELETION, and now UPDATE.
+> Remaining STORY realtime work is the TRAY fold of `story:updated`/`story:deleted` (iOS `storyGroups` +
+> `shouldKeepLocalViewed` viewed-monotonicity) — a distinct, larger slice needing a Room-cache removal/merge
+> seam. Alternatively move to the next feature-parity box (STATUS realtime folds — `status:created`/`updated`/
+> `deleted`/`reacted` — are the sibling family Android's `SocialSocketManager` already declares flows for; scout
+> whether a status render surface exists to fold into before committing, per the orphan rule). Scout read-only
+> before committing.
+
+> On 2026-08-24 **the open story viewer folds a realtime `story:deleted`** (slice
+> `story-deleted-realtime-viewer`, feature-parity Story realtime) — the removal sibling of the story socket
+> events the viewer already consumes (`story:reacted`/`-unreacted`/`-translation-updated`), and the third of
+> the STORY realtime folds the "Next" pointer flagged (`story:updated`/`story:deleted`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3493/#3492/#3491/#3474/#3470
+> (gateway/web/ios Prisme/validation/calls cycles): none is a `claude/apps/android/*` slice from THIS routine,
+> all touch production logic outside `apps/android`. Prior slice (`feed-post-reposted-realtime`) already merged
+> into main. Branched off freshly-fetched `origin/main` (`0432cd41`).
+>
+> **The gap — the removal twin of the story events the viewer already folds.** The gateway broadcasts
+> `story:deleted` (`{ storyId, authorId }`) to every friend's feed room via `SocialEventsHandler.broadcastStoryDeleted`
+> (over-broadcast is safe; a recipient who never had the story ignores it). Every client auto-joins its own
+> `feed:{userId}` room on auth (`AuthHandler`), so the event reaches Android — but `SocialSocketManager` had no
+> `storyDeleted` flow, `SocketEvents.kt` no DTO, and `StoryViewerViewModel` no subscriber, so a story deleted
+> from another device stayed on screen in the open viewer until it was closed. iOS folds it via
+> `StoryViewModel.storyDeleted` → `purgeDeadStories`.
+>
+> **Scout — why the VIEWER, not the tray.** The story TRAY (`StoriesViewModel`) is Room-cache-driven (no
+> in-memory fold seam like the feed's `_feedCache`); folding a delete there means a DB-cache removal — a larger
+> slice. The VIEWER already consumes story socket events into an in-memory `StoryPlayback` via a pure engine
+> (`StoryReactionState`, `StoryTextObjectTranslationMerge`), giving a clean, orphan-free fold seam and render
+> surface. `story:updated` (engagement-reset + whole-story content swap with viewed-monotonicity) is deferred:
+> a distinct, larger slice (its own viewed-state preservation rule).
+>
+> **The fix — a DTO + a socket flow + a PURE slide-removal engine method + a VM subscriber.** (1) New
+> `SocketStoryDeletedData(storyId, authorId="")` in `:core:model` (mirror of iOS, defaulted authorId for
+> forward-compatible decoding). (2) `SocialSocketManager.storyDeleted` flow + `listen("story:deleted", …)`.
+> (3) New pure `StoryPlayback.removingSlide(storyId): StoryPlayback` — drops the matched slide, drops an emptied
+> author group, and re-anchors the cursor BY IDENTITY (so a dropped earlier group shifts the index correctly):
+> current slide survives → stay on it; current slide removed but group survives → reuse the slot (advance to
+> next / fall back to new last); current group emptied → clamp onto the group now in the slot at its first slide;
+> nothing left → dismiss; unknown id → inert. (4) `StoryViewerViewModel.observeStoryDeletions` subscribes,
+> applies `removingSlide`, purges the per-slide caches (`rawItems`, `reactionStates`), and re-projects via `emit()`.
+>
+> **Tests: +16** — 10 `StoryPlaybackTest` (`removingSlide`: unknown-id inert, later/earlier slide in current
+> group, current-slide advance, current-last fallback, only-slide-of-group drop+clamp forward/back, earlier-group
+> shift, later-group untouched, last-remaining dismiss), 5 `StoryViewerViewModelTest` (drop a later slide, delete
+> current advances, delete only slide rolls to next group, delete last remaining dismisses, unknown-id inert),
+> 2 `SocialSocketManagerTest` (decodes storyId+authorId; decodes with defaulted authorId). **RED-proof isolated**:
+> stubbing `removingSlide` to `return this` reddened EXACTLY the 9 structural `StoryPlaybackTest` cases (31
+> completed, 9 failed) while the unknown-id case (correctly expecting `this`) stayed green — genuine
+> discrimination, not an assertion echo.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping android-37.0 alongside,
+> resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:stories` unit tests **BUILD SUCCESSFUL**; full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) — **BUILD SUCCESSFUL in 3m
+> 45s (973 tasks)**. Reviewer PASS. Diff is `apps/android` only (3 prod files edited in :core:model + :sdk-core +
+> :feature:stories, 1 pure engine method, +16 tests across 3 files, tracking docs). Verdict: **PASS** — a DTO
+> mirroring an existing type, a socket event mirroring the existing story events, a pure identity-anchored
+> slide-removal engine method, and a VM subscriber reusing the established socket-fold + `emit()` seam;
+> behavioural tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: STORY realtime folds now cover reactions, overlay translations, and DELETION in the viewer. Remaining
+> STORY realtime gap: `story:updated` (engagement-reset + whole-story content swap) — a distinct slice needing a
+> viewed-monotonicity rule (iOS `shouldKeepLocalViewed`), and it lands in the TRAY on iOS (`storyGroups`), so
+> scout whether Android should fold it into the viewer, the Room cache, or both. Alternatively move to the next
+> feature-parity box. Scout read-only before committing.
+
+> On 2026-08-24 **the feed folds a realtime REPOST pushed over `post:reposted`** (slice
+> `feed-post-reposted-realtime`, feature-parity Feed) — the ARRIVAL sibling of the `post:created` fold.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3487/#3481/#3475/#3474/#3470
+> (gateway/web/ios Prisme/validation cycles) and #3477 (`claude/upbeat-dirac-*`, the SEPARATE calls routine —
+> `tasks/calls-fonctionnel-todo.md`, left untouched): none is a `claude/apps/android/*` slice from THIS routine,
+> all touch production logic outside `apps/android`. Prior slice (`feed-post-updated-realtime-merge`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`48b2fe41`).
+>
+> **The gap — the arrival twin of `post:created`.** The gateway broadcasts a repost as a COMPLETE new post
+> (`{ originalPostId, repost }`, the repost authored by the reposter, embedding the original under `repostOf`)
+> to every visibility-filtered feed room via `SocialEventsHandler.broadcastPostReposted`. iOS folds it via
+> `FeedSocketHandler` routing `postReposted` through `handlePostUpsert(data.repost)` — a repost is itself a new
+> feed post. On Android the event decoded nowhere: `SocialSocketManager` had no `postReposted` flow,
+> `SocketEvents.kt` no DTO, `FeedViewModel` no subscriber — a repost stayed invisible on the feed until a full
+> refetch, while `post:created` (its arrival twin) already prepended live.
+>
+> **Scout — why NOT the other Next candidates.** `post:reaction-added`/`-removed`: iOS folds the ABSOLUTE
+> per-emoji count into `reactionSummary`, but the Android feed card renders reactions as a HEART + count only
+> (no emoji summary; only STATUSES render `reactionSummary` chips), so folding it would be orphan/dead-end code
+> (routine forbids). `comment:reaction-sync`/`post:reaction-sync`: NOT broadcasts — iOS SDK documents them as
+> ACK-only responses to `*-request-sync` emits (`socket.on` explicitly absent), so not an "ignored broadcast"
+> slice. `post:reposted` was the clean one: an existing render surface (the `RepostEmbedBuilder` feed card),
+> an existing fold seam (`FeedRealtimeReducer.accept`), zero orphan risk.
+>
+> **The fix — a DTO + a socket flow + a VM subscriber reusing the `post:created` seam.** (1) New
+> `SocketPostRepostedData(originalPostId, repost: ApiPost)` in `:core:model` (mirror of iOS, nests the repost
+> under `repost`). (2) `SocialSocketManager.postReposted` flow + `listen("post:reposted", …)`. (3) `FeedViewModel`
+> subscribes and routes `payload.repost` through the SAME `FeedRealtimeReducer.accept(head, repost, cacheIds)`
+> path `post:created` uses — dedup against the cache-projected feed and the buffered head, prepend newest-first,
+> bump the "N new posts" banner. No new pure logic, no new render surface: the repost renders through the
+> existing repost embed cell.
+>
+> **Tests: +3** — 1 `SocialSocketManagerTest` (decodes the repost nested under `repost`, carrying author +
+> content), 2 `FeedViewModelTest` (a `post:reposted` arrives at the head and raises the banner; a repost already
+> visible in the cache feed is inert with no banner bump — the two arms of `accept`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37` (no "inconsistent location" line); the four-edit copy→patch
+> (`source.properties` ApiLevel + `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields),
+> keeping android-37.0 alongside, resolved it (per NOTES "THIRD mode").
+>
+> **Verified**: SDK bootstrapped via the four-edit copy→patch (both dirs);
+> `:sdk-core:testDebugUnitTest` (`SocialSocketManagerTest`) **BUILD SUCCESSFUL in 3m 14s**, then full
+> `assembleDebug testDebugUnitTest` (all modules, the CI-mirror gate, incl. `FeedViewModelTest`) **BUILD
+> SUCCESSFUL in 6m 39s (973 tasks)**. Reviewer PASS. Diff is `apps/android` only (3 prod files edited in
+> :core:model + :sdk-core + :feature:feed, +3 tests across 2 files, tracking docs). Verdict: **PASS** — a DTO
+> mirroring an existing type, a socket event mirroring the existing social events, and a VM subscriber reusing
+> the established `post:created` head-accept seam; behavioural tests through the public API; no production logic
+> outside `apps/android`.
+>
+> **Next**: Feed realtime arrivals/edits/deletes now honoured for POST (created / updated / reposted /
+> translation / liked / bookmarked / deleted), STORY overlay, and COMMENT (add / edit / delete / translation /
+> like / reaction-heart). Remaining iOS folds Android's `SocialSocketManager` still ignores are all currently
+> **orphan-blocked or ACK-only** (see Scout above): `post:reaction-*` and `comment:reaction-sync` need a post/
+> comment EMOJI-reaction render surface first (Android renders heart-only), and `comment:media-updated` needs a
+> comment-media model+render surface (Android's `ApiPostComment` has no `media` field). Next high-value area:
+> scout STORY realtime (`story:updated` engagement-reset, `story:deleted`) or move to the next feature-parity
+> Feed box. Scout read-only before committing.
+
+> On 2026-08-24 **the feed folds realtime post EDITS pushed over `post:updated`** (slice
+> `feed-post-updated-realtime-merge`, feature-parity Feed) — the WHOLE-POST sibling of the
+> `post-translation-updated` fold and the post analog of the `comment:updated` fold, both shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3481 (gateway anonymous IP-range),
+> #3477 (`claude/upbeat-dirac-*`, the SEPARATE calls routine — `tasks/calls-fonctionnel-todo.md`, left
+> untouched), #3475/#3474/#3470 (web/ios/gateway Prisme/i18n cycles): none is a `claude/apps/android/*` slice,
+> all touch production logic outside `apps/android`, none in this routine's scope. Prior slice
+> (`comment-updated-realtime-merge`, #3482) already merged into main. **Main's Android CI green** at 756e7b9d
+> (last android-touching commit; later main commits — cycle 126, web composer — touch no `apps/android` file,
+> so android.yml did not re-run and could not have reddened it). Branched off freshly-fetched `origin/main`
+> (`f79ed42f`).
+>
+> **The gap — the whole-post twin of the two content-folds Android already ships.** The gateway rebroadcasts an
+> edited post (caption / media / mood) as the COMPLETE new object `{ post }` to every feed/post room via
+> `SocialEventsHandler.broadcastPostUpdated`. iOS folds it into the feed, preserving the viewer's own `isLiked`
+> across the swap (`FeedViewModel` post:updated sink). On Android the event decoded nowhere: `SocialSocketManager`
+> had no `postUpdated` flow, `SocketEvents.kt` no DTO, `FeedViewModel` no subscriber — an edited post stayed
+> stale on the card until a full refetch, while `post:translation-updated` (the caption-only twin) already folded.
+>
+> **The fix — a DTO + a socket flow + a PURE viewer-state-preserving merge + a cache fold + a VM subscriber.**
+> (1) New `SocketPostUpdatedData(post: ApiPost)` in `:core:model` (mirror of iOS, nests the post under `post`).
+> (2) New pure `PostUpdateMerge.merge(previous, updated): ApiPost?` — adopts every AUTHORITATIVE field from the
+> edit (content, counts, translations, reactionSummary, media) while carrying the reader's OWN
+> `isLikedByMe`/`isBookmarkedByMe`/`isViewedByMe`/`currentUserReactions` across the swap. The broadcast is ONE
+> unpersonalized object shared by all recipients, so its viewer fields are the broadcaster's/default view;
+> adopting them wholesale would silently un-like/un-bookmark/un-view the card on any unrelated edit. iOS preserves
+> only `isLiked`; Android preserves all four — **strictly more faithful**. Returns `null` (inert, caller skips the
+> re-emit) when the merged result equals `previous` (a re-broadcast, or an edit that changed nothing visible).
+> (3) `SocialSocketManager.postUpdated` flow + `listen("post:updated", …)`. (4)
+> `PostRepository.applyPostUpdate(updated): Boolean` folds via `PostUpdateMerge` into `_feedCache` (the whole-post
+> sibling of `applyTranslationUpdate`). (5) `FeedViewModel` subscribes and routes to the repository (the
+> content-edit sibling of the `post:translation-updated` sink).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200).** Pristine `android-37.0` auto-installed by AGP but the
+> first `./gradlew` hash-errored on `android-37`; the four-edit copy→patch (`source.properties` ApiLevel +
+> `package.xml` `<api-level>` + `path=` + BOTH `build.prop` `sdk_full` fields), keeping both dirs, resolved it
+> (per NOTES "THIRD mode").
+>
+> **Tests: +11** — 6 `PostUpdateMergeTest` (adopts edited content/counts; preserves the reader's like state
+> against an unpersonalized broadcast; preserves bookmark/viewed/reactions; inert when nothing visible changed;
+> inert on an identical re-broadcast; a reactionSummary-only change is NOT a no-op), 3 `PostRepositoryTest`
+> (folds the edit preserving the reader's like state; inert for an unknown post; inert on an identical
+> re-broadcast), 1 `SocialSocketManagerTest` (decodes the nested edited post), 1 `FeedViewModelTest` (a
+> `post:updated` routes to `applyPostUpdate`). **RED-proof isolated**: dropping the viewer-state preservation
+> (`merge` → `updated.takeIf { it != previous }`) reddened EXACTLY the 4 preservation/discrimination tests
+> (2968 completed, 4 failed) — the 2 preservation-independent tests (`adopts edited content`, `inert
+> re-broadcast`) stayed green: genuine discrimination, not an assertion echo.
+>
+> **Verified**: targeted `:core:model`/`:sdk-core`/`:feature:feed` unit tests **BUILD SUCCESSFUL**; full
+> `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) — **BUILD SUCCESSFUL in 4m
+> 10s (973 tasks)**. Reviewer
+> PASS. Diff is `apps/android` only (3 prod files edited in :core:model + :sdk-core + :feature:feed, 1 new pure
+> file, +11 tests across 4 files, tracking docs). Verdict: **PASS** — a DTO mirroring an existing type, a pure
+> viewer-state-preserving merge, a cache fold reusing the established `_feedCache` seam, a socket event mirroring
+> the existing social events, and a VM subscriber reusing the `post:translation-updated` pattern; behavioural
+> tests through the public API; no production logic outside `apps/android`.
+>
+> **Next**: Feed realtime is now honoured for POST caption (translation), POST body (edit), STORY overlay, and
+> COMMENT (add/edit/delete/translation/like). The remaining social realtime channels iOS folds that Android's
+> `SocialSocketManager` still ignores: **`post:reaction-added`/`-removed`/`-sync`** and
+> **`comment:reaction-sync`** (both need scouting first — Android models post/comment reactions as a like/heart
+> count + `reactionSummary`, but whether the feed/thread RENDERS the emoji summary decides orphan risk),
+> **`post:reposted`** (a repost landing live — scout whether the feed head accepts it), and `comment:media-updated`
+> (still BLOCKED on a comment-audio render surface). Scout read-only before committing to any.
+
+> On 2026-08-24 **the comment thread folds realtime EDITS pushed over `comment:updated`** (slice
+> `comment-updated-realtime-merge`, feature-parity Feed) — AND a required hotfix that **restored a red `main`**.
+>
+> **Step 0 — main was RED, and the fix came first.** `list_pull_requests` (open) → one android PR, #3477
+> (`claude/upbeat-dirac-*`, "Vague 178" calls routine), which belongs to the SEPARATE `tasks/calls-fonctionnel-todo.md`
+> routine, NOT this one (its slices are `claude/apps/android/<slice-id>`); left untouched. But bootstrapping the SDK
+> (dl.google.com **200**; pristine `android-37.0` hash-errored → four-edit copy→patch `android-37`, both dirs, per NOTES)
+> and running `meeshy.sh check` surfaced a **compile error on `origin/main`**: `bb99e9bd` made
+> `ParticipantLeftEvent`/`ParticipantBannedEvent.userId` nullable but never updated `ConversationMembersViewModel`, which
+> still passed `event.userId: String?` into `MemberRoster.withoutUser(String)`. **Android CI red on main since
+> `11f0c31e`** (last green `fb7afd47`, confirmed via `actions_list`). Since `assembleDebug` compiles all modules, NO
+> android PR could go green until this was fixed. Shipped as a dedicated hotfix PR **#3479**
+> (`claude/apps/android/fix-members-nullable-participant`): remove by `userId ?: participantId ?: return@collect` — which
+> also **completes `bb99e9bd`'s own intent** ("un visiteur sans compte expulsable": a link visitor with no account is now
+> expellable by participantId; the roster already matches either id). +3 tests (accountless visitor dropped by
+> participantId on left AND banned; neither-id event inert). RED-proof: dropping the participantId fallback fails exactly
+> the 2 accountless-visitor tests (28 completed, 2 failed). Full `meeshy.sh check` BUILD SUCCESSFUL (973 tasks).
+>
+> **The slice — the EDIT sibling of the comment folds already shipped.** The Next pointer named `comment:media-updated`,
+> but a read-only scout killed it as a thin slice: Android's `ApiPostComment` has **no `media` field at all** (iOS's
+> `APIPostComment` does), and no comment audio/media render surface exists — wiring the realtime event would be
+> orphan/dead-end code (routine forbids it; same orphan risk the pointer flagged for §E). Turned instead to
+> `comment:updated`: iOS folds it (`FeedCommentsSheet.applyCommentEdit`), Android had no handler — an edited comment
+> stayed stale until a full refetch. New `SocketCommentUpdatedData(postId, comment)` (mirror of iOS, nests the full
+> `ApiPostComment`) + `SocialSocketManager.commentUpdated` + `listen("comment:updated", …)`. New
+> `CommentThreadState.replaced(comment)` / `CommentRepliesState.replacedReply(reply)` reducers swap the whole row in
+> place by id (adopt every field — the payload is complete; the heart lives in a separate `CommentLikeState` keyed by id,
+> so a full-row swap never disturbs the viewer's like). `PostCommentsViewModel.onCommentUpdated` filters by `postId` and
+> applies both reducers (each inert for the collection it doesn't hold) — mirror of the `onCommentTranslationUpdated`
+> dual-update pattern.
+>
+> **Tests: +9** — 3 `CommentThreadStateTest` (replace swaps the row preserving position; leaves other rows untouched;
+> inert unknown), 3 `CommentRepliesStateTest` (replace swaps a reply in place; finds it in whichever thread; inert
+> unknown), 1 `SocialSocketManagerTest` (decodes the full edited comment), 2 `PostCommentsViewModelTest` (an edit
+> repaints a top-level comment AND a loaded reply in place with NO refetch; inert for another post; inert for an unknown
+> comment). **RED-proof isolated**: neutering both reducers to `return this` reddened EXACTLY the 5 transformation tests
+> (193 completed, 5 failed) — every inert/ignored test stayed green: genuine discrimination.
+>
+> **Verified**: full `meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) with hotfix+slice — **BUILD
+> SUCCESSFUL**. Reviewer PASS. Both diffs `apps/android` only. Verdict: **PASS** — the hotfix restores a red main and
+> completes the intent of the change that broke it; the slice is a DTO mirroring an existing type, two in-place-replace
+> reducers, a socket event mirroring the existing social events, and a dual-update VM fold reusing the established
+> pattern; behavioural tests through the public API; no production logic outside apps/android.
+>
+> **Next**: The realtime comment channels Android folds are now `added` / `deleted` / `translation-updated` / `updated`.
+> The remaining social realtime events iOS folds that Android's `SocialSocketManager` still ignores (existing host
+> surfaces, low orphan risk): **`comment:reaction-sync`** (authoritative reaction resync for a comment — Android already
+> wires `comment:reaction-added`/`-removed`, so the host exists), **`post:updated`** (a post edited — the feed VM already
+> handles posts), **`post:reposted`** and the **`post:reaction-*`** family (scout whether Android renders post emoji
+> reactions first — likes only may mean a missing surface). `comment:media-updated` stays BLOCKED on a comment-audio
+> render surface (add `ApiPostComment.media` + a comment audio player first — a larger UI slice, not a thin fold).
+
+> On 2026-08-24 **the comment thread folds realtime translations pushed over `comment:translation-updated`**
+> (slice `comment-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
+> pointer named this exact candidate: "the adjacent sibling the scout flagged is `comment:translation-updated`…
+> same shape, one rung over (comment-keyed)"). It IS the COMMENT sibling of the POST caption realtime merge
+> shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3465 (gateway/ios cycle 124), #3464
+> (ios i18n 241i), #3463 (gateway search pagination): none is a `claude/apps/android/*` slice, all touch
+> production logic outside `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`post-translation-updated-realtime-merge`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`edaec937`).
+>
+> **The gap — the comment-keyed twin of the post channel Android never wired.** The gateway's
+> `PostTranslationService` translates a comment server-side and broadcasts `comment:translation-updated`
+> `{ postId, commentId, language, translation:{text, translationModel?, confidenceScore?, createdAt?} }` via
+> `SocialEventsHandler.broadcastCommentTranslationUpdated`. iOS folds it into the open thread
+> (`PostDetailViewModel`/`FeedViewModel.applyCommentTranslation` + `SocketCommentTranslationUpdatedData`). On
+> Android the event decoded nowhere: `SocialSocketManager` had no comment-translation flow, `SocketEvents.kt`
+> no DTO, and `PostCommentsViewModel` no subscriber — a comment the reader could see translated on iOS stayed
+> in its source language on Android until a full refetch. (`PostTranslationMerge` had a comment STRING overload
+> from the on-demand slice, but no entry-preserving one, and it was unwired to any socket.)
+>
+> **The fix — reuse the entry upsert + a metadata-preserving comment overload + socket wiring + a thread fold.**
+> (1) New `SocketCommentTranslationUpdatedData(postId, commentId, language, translation)` in `:core:model` whose
+> `translation` field IS an `ApiPostTranslationEntry` (the comment-keyed sibling of
+> `SocketPostTranslationUpdatedData`, one rung over) — decodes straight into one, no bespoke payload struct.
+> (2) New entry-preserving comment overload `PostTranslationMerge.mergeTranslation(comment, lang, entry): ApiPostComment?`
+> reusing the existing private entry `upsert` (the string comment overload stored `ApiPostTranslationEntry(text=…)`
+> only, dropping the model/confidence the push carries; metadata-only change is NOT a no-op). (3)
+> `SocialSocketManager.commentTranslationUpdated` flow + `listen("comment:translation-updated", …)`. (4)
+> `PostCommentsViewModel.onCommentTranslationUpdated` subscribes, filters by `postId`, finds the comment (top-level
+> or a loaded reply), merges the entry, and folds via the existing `thread.retranslated`/`replies.retranslated`
+> reducers — **no `activeLanguages` override forced** (the reader did not tap; their own Prisme chain decides, parity
+> with iOS `applyCommentTranslationUpdate` and with the post slice).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` via `--channel=3` WORKED alone.**
+>
+> **Tests: +13** — 7 `PostTranslationMergeTest` (comment entry overload: appends preserving model/confidence/timestamp;
+> appends order-preserving; replaces in place under a case-insensitively matched key; stores a metadata-only change;
+> no-op identical entry; no-op blank lang; no-op blank text), 2 `SocialSocketManagerTest` (decodes+emits the full
+> entry; text-only payload → null metadata), 4 `PostCommentsViewModelTest` (an es reader on a fr/en-only comment sees
+> the pushed `es` translation repaint the row with NO tap; the same repaints a loaded REPLY; an event for another post
+> is ignored; an unknown comment is inert). **RED-proof, surgical per piece**: neutering the comment entry
+> `mergeTranslation`→`return null` reddened EXACTLY the 4 transformation merge tests (3 no-op tests green); commenting
+> the socket `listen` reddened the 2 socket tests; neutering the VM fold reddened EXACTLY the 2 repaint tests while
+> the 2 inert tests stayed green — genuine discrimination, not assertion echo.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) locally —
+> **BUILD SUCCESSFUL in 6m 17s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (4 prod files edited in
+> :core:model + :sdk-core + :feature:feed, +13 tests across 3 files, tracking docs). Verdict: **PASS** — a DTO reusing
+> an existing type, a metadata-preserving merge overload reusing the entry upsert, a socket event mirroring the
+> existing social events, and a thread fold reusing the on-demand reducers; behavioural tests through the public API;
+> no production logic outside apps/android.
+>
+> **Next**: Feed/Prisme realtime is now honoured end to end for POST caption, STORY overlay, and COMMENT. The
+> remaining realtime social channel Android may not fold is **`comment:media-updated`** (gateway emits it, iOS wires it
+> at `PostDetailViewModel.commentMediaUpdated`/`FeedCommentsSheet` — a comment's audio transcription/translations
+> landing) — scout whether Android's `SocialSocketManager` decodes it and whether `PostCommentsViewModel` routes it into
+> the thread. Else turn to the §E editor-side candidates (clip-inspector reducer / timeline transport) — both still need
+> a timeline/selection host surface first (orphan risk), so scout read-only before committing.
+
+> On 2026-08-24 **the feed folds realtime post translations pushed over `post:translation-updated`**
+> (slice `post-translation-updated-realtime-merge`, feature-parity Feed/Prisme — the previous entry's `Next`
+> pointer named this exact candidate: "the caption sibling of THIS slice — iOS wires it too, Android's viewer
+> likely doesn't"). It IS the POST caption sibling of the STORY overlay realtime merge shipped the same day.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3458 (web Prisme cycle 123), #3426
+> (ios i18n 240i): neither is a `claude/apps/android/*` slice, both touch production logic outside
+> `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`story-text-object-translation-realtime-merge`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`c65d44cd`).
+>
+> **The gap — a realtime Prisme channel Android never wired (a scout confirmed it before a line was written).**
+> The gateway's `PostTranslationService` translates a post server-side and broadcasts `post:translation-updated`
+> `{ postId, language, translation:{text, translationModel?, confidenceScore?, createdAt?} }` to the author's
+> feed room (`SocialEventsHandler.broadcastPostTranslationUpdated`). iOS folds it into the open feed
+> (`FeedViewModel.applyPostTranslation` + `SocketPostTranslationUpdatedData`). On Android the event decoded
+> nowhere: `SocialSocketManager` had no post-translation flow, `SocketEvents.kt` no DTO, no VM subscriber. A
+> post the reader could see translated on iOS stayed in its source language on Android until a full refetch.
+>
+> **The fix — reuse the entry type + a metadata-preserving merge + socket wiring + a cache fold.**
+> (1) New `SocketPostTranslationUpdatedData(postId, language, translation)` in `:core:model` whose
+> `translation` field IS an `ApiPostTranslationEntry` — the payload's `{text, model, confidence, createdAt}`
+> object matches that type exactly, so it decodes straight into one (no bespoke payload struct).
+> (2) New entry-preserving `PostTranslationMerge.mergeTranslation(post, lang, entry): ApiPost?` overload: the
+> existing string overload stored `ApiPostTranslationEntry(text=…)` only, dropping the model/confidence the
+> push carries; the new overload folds the whole entry. No-op on blank lang / blank text / the identical entry
+> already present (a metadata-only change is NOT a no-op — richer server data is never silently dropped).
+> (3) `SocialSocketManager.postTranslationUpdated` flow + `listen("post:translation-updated", …)`.
+> (4) `PostRepository.applyTranslationUpdate(postId, lang, entry): Boolean` folds the merge into `_feedCache`
+> (the push sibling of `requestOnDemandTranslation`, minus the translator call), so the projected card
+> re-renders in the reader's preferred language — **no override forced** (the reader's own chain decides,
+> parity with iOS `applyPostTranslation` which only sets `translatedContent` when the language is preferred,
+> and with the story slice). (5) `FeedViewModel` subscribes and routes the event to the repository.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE (200); pristine `android-37.0` via `--channel=3` WORKED alone**
+> (no copy→patch, no both-dirs). compileSdk 37; AGP 8.13.0 mapped it to `android-37.0` on the first
+> `./gradlew`. (NOTES' "try pristine first" held again.)
+>
+> **Tests: +18** — 9 `PostTranslationMergeTest` (entry overload: appends preserving model/confidence/timestamp;
+> appends order-preserving; replaces in place under a case-insensitively matched key; no-op on identical entry;
+> **stores a metadata-only change** so richer data is never dropped; no-op blank lang; no-op blank text; trims
+> the target), 2 `SocialSocketManagerTest` (decodes+emits the full entry; text-only payload → null metadata),
+> 5 `PostRepositoryTest` (`applyTranslationUpdate` folds into cache preserving metadata AND calls no translator;
+> inert on unknown post / blank target / blank text / identical entry), 1 `FeedViewModelTest` (a
+> `post:translation-updated` event routes to `repository.applyTranslationUpdate` with the payload). **RED-proof,
+> surgical**: neutering the entry `mergeTranslation` → `return null` reddened EXACTLY the 5 transformation
+> merge tests while the 3 no-op tests stayed green (and the 8 string-overload tests untouched) — genuine
+> discrimination, not assertion echo.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest, all modules) locally
+> — **BUILD SUCCESSFUL in 4m 26s** (973 tasks). Reviewer PASS. Diff is `apps/android` only (4 prod files
+> edited in :core:model + :sdk-core + :feature:feed, +18 tests across 4 files, tracking docs). Verdict:
+> **PASS** — a DTO reusing an existing type, a metadata-preserving merge overload reusing the string overload's
+> upsert shape, a socket event mirroring the existing social events, and a cache fold mirroring the on-demand
+> path; behavioural tests through the public API; no production logic outside apps/android.
+>
+> **Next**: Feed/Prisme — the POST caption realtime merge is now honoured end to end. The adjacent sibling the
+> scout flagged is **`comment:translation-updated`** (gateway emits it, iOS wires it at
+> `FeedViewModel.commentTranslationUpdated`; Android's `PostTranslationMerge` already has the comment overload
+> but it is UNWIRED to any socket). That is the natural next slice — same shape, one rung over
+> (comment-keyed). Before building it, scout whether the comment thread surface (`PostCommentsSection` /
+> `PostDetailViewModel`) subscribes to a comment stream to route it into, or whether comments live in the feed
+> cache too. Else turn to the §E editor-side candidates (clip-inspector reducer / timeline transport) — both
+> still need a timeline/selection host surface first (orphan risk), so scout read-only before committing.
+
+> On 2026-08-24 **the story viewer merges realtime overlay translations pushed over `story:translation-updated`**
+> (slice `story-text-object-translation-realtime-merge`, feature-parity §E — the previous entry's `Next` pointer
+> flagged that `requestStoryTranslation` translates only the CAPTION and asked to scout iOS overlay parity
+> first. The scout found the missing half: iOS does NOT pull overlays on demand — the **gateway** translates a
+> canvas overlay server-side and BROADCASTS it via `story:translation-updated` (`{postId, textObjectIndex,
+> translations}`), which iOS merges into the open viewer (`StoryItem.mergingTextObjectTranslations`). Android
+> had no handler for this event at all — a whole realtime Prisme channel was on the floor).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3453..#3434 are all Dependabot, plus
+> #3429 (shared ObjectId), #3426 (ios i18n): none is a `claude/apps/android/*` slice, all touch production
+> logic outside `apps/android`, none in this routine's scope, none touched. Prior slice
+> (`story-language-bar-text-object-translations`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`cba70d47`).
+>
+> **The gap — a realtime Prisme channel Android never wired.** The gateway's `StoryTextObjectTranslationService`
+> persists a translated overlay and broadcasts `story:translation-updated` to the author's feed room. iOS folds
+> it into the cached story so the reader — who resolves overlays via the preferred chain — switches to the
+> requested language the instant it lands. On Android the event decoded nowhere, so an overlay the reader asked
+> to translate stayed in its source language until a full refetch.
+>
+> **The fix — pure merge + socket wiring + one emit generalisation.**
+> (1) New pure `StoryTextObjectTranslationMerge.merge(item, textObjectIndex, translations)` in `:core:model`
+> (canvas sibling of `StoryTranslationMerge`): upserts the languages into the targeted text object (existing
+> overwritten, new added) via immutable `copy`; empty map / no `storyEffects` / out-of-range or negative index
+> → story returned unchanged (iOS `mergingTextObjectTranslations` parity, minus its memberwise-init field-drop
+> hazard — `copy` preserves every other field for free).
+> (2) New `SocketStoryTranslationUpdatedData` + `SocialSocketManager.storyTranslationUpdated` flow, wired with
+> `listen("story:translation-updated", …)`.
+> (3) `StoryViewerViewModel.observeTranslationUpdates()` subscribes, merges into `rawItems` (inert on unknown
+> `postId` or no-op merge), and calls `emit()`. `emit()` now re-projects the current slide from `rawItems`
+> **unconditionally** — it was gated behind an active exploration override, which meant a realtime merge with
+> no override never reached the view. With no override and no runtime merge the unconditional path reproduces
+> `toSlideView` exactly (same `StoryContentResolver`/`StoryTextObjectProjection` calls, override=null), so
+> non-current slides and no-change emits are byte-identical to before. No forced override (iOS parity — the
+> reader's own chain resolves the merged language).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE; pristine `android-37.0` via `--channel=3` WORKED alone this run**
+> (no copy→patch, no both-dirs). `platforms;android-37` is not a downloadable package; `sdkmanager --channel=3
+> "platforms;android-37.0"` installed the preview platform and AGP 8.13.0 mapped compileSdk 37 → android-37.0
+> on the first `./gradlew`. (NOTES' "recipe is image-dependent, try pristine first" held — pristine was right.)
+>
+> **Tests: +12** — 8 `StoryTextObjectTranslationMergeTest` (adds to target; preserves+overwrites same
+> language; targets only the indexed object; out-of-range → unchanged; negative → unchanged; empty map →
+> unchanged; no storyEffects → unchanged; every other story/effects field survives), 2
+> `SocialSocketManagerTest` (decodes+emits the payload; missing `translations` → empty map), 2
+> `StoryViewerViewModelTest` (a realtime merge repaints the current overlay in the reader's language with NO
+> tap; the merged language surfaces as a present content chip) + a reused inert case (unknown `postId` leaves
+> the overlay untouched). **RED-proof, surgical per piece**: neutering `merge`→`return item` reddened the 4
+> transformation merge tests (4 no-op tests stayed green — correct); commenting the socket `listen` reddened
+> the 2 socket tests (other 15 green); with merge+subscription intact, reverting ONLY the `emit()`
+> re-projection reddened EXACTLY the repaint test while the chip test (reads `rawItems` via
+> `availableLanguagesFor`) and the inert test stayed green — isolating the emit generalisation's necessity.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally — see run log
+> below for the result. Reviewer PASS. Diff is `apps/android` only (3 prod files edited/added in :core:model +
+> :sdk-core + :feature:stories, +12 tests across 3 files, tracking docs). Verdict: **PASS** — a pure merge
+> reusing the caption-merge shape, a socket event mirroring the existing story events, and one behaviour-
+> preserving emit generalisation; behavioural tests through the public API; no production logic outside
+> apps/android; no wire/shared/model change beyond a new Android socket DTO.
+>
+> **Next**: §E (Stories) — realtime AND on-demand overlay translation are both now honoured end to end (the
+> viewer offers overlay languages, resolves them per the chain and per a tapped override, and now folds in
+> pushed overlay translations). Remaining reader-side loose end: `requestStoryTranslation` still pulls only the
+> CAPTION on demand (`translateStory` → `StoryTranslationMerge` on `item.content`); iOS does NOT pull overlays
+> on demand either (they arrive via the realtime channel this slice wired), so this is **parity-complete, not a
+> gap** — do not build an N-call overlay pull. Turn instead to the editor-side candidates that resurface each
+> cycle: (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete) or (b)
+> the **timeline transport** pure state (play/pause/scrub/zoom 0.25×–4×/mute) — both still need a
+> timeline/selection host surface first (orphan risk), so scout that surface read-only before committing; else
+> take the highest-value non-editor §E box (e.g. `post:translation-updated` CAPTION realtime merge into the
+> viewer, the caption sibling of THIS slice — iOS wires it too, Android's viewer likely doesn't).
+
+> On 2026-08-24 **the story language bar descends the Prisme over ALL slide content, not the caption alone**
+> (slice `story-language-bar-text-object-translations`, feature-parity §E — the previous entry's `Next`
+> pointer's scout arm: "worth a scout to confirm a pulled-then-displayed text object resolves." The scout
+> found the gap one rung earlier than the pull: the **language bar itself** never offered overlay languages).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3431 (gateway/shared notif Prisme
+> cycle 121), #3429 (shared ObjectId it. 259), #3426 (ios i18n 240i), #3424 (gateway ObjectId 258), #3418
+> (web/admin 257): none is a `claude/apps/android/*` slice, all touch production logic outside `apps/android`,
+> none in this routine's scope, none touched. Prior slice (`story-text-object-exploration-override`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`7fdd6b64`).
+>
+> **The gap — the exploration strip was blind to overlay translations.** `availableLanguagesFor` built its
+> "present" content chips from `item.translations` alone (the CAPTION). But CLAUDE.md §Cohérence: the Prisme
+> applies to ALL content, and the two prior cycles wired text overlays as first-class translatable content
+> (`StoryTextObject.translations`, resolved by `StoryTextObjectProjection`). A slide whose overlays carried a
+> translation the caption lacked (nominal once the device locale, rank 4, differs from the app language)
+> offered the reader NO chip to reach it — the overlay's translation existed but was unreachable. Same shape
+> as the caption/overlay disagreement the last two cycles fixed, one rung earlier: the strip that OFFERS the
+> languages, not the resolver that renders them.
+>
+> **The fix — union caption + overlay languages, caption-first, deduped case-insensitively.**
+> `availableLanguagesFor` now unions `item.translations` languages (in caption order) with every language key
+> across `storyEffects.textObjects[].translations` (blank values filtered, mirroring the caption's
+> `content.isNotBlank()`), `distinctBy { lowercase() }`. The empty-gate (`present.isEmpty()` ⇒ no strip) and
+> the translatable-request arm's `presentLower` exclusion both now account for overlay languages, so an
+> overlay-only-translated story (a) shows its overlay languages as present content chips and (b) still offers
+> a configured-absent language as a translatable request chip. Consumer path unchanged: tapping a present
+> overlay-language chip sets the ephemeral override, `emit()` re-projects the overlays into it (proven by the
+> toggle test). One pure private method edited; zero screen/model/wire change.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE; gradle auto-installed pristine `android-37.0` which HASH-ERRORED
+> (`Failed to find target with hash string 'android-37'`); the four-edit copy→patch `android-37` + keep-both-dirs
+> recipe worked** (source.properties ApiLevel=37, package.xml `<api-level>`+`path=`, build.prop `sdk_full=37`;
+> both `android-37` and `android-37.0` kept). Matches the immediately-prior slice's finding — this image family
+> wants the patched integer-hash dir. (NOTES' "recipe is image-dependent" still holds.)
+>
+> **Tests: +5** (`StoryViewerViewModelTest`) — overlay-only translation surfaces as a present content chip;
+> caption+overlay unioned caption-first with no duplicate (`.inOrder()` es,de); a blank overlay translation
+> value is not offered; an overlay-only-translated story still offers a configured-absent language as
+> translatable; tapping an overlay-only present chip re-resolves the overlays into it (the full offer→act
+> loop). **RED proven against unmodified production**: exactly these 5 failed, the other 56
+> `StoryViewerViewModelTest` cases stayed green — genuine discrimination on the fixture, not the assertion.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally — **BUILD
+> SUCCESSFUL** (973 tasks, 6m34s). Reviewer PASS. Diff is `apps/android` only (1 prod file, +5 tests in 1
+> file, tracking docs). Verdict: **PASS** — one pure method extended to union overlay translations into the
+> exploration strip, reusing the existing chip/override machinery, behavioural tests through the public API,
+> no production logic outside apps/android, no wire/shared/model change.
+>
+> **Next**: §E (Stories) — the exploration strip now offers every present content language across caption +
+> overlays, and both reader-side resolvers (caption + overlays) honour the tapped override. One reader-side
+> loose end remains: **`requestStoryTranslation` translates only the CAPTION** (`translateStory` →
+> `StoryTranslationMerge.mergeTranslation` on `item.content`), so a pulled on-demand language repaints the
+> caption but leaves overlays on their own chain — worth a scout to confirm whether iOS translates overlays
+> on demand (parity) before building an N-call overlay pull. Otherwise the editor-side candidates resurface:
+> (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete; needs a
+> timeline/selection host surface first — orphan risk until then, two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` still undecoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute, modelled on chat's `OverlayMediaTransport`, ephemeral
+> editor state no wire backing — also needs a host surface). Prefer the candidate with the cleanest pure core
+> AND a real consumer surface; scout read-only first.
+
+> On 2026-08-24 **a text overlay re-resolves into the "Exploration" language the reader taps** (slice
+> `story-text-object-exploration-override`, feature-parity §E — the previous entry's `Next` pointer
+> candidate (c): folding the exploration language override into text-object re-resolution, chosen over
+> the clip-inspector editor reducer (needs a timeline/selection host surface first) and the timeline
+> transport (ephemeral editor state, no wire backing) because it has BOTH the cleanest pure core AND a
+> real consumer surface — the viewer we wired text objects into the run before). The caption already
+> re-resolved on a language-bar tap (`StoryContentResolver.resolve(item, prefs, override)` in `emit()`),
+> but the freshly-shipped text overlays did **not**: `toSlideView` projected them once with the default
+> `preferredLanguages` and `emit()`'s override branch copied only the caption's `text`/`isTranslated`/
+> `languageCode` — so tapping "es" translated the slide's caption but left every text overlay stuck in the
+> chain language. The overlay and the caption disagreed on the very language the user had just chosen.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3425 (web/audio cycle 119),
+> #3424 (gateway ObjectId it. 258), #3418 (web/admin it. 257): none is a `claude/apps/android/*` slice,
+> all touch production logic outside `apps/android`, none in this routine's scope, none touched. Prior
+> iteration (`story-text-object-viewer-projection`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`924c8618`).
+>
+> **One pure param, threaded to a real consumer, mirroring the caption's own override contract.**
+> `StoryTextObjectProjection.resolveText`/`project` gain an optional `overrideLanguage` (default `null` —
+> the 2-arg call sites are byte-identical). The override is tried FIRST without removing the preference
+> chain, exactly as `StoryContentResolver` documents its own `overrideLanguage`: implemented by prepending
+> the override to the language list the existing exact-then-normalised loop already walks
+> (`listOf(override) + preferredLanguages`), so the override inherits the text-object resolver's own
+> case/region-insensitive matching (iOS `resolvedText` parity) and an override with no matching translation
+> falls straight through to the normal Prisme resolution. A blank/null override is inert. The empty-guard
+> moved from `preferredLanguages.isEmpty()` to the effective `languages.isEmpty()` so an override still
+> resolves for a reader with no configured chain.
+>
+> **Real wiring (not orphan logic)**: `emit()`'s override branch now re-projects the current slide's text
+> objects from the raw item — `item.storyEffects.textObjects.map { project(it, preferredLanguages, override) }`
+> — alongside the caption re-resolution, and the Compose `StoryTextObjectLayer` already reads
+> `slide.textObjects`, so a tapped language now repaints caption AND overlays together. Zero screen edit.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE, but pristine `android-37.0` HASH-ERRORED this image; the
+> four-edit copy→patch `android-37` + keep-both-dirs recipe worked.** `sdkmanager "platforms;android-35"…`
+> installed fine, `:feature:stories:help`/`testDebugUnitTest` died `Failed to find target with hash string
+> 'android-37'`. Applied the documented copy→patch (source.properties ApiLevel, package.xml `<api-level>` +
+> `path=`, build.prop both `sdk_full` keys) then kept BOTH `android-37` and pristine `android-37.0` — next
+> run green. (NOTES' "recipe is image-dependent, flips between runs" held again; pristine-first cost one run.)
+>
+> **Tests: +9** — 7 `StoryTextObjectProjectionTest` (override tried FIRST ahead of chain, override with no
+> match falls back to chain, override matched case/region-insensitively, override resolves with no
+> configured chain, blank override inert ≡ no override, neither override nor chain matches → original,
+> `project` resolves via override), +2 `StoryViewerViewModelTest` (toggling the override re-resolves the
+> current slide's text objects then a re-tap restores the automatic resolution; an override with no
+> text-object translation falls back to the reader's chain). **Mutation RED-proof (isolated, restored
+> after)**: neutering the override (`val languages = preferredLanguages`) failed EXACTLY the 5
+> override-dependent tests (4 pure + 1 viewmodel toggle) while the 4 fallback/inert tests
+> (no-match-falls-back, blank-inert, neither-matches, viewmodel-fallback) stayed green — genuine
+> discrimination on the FIXTURE, not the assertion; production restored clean, no stray `.bak`.
+>
+> **Verified**: full `./apps/android/meeshy.sh check` (assembleDebug + testDebugUnitTest) locally, **BUILD
+> SUCCESSFUL** (973 tasks, 4m). Reviewer PASS. Diff is `apps/android` only (2 prod files edited, +9 tests
+> across 2 files, tracking docs). Verdict: **PASS** — one pure optional param threaded to the one existing
+> consumer, reusing the resolver's own matching, mirroring the caption's documented override contract,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — the two remaining reader-side overrides now both honour Exploration (caption +
+> text objects); the on-demand story translation (`requestStoryTranslation`) already merges the pulled
+> translation into the raw item so text objects will pick it up on the next `emit()` — worth a scout to
+> confirm a pulled-then-displayed text object resolves. Otherwise the editor-side candidates resurface:
+> (a) the **clip-inspector editor reducer** (pure per-clip volume/fade/loop/background/delete derivation —
+> rich pure core, still needs a timeline/selection host surface, two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` not yet decoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute, modelled on chat's `OverlayMediaTransport`, ephemeral
+> editor state no wire backing). Prefer the candidate with the cleanest pure core AND a real consumer
+> surface; scout read-only first.
+
+> On 2026-08-24 **a slide's text overlays render and animate on the viewer canvas** (slice
+> `story-text-object-viewer-projection`, feature-parity §E — the previous entry's `Next` pointer's
+> preferred candidate: the scout ranked the text-object viewer projection first, cleanest pure core with
+> the wire fully backed, reusing the two already-tested reader resolvers, chosen over the clip-inspector
+> editor reducer, which lands editor-side with no host surface yet, and the timeline transport, which has
+> no wire backing at all). The viewer decoded `storyEffects.textObjects` on the wire (`Story.kt`) and the
+> v3→v1 projection already produced them, but `StoryViewerViewModel.toSlideView` projected background +
+> foreground **media** only — a text overlay authored on a slide was dropped on the floor.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #3418 (web/admin it. 257):
+> not a `claude/apps/android/*` slice, out of this routine's scope, untouched. Prior iteration
+> (`story-media-fade-envelope`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`5cb8ce45`).
+>
+> **One pure view + one pure projection, ported from iOS's canonical paths.** New `StoryTextObjectView`
+> mirrors `StoryForegroundMediaView`: `animated(atSeconds)` folds the keyframe transform
+> (`StoryKeyframeResolver`) with the object's own fadeIn/fadeOut envelope (`StoryMediaFadeResolver`) at
+> iOS render precedence `fade ?? keyframeOpacity ?? base` — a live envelope OVERRIDES a keyframe opacity;
+> a text object never participates in a clip transition (iOS parity), so unlike the media layer no
+> transition ramp is folded, and `animated()` returns `this` unchanged when neither a keyed channel nor a
+> live envelope acts. New `StoryTextObjectProjection.resolveText` ports iOS
+> `StoryTextObject.resolvedText(preferredLanguages:)` (`StoryModels.swift`): per preferred language, an
+> exact `translations[lang]` key first, then a case/region-insensitive `base()` match (via the shared
+> `LanguageCodeNormalizer`), before the next language — else the original text (Prisme rule 1: absent
+> target ⇒ show the original). `project()` maps transform/timing/keyframe fields into the view.
+>
+> **Real wiring (not orphan logic)**: `StorySlideView` gains `textObjects`; `toSlideView` projects
+> `storyEffects.textObjects` through `LanguageResolver.preferredContentLanguages(prefs)`. Compose
+> `StoryTextObjectLayer` renders each overlay at its center anchor with `.alpha(animated.opacity)`,
+> `fontSize × scale` mapped from the 1080-referential design space (iOS `StoryTextSize` parity) onto the
+> real canvas width, and a `graphicsLayer` rotation — so a fading, keyframed text overlay now paints and
+> animates where before it was invisible.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE, pristine `android-37.0` worked (NOTES' cheapest recipe).**
+> `sdkmanager "platforms;android-35" …` then `--channel=3 "platforms;android-37.0"`; `:feature:stories:help`
+> resolved `android-37` on the first run — no copy→patch, no both-dirs mode.
+>
+> **Tests: +19** — 6 `StoryTextObjectViewTest` (no-fade-no-kf → identity, fade-in folds, fade-out folds,
+> envelope OVERRIDES keyframe opacity while position keeps animating, outside-window → identity,
+> keyframes animate position while opacity holds base + un-keyed scale holds base), 11
+> `StoryTextObjectProjectionTest` (no-translations→original, empty-preferred→original, exact-key match,
+> case/region-insensitive match, normalized 3-letter key ↔ 2-letter preference, exact-key wins over
+> normalized sibling, preferred-priority first-match-wins, no-match→original, project carries
+> transform/timing/keyframe fields + animates, project resolves text via prisme, project defaults absent
+> timing to 0), +1 `StoryViewerViewModelTest` (a slide's text objects project into the view and ramp
+> their fade). **Mutation RED-proof (isolated, restored after)**: dropping the envelope override
+> (`fadeEnvelope ?: base.opacity` → `base.opacity`) failed EXACTLY the 4 fade-value tests (fade-in,
+> fade-out, override, viewmodel fade), the identity/keyframe-only/outside-window/projection tests stayed
+> green — genuine discrimination; production restored clean, no stray `.bak`.
+>
+> **Verified**: `:feature:stories:testDebugUnitTest` for the three files **BUILD SUCCESSFUL** (60 tests,
+> 3m15s); full `assembleDebug testDebugUnitTest` gate run for the PR. Reviewer PASS. Diff is
+> `apps/android` only (2 new pure files, 1 view-model data-class field + projection, 1 Compose layer +
+> render loop, +19 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side view + projection
+> reading existing wire fields, reusing two tested resolvers + the shared normalizer, behavioural tests
+> through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — with the reader now honouring text objects, either (a) the **clip-inspector
+> editor reducer** (pure per-clip volume/fadeIn/fadeOut/loop/background/delete derivation over a selected
+> object — rich pure core, but needs a timeline/selection host surface first, and two iOS fields
+> `mutedVolumeMemento`/`isDuckingDisabled` are not yet decoded on Android), or (b) the **timeline transport**
+> pure state (play/pause/scrub/zoom 0.25×–4×/mute — clean reducer modelled on chat's `OverlayMediaTransport`,
+> but ephemeral editor state with no wire backing), or (c) folding the **exploration language override**
+> into text-object re-resolution (the caption re-resolves on override today; text objects use default prefs).
+> Prefer the candidate with the cleanest pure core AND a real consumer surface; scout read-only first.
+
+> On 2026-08-23 **a timed foreground clip fades in/out on the viewer canvas** (slice
+> `story-media-fade-envelope`, feature-parity §E — the previous entry's `Next` pointer's clip-inspector
+> candidate, taken on its reader side first: the wire-backed fade envelope is a clean pure core, chosen
+> over the text-keyframe alternative which would need a whole new text-object projection + Compose
+> rendering it doesn't have yet). iOS ramps a clip's opacity over its own `fadeIn`/`fadeOut`
+> (`StoryRenderer.fadeOpacity(item:at:)`); the Android foreground projection **dropped** both fields, so a
+> clip authored with a fade snapped on/off instead of ramping.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3414 (ios cycle 114 bis), #3409
+> (shared/gateway it. 256), #3395 (iOS 239i), #3392 (gateway it. 254): none is a `claude/apps/android/*`
+> slice, none in this routine's scope, none touched. Prior iteration (`story-clip-transition-opacity`)
+> already merged into main. Branched off freshly-fetched `origin/main` (`9be98e15`).
+>
+> **One pure resolver, ported 1:1 from iOS's canonical path** (`StoryRenderer.fadeOpacity`): new
+> `StoryMediaFadeResolver.fadeOpacity(fadeIn, fadeOut, startTime, duration, currentTime)` — `null` when the
+> clip authors no fade (both ≤0) OR the playhead is outside `[start, end)`; inside, fade-in ramps
+> `(t−start)/fadeIn` clamped `[0,1]`, then a steady `1.0`, then fade-out `(end−t)/fadeOut`; a `null`
+> duration → `end = +∞` so the fade-out edge (which needs a finite end) never fires; fade-in is evaluated
+> before fade-out so a clip shorter than `fadeIn+fadeOut` reports the fade-in ramp at the overlap
+> (iOS parity).
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `fadeIn`/`fadeOut` (threaded
+> through `toForegroundMediaView`, previously discarded). `animated()` computes the envelope and folds it at
+> **iOS render precedence** `fade ?? keyframeOpacity ?? base`, then `× transitionOpacity` — so a live
+> envelope OVERRIDES an authored keyframe opacity (not multiplied) and still multiplies with a
+> crossfade/dissolve ramp. The early-return now also accounts for a lone fade envelope
+> (`resolved == null && transitions.isEmpty() && fadeEnvelope == null → this`). **Zero Compose glue
+> change**: the viewer already applied `.alpha(animated.opacity)`, so a fading clip now ramps with no
+> screen edit.
+>
+> **SDK bootstrap — pristine `android-37.0` worked this image** (cheapest recipe; NOTES' "try pristine
+> first" held). `sdkmanager --channel=3 "platforms;android-37.0"` alone; `./gradlew :feature:stories:help`
+> resolved the target on the first run — no copy→patch, no both-dirs mode needed.
+>
+> **Tests: +23** — 16 `StoryMediaFadeResolverTest` (no-fade→null, zero-fade→null, before-window→null,
+> at/after-end→null, fade-in start=0/mid=0.5/past=1.0/boundary=1.0, fade-out mid=0.5/near-end=0.25/
+> boundary=1.0, fade-in-only-no-duration fades then holds forever, fade-out-only-no-finite-end never fades,
+> fade-in-precedence on overlap, shifted-clip start-relative clock, absent-startTime≡0), 6
+> `StoryForegroundFadeTest` (fade-in folds, fade-out folds, envelope OVERRIDES keyframe opacity while
+> position keyframes still animate, envelope × transition multiply to 0.05, outside-window identity,
+> no-fade-no-kf-no-transition identity), +1 `StoryViewerViewModelTest` (projection carries
+> fadeIn/fadeOut and ramps in/out). **Mutation RED-proof (isolated, restored after)**: dropping the
+> override (`fadeEnvelope ?: base.opacity` → `base.opacity`) failed EXACTLY the 5 envelope-value tests
+> (2 foreground fade + 1 viewer projection + fade-in/fade-out folds), the identity/outside-window tests
+> stayed green — genuine discrimination; production verified clean after restore, no stray `.bak`.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 4m11s, no
+> test failures). Reviewer PASS. Diff is `apps/android` only (1 new pure file, 1 view-model data-class +
+> projection threading + `animated()` opacity fold, +23 tests across 3 files, tracking docs). Verdict:
+> **PASS** — pure app-side resolver reading existing wire fields + `animated()` folding at iOS precedence,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) — the clip-inspector **editor** side now that the reader honours fades: a pure
+> per-clip inspector reducer (volume/fadeIn/fadeOut/loop/background/delete derivation over a selected
+> `StoryMediaObject`, wire-backed), OR the **timeline transport** pure state (play/pause/scrub/zoom
+> 0.25×–4×/mute), OR the text-object viewer projection (prerequisite for text keyframes/fades). Prefer the
+> candidate with the cleanest pure core; scout read-only first to confirm the wire fields and avoid
+> glue-only work.
+
+> On 2026-08-23 **story clip transitions fade the foreground on the viewer canvas** (slice
+> `story-clip-transition-opacity`, feature-parity §E — the previous entry's `Next` pointer's preferred
+> candidate: the wire-backed clip-transition reader resolver, chosen over the text-keyframe alternative for
+> the cleaner pure core). iOS ramps a transitioning clip's opacity over the transition window (`fromClipId`
+> fades out, `toClipId` fades in) via `ReaderTransitionResolver.opacity` + the canonical primitive
+> `StoryRenderer.clipTransitionOpacity`; the Android viewer decoded `StoryClipTransition[]` on the wire
+> (`Story.kt`) but **dropped** it from the projection — a serialized crossfade/dissolve rendered as a hard cut.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3409 (shared/gateway it. 256),
+> #3408 (calls Vague 169), #3404 (web it. 255), #3395 (iOS 239i), #3392 (gateway it. 254): none is a
+> `claude/apps/android/*` slice, none in this routine's scope, none touched. Prior iteration
+> (`story-keyframe-interpolation`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`b38adef6`).
+>
+> **One pure resolver, ported 1:1 from iOS's canonical SOTA path** (`StoryReaderResolvers.swift`
+> `ReaderTransitionResolver` + `StoryRenderer.clipTransitionOpacity`): new `StoryClipTransitionResolver`
+> with (1) `crossfadeFactor(mediaId, transitions, transitionStart, at)` — the canonical primitive: crossfade
+> only (other kinds + zero-duration → opaque, defensively guarding the `0/0` NaN iOS would hit), window guard,
+> `fromClipId → 1−progress`, `toClipId → progress`, else `1.0`; (2) `opacity(mediaId, startTime, duration,
+> transitions, currentTime)` — the reader layer: clips to the clip's own `[start, end]` window (→0 outside),
+> degrades `dissolve → crossfade` for live playback (iOS `liveRenderableTransition` — the MP4 exporter keeps
+> the per-pixel dissolve), computes each matching transition's `transitionStart` (outgoing `end−dur`, incoming
+> `start`), multiplies the factors, clamps `[0,1]`.
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `id`, `duration`, and the slide's
+> `clipTransitions` (threaded through `toForegroundMediaView`, previously discarded). `animated(atSeconds)`
+> folds the transition opacity into the keyframe-resolved opacity (`base.opacity * transitionOpacity`),
+> returning `this` only when neither keyframes nor a participating transition animate. **Degenerate-window
+> guard (improvement over a naive port)**: a clip that participates in a transition but has `duration == 0`
+> is left untouched — `end == start` would make the window-clip hide it at almost every instant. **Zero Compose
+> glue change**: the viewer already applied `.alpha(animated.opacity)`, so a transitioning clip now fades
+> instead of hard-cutting with no screen edit.
+>
+> **SDK bootstrap — NEW recipe: BOTH dirs present** (NOTES updated). This image failed with *both* the pristine
+> `android-37.0` alone (`Failed to find target with hash string 'android-37'`) AND the full four-edit copy→patch
+> `android-37` alone (same error, no "inconsistent location" line — descriptor demonstrably correct:
+> `<api-level>37</api-level>`, `base-extension true`, `path="platforms;android-37"`, `sdk_full=37`). What worked:
+> keep the patched `android-37` AND reinstall the pristine `android-37.0` so **both** platform dirs coexist —
+> AGP 8.13.0 then resolved the target. Neither-alone-both-together is a third mode past the two the NOTES record.
+>
+> **Tests: +23** — 16 `StoryClipTransitionResolverTest` (8 `crossfadeFactor`: outgoing 1→0 across window with
+> start/mid/end boundaries, incoming 0→1 likewise, neither-role opaque, before-window opaque, after-window
+> opaque, dissolve opaque in raw primitive, zero-duration opaque no-divide-by-zero, empty-list opaque; 8
+> `opacity`: before-start invisible, after-end invisible, no-transition-in-window opaque, incoming fades in +
+> settles full past window, outgoing fades out at tail, dissolve degraded to crossfade ramp, stacked
+> incoming×outgoing multiply to 0.25, empty-transitions opaque), 6 `StoryForegroundTransitionTest` (no-kf-no-tr
+> → identity, incoming folds ramp, outgoing folds fade-out, zero-duration participant untouched, bystander
+> keeps base opacity, keyframe×transition opacity multiply), +1 `StoryViewerViewModelTest` (foreground
+> projection carries id/duration/clipTransitions and fades on the ramp). **Mutation RED-proof (isolated,
+> restored after)**: inverting the outgoing branch `1−progress → progress` failed EXACTLY the 2 outgoing tests
+> (start/end boundaries where the ramp direction actually differs), the other 20 stayed green — genuine
+> discrimination; production verified clean after restore, no stray `.bak`.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 4m27s, no test
+> failures). Reviewer PASS. Diff is `apps/android` only (1 new pure file, 1 view-model data-class + projection
+> threading, +23 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side resolver reading an
+> existing wire model + `animated()` folding, behavioural tests through the public API, no production logic
+> outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) V2-timeline neighbours — extend keyframe application to **text** clips (the wire
+> `StoryTextObject.keyframes` already decode; a text element could animate the same way the foreground media
+> now does — genuinely wire-backed pure logic), OR the **per-clip inspector** volume/fade/loop derivation, OR
+> the timeline transport (play/pause/scrub) pure state. Prefer the candidate with the cleanest pure core;
+> scout read-only first to confirm the wire fields and avoid glue-only work.
+
+> On 2026-08-23 **story keyframe animation plays back on the viewer canvas** (slice
+> `story-keyframe-interpolation`, feature-parity §E — the `Next` pointer's preferred candidate: a genuinely
+> wire-backed keyframe interpolation reducer, chosen over glue-only work). iOS animates a canvas clip's
+> position/scale/opacity over time from its `StoryKeyframe[]` (the wire model Android already decodes); the
+> Android viewer projection explicitly **dropped** keyframes ("keyframe animation … not applied in this
+> projection"), so a shifting/fading foreground clip rendered frozen at its static base.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3404 (web it. 255), #3395 (iOS 239i),
+> #3392 (gateway it. 254): none is a `claude/apps/android/*` slice, none in this routine's scope, none touched.
+> Prior iteration (`story-text-element-rtl-direction`, #3402) already merged into main. Branched off
+> freshly-fetched `origin/main` (`0656f14a`).
+>
+> **Three pure units, ported 1:1 from iOS's canonical SOTA path** (`KeyframeInterpolator.swift` +
+> `StoryReaderResolvers.swift`): (1) `StoryEasing.eased(t)` — linear/easeIn/easeOut/easeInOut, ports
+> `StoryEasing.apply`; (2) `StoryKeyframeInterpolator.interpolate(samples, at)` — 0→null, 1→constant,
+> `t≤t0`/`t≥tn` clamp, else find the straddling segment, `u=(t-lo)/(hi-lo)`, apply the LOWER keyframe's easing,
+> lerp; unsorted-safe via an O(n) sorted-check before the O(n log n) fallback (runs per animation frame);
+> (3) `StoryKeyframeResolver.resolve(...)` — projects the four independently-optional wire channels
+> (x/y/scale/opacity) each onto their own sample list, returns a complete `ResolvedKeyframeTransform` (un-keyed
+> channels hold the clip's static base) or `null` when nothing is keyed. **Deliberate improvement over iOS**:
+> iOS subtracts the clip `startTime` for the position channel but forgets to for scale/opacity
+> (`StoryReaderResolvers.swift:117/129` pass raw `currentTime`); per timeline spec §2.1 `keyframe.time` is a
+> `startTime`-relative offset for EVERY channel, so this port subtracts it uniformly. A `startTime==0` clip
+> (the common case) is unaffected.
+>
+> **Real wiring (not orphan logic)**: `StoryForegroundMediaView` now carries `keyframes`+`startTime` (threaded
+> through `toForegroundMediaView`, previously discarded) + an `opacity` base, and exposes the pure
+> `animated(atSeconds)` (returns `this` when nothing animates, else a copy with interpolated x/y/scale/opacity).
+> **Compose glue (exempt)**: `StoryForegroundLayer` takes the slide `progress` clock (`progress.value *
+> SLIDE_DURATION_MS/1000`), calls `.animated(playhead)`, and applies `.alpha(opacity)` — a keyed foreground
+> clip now moves/scales/fades during playback instead of sitting frozen.
+>
+> **SDK bootstrap — recipe FLIPPED**: the four-edit copy→patch `android-37` (correct `package.xml`) STILL died
+> `Failed to find target with hash string 'android-37'` on this image; the **pristine** `android-37.0`
+> (no patching) worked instead — opposite of the last two entries. NOTES updated: try pristine FIRST next run.
+>
+> **Tests: +26** — 13 `StoryKeyframeInterpolatorTest` (5 easing: endpoints-pinned, linear identity, easeIn/
+> easeOut/easeInOut midpoints; empty→null; single→constant; clamp-low; clamp-high; linear midpoint; lower-kf
+> easing; segment-crossing switches easing; same-time no-divide-by-zero; unsorted≡sorted), 8
+> `StoryKeyframeResolverTest` (null/empty/no-channel→null; keyed-channel-only; four-channels; startTime offset
+> uniform; no-easing linear; per-channel easing), 4 `StoryForegroundKeyframeTest` (no-keyframes→identity;
+> no-channel→identity; keyed follows animation + identity fields preserved; startTime offsets the clock), +1
+> `StoryViewerViewModelTest` (foreground projection carries keyframes/startTime, animates). **Mutation
+> RED-proof ×2 (isolated, restored after)**: `EASE_IN → t` (linear) failed EXACTLY the 3 ease-in tests; dropping
+> the `startTime` subtraction failed EXACTLY the 2 startTime-offset tests — 5 of 26 failed, the other 21 stayed
+> green. Genuine discrimination; production verified clean after restore.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (973 tasks, 5m46s, no test
+> failures). Reviewer PASS. Diff is `apps/android` only (2 new pure files, 1 view-model data-class + projection
+> threading, Compose glue in the viewer screen, +26 tests across 4 files, tracking docs). Verdict: **PASS** —
+> pure app-side reducers reading an existing wire model + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) V2-timeline neighbours of this slice — the **clip-transition** reader resolver
+> (crossfade/dissolve opacity ramp, iOS `ReaderTransitionResolver` + `StoryRenderer.clipTransitionOpacity`, also
+> wire-backed via `StoryClipTransition`) is the natural pure-logic follow-up, OR extend keyframe application to
+> **text** clips (the wire `StoryTextObject.keyframes` already decode — a text element could animate the same way
+> the foreground media now does). Both are genuinely wire-backed. Prefer the one with the cleaner pure core;
+> scout read-only first to confirm the wire fields and avoid glue-only work.
+
+> On 2026-08-23 **story text elements resolve their base writing direction (RTL) from content** (slice
+> `story-text-element-rtl-direction`, feature-parity §E — the last named text-element attribute, the `Next`
+> pointer's RTL item). This **completes §E text-element attribute parity** (style, colour, size, alignment,
+> background, outline/stroke, fade, RTL).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3398 (iOS Vague 167), #3395 (iOS
+> 239i), #3392 (gateway it. 254): none is a `claude/apps/android/*` slice, none in this routine's scope, none
+> touched. Prior iteration (`story-text-element-fade-timing`) already merged into main. Branched off
+> freshly-fetched `origin/main` (`0fb38477`).
+>
+> **Scout confirmed the note's hypothesis**: the wire `StoryTextObject` has NO RTL/direction field (`textAlign`
+> is the only alignment-ish field). iOS derives direction from content at render time. So the honest,
+> iOS-parity design is a **content-derived resolver**, NOT a stored field or a manual override (an override
+> couldn't persist with no wire field — it would be a dead-end feature). Did NOT invent a wire field.
+>
+> **The resolver is real, testable pure logic**: new `StoryTextBidi.resolveBaseDirection(text) ->
+> StoryTextDirection` (LTR/RTL) implementing the **Unicode Bidi Algorithm P2/P3 "first strong character"
+> rule** — scan for the first strong char (skipping neutrals, whitespace, digits, punctuation, and the whole
+> content of any directional isolate LRI/RLI/FSI…PDI via a depth counter), take RTL iff it is R or AL, default
+> LTR when none. Classification uses `Character.getDirectionality` (the JDK's UBA table) — the SOTA choice
+> over hand-rolled ranges — so Arabic/Hebrew/Adlam (incl. supplementary-plane surrogate pairs) and the strong
+> marks LRM/RLM/ALM all resolve correctly. `StoryTextElement.baseDirection` is a **derived** property (no
+> stored field → `toTextObject` untouched, honest parity). **Compose glue (exempt)**: the canvas sets
+> `TextStyle.textDirection` from `baseDirection` on both the stroked underlay and the fill, so an Arabic
+> caption lays its paragraph out right-to-left instead of the previous forced LTR. **No VM intent** —
+> direction follows the text automatically, mirroring iOS's render-time derivation.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (200). NEW gotcha (NOTES): the `android-37` copy→patch
+> also needs **`build.prop`'s `ro.build.version.sdk_full=37.0` → `37`** patched, not only `source.properties`
+> ApiLevel + `package.xml` `<api-level>`/`path=`. With only the first three edits, `./gradlew` STILL died with
+> `Failed to find target with hash string 'android-37'` (AGP 8.13 reads `sdk_full`). Also deleted the pristine
+> `android-37.0` dir so only `android-37` remains. With all four fixes, the local gate ran.
+>
+> **Tests: +20** — 17 `StoryTextDirectionTest` (no-strong→LTR ×3: empty/digits/emoji; first-strong-L ×3:
+> latin, latin-before-arabic, leading-LRM; first-strong-R ×2: hebrew, RLM; first-strong-AL ×3: arabic, ALM,
+> arabic-before-latin; neutral-skip ×2: whitespace/punct→arabic, digits→hebrew; supplementary-plane Adlam;
+> isolate ×3: arabic-in-isolate→LTR, FSI→LTR, unmatched-PDI→hebrew) + 3 element `baseDirection` (empty→LTR,
+> latin→LTR, arabic→RTL). **Mutation RED-proven ×2 (isolated runs after an earlier collision was detected and
+> discarded)**: RTL branch→LTR failed EXACTLY the 9 RTL-detection tests (the 8 LTR/default/isolate stayed
+> green); removing the `if (isolateDepth > 0) continue` guard failed EXACTLY the 2 isolate tests. Genuine
+> discrimination, files restored + verified clean afterward.
+>
+> **Verified**: `:feature:stories:testDebugUnitTest` green (17/17 direction, 44/44 element, 0 failures/skips);
+> full `assembleDebug testDebugUnitTest` local gate [see run log below]. Reviewer PASS. Diff is `apps/android`
+> only (1 new pure resolver file, 1 derived model property, Compose glue in the composer, +20 tests across 2
+> files, tracking docs). Verdict: **PASS** — pure app-side resolver + derived property + exempt Compose glue,
+> behavioural tests through the public API, no production logic outside apps/android, no wire/shared change.
+>
+> **Next**: §E (Stories) moves past text-element attributes (now complete) to the story-canvas **Effets** tiles
+> — filters / drawing / timeline (named pending in the composer-band slice) — or on-canvas sticker/drawing
+> elements. Scout read-only first: check whether the wire `StoryEffects`/`StoryTextObject` already carry
+> filter/keyframe fields (keyframes DO exist on the wire — `StoryKeyframe`), so a timeline/keyframe slice may
+> be genuinely wire-backed and testable, unlike RTL. Prefer a candidate with real pure logic (a filter
+> enum+wire mapping, or a keyframe interpolation reducer) over glue-only work.
+
+> On 2026-08-23 **story text elements get per-element fade in/out timing (fadeIn/fadeOut)** (slice
+> `story-text-element-fade-timing`, feature-parity §E — the fade item the size/outline slices named as pending,
+> `story-text-element-fade-timing`, feature-parity §E — the fade item the size/outline slices named as pending,
+> the `Next` pointer's preferred candidate (2): two existing `Double?` wire fields, mirroring the size/outline
+> shape). iOS's `StoryTextEditorView` exposes two independent `0…5 s` timing sliders (`fadeIn`/`fadeOut`, `0`
+> folds to `nil`); Android's on-canvas text element carried style/colour/align/size/background/outline but no
+> fade, so a caption could never ease in or out.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3395 (iOS 239i) and #3392 (gateway
+> it. 254): neither is a `claude/apps/android/*` slice, neither in this routine's scope, neither touched. Prior
+> iteration (`story-text-element-font-size`, #3384-line) already merged into main. Branched off freshly-fetched
+> `origin/main` (`396ae223`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). New gotcha recorded in NOTES: the
+> copy→patch for `android-37` also needs `package.xml`'s **`path="platforms;android-37.0"` → `android-37`**
+> patched, not only `<api-level>` + `source.properties`. Without it the first `./gradlew` died with *"Observed
+> package id 'platforms;android-37.0' in inconsistent location"* → `Failed to find target with hash string
+> 'android-37'`. With all THREE metadata edits, full `assembleDebug testDebugUnitTest` ran locally, **BUILD
+> SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model, not duplication**: the wire `StoryTextObject.fadeIn`/`fadeOut` (`Double?`, seconds) already existed —
+> this slice adds only the **app-side** model that projects onto them. New pure `StoryTextFade`
+> `(inSeconds, outSeconds)` — held FLAT (two independent ends, exactly as iOS binds two separate sliders), each
+> defaulting to `NONE_SECONDS = 0`. `StoryTextFadeCycle.advance` is the Android tap-friendly form of the iOS
+> `0…5 s` slider: discrete steps `[0.5,1,2,3,5]` short→long, one tap advances to the first step STRICTLY greater
+> than the current value (a between-steps value jumps UP, a tap never shortens), wraps past the longest back to
+> no-fade; every step stays within the iOS-accepted `0…5 s` range so a cycled value round-trips the wire.
+>
+> **`StoryTextElement`**: gained `fade: StoryTextFade = StoryTextFade()` (defaulted no-fade); `toTextObject` sets
+> `fadeIn`/`fadeOut`, EACH omitted while its end is 0 (the value iOS folds to `nil` — same "absent = no styling,
+> minimal payload" law the outline/background slices set). **VM** `onTextElementCycleFadeIn(id)` /
+> `onTextElementCycleFadeOut(id)` each advance ONLY their own end via the pure cycle, inert on unknown id,
+> selection/editing untouched — mirrors the size/outline wrappers. **Compose glue (exempt)**: two toolbar buttons
+> (`Login`/`Logout` AutoMirrored icons, tinted `primary` when that end fades, else `onSurfaceVariant`) drive the
+> taps; the style row that holds align/size/outline/fade/duplicate is now `horizontalScroll`-wrapped so the two
+> extra buttons never clip on a narrow phone. 4 locales get `stories_composer_fade_in`/`_fade_out`.
+>
+> **Tests: +20** — 10 `StoryTextFadeTest` (model visibility ×3; `cycledIn`/`cycledOut` each touch only their end
+> ×2; cycle: every-step-then-wrap, between-steps jump-up, past-longest wrap, beyond-longest wrap, the five steps
+> all ≤5s), 5 `StoryTextElementTest` (fresh element no fade; `toTextObject` omits both when none, carries in-only,
+> out-only, both), 5 `StoryComposerViewModelTest` (fade-in advances only in, fade-out advances only out, fade-in
+> wraps, both inert on unknown id). **Mutation RED-proof ×2**: nulling `toTextObject`'s `fadeIn` failed EXACTLY
+> the 3 fade-in projection tests + a no-op `advance` (return `current`) failed EXACTLY the 7 cycle/cycled tests —
+> 10 of 195 failed, genuine discrimination (the omit/inert tests stayed green). Restored via backup; production
+> diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (4m37s, no test failures);
+> stories suite re-run green on the restored files. Reviewer PASS. Diff is `apps/android` only (1 new pure model
+> file, 1 model field + wire wiring, 2 VM methods, Compose glue in the composer screen + a scrollable row, strings
+> ×4 locales, +20 tests across 3 files, tracking docs). Verdict: **PASS** — pure app-side model projecting onto
+> two existing wire fields + exempt Compose glue, behavioural tests through the public API, no production logic
+> outside apps/android.
+>
+> **Next**: §E (Stories), the last named text-element attribute — **RTL** (a per-element writing-direction
+> override). Scout read-only first: the wire `StoryTextObject` has NO dedicated RTL/direction field (confirmed
+> this run — `textAlign` is the only alignment-ish field), so iOS likely derives direction from the text content
+> at render time. Decide whether Android RTL is a client-only concern (derive from the caption's script, no wire
+> field, glue-only) or genuinely needs a new wire field (in which case it's cross-cutting, not an apps/android-only
+> slice, and should be deferred/flagged). If RTL turns out to be non-wire-backed like `frame` was, skip it and
+> move to the story-canvas **Effets** tiles (filters / drawing / timeline) or another §E gap. Do NOT invent a wire
+> field for RTL — that would touch shared/gateway and break the merge gate.
+
+> On 2026-08-23 **story text elements get a discrete font size (fontSize), born at the iOS-parity 96** (slice
+> `story-text-element-font-size`, feature-parity §E — the `story-text-element-styling` backlog's **size** item,
+> the follow-up the outline slice named). iOS births a fresh text element at `fontSize: 96` design units
+> (1080-referential) and changes it by pinch (baked into `fontSize`); Android's `StoryTextElement.toTextObject`
+> never set `fontSize`, so it leaked the wire default `64.0` — a caption rendered ~⅓ smaller than iOS. This lands
+> the parity size **and** a discrete size ladder so a size can be chosen by a single tap (an Android-side
+> improvement; iOS has no discrete size control).
+>
+> **Step 0 — merged the prior iteration's open PR first.** #3384 (`story-text-element-outline`) was left ⚠ blocked
+> last run on a base-red `ci.yml`. Re-examined: the **Android** merge gate was GREEN, and the gateway time-bomb
+> that held it (a `MessageHandlerEditDelete` fixture pinning `createdAt = 2026-08-22T10:00:00Z`, expiring at the
+> 24 h edit window) is **fixed on main** — commit `68e4285b` made the fixture relative to the real clock. #3384's
+> `ci.yml` was red only because its base (`e87b7b0d`) predated that fix. `ci.yml` remains red on main itself, now
+> on **Quality (bun)** — an `apps/web` type-debt ratchet regression (1240 vs baseline 1239, +1) — again zero
+> Android lines, unfixable in `apps/android` scope. Merge criteria held (Android gate green, diff `apps/android`
+> only, mergeable), so squash-merged #3384 → main (`4141bfd5`), documented the base-red resolution on the PR.
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe refinement: the copy→patch for
+> `android-37` needs to patch **`package.xml`'s `<api-level>37.0</api-level>` → `37`**, not only
+> `source.properties`'s `AndroidVersion.ApiLevel` — AGP reads `package.xml` for the platform hash, so patching
+> only `source.properties` still fails with `Failed to find target with hash string 'android-37'`. With both
+> patched, full `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL** (973 tasks). Local gate
+> available this run. (NOTES updated.)
+>
+> **Model, not duplication**: the wire `StoryTextObject.fontSize` (default `64.0`) already existed — this slice
+> adds only the **app-side** discrete model that projects onto it. New pure `StoryTextSize` enum ladder
+> (`SMALL 64` / `MEDIUM 96` / `LARGE 140` / `XLARGE 200` design units) with `DEFAULT = MEDIUM` (iOS-parity birth
+> size). `StoryTextSizeCycle.next` wraps largest→smallest (no "off" step — text always has a size; unlike the
+> outline cycle), off the ordered `StoryTextSize.entries` SSOT the tap and any future picker share.
+>
+> **`StoryTextElement`**: gained `size: StoryTextSize = StoryTextSize.DEFAULT`; `toTextObject` now sets
+> `fontSize = size.designSize.toDouble()` (default → 96.0, the parity fix). The effective on-screen size is
+> `designSize × scale`, mirroring iOS `fontSize × scale` — Android keeps the pinch on the separate `scale`
+> multiplier, so the two compose rather than fight. **VM** `onTextElementCycleSize(id)` advances one tap via the
+> pure cycle, inert on unknown id, selection/editing untouched — mirrors the outline/bg/style/align wrappers.
+> **Compose glue (exempt)**: a `FormatSize` toolbar button (tinted `primary` when the size is non-default, else
+> `onSurfaceVariant`) drives the tap; the canvas previews the size in sp via `designSize ×
+> STORY_TEXT_CANVAS_FONT_FACTOR` (0.1875, so MEDIUM→18 sp) on both the fill and the stroked underlay. 4 locales
+> get `stories_composer_size`.
+>
+> **Tests: +11** — 5 `StoryTextSizeTest` (the four-step design-unit ladder, `DEFAULT`=MEDIUM=96, cycle steps
+> order, `next` visits-all-then-wraps, `next` past-largest wraps), 3 `StoryTextElementTest` (fresh element born
+> MEDIUM; `toTextObject` carries default→96.0 and a chosen size→200.0), 3 `StoryComposerViewModelTest`
+> (`onTextElementCycleSize` advances / wraps at the top / inert on unknown id). **Mutation RED-proof ×2**:
+> dropping the `toTextObject` `fontSize` projection failed EXACTLY the 2 fontSize element tests (the ladder/cycle
+> stayed green); a no-advance `next` (return `steps[index]`) failed EXACTLY the 4 cycle tests (2 size + 2 VM; the
+> inert VM test and the born-MEDIUM test stayed green) — genuine discrimination, restored via backup.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (4m47s, no test failures).
+> Reviewer PASS. Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method,
+> Compose glue in the composer screen, strings ×4 locales, +11 tests across 3 files, tracking docs). Verdict:
+> **PASS** — pure app-side model projecting onto the existing wire field + exempt Compose glue, behavioural tests
+> through the public API, no production logic outside apps/android.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) **RTL** for text elements (a per-element writing-direction override; the wire has no dedicated field — iOS
+> derives it, so scout whether it's a client-only concern or needs a wire field); (2) **fade timing**
+> (`StoryTextObject.fadeIn`/`fadeOut` are Double? wire fields already — a per-element fade in/out, same shape as
+> this slice, projecting onto existing wire fields — likely the cleanest next thin slice); (3) the story-canvas
+> **Effets** tiles (filters / drawing / timeline). Prefer (2) — two existing wire fields, mirrors this slice.
+> NOTE: `frame` (iOS `StoryTextFrameShape` cycle) is NOT cleanly wire-backed — the frame fields live on iOS's
+> client `StoryTextObject` but are absent from the gateway/shared contract and the canvas-v3 fixtures, so skip it
+> unless a wire field is confirmed.
+
+> On 2026-08-23 **story text elements get a stroke outline (borderColor / borderWidth)** (slice
+> `story-text-element-outline`, feature-parity §E — the `story-text-element-styling` backlog's `outline/stroke`
+> item, the pending follow-up the `story-text-element-background` entry named). iOS lets a text element carry a
+> discrete `.border` attribute cycled from the composer's high row (`StoryTextAttributeCycle.advance(.border)`);
+> Android's on-canvas text element carried style/colour/align/background but no stroke, so a caption could never
+> be outlined for legibility over busy media.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration. `list_pull_requests` → the open
+> PRs repo-wide are OTHER routines' work — #3381 (realtime-sync cycle 108, branch `claude/keen-hamilton-lmraqx`,
+> touches shared+gateway = production logic, NOT android-routine), #3375 (web it. 251), #3364 (iOS 238i). None is
+> a `claude/apps/android/*` android-routine slice, and none is in this routine's scope. Prior android iteration
+> (`story-text-element-background`, #3379) already merged into main. Branched off freshly-fetched `origin/main`
+> (`1e6837b6`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). This run the recipe that worked was the
+> **copy→patch** one (as the three 2026-08-23 entries used), NOT the pristine `android-37.0` one the 2026-08-21
+> NOTES recorded: install cmdline-tools + `platforms;android-37.0` via `--channel=3` + `build-tools;36.0.0`, then
+> `cp -r android-37.0 android-37` and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. The FIRST
+> `./gradlew` failed with **`Failed to find target with hash string 'android-37'`** on the pristine dir; after the
+> copy+patch, `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL**. Local gate available this run.
+>
+> **Model reuse, not duplication**: the wire `StoryTextObject` already carried `borderColor`/`borderWidth` — this
+> slice adds only the **app-side** composer model that projects onto them. New pure `StoryTextOutline`
+> `(width: Float, color: String?)` in `:feature:stories` — held FLAT, not a sealed `None`/`Stroke`, precisely
+> because iOS keeps the chosen colour when the width returns to zero (so re-thickening never re-asks); a `None`
+> case would erase it. Plus `StoryTextOutlineCycle.advance` — a case-for-case port of iOS
+> `StoryTextAttributeCycle.advance(.border)`: steps `[2,4,8,12]` thin→thick, one tap advances to the first step
+> STRICTLY greater than the current width (a between-steps width jumps UP, a tap never thins), wraps past the
+> thickest back to no-stroke, and posts the default white (`FFFFFF`) the first time a stroke leaves zero
+> uncoloured. The colour is preserved across every other transition, the return to zero included.
+>
+> **`StoryTextElement`**: gained `outline: StoryTextOutline = StoryTextOutline()` (defaulted no-stroke — the one
+> non-copy construction site uses named args, verified); `toTextObject` sets `borderColor`/`borderWidth`, BOTH
+> omitted while width is 0 (a retained colour never leaks onto the wire without a width — the same "absent = no
+> styling, minimal payload" law the background slice set). **VM** `onTextElementCycleOutline(id)` advances one
+> tap via the pure cycle, inert on unknown id, selection/editing untouched — mirrors the style/colour/align/bg
+> wrappers. **Compose glue (exempt)**: a `BorderColor` toolbar button (tinted `primary` when a stroke is visible,
+> else `onSurfaceVariant`) drives the tap; the canvas paints a stroked underlay of the same glyphs
+> (`TextStyle(drawStyle = Stroke(width))`, outline colour) beneath the fill so the border hugs the letterforms
+> rather than boxing the element. 4 locales get `stories_composer_outline`.
+>
+> **Tests: +17** — 10 `StoryTextOutlineTest` (model visibility ×4; cycle: every-step-then-wrap, between-steps
+> jump-up, leaving-zero posts white, leaving-zero keeps chosen colour, return-to-zero keeps colour, the four
+> steps), 4 `StoryTextElementTest` (fresh element has no outline; `toTextObject` omits border when none, carries
+> both when stroked, keeps a retained colour off the wire at zero width), 3 `StoryComposerViewModelTest`
+> (`onTextElementCycleOutline` thickens+posts white / wraps / inert on unknown id). **Mutation RED-proof ×2**:
+> nulling `toTextObject`'s `borderWidth` failed EXACTLY `carries a stroked outline` (the omit tests stayed green);
+> dropping the white-post in `advance` failed EXACTLY `advance leaving zero posts the default white` + the VM
+> `thickens…posts the default colour` (wrap/inert stayed green) — 3 of 179 failed, genuine discrimination.
+> Restored via backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, **BUILD SUCCESSFUL** (4m49s, no test failures). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method, Compose glue in
+> the composer screen, strings ×4 locales, +17 tests across 3 files, tracking docs). Verdict: **PASS** — pure
+> app-side model projecting onto the existing wire fields + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android.
+>
+> **PR #3384 — ⚠ BLOCKED ON BASE, NOT MERGED (2026-08-23).** The merge gate — the **Android** CI check —
+> is **GREEN** (`assembleDebug` + `testDebugUnitTest`, run 32633748096 conclusion success). The monorepo
+> `ci.yml` is RED, but **the only red job is `Test gateway`** (2 failed / 19214 passed): both failures are in
+> `services/gateway/src/socketio/handlers/__tests__/MessageHandlerEditDelete.test.ts` — the `message:edited`
+> payload/`senderId` cases whose fixture pins `createdAt = 2026-08-22T10:00:00Z`. `admitMessageEdit` refuses any
+> edit past a 24 h window, so those two turned RED for EVERY branch at 10:00 UTC today. This is red on `main`
+> itself (PR #3381's commit proved it on a clean `origin/main`) and touches ZERO lines of this apps/android-only
+> diff — `ci.yml` doesn't even compile the Kotlin this slice adds. It is the CI-red rule's "red on the base too,
+> not mine" case, and it is **unfixable within apps/android scope** (the fix lives in `services/gateway`; touching
+> it would violate the hard rule "diff is apps/android only"). Per the hard rule **never merge past red CI**, the
+> PR is left OPEN and WATCHED (subscribed to PR activity). **Next iteration's Step 0**: if `main`/base has
+> recovered (the gateway time-bomb fixed — e.g. PR #3381's gateway fix, or another, merged), merge base into this
+> branch, re-run CI, and squash-merge #3384 once `ci.yml` is green; then proceed to the next slice. Until then
+> this slice stays ⚠ blocked and no new slice starts on top of an unmerged one.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) continue the text-element styling backlog — **size** (discrete font-size control; the wire
+> `StoryTextObject.fontSize` already exists, default 64) is the cleanest remaining thin slice, same shape as
+> this one; (2) RTL / fade timing (`fadeIn`/`fadeOut` on the wire); (3) the story-canvas **Effets** tiles
+> (filters/drawing/timeline). Prefer (1) — one wire field, mirrors this slice.
+
+> On 2026-08-23 **story text elements get a background (none / solid / glass)** (slice
+> `story-text-element-background`, feature-parity §E — "Text elements … background (none/solid/glass) …",
+> the `story-text-element-styling` slice's first named-pending item). iOS lets a text element carry a
+> `StoryTextBackgroundStyle` (`.none`/`.solid(hex:)`/`.glass(radius:)`) chosen from `StoryTextBackgroundPresets`;
+> Android's on-canvas text element carried style/colour/align but no backing, so a caption always floated bare.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the open
+> PRs repo-wide are gateway/web/ios work — #3376/#3375/#3368/#3364/#3352 — none android-routine). Prior android
+> iteration (`feed-repost-embed-location`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`06e85aa4`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real `android-37`
+> dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. Full `assembleDebug testDebugUnitTest`
+> (= `meeshy.sh check`) ran locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: the wire model `StoryTextBackgroundStyle` (`{type,hex?,radius?}`, in
+> `:core:model`) already existed — this slice adds only the **app-side** composer model that projects onto it.
+> New pure `StoryTextBackground` sealed interface in `:feature:stories` (`None`/`Solid(hex)`/`Glass(radius)`)
+> — exhaustive `when`, impossible states unrepresentable — with `toStyleWire()` deciding the tagged-union
+> encoding in one place: `None`→`null` (absent = "no background" per the gateway's `resolvedBackgroundStyle`,
+> minimal payload, mirrors iOS purging the legacy `textBg`), `Solid`→`{type:"solid",hex}`, `Glass`→
+> `{type:"glass",radius}`. `StoryTextBackgroundPresets.all` mirrors the iOS `StoryTextBackgroundPresets.all`
+> order/values (None, Glass(24), then 10 solids incl. the `…A6` alpha variants) as the single ordered SSOT the
+> picker chips and the pure `next()` tap-cycle both read (they can't diverge). `next()` wraps at the end and
+> restarts at the first for an off-palette backing.
+>
+> **`StoryTextElement`**: gained `background: StoryTextBackground = None` (defaulted last-ish field — all
+> construction sites use named args, verified — so no call breaks); `toTextObject` now sets
+> `backgroundStyle = background.toStyleWire()`. **VM** `onTextElementBackground(id, background)` mirrors the
+> style/colour/align wrappers exactly (one-line `updateTextElement`, inert on unknown id, selection/editing
+> untouched). **Compose glue (exempt)**: `TextElementLayer` paints the backing behind the glyphs via a
+> `Modifier.storyTextBacking` (rounded solid fill / translucent frosted scrim for glass / nothing for none;
+> `parseBackingColor` handles both `RRGGBB` and `RRGGBBAA`→Compose `AARRGGBB`), and a `BackgroundSwatch` chip
+> row (accent-ringed selection, a slash icon for None) joins the `TextStyleToolbar`. 4 locales get
+> `stories_composer_bg_none`/`_glass`.
+>
+> **Tests: +14** — 8 `StoryTextBackgroundTest` (none/solid/8-digit-solid/glass wire mapping, preset order,
+> `next` advance/wrap/off-palette), 4 `StoryTextElementTest` (fresh element has no backing; `toTextObject`
+> omits `backgroundStyle` when none, carries solid, carries glass), 2 `StoryComposerViewModelTest`
+> (`onTextElementBackground` re-backs only the edited element / inert on unknown id). **Mutation RED-proof ×1**:
+> nulling `toTextObject`'s `backgroundStyle = background.toStyleWire()` failed EXACTLY the two positive-wiring
+> tests (solid + glass, 2 of 29 in that suite) while "omits when none" stayed green — genuine discrimination.
+> Restored via backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure model file, 1 model field + wire wiring, 1 VM method, Compose glue in
+> the composer screen, strings ×4 locales, +14 tests across 3 files, tracking docs). Verdict: **PASS** — pure
+> app-side model projecting onto the existing wire type + exempt Compose glue, behavioural tests through the
+> public API, no production logic outside apps/android.
+>
+> **Next**: still §E (Stories). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) continue the text-element styling backlog — **size** (discrete font-size control) or **outline/stroke**
+> (`borderColor`/`borderWidth` already on the wire `StoryTextObject`), each a clean thin model+wire+chip slice
+> like this one; (2) RTL / fade timing (`fadeIn`/`fadeOut` on the wire); (3) the story-canvas **Effets** tiles
+> (filters/drawing/timeline). Prefer (1) — the wire fields exist and it mirrors this slice's shape exactly.
+
+> On 2026-08-23 **repost embed shows the reposted post's shared location** (slice
+> `feed-repost-embed-location`, feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders
+> the SOURCE post's `SharedPlace` as a tappable sticker inside the quote block (`FeedPostCard.swift:989`),
+> below the reposted media. Android's `ApiRepostOf` did not even carry the field, so a reposted location
+> never surfaced in the embed. This closes the last repost-embed data gap that reuses this cycle's models.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the
+> open PRs repo-wide are gateway/ios/shared work — #3370/#3368/#3364/#3352 — none android-routine). Prior
+> android iteration (`feed-post-location-sticker`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`09caa5a3`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES:
+> install cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37` (AGP reads the integer
+> ApiLevel, not the dir name). Full `assembleDebug testDebugUnitTest` ran locally, **BUILD SUCCESSFUL**
+> (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: `ApiRepostOf` gained only `location: SharedPlace? = null` — the same
+> `:core:model` SSOT `ApiPost.location` already uses (mirrors the *gateway* shape, no iOS-extra `id`).
+> `RepostEmbedPresentation` gained `location: FeedLocationPresentation? = null`, projected through the
+> **same** `FeedPostLocationBuilder.build(repost.location)` the outer feed card uses — one label-resolution
+> source of truth (name → address → null), not a second copy. The Compose glue (exempt) renders the
+> existing dumb `FeedPostLocationSticker` atom inside `RepostEmbedCell` after the media preview (mirror of
+> iOS ordering), tap wired to the screen's `openPlaceOnMap` — promoted `private` → `internal` so the shared
+> cell reuses the one `geo:`-intent + Google-Maps-web-fallback path (no dead-end, no per-screen copy). All
+> 4 `RepostEmbedCell` call sites (feed, detail, bookmarks, user-posts) get the sticker with zero signature
+> change.
+>
+> **Tests: +3** `RepostEmbedBuilderTest` — projects label+coords / absent→null / coordinate-only→null-label.
+> **Mutation RED-proof ×1**: forcing `location = null` in the builder fails EXACTLY the two positive-projection
+> tests (2 of 3), while `absentLocationBecomesNull` correctly stays green (it asserts null for null input) —
+> genuine discrimination, not a blanket break. Restored via backup; production diff verified clean afterward.
+> The label-resolution branches themselves are already mutation-proven in `FeedPostLocationBuilderTest`
+> (prior slice), so these 3 cover the wiring, not a re-test of the delegate.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks); `RepostEmbedBuilderTest`
+> 23/23 green after restore. Reviewer PASS. Diff is `apps/android` only (1 model field, 1 presentation field
+> + builder wiring, 1 Compose sticker in the shared cell, `openPlaceOnMap` visibility bump, +3 tests, tracking
+> docs — no new strings, reuses `feed_location_shared`/`feed_location_open`). Verdict: **PASS** — pure app-side
+> projection through a tested builder + exempt Compose glue, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) begin decomposing the **Unified post composer** tabs (large, multi-slice) — the largest remaining Feed
+> gap; (2) the **story-/reel-canvas repost embed** (needs an Android story-canvas renderer — iOS
+> `StoryRepostEmbedCell`/`ReelRepostEmbedCell`, a bigger dependency); (3) advance to **§E Stories** (next in
+> build order). Prefer (1) or (3) — the cleanly-doable repost-embed data gaps are now closed (like count,
+> mood emoji, location all landed).
+
+> On 2026-08-23 **feed post shows its shared location** (slice `feed-post-location-sticker`,
+> feature-parity §F — new "Feed post location sticker (display side)" box). iOS renders a received post's
+> shared place as a pin + label capsule under the media (`FeedPostLocationSticker`); the Android composer
+> already ATTACHED an outgoing `SharedPlace`, but `ApiPost` dropped the field on the way IN, so a received
+> location never surfaced on the feed card. This lands the display side — the cleanest thin Feed slice with
+> data already on the wire (the composer's own `SharedPlace` model proves the type is used both ways).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-repost-embed-mood-emoji`) already merged into main as PR #3361 (commit `97742b98`). Branched off
+> freshly-fetched `origin/main` (`2e24d7cc`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> cmdline-tools + `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37` (AGP reads the integer
+> ApiLevel, not the dir name). After that the full `assembleDebug testDebugUnitTest` (= `meeshy.sh check`) ran
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Model reuse, not duplication**: I first almost re-declared `SharedPlace` in `Post.kt`, then found the
+> existing SSOT `:core:model/SharedPlace.kt` (`{latitude, longitude, name, address, category}`, no `id` — it
+> mirrors the *gateway* shape, deliberately not iOS's extra `id`). Reused it; `ApiPost` gained only
+> `location: SharedPlace? = null` (data-class boilerplate, coverage-exempt; key-based kotlinx.serialization,
+> order-independent).
+>
+> **`:feature:feed` `FeedPostLocationBuilder`** (pure, app-side — same grain as `RepostEmbedBuilder`):
+> `build(place)` → `FeedLocationPresentation(label, latitude, longitude)` or null when absent. Label resolves
+> `name?.takeIf { isNotBlank } ?: address?.takeIf { isNotBlank }` → null (mirror of iOS `displayLabel`
+> name → address precedence). A null label is NOT an absent sticker — the cell supplies the localized
+> "Position partagée" fallback so a hand-dropped, coordinate-only pin still renders a tappable sticker.
+> Projected into `FeedPostPresentation.location` (defaulted last field — the one direct-construction test,
+> `FeedMediaGalleryTest`, uses named args so it stays green).
+>
+> **`:feature:feed` `FeedPostLocationSticker`** (Compose glue, exempt): a reusable dumb atom (pin +
+> ellipsized label in an Indigo500@12% capsule, accent-coherent, a11y `Role.Button` + open-hint), taking an
+> `onTap` so the map-intent orchestration stays in the screen. Wired into `PostCard` after the image grid
+> (mirror of iOS ordering). Tap → `openPlaceOnMap`: a `geo:lat,lng?q=…` intent, `Locale.ROOT`-formatted so a
+> comma-decimal JVM locale never emits an invalid URI, with a Google-Maps-web `ACTION_VIEW` fallback on
+> `ActivityNotFoundException` — no dead-end when no map app is installed.
+>
+> **Tests: +11** — 9 `FeedPostLocationBuilderTest` (null place / name / name-over-address /
+> blank-name→address / absent-name→address / blank-both→null / absent-both→null / coord passthrough /
+> coord-only→null-label) + 2 `FeedPostBuilderTest` wiring (projects label+coords / absent→null). **Mutation
+> RED-proof ×1**: dropping the name `isNotBlank` guard fails EXACTLY the two blank-name tests (2 of 9), the
+> other 7 green. Restored via `cp` backup; production diff verified clean afterward. Compile-RED was also
+> genuine — the tests referenced `SharedPlace`/`FeedPostLocationBuilder`/`FeedLocationPresentation` before
+> they were plumbed.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 model field, 1 new pure builder + presentation, 1 new Compose cell, screen
+> wiring + map helper, strings ×4 locales, +11 tests, tracking docs). Verdict: **PASS** — pure app-side
+> projection through a tested builder + exempt Compose glue, behavioural tests through the public API, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) the reposted post's **location** in the repost embed — now unblocked on the display side, needs a new
+> `ApiRepostOf.location` field + gateway payload confirmation (iOS `APIRepostOf.location` is on the wire per
+> `PostModels.swift`), then a small mirror of this slice's projection into `RepostEmbedBuilder`; (2) begin
+> decomposing the **Unified post composer** tabs (large, multi-slice); (3) advance to **§E Stories** (next in
+> build order). Prefer (1) — it is the last cleanly-doable repost-embed gap and reuses this slice's model.
+
+> On 2026-08-23 **repost embed shows the reposted post's mood emoji** (slice `feed-repost-embed-mood-emoji`,
+> feature-parity §F — "Repost / quote embed cell in the feed"). iOS prefixes the reposted post's mood emoji
+> to the quoted content (`FeedPostCard.swift:966` — `if let mood = repost.moodEmoji, !mood.isEmpty`), with an
+> explicit comment that a reposted STATUS carries an empty body, so without the emoji "un mood republié
+> n'afficherait qu'un corps vide". Android's `ApiRepostOf` did not even carry the field, so a reposted mood
+> status rendered a completely empty embed. This lands it — the last cleanly-doable repost-embed gap whose
+> data was NOT already on the model.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-repost-embed-like-count`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`e4d8c3f5`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe as recorded in NOTES: install
+> `platforms;android-37.0` via `--channel=3`, then **copy** `android-37.0` → a real `android-37` dir and `sed`
+> its `source.properties` to `AndroidVersion.ApiLevel=37` (the symlink alone is insufficient — AGP reads
+> `37.0` from `source.properties`). After that the full `assembleDebug testDebugUnitTest` ran locally, **BUILD
+> SUCCESSFUL** (152 actionable tasks for the feed subtree; full check below). Local gate available this run.
+>
+> **Backend risk resolved before committing**: the "mood emoji embed" candidate was flagged in prior NOTES as
+> needing "gateway payload confirmation first". Confirmed on the wire — iOS `APIRepostOf` declares
+> `moodEmoji: String?` and decodes `repostOf.moodEmoji` (`PostModels.swift:87,281`), so the gateway already
+> serves it; Android was simply dropping it. No gateway/shared change — the fix is a pure Android model +
+> projection + Compose gap.
+>
+> **`:core:model` `ApiRepostOf`**: gained `val moodEmoji: String? = null` (kotlinx.serialization, key-based —
+> order-independent; data-class boilerplate, coverage-exempt). Only construction site is `RepostEmbedBuilder`
+> (grep-verified), so no other call breaks on the new field.
+>
+> **`:feature:feed` `RepostEmbedBuilder`** (pure, app-side): `RepostEmbedPresentation` gained
+> `moodEmoji: String?`, projected as `repost.moodEmoji?.takeIf { it.isNotBlank() }` — identical guard to the
+> feed card's own `FeedPostPresentation` (`post.moodEmoji?.takeIf { it.isNotBlank() }`) and iOS's `!mood.isEmpty`.
+>
+> **`:feature:feed` `RepostEmbedCell`** (Compose glue, exempt): the content block now shows when
+> `moodEmoji != null || content.isNotBlank()` (was content-only), on a firstTextBaseline `Row` prefixing the
+> emoji (`bodyMedium`) before the content — mirror of iOS's `HStack(alignment: .firstTextBaseline, spacing: 6)`.
+> **Improvement over iOS**: the mood-only case (blank body + emoji) now renders on Android — iOS's own comment
+> flags that exact case as previously an empty body; Android gates content to non-blank so a mood-only repost
+> shows just the emoji, no empty text node. No new strings (emoji is verbatim text). No dead ends: read-only,
+> part of the same tap target that opens the original post.
+>
+> **Tests: +3** — all in `RepostEmbedBuilderTest`, through the public `RepostEmbedBuilder.build`: projects the
+> mood emoji ("🎉") / absent (null) → null / blank ("   ") → null. **Mutation RED-proof ×1**: dropping
+> `.takeIf { it.isNotBlank() }` fails EXACTLY `build_blankMoodEmojiBecomesNull` (1 of 20), the other 19 green.
+> Restored via `cp` backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (1 model field + projection, cell wiring, +3 tests, tracking docs). Verdict: **PASS** —
+> pure app-side projection through a tested SSOT + exempt Compose glue, behavioural tests through the public
+> API, no production logic outside apps/android.
+>
+> **Next**: still §F (Feed) is nearly complete (the two remaining unchecked boxes — "Unified post composer
+> (Post/Status/Story tabs)" and the story-canvas repost embed — are large multi-slice features). Candidates:
+> (1) the reposted post's **location sticker** in the embed (needs a new `ApiRepostOf.location` field — confirm
+> iOS `APIRepostOf.location` is on the wire, which it is per `PostModels.swift`, then a model-plumbing slice
+> mirroring this one); (2) begin decomposing the **Unified post composer** tabs; (3) or advance to **§E Stories**
+> (22 todos, next in build order). Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **repost embed shows the reposted post's like count** (slice `feed-repost-embed-like-count`,
+> feature-parity §F — "Repost / quote embed cell in the feed"). iOS renders the reposted post's like count
+> inside the embedded quote block (`FeedPostCard.repostView` heart + `repost.likes`; `PostDetailView`
+> `repostEmbed` gated `> 0`); Android's shared `RepostEmbedCell` omitted it. This lands it — the single
+> cleanest remaining Feed embed gap, since the data is **already deserialized** into `ApiRepostOf.likeCount`
+> (no new gateway endpoint, no new SDK model field, no new socket stream — which is exactly what disqualified
+> the mood-emoji / location-sticker embed variants that each need a net-new `ApiRepostOf` field).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3352, a gateway share-link language fix, not android-routine). Prior android iteration
+> (`feed-postdetail-quote-repost`) already merged into main as PR #3350. Branched off freshly-fetched
+> `origin/main` (`ad904485`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe wrinkle DEEPENED: the symlink
+> `android-37 → android-37.0` is **no longer sufficient** — AGP reads `AndroidVersion.ApiLevel=37.0` from the
+> platform's `source.properties` and computes the hash `android-37.0`, so `compileSdk = 37` still fails with
+> *"Failed to find target with hash string 'android-37'"* even with the symlink present (confirmed this run:
+> baseline `assembleDebug` failed on exactly that). Fix that actually works: **copy** `android-37.0` → a real
+> `android-37` dir and `sed` its `source.properties` to `AndroidVersion.ApiLevel=37`. After that the full
+> `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) ran locally, **BUILD SUCCESSFUL**
+> (973 tasks). Local gate available this run. (Recorded in NOTES.md.)
+>
+> **`:feature:feed` `RepostEmbedBuilder`** (pure, app-side): `RepostEmbedPresentation` gained `likeCount: Int`,
+> projected as `(repost.likeCount ?: 0).coerceAtLeast(0)` — null (absent payload) → 0, and a malformed
+> negative clamps to 0 (same precedent as `feed-realtime-comment-count`'s `coerceAtLeast(0)`). **Improvement
+> over iOS**: gated `> 0` in the shared cell, so a reposted post with no likes shows no "0 j'aime" clutter —
+> iOS's `FeedPostCard.repostView` renders the count unconditionally; its own `PostDetailView.repostEmbed`
+> already gates `> 0`, and the shared Android cell adopts that restraint for both surfaces.
+>
+> **`:feature:feed` `RepostEmbedCell`** (Compose glue, exempt): a heart (`Icons.Filled.Favorite`) + count row
+> after the media block, accent-coherent (`Indigo500` at 0.7 alpha, mirroring iOS `accentText(...).opacity(0.7)`),
+> merged into one accessibility element via the new `feed_repost_likes_count` plurals (EN/FR/ES/PT). No dead
+> ends: the row is read-only, part of the same tap target that opens the original post.
+>
+> **Tests: +3** — all in `RepostEmbedBuilderTest`, through the public `RepostEmbedBuilder.build`:
+> projects the reposted post's count (7) / absent (null) → 0 / negative (-3) clamps to 0. **Mutation RED-proof
+> ×1**: dropping `.coerceAtLeast(0)` fails EXACTLY `build_clampsNegativeLikeCountToZero` (1 of 17), the other 16
+> green. Restored via `cp` backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 field + projection, cell wiring, plurals ×4 locales, +3 tests, tracking docs).
+> Verdict: **PASS** — pure app-side projection through a tested SSOT + exempt Compose glue, behavioural tests
+> through the public API, no production logic outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates, re-scout read-only before committing (parity notes are hypotheses):
+> (1) the composer's **per-post language selector** (iOS lets you pick the post's original language; confirm
+> `POST /posts` accepts an explicit `originalLanguage` before committing — unverified-backend risk); (2) the
+> reposted post's **mood emoji** in the embed (needs a new `ApiRepostOf.moodEmoji` field + gateway payload
+> confirmation — model plumbing slice); (3) the composer's **location** attachment. Comment-repost is
+> DISQUALIFIED — iOS exposes no repost/quote on comment cells (net-new invention, skip).
+
+> On 2026-08-22 **post-detail gains repost + quote** (slice `feed-postdetail-quote-repost`, feature-parity
+> §F — "Post / comment pin-unpin; repost / quote-repost / share; report"). The feed card already offered
+> repost + quote (slice `feed-quote-repost`); the full-screen post-detail did not. iOS offers both there via
+> `PostDetailView.toggleDetailRepost(quote:)` behind a repost button + alert. This lands the same on Android,
+> routed through the already-tested `RepostCommand` SSOT.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the one
+> open PR repo-wide is #3348, a web/gateway/shared/iOS realtime fix, not android-routine). Prior android
+> iteration (`feed-quote-repost`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`ea1789df`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). Recipe wrinkle: `--channel=3
+> platforms;android-37.0` installs a MINOR-versioned platform dir (`platforms/android-37.0`, ApiLevel
+> `37.0`), but AGP 8.13 with `compileSdk = 37` looks up hash string `android-37` → *"Failed to find target
+> with hash string 'android-37'"*. Fix: `ln -sf android-37.0 android-37` in `$HOME/android-sdk/platforms`.
+> After the symlink the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) ran
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run. (Recorded in NOTES.md.)
+>
+> **`:feature:feed` `PostDetailViewModel`**: new `repost()` / `beginQuote()` / `onQuoteTextChange()` /
+> `cancelQuote()` / `submitQuote()`, mirror of the feed VM's quote flow but scoped to the single open post
+> (`rawPost`). Both paths fold through `RepostCommand.of(post.id, post.repostOf, quote, commentary)` — the
+> pure SSOT already tested by `RepostCommandTest` (root-target resolution + blank-quote degradation). Two
+> **improvements over iOS's post-detail**, both free from routing through the SSOT: (1) reposting a SHARE
+> targets its ROOT, never the intermediate share — iOS's `toggleDetailRepost` reposts the raw `postId` and so
+> embeds an empty share card; (2) a blank/whitespace quote degrades to a simple repost (iOS sends
+> `content = ""`, and in fact iOS's post-detail "quote" is content-LESS entirely — `content: nil`). Ephemeral
+> repost/quote UI state (`quoteComposer`, optimistic `isReposted`, in-flight guard) lives in the existing
+> `PostDetailStatus` flow so it survives every re-projection; the optimistic `isReposted` reverts on failure
+> (iOS `isPostReposted`), failures surface via `errorMessage`, and a double-tap fires the network once
+> (in-flight guard). `sendRepost` rethrows `CancellationException`.
+>
+> **`:feature:feed` `PostDetailScreen`** (Compose glue, exempt): the read-only repost stat becomes an
+> interactive `DetailRepostStat` — a tap opens a Repost / Quote `DropdownMenu` (Android take on iOS's button
+> + alert), the icon fills accent `Indigo500` once reposted (optimistic). The quote path reuses the feed's
+> `QuoteComposerSheet` (made `internal`) for visual coherence — the source-preview card above a commentary
+> field, same as the feed. No new strings (reuses `feed_action_repost` / `feed_action_quote` / the quote
+> sheet strings). No dead ends: the menu dismisses cleanly, the sheet cancels back to the post.
+>
+> **Tests: +15** — all in `PostDetailViewModelTest`, driving the public `state`: repost-original→own-id /
+> repost-of-repost→root / repost-no-root→direct-parent / repost-before-load inert / repost-failure reverts +
+> error / double-repost fires once (in-flight guard) / beginQuote preview (author + trimmed content) /
+> beginQuote-before-load inert / draft change / cancel closes no repost / submitQuote commentary + flags +
+> closes / submitQuote-of-repost→root / submitQuote blank degrades / submitQuote no-composer inert /
+> submitQuote failure reverts + error. **Mutation RED-proof ×1**: `RepostCommand.of(post.id, post.repostOf…)`
+> → `…, null…` fails EXACTLY the 2 root-target tests, other 27 green. Restored via `cp` backup; production
+> diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (VM methods + state, screen wiring, 1 visibility widening in FeedScreen, +15
+> tests, tracking docs). Verdict: **PASS** — app-side orchestration + Compose glue, behavioural tests through
+> the public API, the "what to send" decision left in the already-tested pure SSOT, no production logic
+> outside apps/android.
+>
+> **Next**: still §F (Feed). Candidates: the `PostCommentsViewModel` could gain the same repost entry point if
+> iOS exposes one on comment cells (scout first); or advance to the reposted/quoted embed cell polish, or the
+> `comment pin-unpin` sibling once a gateway endpoint exists (still net-new, skip until then). Re-scout
+> read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **quote-repost composer shipped** (slice `feed-quote-repost`, feature-parity §F —
+> "Post / comment pin-unpin; repost / quote-repost / share; report"). The post options menu offered only a
+> SIMPLE repost; iOS also lets you **quote** — repost with your own commentary. This lands the quote flow
+> and, along the way, fixes a latent Android bug.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the two
+> open PRs repo-wide are #3342 web + #3337 shared/iOS, neither android-routine). Prior android iteration
+> (`guest-join-entry-navigation`) already merged into main. Branched off freshly-fetched `origin/main`
+> (`cb7c8297`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `--channel=3 platforms;android-37.0`
+> recipe worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally,
+> **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Pure SSOT `RepostCommand`** (`:feature:feed`, app-side — ports what iOS keeps in `FeedViewModel`):
+> `of(postId, repostOf, quote, commentary) → RepostCommand(targetId, content, isQuote)` folds two decisions.
+> **(1) Target id** (port of iOS `resolveRepostTargetId`): reposting a repost targets its recorded ROOT
+> (`originalRepostOfId?.trim() ?: repostOf.id`), never the intermediate share — the gateway hydrates
+> `repostOf` one level deep, so reposting a share by its own id embeds an EMPTY share card. The pre-existing
+> simple `repost()` passed `postId` straight through — a **latent bug now fixed** since both the simple and
+> quote paths route through `RepostCommand`. **(2) content/isQuote** (port of iOS `repostPost`
+> `content: isQuote ? content : nil`, `isQuote: isQuote ? (content != nil) : false`): a simple repost carries
+> no content; a quote carries the trimmed commentary. **Surpasses iOS**: a blank/whitespace-only quote
+> degrades to a simple repost (blank→null then `isQuote = content != null`), where iOS's raw `content != nil`
+> would send `content = ""`, `isQuote = true` (an empty quote card).
+>
+> **`:feature:feed` `FeedViewModel`**: `repost(postId)` now routes through `RepostCommand` (target fix);
+> new `beginQuote(postId)` (inert if the post isn't loaded — nothing to quote; seeds a `QuoteComposerState`
+> with the source author + trimmed content preview), `onQuoteTextChange`, `cancelQuote`, `submitQuote`
+> (computes the command, closes the sheet — iOS dismisses immediately — reposts, `refresh()` on success /
+> `errorMessage` on failure). `PostAction.Quote` added to the pure `PostActionMenu` right after `Repost`
+> (every post). `FeedScreen` wires `onQuote → beginQuote` and renders a `QuoteComposerSheet` (Compose glue,
+> exempt: an `AlertDialog` coherent with `ReportPostDialog` — commentary field above a bordered source
+> preview). New strings in all 4 locales (en/fr/es/pt).
+>
+> **Tests: +23** — `RepostCommandTest` ×11 (pure: own-id / repost→root / no-root fallback / blank-root
+> fallback / padded-root trim / simple carries no content / quote trims content + flags / blank + null
+> commentary degrade / inner-whitespace preserved / quote-of-repost composes both); `FeedViewModelTest` ×11
+> (repost own-id + refresh / repost-of-repost→root / error surfaces + no refresh / beginQuote preview /
+> beginQuote inert on unknown / draft change / submitQuote commentary + close + refresh / submitQuote-of-
+> repost→root / submitQuote blank degrades / cancel closes no repost / submit inert with no composer);
+> `PostActionMenuTest` ×1 (quote follows repost). **Mutation RED-proof ×1**: `isQuote = content != null` →
+> `= quote` fails EXACTLY the 3 blank-degradation tests (2 pure + 1 VM), 730 others green. Restored via `cp`
+> backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (1 new pure SSOT + 1 new test in `:feature:feed`, VM + menu + screen wiring,
+> strings in 4 locales, tracking docs). Verdict: **PASS** — app-side orchestration + Compose glue,
+> behavioural tests through the public API, the pure "what to send" decision isolated in a tested SSOT, no
+> production logic outside apps/android.
+>
+> **Next**: still §F (Feed). The sibling gap `comment pin-unpin` remains, but neither iOS nor Android has a
+> comment-pin backend, so it is net-new invention without a port reference — skip until a gateway endpoint
+> exists. Better candidates: quote-repost from the **post-detail** menu (iOS `PostDetailView.toggleDetailRepost`
+> offers both repost and quote there too — `PostDetailViewModel` has its own `repost`; wiring the same
+> `RepostCommand` + composer there is a clean follow-up), or advance to another §F `[~]` (e.g. the reposted/
+> quoted embed cell, line ~4544). Re-scout read-only before committing — parity notes are hypotheses.
+
+> On 2026-08-22 **guest-join deep-link route rewired — the umbrella box is now `[x]`** (slice
+> `guest-join-entry-navigation`, feature-parity §Chat — "Anonymous-session conversation mode; guest
+> join-via-share-link flow"). This lands the last named follow-up: the `MeeshyApp.kt` deep-link route no
+> longer jumps straight to the anonymous guest form; it now consults the entry brain and branches the
+> navigation on the resolved intent.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` → the
+> single open PR repo-wide is #3337, a `packages/shared` + iOS Rivière fix, not android-routine). Prior
+> android iteration (`sharelink-entry-resolver`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`0cec829f`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `--channel=3 platforms;android-37.0`
+> recipe worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`)
+> locally, **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **`:feature:auth` `ShareLinkEntryViewModel`** (new, app-side): the brain the guest-join route now
+> consults on entry. `@HiltViewModel`, exposes `state: StateFlow<ShareLinkEntryUiState>`. On init it reads
+> the auth flag (`ShareLinkAuthStateProviding` seam over `AuthRepository.isAuthenticated`), gathers known
+> conversation ids ONLY when authenticated (`KnownConversationIdsProviding` seam over
+> `ConversationRepository.cachedConversations` — a guest never pays a needless cache read, proven by a
+> test), runs the app-side `ShareLinkEntryResolver`, and reduces the six-way `ShareLinkEntryIntent` to one
+> `ShareLinkEntryUiState`: `OpenConversation` / `ChooseIdentity(conversationId, title, resumesGuestSession)`
+> / `RequiresAccount` / `GuestForm` / `Failed(message)` / `Resolving`. Two intents drive a network join the
+> VM performs itself (`JoinWithAccount`, and the null-resolution fallback while authenticated — iOS's
+> `joinViaShareLink`) via an `AuthenticatedShareLinkJoining` seam over
+> `ShareLinkJoinRepository.joinAuthenticated`: success → `OpenConversation(canonicalId)`, failure →
+> `Failed`. `ChooseIdentity` is actionable (no dead end): `chooseAccount()` joins + opens, `chooseAnonymous()`
+> resumes the stored guest session (or opens the form when there is none / a blank stored conversationId).
+> SOTA over iOS, which routes authenticated vs unauthenticated entry through TWO separate views: Android
+> unifies both behind one VM; a blank stored `conversationId` degrades to the form instead of navigating to
+> an empty id.
+>
+> **`:feature:auth` `ShareLinkEntryScreen`** (new, Compose glue): hosts the VM and renders each state —
+> `GuestForm` delegates to the existing `GuestJoinScreen`; `OpenConversation`/`RequiresAccount` fire the
+> nav callback under a spinner; `ChooseIdentity` shows an accent-coherent two-button choice (Continue with
+> my account / Join·Resume anonymously); `Failed` offers retry. `MeeshyApp.kt`'s `GUEST_JOIN` composable now
+> hosts `ShareLinkEntryScreen(onOpenConversation, onJoined, onBack, onSignIn)` instead of `GuestJoinScreen`.
+> `ShareLinkEntryModule` (Hilt) binds the resolver + three `fun interface` seams to their SDK sources
+> (boilerplate, coverage-exempt). New strings in all 4 locales (en/fr/es/pt).
+>
+> **Tests: +19** — `ShareLinkEntryViewModelTest` drives the public `state` with a REAL `ShareLinkEntryResolver`
+> over faked leaf seams (preview / `InMemoryAnonymousSessionStore` / join / auth / known-ids): guest open→form /
+> guest never-consults-account-list / guest requires-account→sign-in / guest stored-session→resume /
+> guest preview-failure→form / account member→open-straight-away (join not called) / account non-member-open→
+> choose-identity / choose-identity flags-resumable-guest / account require-account→join→open / account
+> join-failure→Failed / account unresolvable→authenticated-join fallback / unresolvable+join-failure→Failed /
+> resume blank-conversationId→form / retry-after-Failed→succeeds / initial-state Resolving / chooseAccount→open /
+> chooseAccount-failure→Failed / chooseAnonymous stored→resume / chooseAnonymous none→form. **Mutation (RED
+> proof) ×1**: neuter the resume blank-conversationId guard → **exactly** `resume ... degradesToTheAnonymousForm`
+> fails (1 of 15 at that point). Restored via the Edit tool; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer PASS.
+> Diff is `apps/android` only (2 new code files + 1 Hilt module + 1 new test in `:feature:auth`, 1 route
+> rewire in `:app`, strings in 4 locales, tracking docs). Verdict: **PASS** — app-side orchestration + Compose
+> glue, behavioural tests through the public API, pure decision left in the SDK model, no production logic
+> outside apps/android.
+>
+> **Next**: the guest-join feature is complete end to end. Pick the next-highest-value unchecked box in
+> `feature-parity.md` for the current build-order area (Auth → Conversations → Chat → Feed → Stories → Calls
+> → the rest). Candidate seen while here: the `ChooseIdentity` "resume anonymously" path currently resumes
+> only when a stored session exists for the exact link; a future refinement could also re-preview + open the
+> guest form pre-filled from the dormant session. Re-scout read-only before committing — parity notes are
+> hypotheses.
+
+> On 2026-08-22 **share-link entry-fact resolver shipped** (slice `sharelink-entry-resolver`,
+> feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
+> umbrella box stays `[~]` — the `MeeshyApp.kt` deep-link rewire is now the single named follow-up).
+> This lands the app-side brain that assembles the five `ShareLinkEntryFacts` and asks the pure
+> `ShareLinkEntryPolicy` how a person enters, closing the gap between the policy (shipped last-but-one
+> slice) and the endpoint (`ShareLinkJoinRepository`, shipped last slice).
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration (`list_pull_requests` →
+> `[]`, zero open PRs repo-wide). Prior android iteration (`sharelink-join-authenticated`) already
+> merged into main. Branched off freshly-fetched `origin/main` (`d84fc807`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `platforms;android-37.0` recipe
+> worked; ran the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally,
+> **BUILD SUCCESSFUL** (973 tasks). Local gate available this run.
+>
+> **Placement correction (parity note was a hypothesis).** Last slice's "Next" proposed a `:sdk-core`
+> `ShareLinkEntryResolver`. Re-scouting iOS proved that wrong: iOS's `ShareLinkEntryResolver.swift`
+> lives **app-side** (`apps/ios/Meeshy/Features/Main/Navigation/`), and its own header states "App-side
+> et non SDK : elle appelle un service réseau et consulte l'état de l'app." Putting it in `:sdk-core`
+> would break SDK purity (I/O + device-state consult = product orchestration). Landed it in
+> `:feature:auth` (where the guest-join flow already lives) instead. The pure decision stays in
+> `:core:model` (`ShareLinkEntryPolicy`); the resolver only gathers facts and delegates.
+>
+> **`:feature:auth` `ShareLinkEntryResolver`** (new, app-side): a `ShareLinkPreviewProviding` `fun
+> interface` seam (decouples from the concrete `AnonymousSessionRepository`; the consumer binds it to
+> `repository::preview`) + `AnonymousSessionStore`. `resolve(identifier, isAuthenticated,
+> knownConversationIds): ShareLinkEntryResolution?` where `ShareLinkEntryResolution = (intent,
+> conversationTitle)`. Assembles the five facts — `conversationId` (trimmed), `isAuthenticated`,
+> `isAlreadyMember` (`knownConversationIds.contains`), `linkRequiresAccount` (`info.requireAccount`),
+> `hasStoredGuestSession` — then returns `ShareLinkEntryPolicy.intent(facts)` with the conversation
+> title threaded. SOTA over the iOS force-unwrapping original: (a) a blank identifier is inert (returns
+> `null`, no doomed empty-preview request); (b) a preview with no conversation, or a blank conversation
+> id, resolves to `null` (graceful caller fallback, never a crash). Android divergence made explicit: the
+> guest store is single-valued, so "stored session for THIS link" is `store.load()?.linkId?.trim() ==
+> identifier` — a session opened on a *different* link must never resume here (iOS keys its store by
+> linkId; Android compares).
+>
+> **Tests: +15** — `ShareLinkEntryResolverTest` (drives public `resolve`, recording preview seam +
+> `InMemoryAnonymousSessionStore`; the policy itself is exhaustively covered by `ShareLinkEntryPolicyTest`,
+> so these assert only the resolver's own contribution): blank-identifier-inert-no-network /
+> preview-failure→null / no-conversation→null / blank-conversation-id→null / unauth-open-link→JoinAnonymously /
+> unauth-stored-this-link→ResumeGuestSession / stored-different-link→JoinAnonymously (the linkId compare) /
+> auth-member→OpenConversation(id) / auth-nonmember-requireAccount→JoinWithAccount / auth-nonmember-open→
+> ChooseIdentity / title-threaded / null-title→null-not-crash / identifier-trimmed-before-preview-and-compare /
+> padded-conversation-id-trimmed-for-membership. **Mutation (RED proof) ×2**: (a) linkId equality dropped
+> (`load() != null`) → **exactly** `a stored session for a different link does not count as stored for this
+> one` fails (1 of 15); (b) preview called with the untrimmed identifier → **exactly** `the identifier is
+> trimmed before the preview and the stored-session compare` fails (1 of 15). Both restored via `cp` of a
+> pre-mutation backup; production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL (973 tasks). Reviewer
+> PASS. Diff is `apps/android` only (1 new code file in `:feature:auth` + 1 new test + tracking docs).
+> Verdict: **PASS** — app-side orchestration addition, behavioural tests through the public API, pure
+> decision left in the SDK model, no production logic outside apps/android.
+>
+> **Next**: rewire `MeeshyApp.kt`'s guest-join deep-link route (`Routes.GUEST_JOIN`) to call the resolver
+> before presenting a screen, and branch the navigation on the returned intent —
+> `OpenConversation`/`JoinWithAccount` (call `ShareLinkJoinRepository.joinAuthenticated`, then navigate to
+> chat) / `ResumeGuestSession` (restore + navigate) / `JoinAnonymously` (the current `GuestJoinScreen`) /
+> `ChooseIdentity` (a new choice sheet) / `RequiresAccount` (steer to login). This flips the umbrella box to
+> `[x]`. The Compose glue is JVM-untestable — push all decidable logic into a small VM/state holder and cover
+> that. Re-scout read-only before committing — parity notes are hypotheses (this slice corrected one).
+
+> On 2026-08-22 **authenticated share-link join shipped** (slice `sharelink-join-authenticated`,
+> feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow"; the
+> umbrella box stays `[~]` — the `ShareLinkEntryResolver` + `MeeshyApp.kt` rewire are the last named
+> follow-ups). This lands the JWT counterpart of the anonymous guest join, continuing the same feature
+> begun by `sharelink-entry-policy`.
+>
+> **Step 0**: no open `claude/apps/android/*` slice PR from a prior iteration — the 21 open PRs at branch
+> time (#3325/#3324/#3317/#3310/#3299/#3289/#3281/#3280/#3275/#3270/#3266/#3262/#3259/#3255/#3253/#3250/
+> #3249/#3247/#3245/#3243/#3242) are all web/shared/gateway/ios/sdk, none android-routine. Prior android
+> iteration (`sharelink-entry-policy`) already merged into main. Branched off freshly-fetched
+> `origin/main` (`940ad0c1`).
+>
+> **SDK bootstrap — `dl.google.com` REACHABLE this run** (curl → 200). `platforms;android-37.0` recipe
+> worked (`sdkmanager --channel=3 "platforms;android-37.0" "build-tools;35.0.0" "platform-tools"`); ran
+> the full `assembleDebug testDebugUnitTest` (= `./apps/android/meeshy.sh check`) locally, **BUILD
+> SUCCESSFUL** (973 tasks).
+>
+> **The gap (read-only recon over iOS + Android)**: iOS `ShareLinkService.joinAuthenticated(linkId)`
+> hits `POST /conversations/join/{linkId}` (empty body — the gateway derives the joiner from the JWT;
+> `routes/conversations/sharing.ts` `resolveConversationEntry`, idempotent: an existing member gets the
+> same canonical conversationId as a fresh join). Android had the `JoinAuthenticatedResponse` model but
+> shipped it **orphaned** (grep: zero consumers outside `ShareLink.kt`) — no API endpoint, no repository.
+> `ShareLinkEntryPolicy` (last slice) can now DECIDE `JoinWithAccount`, but nothing could EXECUTE it.
+>
+> **`:core:network` `ConversationApi.joinViaShareLink(linkId)`** (`@POST conversations/join/{linkId}`,
+> no `@Body` — the markRead precedent; JWT rides the interceptor). Chose `ConversationApi` over
+> `ShareLinkApi` deliberately: the path is `conversations/…` and every `ConversationApi` endpoint is
+> JWT, whereas `ShareLinkApi` is documented as the **no-JWT** anonymous surface. The three hand-written
+> `ConversationApi` test stubs (`ConversationRepositoryTest`, `ConversationStatsRepositoryTest`,
+> `ConversationAnalysisRepositoryTest`) each gained the one-line override + import.
+>
+> **`:sdk-core` `ShareLinkJoinRepository`** (new, stateless — JWT sibling of
+> `AnonymousSessionRepository.join`, but installs no token and touches no Room):
+> `joinAuthenticated(linkId): NetworkResult<String>` returns the canonical conversationId. SOTA over
+> iOS: a blank linkId is **inert** (folds to Failure with no network call — never the doomed
+> `conversations/join/` request iOS would fire); a success envelope carrying a **blank** conversationId
+> folds to Failure (malformed), so a caller can never navigate to an empty id; both the linkId sent and
+> the conversationId returned are trimmed.
+>
+> **Tests: +6** — `ShareLinkJoinRepositoryTest`: canonical-id-returned+linkId-forwarded / trims-both-
+> sides / blank-conversationId→Failure / blank-linkId-inert-no-network / unsuccessful-envelope→Failure /
+> transport-error→Failure. **Mutation (RED proof) ×2**: (a) neuter the blank-linkId guard (`if(false)`)
+> → **exactly** `is inert on a blank linkId and never calls the network` fails (1 of 6); (b) neuter the
+> blank-conversationId guard → **exactly** `folds a success envelope with a blank conversationId into a
+> failure` fails (1 of 6). Both restored via the Edit tool (uncommitted file — never `git checkout`);
+> production diff verified clean afterward.
+>
+> **Verified**: full `assembleDebug testDebugUnitTest` locally, BUILD SUCCESSFUL. Reviewer PASS. Diff is
+> `apps/android` only (1 API method in `:core:network` + 1 new repository in `:sdk-core` + 1 new test +
+> 3 stub one-liners + tracking docs). Verdict: **PASS** — stateless repository addition, behavioural
+> tests through the public API, no production logic outside apps/android.
+>
+> **Next**: the `:sdk-core` `ShareLinkEntryResolver` — assembles the five `ShareLinkEntryFacts` (preview
+> via `AnonymousSessionRepository.preview` + `AnonymousSessionStore.load(linkId)` + the in-memory
+> conversation list) and dispatches the resolved `ShareLinkEntryIntent` to either
+> `AnonymousSessionRepository.join` or `ShareLinkJoinRepository.joinAuthenticated`; then rewire
+> `MeeshyApp.kt`'s deep-link route to branch on the intent (the final `[x]` for the umbrella box).
+> Re-scout read-only before committing — parity notes are hypotheses.
+
 > On 2026-08-22 **share-link entry-decision policy shipped** (slice `sharelink-entry-policy`,
 > feature-parity §Chat — "Anonymous-session conversation mode; guest join-via-share-link flow",
 > box flipped `[ ]` → `[~]`). This lands the missing "who enters, and how" brain for share-link

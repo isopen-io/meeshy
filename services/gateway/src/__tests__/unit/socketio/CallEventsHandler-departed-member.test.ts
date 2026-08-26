@@ -379,7 +379,18 @@ describe('CallEventsHandler — endCallParticipationForDepartedMember', () => {
     ).resolves.toBeUndefined();
   });
 
-  it("libère la minuterie de sonnerie du fil que le partant laisse derrière lui", async () => {
+  it("ne clear PAS elle-même la minuterie de sonnerie — `leaveCall()` la scope déjà selon que l'appel continue ou se termine", async () => {
+    // Vague 165 — `leaveCall()` (invoqué via `leaveParticipationAndBroadcast`,
+    // mocké ici) décide déjà, en interne, s'il faut clear `ringingTimeouts`
+    // (dernier participant → clear ; appel de groupe qui continue pour les
+    // autres invités → laisse armé, voir CallService.leaveCall's branche
+    // `isLastParticipant`). Un appel EXTERNE et INCONDITIONNEL ici — comme
+    // sur les trois sites que la Vague 164 a fermés (call:end/leave/
+    // force-leave) — court-circuiterait cette décision pour la SEULE branche
+    // qui compte : celle où l'appel continue. `onDisconnectGraceExpired`,
+    // l'autre appelant de `leaveParticipationAndBroadcast` dans ce même
+    // fichier, ne porte déjà pas cet appel redondant — ce site doit s'y
+    // aligner plutôt que le reconduire.
     const { prisma } = makePrisma([makeParticipation()]);
     const { io } = makeIo();
 
@@ -390,6 +401,6 @@ describe('CallEventsHandler — endCallParticipationForDepartedMember', () => {
       userId: DEPARTED_USER_ID,
     });
 
-    expect(mockClearRingingTimeoutDep).toHaveBeenCalledWith(CALL_ID);
+    expect(mockClearRingingTimeoutDep).not.toHaveBeenCalled();
   });
 });

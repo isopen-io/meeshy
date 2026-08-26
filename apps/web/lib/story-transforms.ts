@@ -343,13 +343,17 @@ export function postBackgroundSound(post: Post): { sound?: CanvasV3['sound']; me
   return { sound, meta: backgroundSoundCredit(scenes) };
 }
 
-export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
-  // Constat 12 — `v >= 3` (spec §D, storyEffectsV3.ts:401, rattrapage B8c),
-  // jamais `v === 3` : un futur `v:4` que le gateway sert TEL QUEL à un client
-  // caps-3 doit rester lu en v3, jamais retomber vide sur la projection v1.
-  const v3Scene = typeof effects?.v === 'number' && effects.v >= 3 ? asObjectArray(effects.scenes)[0] : undefined;
-  const source = v3Scene ? v1ViewOfScene(v3Scene) : effects;
+// Constat 12 — `v >= 3` (spec §D, storyEffectsV3.ts:401, rattrapage B8c),
+// jamais `v === 3` : un futur `v:4` que le gateway sert TEL QUEL à un client
+// caps-3 doit rester lu en v3, jamais retomber vide sur la projection v1.
+function v3Scenes(effects: Record<string, unknown> | undefined): Record<string, unknown>[] {
+  return typeof effects?.v === 'number' && effects.v >= 3 ? asObjectArray(effects.scenes) : [];
+}
 
+// Durée d'UNE slide, en millisecondes — miroir de `StorySlide
+// .computedTotalDuration()` (StoryModels.swift:1420) : le pin d'auteur d'abord,
+// sinon les trois termes du contenu.
+function slideDurationMs(source: Record<string, unknown> | undefined): number {
   // Priority 0 — author-pinned timeline duration is authoritative (the timeline
   // IS the story). `nil` for everything existing → falls back to content.
   const pinned = positiveNumber(source?.timelineDuration);
@@ -414,6 +418,33 @@ export function computeStoryDurationMs(effects: Record<string, unknown> | undefi
   return Math.round(Math.max(bgResult, longestData) * 1000);
 }
 
+/// W2 — la durée de CHAQUE scène du document, dans l'ordre de lecture.
+///
+/// Une scène v3 projetée en familles v1 EST une slide : c'est exactement ce que
+/// fait `StoryEffects(rendering:sceneIndex:)` côté iOS
+/// (`CanvasV3Migration.swift:523`), dont `v1ViewOfScene` est le jumeau web. La
+/// règle de durée est donc celle d'une slide, appliquée scène par scène —
+/// aucune règle nouvelle n'est inventée pour l'enchaînement.
+///
+/// Tableau VIDE pour un blob legacy ou un document v3 sans scène (O3 — `scenes`
+/// reste absent tant qu'aucun objet visuel n'est posé) : il n'y a alors rien à
+/// enchaîner, et `computeStoryDurationMs` retombe sur la mesure du blob entier.
+export function canvasV3SceneDurationsMs(effects: Record<string, unknown> | undefined): number[] {
+  return v3Scenes(effects).map((scene) => slideDurationMs(v1ViewOfScene(scene)));
+}
+
+export function computeStoryDurationMs(effects: Record<string, unknown> | undefined): number {
+  // W2 — la story dure ses scènes CUMULÉES. Ne mesurer que `scenes[0]` (ce que
+  // faisait cette fonction) coupait la story à la fin de la première scène : le
+  // contrat en autorise 10 et les suivantes n'étaient jamais jouées. La somme
+  // porte donc sur les durées DÉJÀ arrondies, celles-là mêmes que le lecteur
+  // consomme scène par scène — arrondir la somme, elle, laisserait dériver la
+  // frontière de la dernière scène.
+  const perScene = canvasV3SceneDurationsMs(effects);
+  if (perScene.length > 0) return perScene.reduce((total, ms) => total + ms, 0);
+  return slideDurationMs(effects);
+}
+
 export function postToStoryData(post: Post): StoryData {
   const author = post.author;
   const effects = (post.storyEffects && typeof post.storyEffects === 'object')
@@ -446,6 +477,9 @@ export function postToStoryData(post: Post): StoryData {
       url: m.fileUrl,
       mimeType: m.mimeType ?? '',
       ...(aspectRatio !== undefined ? { aspectRatio } : {}),
+      // S4-web — `PostMedia.alt` est déjà clé par `postMediaId` côté gateway ;
+      // un sticker importé (S1) le sert tel quel, jamais un alt fabriqué ici.
+      ...(m.alt ? { alt: m.alt } : {}),
     });
   }
 

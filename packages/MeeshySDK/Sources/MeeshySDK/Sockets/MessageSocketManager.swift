@@ -114,6 +114,16 @@ public struct ReactionAggregationEvent: Decodable, Sendable {
     public let emoji: String
     public let count: Int
     public let participantIds: [String]?
+    /// **Ne jamais lire ce champ.** Il n'est plus émis (gateway, cycle 115) et
+    /// reste décodable pour la seule raison qu'il peut encore arriver : la file
+    /// hors-ligne rejoue jusqu'à 48 h la charge telle qu'elle a été ENFILÉE.
+    ///
+    /// Quand il arrive, il vaut ce que la passerelle avait calculé pour
+    /// l'**ACTEUR** de l'événement — donc `true` pour la réaction d'un TIERS.
+    /// Une diffusion de room n'a pas de lecteur : il n'y a pas de « moi » à y
+    /// résoudre. « Ma réaction » se dérive de `ReactionUpdateEvent.userId`
+    /// confronté au `currentUser`, comme le font déjà `PostDetailViewModel` et
+    /// `StoryViewerView+Content` sur la famille commentaire.
     public let hasCurrentUser: Bool?
 }
 
@@ -763,10 +773,20 @@ public struct AttachmentUpdatedEvent: Decodable, Sendable {
 
 // MARK: - Participant Role Updated Event Data
 
+/// Le participant imbriqué de `participant:role-updated`.
+///
+/// `role` porte le rôle **GLOBAL** (`USER|ADMIN|…`) depuis le cycle 92 bis ; le rang
+/// DANS LA CONVERSATION est `conversationRole`, et il voyage aussi au premier
+/// niveau de l'événement sous `newRole` — c'est celui-là qu'on applique.
+///
+/// Tout est optionnel sauf `id` : un champ manquant ne doit jamais faire tomber
+/// l'événement ENTIER. Le décodeur du manager journalise et JETTE l'événement sur
+/// la moindre erreur, donc un nom absent coûterait la mise à jour du rang.
 public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
     public let id: String
-    public let role: String
-    public let displayName: String
+    public let role: String?
+    public let conversationRole: String?
+    public let displayName: String?
     public let userId: String?
 }
 
@@ -780,10 +800,42 @@ public struct ConversationParticipationEvent: Decodable, Sendable {
 /// stale cache entries. `reason` is a stable machine-readable code:
 /// `not_a_member`, `banned`, `no_longer_member`, `invalid_payload`,
 /// `server_error`. `message` is a localized, human-readable description.
+/// Refus d'une jonction de conversation (`conversation:join-error`).
+///
+/// Contrat partagé : `ConversationJoinErrorEventData`
+/// (`packages/shared/types/socketio-events.ts`).
 public struct ConversationJoinErrorEvent: Decodable, Sendable {
     public let conversationId: String
+    /// Motif du refus. `nil` seulement d'une passerelle antérieure au contrat.
+    ///
+    /// **Il DÉCIDE.** Voir ``isMembershipDenied`` — un consommateur qui
+    /// l'ignore traite une limite de débit comme une exclusion.
     public let reason: String?
     public let message: String?
+
+    /// Les seuls motifs qui ÉTABLISSENT que le lecteur n'est pas membre, donc
+    /// les seuls où purger le cache de la conversation ou fermer la vue ouverte
+    /// est fondé.
+    ///
+    /// JUMEAU de `isMembershipDeniedJoinError()`
+    /// (`packages/shared/utils/conversation-join-error.ts`) — toute évolution
+    /// touche les deux.
+    ///
+    /// La passerelle émet sept motifs ; quatre sont transitoires (`rate_limited`,
+    /// `server_error`, `not_authenticated`, `invalid_payload`) et ne disent rien
+    /// de l'appartenance. Ce client les traitait tous comme une révocation
+    /// d'accès : une limite de débit franchie par une tempête de reconnexion
+    /// fermait le fil que l'utilisateur était en train de lire, sur un bandeau
+    /// « accès révoqué », après avoir purgé son cache.
+    ///
+    /// Liste d'AUTORISATION, jamais d'exclusion : un motif inconnu — d'une
+    /// passerelle plus récente que ce client — rend `false`. Ne pas savoir lire
+    /// n'autorise pas à détruire ; c'est la règle que `MeeshyConversation.bridge`
+    /// applique déjà, pour la même raison.
+    public var isMembershipDenied: Bool {
+        guard let reason else { return false }
+        return ["not_a_member", "banned", "no_longer_member"].contains(reason)
+    }
 }
 
 public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
@@ -791,7 +843,14 @@ public struct ParticipantRoleUpdatedEvent: Decodable, Sendable {
     public let userId: String
     public let newRole: String
     public let updatedBy: String
-    public let participant: ParticipantRoleUpdatedParticipantInfo
+    /// OPTIONNEL, comme le déclare le type partagé (`participant?`) : la
+    /// passerelle envoie `null` quand la relecture du rang ne rend rien. Il était
+    /// non-optionnel ici, et un `null` faisait échouer le décodage de l'événement
+    /// ENTIER — donc aucun rafraîchissement, sans trace côté produit.
+    ///
+    /// Ce qui compte pour appliquer le changement (`userId`, `newRole`) est au
+    /// premier niveau : l'événement reste utile sans ce bloc.
+    public let participant: ParticipantRoleUpdatedParticipantInfo?
 }
 
 public struct SocketEventUser: Decodable, Sendable {
@@ -1046,9 +1105,32 @@ public struct ParticipantJoinedEvent: Decodable, Sendable {
 
 public struct ParticipantLeftEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
+    /// L'identité TOUJOURS servie — la seule qu'un visiteur venu par un lien
+    /// partagé possède, n'ayant aucune ligne `User`. C'est sur elle qu'on retire
+    /// la bonne ligne, jamais sur `userId`.
+    ///
+    /// Optionnelle pour un gateway antérieur au contrat, pas parce qu'elle
+    /// manquerait : `names(_:)` compare alors au seul `userId`, ce qui reproduit
+    /// le comportement d'avant.
+    public let participantId: String?
+    /// `nil` quand la personne n'a PAS de compte. **Non-optionnel jusqu'ici** :
+    /// le premier visiteur sans compte expulsé aurait fait échouer le décodage
+    /// de l'événement ENTIER, en silence — `Decodable` refuse un `null` sur un
+    /// `String`, et l'événement n'aurait atteint aucun abonné.
+    public let userId: String?
     public let displayName: String
     public let leftAt: String
+
+    /// La personne nommée par cet événement est-elle `identity` ?
+    ///
+    /// Une identité iOS est un `User.id` pour un compte, un `Participant.id`
+    /// pour un visiteur de lien partagé (cf. `authContext.userId` côté gateway).
+    /// L'événement porte les DEUX faces, et il faut les essayer toutes les deux :
+    /// comparer au seul `userId` rate tout visiteur sans compte, comparer au seul
+    /// `participantId` rate tout compte.
+    public func names(_ identity: String) -> Bool {
+        !identity.isEmpty && (identity == userId || identity == participantId)
+    }
 
     /// Effectif ACTIF APRÈS le départ, absolu — à POSER, jamais à soustraire.
     /// Même raison que sur `ParticipantJoinedEvent` : un client qui décrémente
@@ -1064,9 +1146,26 @@ public struct ParticipantLeftEvent: Decodable, Sendable {
 
 public struct ParticipantBannedEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
+    /// Voir `ParticipantLeftEvent.participantId`.
+    public let participantId: String?
+    /// `nil` sans compte — voir `ParticipantLeftEvent.userId`.
+    public let userId: String?
     public let bannedBy: SocketEventUser
     public let bannedAt: String
+    /// Le lien de partage que ce bannissement a FERMÉ. `nil` quand la personne
+    /// n'était pas entrée par un lien : il n'y avait pas de porte à fermer.
+    public let closedShareLinkId: String?
+
+    /// La personne nommée par cet événement est-elle `identity` ?
+    ///
+    /// Une identité iOS est un `User.id` pour un compte, un `Participant.id`
+    /// pour un visiteur de lien partagé (cf. `authContext.userId` côté gateway).
+    /// L'événement porte les DEUX faces, et il faut les essayer toutes les deux :
+    /// comparer au seul `userId` rate tout visiteur sans compte, comparer au seul
+    /// `participantId` rate tout compte.
+    public func names(_ identity: String) -> Bool {
+        !identity.isEmpty && (identity == userId || identity == participantId)
+    }
     /// `false` quand la cible avait DÉJÀ quitté la conversation : bannir un
     /// ancien membre reste possible — c'est ce qui l'empêche de revenir par un
     /// lien de partage — mais ce bannissement-là ne retire aucune appartenance.
@@ -1096,7 +1195,10 @@ public struct ParticipantBannedEvent: Decodable, Sendable {
 
 public struct ParticipantUnbannedEvent: Decodable, Sendable {
     public let conversationId: String
-    public let userId: String
+    /// Voir `ParticipantLeftEvent.participantId`.
+    public let participantId: String?
+    /// `nil` sans compte — voir `ParticipantLeftEvent.userId`.
+    public let userId: String?
     /// Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
     /// que si le bannissement l'avait prise. `false` quand la personne était
     /// partie d'elle-même AVANT d'être bannie.
@@ -1550,6 +1652,41 @@ public struct NotificationReadEvent: Decodable, Sendable {
     public let notificationId: String
 }
 
+/// `notification:read-bulk` — un AUTRE appareil du meme compte vient de marquer
+/// un LOT lu. Le gateway n'envoie AUCUN id (`updateMany` / `$runCommandRaw` ne
+/// les rendent pas) : il annonce le PREDICAT, que chaque client rejoue sur son
+/// propre cache. @see NotificationBulkScopeMapping.
+public struct NotificationReadBulkEvent: Decodable, Sendable {
+    public let scope: NotificationBulkScopePayload
+}
+
+/// `notification:deleted-bulk` — jumeau du precedent cote PURGE. Cas plus fort :
+/// `notification:counts` ne dit RIEN d'une purge des lues (`unread` est
+/// inchange par construction), donc sans ce predicat rien n'annonce la purge
+/// aux autres appareils.
+public struct NotificationDeletedBulkEvent: Decodable, Sendable {
+    public let scope: NotificationBulkScopePayload
+}
+
+/// `friend-request:cancelled` — signal temps reel PUR (aucune ligne
+/// `Notification` persistee, contrairement a NEW/ACCEPTED/REJECTED). Emis a
+/// l'user-room de l'AUTRE partie, donc `cancelledBy` designe par construction
+/// l'interlocuteur, jamais le lecteur.
+public struct FriendRequestCancelledEvent: Decodable, Sendable {
+    public let friendRequestId: String?
+    public let cancelledBy: String
+}
+
+/// `friend-request:rejected` — emis a l'user-room de l'EXPEDITEUR d'origine.
+/// C'est donc `_sentPending` qu'il faut vider chez le lecteur, jamais
+/// `_receivedPending`. `senderId` n'est PAS sur le fil (il ne sert qu'a router
+/// l'emission cote gateway) : declare optionnel par tolerance, jamais lu.
+public struct FriendRequestRejectedEvent: Decodable, Sendable {
+    public let friendRequestId: String?
+    public let senderId: String?
+    public let rejecterId: String
+}
+
 public struct NotificationDeletedEvent: Decodable, Sendable {
     public let notificationId: String
 }
@@ -1933,6 +2070,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
+    public let notificationReadBulk = PassthroughSubject<NotificationReadBulkEvent, Never>()
+    public let notificationDeletedBulk = PassthroughSubject<NotificationDeletedBulkEvent, Never>()
 
     // Combine publishers — call signaling
     public let callOfferReceived = PassthroughSubject<CallOfferData, Never>()
@@ -2124,12 +2263,27 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
             // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
             // 20s server-side, so the persistent WebSocket now holds.
+            //
+            // P4-1 évalué 2026-08-22 puis ÉCARTÉ : `.forceWebsockets(true)`
+            // économiserait 1-2 RTT par connect mais supprime le REPLI polling
+            // — contrairement au web (`transports: ['websocket','polling']`,
+            // WS d'abord AVEC repli), un réseau qui casse l'upgrade WebSocket
+            // (proxy TLS-inspectant, portail captif) perdrait tout temps réel.
+            // À reconsidérer seulement avec un repli après N échecs.
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
             .sessionDelegate(CertificatePinningDelegate()),
+            // BW-IOS-01 — negocie l'extension `permessage-deflate`. Le gateway
+            // l'annonce depuis toujours (`perMessageDeflate`, seuil 256 o) mais
+            // Starscream ne pose l'en-tete d'extension que si le manager le
+            // demande : sans ce drapeau, TOUTES les trames iOS voyageaient non
+            // compressees. Un intermediaire qui casserait l'extension fait
+            // retomber le handshake sur des trames nues, jamais sur une
+            // deconnexion.
+            .compress,
         ])
 
         socket = manager?.defaultSocket
@@ -2157,6 +2311,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .reconnectWaitMax(16),
             .reconnectAttempts(-1),
             .sessionDelegate(CertificatePinningDelegate()),
+            // BW-IOS-01 — `permessage-deflate` (voir `connect()`).
+            .compress,
         ])
 
         socket = manager?.defaultSocket
@@ -2842,14 +2998,36 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:join", ["callId": callId])
     }
 
-    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (3 s
-    /// timeout). Returns `true` when the gateway has put the socket in the call
-    /// room. Use this on socket reconnect before sending room-scoped events
-    /// (call:request-ice-servers, call:toggle-video) — the gateway guards those
-    /// with `socket.rooms.has(ROOMS.call(callId))` which is only true after the
-    /// async joinCall() DB work completes and socket.join() runs.
-    public func emitCallJoinWithAck(callId: String) async -> Bool {
-        guard let socket else { return false }
+    /// Detailed outcome of an ACK-aware `call:join` — mirrors the gateway's
+    /// `CallJoinAck` shape (`packages/shared/types/video-call.ts`) instead of
+    /// collapsing it to a bare `Bool`. `endReason` carries the RAW server
+    /// string (Prisma `CallSession.endReason`, populated only when
+    /// `errorCode == "CALL_ENDED"`) — the SDK stays pure and does not map it;
+    /// the app layer maps it via `CallEndReasonMapper`, same convention
+    /// already used for `call:ended`/`call:missed`.
+    public struct CallJoinAckResult: Sendable {
+        public let joined: Bool
+        public let errorCode: String?
+        public let endReason: String?
+
+        public init(joined: Bool, errorCode: String? = nil, endReason: String? = nil) {
+            self.joined = joined
+            self.errorCode = errorCode
+            self.endReason = endReason
+        }
+    }
+
+    /// ACK-aware join: emits `call:join` and awaits gateway confirmation (6 s
+    /// timeout), returning the full ack (success + error detail) rather than
+    /// just success. Use this on socket reconnect before sending room-scoped
+    /// events (call:request-ice-servers, call:toggle-video) — the gateway
+    /// guards those with `socket.rooms.has(ROOMS.call(callId))` which is only
+    /// true after the async joinCall() DB work completes and socket.join()
+    /// runs. Also lets a reconnect distinguish "the call already ended
+    /// server-side while we were disconnected" (`errorCode == "CALL_ENDED"`)
+    /// from a plain ACK timeout — see Vague 162.
+    public func emitCallJoinWithAckDetailed(callId: String) async -> CallJoinAckResult {
+        guard let socket else { return CallJoinAckResult(joined: false) }
         let payload: [String: Any] = ["callId": callId]
         return await withCheckedContinuation { continuation in
             var resumed = false
@@ -2864,10 +3042,23 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             socket.emitWithAck("call:join", payload).timingOut(after: 6) { items in
                 guard !resumed else { return }
                 resumed = true
-                let success = (items.first as? [String: Any])?["success"] as? Bool ?? false
-                continuation.resume(returning: success)
+                let response = items.first as? [String: Any]
+                let success = response?["success"] as? Bool ?? false
+                let error = response?["error"] as? [String: Any]
+                let errorCode = error?["code"] as? String
+                let endReason = error?["endReason"] as? String
+                continuation.resume(returning: CallJoinAckResult(
+                    joined: success, errorCode: errorCode, endReason: endReason
+                ))
             }
         }
+    }
+
+    /// Boolean-only convenience over `emitCallJoinWithAckDetailed` — kept for
+    /// callers (e.g. the incoming-call cold-start join) that only care whether
+    /// the room join succeeded, not why it didn't.
+    public func emitCallJoinWithAck(callId: String) async -> Bool {
+        await emitCallJoinWithAckDetailed(callId: callId).joined
     }
 
     public func emitCallLeave(callId: String) {
@@ -3458,6 +3649,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // Le serveur a REVOQUE la session (mot de passe change, revocation de
+        // tous les appareils, action admin) puis coupe la socket. Surtout PAS
+        // `handleUnauthorized()` comme la ligne au-dessus : son
+        // `refreshSession(force:)` obtiendrait un JWT neuf — `/auth/refresh` ne
+        // verifie pas que la session existe encore — et re-armerait pour 24 h
+        // la session qu'on vient de revoquer. La charge (`code`/`message`/
+        // `reason`) n'est pas decodee : aucune surface iOS ne l'affiche.
+        socket.on("auth:session-revoked") { _, _ in
+            Logger.socket.warning("MessageSocket: session revoked — forcing re-authentication")
+            Task { @MainActor in
+                AuthManager.shared.handleSessionRevoked()
+            }
+        }
+
         // --- Read status events ---
 
         socket.on("read-status:updated") { [weak self] data, _ in
@@ -3719,6 +3924,36 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        socket.on("notification:read-bulk") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationReadBulkEvent.self, from: data) { [weak self] event in
+                self?.notificationReadBulk.send(event)
+            }
+        }
+
+        socket.on("notification:deleted-bulk") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(NotificationDeletedBulkEvent.self, from: data) { [weak self] event in
+                self?.notificationDeletedBulk.send(event)
+            }
+        }
+
+        // --- Friend request lifecycle events ---
+
+        socket.on("friend-request:cancelled") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(FriendRequestCancelledEvent.self, from: data) { event in
+                Task { await MessageSocketManager.applyFriendRequestWithdrawal(otherUserId: event.cancelledBy) }
+            }
+        }
+
+        socket.on("friend-request:rejected") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(FriendRequestRejectedEvent.self, from: data) { event in
+                Task { await MessageSocketManager.applyFriendRequestRejection(rejecterId: event.rejecterId) }
+            }
+        }
+
         // --- Mention events ---
 
         socket.on("mention:created") { [weak self] data, _ in
@@ -3874,6 +4109,33 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+    }
+
+    // MARK: - Friend request lifecycle
+
+    /// `friend-request:cancelled` ne porte que `{friendRequestId, cancelledBy}`
+    /// et ne dit PAS de quel cote se trouve le lecteur — l'evenement part a
+    /// l'user-room de l'AUTRE partie, donc `cancelledBy` est l'interlocuteur,
+    /// que la demande ait ete emise ou recue. On retire dans les DEUX sens :
+    /// chacune des deux methodes est un no-op quand la cle est absente.
+    ///
+    /// Muter `FriendshipCache` ne repeint PAS l'ecran Demandes : ses lignes
+    /// viennent de GRDB (`PersistenceKeys.receivedRequests` / `sentRequests`),
+    /// qui resterait `.fresh` avec la ligne retiree. D'ou l'invalidation
+    /// EXPLICITE — `notifyChange()` ne fait qu'incrementer `version`.
+    static func applyFriendRequestWithdrawal(otherUserId: String) async {
+        FriendshipCache.shared.didCancelRequest(to: otherUserId)
+        FriendshipCache.shared.didRejectRequest(from: otherUserId)
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
+    }
+
+    /// `friend-request:rejected` arrive chez l'EXPEDITEUR d'origine : sa demande
+    /// vit dans `_sentPending`, que `didCancelRequest(to:)` vide.
+    /// `didRejectRequest(from:)` viderait `_receivedPending` — mauvaise
+    /// direction, no-op garanti.
+    static func applyFriendRequestRejection(rejecterId: String) async {
+        FriendshipCache.shared.didCancelRequest(to: rejecterId)
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
     }
 
     // MARK: - Decode Helper

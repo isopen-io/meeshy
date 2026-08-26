@@ -21,8 +21,8 @@ extension UserProfileSheet {
     /// Détails tab, not the header. Driven by
     /// `ProfileHeaderMetrics.progress(offset: scrollOffset)`.
     @ViewBuilder
-    var bigCollapsibleHeader: some View {
-        let progress = ProfileHeaderMetrics.progress(offset: scrollOffset)
+    func bigCollapsibleHeader(offset: CGFloat) -> some View {
+        let progress = ProfileHeaderMetrics.progress(offset: offset)
         let bannerHeight = ProfileHeaderMetrics.expandedBanner
             - (ProfileHeaderMetrics.expandedBanner - ProfileHeaderMetrics.collapsedBar) * progress
 
@@ -32,7 +32,7 @@ extension UserProfileSheet {
                 .clipped()
                 .opacity(1 - Double(progress) * 0.6)
 
-            identitySection
+            identitySection(offset: offset)
                 .padding(.top, -40)
                 // Avatar + name shrink slightly as the header collapses, then
                 // the compact pinned bar takes over once mostly collapsed.
@@ -113,7 +113,7 @@ extension UserProfileSheet {
 
     // MARK: - Identity
 
-    var identitySection: some View {
+    func identitySection(offset: CGFloat) -> some View {
         VStack(spacing: 6) {
             profileAvatar
                 .bounceOnAppear()
@@ -147,7 +147,7 @@ extension UserProfileSheet {
         .padding(.top, 4)
         // Gate the expanded identity from VoiceOver once the compact pinned bar
         // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
-        .accessibilityHidden(ProfileHeaderMetrics.progress(offset: scrollOffset) > 0.5)
+        .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
     }
 
     @ViewBuilder
@@ -201,8 +201,8 @@ extension UserProfileSheet {
     // MARK: - Pinned tab bar (section header — pins on scroll)
 
     @ViewBuilder
-    var pinnedTabBar: some View {
-        let progress = ProfileHeaderMetrics.progress(offset: scrollOffset)
+    func pinnedTabBar(offset: CGFloat) -> some View {
+        let progress = ProfileHeaderMetrics.progress(offset: offset)
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 ForEach(ProfileTab.allCases, id: \.self) { tab in

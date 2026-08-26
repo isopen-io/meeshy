@@ -749,6 +749,35 @@ describe('TransformersService', () => {
       expect(att.lineCount).toBe(100);
     });
 
+    it('porte la provenance de capture jusqu au message transformé', () => {
+      // Ce transformateur est le SEUL chemin entre la réponse de la passerelle et
+      // l'objet que la feuille de partage lit. Un champ qu'il ne recopie pas est
+      // indistinguable d'un champ que le serveur n'envoie pas — c'est exactement
+      // ce qui rendait la confirmation de publication décorative.
+      const raw = makeRawMessage({
+        attachments: [makeRawAttachment({ capturedInApp: true })],
+      });
+      const msg = svc.transformMessageData(raw);
+      expect(msg.attachments![0].capturedInApp).toBe(true);
+    });
+
+    it("ne déclare une capture que sur un booléen VRAI", () => {
+      const raw = makeRawMessage({
+        attachments: [makeRawAttachment({ capturedInApp: 'false' })],
+      });
+      const msg = svc.transformMessageData(raw);
+      expect(msg.attachments![0].capturedInApp).toBe(false);
+    });
+
+    it('traite une pièce jointe sans provenance déclarée comme non capturée', () => {
+      // Toutes les pièces jointes écrites avant ce champ, et tout client qui ne
+      // le connaît pas : l'absence ne peut pas valoir capture, sans quoi chaque
+      // publication d'archive demanderait une confirmation qui ne veut rien dire.
+      const raw = makeRawMessage({ attachments: [makeRawAttachment()] });
+      const msg = svc.transformMessageData(raw);
+      expect(msg.attachments![0].capturedInApp).toBe(false);
+    });
+
     it('falls back to senderId when uploadedBy is missing', () => {
       const raw = makeRawMessage({
         senderId: 'participant-99',

@@ -60,12 +60,22 @@ enum StoryCoverThumbnail {
             legacyBackgroundURL: nil, imageURLsByObjectId: [:], requiredObjectIds: []
         )
 
+        // Les `PostMedia` que la composition référence par ses STICKERS : ils
+        // sont attachés au post comme n'importe quel média, donc le repli
+        // legacy ci-dessous les prendrait pour le fond et peindrait l'image
+        // d'un sticker PLEIN CADRE derrière la composition.
+        let stickerMediaIds = Set(
+            (effects.stickerObjects ?? []).map(\.postMediaId).filter { !$0.isEmpty }
+        )
+
         if let bg = effects.resolvedBackgroundMedia {
             let url = bg.mediaURL ?? item.media.first(where: { $0.id == bg.postMediaId })?.url
             guard bg.kind == .image, let url, !url.isEmpty else { return nil }
             plan.imageURLsByObjectId[bg.id] = url
             plan.requiredObjectIds.insert(bg.id)
-        } else if let legacyVisual = item.media.first(where: { $0.type == .image || $0.type == .video }) {
+        } else if let legacyVisual = item.media.first(where: {
+            ($0.type == .image || $0.type == .video) && !stickerMediaIds.contains($0.id)
+        }) {
             guard legacyVisual.type == .image, let url = legacyVisual.url, !url.isEmpty else { return nil }
             plan.legacyBackgroundURL = url
         }
@@ -73,6 +83,15 @@ enum StoryCoverThumbnail {
         for obj in effects.resolvedForegroundMediaObjects where obj.kind == .image {
             let url = obj.mediaURL ?? item.media.first(where: { $0.id == obj.postMediaId })?.url
             if let url, !url.isEmpty { plan.imageURLsByObjectId[obj.id] = url }
+        }
+
+        // Sticker IMAGE : son asset est un `PostMedia` du post comme un autre,
+        // et il entre dans le renderer par le MÊME slot `loadedImages`, sous
+        // l'id d'ÉLÉMENT. Jamais `required` : sans son image le renderer peint
+        // l'emoji de repli, ce qui vaut mieux que pas de cover du tout.
+        for sticker in effects.stickerObjects ?? [] where !sticker.postMediaId.isEmpty {
+            let url = item.media.first(where: { $0.id == sticker.postMediaId })?.url
+            if let url, !url.isEmpty { plan.imageURLsByObjectId[sticker.id] = url }
         }
 
         let hasVisualBackground = plan.legacyBackgroundURL != nil || !plan.requiredObjectIds.isEmpty
@@ -98,6 +117,11 @@ enum StoryCoverThumbnail {
 
 @MainActor
 class StoryViewModel: ObservableObject, StoryPublishExecutor {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     /// Versioned cache key for the home tray story list. Bump the suffix
     /// whenever `StoryItem` / `StoryGroup` gains a non-optional field or a
     /// formerly-dropped enrichment becomes load-bearing — the previous
@@ -274,7 +298,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: item.originalLanguage,
             visibility: item.visibility,
             visibilityUserIds: item.visibilityUserIds ?? [],
-            declaredMentions: item.mentionsPayload ?? []
+            declaredMentions: item.mentionsPayload ?? [],
+            composerMediaAlt: item.mediaAltPayload ?? [:],
+            allowSoundExtraction: item.allowSoundExtractionPayload,
+            // Une valeur inconnue (row écrite par une version future) retombe
+            // sur la story plutôt que d'échouer : le rejeu publie, au pire sous
+            // le format historique.
+            targetType: item.targetTypePayload.flatMap(PostType.init(rawValue:)) ?? .story
         )
 
         let ids = try await runStoryUpload(
@@ -394,6 +424,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// texte. Vide = aucune référence hors texte ; le serveur relit le
         /// texte lui-même.
         var declaredMentions: [PostMentionInput] = []
+        /// Le texte alternatif saisi par l'auteur, keyé par ID D'ÉLÉMENT DU
+        /// COMPOSER. La traduction vers les ids `PostMedia` n'est possible
+        /// qu'après l'upload, qui les attribue — `runStoryUpload` la fait juste
+        /// avant l'envoi (`StoryMediaAltMapping.serverKeyed`).
+        var composerMediaAlt: [String: String] = [:]
+        /// L'opt-in d'extraction de bande-son du post. `nil` = l'auteur n'a rien
+        /// tranché : le défaut serveur s'applique par silence.
+        var allowSoundExtraction: Bool? = nil
+        /// Le FORMAT choisi dans le composer (V3-3), porté jusqu'à l'envoi.
+        /// `.story` par défaut : toute surface qui n'offre pas d'éventail
+        /// publie exactement ce qu'elle publiait.
+        var targetType: PostType = .story
         /// IDs of slide-Posts already created server-side. Tracked so that:
         /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
         ///     duplicate slides — what was previously committed plus the same again),
@@ -781,7 +823,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         Task(priority: .userInitiated) { [weak self] in
             guard let self else { return }
             let imageCache = await CacheCoordinator.shared.images
-            await withTaskGroup(of: Void.self) { taskGroup in
+            await withTaskGroup(of: [String].self) { taskGroup in
                 for group in groupsToPreload {
                     guard let targetStory = group.stories.first(where: { !$0.isViewed }) ?? group.stories.first else { continue }
                     // Réclame (et marque) les URLs non encore préchargées sur le MainActor
@@ -791,6 +833,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     taskGroup.addTask {
                         await Self.prefetchStoryMediaURLs(urls, in: targetStory, imageCache: imageCache, prerollPlayer: true)
                     }
+                }
+                // Une URL sautée par la politique (ex: vidéo en cellulaire) n'est
+                // PAS « déjà préchargée » — la retirer pour qu'un retour au Wi-Fi
+                // en cours de session la rattrape (cf. claimUnprefetchedURLs ci-dessous).
+                for await skipped in taskGroup {
+                    self.prefetchedMediaURLs.subtract(skipped)
                 }
             }
         }
@@ -810,7 +858,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     guard !Task.isCancelled else { return }
                     let urls = self.claimUnprefetchedURLs(for: story)
                     guard !urls.isEmpty else { continue }
-                    await Self.prefetchStoryMediaURLs(urls, in: story, imageCache: imageCache, prerollPlayer: false)
+                    let skipped = await Self.prefetchStoryMediaURLs(urls, in: story, imageCache: imageCache, prerollPlayer: false)
+                    self.prefetchedMediaURLs.subtract(skipped)
                 }
             }
         }
@@ -1082,8 +1131,45 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         }
     }
 
+    /// Décision PURE : ce type de média de story doit-il être PRÉCHARGÉ, la
+    /// politique d'auto-téléchargement étant déjà résolue ? Miroir exact de
+    /// `BubbleCarouselView.shouldPrefetchAttachment` — extraite pour être
+    /// testable sans monter la vue ni le monitor réseau.
+    ///
+    /// `.document` n'a pas de politique propre : il transite par le store
+    /// `images` (branche `else` du routage ci-dessous), donc il suit `prefs.image`.
+    nonisolated static func shouldPrefetchStoryMedia(
+        kind: FeedMediaType,
+        allowImage: Bool,
+        allowVideo: Bool,
+        allowAudio: Bool
+    ) -> Bool {
+        switch kind {
+        case .video: return allowVideo
+        case .audio: return allowAudio
+        case .image, .document: return allowImage
+        }
+    }
+
     /// Prefetch les URLs (déjà filtrées) d'une story dans les stores disque + mémoire.
-    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async {
+    /// Retourne les URLs SAUTÉES par la politique d'auto-téléchargement (ex:
+    /// vidéo interdite en cellulaire), pour que l'appelant les retire de
+    /// `prefetchedMediaURLs` — sinon la dédup de session les marque
+    /// « déjà préchargées » à vie et un retour au Wi-Fi ne les rattrape jamais.
+    private static func prefetchStoryMediaURLs(_ urls: [String], in story: StoryItem, imageCache: DiskCacheStore, prerollPlayer: Bool) async -> [String] {
+        // Respecte la politique d'auto-téléchargement de l'utilisateur — miroir
+        // de `ConversationMediaHandler.prefetchRecentMedia` et de
+        // `BubbleCarouselView.prefetchAdjacentPages`. Sans cette garde, le
+        // préchargement du tray tirait le corps MP4/audio COMPLET en cellulaire
+        // alors que « Vidéo : Wi-Fi uniquement » est le réglage par défaut.
+        // Le chemin de LECTURE (ouverture réelle d'une story) n'est PAS gardé :
+        // une story tapée doit toujours se charger.
+        let condition = NetworkConditionMonitor.shared.condition
+        let prefs = MediaDownloadPreferencesStore.shared.preferences
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
+        let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
+        var skipped: [String] = []
         for urlString in urls {
             // Normalize through the SAME resolver the SDK reader uses
             // (`StoryReaderRepresentable` / `directURLIfAny`). Cache keys must
@@ -1096,6 +1182,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 declaredType: story.media.first(where: { $0.url == urlString })?.type,
                 urlString: resolved
             )
+            guard Self.shouldPrefetchStoryMedia(
+                kind: mediaType, allowImage: allowImage, allowVideo: allowVideo, allowAudio: allowAudio
+            ) else { skipped.append(urlString); continue }
 
             if mediaType == .video {
                 // Peupler le store `video` (celui que le canvas relit), pas
@@ -1110,6 +1199,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 _ = await imageCache.image(for: resolved)
             }
         }
+        return skipped
     }
 
     // MARK: - Mark Story as Viewed
@@ -1357,6 +1447,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Background Publishing
 
     func publishStoryInBackground(
+        /// Le format que l'auteur a choisi dans l'éventail du composer. C'est
+        /// lui qui décide du `type` envoyé à `POST /posts` — sans quoi choisir
+        /// « Post » publierait une story, un choix qui a l'air de marcher.
+        targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
@@ -1377,7 +1471,14 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// Les personnes que l'auteur a choisi de nommer, avec leur mode. Seuls
         /// les modes que le TEXTE ne peut pas porter partent au serveur : les
         /// INLINE, il les relit lui-même du contenu.
-        references: [ComposerReference] = []
+        references: [ComposerReference] = [],
+        /// Le texte alternatif par média, keyé par ID D'ÉLÉMENT DU COMPOSER :
+        /// les ids serveur n'existent qu'après l'upload. `runStoryUpload`
+        /// traduit juste avant l'envoi.
+        composerMediaAlt: [String: String] = [:],
+        /// L'opt-in d'extraction de bande-son du post entier. `nil` = l'auteur
+        /// n'a rien tranché.
+        allowSoundExtraction: Bool? = nil
     ) {
         let declaredMentions = ComposerReferences.payload(references)
 
@@ -1394,6 +1495,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         if NetworkMonitor.shared.isOffline {
             Task { [weak self] in
                 await self?.enqueueStoryForOfflinePublish(
+                    targetType: targetType,
                     slides: slides,
                     slideImages: slideImages,
                     loadedImages: loadedImages,
@@ -1403,7 +1505,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     visibility: visibility,
                     visibilityUserIds: visibilityUserIds,
                     draftId: draftId,
-                    declaredMentions: declaredMentions
+                    declaredMentions: declaredMentions,
+                    composerMediaAlt: composerMediaAlt,
+                    allowSoundExtraction: allowSoundExtraction
                 )
             }
             showStoryComposer = false
@@ -1432,7 +1536,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: originalLanguage,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
-            declaredMentions: declaredMentions
+            declaredMentions: declaredMentions,
+            composerMediaAlt: composerMediaAlt,
+            allowSoundExtraction: allowSoundExtraction,
+            targetType: targetType
         )
         let uploadId = upload.id
         activeUploads.append(upload)
@@ -1454,6 +1561,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         Task { [weak self] in
             guard let self else { return }
             let intent = await self.persistPublishIntentToQueue(
+                targetType: targetType,
                 slides: slides,
                 slideImages: slideImages,
                 loadedImages: loadedImages,
@@ -1464,7 +1572,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
                 repostOfId: repostOfId,
-                declaredMentions: declaredMentions
+                declaredMentions: declaredMentions,
+                composerMediaAlt: composerMediaAlt,
+                allowSoundExtraction: allowSoundExtraction
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
             // la revendication est donc acquise d'office ici. On enregistre
@@ -1559,6 +1669,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// enqueue branch without having to mutate `NetworkMonitor.shared`
     /// (whose `isOffline` setter is `private(set)`).
     func enqueueStoryForOfflinePublish(
+        targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
@@ -1568,9 +1679,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         visibility: String = StoryVisibilityPreferenceStore.fallback,
         visibilityUserIds: [String] = [],
         draftId: String? = nil,
-        declaredMentions: [PostMentionInput] = []
+        declaredMentions: [PostMentionInput] = [],
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
+            targetType: targetType,
             slides: slides,
             slideImages: slideImages,
             loadedImages: loadedImages,
@@ -1580,7 +1694,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
             draftId: draftId,
-            declaredMentions: declaredMentions
+            declaredMentions: declaredMentions,
+            composerMediaAlt: composerMediaAlt,
+            allowSoundExtraction: allowSoundExtraction
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -1621,6 +1737,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// l'item en queue, repris au drain de boot). Retourne les ids de l'item
     /// persisté, `nil` si l'encodage échoue.
     func persistPublishIntentToQueue(
+        /// Le format choisi. Persisté DANS l'item de file : il ne vit nulle
+        /// part ailleurs (le brouillon ne le porte pas), donc un rejeu qui ne
+        /// l'emporterait pas republierait une story là où l'auteur avait
+        /// choisi « Post ».
+        targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
@@ -1638,7 +1759,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// est exclu de la relecture serveur, une note comme un silence n'ont
         /// aucun texte), donc un rejeu qui ne les porterait pas publierait une
         /// story qui ne prévient personne.
-        declaredMentions: [PostMentionInput] = []
+        declaredMentions: [PostMentionInput] = [],
+        /// Accessibilité : ces deux champs ne vivent NULLE PART ailleurs (le
+        /// brouillon ne les porte pas), donc un rejeu qui ne les emporterait
+        /// pas publierait une story muette pour les lecteurs d'écran.
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
@@ -1665,11 +1791,20 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // promettait « publication au retour en ligne », puis le drain la
         // faisait échouer DÉFINITIVEMENT en `.missingLocalMedia` — travail
         // perdu, longtemps après, sans signal au moment où c'était réparable.
+        //
+        // Les images de stickers doivent traverser la file SANS être aplaties :
+        // le JPEG n'a pas de canal alpha et c'est ce fichier-là que le drain
+        // téléversera. On nomme tous les ids de stickers — le writer n'agit que
+        // sur ceux dont il détient réellement un bitmap, donc un sticker emoji
+        // n'y change rien. `StorySticker.kind` ne peut pas servir de filtre
+        // ici : il se déduit de `postMediaId`, encore vide avant publication.
+        let stickerIds = Set(slides.flatMap { $0.effects.stickerObjects ?? [] }.map(\.id))
         let mediaOutcome = StoryOfflineMediaWriter.persist(
             images: allImages,
             videos: loadedVideoURLs,
             audios: loadedAudioURLs,
             into: offlineDir,
+            alphaPreservingIds: stickerIds,
             fileManager: fm
         )
         guard mediaOutcome.isComplete else {
@@ -1709,7 +1844,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibilityUserIds: visibilityUserIds,
             originalLanguage: originalLanguage,
             draftId: draftId,
-            mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions
+            mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions,
+            mediaAltPayload: composerMediaAlt.isEmpty ? nil : composerMediaAlt,
+            allowSoundExtractionPayload: allowSoundExtraction,
+            targetTypePayload: targetType.rawValue
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
         return (queueId: item.id, tempStoryId: tempStoryId)
@@ -2052,6 +2190,37 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let item: StoryItem
     }
 
+    /// Ce qui reste quand un sticker n'a même pas pu être encodé : sans type
+    /// nommé, l'échec se confondrait avec une panne réseau dans le journal.
+    private struct StoryStickerImageNotEncodable: Error {}
+
+    /// Téléverse l'image d'un sticker par le chemin commun (TUS → `PostMedia`),
+    /// pour le publish comme pour l'édition.
+    ///
+    /// PNG et non JPEG : un sticker est une image détourée et le JPEG n'a pas
+    /// de canal alpha — le réencoder ainsi publierait un rectangle opaque à la
+    /// place du découpage. La bibliothèque borne déjà la taille à l'écriture
+    /// (`PasteDestination.maxSide`), il n'y a rien à sous-échantillonner ici.
+    private func uploadStickerImage(
+        _ image: UIImage,
+        uploader: TusUploadManager,
+        token: String
+    ) async throws -> TusUploadResult {
+        guard let data = image.pngData() else { throw StoryStickerImageNotEncodable() }
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sticker_\(UUID().uuidString).png")
+        try data.write(to: tempURL)
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+        let result = try await uploader.uploadFile(
+            fileURL: tempURL, mimeType: "image/png",
+            credential: .bearer(token), uploadContext: "story", thumbHash: image.toThumbHash()
+        )
+        // Même réconciliation que les autres images : le lecteur — l'auteur en
+        // premier — trouve l'asset en cache au lieu de le retélécharger.
+        await CacheCoordinator.shared.images.adoptImage(localFile: tempURL, for: result.fileUrl)
+        return result
+    }
+
     /// Headless story upload pipeline shared by:
     ///   1. `launchUploadTask` (composer flow) — wraps progress/phase/published
     ///       callbacks to drive the `activeUploads` surfaces and tray prepend.
@@ -2182,6 +2351,35 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 updatedEffects.mediaObjects = mediaObjects
             }
 
+            // L'image d'un sticker importé est INTÉGRÉE au post : elle part par
+            // le chemin commun, comme tout autre média, et le sticker reçoit son
+            // `postMediaId`. Aucune URL tierce n'entre dans le document publié.
+            if let stickers = updatedEffects.stickerObjects {
+                var uploadedStickers: [String: String] = [:]
+                let pendingStickerIds = StoryStickerUpload.pendingUploadIds(
+                    stickers: stickers, availableBitmapIds: Set(upload.loadedImages.keys)
+                )
+                for stickerId in pendingStickerIds {
+                    guard !Task.isCancelled else { return newPostIds }
+                    guard let image = upload.loadedImages[stickerId] else { continue }
+                    do {
+                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        uploadedStickers[stickerId] = result.id
+                        foregroundMediaIds.append(result.id)
+                    } catch {
+                        // L'erreur s'arrête ICI : propager ferait échouer la
+                        // slide entière pour une image d'appoint. Le sticker
+                        // reste, rendu par son emoji de repli.
+                        Logger.stories.error(
+                            "publish sticker image upload failed stickerId=\(stickerId, privacy: .public) slide=\(slide.id, privacy: .public) reason=\(error.localizedDescription, privacy: .public) — sticker kept, falls back to its emoji"
+                        )
+                    }
+                }
+                updatedEffects.stickerObjects = StoryStickerUpload.applying(
+                    uploads: uploadedStickers, to: stickers
+                )
+            }
+
             if var audioObjects = updatedEffects.audioPlayerObjects {
                 os.Logger.storyAudio.info(
                     "publish slide=\(slide.id, privacy: .public) preUpload audioCount=\(audioObjects.count) loadedAudioKeys=\(upload.loadedAudioURLs.keys.joined(separator: ","), privacy: .public)"
@@ -2242,7 +2440,22 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 declared: upload.declaredMentions, effects: updatedEffects
             )
 
-            let post = try await postService.createStory(
+            // Le texte alternatif est collecté sous les ids d'élément du
+            // composer ; le gateway ne retient que des ids de `mediaIds`
+            // (`PostService.applyMediaAlt` filtre le reste sans rien dire).
+            // L'upload vient d'attribuer les `postMediaId` : c'est ici, et
+            // nulle part plus tôt, que la traduction est possible.
+            let serverMediaAlt = StoryMediaAltMapping.serverKeyed(
+                composerKeyed: upload.composerMediaAlt,
+                mediaObjects: updatedEffects.mediaObjects ?? []
+            )
+
+            // V3-3 — le TYPE suit le format choisi dans le composer. Le canevas
+            // part avec lui : `create(content:type:…)` ne porte aucun
+            // `storyEffects`, et y router un post composé perdrait chaque objet
+            // texte, autocollant et dessin sans la moindre erreur.
+            let post = try await postService.createCanvasPost(
+                type: upload.targetType,
                 content: slide.content,
                 storyEffects: updatedEffects,
                 visibility: upload.visibility,
@@ -2250,7 +2463,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 originalLanguage: upload.originalLanguage,
                 mediaIds: allMediaIds.isEmpty ? nil : allMediaIds,
                 repostOfId: upload.repostOfId,
-                mentions: canvasMentions.isEmpty ? nil : canvasMentions
+                mentions: canvasMentions.isEmpty ? nil : canvasMentions,
+                allowSoundExtraction: upload.allowSoundExtraction,
+                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
             )
 
             newPostIds.append(post.id)
@@ -2358,7 +2573,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// prouver : l'édition n'en parle pas, le serveur préserve. Envoyer
         /// `[]` depuis un ignorant révoquerait des références que l'auteur n'a
         /// jamais vues — et leur retirerait l'accès au contenu.
-        declaredReferencesAreKnown: Bool = false
+        declaredReferencesAreKnown: Bool = false,
+        /// Même contrat qu'à la création : keyé par id d'élément du composer,
+        /// traduit en ids serveur juste avant le PUT. Le gateway ne l'applique
+        /// qu'aux médias ATTACHÉS par cette édition (`mediaIdsToAttach`), donc
+        /// un texte saisi sur un média déjà en ligne n'a pas d'effet ici.
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) -> Bool {
         guard let slide = slides.first else { return false }
         if NetworkMonitor.shared.isOffline {
@@ -2375,7 +2596,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 visibility: visibility, visibilityUserIds: visibilityUserIds,
                 draftId: draftId,
                 references: references,
-                declaredReferencesAreKnown: declaredReferencesAreKnown
+                declaredReferencesAreKnown: declaredReferencesAreKnown,
+                composerMediaAlt: composerMediaAlt,
+                allowSoundExtraction: allowSoundExtraction
             )
         }
         return true
@@ -2397,7 +2620,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         visibilityUserIds: [String],
         draftId: String? = nil,
         references: [ComposerReference] = [],
-        declaredReferencesAreKnown: Bool = false
+        declaredReferencesAreKnown: Bool = false,
+        composerMediaAlt: [String: String] = [:],
+        allowSoundExtraction: Bool? = nil
     ) async {
         do {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
@@ -2504,10 +2729,40 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 updatedEffects.audioPlayerObjects = audioObjects
             }
 
-            // 4. Les originaux plus référencés par la composition éditée.
+            // 4. Stickers — même contrat que les médias : les images déjà
+            // téléversées sont CONSERVÉES (sans quoi l'étape 5 supprimerait
+            // côté serveur l'image de chaque sticker que la story continue
+            // d'afficher), les nouvelles partent par le chemin commun.
+            if let stickers = updatedEffects.stickerObjects {
+                keptOriginalIds.formUnion(StoryStickerUpload.attachedPostMediaIds(stickers: stickers))
+                var uploadedStickers: [String: String] = [:]
+                let pendingStickerIds = StoryStickerUpload.pendingUploadIds(
+                    stickers: stickers, availableBitmapIds: Set(loadedImages.keys)
+                )
+                for stickerId in pendingStickerIds {
+                    guard let image = loadedImages[stickerId] else { continue }
+                    do {
+                        let result = try await uploadStickerImage(image, uploader: uploader, token: token)
+                        uploadedStickers[stickerId] = result.id
+                        newMediaIds.append(result.id)
+                    } catch {
+                        // L'erreur s'arrête ICI : le sticker reste, rendu par
+                        // son emoji de repli, plutôt que de faire échouer une
+                        // édition entière pour une image d'appoint.
+                        Logger.stories.error(
+                            "update sticker image upload failed stickerId=\(stickerId, privacy: .public) reason=\(error.localizedDescription, privacy: .public) — sticker kept, falls back to its emoji"
+                        )
+                    }
+                }
+                updatedEffects.stickerObjects = StoryStickerUpload.applying(
+                    uploads: uploadedStickers, to: stickers
+                )
+            }
+
+            // 5. Les originaux plus référencés par la composition éditée.
             let removeMediaIds = edit.originalMediaIds.filter { !keptOriginalIds.contains($0) }
 
-            // 5. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
+            // 6. PUT — le gateway pose `contentEditedAt`, remet l'engagement à
             // zéro et broadcast `story:updated` avec `engagementReset: true`.
             //
             // TRI-ÉTAT des références : `nil` tant que le composer n'a pas pu
@@ -2517,6 +2772,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             let declaredMentions: [PostMentionInput]? = declaredReferencesAreKnown
                 ? Self.declaredMentions(references: references, effects: updatedEffects)
                 : nil
+            let serverMediaAlt = StoryMediaAltMapping.serverKeyed(
+                composerKeyed: composerMediaAlt,
+                mediaObjects: updatedEffects.mediaObjects ?? []
+            )
             let post = try await postService.update(
                 postId: edit.postId,
                 content: slide.content,
@@ -2529,10 +2788,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 storyEffects: updatedEffects,
                 mediaIds: newMediaIds.isEmpty ? nil : newMediaIds,
                 location: nil,
-                mentions: declaredMentions
+                mentions: declaredMentions,
+                allowSoundExtraction: allowSoundExtraction,
+                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
             )
 
-            // 6. Réconciliation locale : cover local-first re-rendue (la
+            // 7. Réconciliation locale : cover local-first re-rendue (la
             // composition a changé) + remplacement de l'item dans le groupe.
             var editedSlide = slide
             editedSlide.effects = updatedEffects

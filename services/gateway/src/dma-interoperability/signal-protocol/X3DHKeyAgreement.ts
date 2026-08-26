@@ -17,13 +17,52 @@
  */
 
 import * as crypto from 'crypto';
-import { createHmac, createHash } from 'crypto';
-import { PrismaClient } from '../../../shared/prisma/client';
+import { createHmac, createVerify } from 'crypto';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SignalKeyManager } from './SignalKeyManager';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 // Create child logger for this module
 const logger = enhancedLogger.child({ module: 'X3DHKeyAgreement' });
+
+/**
+ * Refus d'un paquet de pré-clés dont la pré-clé signée n'est pas rattachée à la
+ * clé d'identité annoncée.
+ *
+ * Type propre plutôt qu'`Error` nu : un appelant doit pouvoir distinguer « ce
+ * paquet est inauthentique » — qui est un signal d'ATTAQUE, et ne se réessaie
+ * pas — d'un accord qui a échoué pour une raison d'exploitation.
+ */
+export class X3DHSignedPreKeyRejected extends Error {
+  constructor(reason: string) {
+    super(`X3DH: pré-clé signée refusée — ${reason}`);
+    this.name = 'X3DHSignedPreKeyRejected';
+  }
+}
+
+/**
+ * L'identifiant d'enregistrement entre dans l'`info` du HKDF, donc dans les clés.
+ * Les deux bouts doivent y mettre le MÊME entier — celui de l'INITIATEUR.
+ *
+ * Dériver contre un `0` de repli, comme le faisait le répondeur, ne dégrade pas
+ * la session : elle fabrique des clés que le pair ne retrouvera JAMAIS. La panne
+ * ne se déclare alors qu'au premier déchiffrement, sous les traits d'une
+ * authentification GCM rompue — c'est-à-dire sous les traits d'une ATTAQUE.
+ * Refuser ici nomme la vraie cause, à l'endroit où elle est encore lisible.
+ *
+ * La garde est runtime parce que la valeur traverse une frontière que le typage
+ * ne couvre pas : elle vient d'une colonne (`DMAEnrollment.registrationId`).
+ */
+const assertInitiatorRegistrationId = (registrationId: number | undefined): number => {
+  if (typeof registrationId !== 'number' || !Number.isInteger(registrationId)) {
+    throw new Error(
+      "X3DH: impossible de dériver — l'identifiant d'enregistrement de l'initiateur est absent " +
+        'ou non entier, or les deux bouts doivent lier le même'
+    );
+  }
+
+  return registrationId;
+};
 
 /**
  * Pre-key bundle published by a user for others to initiate sessions
@@ -120,7 +159,11 @@ export class X3DHKeyAgreement {
     initiatorSessions: 0,
     responderSessions: 0,
     dhOperationsPerformed: 0,
-    agreementErrors: 0
+    agreementErrors: 0,
+    // Comptés à part d'`agreementErrors` : un refus de signature n'est pas un
+    // incident d'exploitation, c'est la trace d'un paquet inauthentique.
+    signedPreKeysVerified: 0,
+    signedPreKeysRejected: 0
   };
 
   constructor(keyManager: SignalKeyManager, prisma: PrismaClient) {
@@ -149,6 +192,17 @@ export class X3DHKeyAgreement {
   ): Promise<X3DHInitiatorResult> {
     try {
       logger.debug('Starting X3DH initiator key agreement');
+
+      // Step 0: AUTHENTIFIER le paquet avant d'en dériver quoi que ce soit.
+      //
+      // X3DH §3.3 : « Alice verifies the prekey signature and aborts the protocol
+      // if verification fails ». C'est la SEULE étape qui rattache la pré-clé
+      // signée — reçue d'un annuaire que le protocole suppose hostile — à la clé
+      // d'identité, qui est l'unique ancre de confiance de l'accord.
+      //
+      // Le refus est prononcé AVANT la génération de l'éphémère et avant tout DH :
+      // aucun secret ne doit être dérivé contre une clé qu'on n'a pas authentifiée.
+      this.assertSignedPreKeyIsAuthentic(recipientBundle);
 
       // Step 1: Generate ephemeral key pair (ephemeral_key_pair)
       const ephemeralKeyPair = this.generateEphemeralKeyPair();
@@ -179,7 +233,7 @@ export class X3DHKeyAgreement {
         'DH3: ephemeral × signed-prekey'
       );
 
-      let dh4 = Buffer.alloc(32);
+      let dh4: Buffer = Buffer.alloc(32);
       let preKeyUsed: number | undefined;
 
       if (recipientBundle.preKey) {
@@ -199,10 +253,23 @@ export class X3DHKeyAgreement {
       logger.debug('Performed DH operations and concatenated results', { dhOperations: recipientBundle.preKey ? 4 : 3 });
 
       // Step 4: HKDF key derivation
+      //
+      // L'identifiant lié au HKDF est celui de l'INITIATEUR — le nôtre, ici. Les
+      // deux bouts doivent y mettre le MÊME entier, sans quoi un secret partagé
+      // pourtant identique produit deux jeux de clés étrangers l'un à l'autre ;
+      // et c'est le seul des deux que les deux bouts peuvent connaître sans le
+      // tenir d'un canal hostile (le répondeur le lit dans l'inscription de
+      // l'expéditeur, cf. `responderKeyAgreement`).
+      //
+      // `recipientBundle.registrationId`, lui, ne voyage QUE dans le paquet de
+      // pré-clés — un champ que la signature de la pré-clé signée ne couvre PAS.
+      // Le lier donnerait à l'annuaire un levier pour désaccorder deux pairs sans
+      // jamais toucher à une signature. Il reste dans le paquet comme étiquette
+      // de session ; il n'entre pas dans une dérivation.
       const derived = this.deriveKeys(
         concatenated,
         'WhatsApp DMA Interoperability',
-        recipientBundle.registrationId
+        this.initiatorRegistrationId()
       );
 
       logger.debug('Derived keys using HKDF');
@@ -249,8 +316,11 @@ export class X3DHKeyAgreement {
     ephemeralPublicKey: Buffer,
     initiatorIdentityKey: Buffer,
     signedPreKeyId: number,
-    preKeyId?: number,
-    initiatorRegistrationId?: number
+    preKeyId: number | undefined,
+    // REQUIS : sans lui aucune clé du pair n'est atteignable (cf.
+    // `assertInitiatorRegistrationId`). Un appelant qui ne l'a pas n'a pas de
+    // session à ouvrir — il n'a pas un argument par défaut à recevoir.
+    initiatorRegistrationId: number
   ): Promise<X3DHResponderResult> {
     try {
       logger.debug('Starting X3DH responder key agreement', { signedPreKeyId, preKeyId, initiatorRegistrationId });
@@ -298,7 +368,7 @@ export class X3DHKeyAgreement {
         'DH3: signed-prekey × ephemeral'
       );
 
-      let dh4 = Buffer.alloc(32);
+      let dh4: Buffer = Buffer.alloc(32);
 
       if (preKey) {
         // DH4: responder pre-key private × initiator ephemeral public
@@ -321,7 +391,7 @@ export class X3DHKeyAgreement {
       const derived = this.deriveKeys(
         concatenated,
         'WhatsApp DMA Interoperability',
-        initiatorRegistrationId ?? 0
+        assertInitiatorRegistrationId(initiatorRegistrationId)
       );
 
       logger.debug('Derived keys using HKDF');
@@ -345,6 +415,101 @@ export class X3DHKeyAgreement {
       logger.error('X3DH responder agreement failed', { err: error });
       this.stats.agreementErrors++;
       throw error;
+    }
+  }
+
+  /**
+   * Notre propre identifiant d'enregistrement, côté initiateur.
+   *
+   * C'est celui que nous PUBLIONS (`SignalKeyManager.getPublicKeysForPublishing`)
+   * et donc celui que le répondeur retrouvera dans notre inscription — la même
+   * valeur des deux côtés, ce qu'exige la dérivation.
+   */
+  private initiatorRegistrationId(): number {
+    return assertInitiatorRegistrationId(this.keyManager.getRegistrationId());
+  }
+
+  /**
+   * Confronte la pré-clé signée du paquet à la clé d'identité qu'il annonce.
+   *
+   * Le producteur est `SignalKeyManager.generateAndStoreSignedPreKey` : il signe
+   * les octets SPKI DER de la pré-clé publique, en ECDSA-SHA256, avec la clé
+   * d'identité privée. La vérification lit donc exactement ces octets-là.
+   *
+   * Fail-closed sur toute la surface : une signature absente, une clé illisible
+   * ou une exception d'OpenSSL valent REFUS, jamais laissez-passer. Le retrait de
+   * la signature est en pratique la manœuvre la moins chère — bien moins que la
+   * forgerie — donc l'absence est traitée exactement comme l'invalidité.
+   */
+  private assertSignedPreKeyIsAuthentic(bundle: PreKeyBundle): void {
+    const reason = this.signedPreKeyRejectionReason(bundle);
+
+    if (reason) {
+      this.stats.signedPreKeysRejected++;
+      logger.error('SECURITY: X3DH signed pre-key rejected — aborting key agreement', {
+        reason,
+        signedPreKeyId: bundle?.signedPreKey?.id,
+        registrationId: bundle?.registrationId
+      });
+      throw new X3DHSignedPreKeyRejected(reason);
+    }
+
+    this.stats.signedPreKeysVerified++;
+  }
+
+  /**
+   * Rend la raison du refus, ou `null` si le paquet est authentique.
+   */
+  private signedPreKeyRejectionReason(bundle: PreKeyBundle): string | null {
+    if (!bundle?.identityKey?.length) {
+      return "le paquet ne porte aucune clé d'identité";
+    }
+
+    if (!bundle.signedPreKey?.publicKey?.length) {
+      return 'le paquet ne porte aucune pré-clé signée';
+    }
+
+    if (!bundle.signedPreKey.signature?.length) {
+      return 'le paquet ne porte aucune signature';
+    }
+
+    return this.signatureIsAuthentic(
+      bundle.signedPreKey.publicKey,
+      bundle.signedPreKey.signature,
+      bundle.identityKey
+    )
+      ? null
+      : "la signature ne rattache pas la pré-clé signée à la clé d'identité annoncée";
+  }
+
+  /**
+   * Vérification ECDSA-SHA256, rendant `false` sur toute anomalie.
+   *
+   * Une clé d'identité malformée fait lever `createPublicKey` ; une signature
+   * malformée fait lever ou rendre `false` selon la nature du défaut. Les deux
+   * issues sont le même verdict — le paquet n'est pas authentique — et aucune ne
+   * doit remonter à l'appelant sous la forme d'une exception d'OpenSSL.
+   */
+  private signatureIsAuthentic(
+    signedPreKeyPublic: Buffer,
+    signature: Buffer,
+    identityKey: Buffer
+  ): boolean {
+    try {
+      const identityKeyObject = crypto.createPublicKey({
+        key: identityKey,
+        format: 'der',
+        type: 'spki'
+      });
+
+      const verify = createVerify('SHA256');
+      verify.update(signedPreKeyPublic);
+      return verify.verify(identityKeyObject, signature);
+    } catch (error) {
+      logger.warn('X3DH signed pre-key signature could not be verified', {
+        err: error instanceof Error ? error.message : String(error)
+      });
+      return false;
     }
   }
 

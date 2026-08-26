@@ -23,6 +23,8 @@
     <string name="feed_repost_quoted">Citado</string>
     <string name="feed_repost_story">Story</string>
     <string name="feed_repost_open">Abrir a publicação republicada</string>
+    <string name="feed_location_shared">Localização partilhada</string>
+    <string name="feed_location_open">Abrir a localização no mapa</string>
     <string name="feed_repost_more_media">+%1$d</string>
     <string name="bookmarks_title">Salvos</string>
     <string name="bookmarks_empty">Nenhuma publicação salva ainda</string>
@@ -60,6 +62,10 @@
     <plurals name="feed_new_posts">
         <item quantity="one">%1$d nova publicação</item>
         <item quantity="other">%1$d novas publicações</item>
+    </plurals>
+    <plurals name="feed_repost_likes_count">
+        <item quantity="one">%1$d curtida</item>
+        <item quantity="other">%1$d curtidas</item>
     </plurals>
     <!-- Mood status bar (Prisme: PT) -->
     <string name="status_bar_me">Eu</string>
@@ -120,6 +126,11 @@
     <string name="feed_action_share">Compartilhar</string>
     <string name="feed_action_copy_link">Copiar link</string>
     <string name="feed_action_repost">Repostar</string>
+    <string name="feed_action_quote">Citar</string>
+    <string name="feed_quote_title">Citar publicação</string>
+    <string name="feed_quote_hint">Adicione um comentário</string>
+    <string name="feed_quote_submit">Repostar</string>
+    <string name="feed_quote_cancel">Cancelar</string>
     <string name="feed_action_bookmark">Salvar</string>
     <string name="feed_action_unbookmark">Remover dos salvos</string>
     <string name="feed_action_pin">Fixar</string>

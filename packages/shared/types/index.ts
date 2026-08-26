@@ -222,6 +222,7 @@ export {
   GLOBAL_ROLE_HIERARCHY,
   MEMBER_ROLE_HIERARCHY,
   WRITE_PERMISSION_HIERARCHY,
+  globalRoleLevel,
   hasMinimumRole,
   hasMinimumMemberRole,
   normalizeGlobalRole,
@@ -683,6 +684,13 @@ export interface SendMessageRequest {
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
   readonly attachmentIds?: readonly string[];
+  /**
+   * Les mentionnés que l'ÉMETTEUR nomme. `POST /messages` les déclare et les
+   * honore depuis toujours ; ce contrat-ci ne les portait pas, si bien qu'aucun
+   * client typé ne pouvait les poser — jumeau REST de l'omission qui, sur le
+   * transport socket, faisait perdre toute mention d'une conversation chiffrée.
+   */
+  readonly mentionedUserIds?: readonly string[];
 }
 
 // Re-export the Zod schema + inferred runtime type from messages.ts so callers

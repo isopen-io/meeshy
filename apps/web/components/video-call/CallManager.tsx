@@ -24,9 +24,11 @@ import type {
   CallMediaToggleEvent,
   CallError,
   CallSession,
+  CallJoinAck,
 } from '@meeshy/shared/types/video-call';
 import { CALL_TERMINAL_STATUSES } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { TypedSocket } from '@/services/socketio/types';
 import { getCallMediaConstraints, stopPreauthorizedStream } from '@/lib/calls/call-media-constraints';
 import { callsService } from '@/services/calls.service';
 import { isRetryableCallFailure } from '@/lib/calls/call-retry-policy';
@@ -141,7 +143,7 @@ export function CallManager() {
         // Emit leave event to server
         const socket = meeshySocketIOService.getSocket();
         if (socket) {
-          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+          socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
         }
 
         // Reset local state
@@ -171,7 +173,7 @@ export function CallManager() {
   const rejectWaitingCall = useCallback((callId: string) => {
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_END, {
+      socket.emit(CLIENT_EVENTS.CALL_END, {
         callId,
         reason: 'rejected',
       });
@@ -328,6 +330,23 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     } else {
+      // Vague 163 (2026-08-23) — `call:check-active` replays the SAME
+      // ringing call:initiated on every socket reconnect during the 60s
+      // gateway ringing window (see CallEventsHandler.ts `call:check-active`
+      // comment: "the client dedups by callId") — but this branch never
+      // actually deduped: a replay for the callId already showing as
+      // `incomingCall` fell straight through to `setIncomingCall` +
+      // `startCallTimeout`, which RE-ARMS a fresh 45s window on every
+      // reconnect instead of leaving the original deadline alone. A callee
+      // on a flaky connection — the exact case this replay exists to cover —
+      // could see the ringing banner outlive the caller's own 45s no-answer
+      // timeout indefinitely, one reconnect at a time. A true duplicate
+      // replay for an unanswered call already showing is a no-op.
+      if (incomingCall && incomingCall.callId === event.callId) {
+        logger.debug('[CallManager]', 'Duplicate call:initiated replay for already-showing call ' + event.callId + ' — ignoring (no timer re-arm)');
+        return;
+      }
+
       // Busy-path parity (iOS CallManager busy-path, Android onIncomingOffer):
       // a second incoming call while already in a DIFFERENT active call must not
       // naively setIncomingCall. The render mounts CallNotification and
@@ -413,6 +432,25 @@ export function CallManager() {
    */
   const handleParticipantJoined = useCallback(
     (event: CallParticipantJoinedEvent) => {
+      // Vague 160 — a call:ended for an unrelated callId already has this
+      // guard (see the stale-callId comment on handleCallEnded below); this
+      // event is the sibling that never got it, even though it carries the
+      // same callId field for the same reason. The call-waiting "End &
+      // Answer" swap (handleEndAndAnswerWaiting) emits call:leave for the
+      // outgoing call WITHOUT awaiting an ack, then synchronously moves
+      // currentCall to the waiting call — the left call keeps running for
+      // its other participants (group call) until the server processes the
+      // leave, so a participant-joined for the OLD call can still reach this
+      // socket after currentCall already points at the NEW one. Only skip
+      // when a DIFFERENT call is genuinely tracked — `currentCall` is still
+      // null before this client's own join ack lands, and addParticipant's
+      // pendingParticipantsByCallId buffer (call-store.ts) exists precisely
+      // to hold those pre-ack events, so this must not block that case.
+      const { currentCall: trackedCallForJoin } = useCallStore.getState();
+      if (trackedCallForJoin && trackedCallForJoin.id !== event.callId) {
+        return;
+      }
+
       logger.info('[CallManager]', 'Participant joined - callId: ' + event.callId + ', participantId: ' + event.participant.id);
 
       // Apply the per-user ICE servers (STUN + time-limited TURN) the gateway
@@ -458,9 +496,23 @@ export function CallManager() {
    */
   const handleParticipantLeft = useCallback(
     (event: CallParticipantLeftEvent) => {
+      // Vague 160 — sibling of the handleParticipantJoined guard above: a
+      // participant-left for a call this client already moved away from
+      // (currentCall now points elsewhere) must not remove an entry from
+      // the CURRENT call's roster, even on an identity collision (the same
+      // participantId can legitimately belong to a stale AND a current
+      // call's roster entry after a rejoin).
+      const { currentCall: trackedCallForLeft } = useCallStore.getState();
+      if (trackedCallForLeft && trackedCallForLeft.id !== event.callId) {
+        return;
+      }
+
+      // `CallParticipantLeftEvent` has no `anonymousId` field (see
+      // packages/shared/types/video-call.ts) — VideoCallInterface's own
+      // handler dropped the same dead lookup at Vague 133; this sibling
+      // listener carried an unfixed duplicate that always logged `undefined`.
       logger.info('[CallManager]', 'Participant left - callId: ' + event.callId + ', participantId: ' + event.participantId, {
         userId: event.userId,
-        anonymousId: (event as unknown).anonymousId,
         mode: event.mode
       });
 
@@ -652,6 +704,15 @@ export function CallManager() {
       // update it by its actual `.id`.
       const identity = event.userId || event.participantId;
       const { currentCall } = useCallStore.getState();
+      // Vague 160 — same stale-callId guard as handleParticipantJoined/Left
+      // above: without it, a media-toggle for a call this client already
+      // left (currentCall now points at a different, newer call) can still
+      // flip a roster entry's mute/camera flag on the CURRENT call whenever
+      // the identity happens to resolve to one of its participants (e.g.
+      // redialing the same peer).
+      if (currentCall && currentCall.id !== event.callId) {
+        return;
+      }
       const participant = currentCall?.participants.find(
         (p) => (p.userId || p.participantId) === identity
       );
@@ -745,12 +806,12 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      const ack = await new Promise<{ success?: boolean; data?: { iceServers?: RTCIceServer[] } }>((resolve, reject) => {
+      const ack = await new Promise<CallJoinAck>((resolve, reject) => {
         const timer = setTimeout(
           () => reject(new Error('CALL_JOIN_ACK_TIMEOUT')),
           CALL_JOIN_ACK_TIMEOUT_MS
         );
-        (socket as unknown).emit(
+        socket.emit(
           CLIENT_EVENTS.CALL_JOIN,
           {
             callId: params.callId,
@@ -759,7 +820,7 @@ export function CallManager() {
               videoEnabled: params.isVideo,
             },
           },
-          (response: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+          (response) => {
             clearTimeout(timer);
             resolve(response);
           }
@@ -865,7 +926,7 @@ export function CallManager() {
     const { currentCall: active } = useCallStore.getState();
     const socket = meeshySocketIOService.getSocket();
     if (socket && active?.id) {
-      (socket as unknown as { emit: (e: string, d: unknown) => void }).emit(CLIENT_EVENTS.CALL_LEAVE, {
+      socket.emit(CLIENT_EVENTS.CALL_LEAVE, {
         callId: active.id,
       });
     }
@@ -914,7 +975,7 @@ export function CallManager() {
     // immédiatement à l'appelant.
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_END, {
+      socket.emit(CLIENT_EVENTS.CALL_END, {
         callId: incomingCall.callId,
         reason: 'rejected',
       });
@@ -938,25 +999,32 @@ export function CallManager() {
    * is ended server-side even though both peers' media is fine. Mirrors iOS
    * CallManager.didReconnect.
    */
-  const rejoinActiveCallAfterReconnect = useCallback((socket: unknown) => {
+  const rejoinActiveCallAfterReconnect = useCallback((socket: TypedSocket | null) => {
     const { isInCall: activeInCall, currentCall: activeCall } = useCallStore.getState();
     if (!socket || !activeInCall || !activeCall?.id) return;
 
     const callId = activeCall.id;
     logger.info('[CallManager]', 'Socket reconnected — re-joining call room', { callId });
 
-    (socket as unknown).emit(
+    socket.emit(
       CLIENT_EVENTS.CALL_JOIN,
       { callId, settings: { audioEnabled: true, videoEnabled: true } },
-      (ack: { success?: boolean; error?: { code?: string; message?: string } }) => {
+      (ack) => {
         if (ack?.success) return;
         if (ack?.error?.code === 'CALL_ENDED') {
           logger.warn('[CallManager]', 'Call ended while disconnected — tearing down', { callId });
+          // Vague 161 — forward the server's REAL endReason when the gateway
+          // sends one (CallAlreadyEndedError, CallService.joinCallAttempt)
+          // instead of hardcoding 'completed'. Hardcoding it silently
+          // defeated isRetryableCallFailure's offer for the one case this
+          // reconnect path exists for: a genuine connectionLost/
+          // heartbeatTimeout that lost the race against the gateway's
+          // disconnect-grace window while this socket was down.
           handleCallEndedRef.current({
             callId,
             duration: 0,
             endedBy: '',
-            reason: 'completed',
+            reason: ack.error?.endReason ?? 'completed',
           } as CallEndedEvent);
           return;
         }
@@ -1049,7 +1117,7 @@ export function CallManager() {
     // ever removes exactly those.
     let attachedListeners: Record<string, (...args: unknown[]) => void> | null = null;
 
-    const attachListeners = (socket: unknown) => {
+    const attachListeners = (socket: TypedSocket | null) => {
       if (!isSubscribed || !socket?.connected) return;
 
       // Cleanup this component's OWN previously-attached listeners only.
@@ -1075,14 +1143,19 @@ export function CallManager() {
 
       // Attach via refs (stable references that don't cause re-fires)
       attachedListeners = {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Socket.IO listener args are typed by the handler ref
-        [SERVER_EVENTS.CALL_INITIATED]: (data: any) => handleIncomingCallRef.current(data),
-        [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: unknown) => handleParticipantJoinedRef.current(data),
-        [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: unknown) => handleParticipantLeftRef.current(data),
-        [SERVER_EVENTS.CALL_ENDED]: (data: unknown) => handleCallEndedRef.current(data),
+        // `attachedListeners` is a heterogeneous bag keyed by event name — its
+        // storage type stays a loose `(...args: unknown[]) => void` (needed
+        // for the uniform on/off/off-by-name calls below), so each entry
+        // narrows its own `unknown` payload to the event's real shape right
+        // at the boundary where the server contract guarantees it, instead of
+        // erasing the whole socket's type the way `(socket as unknown)` did.
+        [SERVER_EVENTS.CALL_INITIATED]: (data: unknown) => handleIncomingCallRef.current(data as CallInitiatedEvent),
+        [SERVER_EVENTS.CALL_PARTICIPANT_JOINED]: (data: unknown) => handleParticipantJoinedRef.current(data as CallParticipantJoinedEvent),
+        [SERVER_EVENTS.CALL_PARTICIPANT_LEFT]: (data: unknown) => handleParticipantLeftRef.current(data as CallParticipantLeftEvent),
+        [SERVER_EVENTS.CALL_ENDED]: (data: unknown) => handleCallEndedRef.current(data as CallEndedEvent),
         [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: unknown) => handleAnsweredElsewhereRef.current(data as { callId: string }),
-        [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: unknown) => handleMediaToggleRef.current(data),
-        [SERVER_EVENTS.CALL_ERROR]: (data: unknown) => handleCallErrorRef.current(data),
+        [SERVER_EVENTS.CALL_MEDIA_TOGGLED]: (data: unknown) => handleMediaToggleRef.current(data as CallMediaToggleEvent),
+        [SERVER_EVENTS.CALL_ERROR]: (data: unknown) => handleCallErrorRef.current(data as CallError),
         // `call:force-leave` — le serveur sort CE destinataire de l'appel,
         // qui continue pour les autres (fin d'appartenance : quitté, banni,
         // retiré, fil supprimé pour soi). Distinct de `call:participant-left`,
@@ -1135,7 +1208,7 @@ export function CallManager() {
     // unconditional `call:check-active` emit on connect. Idempotent: the
     // gateway scopes the replay to the 60s ringing window and the client
     // dedups by callId (see CallEventsHandler.ts `call:check-active`).
-    const checkForActiveCall = (socket: unknown) => {
+    const checkForActiveCall = (socket: TypedSocket | null) => {
       // Only ever invoked from an already-established `connect` context
       // (initial-connected branch, the `connect` event itself, or the
       // socket-becomes-available poll below), so `.connected` is implied —
@@ -1206,6 +1279,7 @@ export function CallManager() {
           s.off(SERVER_EVENTS.CALL_ALREADY_ANSWERED, attachedListeners[SERVER_EVENTS.CALL_ALREADY_ANSWERED]);
           s.off(SERVER_EVENTS.CALL_MEDIA_TOGGLED, attachedListeners[SERVER_EVENTS.CALL_MEDIA_TOGGLED]);
           s.off(SERVER_EVENTS.CALL_ERROR, attachedListeners[SERVER_EVENTS.CALL_ERROR]);
+          s.off(SERVER_EVENTS.CALL_FORCE_LEAVE, attachedListeners[SERVER_EVENTS.CALL_FORCE_LEAVE]);
         }
       }
     };

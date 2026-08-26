@@ -159,12 +159,35 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let forwardedFromAttachmentId: String?
     public let isForwarded: Bool?
 
+    // ── Provenance ──
+    /// Le fichier sort de la caméra ou du micro DE L'APPLICATION. Déclaré par
+    /// le client qui a capturé, à l'envoi — lui seul le sait, et seulement à cet
+    /// instant — puis rendu ici par la passerelle. La feuille de partage le lit
+    /// pour décider si PUBLIER ce média demande confirmation.
+    /// @see `PublicationTargetRule.needsCaptureConfirmation`
+    public let capturedInApp: Bool?
+
     // ── View-once / Effects / Blur ──
     public let isViewOnce: Bool?
     public let maxViewOnceCount: Int?
     public let viewOnceCount: Int?
     public let isBlurred: Bool?
     public let effectFlags: UInt32?
+
+    /// Protection DÉCLARÉE par le fil — `nil` quand il n'en dit RIEN (les deux
+    /// drapeaux absents), ce qui n'est pas la même chose que « dit qu'elle est
+    /// absente ». Site UNIQUE de la dérivation pour `ReplyReference
+    /// .attachmentIsProtected`, que le chemin réseau (`uiReplyTo`) et le chemin
+    /// cache (`MessagePersistenceActor`) gravent tous les deux.
+    ///
+    /// Un `false` fabriqué à partir d'un silence serait une AFFIRMATION : il
+    /// rendrait la citation d'un média protégé indistinguable de celle d'un
+    /// média ordinaire, et le jour où le fil se met à porter les drapeaux, le
+    /// blob gravé continuerait de mentir. `nil` se laisse corriger.
+    public var declaredProtection: Bool? {
+        guard isViewOnce != nil || isBlurred != nil else { return nil }
+        return (isViewOnce ?? false) || (isBlurred ?? false)
+    }
 
     // ── Consumption tracking (R5 — denormalized counters surfaced in
     //    attachmentFullSelect; required to render the consumption strip
@@ -203,7 +226,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         case pageCount, lineCount
         case latitude, longitude
         case uploadedBy, isAnonymous, createdAt
-        case forwardedFromAttachmentId, isForwarded
+        case forwardedFromAttachmentId, isForwarded, capturedInApp
         case isViewOnce, maxViewOnceCount, viewOnceCount, isBlurred, effectFlags
         case deliveredToAllAt, viewedByAllAt, downloadedByAllAt
         case listenedByAllAt, watchedByAllAt
@@ -255,6 +278,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
         self.forwardedFromAttachmentId = try c.decodeIfPresent(String.self, forKey: .forwardedFromAttachmentId)
         self.isForwarded = try c.decodeIfPresent(Bool.self, forKey: .isForwarded)
+        self.capturedInApp = try c.decodeIfPresent(Bool.self, forKey: .capturedInApp)
         self.isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
         self.maxViewOnceCount = try c.decodeIfPresent(Int.self, forKey: .maxViewOnceCount)
         self.viewOnceCount = try c.decodeIfPresent(Int.self, forKey: .viewOnceCount)
@@ -736,7 +760,8 @@ extension APIMessage {
             return MeeshyMessageAttachment(
                 id: apiAtt.id, fileName: apiAtt.fileName ?? "", originalName: apiAtt.originalName ?? "",
                 mimeType: apiAtt.mimeType ?? "application/octet-stream", fileSize: apiAtt.fileSize ?? 0,
-                fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
+                fileUrl: apiAtt.fileUrl ?? "", capturedInApp: apiAtt.capturedInApp == true,
+                width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
                 thumbnailColor: thumbnailColor,
@@ -772,8 +797,18 @@ extension APIMessage {
                 return ReplyReference(
                     messageId: reply.id, authorName: authorName,
                     previewText: reply.content ?? "", isMe: isReplyMe,
+                    // L'avatar de l'auteur cite est DEJA sur le fil (le gateway
+                    // selectionne `replyTo.sender.avatar` et `…sender.user.avatar`
+                    // sur les trois chemins) — il etait simplement jete ici.
+                    // Meme cascade que partout ailleurs : `resolvedAvatar`.
+                    authorAvatarUrl: reply.sender?.resolvedAvatar,
                     attachmentType: kindRaw,
-                    attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                    attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
+                    // La vignette voyage sans condition ; la PROTECTION doit
+                    // voyager avec elle, sinon la citation d'un média à vue
+                    // unique affiche son contenu sous un bouton play que
+                    // l'hôte refuse ensuite d'honorer.
+                    attachmentIsProtected: firstAtt?.declaredProtection
                 )
             }
             // Snapshot figé du post cité (vignette + compteurs like/commentaire/
@@ -782,6 +817,9 @@ extension APIMessage {
             if let target = postReplyTo {
                 // Réponse à un mood : rendu dédié (emoji + contenu + date).
                 if let emoji = target.moodEmoji {
+                    // `authorAvatarUrl` reste nil, DELIBEREMENT : le snapshot
+                    // `postReplyTo` ne porte aucun avatar d'auteur, et une
+                    // citation de mood n'ouvre aucun profil (elle saute au post).
                     return ReplyReference(
                         messageId: target.id,
                         // Le nom vient du snapshot serveur. Vide sur un snapshot
@@ -794,6 +832,9 @@ extension APIMessage {
                         moodEmoji: emoji
                     )
                 }
+                // Idem : aucun avatar dans le snapshot `postReplyTo`, et
+                // `authorName` vaut litteralement "Story" — il n'y a pas de
+                // personne a ouvrir depuis cette citation.
                 return ReplyReference(
                     messageId: target.id, authorName: "Story",
                     previewText: target.previewText.isEmpty ? "\u{1F4F7} Story" : target.previewText,
@@ -806,6 +847,8 @@ extension APIMessage {
                 )
             }
             if let storyId = storyReplyToId, !storyId.isEmpty {
+                // Repli le plus pauvre : seul l'identifiant de la story est
+                // connu. Ni auteur reel, ni avatar — aucune porte vers un profil.
                 return ReplyReference(
                     messageId: storyId, authorName: "Story",
                     previewText: "\u{1F4F7} Story", isStoryReply: true

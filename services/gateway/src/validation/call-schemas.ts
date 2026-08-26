@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from '@meeshy/shared/utils/time-range';
 import {
   callTypeEnum,
   CommonSchemas,
@@ -150,68 +151,102 @@ export const socketLeaveCallSchema = z.object({
  *
  * Validates WebRTC signaling data with strict size limits
  */
+/**
+ * Champs communs aux deux formes de signal.
+ *
+ * Bounded (calling-stack audit 2026-08-15): `from`/`to` portent un userId
+ * (24-char Mongo ObjectId en pratique, vérifié contre le `userId` authentifié
+ * plus bas) — 128 est un plafond généreux qui ferme les deux seuls champs non
+ * bornés de cette charge. La limite de trame de 1 Mo de Socket.IO est sinon le
+ * seul plafond, ce qui laisse un client abusif mais dans les clous du
+ * rate-limiter relayer des trames proches du mégaoctet 100×/10 s à travers
+ * `io.to(targetSocketId).emit(...)`.
+ *
+ * §3.5 `negotiationId` — l'époque de négociation, déclarée pour que Zod ne la
+ * retire pas de la charge relayée verbatim (le client récepteur s'en sert pour
+ * écarter les offres/candidats périmés).
+ */
+const webRTCSignalBaseShape = {
+  from: z.string().min(1, 'from field is required').max(128, 'from field exceeds maximum length'),
+  to: z.string().min(1, 'to field is required').max(128, 'to field exceeds maximum length'),
+  negotiationId: z.number().int().min(0).optional()
+};
+
+/**
+ * Offer / answer / ice-restart — porte un SDP, obligatoirement.
+ *
+ * Structurellement validé : tout SDP WebRTC conforme à la RFC 4566 contient
+ * « v=0 » (champ de version, toujours en tête) et au moins une ligne « m= »
+ * (description de média). Une chaîne qui passe le plafond de 50 Ko sans ces
+ * champs est soit malformée, soit une charge fabriquée pour le parseur SDP du
+ * pair.
+ */
+const webRTCOfferAnswerSignalSchema = z.object({
+  type: z.literal(['offer', 'answer', 'ice-restart']),
+  ...webRTCSignalBaseShape,
+  sdp: z.string()
+    .min(1, 'SDP is required for offer/answer/ice-restart signals')
+    .max(50000, 'SDP data exceeds maximum size of 50KB')
+    .refine(
+      (s) => s.includes('v=0') && s.includes('m='),
+      'SDP must contain a version field (v=0) and at least one media line (m=) per RFC 4566'
+    )
+});
+
+/**
+ * Ice-candidate — porte un candidat, obligatoirement.
+ *
+ * Validé contre le format candidate-attribute de la RFC 8445. La chaîne VIDE
+ * est acceptée : c'est le marqueur de fin de candidats (§8.2.1). Refuser les
+ * chaînes non conformes évite de relayer au pair des charges fabriquées pour
+ * son implémentation WebRTC.
+ */
+const webRTCIceCandidateSignalSchema = z.object({
+  type: z.literal('ice-candidate'),
+  ...webRTCSignalBaseShape,
+  candidate: z.string()
+    .max(1000, 'ICE candidate exceeds maximum size of 1KB')
+    .refine(
+      (s) => s === '' || /^candidate:\S+/i.test(s),
+      'ICE candidate must start with "candidate:" (RFC 8445) or be empty (end-of-candidates marker)'
+    ),
+  sdpMLineIndex: z.number().optional(),
+  // Borné pour la même raison que from/to — les vraies valeurs sont de courts
+  // identifiants de flux média ("0", "audio", "video", "sdparta_0").
+  sdpMid: z.string().max(256, 'sdpMid exceeds maximum length').optional()
+});
+
+/**
+ * Socket.IO Event: call:signal
+ *
+ * **Une union DISCRIMINÉE, et non un objet plat gardé par un `.refine`**
+ * (cycle 107). Les deux expriment exactement les mêmes contraintes à
+ * l'exécution — le `.refine` qu'elle remplace exigeait déjà un `sdp` non vide
+ * sur offer/answer/ice-restart et un `candidate` sur ice-candidate. Ce qui
+ * change est le TYPE INFÉRÉ : `.refine` ne restreint pas `z.infer`, si bien que
+ * `SocketSignalInput.signal` sortait PLAT — `type` en union des quatre valeurs,
+ * `sdp` et `candidate` tous deux optionnels — alors que le contrat partagé
+ * déclare `WebRTCSignal`, une vraie union discriminée où chaque membre exige
+ * son champ.
+ *
+ * Tant que le relais émettait sur un `Server` non typé (le cast retiré au
+ * cycle 107), l'écart ne se voyait pas. Il devenait, dès la porte posée, la
+ * seule chose qui empêchait `validation.data` d'être émis tel quel — et le
+ * corriger ICI plutôt qu'au site d'émission évite d'y écrire un cast, c'est-à-
+ * dire de rouvrir la porte qu'on vient de fermer.
+ *
+ * Bénéfice de bord : Zod RETIRE désormais les champs de l'autre membre (un
+ * `sdp` accroché à un `ice-candidate`, un `candidate` accroché à une offre) au
+ * lieu de les relayer. Le relais dépend déjà de ce retrait pour sa sécurité —
+ * il émet `validation.data`, jamais `data`, précisément pour qu'un client ne
+ * puisse pas passer de champs arbitraires au pair.
+ */
 export const socketSignalSchema = z.object({
   callId: objectIdSchema,
-  signal: z.object({
-    type: z.enum(['offer', 'answer', 'ice-candidate', 'ice-restart'], {
-      error: () => 'Signal type must be offer, answer, ice-candidate, or ice-restart'
-    }),
-    // Bounded (calling-stack audit 2026-08-15): both carry a userId
-    // (24-char Mongo ObjectId in practice, verified against the
-    // authenticated `userId` below) — 128 is a generous ceiling that
-    // closes the only unbounded fields in this payload. Socket.IO's
-    // default 1MB frame limit is otherwise the sole cap, letting a
-    // rate-limited-but-still-abusive client relay near-1MB frames
-    // 100×/10s through `io.to(targetSocketId).emit(...)`.
-    from: z.string().min(1, 'from field is required').max(128, 'from field exceeds maximum length'),
-    to: z.string().min(1, 'to field is required').max(128, 'to field exceeds maximum length'),
-    // SDP data for offer/answer — size-capped and structurally validated.
-    // Every RFC 4566 WebRTC SDP must contain "v=0" (version field, always first)
-    // and at least one "m=" line (media description). A string that passes the
-    // 50KB cap but lacks these fields is either malformed or a crafted payload
-    // that could exploit the client-side SDP parser.
-    sdp: z.string()
-      .max(50000, 'SDP data exceeds maximum size of 50KB')
-      .refine(
-        (s) => s.includes('v=0') && s.includes('m='),
-        'SDP must contain a version field (v=0) and at least one media line (m=) per RFC 4566'
-      )
-      .optional(),
-    // ICE candidate data — validated against RFC 8445 candidate-attribute format.
-    // An empty string is accepted as the end-of-candidates marker (§8.2.1).
-    // Rejecting non-conforming strings prevents forwarding crafted payloads that
-    // could trigger parser bugs in the peer's WebRTC implementation.
-    candidate: z.string()
-      .max(1000, 'ICE candidate exceeds maximum size of 1KB')
-      .refine(
-        (s) => s === '' || /^candidate:\S+/i.test(s),
-        'ICE candidate must start with "candidate:" (RFC 8445) or be empty (end-of-candidates marker)'
-      )
-      .optional(),
-    sdpMLineIndex: z.number().optional(),
-    // Bounded for the same reason as from/to above — real values are short
-    // media-stream identifiers ("0", "audio", "video", "sdparta_0").
-    sdpMid: z.string().max(256, 'sdpMid exceeds maximum length').optional(),
-    // §3.5 negotiation epoch — declared so Zod does not strip it from the
-    // opaque relay payload (the gateway passes it through verbatim; the
-    // receiving client uses it to drop stale offers/candidates).
-    negotiationId: z.number().int().min(0).optional()
-  }).refine(
-    (data) => {
-      if (data.type === 'offer' || data.type === 'answer' || data.type === 'ice-restart') {
-        return typeof data.sdp === 'string' && data.sdp.length > 0;
-      }
-      /* istanbul ignore else -- enum guarantees all 4 types are handled */
-      if (data.type === 'ice-candidate') {
-        return typeof data.candidate === 'string';
-      }
-      /* istanbul ignore next -- enum guarantees all 4 types handled above */
-      return true;
-    },
-    {
-      message: 'Invalid signal structure: offer/answer/ice-restart requires sdp, ice-candidate requires candidate'
-    }
-  )
+  signal: z.discriminatedUnion('type', [
+    webRTCOfferAnswerSignalSchema,
+    webRTCIceCandidateSignalSchema
+  ])
 });
 
 /**
@@ -321,17 +356,16 @@ export const socketTranscriptionSegmentSchema = z.object({
     })
     // Un segment temporel ne peut PAS finir avant d'avoir commencé — même
     // classe de sanité numérique que `min(0)` sur les bornes. Bornes égales
-    // (segment ponctuel) admises. Miroir strict de `transcriptionSegmentSchema`
-    // dans `packages/shared/utils/attachment-validators.ts` (durci itération
-    // 234) : sans ce `refine`, un `startMs=1500, endMs=500` traverse le gate
-    // et se PROPAGE — ce chemin persiste le segment (`Transcription`), l'envoie
-    // au traducteur (ZMQ) et le diffuse à TOUS les participants de l'appel,
-    // qui l'inscrivent dans leur overlay de sous-titres puis dans le replay
+    // (segment ponctuel) admises. Invariant partagé par tous les couples
+    // `startMs/endMs`, déclaré une seule fois dans
+    // `@meeshy/shared/utils/time-range` (itération 238, ex-miroir manuel de
+    // `transcriptionSegmentSchema`, durci itération 234/236) : sans ce
+    // `refine`, un `startMs=1500, endMs=500` traverse le gate et se PROPAGE —
+    // ce chemin persiste le segment (`Transcription`), l'envoie au traducteur
+    // (ZMQ) et le diffuse à TOUS les participants de l'appel, qui l'inscrivent
+    // dans leur overlay de sous-titres puis dans le replay
     // `GET /calls/:callId/transcript`, sans indice d'origine.
-    .refine((segment) => segment.endMs >= segment.startMs, {
-      message: 'endMs must be greater than or equal to startMs',
-      path: ['endMs'],
-    })
+    .refine(isMsRangeOrdered, MS_RANGE_REFINEMENT)
 });
 
 /**

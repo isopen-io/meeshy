@@ -1,5 +1,445 @@
 # @meeshy/web
 
+## 1.32.1
+
+### Patch Changes
+
+- Changements automatiques détectés :
+
+  - langgraph 1.x exige @langchain/core 1.x — le bump seul cassait la résolution
+
+## 1.32.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - les 8 clés « publier depuis la feuille de partage » n'entraient pas au catalogue
+  - comments & status descend the ordered Prisme (rank-conscious) [itération 257]
+  - REST leave route attributed a moderator kick to the kicked target, not the moderator [Vague 175]
+  - merge realtime overlay translations pushed over story:translation-updated (#3455)
+  - la bannière RÉSOLVAIT le Prisme sans jamais le SERVIR [cycle 122]
+  - la réponse et la mention n'appliquaient AUCUN Prisme [cycle 122]
+  - language bar descends the Prisme over ALL slide content (#3432)
+  - call links dropped their post-login destination — redirect vs returnUrl [Vague 174]
+  - la bannière ne descendait que le rang 1 du Prisme [cycle 121]
+  - le Prisme des posts ne descendait que le rang 1 — parité iOS/Android [cycle 120]
+  - re-resolve text overlays into the Exploration language (#3427)
+  - WebRtcEngine's remote-video replay leaked the ended call's disposed track into the next call [Vague 173]
+  - la langue d'origine gagne à son RANG, jamais en court-circuit [cycle 119]
+  - importer `encodeToString` — le témoin de cache ne compilait pas [cycle 118]
+  - call:join's own ack is the joiner's completion signal, never a broadcast the server sends back [Vague 172] (#3422)
+  - la ligne de liste n'appliquait pas le Prisme — le 3e client n'avait jamais reçu la règle [cycle 118]
+  - project text objects into the story viewer (#3421)
+  - retirer `feed.post.reach`, devenue clé morte — ma décision de la garder était fausse [239i] — run test
+  - SSOT des formateurs de planification d'agent
+  - applySurvivalVideoSend's OS-suspension guard only blocked resume, not suspend [Vague 171]
+  - reader fadeIn/fadeOut envelope on the viewer canvas (#3416)
+  - le catalogue app n a plus AUCUNE cle en double — et A3 est applique
+  - une garde de hash perimee remplacee par son invariant, une cle etrangere adoptee
+  - un agrégat DIFFUSÉ ne peut pas porter la réponse d'un lecteur [cycle 115]
+  - MediaAccessibilityStore declarait ObservableObject sans importer Combine
+  - les deux rouges du catalogue — trois cles mortes de mon fait, une cle absente qui bloquait main
+  - vague 2 + ses correctifs — rendre ATTEIGNABLE ce qui etait ecrit
+  - backfiller capturedInApp — sans quoi les conversations anciennes cessent de charger
+  - l audience nommee de la file prend son defaut — un parametre sans defaut casse tous ses appelants
+  - une note vocale enregistrée DÉCLARE sa provenance
+  - publier depuis la feuille de partage — le troisième client rejoint la règle
+  - la confirmation de publication d'une capture ne s'est jamais déclenchée
+  - clip-transition opacity ramp on the viewer canvas (#3412)
+  - un post peut NAITRE avec une audience nommee — les six modes, jusqu au bout de la file
+  - une suite arrivee par la fusion n etait enregistree nulle part
+  - la date et les coches vivent EN BAS — magnifie ou non
+  - les deux rouges du gate — une garde retournee, une cle morte
+  - la borne STRICTE endMs > startMs triplée entre enfin dans time-range [itération 256]
+  - play back keyframe animation on the story viewer canvas (#3406)
+  - toggleVideo's three video-disabling failure paths also reset videoSurvivalController [Vague 169]
+  - en conversation chiffree, nommer quelqu'un ne produisait rien
+  - vague 1 du lot C — quatre chantiers a fichiers disjoints
+  - l'appui long en mode Focal montre le message NORMAL, plus une capture tranchée
+  - la magnification de la Lentille n'est plus une carte — c'est la rangée
+  - l audience d une publication se change apres coup — et une story y naît publique
+  - handleHold's unhold generic catch also resets videoSurvivalController — run test [Vague 168]
+  - rebrancher deux pastilles de langue sur la SSOT du Prisme
+  - derive story text base writing direction (RTL) from content (#3402)
+  - les six audiences, offertes partout et jusqu au bout — y compris apres publication
+  - une publication naît publique — l audience se resserre, elle ne se devine pas
+  - le glyphe de synchronisation quitte la rangee — arbitrage produit rendu
+  - la rangee remonte sur l atome de non-lus, et le point du pont cesse d etre reclame
+  - per-element fade in/out timing for text elements (parity iOS) (#3396)
+  - handleAudioRouteChange's .newDeviceAvailable reverts isSpeaker on applySpeakerRoute() failure — run test [Vague 167]
+  - l accuse de reception dit enfin ce qu il envoie
+  - la surface decide de ce qu un collage produit — et un document n est jamais avale
+  - publier une piece jointe recue, sans la retelecharger
+  - typer la liste des versions de la rangee de drapeaux
+  - un nombre, un élément, un nom — les statistiques de portée que VoiceOver ne pouvait pas attribuer [239i] — run test
+  - un mot peut accompagner un transfert
+  - le corps d un post se lit UNE fois, et une rangee de drapeaux dit sa langue
+  - web call-signaling emits stop hiding their contract behind casts [Vague 166]
+  - le `Server` NU pris pour emettre n'etait garde par rien
+  - la porte de mise a jour, sur les DEUX racines
+  - le binaire annonce sa version et entend le 426 du gateway
+  - SSOT du prédicat ObjectId — 8 copies du littéral rebranchées sur isValidMongoId [258]
+  - le checkpoint /sync n'avance que sur une reponse qui a COUVERT la fenetre
+  - la file hors ligne de message:new ne depend plus de la synchro de liste
+  - le seul rejeu qui ne pouvait pas se declarer indelivrable annoncait sa remise [cycle 114]
+  - une entrée de file dont l'id de conversation est illisible désarmait le gate d'autorisation du lot ENTIER [cycle 113]
+  - les identifiants PUBLICS cessent de dire quand ils sont nés — et de collisionner en silence
+  - le rejeu hors ligne diffusait une charge informe, et une entrée non datée désordonnait les saines [cycle 111]
+  - l import de l enveloppe vivait SOUS le schema qui la lit
+  - le chemin d'envoi PRIMAIRE strippait l'enveloppe de chiffrement
+  - le rejeu hors ligne ne peut plus perdre un message en silence
+  - retirer le SecurityMonitor mort (supplanté par les securityEvent.create en ligne)
+  - retirer le `participant-resolver` util mort, homonyme du vivant [itération 254]
+  - SSOT du prédicat ObjectId — 4 copies rebranchées, 2 regex divergentes fondues [itération 259]
+  - le témoin de post.ts affirmait « aucune valeur d'exécution » sur un module qui en exporte une
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.14.1
+
+## 1.31.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le cliquet appelait une fonction que la fusion avait emportee
+  - story text elements get a discrete font size, born at the iOS-parity 96 (#3390)
+  - le meuble du composer — plateau, atelier enveloppe, socle permanent
+  - le lecteur web enchaine enfin les scenes d une story v3 (W2)
+  - sept casts de socket sur le chemin de MESSAGERIE — six etaient inutiles
+  - le contrat de socket existait — neuf casts le retiraient au site d'appel
+  - story text elements get a stroke outline (borderColor/borderWidth) (#3384)
+  - le web peint enfin le lieu et le dessin d'une story iOS
+  - le cliquet de dette derivait de 3 avec l'etat du BUILD — il refuse
+  - le repost du fil miroitait un type qu il ne portait pas — main etait rouge
+  - la loi du miroir manquait la CARTE DU FIL — et le type l'avait dit
+  - le repost miroite le format de sa source, et l'ancrage devient un geste
+  - remove dead call-mode type guards, one a landmine for a future SFU wiring
+  - l'écran À propos renvoie aux pages réelles du site
+  - story text elements get a stroke outline (borderColor/borderWidth)
+  - le repost vise la RACINE, au format de la CARTE
+  - C3 — les portes portent leur format, et le profil son eventail
+  - les cinq directives produit — socle posé, DEUX VÉRIFICATEURS RENDENT ROUGE
+  - le cliquet de dette criait « RÉGRESSION » sur un arbre intact [cycle 108]
+  - la lecture v3 ne doit pas dependre du reglage de l'appelant
+  - resserrer le cliquet de dette de types — 1241 → 1239 [cycle 107]
+  - réciprocité sur la source des transferts — socle posé, FUITE ENCORE OUVERTE
+  - Android jetait le curseur `_seq` pendant que le contrat disait qu'il le lisait [cycle 108]
+  - endCallParticipationForDepartedMember cleared the call-wide ring timer even when the group call continued [Vague 165]
+  - Android annonce enfin ce qu'il sait lire (X-Canvas-Caps: 3)
+  - Android sait lire le canvas v3 -- sans changer son viewer
+  - text-element background (none/solid/glass) [story-text-element-background] (#3379)
+  - un keyframe sans identifiant emportait le post entier
+  - une transition inconnue ne doit pas emporter le post entier
+  - un identifiant de conversation cesse de publier ses participants
+  - retirer la carte ouverte ne ferme rien — c'est le SPREAD qui fait taire le compilateur [cycle 106]
+  - router les comparaisons de langue par la SSOT [itération 251]
+  - call:end/leave/force-leave cleared the call-wide ring timer even when the group call continued [Vague 164]
+  - render reposted post's shared location in the quote embed (#3371)
+  - D7 — la respiration est écrêtée à la marge qui la reçoit
+  - la pilule de section centrale n'est plus montée — le sticker épinglé le dit déjà
+  - l'amnistie de type-check — six cycles de contrat gardés par rien [cycle 105]
+  - un cast est une porte, et `_seq` n'était déclaré nulle part [cycle 105]
+  - borner la garde VoiceOver de StatRing à sa struct, pas à 2600 caractères [238i] — run test
+  - messageType — la moitié CLIENT que le serveur ne peut pas corriger [cycle 104]
+  - fermer la famille « abrégé compact » et interdire la 8ᵉ copie [238i] — run test
+  - feed post shows its shared location [feed-post-location-sticker] (#3365)
+  - call:check-active replay re-armed the callee's 45s no-answer timer on every reconnect [Vague 163]
+  - call:join CALL_ENDED ack during reconnect left iOS in a zombie active-call state [Vague 162]
+  - repost embed shows the reposted post's mood emoji [feed-repost-embed-mood-emoji] (#3361)
+  - D5 — le sticker dit enfin qu'il est replié
+  - empreintes de cache sur octets déterministes (.sortedKeys) + test du skip sur compteur de chiffrements — run test
+  - les deux tests DND s'ancrent sur un now fixe — rouges chaque jour dans la minute 23:59 — run test
+  - self.namespace explicite dans l'autoclosure du Logger d'upsertEntriesDiffed — run test
+  - correctifs revue adversariale (2 blockers, 2 majors, 6 minors) — run test
+  - correctifs de la revue adversariale du diff — 2 blockers, 2 majors, 6 minors
+  - rejoin-after-reconnect hardcoded reason:'completed', defeating retry [Vague 161]
+  - show the reposted post's like count in the repost embed (#3354)
+  - ReelAudioBackdrop — la boucle repeatForever s'arrête quand le réel perd l'élection autoplay
+  - écriture-diff du cache GRDB — plus de réécriture + re-chiffrement intégral par flush ni par save
+  - découvertes d'audit — tri feed memoisé, .equatable() hashtag, boot iPad parallèle, lecture audio streamée, caches bornés, ticks story allégés
+  - ScrollOffsetRelay sur les 8 écrans restants — le body complet ne se ré-évalue plus à ~120 Hz au scroll
+  - démarrage et données — hydratation traductions hors boot, compteurs de livraison batchés, déchiffrement mémoïsé, budgets L1 audio/vidéo
+  - quick wins hot-path — decode emojis memoise, formatters caches, Reduce Motion sur 4 sites, rangée notification Equatable, brouillons commentaires debouncés, chemin miniatures memoisé
+  - D4 et D7 — la contre-expertise renverse deux de mes faux positifs
+  - stale-callId roster mutation (web) + 3rd suspension flag on camera actuators (iOS) [Vague 160]
+  - post-detail repost + quote-repost (#3350)
+  - un refus de jonction TRANSITOIRE effaçait la conversation [cycle 99]
+  - le compteur de vecteurs Rivière compte les 61 cas qui existent
+  - l'effectif quitte la rangée au repos, le chip rouge de non-lus y prend sa place
+  - quote-repost composer + root-target fix in the feed [feed-quote-repost] (#3345)
+  - call:force-leave listener leak (web) + camera hold guard (iOS) [Vague 159]
+  - le témoin de cadence dérive son seuil de la géométrie, au lieu de le poser
+  - le canevas se souvient de son cadre, et le recadrage cesse d'etre sans retour
+  - la rangée à trois lignes a la hauteur de ses trois lignes
+  - un message chiffré par un bout se déchiffre enfin à l'autre [cycle 98]
+  - le témoin du badge compact suit la proportion, pas l'ancienne taille
+  - la rangée dit « auteur : message », la date vit seule en bas à droite, l'effectif sur la bordure
+  - D2 — les boutons flottants ne mordent plus l'en-tete ni ses cibles tactiles
+  - la dédup des traductions fusionne les codes région-tagués de même langue [iter 246]
+  - toggleVideo() could re-acquire the camera during a CallKit hold [Vague 158]
+  - lot 6 D8+D1 — l'unite mois prend son espace, le squelette cesse de faire sauter la liste
+  - route guest-join deep link through the entry brain (#3340)
+  - l'espace admin envoie une diffusion en notification in-app à tous les comptes ciblés
+  - « Activer les bêta » naît OFF, et dit au lancement quelles fonctionnalités bêta sont actives
+  - une diffusion admin peut partir en notification in-app à tous les comptes ciblés
+  - une story legacy « média seul » vidéo se lit comme un fond vidéo, plus comme une image
+  - le parc natif annonce enfin le canvas qu'il sait deja lire
+  - leaveCall idempotent group-continue branch leaked departed participant heartbeat
+  - share-link entry-fact resolver (app-side) (#3335)
+  - l'intention du composer est un modele pur, et sa table se demontre
+  - le hook des traductions matche les codes de langue tagués région/casse [itération 244]
+  - onnegotiationneeded's auto-renegotiation crashed the process on failure [Vague 156]
+  - un seul abrégé compact pour les deux cartes communauté
+  - sanitizeFileName tient enfin son plafond de 255 et ne fabrique plus de dotfile
+  - la notation compacte se construit sans inférence — .compactName, pas .compact
+  - l'abrégé « 1.5k » des cartes communauté gravait le format anglais dans toutes les langues
+  - authenticated share-link join (POST conversations/join/{linkId})
+  - le changement de rang n'atteignait jamais le trombinoscope Android [cycle 92]
+  - la loi Rivière Swift ne nomme plus une colonne au rang d'un avis système — miroir de #3270
+  - le lecteur de scenes ne prend la main que sur un v3 natif, l'archive garde son hote
+  - un bouton de son par-dessus la video du fil — le son cesse d'exiger le plein ecran
+  - l'aperçu Prisme ne rétrograde plus la langue primaire sur une origine région-taguée [iteration 243]
+  - moderator kick checked only the CALLER's rank, never the TARGET's [Vague 155]
+  - pure share-link entry-decision policy (#3321)
+  - l'appui long sur une bulle ouvre le message dans le fil, répond ou copie ; le bord atteint se sent [lot 3]
+  - le viewer story lit ses scenes par le lecteur, plus par l'hote nu
+  - l'axe des ordonnées est le temps — une poignée graduée saute à la période voulue [R-3]
+  - l'analyse et la comparaison vocales etaient mortes en production [cycle 90]
+  - l'identité d'une voix devient vivante — avatar avec présence et story, nom qui ouvre la fiche [R-5]
+  - le bouton de son du fil pilote vraiment le lecteur (corrige rejet DoD S2)
+  - rails et connecteurs se tracent dans le repère du pane, même cadré au présent ; la citation tient sur une ligne [R-8]
+  - la Rivière s'ouvre vraiment au présent, la citation mène à sa cible, le composeur garde sa place [R-6, R-7, cadrage]
+  - une édition de message REST ne rendait rien — la clé déclarée n'existait pas dans la charge
+  - unblock base CI — BubbleContentMatrixTests missing JoinNotice.participantId
+  - l'identite d'un montage s'enracine dans ce qu'il peint, jamais dans la place du cadre
+  - anonymous shared-link guests can call back / join from a bubble
+  - conversation-lock master PIN change + remove flows (#3313)
+  - deux bulles d'un même groupe partagent UNE bordure — jointure pointillée, fond continu, plus de contours fermés intercalés [lot G]
+  - BubbleContentMatrixTests nomme le participantId que JoinNotice exige depuis 88c2e91f0 — le bundle de tests de main recompile
+  - parite des jetons Lentille — sept jetons river manquaient dans le CSS
+  - un avis d'arrivee mene a la fiche, et « parti » cesse de se dire « indisponible »
+  - bouton de son sur les videos du fil (reel natif + repost)
+  - le lecteur de scene accepte le porteur, la commande de muet et les fils du viewer
+  - la console de moderation servait des listes vides, par deux defauts independants [cycle 87]
+  - close the remaining 7 duplicate-toast sites Vague 151 left open in use-webrtc-p2p [Vague 152]
+  - use-webrtc-p2p forwards call-connected via onConnected instead of a hardcoded English toast [Vague 153]
+  - conversation-stats sentiment three-way bar (slice conversation-stats-sentiment-bar) (#3304)
+  - un seul compteur de non-lus — 5 clés, 3 mécanismes, 3 accords faux (iteration 236i) (#3293)
+  - AI participant persona profiles + trait bars (parity iOS) (#3295)
+  - floating participant tiles could spawn off-screen in group calls
+  - VoiceOver énonçait « %lld messages non lus » sur chaque rangée non lue (iteration 235i) (#3257)
+  - three calling-stack audit fixes — network handoff, duplicate VoIP push, stale audio reactivation (run test)
+  - AI conversation-analysis summary card (parity iOS) (#3287)
+  - la scène de carte parle le prisme, garde son 9:16 réel et sait dire son nom
+  - la scène du post naît en pause dans la carte, jamais dans le fil
+  - le bouton muet du fond pilote un lecteur, jamais un decor
+  - le compteur de likes d'un commentaire ne savait que MONTER [cycle 81]
+  - conversation stats dashboard (rings + activity + content-type breakdown) (#3283)
+  - D6d restaure le STOP D4 et rend sa propre preuve falsifiable
+  - connection/ICE failure toasted twice, only one translated [cycle 151]
+  - le bouton muet du fond existe sur trois surfaces, jamais deux conditions
+  - D6d referme le lot D - hygiene reglee, dettes rendues visibles, STOP D4 leve par derogation produit
+  - le rejet de la bannière d'épingle était un booléen collant [cycle 80]
+  - le miroir CSS des jetons Lentille déclare la carte de focus magnifiée (height 104, padding 14, avatar 52, nom 17)
+  - le resolveur du fond audio lit enfin la forme empruntee dominante
+  - un losange audio pose SON CLIP sur le bus de selection, pas son propre id
+  - huit gardes rouges du run iOS complet après le merge — chevron RTL, fuseau du jour de semaine, clé de catalogue, drapeau en premier, littéral en commentaire, clamp Focal retiré
+  - les opacités de la carte de focus et de ses chips sont nommées en Core — plus de littéral de loi en dur
+  - réaligner le garde-fou du header story sur le résolveur E1
+  - l'annonce du fond audio passe par un résolveur unique, trois surfaces
+  - un losange audio ouvre la fiche de son clip, un losange rogne rentre dans sa barre, et la selection ne se pose que si une fiche s ouvre
+  - on-demand story translation via the language bar's request arm (#3278)
+  - la Rivière se parcourt vraiment — elle cesse de pousser l'en-tête hors de l'écran, respire entre ses rangs et nomme la voix qu'on lit
+  - la Rivière s'ouvre vraiment — l'écran est monté au fil, l'avis système y est gravé, et la bêta en tient l'interrupteur
+  - chips d'étiquettes plus petites et marge autour de la carte de focus de la liste
+  - le bannissement retirait la ligne, la levée ne la remettait pas
+  - la scène de magnificence se désarme en moins de 5 s
+  - effectif → participants, carte de liste ample, chips uniformes sur toutes les bulles en focus, aperçu « Auteur : texte » sur deux lignes
+  - la carte du message en focus est le fond de la rangée — chips consolidées sur ses lignes ; reconfiguration différée (plus d'apply réentrant)
+  - un battement de 90 s dont le serveur faisait déjà le travail
+  - la bulle en focus montre tout avec la carte ; effectif, synchronisation et nom original sur les lignes de la carte de liste
+  - on-demand comment translation via the flag strip's request arm (#3273)
+  - chips du focus sur la ligne de la carte, présence et respiration de la carte de focus, affiliations en état vide
+  - remove-participant confirm dialog leaked the {name} sentinel on $-names
+  - la carte de focus porte catégorie, étiquettes, date complète et dernier expéditeur ; bordure basse du message en focus
+  - deux présences dans le même tick, deux personnes affichées
+  - la liste des présents suit enfin le canal qui porte le fait
+  - le message en focus porte sa date, la carte encadre aux mêmes espaces, le chrome revient près de la fin du scroll — et la Rivière a son point d'entrée
+  - cinq canaux que le contrat promettait et que personne n'émettait
+  - on-demand post-detail translation via the flag strip's request-missing-language arm (#3269)
+  - la magnificence n'existe que pendant le défilement — focus au centre, retour à plat au repos, accès rapides en fin de liste
+  - Android écoutait deux canaux que personne ne prononce
+  - l'aperçu d'appui long d'une conversation montre les derniers messages, plus le menu des modes
+  - Focal revient en passe MINIMALE, Bulles devient un choix, Script gagne le (+) de réaction — et la pilule de section nomme le sticker qui tient la ligne
+  - un message rendu à ma vue revient, au lieu d'attendre un défilement
+  - on-demand post translation via the flag strip's request-missing-language arm (#3265)
+  - sortir quelqu'un d'un fil le sort de l'appel qui s'y tient
+  - createPeerConnection() closes the previous RTCPeerConnection before overwriting it [Vague 150]
+  - fil de messages — egalite sans allocation, statut O(1), preference audio resolue une fois, plus de GeometryReader mort par cellule ; Script : video solo au format reel
+  - le suffixe verrouille etait en francais brut, et le bord volait la selection a la piste
+  - liste Lentille — carte de focus magnifiee qui suit le defilement, encoche en menu natif, pull-to-refresh repare, rail « moi » aligne sur le tray, couts par passe reduits
+  - un avis système n'est la voix de personne
+  - un message système ne prend jamais part à un groupe de bulles
+  - removingHandle n'ampute plus un @handle collé à un e-mail — frontière gauche du SSOT
+  - la piste selectionnee ne se voyait plus, et un fond verrouille se laissait deplacer
+  - live feed comment-count sync — comment:added/deleted overlay on the feed card (#3260)
+  - l aimant du plan lisait une echelle qui n est plus celle du plan
+  - le rognage d un bord ne se dispute plus le doigt avec le scroller du plan
+  - reordonner une piste ne la deplace plus dans le temps — un doigt vertical porte toujours quelques points d horizontal
+  - conversation lock "unlock-all" — verify master PIN, drop every lock at once (#3258)
+  - D4 corrige un verdict budget usurpe - l'appareil mesure est un plafond, pas le plancher A11
+  - le montage de story-v3-roundtrip expirait pour de vrai — main rouge sans qu'une ligne ait changé
+  - un seul compteur de membres — 3 clés, 2 helpers jumeaux et 4 concaténations fusionnés (iteration 234i) (#3251)
+  - le mode Bulles groupe enfin, et c'est le DERNIER message qui porte l'identité
+  - la rangee Focal transmet une identite deja resolue, elle ne la compose plus
+  - les deux mocks de socket conforment au protocole etendu
+  - l'hote pilote les droits d'un visiteur depuis sa fiche
+  - l'acces a l'historique se fige au join, et l'hote pilote les droits d'un visiteur
+  - debounce the sub-200ms sending clock glyph (parity iOS) (#3256)
+  - un visiteur sans compte ouvre sa fiche, non une page de profil vide
+  - une scene qui ne porte qu'une empreinte existe quand meme - le thumbHash calcule en aval du persist survivait pas a un canvas sans objet (rouge CI StoryUploadQueueTests depuis le lot B) ; O3 reste tenu pour le canvas reellement vide, miroir Swift/TS
+  - la feuille d'un visiteur enonce ses capacites et, pour l'hote, les reglages du lien
+  - la fiche s'ouvre depuis toutes les surfaces d'une conversation, et enonce les contraintes d'entree
+  - un message système n'est pas une prise de parole — il ne groupe plus la rangée suivante (Focal)
+  - le pont SDK gardait un bounds audio inverse quand seule une borne existait (Task F7e, addendum rev. 2 du plan lot F, arbitrage 11, constat 25)
+  - la fiche d'un visiteur enonce ses capacites et, pour l'hote, les reglages du lien
+  - la garde de forme jumelle du texte racine est restauree (9/9) et l'arbitrage 4 du plan suit le code - le Prisme se ferme a la LECTURE, l'emission ne devine jamais (rattrapage F7d, correctifs DoD par l'orchestrateur)
+  - la regle 3 du Prisme restait cassee en lecture - F7d ne fermait le constat 4 qu'en apparence (correction rejet DoD, addendum rev. 2 du plan lot F)
+  - la locale devinee de l'objet texte rouvrait le court-circuit que F7d fermait au niveau post (F7d, correction rejet DoD, addendum rev. 2 du plan lot F)
+  - le plan 2D rend le mute par clip, les echos de boucle, l accessibilite des pistes et le glissement temporel (D3, revue DoD)
+  - la story ecrite en anglais se retaguait francaise, le texte racine et le fond du canvas n'avaient pas de forme jumelle avec iOS/gateway (F7d, addendum rev. 2 du plan lot F)
+  - un losange de keyframe se posait au temps RELATIF de son clip sur un axe ABSOLU (D3, revue DoD)
+  - le badge du fond restait muet sur carte et detail, la republication gardait son verbe hors de la carte (F7c, addendum rev. 2 du plan lot F)
+  - composer draft persists the manual language pick (parity iOS) (#3254)
+  - D3 corrige six constats de la deuxieme revue DoD sur son propre correctif
+  - F7b rejetee par le DoD - Prisme vide pour le visiteur sans compte, voile v3 peignant au-dessus du texte (addendum rev. 2 du plan lot F)
+  - StoryViewer cablait CanvasV3Scene a moitie - mute, playhead, tampon, prisme complet et credit audio l'atteignent enfin (F7b, addendum rev. 2 du plan lot F)
+  - le plan 2D retrouve son scrub, son trim de keyframe et ses transitions perdus au premier passage (D3, revue DoD)
+  - le fond de scene disparaissait sous une transition de clip (F7a, correction de revue)
+  - la scène v3 tenait un rendu appauvri — elle retrouve le plancher du chemin legacy (F7a)
+  - composer draft persists armed message effects (parity iOS) (#3252)
+  - le CTA de l'inscription perdait son nom au moment de créer le compte
+  - la fiche conversation collait un « s » latin sur toutes les langues au chapeau « Membres » (iteration 232i) (#3241)
+  - le v3 emis par le composer redevient LISIBLE - le funnel jetait le document entier (F5b, correction de revue)
+  - pure message-bubble accessibility-label composer (parity iOS) (#3248)
+  - le composer story emet enfin du v3 - le fond, le porteur, l'audio et le texte racine deviennent des objets de scene (F5b)
+  - originalLanguage atteint enfin le vrai point de publication de la story (F5, correction revue Codex)
+  - le plan 2D remplace le conteneur mono-piste de la timeline, et un bord tire peut de nouveau suivre la slide (D3)
+  - originalLanguage part enfin en creant une story - le funnel createPost le resout depuis la locale d'interface active (F5)
+  - l'attribution de repost cesse de dire « Reposted from », l'icone dit deja tout (F4)
+  - un tap sur une poignee de bord non deplacee n'ouvrait jamais l'Inspecteur, et les graduations du plan 2D restaient mortes (D2)
+  - l'annonce du fond + bouton muet arrivent enfin sur le web (F3)
+  - le plan 2D se dessine en un seul passe Canvas, jamais une vue par keyframe (D2)
+  - la couche fetch annonce enfin X-Canvas-Caps: 3 (F2b)
+  - StoryViewer monte enfin CanvasV3Scene, le legacy devient le repli (F2)
+  - le plan 2D sait ordonner l ecran et distinguer une duree choisie d un fantome (D1)
+  - le web sait enfin dessiner une scene v3 — CanvasV3Scene, rendu pur et statique (F1)
+  - AudioForegroundChip cesse de mentir a froid, code mort retire, P0 remonte a 57 (B8f)
+  - le chemin lecture reclame le player du media porteur, et la config du player cesse d'etre decorative (rattrapage B8e)
+  - un composer multi-slides ne rouvre plus en portrait au-dela de sa premiere slide (rattrapage B8d, correction DoD)
+  - le mode Focal ne groupe plus la première bulle d'un arrivant avec son avis système
+  - row mood badge wires peer's ephemeral status emoji (parity iOS) (#3246)
+  - un brouillon 16:9 ne rouvre plus en portrait apres sa migration v1 vers v3 (rattrapage B8d)
+  - un ObjectV3 malformé ne vide plus la scène, v:4 ne rétrograde plus en legacy
+  - row story ring wires peer's unviewed-story affordance (parity iOS) (#3244)
+  - un message système n'est pas une prise de parole — il ne groupe plus la bulle suivante
+  - les catalogues interpolaient en {{nom}}, que nul interpolateur de l'app ne comprend
+  - un canvas sans cadre perdait son son, et un objet sans rang tombait a zero (rattrapage B8b)
+  - le pont v3 loge tout ce que le runtime porte (B8b)
+  - le contrat v3 loge le dessin, les variantes et l'empreinte (B8a)
+  - l'invariant endMs>=startMs a une source unique — et le 3e site le gagne enfin
+  - le fil v3 entre dans StoryEffects, et tout encodage repart du canvas COURANT (B7)
+  - AudioChipDisplay.backgroundAnnouncement, resolveur pur promu (B5)
+  - MeeshyScenePlayer, trois modes qui naissent TOUS en pause (B4)
+  - les brouillons v1 se réencodent en v3 au chargement sans vider firstSlideEffects
+  - pont bidirectionnel StoryEffects vers CanvasV3 (B2) - migre au golden PARTAGE du gateway (remap letterbox U20, Prisme C6, karaoke C7, champs vivants sticker U21, filtre G3), rend une scene v3 dans les familles runtime, ancres band en constantes provisoires 0.08/0.92, 4/4 verts + gate complet 2 cibles, P0 a 12/51
+  - modèles Swift CanvasV3 (B1) - unions discriminées sur t, kind réservé ré-encodé tel quel, les 6 fixtures gelées décodent et round-trippent, P0 à 11/51
+  - repair a 3-way merge artifact, extend numbering to the 2 entries #3073 added
+  - update StoryRepostFlowTests for repost visibility parameter
+  - le composeur d'humeur ne collapse plus en split view vide sur iPad (220i)
+  - hide decorative SF Symbols in ConversationEncryptionDetailSheet (214i)
+  - fermer la fuite de source de transfert par l URL — main etait rouge dessus
+  - retirer le `CaptchaService` mort, doublon de la vérif vivante [itération 253]
+  - main etait rouge sur une bombe a retardement de 24 heures [cycle 108 bis]
+  - un témoin qui a viré au rouge tout seul, à 10:00:00Z [cycle 108]
+  - deux cas d'édition étaient des bombes à retardement — main est rouge depuis 10:00 UTC
+  - retirer le `TranslationCache` Redis mort, homonyme du vivant [itération 252]
+  - la porte d'ÉCOUTE rejoint le contrat — un cast ouvrait un sous-système [cycle 107]
+  - rendre son doc-comment à `PREVIEW_PRISM_PARTICIPANT_SELECT`
+  - la file rejoint le contrat — ce qu'on ENFILE est tenu à ce qu'on ÉMET [cycle 106]
+  - retirer `_findUsersForLanguage`, code mort à comparaison brute [itération 250]
+  - la porte d'émission — huit copies d'une déclaration qui ne dit rien [cycle 104]
+  - `message:edited` — le transport REST que le contrat ne gouvernait pas [cycle 103]
+  - messageType — une règle écrite QUATRE fois, et un client qui ne peut pas la dire [cycle 102]
+  - le scoring d'affinité des réels canonicalise ses codes de langue [it. 249]
+  - une édition faite en WebSocket n'atteignait aucun client iOS [cycle 101]
+  - le transport d'édition PRIMAIRE servait une charge que le décodeur iOS rejette [cycle 101]
+  - six handlers Socket.IO de plus contraints par le contrat [cycle 100]
+  - la porte des langues d'un lien partagé comparait des codes bruts [iter 248]
+  - message:new avait deux producteurs qui ne disaient plus la même chose [cycle 99]
+  - l'aperçu de liste matche les clés de traduction taguées région/casse [itération 247]
+  - les deux bouts de X3DH dérivent enfin les mêmes clés [cycle 97]
+  - X3DH vérifie enfin la signature qui l'authentifie, et la garde que le retrait désarmait [cycle 96]
+  - donner un contrat de réponse à GET /sync, et corriger les trois défauts qu'il rend observables [cycle 95]
+  - aligner GET /messages/:messageId sur son enveloppe, et les deux défauts qu'elle couvrait
+  - remettre le sous-arbre DMA/Signal sous le compilateur, et corriger ce qu'il révèle [cycle 94]
+  - la présence était gardée sur ce qui LISTE un participant, sur rien qui en MUTE un [cycle 92]
+  - toute la signalisation d'appel servait `{"success":false,"error":{}}` [cycle 92]
+  - reparer une enveloppe rend lisibles les defauts de ce qu'elle contenait [cycle 93]
+  - la banniere push ne dit plus deux fois la meme phrase
+  - la connexion 2FA, l'édition et la suppression d'un message ne rendaient RIEN [cycle 91]
+  - le schema partage decrivait la bonne enveloppe et le mauvais expediteur [cycle 92]
+  - la forme juste etait trois cents lignes plus bas, et elle tronquait [cycle 91]
+  - onze schemas d'erreur ecrits a la main supprimaient `code` [cycle 89]
+  - mettre a jour le cliquet du balayage — cinq sites de presence repares [cycle 88]
+  - les cinq sites de presence, et un faux positif qui cachait une fuite ACTIVE [cycle 88]
+  - la pagination du listing des membres actifs redémarrait à la page 1 sur un curseur périmé [iteration 241]
+  - trois listes d'administration servaient des rangees VIDES [cycle 87]
+  - le dossier routes/communities/ n'a jamais servi une requete [cycle 86]
+  - porter le correctif de la recherche de communautes sur la route SERVIE [cycle 86]
+  - porter le correctif du cycle 84 bis sur la route SERVIE — il vivait dans un module ombre
+  - le balayage rend 38 schemas de reponse qui vident ce qu'ils declarent [cycle 86]
+  - la liste des membres servait la presence brute — le gate etait dans le fichier masque [cycle 86]
+  - la presence des membres d'une communaute sortait brute [cycle 85]
+  - reordonner ses communautes ne persistait rien [cycle 85]
+  - un schema de reponse sans properties EFFACE, et la panne tenait la porte [cycle 84]
+  - PATCH conversation servait la presence brute de ses participants [cycle 84]
+  - le fil de stories servait la presence brute de ses auteurs [cycle 83]
+  - la liste d'amis servait la presence brute, meme quand l'ami l'avait coupee [cycle 82]
+  - les limit des query-schemas admin non bornés interdisent enfin le take négatif [iteration 239]
+  - le carnet d'adresses applique le blocage a la LECTURE, et filtre sa presence [cycle 81]
+  - un emit socket en panne emportait le push et l'e-mail avec lui
+  - la route des droits passe par le manager, comme ses voisines
+  - la resolution des droits d'un participant cesse d'etre prisonniere de auth.ts
+  - admettre limit=0 sur MyMentionsQuerySchema (préserve le repli || 50 du endpoint)
+  - MyMentionsQuerySchema.limit gagne la garde numérique + clamp 1..100 (take Prisma négatif interdit)
+  - le convertisseur v1→v3 ne sert plus un timing d'objet inversé
+  - une écoute continue rapportée avec endMs ≤ startMs ne peut plus fuir en silence
+  - les quatre acks d'appel que le contrat exigeait et que personne n'envoie [cycle 108]
+  - V0 — le contrat du composer, la loi produit et rien d'autre
+  - la règle de source de transfert accueille un troisième acteur, sans le collecter
+  - `SocketIOMessage` cesse de sous-déclarer la charge utile qu'il gouverne [cycle 101]
+  - rendre les couloirs vivants de la Rivière par colonne, pas par naissance [iter 245]
+  - callSessionMinimalSchema.mode déclarait le type d'appel, pas l'architecture WebRTC
+  - removingHandle ne crashe plus sur un username à tiret (SSOT escapeRegex) [iteration 242]
+  - une réaction sans emoji ne fabrique plus un double espace dans le titre de notification [iteration 240]
+  - normalizeLanguageForDedup strip la région des codes irréductibles
+  - formatFileSize ne rend plus « 512 undefined » sous l'octet
+  - resolveRiverLaneAt ne nomme plus une colonne au rang d'un avis système
+  - SignalSchemas.encryptedMessage.iv exige 16 car. base64 (12 octets), pas 24
+  - un expiresAt absent ne fuit plus « NaNm » à l'écran — formatTimeRemaining garde la finitude
+  - chunk() honore enfin « size < 1 ⇒ tranche unique » (le fini < 1 fragmentait en singletons)
+  - les deux dernières primitives de rôle folded enfin la casse comme toute leur famille
+
+### Patch Changes
+
+- Updated dependencies
+  - @meeshy/shared@1.14.0
+
 ## 1.30.0
 
 ### Minor Changes

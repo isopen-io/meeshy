@@ -71,7 +71,7 @@ jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
   usePostSocketCacheSync: jest.fn(),
 }));
 jest.mock('@/hooks/social/use-post-room', () => ({ usePostRoom: jest.fn() }));
-jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr' }));
+jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'] }));
 jest.mock('@/hooks/use-impression-tracking', () => ({
   useImpressionTracking: () => ({ record: jest.fn() }),
 }));
@@ -97,7 +97,6 @@ jest.mock('@/services/report.service', () => ({
 const mockAddToast = jest.fn();
 jest.mock('@/components/v2', () => ({ useToast: () => ({ addToast: mockAddToast }) }));
 jest.mock('@/components/v2/CommentList', () => ({ CommentList: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));

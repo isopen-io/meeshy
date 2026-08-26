@@ -18,6 +18,13 @@ export interface CallHistoryPeer {
   displayName: string | null;
   avatar: string | null;
   phoneNumber: string | null;
+  /**
+   * Gated STRICT by `CallService.listHistory` via `applyPresenceVisibilityAsOffline`
+   * (directive produit 2026-08-25) — `false` for a viewer who is neither this
+   * peer, an ADMIN/BIGBOSS, nor their accepted friend. Non-nullable on the
+   * wire (mirrored by the SDK's `APICallRecord.peer.isOnline: Bool`), so
+   * "hidden" folds to `false`, never to `null`.
+   */
   isOnline: boolean;
 }
 

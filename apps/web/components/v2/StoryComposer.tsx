@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogHeader, DialogBody } from './Dialog';
+import { Dialog, DialogHeader } from './Dialog';
 import { Button } from './Button';
 import { toast } from 'sonner';
 import { useAttachmentUpload } from '@/hooks/composer/useAttachmentUpload';
@@ -11,10 +11,59 @@ import { useAuthStore } from '@/stores/auth-store';
 import { AudienceUserPicker, AUDIENCE_VISIBILITIES, isAudienceIncomplete } from './AudienceUserPicker';
 import { ReferencePicker } from '@/components/composer/ReferencePicker';
 import { ReferenceChipRow } from '@/components/composer/ReferenceChipRow';
+import { ComposerFormatFan } from '@/components/composer/ComposerFormatFan';
 import { useReferences } from '@/hooks/composer/useReferences';
 import { removingHandle } from '@meeshy/shared/utils/composer-references';
 import type { PostReferenceDisplay, PostReferenceInput } from '@meeshy/shared/types/post-reference';
-import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
+import { PUBLICATION_VISIBILITY_OPTIONS } from './publication-visibility';
+import { webComposerOpening, type ComposerDoor, type ComposerFormat } from '@/lib/composer-door';
+import {
+  MEDIA_LIMITS,
+  MEDIA_ACCEPT,
+  BACKGROUND_COLORS,
+  TEXT_STYLES,
+  getTextStyleClasses,
+  buildCanvasV3,
+  type TextStyle,
+  type MediaCategory,
+  type CanvasMediaSource,
+  type CanvasAudioSource,
+} from '@/lib/story-canvas-v3';
+
+/**
+ * F5b / W5 — le composer story ÉMET du v3, et sa SURFACE est désormais
+ * absorbée par le meuble unifié.
+ *
+ * `StoryComposerSurface` porte tout le formulaire (aperçu, médias, palette,
+ * styles de texte, audience, et — quand elle est montée par le meuble —
+ * l'éventail des formats). `StoryComposer` en reste l'enrobage historique :
+ * un `Dialog` modal avec son bouton de fermeture et son titre, monté tel quel
+ * par `PostsFeedScreen.tsx` (§G — absorbé, jamais retiré). L'émetteur v3
+ * (`buildCanvasV3` et ses catalogues) vit dans `lib/story-canvas-v3.ts` :
+ * aucune UI n'y est descendue, pour qu'il reste consommable identiquement par
+ * les deux enrobages.
+ *
+ * ### C'est l'ENROBAGE qui décide où va le bouton Publier
+ *
+ * Les deux n'ont pas la même contrainte de place, et ce n'est pas un détail de
+ * goût :
+ *
+ * - le **dialogue** vit dans un `Dialog` (`components/v2/Dialog.tsx`) qui n'a
+ *   NI `max-h` NI `overflow-y` : ce qui dépasse la fenêtre est coupé et
+ *   devient inatteignable. Son en-tête portait donc historiquement TROIS
+ *   enfants sous `flex items-center justify-between` — fermer, titre,
+ *   Publier — ce qui centrait le titre par construction ET gardait le CTA
+ *   visible avant toute saisie, quelle que soit la hauteur du corps
+ *   (six rangées d'outils, plus `AudienceUserPicker` sous EXCEPT/ONLY) ;
+ * - le **meuble** n'est pas un modal : sa surface défile avec la page, et son
+ *   Publier vit au bas du formulaire, sur la même rangée que l'éventail,
+ *   comme `ComposerDocumentSurface`.
+ *
+ * D'où `renderPublishHeader` : la surface reste la SEULE à savoir si l'on peut
+ * publier et à porter le geste ; l'enrobage choisit où le peindre. Le fournir
+ * retire le bouton du bas — jamais deux Publier pour une seule intention.
+ */
 
 // ============================================================================
 // Types
@@ -22,95 +71,76 @@ import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
 
 const REFERENCE_MODES: readonly Exclude<PostReferenceDisplay, 'INLINE'>[] = ['NOTE', 'SILENT'];
 
-type TextStyle = 'bold' | 'neon' | 'typewriter' | 'handwriting';
-
-type MediaCategory = 'image' | 'video' | 'audio';
-
 /// W3 — parité `PostVisibility` complète (inc.2) : EXCEPT/ONLY sont servis
 /// par l'AudienceUserPicker et gatés à la publication (`isAudienceIncomplete`,
-/// partagé avec PostComposer depuis le module du picker) — jamais publiés
-/// sans liste (le trou W6).
+/// partagé avec `ComposerDocumentSurface`/`ComposerMoodSurface` depuis le
+/// module du picker) — jamais publiés sans liste (le trou W6).
 type StoryVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
+
+/**
+ * La charge d'une publication story, déclarée UNE fois — consommée par les
+ * deux enrobages (`StoryComposer`, `StoryComposerSurface`) qui partagent le
+ * même corps de formulaire, donc n'ont jamais deux déclarations à faire
+ * diverger.
+ */
+export interface ComposerStoryPayload {
+  content?: string;
+  storyEffects: Record<string, unknown>;
+  visibility: StoryVisibility;
+  /// W3 — audience explicite (EXCEPT/ONLY). Plombé jusqu'au service ;
+  /// alimenté par le picker à l'inc.2.
+  visibilityUserIds?: string[];
+  mediaIds?: string[];
+  mentions?: readonly PostReferenceInput[];
+}
 
 interface StoryComposerProps {
   open: boolean;
   onClose: () => void;
-  onPublish: (story: {
-    content?: string;
-    storyEffects: Record<string, unknown>;
-    visibility: StoryVisibility;
-    /// W3 — audience explicite (EXCEPT/ONLY). Plombé jusqu'au service ;
-    /// alimenté par le picker à l'inc.2.
-    visibilityUserIds?: string[];
-    mediaIds?: string[];
-    mentions?: readonly PostReferenceInput[];
-  }) => void;
+  onPublish: (story: ComposerStoryPayload) => void;
   defaultVisibility?: StoryVisibility;
 }
 
-// ============================================================================
-// Constants
-// ============================================================================
-
-const MEDIA_LIMITS: Record<MediaCategory, number> = {
-  image: 5,
-  video: 2,
-  audio: 3,
-};
-
-const MEDIA_ACCEPT: Record<MediaCategory, string> = {
-  image: 'image/*',
-  video: 'video/*',
-  audio: 'audio/*',
-};
-
-const BACKGROUND_COLORS = [
-  { id: 'terracotta', value: '#C4704B', label: 'Terracotta' },
-  { id: 'teal', value: '#1A6B5A', label: 'Teal' },
-  { id: 'charcoal', value: '#2D3748', label: 'Charcoal' },
-  { id: 'gold', value: '#E8C547', label: 'Gold' },
-  { id: 'pink', value: '#E74C9B', label: 'Pink' },
-  {
-    id: 'gradient',
-    value: 'linear-gradient(135deg, #C4704B, #1A6B5A)',
-    label: 'Gradient',
-  },
-] as const;
-
-const TEXT_STYLES: { id: TextStyle; label: string }[] = [
-  { id: 'bold', label: 'Aa' },
-  { id: 'neon', label: 'Ne' },
-  { id: 'typewriter', label: 'Tt' },
-  { id: 'handwriting', label: 'Hh' },
-];
-
-export const VISIBILITY_OPTIONS: { id: StoryVisibility; labelKey: string; icon: string }[] = [
-  { id: 'PUBLIC', labelKey: 'storyVisibility.public', icon: '\uD83C\uDF0D' },
-  { id: 'FRIENDS', labelKey: 'storyVisibility.friends', icon: '\uD83D\uDC65' },
-  { id: 'COMMUNITY', labelKey: 'storyVisibility.community', icon: '\uD83C\uDFD8\uFE0F' },
-  { id: 'EXCEPT', labelKey: 'storyVisibility.except', icon: '\uD83D\uDEAB' },
-  { id: 'ONLY', labelKey: 'storyVisibility.only', icon: '\uD83C\uDFAF' },
-  { id: 'PRIVATE', labelKey: 'storyVisibility.private', icon: '\uD83D\uDD12' },
-];
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function getTextStyleClasses(style: TextStyle): string {
-  switch (style) {
-    case 'bold':
-      return 'font-bold';
-    case 'neon':
-      return 'font-bold [text-shadow:0_0_8px_rgba(255,255,255,0.8),0_0_20px_rgba(255,255,255,0.4)]';
-    case 'typewriter':
-      return 'font-mono tracking-wider';
-    case 'handwriting':
-      return 'italic font-light tracking-wide';
-    default:
-      return 'font-bold';
-  }
+/**
+ * Ce qu'un enrobage doit connaître pour peindre le bouton Publier lui-même :
+ * le geste, l'état du geste, et son libellé. Rien de plus — la surface reste
+ * la seule à savoir POURQUOI il est désactivé.
+ */
+export interface StoryPublishControl {
+  readonly publish: () => void;
+  readonly disabled: boolean;
+  readonly label: string;
 }
+
+/**
+ * Le corps montable du format story.
+ *
+ * `door`, `onFormatChange` et `routableFormats` sont OPTIONNELS et n'arrivent
+ * ensemble que d'un seul appelant : `MeeshyComposer`, qui les fournit tous
+ * les trois pour peindre l'éventail (`ComposerFormatFan`) — exactement le
+ * même composant partagé que `ComposerDocumentSurface`. Le dialogue autonome
+ * (`StoryComposer`) ne les fournit jamais : pas de porte, pas d'éventail,
+ * comportement identique à avant W5.
+ */
+export interface StoryComposerSurfaceProps {
+  readonly onPublish: (payload: ComposerStoryPayload) => void;
+  readonly defaultVisibility?: StoryVisibility;
+  readonly door?: ComposerDoor;
+  readonly onFormatChange?: (format: ComposerFormat) => void;
+  readonly routableFormats?: ReadonlyArray<ComposerFormat>;
+  /**
+   * Peint par l'enrobage AU-DESSUS du formulaire, avec de quoi publier. Le
+   * fournir DÉPLACE le bouton Publier : la surface ne peint plus le sien —
+   * voir la note de fichier. Absent ⇒ la surface garde son bouton bas.
+   */
+  readonly renderPublishHeader?: (control: StoryPublishControl) => ReactNode;
+  readonly disabled?: boolean;
+  readonly className?: string;
+}
+
+// ============================================================================
+// Helpers (UI — pas de l'émission v3, restent ici)
+// ============================================================================
 
 function isGradient(bg: string): boolean {
   return bg.startsWith('linear-gradient');
@@ -131,168 +161,20 @@ function getCategoryLabelKey(category: MediaCategory): string {
   }
 }
 
-function generateStoryObjectId(): string {
-  const cryptoRef = (globalThis as { crypto?: Crypto }).crypto;
-  if (cryptoRef && typeof cryptoRef.randomUUID === 'function') {
-    return cryptoRef.randomUUID();
-  }
-  if (cryptoRef && typeof cryptoRef.getRandomValues === 'function') {
-    const bytes = new Uint8Array(16);
-    cryptoRef.getRandomValues(bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
-  }
-  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
-}
-
 // ============================================================================
-// F5b — le composer ÉMET du v3
+// StoryComposerSurface — le corps, montable par le dialogue OU le meuble
 // ============================================================================
 
-/// Fond canonique du fil (`#hex` | `gradient:from,to` | url) : la palette du
-/// composer parle CSS (`linear-gradient(135deg, A, B)`), forme qu'aucun
-/// lecteur — ni `CanvasV3Scene`, ni le chemin legacy, ni iOS — ne sait lire.
-const CSS_GRADIENT_STOPS = /^linear-gradient\([^,]*,(.*)\)$/;
-
-function canonicalBackground(value: string): string {
-  const stops = CSS_GRADIENT_STOPS.exec(value)?.[1];
-  if (stops === undefined) return value;
-  return `gradient:${stops.split(',').map((stop) => stop.trim()).filter(Boolean).join(',')}`;
-}
-
-const NEUTRAL_TRANSFORM: ObjectV3['transform'] = { scale: 1, rotation: 0, opacity: 1 };
-
-type UnrankedObjectV3 = Omit<ObjectV3, 'z'>;
-
-type CanvasMediaSource = {
-  postMediaId: string;
-  mediaType: 'image' | 'video';
-  x: number;
-  y: number;
-  isBackground: boolean;
-  duration?: number;
-};
-
-type CanvasAudioSource = {
-  postMediaId: string;
-  placement: string;
-  x: number;
-  y: number;
-  volume: number;
-  isBackground: boolean;
-  duration?: number;
-};
-
-type CanvasComposerState = {
-  background: string;
-  textStyle: TextStyle;
-  content?: string;
-  media?: readonly CanvasMediaSource[];
-  audio?: readonly CanvasAudioSource[];
-};
-
-/// Constat 23 — forme jumelle du convertisseur gateway
-/// (`baseObject({ id: 'bg' }, 'media', 'bg', z++)`, `storyEffectsV3.ts:73`)
-/// et d'iOS (`ObjectV3(id: "bg", …)`, `CanvasV3Migration.swift:174`) : l'objet
-/// de fond porte l'id LITTÉRAL, jamais un id généré.
-function backgroundObject(background: string): UnrankedObjectV3 {
-  return {
-    id: 'bg',
-    kind: 'media',
-    anchor: { t: 'free', x: 0.5, y: 0.5 },
-    plane: 'bg',
-    transform: NEUTRAL_TRANSFORM,
-    payload: { background: canonicalBackground(background) },
-  };
-}
-
-/// G3 — le stylage RACINE devient un objet texte seulement en l'absence
-/// d'objet texte : l'écran web n'a pas de famille `textObjects`, son contenu
-/// est donc toujours ce texte-là. Sans lui, `StoryViewer` en v3 n'affiche plus
-/// rien (le bloc legacy `story.content` ne se monte plus).
-///
-/// Constat 4 (BLOQUANT, rejet DoD de F7d, arbitrage 4 vs 8) — ce texte
-/// racine ne pose JAMAIS de `locale` ICI, et c'est définitif : le composer
-/// web n'a aucun sélecteur de langue EXPLICITE pour l'auteur (contre iOS,
-/// `StoryComposerViewModel+Elements.swift:674`), et ce texte ne porte
-/// JAMAIS un `content` vide (G3 ci-dessus) — le résolveur partagé avec
-/// `originalLanguage` (`resolveOriginalLanguageForCreate`) refuserait donc
-/// TOUJOURS de deviner ici, rendant tout appel à cet endroit une branche
-/// morte. La règle 3 du Prisme (l'origine doit concourir à SON rang) reste
-/// néanmoins honorée : le serveur détecte la vraie langue à la création
-/// (`PostService.ts` `detectLanguage(data.content)`) et la persiste sur
-/// `post.originalLanguage` ; `postToStoryData` (`lib/story-transforms.ts`,
-/// `withOriginLocale`) la reporte à la LECTURE sur tout objet texte
-/// dépourvu de sa propre `locale` — jamais devinée, jamais dupliquée ici.
-function rootTextObject(content: string, textStyle: TextStyle): UnrankedObjectV3 {
-  return {
-    id: generateStoryObjectId(),
-    kind: 'text',
-    anchor: { t: 'free', x: 0.5, y: 0.5 },
-    plane: 'fg',
-    transform: NEUTRAL_TRANSFORM,
-    payload: { text: content, textStyle },
-  };
-}
-
-function mediaObject(media: CanvasMediaSource): UnrankedObjectV3 {
-  return {
-    id: generateStoryObjectId(),
-    kind: 'media',
-    anchor: { t: 'free', x: media.x, y: media.y },
-    plane: 'content',
-    transform: NEUTRAL_TRANSFORM,
-    payload: {
-      postMediaId: media.postMediaId,
-      mediaType: media.mediaType,
-      isBackground: media.isBackground,
-      ...(media.duration !== undefined ? { duration: media.duration } : {}),
-    },
-  };
-}
-
-/// `volume` n'est émis que s'il s'écarte de 1 et `waveformSamples` reste
-/// DEHORS (spec §C2bis) : les deux côtés décodent 1 par défaut, et les golden
-/// v1→v3 ne portent pas l'échantillonnage de composition.
-function audioObject(audio: CanvasAudioSource): UnrankedObjectV3 {
-  return {
-    id: generateStoryObjectId(),
-    kind: 'audio',
-    anchor: { t: 'free', x: audio.x, y: audio.y },
-    plane: 'content',
-    transform: NEUTRAL_TRANSFORM,
-    payload: {
-      postMediaId: audio.postMediaId,
-      placement: audio.placement,
-      isBackground: audio.isBackground,
-      ...(audio.volume !== 1 ? { volume: audio.volume } : {}),
-      ...(audio.duration !== undefined ? { duration: audio.duration } : {}),
-    },
-  };
-}
-
-/// O3 — jamais de cadre vide servi au fil : la palette a toujours une valeur,
-/// le porteur de fond existe donc TOUJOURS et la scène ne peut pas être vide.
-/// `z` est le rang d'INSERTION (fond, texte racine, porteur, audio), pas un
-/// ordre par plan — le plan porte déjà l'empilement à la lecture.
-function buildCanvasV3(state: CanvasComposerState): CanvasV3 {
-  const objects: ObjectV3[] = [
-    backgroundObject(state.background),
-    ...(state.content?.trim() ? [rootTextObject(state.content, state.textStyle)] : []),
-    ...(state.media ?? []).map(mediaObject),
-    ...(state.audio ?? []).map(audioObject),
-  ].map((object, index) => ({ ...object, z: index }));
-
-  return { v: 3, scenes: [{ id: 's1', objects }] };
-}
-
-// ============================================================================
-// StoryComposer
-// ============================================================================
-
-function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS' }: StoryComposerProps) {
+function StoryComposerSurface({
+  onPublish,
+  defaultVisibility = DEFAULT_PUBLICATION_VISIBILITY,
+  door,
+  onFormatChange,
+  routableFormats,
+  renderPublishHeader,
+  disabled = false,
+  className,
+}: StoryComposerSurfaceProps) {
   const { t } = useI18n('common');
   const [selectedBg, setSelectedBg] = useState<string>(BACKGROUND_COLORS[0].value);
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyle>('bold');
@@ -312,13 +194,27 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     selectedFiles,
     uploadedAttachments,
     isUploading,
+    uploadProgress,
     handleFilesSelected,
     handleRemoveFile,
     clearAttachments,
   } = useAttachmentUpload({
     token: token ?? undefined,
     maxAttachments: MEDIA_LIMITS.image + MEDIA_LIMITS.video + MEDIA_LIMITS.audio,
+    // Une STORY publie en `PostMedia` (via TUS), jamais en
+    // `MessageAttachment` — voir `services/attachmentTransport.ts`.
+    uploadContext: 'story',
   });
+
+  // L'éventail n'est peint QUE quand les trois props de la porte arrivent
+  // ensemble — c'est-à-dire seulement depuis le meuble. `uploadedAttachments`
+  // porte déjà la forme `ReelMediaLike` attendue par le prédicat partagé,
+  // comme pour `ComposerDocumentSurface`.
+  const showFan = door !== undefined && onFormatChange !== undefined && routableFormats !== undefined;
+  const offeredFormats = showFan ? webComposerOpening(door, uploadedAttachments).offeredFormats : [];
+  const selectableFormats = showFan
+    ? offeredFormats.filter((offered) => routableFormats!.includes(offered))
+    : [];
 
   const mediaCounts = useMemo(() => {
     const counts: Record<MediaCategory, number> = { image: 0, video: 0, audio: 0 };
@@ -408,68 +304,21 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
     clearReferences();
   }, [content, selectedBg, selectedTextStyle, visibility, visibilityUserIds, onPublish, uploadedAttachments, clearAttachments, referencesPayload, clearReferences]);
 
-  const handleClose = useCallback(() => {
-    onClose();
-    setContent('');
-    setSelectedBg(BACKGROUND_COLORS[0].value);
-    setSelectedTextStyle('bold');
-    setVisibility(defaultVisibility);
-    setVisibilityUserIds([]);
-    clearAttachments();
-    clearReferences();
-  }, [onClose, clearAttachments, defaultVisibility, clearReferences]);
-
   const hasContent = content.trim().length > 0 || selectedFiles.length > 0;
   // W3 inc.2 — EXCEPT/ONLY sans audience = publication bloquée (jamais de
   // visibilité cassée, cf. W6).
   const audienceIncomplete = isAudienceIncomplete(visibility, visibilityUserIds.length);
 
+  // L'état du bouton Publier, calculé UNE fois : les deux emplacements
+  // possibles (l'en-tête de l'enrobage, le bas du formulaire) le lisent au
+  // même endroit, donc ils ne peuvent pas diverger.
+  const publishDisabled = !hasContent || isUploading || audienceIncomplete || disabled;
+  const publishLabel = isUploading ? t('uploading') : t('publish');
+
   return (
-    <Dialog open={open} onClose={handleClose} className="max-w-lg">
-      {/* Header */}
-      <DialogHeader className="flex items-center justify-between p-4 pb-3">
-        <button
-          type="button"
-          onClick={handleClose}
-          className={cn(
-            'flex h-8 w-8 items-center justify-center rounded-full',
-            'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-hover)]',
-            'transition-colors duration-300'
-          )}
-          aria-label={t('close')}
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-
-        <h2 className="text-base font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
-          {t('newStory')}
-        </h2>
-
-        <Button
-          size="sm"
-          variant="primary"
-          onClick={handlePublish}
-          disabled={!hasContent || isUploading || audienceIncomplete}
-        >
-          {isUploading ? t('uploading') : t('publish')}
-        </Button>
-      </DialogHeader>
-
-      {/* Body */}
-      <DialogBody className="p-4 pt-0">
+    <>
+      {renderPublishHeader?.({ publish: handlePublish, disabled: publishDisabled, label: publishLabel })}
+      <div className={cn(className)} data-testid="composer-story-surface">
         {/* Preview Zone */}
         <div
           className="relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-xl"
@@ -482,6 +331,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
             onChange={(e) => setContent(e.target.value)}
             placeholder={t('storyPlaceholder')}
             maxLength={500}
+            disabled={disabled}
             className={cn(
               'z-10 w-full resize-none bg-transparent px-6 py-4 text-center text-xl text-white',
               'placeholder:text-white/50 focus:outline-none',
@@ -527,6 +377,14 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
                           <circle cx="6" cy="18" r="3" />
                           <circle cx="18" cy="16" r="3" />
                         </svg>
+                      </div>
+                    )}
+                    {isUploading && (
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-1 py-0.5 text-center text-[10px] text-white">
+                        {/* Cette surface ne lisait PAS `uploadProgress` : ses
+                            médias — vidéo et audio, les plus lourds du
+                            produit — montaient sans aucun signal. */}
+                        {uploadProgress[index] ?? 0}%
                       </div>
                     )}
                     <button
@@ -676,7 +534,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
 
           {/* Visibility Selector */}
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {VISIBILITY_OPTIONS.map((opt) => (
+            {PUBLICATION_VISIBILITY_OPTIONS.map((opt) => (
               <button
                 key={opt.id}
                 type="button"
@@ -702,6 +560,26 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
               onChange={setVisibilityUserIds}
             />
           )}
+
+          {/* Éventail (meuble uniquement) + Publier — même rangée que
+              `ComposerDocumentSurface` : outils à gauche, publication à droite.
+              Le bouton disparaît quand l'enrobage le peint lui-même. */}
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {showFan && (
+                <ComposerFormatFan
+                  offered={selectableFormats}
+                  selected="story"
+                  onSelect={onFormatChange!}
+                />
+              )}
+            </div>
+            {!renderPublishHeader && (
+              <Button size="sm" variant="primary" onClick={handlePublish} disabled={publishDisabled}>
+                {publishLabel}
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Hidden file inputs */}
@@ -738,12 +616,75 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
             e.target.value = '';
           }}
         />
-      </DialogBody>
+      </div>
+    </>
+  );
+}
+
+StoryComposerSurface.displayName = 'StoryComposerSurface';
+
+// ============================================================================
+// StoryComposer — l'enrobage historique, un Dialog mince autour de la surface
+// ============================================================================
+
+function StoryComposer({ open, onClose, onPublish, defaultVisibility = DEFAULT_PUBLICATION_VISIBILITY }: StoryComposerProps) {
+  const { t } = useI18n('common');
+
+  // L'en-tête et le corps sont rendus par la MÊME surface : c'est elle qui
+  // tient l'état de publication, et c'est l'enrobage qui dit où le bouton se
+  // peint (voir la note de fichier). Les TROIS enfants de l'en-tête sont
+  // load-bearing sous `justify-between` — retirer le bouton plaquerait le
+  // titre contre le bord droit et repousserait le CTA sous six rangées
+  // d'outils dans un dialogue qui ne défile pas.
+  return (
+    <Dialog open={open} onClose={onClose} className="max-w-lg">
+      <StoryComposerSurface
+        onPublish={onPublish}
+        defaultVisibility={defaultVisibility}
+        className="p-4 pt-0"
+        renderPublishHeader={({ publish, disabled, label }) => (
+          <DialogHeader className="flex items-center justify-between p-4 pb-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className={cn(
+                'flex h-8 w-8 items-center justify-center rounded-full',
+                'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-hover)]',
+                'transition-colors duration-300'
+              )}
+              aria-label={t('close')}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+
+            <h2 className="text-base font-semibold text-[var(--gp-text-primary)] transition-colors duration-300">
+              {t('newStory')}
+            </h2>
+
+            <Button size="sm" variant="primary" onClick={publish} disabled={disabled}>
+              {label}
+            </Button>
+          </DialogHeader>
+        )}
+      />
     </Dialog>
   );
 }
 
 StoryComposer.displayName = 'StoryComposer';
 
-export { StoryComposer };
+export { StoryComposer, StoryComposerSurface };
 export type { StoryComposerProps, StoryVisibility };

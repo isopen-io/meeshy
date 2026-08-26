@@ -145,17 +145,12 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
     return false;
   }, [isOwnMessage, userRole]);
 
-  // Contenu affiché actuellement (utilise effectiveDisplayLanguage pour mise à jour immédiate)
-  const currentContent = useMemo(() => {
-    if (effectiveDisplayLanguage === (message.originalLanguage || 'fr')) {
-      return message.originalContent || message.content;
-    }
-    
-    const translation = message.translations.find((t: unknown) => 
-      (t.language || t.targetLanguage) === effectiveDisplayLanguage
-    );
-    return translation ? ((translation as unknown).content || (translation as unknown).translatedContent || message.content) : message.content;
-  }, [effectiveDisplayLanguage, message.originalLanguage, message.originalContent, message.content, message.translations]);
+  // NB: la résolution du contenu affiché vit dans `useMessageDisplay`
+  // (hooks/use-message-display.ts), consommé par BubbleMessageNormalView via
+  // `currentDisplayLanguage`. Un `currentContent` local dupliquait cette logique
+  // ici sans jamais être lu — code mort retiré (le défaut de comparaison brute
+  // qu'il portait est corrigé à la source vivante). Cf. itération 250, PR #3368 :
+  // un défaut de forme sur du code mort se résout par suppression.
 
   // Actions des vues spécialisées
   const handleReactionSelect = useCallback((_emoji: string) => {

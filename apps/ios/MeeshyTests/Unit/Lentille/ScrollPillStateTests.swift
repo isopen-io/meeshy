@@ -415,25 +415,27 @@ final class ScrollPillStateTests: XCTestCase {
 
     // MARK: - Montage : déclaré == monté, chacun derrière SA condition (leçon 257)
 
-    func test_sectionScrollPill_isMountedExactlyOnce_behindTheFlag() throws {
-        let code = normalizedCode(try listViewSource())
-
-        XCTAssertEqual(
-            occurrences(of: "SectionScrollPillHost( relay: scrollOffsetRelay, title: title, sections: conversationViewModel.groupedConversations.map(\\.section), positions: sectionPositionRegistry )", in: code), 1,
-            "La pilule doit être montée — une fois, via son hôte, alimenté par le relais " +
-            "EXISTANT. I-061 l'avait écrite et testée sans la monter : une vue juste, " +
-            "compilée, invisible."
-        )
-        XCTAssertTrue(
-            code.contains("if LentilleFeatureFlag.isLentilleListEnabled, let title = Self.sectionPillTitle("),
-            "…et derrière SA condition : drapeau OFF ⇒ aucune pilule, rendu identique à " +
-            "aujourd'hui."
-        )
-        XCTAssertEqual(
-            occurrences(of: "SectionScrollPill(", in: normalizedCode(try pillHostSource())), 1,
-            "La vue pure de I-061 est rendue par son hôte, et par lui seul."
-        )
-    }
+    // MARK: - PIERRE TOMBALE — `test_sectionScrollPill_isMountedExactlyOnce_behindTheFlag`
+    //
+    // Cette garde exigeait que la pilule de section soit MONTÉE dans la liste.
+    // Elle est retirée le 2026-08-23 parce que le produit a retiré la pilule,
+    // pas parce qu'elle gênait : directive de `463547f5d` — « on n'a pas besoin
+    // de sticker de section central, car les sections stick sur place quand on
+    // les dépasse ». Le doublon y est mesuré au simulateur : sticker
+    // « MEESHY TEAM » à (0, 122.0, 402×21.3) et capsule portant le MÊME mot à
+    // (160.0, 130.0, 82×13.3) — 81 % de recouvrement de la bande, pour zéro
+    // information supplémentaire.
+    //
+    // Elle était rouge sur `main` depuis, et son message accusait à tort le
+    // câblage (« I-061 l'avait écrite et testée sans la monter : une vue juste,
+    // compilée, invisible ») — vrai à l'époque d'I-061, faux depuis que le
+    // démontage est devenu la décision.
+    //
+    // **Ce qui protège encore cette surface**, et pourquoi la retirer ne perd
+    // rien : `SectionScrollPillTests` (5 témoins) couvre la vue elle-même, et
+    // la loi de défilement de ce fichier — `ScrollTimePillLaw` — reste
+    // intégralement testée ci-dessus. Ne pas rétablir `sectionScrollPillOverlay`
+    // sans ré-amender d'abord la directive de `463547f5d`.
 
     func test_storiesVivantsRail_isMountedExactlyOnce_behindTheFlag_andKeepsTheStoryRoute() throws {
         let code = normalizedCode(try listViewSource())

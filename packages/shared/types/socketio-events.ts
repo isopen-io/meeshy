@@ -9,9 +9,15 @@ import type { ParticipantType } from './participant.js';
 // Le pont ✦ (G-123) — payload optionnel de `conversation:unread-updated`
 import type { ConversationBridge } from './conversation-bridge.js';
 
+// Motifs de refus de `conversation:join` — la table ET la règle qui décide
+// lesquels autorisent un consommateur à purger son cache (cycle 99)
+import type { ConversationJoinErrorReason } from '../utils/conversation-join-error.js';
+
 // Prédicat des marquages de notifications en masse
 import type {
+  NotificationContext,
   NotificationDeletedBulkScope,
+  NotificationMetadata,
   NotificationReadBulkScope,
 } from './notification.js';
 
@@ -52,6 +58,8 @@ import type {
   CallForceLeaveClientEvent,
   CallForceLeaveServerEvent,
   CallRequestIceServersEvent,
+  CallMediaToggleClientEvent,
+  CallAnalyticsEvent,
   CallIceServersRefreshedEvent,
 } from './video-call.js';
 
@@ -90,6 +98,9 @@ import type {
   PostReactionAddData,
   PostReactionRemoveData,
 } from './post.js';
+
+// La ligne de réaction persistée — ce que l'accusé de `reaction:add` porte.
+import type { ReactionData, ReactionUpdateEvent } from './reaction.js';
 
 // ===== ROOM HELPERS =====
 // Convention: entity:${id} (colons, jamais underscores)
@@ -517,6 +528,7 @@ export const SERVER_EVENTS = {
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
   USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
+  USER_PREFERENCES_COMMUNITY_REORDERED: 'user:preferences-community-reordered',
 
   // --- User Profile (realtime propagation to conversation partners) ---
   USER_UPDATED: 'user:updated',
@@ -651,6 +663,12 @@ export const CLIENT_EVENTS = {
   CALL_CHECK_ACTIVE: 'call:check-active',
   /** Request fresh TURN credentials before the current TTL expires. */
   CALL_REQUEST_ICE_SERVERS: 'call:request-ice-servers',
+  /**
+   * Rapport de télémétrie terminal, émis UNE fois au raccrochage par les trois
+   * clients. Écouté, validé (`socketCallAnalyticsSchema`) et agrégé par la
+   * passerelle depuis toujours — déclaré ici seulement au cycle 107.
+   */
+  CALL_ANALYTICS: 'call:analytics',
 
   // --- Location sharing ---
   LOCATION_LIVE_START: 'location:live-start',
@@ -743,12 +761,66 @@ export interface ConversationParticipationEventData {
 }
 
 /**
+ * Données pour le REFUS d'une jonction de conversation (`conversation:join-error`).
+ *
+ * Déclaré au cycle 99. L'événement existait depuis longtemps — huit sites
+ * d'émission dans `ConversationHandler`, un consommateur web et un consommateur
+ * iOS — mais n'avait AUCUNE entrée ici. Ses deux consommateurs en avaient donc
+ * chacun transcrit la forme en lisant le producteur, et tous deux avaient
+ * conclu la même chose de travers : que l'événement signifiait « tu n'es plus
+ * membre », alors que quatre de ses sept motifs sont transitoires.
+ *
+ * `reason` n'est pas décoratif : c'est lui qui sépare les refus qui établissent
+ * la non-appartenance de ceux qui ne disent rien de l'appartenance. Un
+ * consommateur DOIT le lire avant de détruire quoi que ce soit, via
+ * `isMembershipDeniedJoinError()` — la seule règle, partagée.
+ *
+ * @see utils/conversation-join-error.ts
+ */
+export interface ConversationJoinErrorEventData {
+  /**
+   * L'identifiant TEL QUE DEMANDÉ par le client, pas l'identifiant normalisé :
+   * sur les refus précoces (`invalid_payload`, `server_error`) la normalisation
+   * n'a pas eu lieu, et le client doit pouvoir rapprocher le refus de la
+   * demande qu'il a émise.
+   */
+  readonly conversationId: string;
+  readonly reason: ConversationJoinErrorReason;
+  readonly message: string;
+}
+
+/**
  * Données pour l'événement d'authentification
  */
+/**
+ * L'identité MINIMALE que l'accusé d'authentification rend au socket qui vient
+ * de s'authentifier.
+ *
+ * Ce n'est PAS un `SocketIOUser`, et le déclarer ainsi était un mensonge de
+ * contrat (cycle 101) : les deux — et seuls — émetteurs de `AUTHENTICATED`
+ * (`AuthHandler._authenticateJWTUser` et `._authenticateAnonymousUser`)
+ * servent exactement ces trois champs. `language` n'existe pas sur
+ * `SocketIOUser` ; ses onze champs requis (`username`, `email`, `role`,
+ * `isOnline`, `lastActiveAt`…) n'ont jamais voyagé sur cet événement, et un
+ * participant ANONYME n'a pas de ligne `User` d'où les tirer.
+ *
+ * Le destinataire de cet accusé sait déjà QUI il est — il vient de présenter
+ * son jeton. Ce que l'événement lui apprend, c'est sous quelle identité la
+ * passerelle l'a admis (`id`), dans quelle langue elle le servira
+ * (`language`), et par quel régime (`isAnonymous`).
+ */
+export interface AuthenticatedEventUser {
+  readonly id: string;
+  readonly language: string;
+  readonly isAnonymous: boolean;
+}
+
 export interface AuthenticatedEventData {
   readonly success: boolean;
-  readonly user?: SocketIOUser;
+  readonly user?: AuthenticatedEventUser;
   readonly error?: string;
+  /** `APP_VERSION` de la passerelle — émis par les deux producteurs. */
+  readonly version?: string;
 }
 
 /**
@@ -821,8 +893,23 @@ export interface NotificationEventData {
     readonly displayName?: string;
     readonly avatar?: string;
   };
-  readonly context?: Record<string, unknown>;
-  readonly metadata?: Record<string, unknown>;
+  /**
+   * Déclaré `NotificationContext` — le type RÉEL du producteur — et non plus
+   * `Record<string, unknown>` (cycle 105).
+   *
+   * L'opacité n'était pas un choix : elle n'a jamais été confrontée à
+   * l'émetteur, parce que `emitWithSeq` prenait `Record<string, unknown>` et
+   * que les deux sites d'appel portaient le double cast qui le dit
+   * (`socketPayload as unknown as Record<string, unknown>`). Le premier typage
+   * de l'émission l'a fait tomber : `NotificationContext` est une interface,
+   * donc SANS signature d'index, donc jamais assignable à une carte ouverte.
+   *
+   * Le type vit dans ce même paquet (`types/notification.ts`) : le déclarer ne
+   * fait entrer aucune dépendance, il cesse seulement de cacher ce que les
+   * trois clients reçoivent déjà.
+   */
+  readonly context?: NotificationContext;
+  readonly metadata?: NotificationMetadata;
   readonly state: {
     readonly isRead: boolean;
     readonly readAt: Date | null;
@@ -833,6 +920,41 @@ export interface NotificationEventData {
     readonly emailSent: boolean;
     readonly pushSent: boolean;
   };
+  /**
+   * Curseur MONOTONE par utilisateur, estampillé par `emitWithSeq`
+   * (`services/gateway/src/socketio/utils/emitWithSeq.ts`) — pas une propriété
+   * de la notification, une propriété du TRANSPORT.
+   *
+   * C'est le signal de détection de TROU du SyncEngine : un client qui reçoit
+   * `_seq = N+2` après `N` sait qu'un événement lui a échappé et déclenche une
+   * resynchronisation. **Les trois clients l'OBSERVENT** — web
+   * (`observeSyncSeq(this.syncSeq, data?._seq)`,
+   * `notification-socketio.singleton.ts`), iOS (`case seq = "_seq"` →
+   * `SyncSeqTracker.observe`, `MeeshySDK/Sockets/MessageSocketManager.swift`),
+   * Android (`syncSeqTracker.observe(raw.opt("_seq"))`,
+   * `sdk-core/.../socket/MessageSocketManager.kt`).
+   *
+   * Ce paragraphe a dit « les trois le lisent » pendant que **Android le
+   * jetait** : son décodeur (`Json.ignoreUnknownKeys`) déposait le champ, et la
+   * preuve citée — `MessageSocketManagerNotificationTest` — n'assertait rien sur
+   * `_seq` ; elle prouvait exactement l'inverse, que le décodage SURVIT au champ.
+   * Une citation n'est pas une mesure : le test cité prouvait la tolérance, pas
+   * la lecture. Android observe depuis que ce miroir a été écrit (cycle 108).
+   *
+   * **Déclaré ici parce qu'il ne l'était NULLE PART** (cycle 105). Il ne
+   * voyageait que parce que `emitWithSeq` prenait
+   * `payload: Record<string, unknown>` : un champ porteur, traversant trois
+   * décodeurs, dont aucun contrat ne parlait — exactement le cas de `location`
+   * sur `ConversationUpdatedEventData` avant qu'on ne le déclare, et la même
+   * conséquence : la parité entre émetteurs ne tenait qu'à la lecture du code
+   * voisin.
+   *
+   * Optionnel, et l'absence est SIGNIFIANTE : `emitWithSeq` dégrade
+   * volontairement en émettant SANS `_seq` quand l'allocation du compteur
+   * rejette ou dépasse son délai. Le client traite alors l'événement sans
+   * avancer son curseur, et le trou éventuel est rattrapé au prochain `/sync`.
+   */
+  readonly _seq?: number;
 }
 
 /**
@@ -1051,29 +1173,15 @@ export interface ConversationUnreadUpdatedEventData {
 }
 
 /**
- * Données pour l'événement de mise à jour de réaction
+ * Données pour l'événement de mise à jour de réaction.
+ *
+ * C'est `ReactionUpdateEvent` (`./reaction`), pas une seconde déclaration : les
+ * deux ont vécu comme jumelles structurelles dans deux fichiers qui ne se citent
+ * pas, avec le risque de DÉRIVE que ça porte — `ReactionService.createUpdateEvent`
+ * rend l'une, le contrat de diffusion déclarait l'autre, et rien n'obligeait les
+ * deux à rester d'accord. Un alias supprime la question.
  */
-export interface ReactionUpdateEventData {
-  readonly messageId: string;
-  readonly conversationId: string;
-  readonly participantId: string;
-  /**
-   * User.id du réacteur (distinct de `participantId`, un Participant.id scopé
-   * conversation). Requis pour que les autres appareils du même utilisateur
-   * reconnaissent leur propre réaction — un Participant.id n'égale jamais un
-   * User.id. Toujours émis ; optionnel pour la compat des payloads rejoués.
-   */
-  readonly userId?: string;
-  readonly emoji: string;
-  readonly action: 'add' | 'remove';
-  readonly aggregation: {
-    readonly emoji: string;
-    readonly count: number;
-    readonly participantIds: readonly string[];
-    readonly hasCurrentUser: boolean;
-  };
-  readonly timestamp: Date;
-}
+export type ReactionUpdateEventData = ReactionUpdateEvent;
 
 /**
  * Données pour l'événement de synchronisation des réactions
@@ -1384,13 +1492,26 @@ export interface ParticipantRoleUpdatedEventData {
   readonly userId: string;
   readonly newRole: string;
   readonly updatedBy: string;
-  /** Minimum guaranteed shape from gateway; actual payload may include additional fields */
+  /**
+   * Le participant SÉRIALISÉ (`serializeConversationParticipant`), ou `null`
+   * quand la relecture du rang ne rend rien — d'où l'optionnalité, qui est
+   * portée par le contrat et doit l'être par chaque décodeur client.
+   *
+   * **`role` porte le rôle GLOBAL** (`USER|ADMIN|…`) ; le rang DANS LA
+   * CONVERSATION est `conversationRole`. Le rang à APPLIQUER reste `newRole`,
+   * au premier niveau : ce bloc est un complément d'affichage, pas la décision.
+   * Confondre les deux rétrograderait tout le monde en « membre ».
+   *
+   * Forme minimale garantie ; la charge utile porte le participant entier.
+   */
   readonly participant?: {
     readonly id: string;
-    readonly role: string;
-    readonly displayName: string;
+    readonly participantId?: string;
+    readonly role?: string;
+    readonly conversationRole?: string | null;
+    readonly displayName?: string | null;
     readonly userId: string | null;
-  };
+  } | null;
 }
 
 /**
@@ -1548,6 +1669,41 @@ export interface UserPreferencesReorderedEventData {
 }
 
 /**
+ * Émis par `POST /user-preferences/communities/reorder` après mise à jour batch
+ * de l'ordre des COMMUNAUTÉS dans une catégorie.
+ *
+ * ## Pourquoi un événement à part, et non un élargissement du précédent
+ *
+ * `UserPreferencesReorderedEventData` décrit le même geste sur l'autre table, et
+ * la tentation est d'y ajouter `communityId`. Mesuré sur les décodeurs
+ * existants, cet élargissement casse le cas nominal pour en servir un neuf :
+ *
+ * - iOS — `UserPreferencesReorderedSocketEvent.Update.conversationId` est un
+ *   `String` NON optionnel : un seul item de communauté fait échouer le
+ *   décodage de l'ÉVÉNEMENT ENTIER, emportant les réordonnancements de
+ *   conversation qui voyagent avec lui ;
+ * - web — `applyRemoteReorder` filtre sur `preferencesMap.has(conversationId)`,
+ *   donc les items de communauté disparaissent en silence.
+ *
+ * Un nom neuf est INERTE pour ces deux consommateurs par construction. La règle
+ * générale : la forme d'un événement DIFFUSÉ ne s'élargit qu'après avoir relevé
+ * ses décodeurs sur les trois clients, et un décodeur strict rend l'élargissement
+ * plus cher que le nom neuf.
+ *
+ * Comme son jumeau conversation, il ne porte PAS de version : `orderInCategory`
+ * vit hors du chemin versionné et le client l'applique sans arbitrage. Il ne
+ * nomme que ce qui a été RÉELLEMENT écrit — les communautés dont l'appelant est
+ * membre — jamais ce qu'il a demandé.
+ */
+export interface UserPreferencesCommunityReorderedEventData {
+  readonly userId: string;
+  readonly updates: ReadonlyArray<{
+    readonly communityId: string;
+    readonly orderInCategory: number;
+  }>;
+}
+
+/**
  * Snapshot d'une `UserConversationCategory` envoyé dans
  * `CATEGORY_CREATED` / `CATEGORY_UPDATED`.
  */
@@ -1662,9 +1818,22 @@ export interface MentionCreatedEventData {
 
 export interface ConversationParticipantBannedEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  /** Toujours présent — voir `ConversationParticipantLeftEventData.participantId`. */
+  readonly participantId?: string;
+  /** `null` sans compte — voir `ConversationParticipantLeftEventData.userId`. */
+  readonly userId: string | null;
   readonly bannedBy: { readonly id: string };
   readonly bannedAt: string;
+  /**
+   * Le lien de partage que ce bannissement a FERMÉ, quand la personne était
+   * entrée par un lien. Bannir sort de la conversation ET invalide la porte
+   * empruntée : sortir quelqu'un en laissant son lien ouvert ne protège de rien,
+   * il suffit de le rouvrir pour revenir sous un autre pseudonyme.
+   *
+   * ABSENT quand il n'y avait pas de lien à fermer (créateur, membre ajouté à la
+   * main) — jamais `null` : l'absence dit « aucune porte n'a été fermée ».
+   */
+  readonly closedShareLinkId?: string;
   /**
    * Faux quand la cible avait DÉJÀ quitté la conversation — bannir un ancien
    * membre reste possible, c'est ce qui l'empêche de revenir par un lien de
@@ -1693,7 +1862,10 @@ export interface ConversationParticipantBannedEventData {
 
 export interface ConversationParticipantUnbannedEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  /** Toujours présent — voir `ConversationParticipantLeftEventData.participantId`. */
+  readonly participantId?: string;
+  /** `null` sans compte — voir `ConversationParticipantLeftEventData.userId`. */
+  readonly userId: string | null;
   /**
    * Le bannissement est levé dans tous les cas ; l'appartenance n'est rendue
    * que si le bannissement l'avait prise. Faux quand la personne était partie
@@ -1745,7 +1917,22 @@ export interface ConversationParticipantJoinedEventData {
 
 export interface ConversationParticipantLeftEventData {
   readonly conversationId: string;
-  readonly userId: string;
+  /**
+   * L'identité TOUJOURS présente — la seule qu'un visiteur venu par un lien
+   * partagé possède, puisqu'il n'a aucune ligne `User`. C'est sur ce champ, et
+   * jamais sur `userId`, qu'un client retire la bonne ligne.
+   *
+   * Absent des serveurs antérieurs à ce contrat : un client le lit alors comme
+   * `undefined` et retombe sur `userId`, ce qui reproduit son comportement
+   * d'avant (les seuls départs qu'ils annonçaient étaient ceux de comptes).
+   */
+  readonly participantId?: string;
+  /**
+   * `null` quand la personne n'a PAS de compte. Ce champ déclare un `User.id` :
+   * y recopier un `Participant.id` ferait passer une clé de participant pour une
+   * clé d'utilisateur dans tout ce qui la consomme ensuite.
+   */
+  readonly userId: string | null;
   readonly displayName: string;
   readonly leftAt: string;
   /**
@@ -1767,6 +1954,64 @@ export interface ConversationUpdatedEventData {
   readonly conversationId: string;
   readonly updatedBy: { readonly id: string };
   readonly updatedAt: string;
+  /**
+   * Identité du message que la ligne de liste doit décrire après cet
+   * événement. Membre porteur du groupe d'aperçu : c'est LUI que les trois
+   * clients lisent en premier, et les autres champs du groupe ne valent que
+   * pour le message qu'il nomme.
+   *
+   * Tri-état, et les trois branches sont distinctes :
+   * - **clé ABSENTE** — cet événement ne parle pas du dernier message (un
+   *   renommage, un réglage). Ne rien toucher.
+   * - **`null`** — « ce lecteur n'a plus AUCUN message visible ici » : il vient
+   *   de masquer pour lui le dernier qui lui restait. Seul
+   *   `emitConversationPreviewUpdate` produit cette forme.
+   * - **plein** — la ligne décrit ce message. Il peut être celui qu'elle
+   *   décrivait déjà (édition, traduction qui atterrit) ou un AUTRE (masquage
+   *   personnel, suppression pour tous) ; seule l'identité les sépare.
+   */
+  readonly lastMessageId?: string | null;
+  /**
+   * Horodatage du message nommé par `lastMessageId` — le RANG de la
+   * conversation dans la liste, donc ce que le tri des trois clients lit.
+   *
+   * **Chaîne ISO**, comme `updatedAt` son jumeau ci-dessus. Les trois
+   * émetteurs passaient l'objet `Date` de Prisma : le fil ne montrait pas la
+   * différence (l'encodeur par défaut de socket.io est `JSON.stringify`, qui
+   * rend exactement `toISOString()`), mais c'était le seul horodatage du
+   * payload dont le type était décidé par l'encodeur au lieu d'être énoncé —
+   * et tout témoin en cours de route voyait donc une `Date` là où les clients
+   * reçoivent une chaîne.
+   */
+  readonly lastMessageAt?: string | null;
+  /**
+   * Texte d'aperçu du message nommé, PLAFONNÉ (`truncateMessagePreview`).
+   *
+   * Vide n'est pas absent : un message position-seule a un `content` vide que
+   * le client compose depuis `location`. Sort de `resolveLastMessagePreviewPrism`
+   * avec la carte du Prisme, sous le même plafond qu'elle — la paire est
+   * indissociable par construction, un appelant ne peut pas en émettre une
+   * moitié plafonnée et l'autre non.
+   */
+  readonly lastMessagePreview?: string | null;
+  /**
+   * Auteur du message nommé par `lastMessageId`.
+   *
+   * **Deux espaces d'ids, et le contrat ne les distingue pas.** La colonne
+   * `Message.senderId` est un `Participant.id`
+   * (`sender Participant @relation("MessageSender")`), et c'est ce que servent
+   * le chemin REST/ZMQ et `emitConversationPreviewUpdate`. Le chemin socket
+   * (`message:send`) sert un `User.id` — les deux espaces ne se télescopent
+   * jamais, si bien que rien ne rougit.
+   *
+   * Piège ARMÉ, pas panne : aucun client n'en tire de rendu aujourd'hui. Le web
+   * l'écrit dans le `Message.senderId` de sa ligne neutre, que rien ne relit ;
+   * iOS le décode et ne le mappe pas. Déclaré ici pour que le prochain client
+   * qui voudra l'utiliser trouve l'avertissement AVANT de résoudre un nom avec.
+   * L'unifier est un changement de SÉMANTIQUE sur le chemin le plus chaud du
+   * service — son propre lot, pas celui-ci.
+   */
+  readonly senderId?: string | null;
   /**
    * Prisme Linguistique de la ligne de liste, résolu POUR CE destinataire —
    * jumeaux des champs que `GET /conversations` pose déjà sur la conversation.
@@ -1832,7 +2077,52 @@ export interface ConversationUpdatedEventData {
    * exactement le comportement d'avant.
    */
   readonly previewRecalculated?: boolean;
-  readonly [key: string]: unknown;
+  /**
+   * Groupe MÉTADONNÉES — l'autre moitié de l'événement, et la seule que
+   * `PUT /conversations/:id` émet (`routes/conversations/core.ts`).
+   *
+   * Ces huit champs voyagent depuis toujours et les trois clients les lisent
+   * (iOS les décode tous sur `ConversationUpdatedEvent`) ; aucun n'était
+   * déclaré. Ils passaient par la signature d'index, en compagnie des quatre
+   * champs porteurs du groupe d'aperçu ci-dessus.
+   *
+   * Ils sont posés UN PAR UN, seulement quand la requête les a changés : une
+   * clé absente veut dire « ce réglage n'a pas bougé », jamais « remets-le à
+   * zéro ». C'est la même règle de tri-état que le groupe d'aperçu, et c'est
+   * pourquoi aucun d'eux n'est requis.
+   *
+   * Le payload de ce chemin ne porte AUCUNE clé `lastMessage*`, délibérément :
+   * un `lastMessageTranslations: null` posé par un renommage effacerait une
+   * traduction parfaitement valide sur toutes les lignes de liste.
+   */
+  readonly title?: string;
+  readonly description?: string;
+  readonly avatar?: string | null;
+  readonly banner?: string | null;
+  readonly defaultWriteRole?: string;
+  readonly isAnnouncementChannel?: boolean;
+  readonly slowModeSeconds?: number;
+  readonly autoTranslateEnabled?: boolean;
+  /*
+   * PAS de `readonly [key: string]: unknown` ici, et la raison mérite d'être
+   * écrite parce qu'elle n'est PAS celle qu'on croit.
+   *
+   * La signature d'index vivait ici pour laisser passer les douze champs
+   * ci-dessus, qu'aucune ligne ne déclarait. La retirer ne fait tomber AUCUNE
+   * compilation — mesuré, 0 erreur sur `packages/shared` + `services/gateway` —
+   * parce que les quatre émetteurs composent tous leur charge dans une variable
+   * avant de la répandre dans l'appel à `emit`, et qu'une clé venue d'un spread
+   * est invisible au contrôle des propriétés excédentaires de TypeScript.
+   *
+   * Elle ne supprimait donc qu'un contrôle que le spread supprimait déjà. Ce
+   * qui SURVIT au spread — un champ requis absent, un champ de type faux — ne
+   * porte que sur les champs DÉCLARÉS : c'est la déclaration qui fait le
+   * travail, pas la fermeture de la carte. Le cliquet qui garde le reste est un
+   * balayage
+   * (`services/gateway/src/socketio/__tests__/conversation-updated-declared-fields.ts`),
+   * et il n'a de sens que tant que cette signature reste absente — avec elle,
+   * tout serait déclaré d'avance et il ne pourrait plus tomber.
+   */
 }
 
 export interface ConversationClosedEventData {
@@ -1902,6 +2192,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_JOIN_ERROR]: (data: ConversationJoinErrorEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
   [SERVER_EVENTS.AUTH_TOKEN_EXPIRED]: (data: AuthTokenExpiredEventData) => void;
   [SERVER_EVENTS.AUTH_SESSION_REVOKED]: (data: AuthSessionRevokedEventData) => void;
@@ -2005,6 +2296,9 @@ export interface ServerToClientEvents {
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
   [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
+  [SERVER_EVENTS.USER_PREFERENCES_COMMUNITY_REORDERED]: (
+    data: UserPreferencesCommunityReorderedEventData
+  ) => void;
 
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
@@ -2027,6 +2321,29 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.NOTIFICATION_COUNTS]: (data: NotificationCountsEventData) => void;
 
   // Delivery queue — includes affected conversationIds so clients can scope invalidation
+  /**
+   * Fin du rejeu de la file hors ligne, au reconnect.
+   *
+   * **Les deux champs ne portent PAS la même population, et c'est délibéré.**
+   *
+   * - `count` — le nombre d'entrées RÉELLEMENT rejouées. C'est une affirmation
+   *   de livraison : elle ne compte jamais une entrée que la passerelle n'a pas
+   *   su diffuser (`eventType` que la table `DRAINED_EVENT` ne résout pas, ou
+   *   émission qui a levé). Même règle que les accusés de réception, qui
+   *   descendent de la même liste.
+   * - `conversationIds` — les conversations TOUCHÉES par le drain, rejeu réussi
+   *   ou entrée perdue. Plus large que `count` par construction.
+   *
+   * L'écart entre les deux est ce qui rend une perte de rejeu RÉCUPÉRABLE. Le
+   * drain est destructif : une entrée qu'on ne sait pas diffuser sort de la
+   * file sans que rien n'atteigne le client. Les messages qu'elle transportait
+   * sont pourtant toujours en base — seul leur rejeu temps réel a échoué. En
+   * nommant quand même la conversation, l'événement envoie le client les
+   * relire ; l'omettre ferait d'un incident de transport un trou permanent.
+   *
+   * Un `count: 0` accompagné d'une conversation nommée est donc une forme
+   * VALIDE, et se lit « rien n'a pu être rejoué, va relire celle-ci ».
+   */
   [SERVER_EVENTS.PENDING_MESSAGES_DELIVERED]: (data: { count: number; conversationIds: string[] }) => void;
 
   // Conversation lifecycle
@@ -2063,7 +2380,53 @@ export interface MessageSendData {
   readonly messageType?: string;
   readonly replyToId?: string;
   readonly clientMessageId: string;
+  /** Réponse privée à une story — DM porteur du contexte de la story. */
+  readonly storyReplyToId?: string;
+  /** Transfert : le message source, et sa conversation si elle diffère. */
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  /**
+   * Diffusion à plusieurs destinataires (PAS un transfert) : la passerelle
+   * copie CÔTÉ SERVEUR les pièces jointes du message désigné, si bien que
+   * l'émetteur n'envoie ni texte ni `attachmentIds`.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+  readonly isBlurred?: boolean;
+  /** ISO 8601 — la passerelle en recompose le bit EPHEMERAL. */
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  /**
+   * Lieu partagé — champ dédié, JAMAIS un `metadata` brut. La forme n'est pas
+   * contrainte ici : la validation stricte vit côté passerelle
+   * (`services/location/sharedPlace.ts`).
+   */
+  readonly location?: unknown;
+  /**
+   * Les mentionnés que l'ÉMETTEUR nomme, plutôt que ceux que la passerelle
+   * déduit du texte.
+   *
+   * Ce n'est pas une commodité : c'est le seul canal qui survit au chiffrement.
+   * La passerelle retombe sur l'extraction des `@username` du CONTENU quand la
+   * liste est absente — mais en mode `e2ee` le client remplace `content` par le
+   * littéral `[Encrypted]` avant d'émettre, si bien qu'il n'y a plus rien à
+   * extraire. La liste explicite est alors la seule chose qui rattache un
+   * message à ceux qu'il nomme.
+   */
+  readonly mentionedUserIds?: readonly string[];
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
 }
+
+/**
+ * Le mode de chiffrement TEL QU'IL VOYAGE. La passerelle normalise la casse à
+ * l'entrée (iOS émet « E2EE »), mais le jeu de valeurs est FERMÉ : ce sont les
+ * trois que le schéma accepte, ni plus ni moins.
+ */
+export type EncryptionModeOnWire = 'e2ee' | 'server' | 'hybrid';
 
 /**
  * Réponse d'envoi de message
@@ -2087,6 +2450,21 @@ export interface MessageSendWithAttachmentsData {
   readonly attachmentIds: readonly string[];
   readonly replyToId?: string;
   readonly clientMessageId: string;
+  readonly storyReplyToId?: string;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  readonly isBlurred?: boolean;
+  readonly expiresAt?: string;
+  readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly location?: unknown;
+  /** Même contrat que `MessageSendData.mentionedUserIds` ci-dessus. */
+  readonly mentionedUserIds?: readonly string[];
+  readonly encryptedContent?: string;
+  readonly encryptionMode?: EncryptionModeOnWire;
+  readonly encryptionMetadata?: Readonly<Record<string, unknown>>;
+  readonly isEncrypted?: boolean;
 }
 
 /**
@@ -2188,18 +2566,106 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
-  [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
-  [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<ReactionUpdateEventData>) => void) => void;
-  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
-  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<unknown>) => void) => void;
+  /**
+   * L'accusé de réception d'un `reaction:add` porte la LIGNE PERSISTÉE
+   * (`ReactionData`), et non l'`ReactionUpdateEventData` du broadcast.
+   *
+   * Ce n'est pas un relâchement du contrat, c'est ce que cet accusé PEUT tenir.
+   * `ReactionUpdateEventData` porte une `aggregation`, qui ne s'obtient qu'au
+   * prix de deux lectures supplémentaires APRÈS la persistance
+   * (`message.findUnique` puis `createUpdateEvent`). Or ce handler acquitte
+   * délibérément dès la persistance : une défaillance transitoire de ces
+   * lectures ne doit jamais retourner l'accusé en échec, sans quoi le client
+   * annule une réaction déjà écrite en base. Déclarer l'agrégation ici, c'est
+   * réclamer un champ que le seul émetteur ne peut produire sans abandonner
+   * cette garantie de livraison — et c'est exactement pourquoi il ne l'a jamais
+   * produit.
+   *
+   * Les familles COMMENTAIRE et POST déclarent, elles, leur `updateEvent`
+   * (`comment:reaction-*`, `post:reaction-*`) : leurs handlers acquittent APRÈS
+   * l'agrégation, et l'iOS décode ces accusés. Les trois familles ne sont donc
+   * pas interchangeables — chacune déclare ce que SON émetteur envoie.
+   *
+   * Historique : la forme opaque (`SocketIOResponse<unknown>` côté handler) a
+   * déjà coûté trois incidents de décodage à l'iOS — deux `malformedResponse`
+   * sur les accusés post/commentaire, un `DecodingError` sur le REST
+   * `/reactions` (d'où `DiscardedReactionResponse`). Le quatrième site est
+   * celui-ci ; il est fermé par la déclaration, et par le fait que les
+   * handlers prennent désormais CE type et non plus `unknown`.
+   */
+  [CLIENT_EVENTS.REACTION_ADD]: (data: ReactionAddData, callback?: (response: SocketIOResponse<ReactionData>) => void) => void;
+  /**
+   * Un retrait ne laisse RIEN derrière lui qui mérite le fil : `data` est
+   * absent, et `never` le rend inexprimable plutôt que simplement vide.
+   *
+   * L'émetteur envoyait `{ message: 'Reaction removed successfully' }` et
+   * `{ message: 'Reaction already absent' }` — deux phrases anglaises non
+   * localisées, qu'aucun des trois clients ne lit (le web n'inspecte que
+   * `success`/`error`, l'iOS passe par le REST, Android n'émet pas cet
+   * événement). Dans un produit dont la promesse est de traduire tout le
+   * contenu, un texte anglais en dur sur le fil est un piège pour le premier
+   * client qui l'affichera.
+   */
+  [CLIENT_EVENTS.REACTION_REMOVE]: (data: ReactionRemoveData, callback?: (response: SocketIOResponse<never>) => void) => void;
+  /**
+   * La QUATRIÈME famille de réactions, et la seule qui ait toujours eu raison :
+   * son handler acquitte `{ success: true }` sur TOUS ses chemins — nominal
+   * comme idempotent — et laisse l'`AttachmentReactionUpdateEventData` voyager
+   * sur la diffusion, qui est son seul lecteur.
+   *
+   * `never` grave ce qu'elle fait déjà. Il ne remplace pas `unknown` pour la
+   * forme : `unknown` accepte TOUTE charge, donc n'aurait pas empêché ce site
+   * de dériver vers la ligne brute ou la phrase anglaise que portaient les
+   * trois autres — c'est exactement l'opacité qui les a laissées diverger.
+   */
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_ADD]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<never>) => void) => void;
+  [CLIENT_EVENTS.ATTACHMENT_REACTION_REMOVE]: (data: { attachmentId: string; messageId: string; emoji: string }, callback?: (response: SocketIOResponse<never>) => void) => void;
   [CLIENT_EVENTS.REACTION_REQUEST_SYNC]: (messageId: string, callback?: (response: SocketIOResponse<ReactionSyncEventData>) => void) => void;
-  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack: (response: CallInitiateAck) => void) => void;
-  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack: (response: CallJoinAck) => void) => void;
+  // Les quatre `ack?` ci-dessous — INITIATE, JOIN, SIGNAL, END — étaient les
+  // seuls acks REQUIS de tout le contrat (4 contre 18 optionnels). Ils
+  // promettaient une chose qu'aucune des deux moitiés du fil ne tient :
+  //
+  //   - la passerelle déclare les QUATRE `ack?` et les appelle toutes en
+  //     `ack?.(…)` (`CallEventsHandler.ts` 2453 / 2776 / 3487 / 3851) : elle est
+  //     écrite pour fonctionner quand il n'y en a pas ;
+  //   - et des émetteurs réels n'en envoient pas — les trois `call:end` du web,
+  //     `call:join` et `call:signal` d'iOS (`MessageSocketManager.swift` 2898 /
+  //     3037 / 3077 / 3086), tandis que d'autres sites du MÊME fichier iOS
+  //     utilisent `emitWithAck` : l'ack est optionnel PAR CONCEPTION.
+  //
+  // Le prix du mensonge se lisait dans le code appelant : les quatre émissions
+  // `call:signal` du web fabriquent un `() => {}` VIDE (`use-webrtc-p2p.ts` 290
+  // / 329 / 674 / 761) pour satisfaire un paramètre requis que le serveur
+  // n'exige pas — une cérémonie qui coûte un paquet d'ACK par candidat ICE.
+  // Là où le contrat n'était pas contourné par une cérémonie, il l'était par un
+  // cast : les trois `call:end` du web passent par `(socket as unknown).emit`.
+  //
+  // Un contrat que tout site d'appel doit contourner pour dire la vérité ne
+  // gouverne plus rien. Cf. le cliquet `_CallAcksAreOptional` sous l'interface.
+  [CLIENT_EVENTS.CALL_INITIATE]: (data: CallInitiateEvent, ack?: (response: CallInitiateAck) => void) => void;
+  [CLIENT_EVENTS.CALL_JOIN]: (data: CallJoinEvent, ack?: (response: CallJoinAck) => void) => void;
   [CLIENT_EVENTS.CALL_LEAVE]: (data: { callId: string }) => void;
-  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack: (response: { success: boolean }) => void) => void;
-  [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: { callId: string; enabled: boolean }, ack: (response: { success: boolean }) => void) => void;
-  [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: { callId: string; enabled: boolean }, ack: (response: { success: boolean }) => void) => void;
-  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_SIGNAL]: (data: CallSignalEvent, ack?: (response: { success: boolean }) => void) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_AUDIO]: (data: CallMediaToggleClientEvent) => void;
+  [CLIENT_EVENTS.CALL_TOGGLE_VIDEO]: (data: CallMediaToggleClientEvent) => void;
+  /**
+   * L'ack est OPTIONNEL, et il l'est dans l'autre sens que celui de
+   * `CallMediaToggleClientEvent` (cycle 107 bis) — même symptôme, résolution
+   * inverse, parce que la mesure diffère.
+   *
+   * Là-bas l'ack a été RETIRÉ : aucun client ne l'envoyait, la passerelle ne
+   * l'appelait jamais, le déclarer était une promesse creuse. Ici il est REL :
+   * la passerelle l'invoque à chacune de ses sorties (`ack?.({ success })`,
+   * `CallEventsHandler` `CALL_EVENTS.END`) et iOS s'en sert par ses variantes
+   * `emitWithAck` (`MessageSocketManager.swift`). Mais elle le déclare `ack?:`
+   * et fonctionne sans, ce dont dépendent les émetteurs SANS ack : iOS
+   * (`emit("call:end", …)`), Android (`CallSignalManager.kt`) et les trois
+   * sites web.
+   *
+   * Le déclarer REQUIS interdisait donc le motif majoritaire que la passerelle
+   * soutient explicitement. Un contrat suit ce qui est, pas ce qu'on préfère.
+   */
+  [CLIENT_EVENTS.CALL_END]: (data: { callId: string; reason?: string }, ack?: (response: { success: boolean }) => void) => void;
   [CLIENT_EVENTS.CALL_HEARTBEAT]: (data: CallHeartbeatEvent) => void;
   [CLIENT_EVENTS.CALL_QUALITY_REPORT]: (data: CallQualityReportEvent) => void;
   [CLIENT_EVENTS.CALL_RECONNECTING]: (data: CallReconnectingEvent) => void;
@@ -2218,6 +2684,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_FORCE_LEAVE]: (data: CallForceLeaveClientEvent) => void;
   [CLIENT_EVENTS.CALL_CHECK_ACTIVE]: () => void;
   [CLIENT_EVENTS.CALL_REQUEST_ICE_SERVERS]: (data: CallRequestIceServersEvent) => void;
+  [CLIENT_EVENTS.CALL_ANALYTICS]: (data: CallAnalyticsEvent) => void;
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
 
   // Location sharing
@@ -2251,6 +2718,96 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.ADMIN_AGENT_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
 }
 
+/**
+ * Le type de l'accusé de réception d'un événement client, LU SUR LE CONTRAT.
+ *
+ * Un handler de la passerelle qui écrit `callback?: (r: SocketIOResponse<X>) =>
+ * void` de sa main REDÉCLARE ce que cette interface déclare déjà, et les deux
+ * peuvent alors diverger sans que rien ne l'empêche — c'est précisément ce qui
+ * s'est produit sur les trois familles de réactions, où les handlers portaient
+ * `SocketIOResponse<unknown>` pendant que le contrat promettait une charge
+ * précise. `unknown` accepte tout : aucune des deux moitiés du fil ne vérifiait
+ * l'autre, et le désaccord a coûté trois incidents de décodage à l'iOS.
+ *
+ * `AckOf<'reaction:add'>` n'est pas une COPIE du contrat, c'est une LECTURE :
+ * il n'existe plus qu'une seule déclaration, et changer la charge d'un accusé
+ * fait rougir tous ses `callback(...)` au lieu de les laisser passer.
+ *
+ * Le `NonNullable` retire l'optionalité du paramètre (`callback?`) sans toucher
+ * à la charge ; l'appel reste facultatif côté handler, c'est sa SIGNATURE qui
+ * cesse de l'être.
+ */
+export type AckOf<E extends keyof ClientToServerEvents> =
+  NonNullable<Parameters<ClientToServerEvents[E]>[1]>;
+
+/**
+ * La RÉPONSE que cet accusé transporte — `Parameters<AckOf<E>>[0]`.
+ *
+ * Les handlers construisent souvent la réponse dans une variable locale avant
+ * de l'acquitter (`const successResponse: … = { … }; callback(successResponse)`).
+ * Annotée `SocketIOResponse<unknown>`, cette locale rouvrait la porte que la
+ * signature venait de fermer : elle accepte n'importe quelle charge, et le
+ * `callback(successResponse)` qui suit ne compare plus rien au contrat.
+ * `AckResponseOf<E>` la referme au même endroit et depuis la même source.
+ */
+export type AckResponseOf<E extends keyof ClientToServerEvents> =
+  Parameters<AckOf<E>>[0];
+
+/* ------------------------------------------------------------------------- *
+ * Le cliquet des acks d'appel — au TYPE, sans une ligne exécutable.
+ *
+ * Même emplacement et même raison que ses jumeaux de la passerelle
+ * (`socketio/serverEmit.ts`, `socketio/clientReceive.ts`) : les tests sont
+ * exclus du `tsconfig` et l'`ignoreCodes` de `ts-jest` couvre `2322`/`2345`, si
+ * bien que **la production est le seul endroit d'où un cliquet de type peut
+ * mordre**. Ici, en plus, `packages/shared` type-check en BLOQUANT dans la CI.
+ *
+ * Ce cliquet garde une propriété que rien d'autre ne peut garder : rendre l'un
+ * de ces acks à nouveau REQUIS casse la compilation ICI, à l'endroit où la
+ * mesure est écrite, plutôt que chez le prochain appelant qui contournera par
+ * un `() => {}` vide ou par un cast.
+ *
+ * EXPORTÉS, contrairement à leurs jumeaux de la passerelle : `packages/shared`
+ * compile avec `noUnusedLocals`, qui refuse un alias de type local jamais
+ * référencé. L'export est donc la façon de garder le cliquet ADJACENT à ce
+ * qu'il garde — l'emplacement fait la moitié de son travail. Types purs, donc
+ * effacés à l'exécution ; leur présence dans la surface publique ne coûte rien.
+ * ------------------------------------------------------------------------- */
+
+/** Échoue à compiler dès que `T` n'est plus `true`. */
+type AssertContract<T extends true> = T;
+
+/**
+ * Émettre ces quatre événements avec la CHARGE SEULE est permis par le contrat.
+ *
+ * `Parameters<…>` d'un ack REQUIS est un tuple de longueur 2, auquel un tuple
+ * de longueur 1 n'est pas assignable — c'est exactement l'erreur (`TS2554`,
+ * « Expected 2 arguments, but got 1 ») que les sites d'appel contournaient.
+ * Avec `ack?`, le tuple devient `[data, ack?]` et la ligne passe.
+ *
+ * Le cas ci-dessous est le plus fort des quatre : `call:end` est émis SANS ack
+ * par cinq des sept émetteurs du dépôt (trois web, deux iOS).
+ */
+export type _CallAcksAreOptional = AssertContract<
+  [
+    [CallInitiateEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_INITIATE]> ? true : false,
+    [CallJoinEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_JOIN]> ? true : false,
+    [CallSignalEvent] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_SIGNAL]> ? true : false,
+    [{ callId: string }] extends Parameters<ClientToServerEvents[typeof CLIENT_EVENTS.CALL_END]> ? true : false,
+  ] extends [true, true, true, true] ? true : false
+>;
+
+/**
+ * Le témoin NÉGATIF, sans lequel le précédent ne prouve rien : un ack requis
+ * REFUSE bien la charge seule. Sans cette ligne, un `Parameters<…>` qui
+ * rendrait `any` (ou une refonte qui rendrait l'assignabilité toujours vraie)
+ * laisserait `_CallAcksAreOptional` passer pour un cliquet qui garde quelque
+ * chose. Un témoin qu'on n'a pas vu échouer n'est pas un témoin.
+ */
+export type _RequiredAckWouldRefusePayloadAlone = AssertContract<
+  [{ callId: string }] extends Parameters<(data: { callId: string }, ack: () => void) => void> ? false : true
+>;
+
 // ===== TYPES DE BASE =====
 
 /**
@@ -2276,20 +2833,99 @@ export interface SocketIOMessageSender {
   readonly lastName?: string;
 }
 
+/**
+ * La charge utile de `message:new` et de `message:edited`, TELLE QUE LES
+ * PRODUCTEURS L'ÉMETTENT.
+ *
+ * Elle a longtemps déclaré quatorze champs quand les producteurs en servaient
+ * une trentaine. Ce n'est pas une imprécision sans suite : les décodeurs iOS,
+ * Android et web sont écrits CONTRE ce contrat, et un champ qui n'y figure pas
+ * doit être transcrit indépendamment par chacun des trois — c'est exactement
+ * ainsi que `conversation:join-error` a vécu huit sites d'émission et deux
+ * transcriptions client divergentes sans jamais être déclaré (cycle 99).
+ *
+ * Ce qui est déclaré `unknown` l'est PAR DÉCISION, pas par paresse : `replyTo`,
+ * `attachments`, `translations` et `metadata` ont une forme DÉLIBÉRÉMENT
+ * différente d'un transport à l'autre (cf. l'en-tête de
+ * `services/gateway/src/socketio/messageNewPayload.ts`, qui énumère les écarts
+ * et leur raison). Entre deux producteurs qui se contredisent, ne rien affirmer
+ * est plus honnête que d'en couronner un.
+ *
+ * Portée de la garde, pour ne pas la surestimer : la passerelle compile en
+ * `strict: false` / `strictNullChecks: false`. Déclarer un champ ici fait donc
+ * tomber une émission dont la clé MANQUE ou dont le TYPE est incompatible —
+ * jamais une qui sert `undefined` là où le contrat promet une valeur.
+ */
 export interface SocketIOMessage {
   readonly id: string;
   readonly conversationId: string;
-  readonly senderId: string; // Participant.id (unified)
+  /**
+   * `User.id` de l'expéditeur — et non son `Participant.id`, contrairement à ce
+   * que cette ligne a déclaré pendant toute la vie du contrat. Les clients
+   * comparent ce champ à leur propre `User.id` pour reconnaître leurs messages
+   * et réconcilier la bulle optimiste entre appareils ; les producteurs le
+   * résolvent par `resolveWireSenderId`, qui ne replie sur le `Participant.id`
+   * que pour un expéditeur ANONYME, lequel n'en a pas d'autre.
+   */
+  readonly senderId: string;
   readonly content: string;
   readonly originalLanguage: string;
   readonly messageType: MessageType;
+  readonly messageSource?: string;
+  /**
+   * Ne voyage QUE vers les appareils de l'expéditeur — `stripClientMessageId`
+   * le retire de la charge utile des pairs juste avant l'émission.
+   */
+  readonly clientMessageId?: string;
   readonly isEdited?: boolean;
   readonly editedAt?: Date;
   readonly deletedAt?: Date;
-  readonly replyToId?: string;
+  readonly expiresAt?: Date;
   readonly createdAt: Date;
   readonly updatedAt?: Date;
   readonly sender?: SocketIOMessageSender;
+
+  /** Vue unique, flou, effets de bulle. */
+  readonly isBlurred?: boolean;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
+  readonly effectFlags?: number;
+
+  /** Réponses, citations de post, transferts. */
+  readonly replyToId?: string;
+  readonly replyTo?: unknown;
+  readonly storyReplyToId?: string;
+  readonly postReplyTo?: unknown;
+  readonly forwardedFromId?: string;
+  readonly forwardedFromConversationId?: string;
+  readonly forwardedFrom?: unknown;
+  readonly forwardedFromConversation?: unknown;
+
+  /** Prisme Linguistique et pièces jointes — formes propres au transport. */
+  readonly translations?: unknown;
+  readonly attachments?: unknown;
+
+  /** Mentions : les pseudos validés en base, et leur résolution enrichie. */
+  readonly validatedMentions?: readonly string[];
+  readonly mentionedUsers?: readonly unknown[];
+
+  /** Hissés depuis `metadata` par les producteurs, pour être lisibles en direct. */
+  readonly location?: unknown;
+  readonly trackingLinks?: readonly unknown[];
+
+  /**
+   * Enveloppe E2EE. Le FAIT du chiffrement, c'est la présence du chiffré ; le
+   * chiffré sans le MODE ne dit pas sous quel régime déchiffrer.
+   */
+  readonly isEncrypted?: boolean;
+  readonly encryptionMode?: string;
+  readonly encryptedContent?: string;
+  readonly encryptionMetadata?: unknown;
+  readonly encryptedPayload?: unknown;
+
+  /** Servis par le seul transport REST/ZMQ (cf. `messageNewPayload.ts`). */
+  readonly originalContent?: string;
+  readonly metadata?: unknown;
 }
 
 export interface UserPermissions {

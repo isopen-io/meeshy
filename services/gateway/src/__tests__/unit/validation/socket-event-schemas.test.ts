@@ -11,6 +11,7 @@ import {
   SocketConversationJoinSchema,
   SocketConversationLeaveSchema,
   SocketReactionAddSchema,
+  SocketTranslationRequestSchema,
 } from '../../../validation/socket-event-schemas.js';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from '@meeshy/shared/types/attachment';
 
@@ -214,6 +215,22 @@ describe('SocketConversationJoinSchema', () => {
 
   it('rejects a conversationId exceeding 255 chars', () => {
     expect(SocketConversationJoinSchema.safeParse({ conversationId: 'a'.repeat(256) }).success).toBe(false);
+  });
+});
+
+describe('SocketTranslationRequestSchema', () => {
+  it('accepts a 2-letter target language', () => {
+    expect(SocketTranslationRequestSchema.safeParse({ messageId: VALID_MONGO_ID, targetLanguage: 'fr' }).success).toBe(true);
+  });
+
+  // Parité SSOT `CommonSchemas.language` (`.max(6)`) : un code ISO 639-3
+  // régionalisé (`bas-CM`) fait 6 caractères et doit passer.
+  it('accepts a region-tagged 6-char target language (bas-CM)', () => {
+    expect(SocketTranslationRequestSchema.safeParse({ messageId: VALID_MONGO_ID, targetLanguage: 'bas-CM' }).success).toBe(true);
+  });
+
+  it('rejects an over-long language code (7 chars)', () => {
+    expect(SocketTranslationRequestSchema.safeParse({ messageId: VALID_MONGO_ID, targetLanguage: 'abcd-CM' }).success).toBe(false);
   });
 });
 

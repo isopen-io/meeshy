@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   useInfiniteNotificationsQuery,
@@ -92,9 +92,15 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   const markAllAsReadMutation = useMarkAllNotificationsAsReadMutation();
   const deleteMutation = useDeleteNotificationMutation();
 
-  const notifications = notificationsData?.pages.flatMap(
-    page => page?.notifications ?? []
-  ) ?? [];
+  // `useMemo` : sans lui, ce `flatMap` fabrique un tableau d'identité NEUVE à
+  // chaque rendu du manager — monté au layout racine, donc ré-évalué par toute
+  // l'application. Chaque consommateur (`NotificationList`, `NotificationDropdown`,
+  // la page /notifications) recevait alors une prop `notifications` « changée »
+  // sans qu'aucune notification n'ait bougé, et re-rendait sa liste entière.
+  const notifications = useMemo(
+    () => notificationsData?.pages.flatMap(page => page?.notifications ?? []) ?? [],
+    [notificationsData]
+  );
 
   const showNotificationToast = useCallback((notification: Notification) => {
     const toastKey = `${notification.id}-${notification.state.createdAt}`;

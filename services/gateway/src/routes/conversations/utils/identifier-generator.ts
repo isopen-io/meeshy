@@ -1,28 +1,25 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { generateConversationIdentifier as sharedGenerateConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
+import {
+  generateConversationIdentifier as sharedGenerateConversationIdentifier,
+  generateCompactConversationIdentifier
+} from '@meeshy/shared/utils/conversation-helpers';
 
-/**
- * Fonction utilitaire pour générer le linkId avec le format demandé
- * Étape 1: génère yymmddhhm_<random>
- * Étape 2: sera mis à jour avec mshy_<conversationShareLink.Id>.yymmddhhm_<random> après création
- */
-export function generateInitialLinkId(): string {
-  const now = new Date();
-  const year = now.getFullYear().toString().slice(-2);
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
-  const hour = now.getHours().toString().padStart(2, '0');
-  const minute = now.getMinutes().toString().padStart(2, '0');
+export { generateCompactConversationIdentifier };
 
-  const timestamp = `${year}${month}${day}${hour}${minute}`;
-  const randomSuffix = Math.random().toString(36).slice(2, 10);
-
-  return `${timestamp}_${randomSuffix}`;
-}
-
-export function generateFinalLinkId(conversationShareLinkId: string, initialId: string): string {
-  return `mshy_${conversationShareLinkId}.${initialId}`;
-}
+// Les identifiants de LIEN DE PARTAGE sont ré-exportés depuis leur domicile
+// unique, `routes/links/utils/link-helpers.ts` — ils y sont définis, testés et
+// documentés. Ce fichier en portait une COPIE mot pour mot jusqu'au
+// 2026-08-23 : deux implémentations d'une même loi, dont l'une pouvait dériver
+// sans que rien ne rougisse. `sharing.ts` importait la copie, `creation.ts`
+// l'original ; le raccourcissement du linkId n'aurait touché qu'un des deux
+// chemins de création.
+export {
+  generateShareLinkId,
+  generateUniqueShareLinkId,
+  ensureUniqueShareLinkIdentifier,
+  SHARE_LINK_ID_PREFIX,
+  SHARE_LINK_ID_LENGTH
+} from '../../links/utils/link-helpers';
 
 /**
  * Génère un identifiant unique pour une conversation
@@ -73,64 +70,6 @@ export async function ensureUniqueConversationIdentifier(prisma: PrismaClient, b
 
   // Si par une chance extrême le hex existe aussi, régénérer récursivement
   return ensureUniqueConversationIdentifier(prisma, baseWithoutSuffix);
-}
-
-/**
- * Vérifie l'unicité d'un identifiant de ConversationShareLink et génère une variante avec timestamp si nécessaire
- */
-export async function ensureUniqueShareLinkIdentifier(prisma: PrismaClient, baseIdentifier: string): Promise<string> {
-  // Si l'identifiant est vide, générer un identifiant par défaut
-  if (!baseIdentifier || baseIdentifier.trim() === '') {
-    const timestamp = Date.now().toString();
-    const randomPart = Math.random().toString(36).substring(2, 8);
-    baseIdentifier = `mshy_link-${timestamp}-${randomPart}`;
-  }
-
-  let identifier = baseIdentifier.trim();
-
-  // Vérifier si l'identifiant existe déjà
-  const existing = await prisma.conversationShareLink.findFirst({
-    where: { identifier }
-  });
-
-  if (!existing) {
-    return identifier;
-  }
-
-  // Si l'identifiant existe, ajouter un suffixe timestamp YYYYmmddHHMMSS
-  const now = new Date();
-  const timestamp = now.getFullYear().toString() +
-    (now.getMonth() + 1).toString().padStart(2, '0') +
-    now.getDate().toString().padStart(2, '0') +
-    now.getHours().toString().padStart(2, '0') +
-    now.getMinutes().toString().padStart(2, '0') +
-    now.getSeconds().toString().padStart(2, '0');
-
-  identifier = `${baseIdentifier}-${timestamp}`;
-
-  // Vérifier que le nouvel identifiant avec timestamp n'existe pas non plus
-  const existingWithTimestamp = await prisma.conversationShareLink.findFirst({
-    where: { identifier }
-  });
-
-  if (!existingWithTimestamp) {
-    return identifier;
-  }
-
-  // Si même avec le timestamp il y a un conflit, ajouter un suffixe numérique
-  let counter = 1;
-  while (true) {
-    const newIdentifier = `${baseIdentifier}-${timestamp}-${counter}`;
-    const existingWithCounter = await prisma.conversationShareLink.findFirst({
-      where: { identifier: newIdentifier }
-    });
-
-    if (!existingWithCounter) {
-      return newIdentifier;
-    }
-
-    counter++;
-  }
 }
 
 /**

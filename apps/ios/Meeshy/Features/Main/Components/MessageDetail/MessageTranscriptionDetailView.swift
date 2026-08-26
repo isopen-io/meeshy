@@ -347,10 +347,7 @@ struct MessageTranscriptionDetailView: View {
     /// Durée parlée locale-aware (« 12 secondes » / « 12 seconds » / « 12 Sekunden »)
     /// — remplace le rendu ambigu « 0:12 » pour VoiceOver. Zéro chaîne à traduire.
     private func spokenDuration(_ seconds: Int) -> String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = seconds >= 60 ? [.minute, .second] : [.second]
-        formatter.unitsStyle = .full
-        return formatter.string(from: TimeInterval(seconds)) ?? formatDuration(seconds)
+        LocalizedNumber.spokenDuration(seconds: seconds)
     }
 
     private func transcriptionBannerA11yLabel(_ transcription: MessageTranscription) -> String {
@@ -382,9 +379,7 @@ struct MessageTranscriptionDetailView: View {
     // MARK: - Helpers
 
     private func formatDuration(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: seconds)
     }
 
     static func languageName(for code: String) -> String {

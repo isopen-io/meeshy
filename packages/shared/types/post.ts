@@ -12,6 +12,21 @@ import type { PostReference, ReferenceAccess } from './post-reference.js';
 export type PostType = 'POST' | 'REEL' | 'STORY' | 'STATUS';
 export type PostVisibility = 'PUBLIC' | 'FRIENDS' | 'COMMUNITY' | 'PRIVATE' | 'EXCEPT' | 'ONLY';
 
+/**
+ * Audience par défaut de TOUTE publication — POST, REEL, STORY, STATUS
+ * confondus (règle produit 2026-08-23) : on publie public, on restreint
+ * ensuite. Le composer expose les six `PostVisibility` avant l'envoi et
+ * l'édition permet de resserrer après coup ; ce qui est fixé ici, c'est
+ * uniquement la case cochée à l'ouverture.
+ *
+ * Source unique : les clients qui laissent `visibility` absent (web
+ * `storyService.createStory`, optimiste `useCreateStoryMutation`, composer
+ * story) DOIVENT lire cette constante — un défaut recopié en littéral est
+ * exactement ce qui avait laissé les stories web à `FRIENDS` pendant que les
+ * posts et les réels naissaient publics.
+ */
+export const DEFAULT_PUBLICATION_VISIBILITY = 'PUBLIC' as const satisfies PostVisibility;
+
 // =====================================================
 // TRACKING LINKS (parité avec Message — metadata.trackingLinks)
 // =====================================================
@@ -159,6 +174,17 @@ export interface Post {
   readonly deletedAt?: string | Date | null;
   readonly isQuote?: boolean;
   readonly repostOfId?: string | null;
+  /**
+   * La RACINE de la chaîne de reposts, hydratée par le serveur
+   * (`PostService.repostPost` : `original.originalRepostOfId ?? original.repostOfId
+   * ?? original.id`) et servie par `postInclude`. `repostOfId` ne nomme que le
+   * maillon PRÉCÉDENT — un cran, pas la source.
+   *
+   * Le champ voyageait déjà dans les charges utiles sans figurer au contrat :
+   * les clients ne pouvaient donc pas replier une chaîne sur sa racine
+   * (`repostTargetId`, `utils/repost-target.ts`).
+   */
+  readonly originalRepostOfId?: string | null;
   readonly expiresAt?: string | Date | null;
   readonly createdAt: string | Date;
   readonly updatedAt: string | Date;
@@ -255,6 +281,24 @@ export interface PostBookmarkedEventData {
 
 export interface StoryCreatedEventData {
   readonly story: Post;
+  /**
+   * Parité U1 avec {@link PostCreatedEventData} — échoué depuis
+   * `X-Client-Mutation-Id` sur `POST /posts` (type STORY).
+   *
+   * **Posé EN AVANCE d'un lecteur — mesuré le 2026-08-25, aucun client ne le
+   * lit encore.** iOS décode `story:created` en `SocketStoryCreatedData`
+   * (`MeeshySDK/Sockets/SocialSocketManager.swift`), qui ne déclare pas ce
+   * champ et dont le sujet Combine ne porte que l'`APIPost` ; le web n'a
+   * AUCUNE occurrence de `clientMutationId` ; Android le déclare
+   * (`SocketEvents.kt`) sans le consommer. La réconciliation d'un item
+   * optimiste par cmid, telle que `PostCreatedEventData` la sert déjà pour
+   * POST et REEL, reste donc à CÂBLER côté clients.
+   *
+   * Ne pas relire ce champ comme une preuve que la réconciliation marche :
+   * ce qu'un serveur TRANSPORTE et ce qu'un client SERT sont deux questions.
+   * Absent pour une story créée sans cmid.
+   */
+  readonly clientMutationId?: string;
 }
 
 export interface StoryUpdatedEventData {
@@ -317,6 +361,19 @@ export interface StoryUnreactedEventData {
 
 export interface StatusCreatedEventData {
   readonly status: Post;
+  /**
+   * Parité U1 avec {@link PostCreatedEventData} — échoué depuis
+   * `X-Client-Mutation-Id` sur `POST /posts` (type STATUS).
+   *
+   * **Posé EN AVANCE d'un lecteur** — même mesure que
+   * {@link StoryCreatedEventData.clientMutationId} : `SocketStatusCreatedData`
+   * (iOS) ne le déclare pas, le web ne connaît pas le champ, Android le
+   * déclare sans le lire. Trois doc-comments clients affirment encore que
+   * « le gateway n'échoue pas de cmid pour les statuts » — c'est désormais
+   * faux SERVEUR et toujours vrai CLIENT ; le câblage est une dette ouverte.
+   * Absent pour un status créé sans cmid.
+   */
+  readonly clientMutationId?: string;
 }
 
 export interface StatusUpdatedEventData {

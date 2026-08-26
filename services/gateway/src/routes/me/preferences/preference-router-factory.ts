@@ -168,12 +168,11 @@ export function createPreferenceRouter<T>(
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
-              type: 'object',
+              ...errorResponseSchema,
               properties: {
-                success: { type: 'boolean', example: false },
+                ...errorResponseSchema.properties,
                 error: { type: 'string', example: 'CONSENT_REQUIRED' },
-                message: { type: 'string' },
-                violations: { type: 'array' }
+                violations: { type: 'array' },
               }
             },
             500: errorResponseSchema
@@ -209,13 +208,21 @@ export function createPreferenceRouter<T>(
 
           // Idempotent via clientMutationId. The MutationLog row keys
           // off (userId, cmid) so the same PUT replayed via the offline
-          // outbox doesn't fire the SocketIO `preferences:updated`
-          // broadcast twice.
+          // outbox n'écrit pas deux fois les préférences.
+          //
+          // ATTENTION — ce commentaire promettait aussi que le broadcast
+          // `preferences:updated` ne partirait pas deux fois. Il part APRÈS le
+          // journal, sans condition : un rejeu le refait. Même dette que la
+          // route `like` (`routes/posts/interactions.ts`), même remède
+          // disponible (`withMutationOutcome`, verdict `replayed`), non porté
+          // ici — hors du fil rouge du repost.
           const updated = await withMutationLog({
             request,
             fastify,
             userId,
             kind: `updateSettings:${category}`,
+            // `converges` — un upsert de préférences rend le même état.
+            replayCost: 'converges',
             op: async () => {
               const u = await fastify.prisma.userPreferences.upsert({
                 where: { userId },
@@ -277,12 +284,11 @@ export function createPreferenceRouter<T>(
             401: errorResponseSchema,
             403: {
               description: 'Consentements requis manquants',
-              type: 'object',
+              ...errorResponseSchema,
               properties: {
-                success: { type: 'boolean', example: false },
+                ...errorResponseSchema.properties,
                 error: { type: 'string', example: 'CONSENT_REQUIRED' },
-                message: { type: 'string' },
-                violations: { type: 'array' }
+                violations: { type: 'array' },
               }
             },
             500: errorResponseSchema
@@ -332,6 +338,8 @@ export function createPreferenceRouter<T>(
             fastify,
             userId,
             kind: `updateSettings:${category}`,
+            // `converges` — un upsert de préférences rend le même état.
+            replayCost: 'converges',
             op: async () => {
               const u = await fastify.prisma.userPreferences.upsert({
                 where: { userId },

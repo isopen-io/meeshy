@@ -46,6 +46,11 @@ struct FriendsCacheAudienceContacts: AudienceContactsProviding {
 
 @MainActor
 final class AudienceUserPickerViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var query: String = ""
     @Published var results: [UserSearchResult] = []
     @Published var selectedIds: [String]

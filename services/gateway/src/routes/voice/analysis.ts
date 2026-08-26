@@ -549,11 +549,11 @@ export function registerAnalysisRoutes(
         },
         503: {
           description: 'Service is unhealthy or unavailable',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             error: { type: 'string', description: 'Error code' },
-            message: { type: 'string', description: 'Error message' }
+            message: { type: 'string', description: 'Error message' },
           }
         }
       }

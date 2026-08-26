@@ -12,6 +12,55 @@ import MeeshyUI
 /// `ReplyReference` n'est ni Equatable ni Hashable cote SDK
 /// (Codable & Sendable seulement), donc on projette les champs
 /// rendus dans `ReplySlice` pour comparer manuellement.
+///
+/// **LOI DES ZONES** (directive produit 2026-08-24, appliquee ici le meme
+/// jour). Une citation n'offre que TROIS classes de zone tactile, et pas une
+/// de plus :
+/// 1. l'AVATAR de l'auteur cite -> ouvre son profil (`onQuotedAuthorTap`) ;
+/// 2. la MINIATURE ou l'ICONE DE LECTURE -> joue ou affiche le media EN PLEIN
+///    ECRAN (`onQuotedMediaTap`) ;
+/// 3. TOUT LE RESTE, LE NOM COMPRIS -> retour au message cite.
+///
+/// Cette peau ne VIOLAIT pas la loi avant ce lot : elle n'offrait qu'une seule
+/// zone, et son nom n'a jamais ete tactile. Il lui manquait les zones 1 et 2 —
+/// un ECART, pas une infraction. Il est comble ici parce que cette peau est
+/// celle que voit TOUT LE MONDE : le programme beta naît eteint
+/// (`BetaFeaturesPreference`, defaut OFF), donc `readingModes` est OFF, donc
+/// `ReadingModeOrchestrator.resolveOrchestratorDecision` rend `.bubbles` des
+/// sa premiere branche. La rangee plate, ou le defaut a ete signale, est
+/// derriere le drapeau.
+///
+/// **La zone 3 vit chez l'HOTE, pas ici** — les trois hotes de ce composant
+/// (`BubbleStandardLayout.bubbleInnerContentBody`,
+/// `BubbleStandardLayout+Media.mediaWithReplyContainerBody`,
+/// `ConversationMediaViews.replyTopSlot`) l'enveloppent chacun d'UN
+/// `.onTapGesture` vers `onReplyTap`/`onStoryReplyTap`. Les zones 1 et 2 sont
+/// des gestes ENFANTS : SwiftUI donne la priorite au plus interne, et ce qui
+/// n'est pas couvert par elles retombe naturellement sur l'hote.
+///
+/// **Une zone non CABLEE n'est pas posee.** Sans son gestionnaire, aucun geste
+/// n'est attache : le tap traverse jusqu'a la zone 3 au lieu d'etre avale par
+/// une cible morte (loi 4 du depot — « un controle existe s'il a un effet »).
+/// C'est pourquoi `authorGateTap` et `mediaGateTap` rendent un optionnel, et
+/// non un booleen.
+///
+/// **Un media PROTEGE n'a pas de zone 2** (`reply.quotedMediaIsProtected`, vue
+/// unique ou floute). Ni vignette, ni `play.circle.fill` : la vignette voyage
+/// sans condition depuis la passerelle, et l'hote refuse deja d'ouvrir un tel
+/// attachement (`MessageListViewController.openQuotedMedia`). Armer cette zone
+/// reviendrait a annoncer une lecture par-dessus un verrou — un controle qui
+/// ment — et a offrir l'apercu en clair d'un contenu a vue unique a tout le
+/// fil, sur la peau que voit TOUT LE MONDE, a chaque relecture. Le glyphe
+/// generique reste, le tap retombe en zone 3, et le media garde son propre
+/// geste de revelation sur la rangee d'origine.
+///
+/// **Carrousel** : la citation est une PORTE, pas une galerie. `ReplyReference`
+/// ne porte qu'UNE `attachmentThumbnailUrl` et aucun compte de pieces jointes
+/// (le gateway n'en selectionne pas), donc ni liste de miniatures ni badge
+/// « +N » ne serait honnete. Le tap ouvre le plein ecran de la conversation,
+/// ou les images 2..N sont atteignables au balayage.
+///
+/// Gardes : `BubbleQuotedReplyZoneLawTests`.
 struct BubbleQuotedReply: View, Equatable {
     /// Style d'enveloppe de la citation.
     /// - `.card` : variante historique — RR12 + bgColor teinté + paddings extérieurs (top 6, horizontal 6). Hôte = bulle chat colorée.
@@ -28,6 +77,25 @@ struct BubbleQuotedReply: View, Equatable {
     let accentHex: String
     let isDark: Bool
     let mentionDisplayNames: [String: String]
+    /// ZONE 1 — tap sur l'AVATAR de l'auteur cite -> sa fiche profil
+    /// (resolution hote : `MessageListViewController.openQuotedAuthorProfile`,
+    /// qui relit le message cite dans le store pour ouvrir le profil REEL).
+    /// `nil` ⇒ zone 1 non armee, le tap retombe sur la zone 3.
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
+    /// ZONE 2 — tap sur la MINIATURE ou l'ICONE DE LECTURE -> le media cite en
+    /// PLEIN ECRAN, ou sa lecture pour un audio (resolution hote :
+    /// `MessageListViewController.openQuotedMedia`). Meme regle de nullite.
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
+
+    /// Cote de l'avatar de la ZONE 1 — la MEME que celle de la rangee plate
+    /// (`FocalMetrics.Avatar.size`), sans emprunter le jeton d'une autre peau :
+    /// une citation montre le meme visage a la meme taille, quelle que soit la
+    /// peau qui la rend.
+    static let authorAvatarSize: CGFloat = 22
+
+    /// Cote de la miniature citee — valeur historique de ce fichier, NOMMEE
+    /// pour que la ZONE 2 et son bouton play parlent de la meme surface.
+    static let thumbnailSize: CGFloat = 38
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.style == rhs.style &&
@@ -45,10 +113,12 @@ struct BubbleQuotedReply: View, Equatable {
             messageId: reply.messageId,
             authorName: reply.authorName,
             authorColor: reply.authorColor,
+            authorAvatarUrl: reply.authorAvatarUrl,
             previewText: reply.previewText,
             isMe: reply.isMe,
             attachmentType: reply.attachmentType,
             attachmentThumbnailUrl: reply.attachmentThumbnailUrl,
+            attachmentIsProtected: reply.attachmentIsProtected,
             isStoryReply: reply.isStoryReply,
             storyPublishedAt: reply.storyPublishedAt,
             storyReactionCount: reply.storyReactionCount,
@@ -62,10 +132,19 @@ struct BubbleQuotedReply: View, Equatable {
         let messageId: String
         let authorName: String
         let authorColor: String
+        /// L'avatar de la ZONE 1 arrive APRES coup (premier refresh serveur,
+        /// hydratation du cache). Sans lui dans la projection, la citation
+        /// resterait figee sur ses initiales pour toujours.
+        let authorAvatarUrl: String?
         let previewText: String
         let isMe: Bool
         let attachmentType: String?
         let attachmentThumbnailUrl: String?
+        /// La protection DECIDE si la vignette et le badge play sont rendus.
+        /// Absente de cette projection, la citation resterait figee sur le
+        /// rendu de la premiere resolution : un media revele — ou une
+        /// protection qui arrive enfin sur le fil — ne redessinerait jamais.
+        let attachmentIsProtected: Bool?
         let isStoryReply: Bool
         let storyPublishedAt: Date?
         let storyReactionCount: Int?
@@ -108,6 +187,185 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
+    // MARK: - LOI DES ZONES : les deux portes et leur armement
+
+    /// La ZONE 1 n'existe que pour la citation d'un MESSAGE. Une story ou une
+    /// humeur citee porte `authorName == "Story"` (ou reste vide) et aucun
+    /// avatar ne voyage avec son instantane : il n'y a pas de personne a
+    /// ouvrir, et l'hote fabriquerait une fiche au nom de « Story ». Les
+    /// QUATRE producteurs d'une citation de story ou d'humeur posent
+    /// `isStoryReply: true` — un seul predicat suffit donc a les couvrir.
+    private var showsAuthorGate: Bool {
+        !reply.isStoryReply
+    }
+
+    /// Le geste de la ZONE 1, ou `nil` s'il n'y a rien a declencher.
+    private var authorGateTap: (() -> Void)? {
+        guard let onQuotedAuthorTap, showsAuthorGate else { return nil }
+        return { onQuotedAuthorTap(reply) }
+    }
+
+    /// URL de la miniature citee — piece jointe d'un message, ou story.
+    ///
+    /// Une piece jointe PROTEGEE (vue unique, floutee) n'en fournit AUCUNE :
+    /// la vignette voyage sans condition depuis la passerelle, la protection
+    /// est ce qui decide de la rendre. Sans ce filtre, la citation d'une video
+    /// a vue unique affichait sa vignette en clair, visible par tout le fil et
+    /// a chaque relecture.
+    private var thumbnailUrlString: String? {
+        if reply.isStoryReply {
+            guard let raw = reply.storyThumbnailUrl, !raw.isEmpty else { return nil }
+            return raw
+        }
+        guard !reply.quotedMediaIsProtected,
+              let raw = reply.attachmentThumbnailUrl, !raw.isEmpty else { return nil }
+        return raw
+    }
+
+    /// Genre de la piece jointe citee — resolu UNE fois : le glyphe, le badge
+    /// play et la question « ce glyphe est-il la zone media ? » la posent tous
+    /// les trois.
+    private var attachmentKind: AttachmentKind? {
+        Self.resolveAttachmentKind(reply.attachmentType)
+    }
+
+    /// Le geste de la ZONE 2, ou `nil`. Une STORY citee en est exclue : son
+    /// chemin (zone 3 -> `onStoryReplyTap`) ouvre DEJA le viewer plein ecran
+    /// demande, et le dedoubler serait un second point actionnable pour une
+    /// seule capacite.
+    ///
+    /// **Un media PROTEGE n'arme rien non plus.** `MessageListViewController
+    /// .openQuotedMedia` refuse deja de l'ouvrir : l'armer ici poserait un
+    /// `play.circle.fill` par-dessus un verrou, c'est-a-dire un controle qui
+    /// ment. Le tap retombe en zone 3, ou le media garde son propre geste de
+    /// revelation sur la rangee d'origine.
+    private var mediaGateTap: (() -> Void)? {
+        guard let onQuotedMediaTap, !reply.isStoryReply, !reply.quotedMediaIsProtected,
+              reply.attachmentType != nil || thumbnailUrlString != nil
+        else { return nil }
+        return { onQuotedMediaTap(reply) }
+    }
+
+    /// ZONE 2, forme SANS miniature. Le glyphe ne devient tactile que si
+    /// aucune miniature ne porte deja la zone media (sinon deux points
+    /// actionnables pour une capacite) ET si le media s'ouvre vraiment
+    /// (`isMedia` = image/video/audio). Un document renverrait au message
+    /// cite — ce que la zone 3 fait deja sous lui.
+    private var glyphOpensTheMedia: Bool {
+        thumbnailUrlString == nil && (attachmentKind?.isMedia ?? false)
+    }
+
+    /// ZONE 1 — l'avatar de l'auteur cite, seule porte vers son profil. Le NOM
+    /// pose a cote reste INERTE : un tap dessus traverse jusqu'a la zone 3.
+    ///
+    /// Composant PARTAGE du depot (`MeeshyAvatar`), a qui l'on confie son
+    /// propre `onTap` : il porte alors sa forme de frappe CIRCULAIRE, son
+    /// retour haptique et son libelle — rien n'est redessine ici. Pas de
+    /// presence, pas d'anneau story, pas d'humeur : une citation est une trace
+    /// figee du passe, pas une carte de presence.
+    ///
+    /// L'avatar est dessine MEME sans URL (initiales colorees, repli natif du
+    /// composant) : la porte vers le profil ne depend jamais d'une photo.
+    @ViewBuilder
+    private var authorGate: some View {
+        if showsAuthorGate {
+            MeeshyAvatar(
+                name: quotedTitle,
+                context: .custom(Self.authorAvatarSize),
+                accentColor: reply.isMe ? accentHex : reply.authorColor,
+                avatarURL: reply.authorAvatarUrl,
+                enablePulse: false,
+                isDark: isDark,
+                onTap: authorGateTap
+            )
+            .accessibilityAddTraits(authorGateTraits)
+            .accessibilityHint(authorGateHint)
+        }
+    }
+
+    /// Un trait de BOUTON sur un avatar que l'hote n'a pas cable serait un
+    /// mensonge : VoiceOver annoncerait une cible qui ne fait rien. Le trait
+    /// suit donc l'ARMEMENT de la zone, pas sa presence a l'ecran.
+    private var authorGateTraits: AccessibilityTraits {
+        authorGateTap == nil ? [] : .isButton
+    }
+
+    /// Meme regle pour l'indice. La cle est celle que la rangee plate a
+    /// DEPLACEE du nom vers l'avatar le 2026-08-24 : elle vit desormais aux
+    /// deux endroits ou la ZONE 1 existe, et n'est donc morte nulle part.
+    private var authorGateHint: String {
+        guard authorGateTap != nil else { return "" }
+        return String(localized: "bubble.reply.author_hint", defaultValue: "Affiche le profil de l'auteur cité", bundle: .main)
+    }
+
+    /// Bouton play pose sur la miniature d'une piste temporelle citee — c'est
+    /// l'affordance « toucher pour jouer en plein ecran ». Decoratif pour
+    /// VoiceOver : la miniature qui le porte se nomme deja.
+    @ViewBuilder
+    private var playBadge: some View {
+        if mediaGateTap != nil, attachmentKind?.hasTimebasedTrack == true {
+            Image(systemName: "play.circle.fill")
+                .font(MeeshyFont.relative(16, weight: .bold))
+                .foregroundStyle(.white)
+                .shadow(radius: 2)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// ZONE 2, forme AVEC miniature. Sans geste arme, l'image reste une image
+    /// et le tap continue jusqu'a la zone 3.
+    @ViewBuilder
+    private var quotedThumbnail: some View {
+        if let thumbUrl = thumbnailUrlString {
+            let thumbnail = CachedAsyncImage(
+                url: thumbUrl,
+                targetSize: CGSize(width: Self.thumbnailSize, height: Self.thumbnailSize)
+            ) {
+                Color(hex: reply.authorColor).opacity(0.3)
+            }
+            .aspectRatio(contentMode: .fill)
+            .frame(width: Self.thumbnailSize, height: Self.thumbnailSize)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay { playBadge }
+
+            if let mediaGateTap {
+                thumbnail
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: mediaGateTap)
+                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+            } else {
+                thumbnail
+            }
+        }
+    }
+
+    /// Glyphe de la ligne d'apercu. ZONE 2 quand il est la SEULE affordance du
+    /// media ; simple ornement sinon, efface de VoiceOver puisque le libelle
+    /// court voisin (« Photo », « Video », …) dit deja le genre.
+    ///
+    /// Une piste temporelle (audio, video) montre `play.circle.fill` — une
+    /// ACTION. Le `waveform` historique nommait un TYPE : il ne disait pas que
+    /// l'audio cite pouvait s'ecouter. `AttachmentKind.sfSymbolName` reste
+    /// intouche pour toutes les autres surfaces, qui decrivent bien un type.
+    @ViewBuilder
+    private func previewGlyph(previewColor: Color) -> some View {
+        if let kind = attachmentKind {
+            if let mediaGateTap, glyphOpensTheMedia {
+                Image(systemName: kind.hasTimebasedTrack ? "play.circle.fill" : kind.sfSymbolName)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(previewColor)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: mediaGateTap)
+                    .accessibilityLabel(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main))
+            } else {
+                Image(systemName: kind.sfSymbolName)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(previewColor)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+
     var body: some View {
         let accentBarColor = Color(hex: reply.isMe ? accentHex : reply.authorColor)
         let nameColor: Color = parentIsMe
@@ -132,6 +390,11 @@ struct BubbleQuotedReply: View, Equatable {
                     // date vivait avec le contenu et lui mangeait sa largeur, ce
                     // qui le coupait à mi-phrase.
                     HStack(spacing: 6) {
+                        // ZONE 1. Le NOM qui la suit est INERTE : sous la LOI
+                        // DES ZONES il retombe en zone 3 (retour au message
+                        // cite), et il n'a jamais porte de geste ici.
+                        authorGate
+
                         Text(quotedTitle)
                             .font(.caption.weight(.bold))
                             .foregroundColor(nameColor)
@@ -148,16 +411,7 @@ struct BubbleQuotedReply: View, Equatable {
                         BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
                     } else {
                         HStack(spacing: 5) {
-                            let attachmentKind = BubbleQuotedReply.resolveAttachmentKind(reply.attachmentType)
-                            if let kind = attachmentKind {
-                                Image(systemName: kind.sfSymbolName)
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundColor(previewColor)
-                                    // Decorative attachment glyph — the adjacent
-                                    // short label ("Photo", "Vidéo", …) conveys
-                                    // the kind, so hide the symbol from VoiceOver.
-                                    .accessibilityHidden(true)
-                            }
+                            previewGlyph(previewColor: previewColor)
 
                             // Empty preview text + attachment → use the kind's
                             // localized short label ("Photo", "Vidéo", ...)
@@ -178,15 +432,9 @@ struct BubbleQuotedReply: View, Equatable {
 
                 Spacer(minLength: 0)
 
-                // Attachment thumbnail or story thumbnail
-                if let thumbUrl = (reply.isStoryReply ? reply.storyThumbnailUrl : reply.attachmentThumbnailUrl), !thumbUrl.isEmpty {
-                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 38, height: 38)) {
-                        Color(hex: reply.authorColor).opacity(0.3)
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
+                // ZONE 2 — miniature du media cite, bouton play par-dessus
+                // une piste temporelle. Tap : le media EN PLEIN ECRAN.
+                quotedThumbnail
             }
             .padding(.leading, 8)
             .padding(.trailing, 10)

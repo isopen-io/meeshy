@@ -2,7 +2,7 @@
 <resources>
     <string name="legal_terms_title">Condições de serviço</string>
     <string name="legal_privacy_title">Política de privacidade</string>
-    <string name="legal_terms_last_updated">Última atualização: 24 de fevereiro de 2026</string>
+    <string name="legal_terms_last_updated">Última atualização: 23 de agosto de 2026</string>
     <string name="legal_privacy_last_updated">Última atualização: 24 de fevereiro de 2026</string>
 
     <string name="legal_tos_acceptance_title">Aceitação das condições</string>
@@ -12,7 +12,7 @@
     <string name="legal_tos_user_conduct_title">Conduta do utilizador</string>
     <string name="legal_tos_user_conduct_body">Compromete-se a não utilizar o Meeshy para enviar spam, conteúdo ilegal, assédio ou conteúdo que viole os direitos de terceiros. Qualquer abuso resultará na suspensão ou no encerramento da sua conta.</string>
     <string name="legal_tos_content_title">Conteúdo</string>
-    <string name="legal_tos_content_body">Mantém a propriedade do seu conteúdo. Ao utilizar o Meeshy, concede-nos uma licença limitada para transmitir e armazenar o seu conteúdo a fim de prestar os nossos serviços.</string>
+    <string name="legal_tos_content_body">Mantém a propriedade do seu conteúdo. Ao utilizar o Meeshy, concede-nos uma licença limitada para transmitir e armazenar o seu conteúdo a fim de prestar os nossos serviços. Em contrapartida, comprometemo-nos a creditar o autor de qualquer conteúdo publicado, incluindo quando este é reencaminhado ou republicado, sempre que a sua origem possa ser rastreada. Trata-se de um compromisso de meios: a menção pode faltar ou ser incompleta se os nossos sistemas não conservarem essa ligação, ou se as definições de privacidade das pessoas envolvidas, incluindo as do autor, o impedirem.</string>
     <string name="legal_tos_account_termination_title">Cancelamento da conta</string>
     <string name="legal_tos_account_termination_body">Pode eliminar a sua conta a qualquer momento. Reservamo-nos o direito de suspender ou encerrar contas que violem estas condições.</string>
     <string name="legal_tos_disclaimer_title">Aviso legal</string>

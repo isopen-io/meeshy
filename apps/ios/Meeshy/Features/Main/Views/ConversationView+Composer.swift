@@ -32,6 +32,11 @@ import MeeshyUI
 ///   arrière-plan) → `flushPendingChange()` immédiat.
 @MainActor
 final class ConversationComposerTextModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var text: String = ""
 
     /// Installé par la vue (onAppear) : reçoit le texte à persister —
@@ -111,6 +116,29 @@ extension ConversationView {
         AnyView(composerEditingCovers(composerPickersAndSheets(composerCore)))
     }
 
+    /// Accent RÉSOLU du composer : substitué (éphémère → rouge d'alerte, flou →
+    /// accent de traçage, effet en attente → bleu de marque) sinon celui de la
+    /// conversation. Sans dériver `composerSecondaryColor` de CETTE valeur, le
+    /// second arrêt du dégradé reste `secondaryColor` (celui de la conversation)
+    /// pendant que le premier bascule sur une teinte de garde — un dégradé
+    /// HYBRIDE qui a l'air d'un bug de teinte plutôt que d'un état volontaire.
+    private var composerAccent: String {
+        viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex
+        : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex
+        : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex
+        : accentColor
+    }
+
+    /// Second arrêt du dégradé servi au composer. Dérivé de `composerAccent`
+    /// par la formule de palette du SDK (`secondary = shiftHue(primary, +30°)`)
+    /// dès que l'accent est substitué ; sinon on garde `secondaryColor` de la
+    /// conversation (déjà cohérent avec `accentColor`, pas besoin de le recalculer).
+    private var composerSecondaryColor: String {
+        composerAccent == accentColor
+            ? secondaryColor
+            : DynamicColorGenerator.hueShiftedHex(composerAccent, degrees: 30)
+    }
+
     private var composerCore: some View {
         ComposerTextHost(model: composerText) { textBinding in
             UniversalComposerBar(
@@ -122,8 +150,8 @@ extension ConversationView {
             // existants (déclaré avant `accentColor` → doit apparaître ici pour
             // l'ordre d'arguments de l'initialiseur memberwise synthétisé).
             onIngest: { items in handleComposerIngest(items) },
-            accentColor: viewModel.ephemeralDuration != nil ? MeeshyColors.errorHex : viewModel.isBlurEnabled ? MeeshyColors.trackingAccentHex : viewModel.pendingEffects.hasAnyEffect ? MeeshyColors.brandPrimaryHex : accentColor,
-            secondaryColor: secondaryColor,
+            accentColor: composerAccent,
+            secondaryColor: composerSecondaryColor,
             // Hide file/photo attachments in the notification preview composer
             // (declared before `selectedLanguage` → must appear here for the
             // synthesized memberwise initializer's argument order).
@@ -1127,6 +1155,6 @@ extension ConversationView {
         }
     }
 
-    // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, formatRecordingTime, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, addCurrentLocation, handleCameraCapture, sendMessage
+    // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, handleCameraCapture, sendMessage
 }
 

@@ -703,10 +703,9 @@ describe('PostReactionHandler', () => {
       await handler.handleRemoveReaction(socket as any, data, callback);
 
       expect(mockIO.to).not.toHaveBeenCalled();
-      expect(callback).toHaveBeenCalledWith({
-        success: true,
-        data: { message: 'Reaction already absent' },
-      });
+      // Reçu SANS `data` : rien n'a changé, donc aucun `updateEvent` n'est
+      // diffusé, donc l'accusé n'a rien à refléter.
+      expect(callback).toHaveBeenCalledWith({ success: true });
     });
 
     it('test_handleRemoveReaction_unauthenticated_callbackError', async () => {

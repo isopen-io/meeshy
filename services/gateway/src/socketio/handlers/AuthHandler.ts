@@ -1,4 +1,4 @@
-import type { Socket } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
@@ -212,7 +212,11 @@ export class AuthHandler {
       id: user.id,
       socketId: socket.id,
       isAnonymous: false,
-      language: user.systemLanguage || 'en',
+      // La langue de CADRAGE est la TÊTE du prisme ordonné calculé juste
+      // au-dessus — pas une seconde lecture. `user.systemLanguage || 'en'`
+      // rendait ce champ et `resolvedLanguages` divergents dès que le rang 1
+      // est vide, dans le MÊME objet littéral.
+      language: resolvedLanguages[0] ?? 'en',
       resolvedLanguages,
       userId: user.id
     };

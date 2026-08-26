@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import os
 import PhotosUI
@@ -8,20 +9,131 @@ import MeeshySDK
 
 // MARK: - StoryComposerView + Publication
 
-/// Ce que la fermeture par la croix doit proposer. Deux questions distinctes,
-/// que l'ancien `guard !composerHasContent` confondait en une : « y a-t-il du
-/// travail à perdre ? » et « le brouillon sait-il le retenir ? ».
+/// Ce que la fermeture par la croix trouve à protéger. Deux questions
+/// distinctes, que l'ancien `guard !composerHasContent` confondait en une :
+/// « y a-t-il du travail à perdre ? » et « le brouillon sait-il le retenir ? ».
+///
+/// M10 (zéro question à la sortie) a changé l'ACTE, jamais la règle : le cas
+/// `confirm` ne fait plus apparaître de feuille d'action, il commande
+/// l'enregistrement silencieux. Son nom survit parce qu'il est PUBLIC — le
+/// renommer casserait les intégrations hors du dépôt ; sa seule lecture est
+/// `offersSave`, qui se lit désormais « il y a de quoi écrire ».
 public nonisolated enum ComposerExitPrompt: Equatable, Sendable {
-    /// Rien à perdre : la croix ferme, sans un mot.
+    /// Rien à perdre : la croix ferme, sans un mot et sans rien écrire.
     case leaveSilently
-    /// Il y a du travail en cours. `offersSave` dit si la feuille a le droit de
-    /// proposer « Sauvegarder » — le reste (« Quitter », « Annuler ») est
-    /// toujours offert.
+    /// Il y a du travail en cours. `offersSave` dit si le brouillon sait le
+    /// retenir — donc si la fermeture doit l'écrire.
     case confirm(offersSave: Bool)
 
     public var offersSave: Bool {
         if case .confirm(let offersSave) = self { return offersSave }
         return false
+    }
+}
+
+/// Ce que la fermeture FAIT du magasin, une fois la règle lue. Un aiguillage
+/// PUR, pour que la loi M10 s'éprouve sans hôte SwiftUI — `StoryComposerView`
+/// n'est pas « hostable » en XCTest, et une règle qui ne vit que dans le corps
+/// d'une vue ne se teste que par analyse de source.
+public nonisolated enum ComposerExitAction: Equatable, Sendable {
+    /// Rien à retenir : seuls les fantômes tombent.
+    case purgePhantoms
+    /// Il y a du travail : le brouillon est écrit, sans un mot et sans
+    /// question. C'est la promesse M10 — fermer, c'est enregistrer.
+    case saveDraft
+}
+
+/// Ce que la collecte d'accessibilité du composer remet à la publication
+/// (V3-4) : le texte alternatif par média et l'opt-in d'extraction de son.
+///
+/// Les deux voyagent ENSEMBLE dans un seul paramètre de hand-off parce qu'ils
+/// se saisissent dans le même panneau et partent dans la même requête ; les
+/// séparer aurait porté la fermeture de publication à douze paramètres
+/// positionnels, où l'ordre devient la seule chose qui distingue deux
+/// dictionnaires.
+///
+/// `mediaAlt` est keyé par ID D'ÉLÉMENT DU COMPOSER, jamais par id de
+/// `PostMedia` : au moment du hand-off les médias ne sont pas encore uploadés.
+/// Le site qui connaît la correspondance la traduit avant l'envoi
+/// (`StoryMediaAltMapping.serverKeyed`), faute de quoi le gateway filtre les
+/// clés inconnues sans rien dire.
+public nonisolated struct ComposerMediaAccessibility: Equatable, Sendable {
+
+    public let mediaAlt: [String: String]?
+    public let allowSoundExtraction: Bool?
+
+    public init(mediaAlt: [String: String]?, allowSoundExtraction: Bool?) {
+        self.mediaAlt = mediaAlt
+        self.allowSoundExtraction = allowSoundExtraction
+    }
+
+    /// L'auteur n'a rien saisi ni rien basculé. Distinct d'un dictionnaire vide
+    /// et d'un `false` explicite : le gateway lit l'absence « n'y touche pas ».
+    public static let empty = ComposerMediaAccessibility(mediaAlt: nil, allowSoundExtraction: nil)
+}
+
+/// Le déclenchement de publication, rendu atteignable de l'EXTÉRIEUR (V3-1) —
+/// une télécommande, jamais un second chemin d'envoi.
+///
+/// Forme retenue parce qu'elle est la seule qui garde `publishAllSlides()` pour
+/// CORPS du déclenchement : l'atelier arme la télécommande avec sa propre
+/// méthode, le meuble ne fait que presser. Il n'a donc rien à recomposer — ni
+/// le rabattement des effets du canvas sur la diapositive courante, ni la
+/// visibilité, ni la langue, qui vivent dans l'état privé de la vue — et
+/// `isArmed` lui répond AVANT qu'il ne peigne sa commande, ce qu'un jeton
+/// observé ne saurait pas dire.
+///
+/// Le loquet anti-double-tap n'est PAS ici : il vit dans `publishAllSlides()`
+/// (`didHandOffPublish`), qui ne le pose que sur un hand-off ACCEPTÉ. Une
+/// télécommande à un coup condamnerait pour la session les surfaces qui
+/// refusent le hand-off (édition hors-ligne, surface qui ne ferme rien).
+public final class ComposerPublishTrigger: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+
+    /// Ce que le meuble lit pour savoir s'il a le droit de peindre une commande
+    /// de publication — loi 4 : non offert = absent de l'interface.
+    @Published public private(set) var isArmed = false
+
+    /// Le format que la DERNIÈRE pression a apporté (V3-3). `nil` tant que
+    /// personne n'a pressé, ou après désarmement.
+    ///
+    /// Il vit ici, sur un objet de RÉFÉRENCE, parce que le corps armé est
+    /// capturé au montage de l'atelier : une propriété de la vue lue depuis ce
+    /// corps serait celle du montage, et le meuble publierait le format qu'il
+    /// offrait à l'ouverture. La télécommande, elle, est le même objet à
+    /// l'armement et à la pression.
+    public private(set) var requestedTargetType: PostType?
+
+    private var handler: (() -> Void)?
+
+    public init() {}
+
+    /// Armée par l'atelier, avec `publishAllSlides` et rien d'autre.
+    public func arm(_ handler: @escaping () -> Void) {
+        self.handler = handler
+        isArmed = true
+    }
+
+    /// Au démontage de l'atelier : une télécommande qui lui survit publierait
+    /// l'état d'un composer disparu.
+    public func disarm() {
+        handler = nil
+        isArmed = false
+        requestedTargetType = nil
+    }
+
+    /// Pressée par le meuble, qui apporte le format choisi AU MOMENT DU GESTE.
+    ///
+    /// `nil` (défaut) = le presseur n'a pas d'éventail à lui : l'atelier publie
+    /// alors sous son propre `publishTargetType`. Passer `nil` n'efface donc
+    /// rien d'utile — il rend la main au seul autre porteur du fait.
+    public func requestPublish(as targetType: PostType? = nil) {
+        requestedTargetType = targetType
+        handler?()
     }
 }
 
@@ -64,6 +176,19 @@ extension StoryComposerView {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    /// Ce que la publication emporte de la collecte d'accessibilité.
+    ///
+    /// Extrait en règle PURE parce que `StoryComposerView` n'est pas hostable
+    /// en XCTest : sans elle, « le texte que l'auteur a saisi atteint le
+    /// hand-off » ne se prouverait que par lecture de source — le même genre de
+    /// preuve qui laissait `mediaAltPayload()` sans aucun appelant.
+    static func accessibilityHandoff(from store: MediaAccessibilityStore) -> ComposerMediaAccessibility {
+        ComposerMediaAccessibility(
+            mediaAlt: store.mediaAltPayload(),
+            allowSoundExtraction: store.allowSoundExtractionPayload()
+        )
+    }
+
     /// C3 — le tap « Publier » est ENTIÈREMENT synchrone : plus aucun `await`
     /// entre le geste et la fermeture du composer. Les thumbHashes, qui
     /// bloquaient jusqu'ici la main pendant l'extraction des frames vidéo, sont
@@ -75,7 +200,7 @@ extension StoryComposerView {
     /// (directive 2026-08-02 : il survit, marqué `pendingPublishAt`) +
     /// suspension d'autosave (E1) + loquet.
     func publishAllSlides() {
-        guard !didHandOffPublish else { return }
+        guard Self.acceptsPublishRequest(didHandOffPublish: didHandOffPublish) else { return }
         // Publier avec la sheet timeline OUVERTE ne doit pas perdre les
         // édits en vol — même flush que l'autosave de draft.
         flushOpenTimelineIntoSlide()
@@ -102,7 +227,10 @@ extension StoryComposerView {
         let accepted = onPublishAllInBackground(
             slides, viewModel.slideImages, viewModel.loadedImages,
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
-            storyLanguage, visibility, ids, viewModel.draftId, viewModel.references
+            storyLanguage, visibility, ids, viewModel.draftId, viewModel.references,
+            Self.accessibilityHandoff(from: accessibilityStore),
+            Self.publishedType(requested: publishTrigger?.requestedTargetType,
+                               atelier: publishTargetType)
         )
         // Tout ce qui engage le brouillon attend de savoir si le hand-off a
         // été accepté. Un refus (édition hors-ligne, surface inerte) laisse le
@@ -288,6 +416,28 @@ extension StoryComposerView {
         hasContent || carriesAudio
     }
 
+    /// Le loquet anti-double-tap, en règle PURE. Depuis qu'un déclencheur
+    /// EXTERNE peut entrer dans `publishAllSlides()` (V3-1), « deux
+    /// déclenchements ne publient qu'une fois » doit pouvoir se prouver
+    /// autrement que par lecture de source : la vue n'est pas hostable en
+    /// XCTest, la règle, elle, l'est.
+    nonisolated static func acceptsPublishRequest(didHandOffPublish: Bool) -> Bool {
+        !didHandOffPublish
+    }
+
+    /// Sous quel type la publication part (V3-3), depuis les DEUX porteurs
+    /// possibles du même fait — et c'est le geste qui tranche.
+    ///
+    /// La pression du meuble apporte le format MESURÉ AU MOMENT DU GESTE ; la
+    /// propriété de l'atelier est celui avec lequel il a été construit, relu à
+    /// chaque rendu du corps. La pression prime parce que le corps armé est
+    /// capturé au montage : une propriété lue depuis lui serait celle du
+    /// montage. Sans pression (l'atelier publie par sa flèche), la propriété
+    /// est le seul porteur, et elle est fraîche.
+    nonisolated static func publishedType(requested: PostType?, atelier: PostType) -> PostType {
+        requested ?? atelier
+    }
+
     /// L'audio du composer vit à DEUX endroits, et le fond sonore à deux stades :
     /// `selectedAudioId` tant que la sélection est vivante (elle n'est rabattue
     /// sur `effects.backgroundAudioId` qu'au hand-off de publication), et les
@@ -325,31 +475,45 @@ extension StoryComposerView {
         )
     }
 
+    /// De la matière ET un publieur. Le second terme ne change rien pour
+    /// `.atelier`, dont la flèche existe toujours ; il n'existe que pour que le
+    /// chrome délégué SANS déclencheur armé se dise non publiable, au lieu de
+    /// rester silencieusement inerte.
     var canPublish: Bool {
         Self.canPublish(hasContent: composerHasContent, carriesAudio: composerCarriesAudio)
+            && chromeOwner.hasPublisher(triggerIsArmed: publishTrigger?.isArmed == true)
     }
 
     /// Protection de sortie — règle DÉDIÉE, distincte du gate du bouton Publier.
     ///
-    /// L'alerte s'arme sur tout ce que le bouton Publier accepterait, audio
-    /// compris : une story « fond + musique » est du travail, et la croix la
-    /// jetait sans un mot — `composerHasContent` ne voit que le VISUEL.
+    /// La protection s'arme sur tout ce que le bouton Publier accepterait,
+    /// audio compris : une story « fond + musique » est du travail, et la croix
+    /// la jetait sans un mot — `composerHasContent` ne voit que le VISUEL.
     ///
-    /// « Sauvegarder » s'offre sur le même périmètre : la prémisse historique
-    /// (« le brouillon ne retient pas l'audio, rabattu au seul hand-off de
+    /// `offersSave` couvre le même périmètre : la prémisse historique (« le
+    /// brouillon ne retient pas l'audio, rabattu au seul hand-off de
     /// publication ») est caduque — `persistDraft()` passe par
     /// `syncCurrentSlideEffects()` → `mergeEffects` qui écrit
     /// `backgroundAudioId` dans la slide via le proxy `currentEffects`, et
     /// `restoreCanvas` re-sème `selectedAudioId` depuis les effets restaurés.
-    /// Sans cette offre, la seule issue d'une session audio-seule était
-    /// « Quitter » — DESTRUCTIVE.
+    /// Une session audio-seule est donc du travail que le magasin SAIT tenir.
     ///
     /// Le formuler ici plutôt que d'appeler `canPublish` garde les deux règles
     /// libres d'évoluer : le jour où le bouton acceptera un cas de plus, la
-    /// feuille n'offrira pas automatiquement de le sauvegarder.
+    /// fermeture n'écrira pas automatiquement ce que le brouillon ne sait pas
+    /// retenir.
     nonisolated static func exitPrompt(hasContent: Bool, carriesAudio: Bool) -> ComposerExitPrompt {
         guard hasContent || carriesAudio else { return .leaveSilently }
         return .confirm(offersSave: hasContent || carriesAudio)
+    }
+
+    /// M10 — la règle de sortie ne pose plus de question, elle commande. Ce que
+    /// la feuille d'action offrait de sauvegarder est exactement ce que la
+    /// fermeture écrit ; ce qu'elle laissait partir sans un mot part toujours
+    /// sans un mot, en n'emportant que les fantômes.
+    nonisolated static func exitAction(_ prompt: ComposerExitPrompt) -> ComposerExitAction {
+        guard case .leaveSilently = prompt else { return .saveDraft }
+        return .purgePhantoms
     }
 
     var exitPrompt: ComposerExitPrompt {
@@ -378,27 +542,30 @@ extension StoryComposerView {
     /// le voile plein écran de l'ancienne carte l'interdisait.
     ///
     /// Seuls les fantômes tombent (`clearPhantomDraftsOnly`, même règle que
-    /// `checkForDraft()` à l'ouverture). Les discards EXPLICITES restent
-    /// destructifs : « Quitter » (`cancelAndDismiss`) et « Recommencer ».
+    /// `checkForDraft()` à l'ouverture). Le seul discard EXPLICITE restant est
+    /// « Recommencer », dans le bandeau de reprise.
     ///
-    /// La condition d'alerte vient d'`exitPrompt`, pas de `composerHasContent` :
-    /// la story « fond + musique » n'a rien de visuel et partait donc en silence.
+    /// M10 — zéro question à la sortie : la feuille « Sauvegarder / Quitter /
+    /// Annuler » a disparu, et avec elle la seule issue destructive de la
+    /// croix. Ce que la feuille offrait d'enregistrer, la fermeture
+    /// l'enregistre. C'est une écriture DEMANDÉE (l'utilisateur ferme), donc
+    /// elle emprunte le chemin explicite `saveDraft()` et non le gate des
+    /// écritures silencieuses (`mayOverwriteStoredDraft`).
+    ///
+    /// Le terme lu reste `exitPrompt`, pas `composerHasContent` : la story
+    /// « fond + musique » n'a rien de visuel et partait sinon en silence.
     func handleDismiss() {
-        guard case .leaveSilently = exitPrompt else { showDiscardAlert = true; return }
-        clearPhantomDraftsOnly()
-        onDismiss()
+        switch Self.exitAction(exitPrompt) {
+        case .saveDraft:
+            saveDraftAndDismiss()
+        case .purgePhantoms:
+            clearPhantomDraftsOnly()
+            onDismiss()
+        }
     }
 
     func saveDraftAndDismiss() {
         saveDraft()
-        onDismiss()
-    }
-
-    func cancelAndDismiss() {
-        clearCurrentDraft()
-        // E1 — le « Quitter » jette le brouillon : suspendre l'autosave pour
-        // qu'un debounce en vol ne le re-persiste pas pendant le démontage.
-        draftAutosaveSuspended = true
         onDismiss()
     }
 

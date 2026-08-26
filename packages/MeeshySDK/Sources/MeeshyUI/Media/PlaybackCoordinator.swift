@@ -11,6 +11,11 @@ public protocol StoppablePlayer: AnyObject {
 
 @MainActor
 public final class PlaybackCoordinator {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = PlaybackCoordinator()
 
     private var audioPlayers: [ObjectIdentifier: WeakAudioPlayer] = [:]
@@ -162,6 +167,11 @@ private struct WeakStoppablePlayer {
 /// production code is visible to the test that owns the probe.
 @MainActor
 public final class PlaybackCoordinatorStopAllProbe {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public var stopAllCount: Int = 0
     public init() {}
 }

@@ -34,6 +34,11 @@ import MeeshySDK
 /// commentaire). Garde source LWS-2bis inchangée : aucun fichier de peau
 /// (`Lentille/Row`, `Lentille/Mode`, `Lentille/Chrome`) ne nomme ce type.
 final class GatewayBridgeProvider: ConversationBridgeProviding, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private let lock = NSLock()
     private var bridges: [String: ConversationBridge] = [:]

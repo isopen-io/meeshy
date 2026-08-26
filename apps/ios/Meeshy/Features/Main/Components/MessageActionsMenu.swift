@@ -99,12 +99,14 @@ struct MessageActionsMenu: View {
         case .translate: return "globe"
         case .copy: return "doc.on.doc"
         case .saveMedia: return "arrow.down.to.line"
+        case .compose: return "wand.and.stars"
         case .pin: return "pin.fill"
         case .unpin: return "pin.slash.fill"
         case .star: return "star.fill"
         case .unstar: return "star.slash.fill"
         case .more: return "ellipsis"
         case .delete: return "trash"
+        case .callDetail: return "info.circle"
         }
     }
 
@@ -114,12 +116,14 @@ struct MessageActionsMenu: View {
         case .translate: return String(localized: "action.translate", defaultValue: "Traduire", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .saveMedia: return String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)
+        case .compose: return String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
         case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
         case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
         case .star: return String(localized: "action.star", defaultValue: "Favori", bundle: .main)
         case .unstar: return String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
         case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
+        case .callDetail: return String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main)
         }
     }
 }

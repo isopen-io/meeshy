@@ -266,12 +266,13 @@
       "video": "vídeo",
       "audio": "áudio"
     },
-    "storyVisibility": {
+    "publicationVisibility": {
+      "label": "Público-alvo",
       "public": "Público",
       "friends": "Amigos",
       "community": "Comunidade",
-      "except": "Todos exceto…",
-      "only": "Somente…",
+      "except": "Amigos exceto…",
+      "only": "Apenas…",
       "private": "Privado"
     },
     "audiencePicker": {
@@ -281,17 +282,50 @@
       "empty": "Ninguém encontrado",
       "remove": "Remover"
     },
+    "composer": {
+      "format": {
+        "groupLabel": "Formato de publicação",
+        "post": "Publicação",
+        "story": "Story",
+        "reel": "Reel",
+        "status": "Status"
+      },
+      "media": {
+        "limitReached": "Pode anexar até {max} arquivos de mídia.",
+        "limitPartial": "Pode anexar até {max} arquivos de mídia. Apenas {added} foram adicionados."
+      },
+      "repost": {
+        "title": "Republicar",
+        "quote": "Citar",
+        "contentLabel": "Conteúdo da citação",
+        "posting": "Publicando..."
+      },
+      "edit": {
+        "title": "Editar publicação",
+        "contentLabel": "Editar conteúdo da publicação",
+        "removeMedia": "Remover esta mídia"
+      }
+    },
     "postComposer": {
       "contentLabel": "Conteúdo da publicação",
       "addPhoto": "Adicionar foto",
       "addVideo": "Adicionar vídeo",
+      "addAudio": "Adicionar áudio",
       "changeVisibility": "Alterar visibilidade",
-      "visibility": {
-        "public": "Público",
-        "friends": "Amigos",
-        "except": "Amigos exceto...",
-        "only": "Apenas...",
-        "private": "Privado"
+      "mediaAlt": {
+        "label": "Texto alternativo",
+        "placeholder": "Descreva este conteúdo para os leitores de ecrã"
+      },
+      "soundExtraction": {
+        "label": "Permitir a reutilização do som",
+        "caption": "Outras pessoas poderão reutilizar o áudio dos vídeos desta publicação nas suas próprias publicações."
+      },
+      "audio": {
+        "start": "Iniciar gravação",
+        "stop": "Parar gravação",
+        "retry": "Repetir",
+        "confirm": "Usar gravação",
+        "error": "Acesso ao microfone negado. Permita o acesso ao microfone e tente novamente."
       },
       "reelToggle": {
         "groupLabel": "Tipo de publicação",
@@ -324,7 +358,10 @@
         "SILENT": "Silencioso",
         "PINNED": "Fixado"
       }
-    }
+    },
+    "repost": "Republicar",
+    "repostAsPost": "Guardar no meu feed",
+    "storyLocationHere": "Aqui"
   },
   "copied": "Copiado",
   "never": "Nunca",

@@ -9,10 +9,14 @@
 
 import type { FastifyInstance } from 'fastify';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import {
+  emitServerEvent,
+  type ServerEmitIO,
+  type ServerEventName,
+  type ServerEventPayload,
+} from '../socketio/serverEmit';
 
-interface SocketIOLike {
-  to(room: string): { emit(event: string, payload: unknown): unknown };
-}
+type SocketIOLike = ServerEmitIO;
 
 /**
  * Resolve the Socket.IO server from the Fastify instance.
@@ -73,11 +77,11 @@ export function resolveSocketIO(fastify: FastifyInstance): SocketIOLike | null {
  * throw) are logged at `warn` so a missed broadcast is correlatable
  * with the originating REST request.
  */
-export function broadcastToUser(
+export function broadcastToUser<E extends ServerEventName>(
   fastify: FastifyInstance,
   userId: string,
-  event: string,
-  payload: unknown,
+  event: E,
+  payload: ServerEventPayload<E>,
 ): boolean {
   const io = resolveSocketIO(fastify);
   if (!io) {
@@ -85,7 +89,7 @@ export function broadcastToUser(
     return false;
   }
   try {
-    io.to(ROOMS.user(userId)).emit(event, payload);
+    emitServerEvent(io.to(ROOMS.user(userId)), event, payload);
     return true;
   } catch (error) {
     fastify.log.warn({ userId, event, err: error }, 'broadcastToUser: emit failed');

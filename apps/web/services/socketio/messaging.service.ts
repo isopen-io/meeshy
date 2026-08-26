@@ -22,12 +22,15 @@ import type {
   MessageHiddenForMeEventData,
   MessageRestoredForMeEventData,
   ReactionUpdateEventData,
+  MessageSendData,
+  MessageSendWithAttachmentsData,
 } from '@meeshy/shared/types/socketio-events';
 import type {
   Message,
   SocketIOMessage
 } from '@/types';
 import type { EncryptedPayload } from '@meeshy/shared/types/encryption';
+import { messageTypeForClientAttachments } from '@meeshy/shared/utils/attachment-message-type';
 import type { AnonymousChatService } from '../anonymous-chat.service';
 import type {
   TypedSocket,
@@ -40,6 +43,18 @@ import type {
   MessageSendOptions,
   MessageAckResponse
 } from './types';
+
+/**
+ * L'accusé d'un envoi, tel que ce service le LIT. Volontairement permissif sur
+ * la forme — c'est l'accusé de DEUX événements, servi par un serveur qui n'est
+ * pas compilé ici, et chaque champ est déjà lu en optionnel.
+ */
+type SendAckResponse = {
+  success?: boolean;
+  data?: { messageId?: string; clientMessageId?: string };
+  message?: string;
+  error?: string;
+};
 
 /**
  * MessagingService
@@ -64,16 +79,34 @@ export class MessagingService {
   private currentUserId: string | null = null;
   private markReceivedTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private recentMessageIds: Map<string, number> = new Map();
+  private typingRetractor: ((conversationId: string, userId: string) => void) | null = null;
 
   setCurrentUserId(userId: string | null): void {
     this.currentUserId = userId;
   }
 
+  /**
+   * Câble la rétractation de frappe : l'arrivée d'un message éteint
+   * immédiatement l'indicateur « X écrit… » de son auteur.
+   *
+   * Le service ne connaît pas `TypingService` — il reçoit une closure opaque,
+   * posée par l'orchestrateur qui possède les deux. C'est le seul endroit du
+   * client web qui sait qu'un message VIENT D'ARRIVER avant toute autre
+   * couche ; le `typing:stop` de l'expéditeur, lui, arrive par un canal
+   * séparé, dans un ordre non garanti, et peut se perdre.
+   */
+  setTypingRetractor(retract: ((conversationId: string, userId: string) => void) | null): void {
+    this.typingRetractor = retract;
+  }
+
+  private static senderIdOf(message: Message): string | undefined {
+    const sender = message.sender;
+    return sender?.userId ?? sender?.id ?? message.senderId;
+  }
+
   private isOwnMessage(message: Message): boolean {
     if (!this.currentUserId) return false;
-    const sender = message.sender;
-    const senderId = sender?.userId ?? sender?.id ?? message.senderId;
-    return senderId === this.currentUserId;
+    return MessagingService.senderIdOf(message) === this.currentUserId;
   }
 
   private isDuplicateMessage(id: string): boolean {
@@ -160,6 +193,16 @@ export class MessagingService {
 
       let message: Message = convertMessageFn(socketMessage);
 
+      // Un message rétracte la frappe qui l'annonçait — AVANT le déchiffrement.
+      // Placé après ce point, la latence E2EE s'ajouterait à la rétractation et
+      // l'indicateur « X écrit… » survivrait au message déjà affiché. Le
+      // dedup ci-dessus est franchi en premier : un doublon ne rétracte pas
+      // deux fois.
+      const senderId = MessagingService.senderIdOf(message);
+      if (this.typingRetractor && message.conversationId && senderId) {
+        this.typingRetractor(message.conversationId, senderId);
+      }
+
       // E2EE: Decrypt message if encrypted
       message = await this.decryptMessage(socketMessage, message);
 
@@ -223,27 +266,27 @@ export class MessagingService {
       this.consumedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: AttachmentStatusUpdatedEventData) => void) => void }).on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
+    socket.on(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, (data: AttachmentStatusUpdatedEventData) => {
       this.attachmentStatusListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: AttachmentUpdatedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
+    socket.on(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, (data: AttachmentUpdatedEventData) => {
       this.messageAttachmentUpdatedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: { count: number; conversationIds: string[] }) => void) => void }).on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number; conversationIds: string[] }) => {
+    socket.on(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, (data: { count: number; conversationIds: string[] }) => {
       this.pendingDeliveredListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: LinkMessageNewEventData) => void) => void }).on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
+    socket.on(SERVER_EVENTS.LINK_MESSAGE_NEW, (data: LinkMessageNewEventData) => {
       this.linkMessageNewListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: MessagePinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_PINNED, (data: MessagePinnedEventData) => {
+    socket.on(SERVER_EVENTS.MESSAGE_PINNED, (data: MessagePinnedEventData) => {
       this.messagePinnedListeners.forEach(listener => listener(data));
     });
 
-    (socket as unknown as { on: (event: string, handler: (data: MessageUnpinnedEventData) => void) => void }).on(SERVER_EVENTS.MESSAGE_UNPINNED, (data: MessageUnpinnedEventData) => {
+    socket.on(SERVER_EVENTS.MESSAGE_UNPINNED, (data: MessageUnpinnedEventData) => {
       this.messageUnpinnedListeners.forEach(listener => listener(data));
     });
 
@@ -301,6 +344,49 @@ export class MessagingService {
   }
 
   /**
+   * Le chiffrement d'un message SORTANT, résolu en une valeur plutôt qu'appliqué
+   * par mutation sur une charge déjà construite.
+   *
+   * Rend `null` quand la conversation n'est pas chiffrée, ou quand aucun
+   * gestionnaire de chiffrement n'est câblé. Ne rend JAMAIS une enveloppe
+   * partielle : un échec de chiffrement propage l'erreur, il ne dégrade pas
+   * l'envoi en clair.
+   *
+   * `content` est rendu à côté de l'enveloppe parce que le mode `e2ee` le
+   * REMPLACE par un littéral — c'est une décision de chiffrement, pas une
+   * décision d'envoi, et elle appartient donc ici.
+   */
+  private async resolveOutgoingEncryption(
+    conversationId: string,
+    content: string
+  ): Promise<{ content: string; encryptedContent: string; encryptionMetadata: EncryptedPayload['metadata'] } | null> {
+    if (!this.encryptionHandlers?.encrypt || !this.encryptionHandlers?.getConversationMode) return null;
+
+    try {
+      const encryptionMode = await this.encryptionHandlers.getConversationMode(conversationId);
+      if (!encryptionMode) return null;
+
+      const encryptedPayload = await this.encryptionHandlers.encrypt(content, conversationId);
+      if (!encryptedPayload) return null;
+
+      logger.debug('[MessagingService]', 'Message encrypted', { conversationId, mode: encryptionMode });
+
+      return {
+        // En `e2ee` le clair ne quitte pas l'appareil : le champ `content` du
+        // fil porte un littéral, et le chiffré porte le message. C'est ce
+        // remplacement qui rend la liste EXPLICITE de mentionnés indispensable —
+        // il ne reste aucun `@` que la passerelle puisse extraire.
+        content: encryptionMode === 'e2ee' ? '[Encrypted]' : content,
+        encryptedContent: encryptedPayload.ciphertext,
+        encryptionMetadata: encryptedPayload.metadata,
+      };
+    } catch (encryptionError) {
+      logger.error('[MessagingService]', 'Encryption failed — aborting send to prevent plaintext leak', { conversationId });
+      throw encryptionError;
+    }
+  }
+
+  /**
    * Send a message
    */
   async sendMessage(
@@ -321,63 +407,72 @@ export class MessagingService {
       forwardedFromConversationId,
       mentionedUserIds,
       attachmentIds,
-      attachmentMimeTypes,
       clientMessageId,
     } = options;
 
     try {
       const hasAttachments = attachmentIds && attachmentIds.length > 0;
 
-      const messageData: Record<string, unknown> = {
+      // Le chiffrement est RÉSOLU avant que la charge n'existe, et non appliqué
+      // par mutation sur un `Record<string, unknown>` déjà construit. C'est ce
+      // qui rend la charge déclarable : tant qu'elle se complétait après coup,
+      // aucun type ne pouvait la décrire, et le seul contrat qui la gouvernait
+      // était les deux `as unknown as` du site d'émission.
+      //
+      // La condition est ici, et pas seulement dans l'unité : sans elle, un
+      // envoi de conversation NON chiffrée paierait un saut de microtâche avant
+      // que l'échéance d'émission n'existe. Le chemin d'envoi reste synchrone
+      // jusqu'à l'`emit` tant qu'aucun chiffrement n'est câblé.
+      const envelope = this.encryptionHandlers
+        ? await this.resolveOutgoingEncryption(conversationId, content)
+        : null;
+
+      // La charge, DÉCLARÉE contre le contrat que la passerelle compile.
+      //
+      // Portée exacte de cette garde, pour qu'on n'en attende pas plus qu'elle
+      // ne tient : un champ REQUIS absent et un champ déclaré du MAUVAIS TYPE
+      // sont refusés, y compris à travers les spreads conditionnels ci-dessous.
+      // Un champ EXCÉDENTAIRE posé par un spread, lui, reste invisible — le
+      // contrôle des propriétés excédentaires ne s'applique qu'aux clés écrites
+      // directement dans le littéral. C'est celles-là qui portent le contrat.
+      const base = {
         conversationId,
-        content,
+        content: envelope?.content ?? content,
         clientMessageId,
         ...(originalLanguage && { originalLanguage }),
         ...(replyToId && { replyToId }),
         ...(forwardedFromId && { forwardedFromId }),
         ...(forwardedFromConversationId && { forwardedFromConversationId }),
+        // Les mentionnés que l'utilisateur a NOMMÉS dans le compositeur. La
+        // passerelle retombe sinon sur l'extraction des `@` du contenu — un
+        // repli qui ne peut rien quand `content` vaut `[Encrypted]`.
         ...(mentionedUserIds && mentionedUserIds.length > 0 && { mentionedUserIds }),
+        ...(envelope && {
+          encryptedContent: envelope.encryptedContent,
+          encryptionMetadata: envelope.encryptionMetadata,
+        }),
       };
 
-      // E2EE: Encrypt content if conversation is encrypted
-      if (this.encryptionHandlers?.encrypt && this.encryptionHandlers?.getConversationMode) {
-        try {
-          const encryptionMode = await this.encryptionHandlers.getConversationMode(conversationId);
-          if (encryptionMode) {
-            const encryptedPayload = await this.encryptionHandlers.encrypt(content, conversationId);
-            if (encryptedPayload) {
-              messageData.encryptedContent = encryptedPayload.ciphertext;
-              messageData.encryptionMetadata = encryptedPayload.metadata;
-              if (encryptionMode === 'e2ee') {
-                messageData.content = '[Encrypted]';
-              }
-              logger.debug('[MessagingService]', 'Message encrypted', {
-                conversationId,
-                mode: encryptionMode
-              });
-            }
-          }
-        } catch (encryptionError) {
-          logger.error('[MessagingService]', 'Encryption failed — aborting send to prevent plaintext leak', { conversationId });
-          throw encryptionError;
-        }
-      }
-
-      // Add attachments if present
-      if (hasAttachments) {
-        messageData.attachmentIds = attachmentIds;
-        messageData.messageType = attachmentMimeTypes && attachmentMimeTypes.length > 0
-          ? this.determineMessageTypeFromMime(attachmentMimeTypes[0])
-          : 'file';
-      }
-
-      // Choose event based on attachments
-      const eventType = hasAttachments
-        ? CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS
-        : CLIENT_EVENTS.MESSAGE_SEND;
-
-      // Send with timeout (WebSocket primary)
-      const wsResult = await this.emitWithTimeout(socket, eventType, messageData, 10000);
+      // `messageType` n'est PAS posé ici. Il n'a jamais atteint la base sur ce
+      // chemin — `SocketMessageSendWithAttachmentsSchema` ne déclare aucun champ
+      // de ce nom, et le handler dérive la même règle côté serveur. Il était
+      // conservé au motif que « l'objet sert aussi de charge au repli REST » :
+      // c'est faux, `sendMessageViaRest` RECONSTRUIT sa charge depuis `options`
+      // et recalcule `messageType` lui-même. Le commentaire décrivait un
+      // couplage qui n'existait pas.
+      //
+      // L'émission vit ICI, dans deux branches monomorphes portant chacune un
+      // nom d'événement LITTÉRAL : c'est la seule forme que `TypedSocket`
+      // vérifie réellement. Un nom en UNION effondre `EventParams` en union de
+      // tuples, et laisse alors passer la charge de n'importe lequel des deux
+      // membres sous n'importe quel autre.
+      const wsResult = await this.emitWithTimeout(
+        (ack) =>
+          hasAttachments
+            ? socket.emit(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, { ...base, attachmentIds }, ack)
+            : socket.emit(CLIENT_EVENTS.MESSAGE_SEND, base, ack),
+        10000
+      );
 
       if (wsResult.success) {
         return {
@@ -392,8 +487,17 @@ export class MessagingService {
         return { success: false, timedOut: true };
       }
 
-      // Don't fallback to REST for E2EE messages (REST can't handle E2EE yet)
-      if (messageData.encryptedContent && messageData.encryptionMetadata) {
+      // Pas de repli REST pour un message chiffré — non parce que REST ne
+      // saurait pas le porter (il le porte : `encryptedContent` y est déclaré,
+      // validé et recomposé depuis toujours), mais parce que `sendMessageViaRest`
+      // RECONSTRUIT sa charge depuis `options`, où l'enveloppe de chiffrement
+      // n'existe pas. Se replier enverrait donc le message EN CLAIR.
+      //
+      // La phrase précédente — « REST can't handle E2EE yet » — désignait le
+      // mauvais coupable, et c'est le socket qui perdait le chiffré : son
+      // schéma strippait l'enveloppe en silence (corrigé côté passerelle,
+      // `validation/encryption-envelope.ts`).
+      if (envelope) {
         return { success: false };
       }
 
@@ -481,12 +585,23 @@ export class MessagingService {
         clientMessageId: options.clientMessageId,
         content: options.content,
         originalLanguage: options.originalLanguage,
-        messageType: options.attachmentIds?.length
-          ? this.determineMessageTypeFromMime(options.attachmentMimeTypes?.[0] ?? '')
-          : 'text',
+        // Le SEUL des deux chemins où cette valeur est AUTORITATIVE : la route
+        // REST accepte l'enum `messageType`, la persiste, et la dérivation
+        // serveur (`deriveMessageTypeForAttachments`) est additive — elle ne
+        // repasse jamais derrière une déclaration explicite. Ce que le client
+        // dit ici, personne ne le corrige.
+        messageType: messageTypeForClientAttachments({
+          hasAttachments: !!options.attachmentIds?.length,
+          mimeTypes: options.attachmentMimeTypes ?? [],
+        }),
         replyToId: options.replyToId,
         forwardedFromId: options.forwardedFromId,
         forwardedFromConversationId: options.forwardedFromConversationId,
+        // Les mentionnés nommés par l'utilisateur. `POST /messages` les déclare
+        // et les honore ; ce repli les laissait tomber, si bien qu'un message
+        // parti par REST après un accusé socket en échec ne notifiait que ceux
+        // que l'extraction des `@` du contenu retrouvait.
+        mentionedUserIds: options.mentionedUserIds,
         attachmentIds: options.attachmentIds,
       });
 
@@ -537,12 +652,23 @@ export class MessagingService {
   }
 
   /**
-   * Emit event with timeout protection
+   * Emit with timeout protection — la plomberie du délai, et RIEN du contrat.
+   *
+   * Elle prenait auparavant `(socket, event, data)` et émettait elle-même, ce
+   * qui l'obligeait à corréler nom→charge : deux événements aux charges
+   * différentes, une seule signature, donc deux `as unknown as`. La corrélation
+   * échouait non pas sur le contrat mais sur la FORME de la charge — un
+   * `Record<string, unknown>` complété par mutation, qu'aucun type ne pouvait
+   * décrire.
+   *
+   * Le geste : rendre l'émission à l'appelant, qui la fait en deux branches
+   * monomorphes portant chacune un nom LITTÉRAL. `TypedSocket` vérifie alors la
+   * charge de chaque branche contre `ClientToServerEvents`, sans une seule
+   * assertion. Cette fonction-ci n'a plus à connaître ni le nom ni la charge :
+   * elle ne sait que poser une échéance et normaliser l'accusé.
    */
   private async emitWithTimeout(
-    socket: TypedSocket,
-    event: string,
-    data: Record<string, unknown>,
+    emit: (ack: (response: SendAckResponse) => void) => void,
     timeoutMs: number
   ): Promise<MessageAckResponse> {
     return new Promise((resolve) => {
@@ -551,7 +677,7 @@ export class MessagingService {
         resolve({ success: false, timedOut: true });
       }, timeoutMs);
 
-      const callback = (response: { success?: boolean; data?: { messageId?: string; clientMessageId?: string }; message?: string; error?: string }) => {
+      emit((response) => {
         clearTimeout(timeout);
         if (response?.success) {
           resolve({
@@ -564,23 +690,8 @@ export class MessagingService {
           logger.warn('[MessagingService]', `Send failed: ${errorMsg}`);
           resolve({ success: false });
         }
-      };
-
-      (socket as unknown as { emit: (event: string, data: unknown, cb: typeof callback) => void }).emit(event, data, callback);
+      });
     });
-  }
-
-  /**
-   * Determine message type from MIME type
-   */
-  private determineMessageTypeFromMime(mimeType: string): string {
-    if (!mimeType) return 'text';
-    if (mimeType.startsWith('image/')) return 'image';
-    if (mimeType.startsWith('audio/')) return 'audio';
-    if (mimeType.startsWith('video/')) return 'video';
-    if (mimeType === 'application/pdf') return 'file';
-    if (mimeType.startsWith('text/')) return 'text';
-    return 'file';
   }
 
   /**

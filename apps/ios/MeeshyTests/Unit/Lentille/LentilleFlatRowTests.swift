@@ -166,16 +166,21 @@ final class LentilleFlatRowTests: XCTestCase {
     // verrouillé VERT par
     // LentilleRowBehaviourAnchorTests.test_L06_timestampColor_isTertiary_neverErrorOnUnread.
 
-    func test_sourceGuard_rowFiles_containNoUnreadBadgeBackground() throws {
+    /// **SUPERSÉDÉ le 2026-08-22** (décision produit : « mettre le chip rouge
+    /// si messages non lus » sur les rangées non magnifiées) — voir la note
+    /// détaillée de `LentilleRowSourceGuardTests
+    /// .test_unreadBadge_livesOnlyInTheRow_andIsAlwaysSemanticRed`. Ce qui
+    /// reste vrai, et que ce témoin continue de garder : ni le pont ✦ ni le
+    /// squelette ne portent de badge.
+    func test_sourceGuard_neitherBridgeNorSkeleton_carriesAnUnreadBadge() throws {
         for relativePath in [
-            "Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",
             "Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",
             "Meeshy/Features/Main/Lentille/Row/LentilleSkeletonRow.swift",
         ] {
             let source = try readSource(relativePath)
             XCTAssertFalse(
                 source.contains("unreadBadgeBackground"),
-                "\(relativePath) ne doit JAMAIS contenir `unreadBadgeBackground` — le chiffre de non-lu vit dans le pont ✦, plus dans un badge (contrat §LWS-7)"
+                "\(relativePath) ne compte rien : le pont porte son point accent, le squelette est un placeholder"
             )
         }
     }

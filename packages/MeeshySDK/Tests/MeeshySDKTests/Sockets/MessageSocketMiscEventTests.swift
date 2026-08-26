@@ -146,10 +146,77 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.userId, "u1")
         XCTAssertEqual(event.newRole, "MODERATOR")
         XCTAssertEqual(event.updatedBy, "u2")
-        XCTAssertEqual(event.participant.id, "p1")
-        XCTAssertEqual(event.participant.role, "MODERATOR")
-        XCTAssertEqual(event.participant.displayName, "Alice")
-        XCTAssertEqual(event.participant.userId, "u1")
+        XCTAssertEqual(event.participant?.id, "p1")
+        XCTAssertEqual(event.participant?.role, "MODERATOR")
+        XCTAssertEqual(event.participant?.displayName, "Alice")
+        XCTAssertEqual(event.participant?.userId, "u1")
+    }
+
+    /// La charge utile RÉELLE de la passerelle depuis le cycle 92 bis : le rang de
+    /// conversation est passé sous `conversationRole`, et `role` porte désormais
+    /// le rôle GLOBAL. Le rang à APPLIQUER reste `newRole`, au premier niveau.
+    func test_participantRoleUpdatedEvent_serializedWireShape() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "newRole": "admin",
+            "updatedBy": "u2",
+            "participant": {
+                "id": "p1",
+                "participantId": "p1",
+                "userId": "u1",
+                "displayName": "Alice",
+                "role": "USER",
+                "conversationRole": "admin",
+                "isOnline": false,
+                "lastActiveAt": null
+            }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantRoleUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.newRole, "admin")
+        XCTAssertEqual(event.participant?.conversationRole, "admin")
+        XCTAssertEqual(event.participant?.role, "USER")
+    }
+
+    /// La passerelle envoie `participant: null` quand la relecture du rang ne
+    /// rend rien, et le type partagé le déclare optionnel. Ce bloc était
+    /// NON-optionnel ici : un `null` faisait échouer le décodage de l'événement
+    /// ENTIER, que le manager journalise et JETTE — donc aucun rafraîchissement
+    /// du trombinoscope, sans trace côté produit. Ce qui sert à appliquer le
+    /// changement est au premier niveau, et doit survivre seul.
+    func test_participantRoleUpdatedEvent_nullParticipant_keepsTheEvent() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "newRole": "moderator",
+            "updatedBy": "u2",
+            "participant": null
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantRoleUpdatedEvent.self, from: json)
+        XCTAssertNil(event.participant)
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.newRole, "moderator")
+    }
+
+    func test_participantRoleUpdatedEvent_absentParticipant_keepsTheEvent() throws {
+        let json = """
+        {
+            "conversationId": "conv1",
+            "userId": "u1",
+            "newRole": "member",
+            "updatedBy": "u2"
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(ParticipantRoleUpdatedEvent.self, from: json)
+        XCTAssertNil(event.participant)
+        XCTAssertEqual(event.newRole, "member")
     }
 
     func test_participantRoleUpdatedEvent_nilUserId() throws {
@@ -168,7 +235,7 @@ final class MessageSocketMiscEventTests: XCTestCase {
         """.data(using: .utf8)!
 
         let event = try decoder.decode(ParticipantRoleUpdatedEvent.self, from: json)
-        XCTAssertNil(event.participant.userId)
+        XCTAssertNil(event.participant?.userId)
     }
 
     // MARK: - ConversationUpdatedEvent

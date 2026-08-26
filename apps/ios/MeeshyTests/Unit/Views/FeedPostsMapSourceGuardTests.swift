@@ -1,13 +1,19 @@
 import XCTest
 @testable import Meeshy
 
-// MARK: - Carte des posts (retour user 2026-08-12)
+// MARK: - La carte des posts vit DANS « À proximité » (directive user 2026-08-26)
 
-/// L'accès à la carte des posts est un bouton TOUJOURS VISIBLE dans le slot
-/// trailing du header du feed (basculement liste ↔ carte à un tap) — pas un
-/// onglet, pas une entrée de menu de création, pas un long-press caché.
+/// **La carte « Posts sur la carte » a fusionné dans « À proximité »** sous un
+/// mode Discover réservé au staff de la plateforme (MODERATOR / ADMIN /
+/// BIGBOSS). Le bouton carte du header du feed — posé le 2026-08-13 à droite
+/// des Réels — n'existe plus ; le header ne porte que DEUX entrées : les Réels
+/// et la découverte à proximité.
+///
+/// Cette garde remplace celle du 13/08 : la directive qu'elle figeait est
+/// caduque, et une garde qui exigerait encore le bouton carte ferait
+/// mécaniquement rougir la nouvelle règle.
 @MainActor
-final class FeedPostsMapSourceGuardTests: XCTestCase {
+final class NearbyDiscoverModeSourceGuardTests: XCTestCase {
 
     private func viewsDirectory() -> URL {
         URL(fileURLWithPath: #filePath)
@@ -19,73 +25,71 @@ final class FeedPostsMapSourceGuardTests: XCTestCase {
     }
 
     private func source(_ file: String) throws -> String {
-        try String(contentsOf: viewsDirectory().appendingPathComponent(file), encoding: .utf8)
+        AppSourceGuard.stripComments(
+            try String(contentsOf: viewsDirectory().appendingPathComponent(file), encoding: .utf8)
+        )
     }
 
-    func test_feedHeader_carriesPostsMapEntryPoint() throws {
-        // Directive user 2026-08-13 : « il faut ajouter le bouton map à côté à
-        // droite du bouton Reels ». Le slot trailing porte donc la PAIRE, sur
-        // les deux chemins (iPad `FeedView`, iPhone `ThemedFeedOverlay`) — un
-        // seul des deux l'aurait fait diverger, comme il divergeait justement
-        // avant ce lot (Réels sur iPhone, carte sur iPad, jamais les deux).
-        for file in ["FeedView.swift", "RootViewComponents.swift"] {
-            let feed = try source(file)
-            XCTAssertTrue(
-                feed.contains("trailing: { feedHeaderActions }"),
-                "\(file) : le header du feed doit porter ses actions dans son " +
-                "slot trailing — point d'entrée permanent des Réels et de la carte."
-            )
-            XCTAssertTrue(
-                feed.contains("FeedPostsMapView(posts: locatedPosts)"),
-                "\(file) : le bouton doit présenter FeedPostsMapView avec les " +
-                "posts géolocalisés (locatedPosts, source unique bouton + carte)."
-            )
-            XCTAssertTrue(
-                feed.contains("router.push(.postDetail(post.id, post))"),
-                "\(file) : un tap sur la carte d'un post sélectionné doit fermer " +
-                "la carte et router vers le détail du post."
-            )
-        }
-    }
-
-    /// L'ORDRE de lecture est la directive elle-même : la carte est à DROITE des
-    /// Réels. Une garde qui se contenterait de leur présence resterait verte si
-    /// on les intervertissait.
-    func test_theMapButtonSitsToTheRightOfTheReelsButton() throws {
+    /// Les DEUX chemins (iPad `FeedView`, iPhone `ThemedFeedOverlay`) portent la
+    /// même paire — c'est la divergence iPhone/iPad qui avait motivé la garde
+    /// précédente, et elle vaut toujours.
+    func test_feedHeader_carriesReelsAndNearbyOnly_noMapButton() throws {
         for file in ["FeedView.swift", "RootViewComponents.swift"] {
             let feed = try source(file)
             let actions = try XCTUnwrap(
                 block(after: "private var feedHeaderActions: some View", in: feed),
                 "\(file) : les actions du header ont disparu."
             )
-            let reels = try XCTUnwrap(
-                actions.range(of: "reelsButton"),
-                "\(file) : le bouton Réels doit rester dans les actions du header."
-            )
-            let map = try XCTUnwrap(
-                actions.range(of: "postsMapButton"),
-                "\(file) : le bouton carte doit vivre à côté des Réels, pas ailleurs."
-            )
+            let reels = try XCTUnwrap(actions.range(of: "reelsButton"), "\(file) : le bouton Réels reste.")
+            let nearby = try XCTUnwrap(actions.range(of: "nearbyButton"), "\(file) : l'entrée à proximité reste.")
+            XCTAssertTrue(reels.lowerBound < nearby.lowerBound, "\(file) : Réels puis À proximité.")
+
+            for forbidden in ["postsMapButton", "feed.header.map", "FeedPostsMapView(", "showPostsMap"] {
+                XCTAssertFalse(
+                    feed.contains(forbidden),
+                    "\(file) : « \(forbidden) » — la carte des posts vit désormais DANS " +
+                    "« À proximité » (mode Discover, staff seulement), plus dans le header du feed."
+                )
+            }
+            XCTAssertTrue(feed.contains("accessibilityIdentifier(\"feed.header.reels\")"), file)
+            XCTAssertTrue(feed.contains("accessibilityIdentifier(\"feed.header.nearby\")"), file)
             XCTAssertTrue(
-                reels.lowerBound < map.lowerBound,
-                "\(file) : la carte se pose À DROITE des Réels."
-            )
-            // Boucle fermée : chaque bouton porte SON identifiant. Sans ce lien,
-            // renommer une propriété en gardant l'ordre passerait sous la garde.
-            XCTAssertTrue(
-                feed.contains("accessibilityIdentifier(\"feed.header.reels\")"),
-                "\(file) : le bouton Réels reste identifiable."
-            )
-            XCTAssertTrue(
-                feed.contains("accessibilityIdentifier(\"feed.header.map\")"),
-                "\(file) : le bouton carte reste identifiable."
+                feed.contains("router.push(.nearbyDiscovery())"),
+                "\(file) : l'entrée de toolbar pousse la route SANS coordonnée."
             )
         }
     }
 
+    /// Le picker de modes ne liste pas les cas en dur : il itère
+    /// `availableModes`, seul site où le rôle du lecteur décide. Un segment
+    /// « Discover » écrit à la main dans la vue échapperait à cette règle.
+    func test_nearbyModePicker_isDrivenByAvailableModes_andDiscoverRendersTheFeedPostsMap() throws {
+        let nearby = try source("NearbyDiscoveryView.swift")
+        XCTAssertTrue(
+            nearby.contains("ForEach(viewModel.availableModes"),
+            "le picker de modes doit itérer availableModes — c'est là que le rôle filtre Discover."
+        )
+        XCTAssertFalse(
+            nearby.contains(".tag(NearbyDiscoveryMode.discover)"),
+            "aucun segment Discover posé à la main : il passerait sous la règle de rôle."
+        )
+        XCTAssertTrue(
+            nearby.contains("PostsMapRepresentable(posts: viewModel.discoverPosts"),
+            "le mode Discover rend la carte des posts du fil (celle du bouton carte d'hier)."
+        )
+    }
+
+    /// Le wrapper plein écran d'hier n'a plus d'hôte : seule la carte
+    /// (`PostsMapRepresentable`) survit, réutilisée par « À proximité ».
+    func test_fullScreenMapWrapper_isGone() throws {
+        let map = try source("FeedPostsMapView.swift")
+        XCTAssertFalse(map.contains("struct FeedPostsMapView"), "le wrapper plein écran est retiré.")
+        XCTAssertTrue(map.contains("struct PostsMapRepresentable"), "la carte réutilisable reste.")
+        XCTAssertFalse(map.contains("private struct PostsMapRepresentable"), "elle doit être visible de NearbyDiscoveryView.")
+    }
+
     /// Bloc délimité par accolades équilibrées à partir de la première `{` qui
-    /// suit `anchor` — sans lui, l'ordre serait mesuré sur le FICHIER entier,
-    /// où les deux identifiants apparaissent aussi dans les corps des boutons.
+    /// suit `anchor` — sans lui, l'ordre serait mesuré sur le FICHIER entier.
     private func block(after anchor: String, in code: String) -> String? {
         guard let start = code.range(of: anchor),
               let open = code[start.upperBound...].firstIndex(of: "{") else { return nil }
@@ -100,33 +104,5 @@ final class FeedPostsMapSourceGuardTests: XCTestCase {
             index = code.index(after: index)
         }
         return nil
-    }
-
-    func test_mapView_clustersAndFitsAnnotations() throws {
-        let map = try source("FeedPostsMapView.swift")
-        XCTAssertTrue(
-            map.contains("clusteringIdentifier = \"feed-post\""),
-            "Les pins doivent se regrouper (clustering natif MKMarkerAnnotationView) " +
-            "— une zone dense sans clustering est illisible."
-        )
-        XCTAssertTrue(
-            map.contains("showAnnotations("),
-            "La caméra doit cadrer l'ensemble des pins à l'ouverture."
-        )
-        XCTAssertTrue(
-            map.contains("guard ids != appliedPostIds else { return }"),
-            "Les annotations ne se rejouent que quand l'ensemble des posts " +
-            "change — updateUIView se déclenche aussi pour la sélection et " +
-            "reposer les pins ferait clignoter la carte."
-        )
-    }
-
-    func test_mapView_emptyState_isExplicit() throws {
-        let map = try source("FeedPostsMapView.swift")
-        XCTAssertTrue(
-            map.contains("feed.map.empty.title"),
-            "Cache vide de posts localisés : un état vide explicite, jamais " +
-            "une carte muette (principe Instant App des états vides)."
-        )
     }
 }

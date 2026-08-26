@@ -152,6 +152,14 @@ struct FocalAudioBlock: View, Equatable {
     var onShowTranslationDetail: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
+    /// LOI DES ZONES (2026-08-24) — ZONES 1 et 2 de la citation. Un message
+    /// audio qui REPOND heberge sa citation DANS le widget
+    /// (`content.audioHostsReply`), et la rangee plate ne la rend donc pas
+    /// elle-meme : sans ces deux fils, cette citation-la resterait la seule du
+    /// mode Script a n'offrir ni avatar ni zone media, alors que sa jumelle
+    /// rendue par `FocalQuotedReplyView` les porte.
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
     var audioQueueTailProvider: ((String) -> [QueuedAudio])? = nil
     var onTapConsentNotice: (() -> Void)? = nil
     var onScrollToMessage: ((String) -> Void)? = nil
@@ -272,6 +280,8 @@ struct FocalAudioBlock: View, Equatable {
                     parentIsMe: content.isMe,
                     onReplyTap: onReplyTap,
                     onStoryReplyTap: onStoryReplyTap,
+                    onQuotedAuthorTap: onQuotedAuthorTap,
+                    onQuotedMediaTap: onQuotedMediaTap,
                     onPlayAudio: onPlayAudio,
                     conversationName: conversationName,
                     audioQueueTailProvider: audioQueueTailProvider,

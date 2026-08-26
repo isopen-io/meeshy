@@ -34,6 +34,11 @@ private struct InteractivePopEnabler: UIViewControllerRepresentable {
     }
 
     final class PopEnablerVC: UIViewController {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         var allowsEdgeSwipe: Bool = true
 
         override func viewWillAppear(_ animated: Bool) {
@@ -63,7 +68,6 @@ struct ConversationOverlayState {
     /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
     /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
     /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
-    var overlayFocalPreview: FocalLongPressPreview? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
     var detailSheetMessage: Message? = nil
@@ -117,7 +121,6 @@ struct ConversationScrollState {
     /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
     /// compares old vs. new to fire the VC's scrollToMessage.
     var scrollToMessageTrigger: Int = 0
-    var highlightedMessageId: String? = nil
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
     var galleryStartAttachment: MessageAttachment? = nil
@@ -177,6 +180,18 @@ struct ConversationComposerState {
     var showOptions = false
     var actionAlert: String? = nil
     var forwardMessage: Message? = nil
+    /// La cible de « Composer » — le média reçu que la porte va semer.
+    /// Non-nil = la porte est présentée.
+    var composeMediaTarget: ComposableMediaTarget? = nil
+    /// La même cible, RETENUE le temps qu'une feuille se referme.
+    ///
+    /// Le second déclencheur de « Composer » vit dans la feuille de transfert,
+    /// et présenter un plein écran pendant qu'une feuille se démonte est la
+    /// course que ce dépôt a déjà payée (« Attempt to present … which is
+    /// already presenting »). La promotion se fait donc dans l'`onDismiss` de
+    /// la feuille — la primitive SwiftUI prévue pour ce cas exact, là où un
+    /// délai n'est qu'un pari.
+    var pendingComposeTarget: ComposableMediaTarget? = nil
     var showConversationInfo = false
 
     // Popup consentement vocal à l'envoi d'audio (2026-07-08) : proposé UNE
@@ -306,6 +321,22 @@ struct ConversationView: View {
     /// docstring de `ReadingModeController.forcedMode`.
     var forcedReadingMode: ReadingModeOrchestrator.ConversationReadingMode? = nil
 
+    /// Conversation CONFIRMÉE par le serveur après un enregistrement dans
+    /// `ConversationSettingsView` (titre, description, avatar, bannière,
+    /// réglages), remontée par `ConversationInfoSheet.onConversationUpdated`.
+    ///
+    /// `conversation` ci-dessus est une valeur FIGÉE, capturée au moment de la
+    /// navigation : `MeeshyConversation.==`/`.hash` ne comparent que `id`, donc
+    /// aucune recomposition du `NavigationStack` ne la rafraîchit quand seuls
+    /// ses champs internes changent. L'override est la seule source vivante.
+    @State private var conversationOverride: Conversation?
+
+    /// La conversation à AFFICHER : l'override serveur s'il existe, sinon la
+    /// valeur figée. `internal` (pas `private`) : lue par l'extension
+    /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
+    /// à portée de fichier.
+    var liveConversation: Conversation? { conversationOverride ?? conversation }
+
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
 
@@ -409,6 +440,10 @@ struct ConversationView: View {
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
     @State var composerHeight: CGFloat = 130
+    /// Hauteur de composer sur laquelle le bouton « redescendre en bas » est
+    /// ancré. FIGÉE tant qu'un message est en cours de rédaction : voir
+    /// `resolvedScrollButtonAnchor(current:composerHeight:isComposing:)`.
+    @State var composerScrollButtonAnchor: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
 
@@ -476,6 +511,28 @@ struct ConversationView: View {
         return contentHeight + safeAreaBottom
     }
 
+    /// Ancrage vertical du bouton « redescendre en bas ».
+    ///
+    /// Le bouton était posé sur `composerHeight`, qui grandit d'une ligne à
+    /// chaque retour à la ligne du champ de saisie : écrire un message faisait
+    /// donc REMONTER le bouton sous le doigt, et ce déplacement se lisait comme
+    /// un retour au bas de la conversation alors que l'utilisateur était en
+    /// train de relire son historique.
+    ///
+    /// Pendant la rédaction, l'ancrage reste donc celui d'avant la première
+    /// frappe. Il se réaligne dès que le champ redevient vide — à l'envoi, ou
+    /// quand l'utilisateur efface — c'est-à-dire aux seuls moments où plus
+    /// aucune position de lecture n'est en jeu. Les autres causes de
+    /// redimensionnement du composer (ouverture des options, barre de réponse)
+    /// continuent de le déplacer : elles ne sont pas « écrire ».
+    static func resolvedScrollButtonAnchor(
+        current: CGFloat,
+        composerHeight: CGFloat,
+        isComposing: Bool
+    ) -> CGFloat {
+        isComposing ? current : composerHeight
+    }
+
     private func updateComposerHeight(_ contentHeight: CGFloat) {
         // `DeviceLayout.safeAreaBottom` et non un parcours de `connectedScenes` :
         // ce dernier est un `Set` NON ORDONNÉ, donc `.first` peut renvoyer une
@@ -487,6 +544,11 @@ struct ConversationView: View {
             safeAreaBottom: DeviceLayout.safeAreaBottom
         ) else { return }
         composerHeight = height
+        composerScrollButtonAnchor = Self.resolvedScrollButtonAnchor(
+            current: composerScrollButtonAnchor,
+            composerHeight: height,
+            isComposing: !composerText.text.isEmpty
+        )
     }
 
     // MARK: - Computed Properties
@@ -800,7 +862,14 @@ struct ConversationView: View {
                 .zoomTransitionDestination(sourceID: overlayState.storyViewerUserId ?? "", in: zoomNamespace)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
-                if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
+                if let conv = liveConversation {
+                    ConversationInfoSheet(
+                        conversation: conv,
+                        accentColor: accentColor,
+                        messages: viewModel.messages,
+                        onConversationUpdated: { conversationOverride = $0 }
+                    )
+                }
             }
             .alert(String(localized: "conversation.view.action_selected", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
                 Button(String(localized: "common.ok", bundle: .main)) { composerState.actionAlert = nil }
@@ -861,8 +930,25 @@ struct ConversationView: View {
                 ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
                     .presentationDetents([.medium, .large])
             }
-            .sheet(item: $composerState.forwardMessage) { msgToForward in
-                ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor, onOpenConversation: { router.navigateToConversation($0) }) { composerState.forwardMessage = nil }
+            .sheet(item: $composerState.forwardMessage, onDismiss: {
+                // La feuille est DÉMONTÉE : le plein écran peut prendre sa
+                // place. Promouvoir plus tôt présenterait deux modaux à la fois.
+                guard let attendue = composerState.pendingComposeTarget else { return }
+                composerState.pendingComposeTarget = nil
+                composerState.composeMediaTarget = attendue
+            }) { msgToForward in
+                ForwardPickerSheet(
+                    message: msgToForward,
+                    sourceConversationId: conversation?.id ?? "",
+                    accentColor: accentColor,
+                    onOpenConversation: { router.navigateToConversation($0) },
+                    // Loi 6 — SECOND point d'entrée du MÊME chemin, jamais une
+                    // dixième porte : la feuille se referme et rend la main,
+                    // l'hôte pose le même état que l'appui long. Elle ne monte
+                    // pas le meuble, ce qui en ferait un second contrat d'envoi.
+                    onCompose: { composerState.pendingComposeTarget = ComposableMediaTarget(message: msgToForward) },
+                    onDismiss: { composerState.forwardMessage = nil }
+                )
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
                     // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
@@ -919,6 +1005,29 @@ struct ConversationView: View {
     private var bodyWithCovers: AnyView {
         AnyView(
         bodyWithLifecycle
+            // La PORTE du média reçu (lot 5, O13). Un plein écran, pas une
+            // feuille : c'est un atelier, et il occupe l'écran comme celui de
+            // la création. Elle vit dans la couche des COVERS et non dans celle
+            // des feuilles, où le débordement de pile par profondeur de type a
+            // déjà coûté dix-huit rapports device.
+            //
+            // Le montage du MEUBLE, lui, reste dans la porte : le poser ici
+            // recopierait son envoi, sa reprise hors-ligne et sa sortie — et
+            // ce lot livre justement un SECOND déclencheur du même chemin.
+            .fullScreenCover(item: $composerState.composeMediaTarget) { cible in
+                ConversationMediaComposerDoor(
+                    // L'INTENTION naît dans la porte, pas ici : un second site
+                    // qui la construirait serait un second contrat à tenir
+                    // d'accord, et ce lot a DEUX déclencheurs pour une seule
+                    // présentation. L'hôte ne remet que la cible.
+                    target: cible,
+                    storyViewModel: storyViewModel,
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel,
+                    onDismiss: { composerState.composeMediaTarget = nil }
+                )
+            }
             .fullScreenCover(item: $scrollState.galleryStartAttachment) { startAttachment in
                 ConversationMediaGalleryView(
                     allAttachments: viewModel.allVisualAttachments,
@@ -1169,6 +1278,13 @@ struct ConversationView: View {
                     // transitions on app reopen.
                     if let replyId = draft.replyToId,
                        let authorName = draft.replyAuthorName {
+                        // `authorAvatarUrl` reste nil, et c'est SANS
+                        // CONSEQUENCE : `MessageDraft` aplatit la citation en
+                        // quatre champs, et cette reference n'alimente que la
+                        // BANNIERE du composeur, qui ne dessine aucun avatar.
+                        // A l'envoi, seul `messageId` survit — la citation
+                        // rendue est reconstruite par `makeReplyReference`
+                        // depuis le message cite en memoire, avatar compris.
                         composerState.pendingReplyReference = ReplyReference(
                             messageId: replyId,
                             authorName: authorName,
@@ -1392,6 +1508,16 @@ struct ConversationView: View {
                     // R-7 : la même réserve basse que le fil — le composeur
                     // n'est jamais une zone où une bulle reste prise.
                     bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
+                    // L2b/2b-7 : la frappe atteint le lecteur quel que soit
+                    // son mode — le pane Rivière est OPAQUE et couvrait la
+                    // cellule de frappe du Fil. Même source que le Fil
+                    // (`typingParticipants`, avec leur visage), même vue (`TypingIndicatorBubble`).
+                    //
+                    // La lecture est VIVANTE sans rien ajouter : le roster est
+                    // porté par `ConversationStateStore`, que cette vue observe
+                    // déjà (`typingObserver`, câblé dans l'init) — c'est ce qui
+                    // fait repasser le body à chaque `typing:start`/`stop`.
+                    typingParticipants: viewModel.typingParticipants,
                     // R-5 : identité vivante — les MÊMES sources que le Fil
                     // (`MessageListViewController` : présence par expéditeur,
                     // anneau de story sauf pour soi, fiche par le routeur).
@@ -1476,6 +1602,30 @@ struct ConversationView: View {
                         }
                     }
                 ))
+                // 2b-2 — le Résumé Vivant naissait VIDE quand il était le mode
+                // d'OUVERTURE. `LivingSummaryHost` construit son ViewModel dans
+                // l'autoclosure d'un `@StateObject` : elle n'est évaluée qu'à la
+                // CRÉATION de l'identité de vue, et le VM ne recompose jamais
+                // son digest. Or le fil s'ouvre souvent AVANT ses messages
+                // (cache puis réseau) — même moment d'ouverture que la Rivière,
+                // qui le traite par son empreinte.
+                //
+                // L'identité bascule EXACTEMENT une fois, au passage vide →
+                // peuplé : l'autoclosure se réévalue avec les messages, et rien
+                // d'autre ne bouge. En pratique une conversation ne redevient
+                // pas vide ; rien dans `viewModel.messages`
+                // (`@Published var messages: [Message] = []`) ne l'interdit
+                // formellement (F12, revue adversariale 2026-08-25) — si le
+                // fil redevenait vide (purge, rechargement raté, réouverture
+                // sur une fenêtre froide), l'hôte serait simplement RECONSTRUIT :
+                // coût borné, jamais un digest périmé affiché. Coût assumé
+                // par ailleurs : le `.task` d'enrichissement agent se rejoue
+                // une fois (no-op pour un invité).
+                //
+                // Ce n'est PAS `showsSkeleton` qui peut garder ce basculement :
+                // il tombe à `false` dès que la réponse agent arrive, donc avant
+                // la première population sur base froide.
+                .id(viewModel.messages.isEmpty)
                 .zIndex(80)
                 .transition(.opacity)
             }
@@ -1612,7 +1762,7 @@ struct ConversationView: View {
                           msg.isForwardable else { return }
                     composerState.forwardMessage = msg
                 },
-                onLongPress: { messageId, focalPreview in
+                onLongPress: { messageId in
                     // Preserve l'overlay menu existant (MessageOverlayMenu panel).
                     // L'infrastructure frame-tracking + LayoutEngine reste en place
                     // et sera utilisée ensuite pour lifter la bulle dans le flow
@@ -1623,16 +1773,21 @@ struct ConversationView: View {
                     // active à la fois).
                     guard overlayState.quickReactionMessageId == nil else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                    if msg.callSummary != nil {
-                        overlayState.callDetailMessage = msg
-                    } else if msg.messageSource != .system {
-                        // Focal : l'aperçu élevé = pixels de la cellule vivante
-                        // (aucun second chemin de rendu). Bulles : nil → le
-                        // ThemedMessageBubble historique de l'overlay.
-                        overlayState.overlayFocalPreview = focalPreview
-                        overlayState.overlayMessage = msg
-                        overlayState.showOverlayMenu = true
-                    }
+                    // L'appui long ouvre les options habituelles — pour TOUT
+                    // message, avis système compris (directive 2026-08-24).
+                    //
+                    // Il aiguillait auparavant par type : un résumé d'appel
+                    // ouvrait sa feuille de détail, et tout autre message
+                    // système ne faisait RIEN. Ce no-op était le vrai défaut :
+                    // un avis d'arrivée reste un message du fil — épinglable,
+                    // favorisable, signalable, supprimable — et le geste qui
+                    // ouvre ces options est le même partout.
+                    //
+                    // La feuille de détail d'un appel n'est pas perdue pour
+                    // autant : elle est devenue une ACTION du menu
+                    // (`PrimaryAction.callDetail`, cf. `onShowCallDetail`).
+                    overlayState.overlayMessage = msg
+                    overlayState.showOverlayMenu = true
                 },
                 // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
@@ -1782,7 +1937,9 @@ struct ConversationView: View {
             // iPadRootView (cf. showsOwnConnectionBanner ci-dessus).
             if showsOwnConnectionBanner {
                 VStack {
-                    Color.clear.frame(height: composerState.showOptions ? 72 : 56)
+                    Color.clear.frame(height: ConnectionBanner.liftedTopPadding(
+                        base: composerState.showOptions ? 72 : 56
+                    ))
                     ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting, activeConversationId: { viewModel.conversationId })
                     Spacer()
                 }
@@ -1827,7 +1984,7 @@ struct ConversationView: View {
                 // plus proche) en fondant pendant le défilement et en revient
                 // (`EdgeHiddenChrome`) ; ses propres entrées/sorties (proximité
                 // du bas) suivent la même direction.
-                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerHeight + MeeshySpacing.sm) } }
+                VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, MeeshySpacing.lg).padding(.bottom, composerScrollButtonAnchor + MeeshySpacing.sm) } }
                     .hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)
                     .zIndex(60)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -2094,9 +2251,9 @@ struct ConversationView: View {
             ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
             Spacer()
             ThemedAvatarButton(
-                name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
+                name: liveConversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
                 isExpanded: false, storyState: headerStoryRingState,
-                avatarURL: conversation?.type == .direct ? conversation?.participantAvatarURL : conversation?.avatar,
+                avatarURL: liveConversation?.type == .direct ? liveConversation?.participantAvatarURL : liveConversation?.avatar,
                 presenceState: headerPresenceState,
                 moodEmoji: headerMoodEmoji
             ) {
@@ -2321,7 +2478,14 @@ struct ConversationView: View {
             expandedHeaderTitleLabel
                 .meeshyTapTarget()
         }
-        .accessibilityLabel(conversation?.name ?? "Conversation")
+        // F11 (revue adversariale 2026-08-25) : `liveConversation` — visible
+        // sur la même surface que `headerTagsRow` juste en dessous (déjà
+        // basculée). Le TITRE rendu par ce même bouton
+        // (`expandedHeaderTitleLabel` → `conversation?.displayName`) reste
+        // délibérément sur la valeur figée — hors du périmètre minimal de ce
+        // correctif, suivi nommé séparément — seul le libellé d'accessibilité
+        // change ici.
+        .accessibilityLabel(liveConversation?.name ?? "Conversation")
         .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
         if conversation?.type == .direct {
@@ -2422,12 +2586,14 @@ struct ConversationView: View {
             MessageOverlayMenu(
                 message: msg,
                 contactColor: accentColor,
-                // Focal : la frame vient de la capture du contrôleur (le
-                // frame-tracker ne suit que les bulles) ; l'aperçu élevé est
-                // alors l'image de la cellule vivante.
-                messageBubbleFrame: overlayState.overlayFocalPreview?.frameInWindow
-                    ?? frameTracker.frame(for: msg.id) ?? .zero,
-                focalPreviewImage: overlayState.overlayFocalPreview?.image,
+                // Le frame-tracker ne suit que les BULLES : en Focal/Script il
+                // rend `nil`, donc `.zero`, et l'overlay présente son aperçu
+                // centré, à sa taille naturelle. C'est exactement ce que
+                // demande la directive du 2026-08-23 — « le mode focal, en
+                // long-press, doit afficher le message normal » — là où la
+                // capture de la cellule Focal en tranchait l'identité et la
+                // barre de méta, toutes deux à cheval sur son cadre.
+                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
@@ -2476,6 +2642,11 @@ struct ConversationView: View {
                         attachmentId: attachment.id.isEmpty ? nil : attachment.id
                     ))
                 },
+                onCompose: {
+                    // L'overlay ne monte rien : il rend la main. Le même état
+                    // que le second déclencheur, un seul chemin de présentation.
+                    composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
+                },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                 mentionDisplayNames: viewModel.mentionDisplayNames,
@@ -2490,6 +2661,9 @@ struct ConversationView: View {
                     overlayState.moreSheetInitialItem = nil
                     overlayState.detailSheetMessage = msg
                 },
+                onShowCallDetail: {
+                    overlayState.callDetailMessage = msg
+                },
                 onExpandFullPicker: {
                     overlayState.fullReactionPickerMessage = msg
                 }
@@ -2503,14 +2677,15 @@ struct ConversationView: View {
     /// Contenu du `.contextMenu` natif d'une bulle (iOS 26+, cf. MessageListView
     /// / MessageListViewController). Palette d'emojis rapides (`ControlGroup`,
     /// choix produit 2026-07-14) + actions primaires via `MessageActionResolver`
-    /// — EXACTEMENT les mêmes callbacks que `overlayMenuContent` (SSOT). Menu
-    /// vide pour les messages système / résumés d'appel (parité overlay :
-    /// aucun menu). Reply/Forward restent dans « Plus… » (feuille détail) et
-    /// via le swipe latéral, inchangés.
+    /// — EXACTEMENT les mêmes callbacks que `overlayMenuContent` (SSOT).
+    /// Reply/Forward restent dans « Plus… » (feuille détail) et via le swipe
+    /// latéral, inchangés.
+    ///
+    /// **Plus d'exclusion des messages système depuis le 2026-08-24** : la
+    /// parité qui la justifiait — « l'overlay n'en donne aucun » — a disparu
+    /// avec le no-op de `onLongPress`. Ce chemin doit rendre le MÊME menu que
+    /// l'overlay, résumé d'appel compris (dont l'entrée `.callDetail`).
     private func buildNativeMessageMenu(for msg: Message) -> AnyView {
-        guard msg.callSummary == nil, msg.messageSource != .system else {
-            return AnyView(EmptyView())
-        }
         let hasText = !msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let ctx = MessageMenuContext(
             isMine: msg.isMe,
@@ -2525,8 +2700,15 @@ struct ConversationView: View {
             isStarred: viewModel.isStarred(messageId: msg.id),
             isEdited: msg.isEdited,
             hasEditRevisions: true,
+            hasCallSummary: msg.callSummary != nil,
             saveableAttachmentCount: msg.attachments.filter { $0.type != .location }.count,
-            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
+            canComposeMedia: ComposableAttachment.offers(message: msg),
+            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
+            // `isForwardable` profitait ici de son défaut `true`, inoffensif
+            // tant que `primaryActions` ne le lisait pas. Le lot 5 le rend
+            // LOAD-BEARING : sans lui, « Composer » s'offrirait sur une vue
+            // unique, et la clause O13 tomberait par un simple défaut.
+            isForwardable: msg.isForwardable
         )
         let actions = MessageActionResolver.primaryActions(ctx)
         // 4 emojis les plus utilisés (fallback sur les défauts) — rangée rapide
@@ -2627,6 +2809,13 @@ struct ConversationView: View {
             } label: {
                 Label(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main), systemImage: "arrow.down.to.line")
             }
+        case .compose:
+            Button {
+                HapticFeedback.light()
+                composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
+            } label: {
+                Label(String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main), systemImage: "wand.and.stars")
+            }
         case .pin:
             Button {
                 Task { await viewModel.togglePin(messageId: msg.id) }
@@ -2667,6 +2856,15 @@ struct ConversationView: View {
                 overlayState.deleteConfirmMessageId = msg.id
             } label: {
                 Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        case .callDetail:
+            Button {
+                overlayState.callDetailMessage = msg
+            } label: {
+                Label(
+                    String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main),
+                    systemImage: "info.circle"
+                )
             }
         }
     }

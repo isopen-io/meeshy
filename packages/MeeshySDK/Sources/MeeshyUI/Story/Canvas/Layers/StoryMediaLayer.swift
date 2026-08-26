@@ -45,6 +45,11 @@ public struct DiskCacheImageLoader: StoryMediaImageLoading {
 /// (`EarlyPerfInliner`) sur le `deinit` synthétisé en Release
 /// `-O -whole-module-optimization`. Un autre call site = une autre copie typée.
 private final class StoryMediaLayerWeakBox: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     nonisolated(unsafe) weak var value: StoryMediaLayer?
     nonisolated init(_ value: StoryMediaLayer) { self.value = value }
 }

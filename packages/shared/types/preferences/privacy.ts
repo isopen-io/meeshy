@@ -12,6 +12,14 @@ export const PrivacyPreferenceSchema = z.object({
   showReadReceipts: z.boolean().default(true),
   showTypingIndicator: z.boolean().default(true),
 
+  // Réciprocité de la source des transferts — OPT-OUT (défaut `true`).
+  // Bilatérale : la source d'un transfert n'est servie que si son AUTEUR et
+  // son LECTEUR l'autorisent tous deux. Un seul refus masque, dans les deux
+  // sens : qui se cache ne voit pas. Porte le nom de l'auteur d'origine ET
+  // celui du groupe public source.
+  // Règle : `packages/shared/utils/forward-source-visibility.ts`.
+  showForwardSource: z.boolean().default(true),
+
   // Contrôle des communications
   allowContactRequests: z.boolean().default(true),
   allowGroupInvites: z.boolean().default(true),
@@ -40,6 +48,7 @@ export const PRIVACY_PREFERENCE_DEFAULTS: PrivacyPreference = {
   showLastSeen: true,
   showReadReceipts: true,
   showTypingIndicator: true,
+  showForwardSource: true,
   allowContactRequests: true,
   allowGroupInvites: true,
   allowCallsFromNonContacts: false,

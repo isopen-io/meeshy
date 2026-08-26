@@ -8,15 +8,25 @@ class PostActionMenuTest {
     // Le post d'un AUTRE : tout sauf la suppression, et le signalement en dernier —
     // une action de moderation ne doit jamais preceder les actions ordinaires.
     @Test
-    fun `someone else's post offers share, copy, repost, bookmark then report`() {
+    fun `someone else's post offers share, copy, repost, quote, bookmark then report`() {
         val actions = PostActionMenu.actions(PostActionContext(isOwn = false, isBookmarked = false))
         assertThat(actions).containsExactly(
             PostAction.Share,
             PostAction.CopyLink,
             PostAction.Repost,
+            PostAction.Quote,
             PostAction.Bookmark,
             PostAction.Report,
         ).inOrder()
+    }
+
+    // Citer suit immediatement reposter, pour tout post — parite iOS (le menu de
+    // partage offre repost ET quote, cf. PostDetailView.toggleDetailRepost).
+    @Test
+    fun `quote follows repost for any post`() {
+        val actions = PostActionMenu.actions(PostActionContext(isOwn = true, isBookmarked = false))
+        assertThat(actions.indexOf(PostAction.Quote))
+            .isEqualTo(actions.indexOf(PostAction.Repost) + 1)
     }
 
     // Son PROPRE post : la suppression remplace le signalement (se signaler
@@ -30,6 +40,7 @@ class PostActionMenuTest {
             PostAction.Share,
             PostAction.CopyLink,
             PostAction.Repost,
+            PostAction.Quote,
             PostAction.Bookmark,
             PostAction.Pin,
             PostAction.Delete,

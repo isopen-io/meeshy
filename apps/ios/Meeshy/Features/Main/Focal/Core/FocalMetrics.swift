@@ -72,11 +72,18 @@ nonisolated public enum FocalMetrics {
 
     /// `thread.row.padding` — `5/16` (contrat Lentille §4.3, colonne Fil).
     nonisolated public enum Row {
-        public static let paddingVertical: CGFloat = 5
+        /// 5 → 3 le 2026-08-24 (« le mode script et focal mettent moins
+        /// d'espace entre les messages d'un groupe, actuellement trop de blanc
+        /// inutile »). Cette cote joue DEUX fois entre deux rangées de suite —
+        /// le bas de l'une et le haut de l'autre : 10 pt devenaient 6.
+        public static let paddingVertical: CGFloat = 3
         public static let paddingHorizontal: CGFloat = 16
         /// Cote ABSENTE de `thread.*` — voir doc de tête (TODO CONTRACTUEL).
-        /// 8 → 4 le 2026-08-21 (« réduit l'espace entre les groupes »).
-        public static let groupTopPadding: CGFloat = 4
+        /// 8 → 4 le 2026-08-21 (« réduit l'espace entre les groupes »), puis
+        /// 4 → 8 le 2026-08-24 : resserrer l'INTÉRIEUR d'un groupe rapproche
+        /// aussi les groupes entre eux, or ce sont eux qui doivent rester
+        /// distincts. La respiration quitte l'intérieur pour la frontière.
+        public static let groupTopPadding: CGFloat = 8
     }
 
     // MARK: - Avatar (pastille)
@@ -179,6 +186,12 @@ nonisolated public enum FocalMetrics {
     nonisolated public enum Focus {
         /// Plafond de caractères du texte du message EN FOCUS (2026-08-21) :
         /// au-delà, « Lire plus » — une magnificence qui tient à l'écran.
+        ///
+        /// **Sans consommateur depuis le 2026-08-25** (L1-01, amendement
+        /// `decisions.md`) : `truncateLimit` de la rangée vaut désormais
+        /// `BubbleExpandableText.truncateLimit` (512) qu'elle soit élue ou
+        /// non. Conservée comme POINT DE REBRANCHEMENT si le plafond de
+        /// focus revient — ne pas supprimer.
         public static let maxCharacters: Int = 360
 
         /// Gabarit de pastille réservé en permanence par l'en-tête
@@ -230,8 +243,27 @@ nonisolated public enum FocalMetrics {
         /// carte : la carte (fond SwiftUI de la rangée, même repère que les
         /// chips) dépasse le bloc de contenu de `focusCardInnerMargin`.
         public static let overhang: CGFloat = chipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
-        public static let identityAvatarSize: CGFloat = 18
-        public static let identityOverhang: CGFloat = overhang
+        /// L'identité du message magnifié est la SEULE chip à dépasser le
+        /// gabarit commun — « en plus agrandi simplement » (directive
+        /// 2026-08-24). Elle porte désormais tout ce que porte l'en-tête de
+        /// rangée (présence, mood, anneau de story, fantôme d'un visiteur sans
+        /// compte) : au gabarit `chipHeight` de 24, rien de tout cela n'était
+        /// lisible.
+        public static let identityAvatarSize: CGFloat = 26
+        public static let identityChipHeight: CGFloat = 34
+        public static let identityNameSize: CGFloat = 13.5
+
+        /// Drapeaux de langue proposés par une rangée. Une rangée ordinaire en
+        /// montre TROIS, la magnifiée CINQ (directive 2026-08-24) : la place
+        /// disponible n'est pas la même, et un message très traduit ne doit pas
+        /// noyer sa propre ligne.
+        public static let flagLimitPlain = 3
+        public static let flagLimitMagnified = 5
+        /// Débord de l'identité — son centre tombe SUR la ligne haute de la
+        /// carte, comme les chips de la ligne basse. Elle avait été posée
+        /// entièrement au-dessus le 2026-08-24 ; l'utilisateur l'a voulue de
+        /// nouveau EN BORDURE le même jour.
+        public static let identityOverhang: CGFloat = identityChipHeight / 2 + FocalScrollPerspective.focusCardInnerMargin
     }
 
     nonisolated public enum HiddenChrome {
@@ -322,7 +354,9 @@ nonisolated public enum FocalMetrics {
     // `FocusChip` a vécu ici quelques heures le 2026-08-22 : j'y avais nommé
     // les opacités de contour des chips de la carte de focus pour satisfaire la
     // garde R15. Le tronc avait fait le MÊME travail au même moment, dans
-    // `FocalScrollPerspective` (`focusChipRingOpacity`,
-    // `focusCardBorderOpacity*`) — c'est SA maison qui fait foi : deux domiciles
+    // `FocalScrollPerspective` — c'est SA maison qui fait foi : deux domiciles
     // pour une même cote, c'est exactement ce que la garde R15 interdit.
+    // Les contours eux-mêmes ont disparu le 2026-08-24 (« plus de cadre en
+    // mode focal ») ; ce qui reste des chips — leur teinte de fond, marque de
+    // l'état actif — vit toujours là-bas (`focusChipFillOpacity`).
 }

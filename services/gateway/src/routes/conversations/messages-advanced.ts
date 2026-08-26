@@ -6,6 +6,7 @@ import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
+import type { Message } from '@meeshy/shared/types/index';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
@@ -38,6 +39,7 @@ import {
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
+import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
 import { broadcastReactionMutation } from '../../socketio/broadcastReactionMutation';
 import { notifyReactionRemoved } from '../../services/notifications/reactionNotify';
 import type {
@@ -242,7 +244,28 @@ export function registerMessagesAdvancedRoutes(
         required: ['content'],
         properties: {
           content: { type: 'string', description: 'Updated message content', minLength: 1 },
-          originalLanguage: { type: 'string', description: 'Language code', default: 'fr' }
+          // PAS de `default: 'fr'`, et c'est le correctif, pas une omission.
+          //
+          // Fastify active `useDefaults` d'AJV : un `default` dans un schéma de
+          // REQUÊTE n'est pas une documentation, c'est une ÉCRITURE dans
+          // `request.body` avant que le gestionnaire ne s'exécute (mesuré sous
+          // les options AJV de `server.ts`). Le champ n'arrivait donc JAMAIS
+          // `undefined`, et la garde qui suit — écrite pour distinguer « je
+          // n'affirme rien sur la langue » de « c'est du français » — ne
+          // pouvait pas se déclencher. Cette route est la SEULE des quatre
+          // entrées d'édition à réécrire `originalLanguage` : sur elle, une
+          // omission réétiquetait le message en français, en base ET comme
+          // langue SOURCE de la retraduction — un texte anglais ressortant
+          // alors traduit comme du français dans toutes les langues du Prisme.
+          //
+          // **Piège armé, pas panne** — et la distinction est mesurée : les
+          // trois clients envoient aujourd'hui la clé (le web la passe en
+          // paramètre REQUIS de `handleEditMessage` ; iOS édite par
+          // `PUT /messages/:messageId` et Android par `PATCH /messages/:id`,
+          // deux routes qui ne portent pas ce champ). Personne ne déclenche
+          // donc le défaut — jusqu'au premier appelant qui omettra la clé, en
+          // lisant une garde qui a l'air de le couvrir.
+          originalLanguage: { type: 'string', description: 'Language code' }
         }
       },
       response: {
@@ -594,7 +617,20 @@ export function registerMessagesAdvancedRoutes(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
-        payload: messageResponse as unknown as Record<string, unknown>,
+        // Le NOYAU du contrat vient de `buildMessageEditedCore` (voir le
+        // sibling `PUT /messages/:messageId`) : le `as unknown as
+        // Record<string, unknown>` qui vivait ici n'était pas une commodité de
+        // typage, c'était la marque du transport que le contrat ne gouvernait
+        // pas — et qui servait le `Participant.id` en guise de `senderId`.
+        payload: {
+          ...messageResponse,
+          ...buildMessageEditedCore(updatedMessage as unknown as Message, {
+            conversationId,
+            content: processedContent,
+            isEdited: updatedMessage.isEdited,
+            editedAt: updatedMessage.editedAt ?? new Date(),
+          }),
+        },
         onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
       });
 
@@ -1087,7 +1123,18 @@ export function registerMessagesAdvancedRoutes(
         actorUserId: userId,
         eventType: 'edited',
         messageId,
-        payload: messageResponse as unknown as Record<string, unknown>,
+        // Même noyau, même raison que sur les deux siblings d'édition : ce
+        // transport est celui du client ANDROID, et il servait lui aussi le
+        // `Participant.id` en guise de `senderId`.
+        payload: {
+          ...messageResponse,
+          ...buildMessageEditedCore(updatedMessage as unknown as Message, {
+            conversationId: message.conversationId,
+            content: processedContent,
+            isEdited: updatedMessage.isEdited,
+            editedAt,
+          }),
+        },
         onError: (err) => logger.error('[CONVERSATIONS] Erreur lors de la diffusion Socket.IO', err),
       });
 
@@ -1372,7 +1419,7 @@ export function registerMessagesAdvancedRoutes(
             eventType: 'reaction-added',
             messageId,
             emoji,
-            payload: updateEvent as unknown as Record<string, unknown>,
+            payload: updateEvent,
             onError: (error) => logger.warn('[REACTION-REST] broadcast failed', error),
           });
         }
@@ -1533,7 +1580,7 @@ export function registerMessagesAdvancedRoutes(
             eventType: 'reaction-removed',
             messageId,
             emoji,
-            payload: updateEvent as unknown as Record<string, unknown>,
+            payload: updateEvent,
             onError: (error) => logger.warn('[REACTION-REST] removal broadcast failed', error),
           });
         }

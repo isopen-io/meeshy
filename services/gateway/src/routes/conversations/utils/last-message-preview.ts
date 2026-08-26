@@ -1,3 +1,5 @@
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+
 import type { MessageTranslationJSON } from '../../../utils/translation-transformer';
 
 /**
@@ -76,15 +78,29 @@ export function buildLastMessagePreviewTranslations(params: {
   if (!translations || typeof translations !== 'object' || Array.isArray(translations)) return null;
   if (viewerLanguages.length === 0) return null;
 
-  const original = originalLanguage?.toLowerCase() ?? null;
+  // Les trois sources de codes comparées ici — langue d'origine, langues du
+  // lecteur, clés de la carte — sont canonicalisées par la même SSOT
+  // (`normalizeLanguageForDedup` : casse repliée, région strippée ET réduction
+  // 3-lettres/legacy), jamais un `.toLowerCase()` brut. `viewerLanguages` sort
+  // déjà région-strippé de `resolveUserLanguagesOrdered`, mais `originalLanguage`
+  // et les CLÉS de `Message.translations` arrivent brutes du fil : un message
+  // écrit avant la canonicalisation au write-boundary porte encore `'en-US'` /
+  // `'fr-FR'` / `'fra'`. Comparées en minuscules seules, ces clés région-taguées
+  // ne matchaient jamais le rang normalisé du prisme — la traduction était
+  // DROPPÉE ici, avant même le résolveur client (`resolveLastMessagePreview`),
+  // et le lecteur retombait sur l'original : violation directe du Prisme (#3).
+  // Canonicaliser au point de comparaison rend le pré-filtre robuste quelle que
+  // soit la normalisation de l'appelant, et idempotent sur les codes déjà
+  // canoniques (zéro régression). Jumeau exact du résolveur client.
+  const original = originalLanguage ? normalizeLanguageForDedup(originalLanguage) : null;
   const entries = Object.entries(translations as Record<string, unknown>);
 
   const out: Record<string, string> = {};
   for (const wanted of viewerLanguages) {
-    const target = wanted.toLowerCase();
+    const target = normalizeLanguageForDedup(wanted);
     if (target === original) continue;
 
-    const match = entries.find(([lang]) => lang.toLowerCase() === target);
+    const match = entries.find(([lang]) => normalizeLanguageForDedup(lang) === target);
     if (!match) continue;
 
     const data = match[1] as Partial<MessageTranslationJSON> | null | undefined;

@@ -57,7 +57,13 @@ private fun ApiPost.effectiveStoryExpiresAt(): String? {
     return Instant.ofEpochMilli(created + STORY_DEFAULT_TTL_HOURS * MILLIS_PER_HOUR).toString()
 }
 
-private fun ApiPost.toStoryItem(): StoryItem {
+/**
+ * Canonical `APIPost -> StoryItem` projection (faithful port of the iOS mapper).
+ * Public so the realtime viewer can re-project a `story:updated` payload through the
+ * exact same conversion the initial `list()` load used — one source of truth for how
+ * a wire story becomes a viewer slide item.
+ */
+public fun ApiPost.toStoryItem(): StoryItem {
     val translations = translations?.map { (lang, entry) ->
         StoryTranslation(language = lang, content = entry.text)
     }

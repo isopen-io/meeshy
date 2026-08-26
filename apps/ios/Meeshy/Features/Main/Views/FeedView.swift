@@ -54,8 +54,6 @@ struct FeedView: View {
     /// Set to false to keep the existing SwiftUI ScrollView path.
     @State private var useUIKitList = false
     @State private var searchText = ""
-    /// Carte plein écran des posts géolocalisés (bouton `map` du header).
-    @State private var showPostsMap = false
     @State var showComposer = false
     @FocusState var isComposerFocused: Bool
     @State private var composerBounce: Bool = false
@@ -67,6 +65,25 @@ struct FeedView: View {
     @State var composerReferences: [ComposerReference] = []
     @State private var expandedComments: Set<String> = []
     @State var postVisibility: String = "PUBLIC"
+    /// Audience nommée de la publication en cours (EXCEPT/ONLY) et le
+    /// sélecteur de personnes qui la remplit. Vides tant que l'auteur reste
+    /// sur une visibilité qui n'en demande pas.
+    @State  var postVisibilityUserIds: [String] = []
+    @State  var audiencePickerMode: PostVisibility? = nil
+
+    /// La visibilité choisie, relue comme un mode du modèle — un `rawValue`
+    /// inconnu (état corrompu) retombe sur PUBLIC, le défaut produit.
+    var selectedPostVisibility: PostVisibility {
+        PostVisibility(rawValue: postVisibility) ?? .public
+    }
+
+    /// EXCEPT sans exclus = privé fantôme ; ONLY sans inclus = invisible pour
+    /// tous. Le gateway les REFUSE (`CreatePostSchema`) : mieux vaut retenir
+    /// l'envoi ici que le laisser échouer après coup.
+    var postAudienceIncomplete: Bool {
+        selectedPostVisibility.requiresUserSelection && postVisibilityUserIds.isEmpty
+    }
+
     /// A QUALIFYING composition (video || audio || >= 2 images —
     /// `ReelComposition.qualifiesAsReel`) defaults to a REEL; the author can
     /// force a plain POST via the composer's Réel⇄Post toggle. A non-qualifying
@@ -118,6 +135,16 @@ struct FeedView: View {
     /// nom et l'adresse ; `MessageAttachment.location` ne les portait pas et
     /// n'est plus le véhicule (Task 11/12, 2026-07-29).
     @State var pendingPlace: SharedPlace? = nil
+    /// Le SECOND opt-in de position (spec du 2026-08-02 §2) : « rendre ce
+    /// contenu trouvable à proximité ». INDÉPENDANT de `pendingPlace`, qui
+    /// gouverne le badge affiché et ne bouge pas — on peut afficher un lieu
+    /// sans être trouvable, et l'inverse.
+    ///
+    /// `.disabled` à l'ouverture, et reconstruit à chaque choix de lieu :
+    /// l'état porte la mémoire PRÉ-SÉLECTIONNÉE et les paliers offerts, tous
+    /// deux lus au moment où le lieu entre. L'interrupteur, lui, repart fermé
+    /// à chaque publication — le consentement porte sur UNE publication.
+    @State var nearbyDiscoverability: NearbyDiscoverabilityChoice = .disabled
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
@@ -437,6 +464,20 @@ struct FeedView: View {
         postRepostedIds.insert(postId)
         postRepostDelta[postId, default: 0] += 1
         postRepostInFlightIds.insert(postId)
+        // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
+        // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
+        // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
+        // laissait au socket un tour de boucle pour la retirer de
+        // `viewModel.posts` ; `cardType` rendait alors `nil`, le gateway
+        // repliait sur `POST` (`?? PostType.POST`) et une story repartagée
+        // devenait un post permanent. Le `Task` reçoit une cible déjà
+        // résolue : il n'a plus de lecture à faire.
+        let carte = viewModel.posts.first(where: { $0.id == postId })
+        let cible = RepostTargeting.target(
+            cardId: postId, cardType: carte?.type,
+            repostOfId: carte?.repost?.id,
+            originalRepostOfId: carte?.repost?.originalRepostOfId
+        )
         Task {
             defer {
                 Task { @MainActor in
@@ -444,11 +485,8 @@ struct FeedView: View {
                 }
             }
             do {
-                _ = try await PostService.shared.repost(
-                    postId: postId,
-                    targetType: nil,
-                    content: nil,
-                    isQuote: false
+                try await RepostPublisher.shared.publish(
+                    .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
                 FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
@@ -556,11 +594,9 @@ struct FeedView: View {
                     titleColor: theme.textPrimary,
                     backArrowColor: MeeshyColors.indigo500,
                     backgroundColor: theme.backgroundPrimary,
-                    // Entrée de la carte des posts (retour user 2026-08-12) :
-                    // un bouton toujours visible dans le header — basculement
-                    // liste ↔ carte à un tap, cf. FeedPostsMapView pour le
-                    // raisonnement UX complet. Depuis 2026-08-13 elle voisine le
-                    // bouton Réels, à sa droite : deux lectures du même feed.
+                    // Deux lectures du même feed dans le slot trailing : les
+                    // Réels et « À proximité ». La carte des posts d'hier vit
+                    // désormais dans cette dernière (mode Discover, staff).
                     trailing: { feedHeaderActions },
                     titleAccessory: {
                         AnyView(
@@ -588,30 +624,18 @@ struct FeedView: View {
                     .task { await recoverStuckPostDraftIfNeeded() }
             }
         }
-        .fullScreenCover(isPresented: $showPostsMap) {
-            FeedPostsMapView(posts: locatedPosts) { post in
-                showPostsMap = false
-                router.push(.postDetail(post.id, post))
-            }
-        }
     }
 
-    // MARK: - Carte des posts
-
-    /// Posts du feed porteurs d'une position — la même source alimente le
-    /// badge du bouton d'entrée et les pins de la carte.
-    private var locatedPosts: [FeedPost] {
-        viewModel.posts.filter { $0.location != nil }
-    }
-
-    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
-    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
-    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
-    /// chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`) porte la même paire.
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
+    /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
+    /// vont ensemble ; le chemin iPhone (`ThemedFeedOverlay.feedHeaderActions`)
+    /// porte la même paire. La carte des posts du feed (bouton `map`,
+    /// 2026-08-13) a fusionné dans « À proximité » le 2026-08-26 — mode
+    /// Discover, réservé au staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: 8) {
             reelsButton
-            postsMapButton
+            nearbyButton
         }
         // La marge droite vient du header (`CollapsibleHeaderMetrics.trailingActionsInset`),
         // pas d'un padding local : posée ici, elle divergeait de celle de la
@@ -638,21 +662,25 @@ struct FeedView: View {
         .accessibilityIdentifier("feed.header.reels")
     }
 
-    private var postsMapButton: some View {
+    /// Troisième entrée du header : la découverte par PROXIMITÉ. Distincte de
+    /// la carte des posts juste à sa gauche, et il faut le dire — celle-ci
+    /// montre les posts DU FEED qui portent un lieu, celle-là interroge le
+    /// serveur pour tout ce qui est découvrable AUTOUR, feed ou pas.
+    private var nearbyButton: some View {
         Button {
             HapticFeedback.light()
-            showPostsMap = true
+            router.push(.nearbyDiscovery())
         } label: {
-            Image(systemName: "map")
+            Image(systemName: "dot.radiowaves.left.and.right")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
-        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
-        .accessibilityIdentifier("feed.header.map")
+        .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
+        .accessibilityHint(String(localized: "feed.nearby.open.hint", defaultValue: "Ouvre la carte des publications trouvables autour de vous", bundle: .main))
+        .accessibilityIdentifier("feed.header.nearby")
     }
 
     // MARK: - Composer Placeholder
@@ -899,6 +927,12 @@ struct FeedView: View {
         let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
         return FeedPostCard(
             post: post,
+            onSeeNearby: { place in
+                HapticFeedback.light()
+                router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate(
+                    latitude: place.latitude, longitude: place.longitude
+                )))
+            },
             isCommentsExpanded: expandedComments.contains(post.id),
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
@@ -1297,7 +1331,13 @@ struct FeedView: View {
                 onPublish: { audioURL, mimeType, durationMs, transcription in
                     showAudioComposer = false
                     Task {
-                        await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription, originalLanguage: transcription?.language)
+                        // La langue n'est plus passée ici : elle est celle de la
+                        // transcription, et `PublishIntent` l'en tire. Ce site
+                        // passait déjà `transcription?.language` — le paramètre
+                        // n'était qu'une porte ouverte sur la divergence du
+                        // jumeau de la feuille, qui empruntait la langue du
+                        // sélecteur de TEXTE quand la transcription manquait.
+                        await publishAudioPost(audioURL: audioURL, mimeType: mimeType, durationMs: durationMs, transcription: transcription)
                     }
                 },
                 onPublishBorrowed: { sound in
@@ -1408,24 +1448,46 @@ struct FeedView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
+                        // Les SIX audiences du modèle, comme le composer story
+                        // et l'éditeur : trois d'entre elles (COMMUNITY,
+                        // EXCEPT, ONLY) étaient inatteignables à la création
+                        // d'un post — offertes ailleurs, refusées ici.
                         Menu {
-                            Button { postVisibility = "PUBLIC" } label: {
-                                Label(String(localized: "Public", defaultValue: "Public"), systemImage: "globe")
-                            }
-                            Button { postVisibility = "FRIENDS" } label: {
-                                Label(String(localized: "Amis", defaultValue: "Amis"), systemImage: "person.2")
-                            }
-                            Button { postVisibility = "PRIVATE" } label: {
-                                Label(String(localized: "Prive", defaultValue: "Priv\u{00E9}"), systemImage: "lock")
+                            ForEach(PostVisibility.allCases) { mode in
+                                Button {
+                                    postVisibility = mode.rawValue
+                                    // Un consentement de découvrabilité ne
+                                    // survit pas à un resserrement d'audience
+                                    // qu'il ne couvrait pas : le contrôle
+                                    // disparaît hors PUBLIC, et un opt-in
+                                    // resté ouvert derrière lui repartirait
+                                    // au prochain élargissement sans que
+                                    // personne ne l'ait réexaminé.
+                                    if mode != .public {
+                                        nearbyDiscoverability.reset()
+                                    }
+                                    if mode.requiresUserSelection {
+                                        audiencePickerMode = mode
+                                    } else {
+                                        postVisibilityUserIds = []
+                                    }
+                                } label: {
+                                    Label(mode.label, systemImage: mode.icon)
+                                }
                             }
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
-                                    .font(.caption2)
-                                Text(postVisibility == "PUBLIC" ? String(localized: "Public", defaultValue: "Public") : postVisibility == "FRIENDS" ? String(localized: "Amis", defaultValue: "Amis") : String(localized: "Prive", defaultValue: "Priv\u{00E9}"))
-                                    .font(.caption)
+                                Image(systemName: selectedPostVisibility.icon)
+                                    .font(MeeshyFont.relative(10))
+                                Text(selectedPostVisibility.label)
+                                    .font(MeeshyFont.relative(12))
                             }
                             .foregroundColor(theme.textMuted)
+                        }
+                        .sheet(item: $audiencePickerMode) { mode in
+                            AudienceUserPickerView(mode: mode, initialSelection: postVisibilityUserIds) { ids in
+                                postVisibilityUserIds = ids
+                            }
                         }
                     }
 
@@ -1673,9 +1735,11 @@ struct FeedView: View {
                     originalType: post.type,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
+                    originalVisibility: post.visibility,
+                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                        await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                     },
                     onDismiss: { editingPost = nil }
                 )

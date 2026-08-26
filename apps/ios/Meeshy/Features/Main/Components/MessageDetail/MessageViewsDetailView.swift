@@ -263,13 +263,18 @@ struct MessageViewsDetailView: View {
                     )
                 }
 
-                if let forward = message.forwardedFrom {
+                // Même règle que la bulle : la fiche de détail lisait
+                // `forward.senderName` en clair et affichait le nom de la
+                // conversation source même pour un tête-à-tête. Une seule
+                // surface de vérité désormais.
+                if message.forwardedFrom != nil {
                     metaDivider
-                    metaInfoRow(icon: "arrowshape.turn.up.forward.fill", label: "Transfere de", value: forward.senderName, accent: accent)
-                    if let convo = forward.conversationName {
-                        metaDivider
-                        metaInfoRow(icon: "bubble.left.and.bubble.right", label: "Conversation", value: convo, accent: accent)
-                    }
+                    metaInfoRow(
+                        icon: "arrowshape.turn.up.forward.fill",
+                        label: String(localized: "message.detail.forwarded", defaultValue: "Forwarded", bundle: .main),
+                        value: BubbleForwardedIndicator.label(for: ForwardBadgePolicy.attribution(for: message.forwardedFrom)),
+                        accent: accent
+                    )
                 }
 
                 if let reply = message.replyTo {
@@ -1002,9 +1007,7 @@ struct MessageViewsDetailView: View {
     }
 
     private func formatDuration(_ seconds: Int) -> String {
-        let mins = seconds / 60
-        let secs = seconds % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: seconds)
     }
 
     private func relativeDate(_ date: Date) -> String {

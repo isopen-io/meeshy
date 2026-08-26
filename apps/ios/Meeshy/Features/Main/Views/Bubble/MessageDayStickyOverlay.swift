@@ -27,6 +27,11 @@ enum MessageDayStickyPlacement {
 /// laisse passer les évènements vers le collectionView en-dessous.
 @MainActor
 final class MessageDayStickyState: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var label: String? = nil
     @Published var isDark: Bool = false
     /// True quand le header de conversation est DÉPLIÉ (tap sur l'avatar ou

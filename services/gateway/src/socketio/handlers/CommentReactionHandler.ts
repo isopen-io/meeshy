@@ -11,14 +11,14 @@
  *   Anonymous users are rejected (comments require registered users to react)
  */
 
-import type { Socket } from 'socket.io';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { MeeshySocket as Socket } from '../typed-socket';
+import type { MeeshyIOServer as SocketIOServer } from '../typed-socket';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { CommentReactionService } from '../../services/CommentReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
-import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import type { AckOf, AckResponseOf } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import {
@@ -74,7 +74,7 @@ export class CommentReactionHandler {
   async handleAddReaction(
     socket: Socket,
     data: { commentId: string; postId: string; emoji: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'comment:reaction-add'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketCommentReactionAddSchema, data);
@@ -86,7 +86,7 @@ export class CommentReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'comment:reaction-add'> = {
           success: false,
           error: 'User not authenticated',
         };
@@ -100,7 +100,7 @@ export class CommentReactionHandler {
       const isAnonymous = user?.isAnonymous || false;
 
       if (isAnonymous) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'comment:reaction-add'> = {
           success: false,
           error: 'Only registered users can react',
         };
@@ -135,7 +135,7 @@ export class CommentReactionHandler {
       });
 
       if (!reaction) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'comment:reaction-add'> = {
           success: false,
           error: 'Failed to add reaction',
         };
@@ -177,7 +177,7 @@ export class CommentReactionHandler {
       // userId, emoji, action, aggregation, timestamp) — le MÊME objet que le
       // broadcast `comment:reaction-added`. Le web ignore `data`, l'iOS le décode en
       // `SocketCommentReactionUpdateEvent`. La `reaction` brute cassait le décodage iOS.
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'comment:reaction-add'> = {
         success: true,
         data: updateEvent,
       };
@@ -207,7 +207,7 @@ export class CommentReactionHandler {
       ).catch(err => this.logger.error('comment reaction notification failed', err, { commentId: validated.commentId }));
     } catch (error: unknown) {
       this.logger.error('Failed to add comment reaction', error, { userId: this.socketToUser.get(socket.id) });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'comment:reaction-add'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add reaction',
       };
@@ -221,7 +221,7 @@ export class CommentReactionHandler {
   async handleRemoveReaction(
     socket: Socket,
     data: { commentId: string; postId: string; emoji: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'comment:reaction-remove'>
   ): Promise<void> {
     try {
       const schemaValidation = validateSocketEvent(SocketCommentReactionRemoveSchema, data);
@@ -233,7 +233,7 @@ export class CommentReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'comment:reaction-remove'> = {
           success: false,
           error: 'User not authenticated',
         };
@@ -247,7 +247,7 @@ export class CommentReactionHandler {
       const isAnonymous = user?.isAnonymous || false;
 
       if (isAnonymous) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'comment:reaction-remove'> = {
           success: false,
           error: 'Only registered users can react',
         };
@@ -288,7 +288,16 @@ export class CommentReactionHandler {
         // instead of an error, which the client would treat as a failed un-react
         // and roll the optimistic removal back, re-showing a reaction that is
         // gone. Mirrors ReactionHandler.handleReactionRemove (message reactions).
-        if (callback) callback({ success: true, data: { message: 'Reaction already absent' } });
+        //
+        // SANS `data`, et c'est la règle « ACK == broadcast » appliquée à la
+        // lettre : rien n'a changé, donc AUCUN `updateEvent` n'est diffusé, donc
+        // il n'y a rien à refléter dans l'accusé. Ce site portait
+        // `{ message: 'Reaction already absent' }` — une phrase anglaise que le
+        // décodeur iOS de `Socket*ReactionUpdateEvent` rejette, sur le chemin
+        // que déclenche exactement le double-tap qu'un accusé idempotent existe
+        // pour absorber. Les deux autres familles portaient la même, recopiée du
+        // même endroit ; c'est la porte typée (`AckOf<…>`) qui les a nommées.
+        if (callback) callback({ success: true });
         return;
       }
 
@@ -302,7 +311,7 @@ export class CommentReactionHandler {
 
       // Contrat ACK == broadcast (voir handleAddReaction) : on renvoie l'`updateEvent`,
       // identique au broadcast `comment:reaction-removed`, au lieu d'un simple {message}.
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'comment:reaction-remove'> = {
         success: true,
         data: updateEvent,
       };
@@ -322,7 +331,7 @@ export class CommentReactionHandler {
       ).catch(err => this.logger.error('comment reaction notification retraction failed', err, { commentId: validated.commentId }));
     } catch (error: unknown) {
       this.logger.error('Failed to remove comment reaction', error, { userId: this.socketToUser.get(socket.id) });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'comment:reaction-remove'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to remove reaction',
       };
@@ -336,7 +345,7 @@ export class CommentReactionHandler {
   async handleRequestSync(
     socket: Socket,
     data: { commentId: string },
-    callback?: (response: SocketIOResponse<unknown>) => void
+    callback?: AckOf<'comment:reaction-request-sync'>
   ): Promise<void> {
     try {
       // Validate at the socket boundary like every sibling method — otherwise a
@@ -352,7 +361,7 @@ export class CommentReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        const errorResponse: SocketIOResponse<unknown> = {
+        const errorResponse: AckResponseOf<'comment:reaction-request-sync'> = {
           success: false,
           error: 'User not authenticated',
         };
@@ -394,14 +403,14 @@ export class CommentReactionHandler {
         currentUserId: userId,
       });
 
-      const successResponse: SocketIOResponse<unknown> = {
+      const successResponse: AckResponseOf<'comment:reaction-request-sync'> = {
         success: true,
         data: reactionSync,
       };
       if (callback) callback(successResponse);
     } catch (error: unknown) {
       this.logger.error('Failed to sync comment reactions', error, { userId: this.socketToUser.get(socket.id) });
-      const errorResponse: SocketIOResponse<unknown> = {
+      const errorResponse: AckResponseOf<'comment:reaction-request-sync'> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to sync reactions',
       };

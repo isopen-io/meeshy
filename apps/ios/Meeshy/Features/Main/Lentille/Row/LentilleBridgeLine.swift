@@ -3,8 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// Ligne 2 du pont ✦ (contrat §3.2, workshop I-065) — rend UN
-/// `ConversationBridge` en texte + point accent `LentilleMetrics.UnreadDot`
-/// (8, couleur accent). Vue de FEUILLE PURE : aucun `@State`, aucune
+/// `ConversationBridge` en texte. Vue de FEUILLE PURE : aucun `@State`, aucune
 /// résolution de langue à elle — les DEUX étages du pont se résolvent par
 /// une loi déjà écrite ailleurs (E7) :
 ///
@@ -28,12 +27,17 @@ struct LentilleBridgeLine: View {
     let accentColor: String
     var isDark: Bool = false
 
+    // Lot 2 (2026-08-22) — le point accent de 8 px qui ouvrait cette ligne est
+    // RETIRÉ (behaviour-matrix:L06 amendé). Il n'apparaissait que sous
+    // `showsBridge`, c'est-à-dire exactement sous `unreadCount > 0` : la
+    // pastille rouge CHIFFRÉE rétablie en queue de ligne de titre porte la
+    // même nouvelle, à quelques points de là. Deux signaux pour un fait, dont
+    // l'un ne sait pas dire combien : c'est celui-là qui part. Son token
+    // (`LentilleMetrics.UnreadDot`) SURVIT — la peau web le consomme encore
+    // (`LentilleRow.tsx`) ; le retirer du JSON partagé y ferait un point de
+    // 0×0 en silence.
     var body: some View {
         HStack(spacing: MeeshySpacing.xs) {
-            Circle()
-                .fill(Color(hex: accentColor))
-                .frame(width: LentilleMetrics.UnreadDot.size, height: LentilleMetrics.UnreadDot.size)
-
             Text(resolvedText)
                 .font(LentilleMetrics.Line2.font)
                 .foregroundColor(textColor)

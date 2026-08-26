@@ -1,13 +1,14 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UserRoleEnum } from '@meeshy/shared/types';
-import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
+import { resolveParticipantAvatar, serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
+import { resolveTargetParticipant, identifyTarget } from './utils/target-participant';
 import {
   ACTIVE_MEMBER_LISTING_LIMIT,
+  canViewExactMemberCount,
   isMemberListingRestricted,
   presentMemberCount
 } from '@meeshy/shared/utils/member-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
   conversationParticipantSchema,
@@ -24,7 +25,7 @@ import {
   type ParticipantRightName,
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
+import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
@@ -32,8 +33,54 @@ import {
   REJOIN_PARTICIPANT_STATE
 } from '../../services/conversations/conversationEntryAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
+
+/**
+ * Portée du prédicat « en ligne » d'un listing filtré `?onlineOnly=true`.
+ *
+ * La porte de présence (`resolveForTargets`) ne gouverne que la VALEUR servie.
+ * Filtrer sur `Participant.isOnline` AVANT elle — en base pour le listing
+ * complet, en mémoire pour le top-99 — livrait à un non-ami la liste exacte
+ * des membres en ligne, chacun masqué `isOnline:false` : l'APPARTENANCE à la
+ * liste était la fuite. La sélection obéit donc à la même loi que le champ,
+ * et ne peut porter que sur les `User.id` dont le viewer a le DROIT de
+ * connaître l'état en ligne :
+ *
+ *  - `'everyone'` — ADMIN/BIGBOSS, que la loi sert FULL : aucune borne ;
+ *  - un ensemble — soi-même ∪ amitiés acceptées (`acceptedFriendIds`), la
+ *    seule relation que la directive du 2026-08-25 tient pour une
+ *    autorisation ; VIDE pour un viewer anonyme, qui ne voit personne en ligne.
+ *
+ * Ce que la porte MASQUE ensuite (préférence `showOnlineStatus`, blocage,
+ * désactivation) sort de la page par `servedOnline` : la sélection en amont ne
+ * connaît que l'amitié, la porte connaît le reste.
+ */
+type OnlineOnlyScope = 'everyone' | ReadonlySet<string>;
+
+async function onlineOnlyScope(prisma: PrismaClient, viewer: PresenceViewer): Promise<OnlineOnlyScope> {
+  if (viewer && isGlobalAdmin(viewer.role)) return 'everyone';
+  if (!viewer) return new Set();
+  const friends = await getPresenceVisibilityService(prisma).acceptedFriendIds(viewer.userId);
+  return new Set([...friends, viewer.userId]);
+}
+
+const withinOnlineOnlyScope = (scope: OnlineOnlyScope, userId: string | null | undefined): boolean =>
+  scope === 'everyone' || (!!userId && scope.has(userId));
+
+const onlineOnlyWhere = (scope: OnlineOnlyScope) => ({
+  isOnline: true,
+  ...(scope === 'everyone' ? {} : { userId: { in: [...scope] } })
+});
+
+/**
+ * Une page filtrée « en ligne » ne contient que ce qu'elle SERT en ligne.
+ */
+const servedOnline = (participant: { readonly isOnline: boolean }): boolean => participant.isOnline === true;
 
 const participantListUserSelect = {
   user: {
@@ -52,7 +99,8 @@ const participantListUserSelect = {
       customDestinationLanguage: true,
       isActive: true,
       createdAt: true,
-      updatedAt: true
+      updatedAt: true,
+      deactivatedAt: true
     }
   }
 } as const;
@@ -74,7 +122,7 @@ type ParticipantActivityStat = {
 async function loadMostActiveParticipants(options: {
   prisma: PrismaClient;
   conversationId: string;
-  filters: { onlineOnly?: string; role?: string; search?: string };
+  filters: { onlineOnly?: OnlineOnlyScope; role?: string; search?: string };
   cursor?: string;
   pageLimit: number;
 }): Promise<{ participants: any[]; hasMore: boolean; nextCursor: string | null }> {
@@ -117,10 +165,18 @@ async function loadMostActiveParticipants(options: {
       ordered.push(match);
     }
   }
+  // Le complément se classe par ANCIENNETÉ seule. Il portait `isOnline: 'desc'`
+  // en tête, pour un lecteur à qui la porte masque ensuite ce champ : les
+  // en-ligne remontaient, et leur POSITION disait ce que le champ taisait. Ce
+  // chemin ne sert jamais un viewer privilégié (tout rang plateforme au-dessus
+  // de USER est exempté du top-99 par `isMemberListingRestricted`) — la clé de
+  // présence n'y a donc aucun ayant droit, et sort sans condition. Pas de
+  // stabilisation par la présence servie non plus : cette liste est un rang
+  // d'ACTIVITÉ, qu'un « amis en ligne d'abord » briserait.
   if (ordered.length < ACTIVE_MEMBER_LISTING_LIMIT) {
     const fill = await prisma.participant.findMany({
       where: { conversationId, isActive: true, id: { notIn: [...taken] } },
-      orderBy: [{ isOnline: 'desc' }, { joinedAt: 'asc' }],
+      orderBy: { joinedAt: 'asc' },
       take: ACTIVE_MEMBER_LISTING_LIMIT - ordered.length,
       include: participantListUserSelect
     });
@@ -130,19 +186,16 @@ async function loadMostActiveParticipants(options: {
   const searchTerm = filters.search?.trim().toLowerCase() ?? '';
   const filtered = ordered.filter(
     (p) =>
-      (filters.onlineOnly !== 'true' || p.isOnline) &&
+      (!filters.onlineOnly || (p.isOnline && withinOnlineOnlyScope(filters.onlineOnly, p.userId))) &&
       (!filters.role || p.role === filters.role.toLowerCase()) &&
       (!searchTerm || (p.displayName ?? '').toLowerCase().includes(searchTerm))
   );
 
-  const startIndex = cursor ? filtered.findIndex((p) => p.id === cursor) + 1 : 0;
-  const page = filtered.slice(startIndex, startIndex + pageLimit);
-  const hasMore = startIndex + page.length < filtered.length;
-  return {
-    participants: page,
-    hasMore,
-    nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null
-  };
+  // `filtered` is recomputed on every request from live ranking + presence, so a
+  // stale cursor (a member who left the top-N or went offline) must terminate
+  // pagination rather than silently restart from page 1. See `sliceByIdCursor`.
+  const { page, hasMore, nextCursor } = sliceByIdCursor(filtered, cursor, pageLimit);
+  return { participants: page, hasMore, nextCursor };
 }
 
 /**
@@ -228,44 +281,60 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Access denied: you are not a member of this conversation or it no longer exists', { code: 'CONVERSATION_ACCESS_DENIED' });
       }
 
-      const pageLimit = limit ? Math.min(parseInt(limit, 10), 100) : 20;
+      // SSOT guard: a malformed `?limit` (string schema, no AJV coercion)
+      // otherwise makes `parseInt` NaN, and `sliceByIdCursor(items, cursor, NaN)`
+      // slices to an empty page for well-formed cursor requests.
+      const { limit: pageLimit } = validatePagination(undefined, limit, { defaultLimit: 20, maxLimit: 100 });
       const platformRole = authRequest.authContext.registeredUser?.role ?? null;
+
+      // Le participant du LECTEUR, résolu UNE fois. Son rôle de conversation
+      // commande DEUX décisions distinctes : la restriction top-99 du listing
+      // ci-dessous, et le droit à l'effectif ENTIER plus bas
+      // (`canViewExactMemberCount`). Il était lu paresseusement, sous la seule
+      // branche du listing — donc jamais pour un lecteur que son rôle
+      // plateforme exemptait du top-99 sans lui ouvrir l'effectif (AUDIT,
+      // ANALYST), fût-il créateur de son propre groupe.
+      //
+      // Même précédence d'identité que resolveCallerParticipant :
+      // participantId (anonyme) d'abord, userId (inscrit) ensuite.
+      const viewer = await prisma.participant.findFirst({
+        where: authRequest.authContext.participantId
+          ? { id: authRequest.authContext.participantId, conversationId, isActive: true }
+          : { conversationId, userId: authRequest.authContext.userId, isActive: true },
+        select: { id: true, role: true, userId: true }
+      });
+      const conversationRole = viewer?.role ?? null;
 
       // Restriction top-99 : un USER plateforme (ou anonyme) qui n'est que
       // simple member de la conversation ne voit que les plus actifs — sauf
       // s'il tient un rôle au-dessus de member dans la communauté hôte
       // (un admin de communauté supervise TOUS les membres de ses salons).
       let restricted = false;
-      if (isMemberListingRestricted({ platformRole, conversationRole: null, communityRole: null })) {
-        // Même précédence d'identité que resolveCallerParticipant :
-        // participantId (anonyme) d'abord, userId (inscrit) ensuite.
-        const viewer = await prisma.participant.findFirst({
-          where: authRequest.authContext.participantId
-            ? { id: authRequest.authContext.participantId, conversationId, isActive: true }
-            : { conversationId, userId: authRequest.authContext.userId, isActive: true },
-          select: { id: true, role: true, userId: true }
+      if (isMemberListingRestricted({ platformRole, conversationRole, communityRole: null })) {
+        let communityRole: string | null = null;
+        const parentCommunity = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { communityId: true }
         });
-        const conversationRole = viewer?.role ?? null;
-        if (isMemberListingRestricted({ platformRole, conversationRole, communityRole: null })) {
-          let communityRole: string | null = null;
-          const parentCommunity = await prisma.conversation.findUnique({
-            where: { id: conversationId },
-            select: { communityId: true }
+        if (parentCommunity?.communityId && viewer?.userId) {
+          const membership = await prisma.communityMember.findFirst({
+            where: {
+              communityId: parentCommunity.communityId,
+              userId: viewer.userId,
+              isActive: true
+            },
+            select: { role: true }
           });
-          if (parentCommunity?.communityId && viewer?.userId) {
-            const membership = await prisma.communityMember.findFirst({
-              where: {
-                communityId: parentCommunity.communityId,
-                userId: viewer.userId,
-                isActive: true
-              },
-              select: { role: true }
-            });
-            communityRole = membership?.role ?? null;
-          }
-          restricted = isMemberListingRestricted({ platformRole, conversationRole, communityRole });
+          communityRole = membership?.role ?? null;
         }
+        restricted = isMemberListingRestricted({ platformRole, conversationRole, communityRole });
       }
+
+      // Le viewer de PRÉSENCE (inscrit + rôle, sinon null) se lit AVANT la
+      // sélection : un filtre `onlineOnly` ne porte que sur ce qu'il a le
+      // droit de voir — voir `OnlineOnlyScope`.
+      const presenceViewer = viewerFromRequest(request);
+      const onlineOnlyFilter = onlineOnly === 'true' ? await onlineOnlyScope(prisma, presenceViewer) : undefined;
 
       let paginatedParticipants: any[];
       let hasMore: boolean;
@@ -275,7 +344,7 @@ export function registerParticipantsRoutes(
         const page = await loadMostActiveParticipants({
           prisma,
           conversationId,
-          filters: { onlineOnly, role, search },
+          filters: { onlineOnly: onlineOnlyFilter, role, search },
           cursor,
           pageLimit
         });
@@ -283,26 +352,14 @@ export function registerParticipantsRoutes(
         hasMore = page.hasMore;
         nextCursor = page.nextCursor;
       } else {
-        const whereConditions: any = {
-          conversationId: conversationId,
-          isActive: true
+        const searchTerm = search?.trim() ?? '';
+        const whereConditions = {
+          conversationId,
+          isActive: true,
+          ...(onlineOnlyFilter ? onlineOnlyWhere(onlineOnlyFilter) : {}),
+          ...(role ? { role: role.toLowerCase() } : {}),
+          ...(searchTerm ? { displayName: { contains: searchTerm, mode: 'insensitive' as const } } : {})
         };
-
-        if (onlineOnly === 'true') {
-          whereConditions.isOnline = true;
-        }
-
-        if (role) {
-          whereConditions.role = role.toLowerCase();
-        }
-
-        if (search && search.trim().length > 0) {
-          const searchTerm = search.trim();
-          whereConditions.displayName = {
-            contains: searchTerm,
-            mode: 'insensitive'
-          };
-        }
 
         // Cursor-based pagination: skip the cursor record, ordered by id for stable pagination
         const cursorOption = cursor ? { id: cursor } : undefined;
@@ -321,8 +378,9 @@ export function registerParticipantsRoutes(
       }
 
       // Total count for accurate header display — même cap 199+ que le
-      // memberCount des conversations : l'effectif exact est réservé aux
-      // admins plateforme.
+      // memberCount des conversations : l'effectif ENTIER est réservé aux
+      // lecteurs autorisés (ADMIN/BIGBOSS/MODERATOR plateforme, OU
+      // creator/admin de la conversation).
       const totalCount = await prisma.participant.count({
         where: {
           conversationId: conversationId,
@@ -330,54 +388,34 @@ export function registerParticipantsRoutes(
         }
       });
       const presentedTotal = presentMemberCount(totalCount, {
-        viewerSeesExactCount: isGlobalAdmin(platformRole ?? '')
+        viewerSeesExactCount: canViewExactMemberCount({ platformRole, conversationRole })
       });
 
-      // Présence des co-participants : montrable (co-participation = contexte
-      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
-      // showLastSeen de chacun. Anonymes inchangés.
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des co-participants : régime STRICT (2026-08-25) — self/
+      // ADMIN+/ami seuls, jamais la seule co-participation. Un participant
+      // sans compte (pas d'entrée possible dans la carte) est masqué, sauf
+      // pour un viewer ADMIN+.
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        presenceViewer,
         paginatedParticipants.map(p => p.userId).filter((uid): uid is string => !!uid),
       );
 
-      const formattedParticipants = paginatedParticipants.map(participant => ({
-        id: participant.id,
-        participantId: participant.id,
-        userId: participant.userId,
-        type: participant.type,
-        username: participant.user?.username ?? participant.displayName,
-        firstName: participant.user?.firstName ?? participant.displayName,
-        lastName: participant.user?.lastName ?? '',
-        displayName: participant.displayName,
-        avatar: resolveParticipantAvatar(participant),
-        role: participant.user?.role ?? 'USER',
-        conversationRole: participant.role,
-        joinedAt: participant.joinedAt,
-        isOnline: presenceVis.get(participant.userId ?? '')?.showOnline === false ? false : participant.isOnline,
-        lastActiveAt: presenceVis.get(participant.userId ?? '')?.showLastSeenTimestamp === false ? null : participant.lastActiveAt,
-        systemLanguage: participant.user?.systemLanguage ?? participant.language,
-        regionalLanguage: participant.user?.regionalLanguage ?? participant.language,
-        customDestinationLanguage: participant.user?.customDestinationLanguage ?? participant.language,
-        autoTranslateEnabled: true,
-        isActive: participant.isActive,
-        createdAt: participant.user?.createdAt ?? participant.joinedAt,
-        updatedAt: participant.user?.updatedAt ?? participant.joinedAt,
-        isAnonymous: participant.type === 'anonymous',
-        canSendMessages: participant.permissions?.canSendMessages ?? true,
-        canSendFiles: participant.permissions?.canSendFiles ?? true,
-        canSendImages: participant.permissions?.canSendImages ?? true,
-        permissions: {
-          canAccessAdmin: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageUsers: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageGroups: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageConversations: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canViewAnalytics: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canModerateContent: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canViewAuditLogs: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageNotifications: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-          canManageTranslations: participant.user?.role === 'ADMIN' || participant.user?.role === 'BIGBOSS',
-        }
-      }));
+      // Cette projection ÉTAIT la référence de la forme de fil, écrite à la main
+      // ici — et c'est précisément parce qu'elle n'existait qu'ici que les deux
+      // routes de MUTATION (invite, changement de rang) passaient un rang Prisma
+      // brut sans gate. La fabrique partagée est désormais la source unique.
+      const formattedParticipants = paginatedParticipants.map(participant =>
+        serializeConversationParticipant(participant, {
+          presence: presenceFor(presenceViewer, presenceVis, participant.userId)
+        })
+      );
+
+      // Une page « en ligne » ne SERT que ce qu'elle montre en ligne : ce que
+      // la porte vient de masquer (préférence, blocage, désactivation) en
+      // sort. Elle peut être plus courte que `limit` ; `hasMore` et
+      // `nextCursor` restent ceux de la page LUE — le curseur désigne une
+      // ligne qui existe, servie ou non.
+      const servedParticipants = onlineOnlyFilter ? formattedParticipants.filter(servedOnline) : formattedParticipants;
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `pagination` field
       // (with cursor-based shape: nextCursor/hasMore/totalCount) that iOS SDK
@@ -385,7 +423,7 @@ export function registerParticipantsRoutes(
       // requires a coordinated client update (breaking change).
       reply.send({
         success: true,
-        data: formattedParticipants,
+        data: servedParticipants,
         pagination: {
           nextCursor,
           hasMore,
@@ -536,7 +574,7 @@ export function registerParticipantsRoutes(
       // le corps.
       const participant = await prisma.participant.findFirst({
         where: { id: participantId, conversationId },
-        include: { user: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true } } }
+        include: { user: { select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, deactivatedAt: true } } }
       });
 
       if (!participant) {
@@ -616,6 +654,24 @@ export function registerParticipantsRoutes(
           }
         : null;
 
+      // La fiche servait `isOnline`/`lastActiveAt` BRUTS, sans aucune gate —
+      // un co-membre qui n'est ni ami ni ADMIN+ apprenait ainsi la dernière
+      // connexion de n'importe quel membre inscrit rien qu'en ouvrant sa
+      // fiche. Régime STRICT : un participant SANS compte (anonyme) n'a pas
+      // d'entrée possible dans la carte de présence — masqué par défaut,
+      // sauf pour un viewer ADMIN+.
+      const presenceViewer = viewerFromRequest(request);
+      const participantPresence = participant.userId
+        ? await getPresenceVisibilityService(prisma).resolveForTarget(presenceViewer, {
+            id: participant.userId,
+            deactivatedAt: participant.user?.deactivatedAt ?? null
+          })
+        : presenceFor(presenceViewer, new Map(), null);
+      const gatedPresence = applyPresenceVisibilityAsOffline(
+        { isOnline: participant.isOnline ?? null, lastActiveAt: participant.lastActiveAt ?? null },
+        participantPresence
+      );
+
       return sendSuccess(reply, {
         participantId: participant.id,
         conversationId,
@@ -630,8 +686,8 @@ export function registerParticipantsRoutes(
         country: participant.anonymousSession?.session?.country ?? null,
         conversationRole: participant.role ?? null,
         joinedAt: participant.joinedAt ?? null,
-        isOnline: participant.isOnline ?? false,
-        lastActiveAt: participant.lastActiveAt ?? null,
+        isOnline: gatedPresence.isOnline,
+        lastActiveAt: gatedPresence.lastActiveAt ?? null,
         shareLinkName: shareLink?.name ?? null,
         hasEmail: !!profile?.email,
         hasBirthday: !!profile?.birthday,
@@ -856,8 +912,11 @@ export function registerParticipantsRoutes(
             data: {
               type: 'object',
               properties: {
-                message: { type: 'string', example: 'Participant ajouté avec succès' },
-                participant: conversationParticipantSchema
+                // `participant` était déclaré ici SANS producteur : le handler
+                // ne renvoie que `message`. Retiré plutôt que fabriqué —
+                // l'inventaire cesse de promettre un champ qui n'a jamais existé
+                // (même traitement que `users/profile.ts|permissions`, cycle 91 bis §5).
+                message: { type: 'string', example: 'Participant ajouté avec succès' }
               }
             }
           }
@@ -1034,9 +1093,27 @@ export function registerParticipantsRoutes(
         // conversation avant cet emit.)
         const audience = await prisma.participant.findMany({
           where: { conversationId, isActive: true, NOT: { userId } },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+          // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une
+          // présentation, et c'était la plafonnée, pour tout le monde.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         });
-        emitToConversationParticipants({
+        // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
+        // rattrape jamais d'un événement manqué (hors ligne, trou de
+        // reconnexion), et les deux clients PERSISTENT la dérive (cache disque
+        // iOS, `staleTime: Infinity` web). Un total se rattrape au suivant.
+        //
+        // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il est
+        // actif depuis l'écriture juste au-dessus, donc il compte, mais il ne
+        // figure pas dans `audience`. Une seconde requête ne rendrait rien de
+        // plus.
+        //
+        // Deux chaînes disjointes : « 199+ » pour la room, l'effectif ENTIER
+        // pour les lecteurs autorisés. Un broadcast unique ne portait que la
+        // présentation plafonnée, et écrasait donc chez l'admin du groupe la
+        // valeur exacte que le REST venait de lui servir.
+        emitConversationMemberCountEvent({
           io,
           conversationId,
           participants: audience,
@@ -1046,21 +1123,8 @@ export function registerParticipantsRoutes(
             userId,
             displayName: addedMemberFields.displayName,
             joinedAt: joinedAt.toISOString(),
-            // Compte ABSOLU plutôt qu'un delta : un client qui incrémente ne se
-            // rattrape jamais d'un événement manqué (hors ligne, trou de
-            // reconnexion), et les deux clients PERSISTENT la dérive (cache
-            // disque iOS, `staleTime: Infinity` web). Un total se rattrape au
-            // suivant.
-            //
-            // `+ 1` parce que l'éventail ÉCARTE l'arrivant (voir ci-dessus) : il
-            // est actif depuis l'écriture juste au-dessus, donc il compte, mais
-            // il ne figure pas dans `audience`. Une seconde requête ne rendrait
-            // rien de plus.
-            //
-            // Plafonné à 199 pour TOUTE la room (broadcast unique) : un admin
-            // plateforme récupère l'exact au prochain fetch REST.
-            ...presentMemberCount(audience.length + 1),
           },
+          memberCount: audience.length + 1,
         });
       }
       // Auto-join the added user's currently-connected sockets to the conversation
@@ -1209,29 +1273,42 @@ export function registerParticipantsRoutes(
         return sendBadRequest(reply, 'Vous ne pouvez pas vous supprimer de la conversation');
       }
 
-      // Capture the removed participant's displayName before flipping inactive,
-      // for the real-time broadcast payload (R6-2). leftAt is shared by the DB
-      // write and the emit so they agree.
-      const removedParticipant = await prisma.participant.findFirst({
-        where: { conversationId, userId, isActive: true },
-        select: { id: true, displayName: true }
-      });
+      // La cible se résout sous les DEUX colonnes : `:userId` porte un `User.id`
+      // pour un membre inscrit, un `Participant.id` pour un visiteur venu par un
+      // lien partagé — qui n'a aucune ligne `User`. Le `findFirst` sur la seule
+      // colonne `userId` ne le trouvait jamais.
+      const removedParticipant = await resolveTargetParticipant(prisma, conversationId, userId);
+
+      if (!removedParticipant) {
+        return sendNotFound(reply, 'Participant introuvable dans cette conversation');
+      }
+
+      // Se retirer soi-même passe par `POST …/leave`. La garde plus haut compare
+      // le segment d'URL ; celle-ci compare l'identité RÉSOLUE, ce qui couvre
+      // aussi l'admin qui se désignerait par son `Participant.id`.
+      if (removedParticipant.userId === currentUserId || removedParticipant.id === currentUserId) {
+        return sendBadRequest(reply, 'Vous ne pouvez pas vous supprimer de la conversation');
+      }
+
+      if (!removedParticipant.isActive) {
+        return sendBadRequest(reply, 'Ce participant ne fait plus partie de la conversation');
+      }
+
       const leftAt = new Date();
 
-      await prisma.participant.updateMany({
-        where: {
-          conversationId: conversationId,
-          userId: userId,
-          isActive: true
-        },
+      // `update` sur la ligne RÉSOLUE, plus `updateMany`. La différence n'est
+      // pas cosmétique : `updateMany` ne trouvant rien n'échoue pas, et c'est
+      // exactement ce qui faisait répondre **200 sans avoir rien fait** dès que
+      // la cible n'était pas adressable par `userId`. Une écriture qui ne trouve
+      // pas sa ligne doit échouer.
+      await prisma.participant.update({
+        where: { id: removedParticipant.id },
         data: {
           isActive: false,
           leftAt
         }
       });
-      if (removedParticipant) {
-        invalidateParticipantLookup(removedParticipant.id, conversationId);
-      }
+      invalidateParticipantLookup(removedParticipant.id, conversationId);
 
       // R6-2 — broadcast so other members' devices drop the removed user from
       // the list + decrement the member count in real time (the DELETE
@@ -1249,7 +1326,10 @@ export function registerParticipantsRoutes(
           // encore dedans jusqu'à l'éviction ci-dessous — garde son signal.
           const remaining = await prisma.participant.findMany({
             where: { conversationId, isActive: true },
-            select: { id: true, userId: true }
+            // `role` et `user.role` en plus : les deux titres qui ouvrent
+            // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+            // connaître PAR DESTINATAIRE.
+            select: { id: true, userId: true, role: true, user: { select: { role: true } } }
           });
           // Le retiré ferme la chaîne. Le commentaire ci-dessus disait « la
           // room reste en tête, donc le retiré garde son signal » : vrai du
@@ -1259,24 +1339,30 @@ export function registerParticipantsRoutes(
           // l'appartenance s'arrête. Ils gardaient une ligne que
           // `GET /conversations` ne sert plus, persistée, jusqu'au prochain
           // delta (tombstone `leftAt`).
-          const audience = removedParticipant
-            ? [...remaining, { id: removedParticipant.id, userId }]
-            : remaining;
-          emitToConversationParticipants({
+          const audience = [
+            ...remaining,
+            { id: removedParticipant.id, userId: removedParticipant.userId },
+          ];
+          // Compte ABSOLU — `remaining` est déjà chargé pour nommer les rooms,
+          // et un delta ne rattrape jamais un événement manqué. Deux chaînes
+          // disjointes, comme le fanout d'arrivée : « 199+ » pour la room,
+          // l'effectif ENTIER pour les lecteurs autorisés.
+          emitConversationMemberCountEvent({
             io,
             conversationId,
             participants: audience,
             event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
             payload: {
               conversationId,
-              userId,
-              displayName: removedParticipant?.displayName ?? '',
-              leftAt: leftAt.toISOString(),
-              // Compte ABSOLU — `remaining` est déjà chargé pour nommer les
-              // rooms, et un delta ne rattrape jamais un événement manqué.
-              // Plafonné à 199 pour toute la room, comme le fanout d'arrivée.
-              ...presentMemberCount(remaining.length)
-            }
+              // `participantId` TOUJOURS, `userId` NUL pour un visiteur sans
+              // compte : ce champ déclare un `User.id`, et y recopier un
+              // `Participant.id` est précisément ce que le CLAUDE.md du gateway
+              // interdit. Les clients retirent la ligne sur `participantId`.
+              ...identifyTarget(removedParticipant),
+              displayName: removedParticipant.displayName ?? '',
+              leftAt: leftAt.toISOString()
+            },
+            memberCount: remaining.length
           });
 
           // La fin d'appartenance, en un seul geste : `endConversationMembership`
@@ -1284,11 +1370,16 @@ export function registerParticipantsRoutes(
           // de sortir ses sockets de la room, parce que c'est par cette room que
           // son propre appareil apprend qu'il doit couper le GPS. Voir l'unité
           // pour l'ordre des trois et pourquoi il compte.
+          // Room personnelle : `userId ?? id` — un participant sans ligne `User`
+          // a bien une room, nommée d'après son `Participant.id` (cf. § Room
+          // Organization). L'adresser par son seul `userId` sauterait une room
+          // qui existe, et son propre appareil n'apprendrait jamais qu'il doit
+          // couper le partage de position.
           await endConversationMembership({
             io,
             manager: socketManager,
             conversationId,
-            userId,
+            userId: removedParticipant.userId ?? removedParticipant.id,
           });
         }
       } catch (socketError) {
@@ -1297,11 +1388,17 @@ export function registerParticipantsRoutes(
 
       const notificationService = fastify.notificationService;
       if (notificationService) {
-        notificationService.createRemovedFromConversationNotification({
-          recipientUserId: userId,
-          removedByUserId: currentUserId,
-          conversationId,
-        }).catch((err: unknown) => logger.error('Notification error removed', err as Error));
+        // Une notification se dépose sur un COMPTE. Un visiteur sans compte n'en
+        // a pas : lui en poster une contre son `Participant.id` fabriquerait une
+        // ligne adressée à un `User` qui n'existe pas. Son appareil apprend le
+        // retrait par l'événement temps réel ci-dessus, qui le nomme.
+        if (removedParticipant.userId) {
+          notificationService.createRemovedFromConversationNotification({
+            recipientUserId: removedParticipant.userId,
+            removedByUserId: currentUserId,
+            conversationId,
+          }).catch((err: unknown) => logger.error('Notification error removed', err as Error));
+        }
 
         const adminParticipants = await prisma.participant.findMany({
           where: {
@@ -1454,21 +1551,35 @@ export function registerParticipantsRoutes(
         }
       });
 
-      const updatedParticipant = await prisma.participant.findUnique({
+      const updatedRow = await prisma.participant.findUnique({
         where: { id: targetParticipant.id },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              firstName: true,
-              lastName: true,
-              avatar: true
-            }
-          }
-        }
+        include: participantListUserSelect
       });
+
+      // Cette route servait `updatedRow` TEL QUEL sous la clé `participant`, que
+      // `conversationParticipantSchema` déclare. La réponse REST est gatée par
+      // le viewer DEMANDEUR (régime STRICT — self/ADMIN+/ami) : elle seule a
+      // un destinataire nommé capable de porter une visibilité. La diffusion
+      // Socket.IO plus bas n'en a pas — toute la salle la reçoit — donc son
+      // `participant` ne transporte plus `isOnline`/`lastActiveAt` du tout,
+      // gaté ou non ; le type partagé (`ParticipantRoleUpdatedEventData`) ne
+      // les déclare déjà pas.
+      const rolePresenceViewer = viewerFromRequest(request);
+      const rolePresenceVis = updatedRow?.userId
+        ? await getPresenceVisibilityService(prisma).resolveForTarget(rolePresenceViewer, {
+            id: updatedRow.userId,
+            deactivatedAt: updatedRow.user?.deactivatedAt ?? null
+          })
+        : presenceFor(rolePresenceViewer, new Map(), null);
+      const updatedParticipant = updatedRow
+        ? serializeConversationParticipant(updatedRow, { presence: rolePresenceVis })
+        : null;
+      const participantForBroadcast = updatedParticipant
+        ? (() => {
+            const { isOnline: _broadcastIsOnline, lastActiveAt: _broadcastLastActiveAt, ...rest } = updatedParticipant;
+            return rest;
+          })()
+        : null;
 
       const manager = fastify.socketIOHandler?.getManager();
       if (manager) {
@@ -1485,7 +1596,7 @@ export function registerParticipantsRoutes(
           userId,
           newRole,
           updatedBy: currentUserId,
-          participant: updatedParticipant
+          participant: participantForBroadcast
         });
         // Invalidate the in-process participant-ID cache so the next message:send
         // from this user re-validates membership/role against the DB instead of

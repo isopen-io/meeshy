@@ -98,10 +98,32 @@ struct MyStoriesView: View {
         Color(hex: DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.username ?? ""))
     }
 
-    /// Stories de l'utilisateur, plus récentes d'abord.
+    /// Stories de l'utilisateur, plus récentes d'abord — actives ET
+    /// expirées confondues (l'archive drainée par `loadMyStoriesArchive`
+    /// rejoint le même groupe, cf. `StoryViewModel.loadMyStoriesArchive`).
     private var stories: [StoryItem] {
         (viewModel.storyGroupForUser(userId: userId)?.stories ?? [])
             .sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Onglet « Publiées » : stories actives seulement — une story expirée
+    /// n'est plus « publiée » au présent, elle est de l'historique.
+    private var activeStories: [StoryItem] {
+        stories.filter { !$0.isExpired() }
+    }
+
+    /// Onglet « Archive » : stories déjà expirées (C7a — sorties de
+    /// « Publiées », où elles étaient mélangées aux stories actives).
+    private var archivedStories: [StoryItem] {
+        stories.filter { $0.isExpired() }
+    }
+
+    private var hasQueueWork: Bool {
+        !viewModel.activeUploads.isEmpty || !publishService.failedItems.isEmpty
+    }
+
+    private var visibleTabs: [MyStoriesTab] {
+        MyStoriesTabResolver.visibleTabs(hasQueueWork: hasQueueWork, hasArchivedStories: !archivedStories.isEmpty)
     }
 
     /// `selectedIDs` filtré contre les stories réellement affichées — une
@@ -118,7 +140,9 @@ struct MyStoriesView: View {
                 Group {
                     switch tab {
                     case .published: publishedTab
+                    case .queue:     queueTab
                     case .drafts:    draftsTab
+                    case .archive:   archiveTab
                     }
                 }
             }
@@ -131,10 +155,18 @@ struct MyStoriesView: View {
                 guard !hasSeededTab else { return }
                 hasSeededTab = true
                 tab = MyStoriesTabResolver.initialTab(
-                    hasPublishedStories: !stories.isEmpty,
-                    hasPendingWork: !draftsViewModel.drafts.isEmpty
-                        || !viewModel.activeUploads.isEmpty
-                        || !publishService.failedItems.isEmpty)
+                    hasPublishedStories: !activeStories.isEmpty,
+                    hasQueueWork: hasQueueWork,
+                    hasDraftWork: !draftsViewModel.drafts.isEmpty)
+            }
+            // Un onglet qui perd sa matière (dernier upload réglé, dernière
+            // story expirée quittant l'archive côté serveur) ne doit jamais
+            // laisser l'utilisateur planté sur un onglet devenu invisible.
+            .adaptiveOnChange(of: hasQueueWork) { _, isPresent in
+                if !isPresent, tab == .queue { tab = .published }
+            }
+            .adaptiveOnChange(of: archivedStories.isEmpty) { _, isEmpty in
+                if isEmpty, tab == .archive { tab = .published }
             }
             .navigationTitle(String(localized: "story.mine.title", defaultValue: "Mes stories"))
             .navigationBarTitleDisplayMode(.inline)
@@ -307,7 +339,7 @@ struct MyStoriesView: View {
     /// sheet, et les deux onglets y seraient instanciés en permanence.
     private var tabPicker: some View {
         Picker("", selection: $tab) {
-            ForEach(MyStoriesTab.allCases) { tab in
+            ForEach(visibleTabs) { tab in
                 Text(tab.title).tag(tab)
             }
         }
@@ -322,10 +354,11 @@ struct MyStoriesView: View {
     private var publishedTab: some View {
         if MyStoriesTabResolver.shouldShowEmptyState(
             tab: .published,
-            hasPublishedStories: !stories.isEmpty,
+            hasPublishedStories: !activeStories.isEmpty,
             hasDrafts: !draftsViewModel.drafts.isEmpty,
             hasActiveUpload: !viewModel.activeUploads.isEmpty,
-            hasFailedItems: !publishService.failedItems.isEmpty
+            hasFailedItems: !publishService.failedItems.isEmpty,
+            hasArchivedStories: !archivedStories.isEmpty
         ) {
             EmptyStateView(
                 icon: "rectangle.stack.badge.xmark",
@@ -346,7 +379,7 @@ struct MyStoriesView: View {
     private var publishedGrid: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
-                ForEach(stories) { story in
+                ForEach(activeStories) { story in
                     MyStoryCard(
                         model: publishedCardModel(for: story),
                         now: Date(),
@@ -399,29 +432,33 @@ struct MyStoriesView: View {
         }
     }
 
-    // MARK: - Onglet « Brouillons »
+    // MARK: - Onglet « File » (C7a — sorti de « Brouillons »)
 
+    /// Uploads actifs + échecs de publication. Reste de la matière RÉSEAU
+    /// (rien de local, contrairement à « Brouillons ») ; visible seulement
+    /// quand `hasQueueWork`, donc pas d'état vide à câbler ici.
     @ViewBuilder
-    private var draftsTab: some View {
+    private var queueTab: some View {
         if MyStoriesTabResolver.shouldShowEmptyState(
-            tab: .drafts,
-            hasPublishedStories: !stories.isEmpty,
+            tab: .queue,
+            hasPublishedStories: !activeStories.isEmpty,
             hasDrafts: !draftsViewModel.drafts.isEmpty,
             hasActiveUpload: !viewModel.activeUploads.isEmpty,
-            hasFailedItems: !publishService.failedItems.isEmpty
+            hasFailedItems: !publishService.failedItems.isEmpty,
+            hasArchivedStories: !archivedStories.isEmpty
         ) {
             EmptyStateView(
-                icon: "square.and.pencil",
-                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon"),
-                subtitle: String(localized: "story.mine.drafts.empty.subtitle",
-                                 defaultValue: "Une story fermée sans être publiée vous attend ici.")
+                icon: "arrow.triangle.2.circlepath",
+                title: String(localized: "story.mine.queue.empty.title", defaultValue: "Rien en file"),
+                subtitle: String(localized: "story.mine.queue.empty.subtitle",
+                                 defaultValue: "Vos publications en cours ou en échec apparaîtront ici.")
             )
         } else {
-            draftsContent
+            queueContent
         }
     }
 
-    private var draftsContent: some View {
+    private var queueContent: some View {
         ScrollView {
             VStack(spacing: 12) {
                 // C5 — TOUTES les publications en cours/en attente sont
@@ -465,27 +502,103 @@ struct MyStoriesView: View {
                             }
                     }
                 }
-                if !draftsViewModel.drafts.isEmpty {
-                    sectionHeader(String(localized: "story.mine.drafts.header",
-                                         defaultValue: "Brouillons"))
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
-                        ForEach(draftsViewModel.drafts) { draft in
-                            MyStoryCard(
-                                model: draftCardModel(for: draft),
-                                now: Date(),
-                                accentColor: accentColor,
-                                isDark: isDark,
-                                onOpen: { onResumeDraft(draft.id) },
-                                onGlyph: { glyph in handleDraftGlyph(glyph, for: draft) },
-                                moreMenu: AnyView(draftMenu(for: draft)))
-                            .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
-                                draftDeleteCandidate = draft
-                            }
-                        }
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    // MARK: - Onglet « Brouillons »
+
+    @ViewBuilder
+    private var draftsTab: some View {
+        if MyStoriesTabResolver.shouldShowEmptyState(
+            tab: .drafts,
+            hasPublishedStories: !activeStories.isEmpty,
+            hasDrafts: !draftsViewModel.drafts.isEmpty,
+            hasActiveUpload: !viewModel.activeUploads.isEmpty,
+            hasFailedItems: !publishService.failedItems.isEmpty,
+            hasArchivedStories: !archivedStories.isEmpty
+        ) {
+            EmptyStateView(
+                icon: "square.and.pencil",
+                title: String(localized: "story.mine.drafts.empty.title", defaultValue: "Aucun brouillon"),
+                subtitle: String(localized: "story.mine.drafts.empty.subtitle",
+                                 defaultValue: "Une story fermée sans être publiée vous attend ici.")
+            )
+        } else {
+            draftsContent
+        }
+    }
+
+    private var draftsContent: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                ForEach(draftsViewModel.drafts) { draft in
+                    MyStoryCard(
+                        model: draftCardModel(for: draft),
+                        now: Date(),
+                        accentColor: accentColor,
+                        isDark: isDark,
+                        onOpen: { onResumeDraft(draft.id) },
+                        onGlyph: { glyph in handleDraftGlyph(glyph, for: draft) },
+                        moreMenu: AnyView(draftMenu(for: draft)))
+                    .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
+                        draftDeleteCandidate = draft
                     }
-                    .padding(.horizontal, 16)
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 24)
+        }
+    }
+
+    // MARK: - Onglet « Archive » (C7a — sorti de « Publiées »)
+
+    /// Stories publiées déjà expirées : le même rendu de carte que
+    /// « Publiées » (`publishedCardModel`), simplement filtré sur
+    /// `isExpired()` plutôt que mélangé aux stories actives.
+    @ViewBuilder
+    private var archiveTab: some View {
+        if MyStoriesTabResolver.shouldShowEmptyState(
+            tab: .archive,
+            hasPublishedStories: !activeStories.isEmpty,
+            hasDrafts: !draftsViewModel.drafts.isEmpty,
+            hasActiveUpload: !viewModel.activeUploads.isEmpty,
+            hasFailedItems: !publishService.failedItems.isEmpty,
+            hasArchivedStories: !archivedStories.isEmpty
+        ) {
+            EmptyStateView(
+                icon: "clock.arrow.circlepath",
+                title: String(localized: "story.mine.archive.empty.title", defaultValue: "Aucune archive"),
+                subtitle: String(localized: "story.mine.archive.empty.subtitle",
+                                 defaultValue: "Vos stories expirées rejoindront cette archive.")
+            )
+        } else {
+            archiveGrid
+        }
+    }
+
+    private var archiveGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                ForEach(archivedStories) { story in
+                    MyStoryCard(
+                        model: publishedCardModel(for: story),
+                        now: Date(),
+                        accentColor: accentColor,
+                        isDark: isDark,
+                        onOpen: { handleRowTap(story) },
+                        onGlyph: { glyph in handlePublishedGlyph(glyph, for: story) },
+                        moreMenu: AnyView(actionMenu(for: story)),
+                        isSelecting: isSelecting,
+                        isSelected: selectedStoryIDs.contains(story.id)
+                    )
+                    .accessibilityAction(named: String(localized: "common.delete", defaultValue: "Supprimer")) {
+                        deleteCandidate = story
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
     }
@@ -970,8 +1083,10 @@ private struct FailedStoryRow: View {
     let onResume: () -> Void
     let onRetry: () -> Void
 
+    private static let relativeFormatter = RelativeDateTimeFormatter()
+
     private var relativeTime: String {
-        RelativeDateTimeFormatter().localizedString(for: item.createdAt, relativeTo: Date())
+        Self.relativeFormatter.localizedString(for: item.createdAt, relativeTo: Date())
     }
 
     var body: some View {

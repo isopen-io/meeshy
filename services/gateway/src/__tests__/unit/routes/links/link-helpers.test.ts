@@ -7,10 +7,12 @@
 import {
   createLegacyHybridRequest,
   resolveShareLinkId,
-  generateFinalLinkId,
-  generateInitialLinkId,
+  generateShareLinkId,
+  generateUniqueShareLinkId,
   generateConversationIdentifier,
   ensureUniqueShareLinkIdentifier,
+  SHARE_LINK_ID_LENGTH,
+  SHARE_LINK_ID_PREFIX,
 } from '../../../../routes/links/utils/link-helpers';
 import type { UnifiedAuthRequest } from '../../../../middleware/auth';
 
@@ -168,21 +170,100 @@ describe('resolveShareLinkId', () => {
 });
 
 // ---------------------------------------------------------------------------
-// generateInitialLinkId
+// generateShareLinkId — l'identifiant PUBLIC compact
+//
+// SUPERSEDE `generateInitialLinkId` / `generateFinalLinkId`, dont le couple
+// produisait `mshy_<ObjectId 24>.<yymmddhhmm>_<8 base36>` — 49 caracteres qui
+// publiaient la cle primaire de la ligne ET son instant de creation, tires d un
+// `Math.random()` predictible. Les temoins ci-dessous attestent les trois
+// proprietes que le couple n avait pas, plutot que de disparaitre avec lui.
 // ---------------------------------------------------------------------------
 
-describe('generateInitialLinkId', () => {
-  it('returns a string in the format YYMMDDHHMI_xxxxxxxx', () => {
-    const result = generateInitialLinkId();
-    expect(result).toMatch(/^\d{10}_[a-z0-9]{8}$/);
+describe('generateShareLinkId', () => {
+  it('rend `mshy_` + 8 caracteres base62 — 13 caracteres en tout', () => {
+    const result = generateShareLinkId();
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
+    expect(result).toHaveLength(SHARE_LINK_ID_PREFIX.length + SHARE_LINK_ID_LENGTH);
   });
 
-  it('returns different values on consecutive calls (probabilistic)', () => {
-    const a = generateInitialLinkId();
-    const b = generateInitialLinkId();
-    // Extremely unlikely to be equal (1/36^8 chance)
-    expect(typeof a).toBe('string');
-    expect(typeof b).toBe('string');
+  it('reste bien plus court que le format qu il remplace (49 caracteres)', () => {
+    expect(generateShareLinkId().length).toBeLessThan(49 / 3);
+  });
+
+  it('ne porte NI ObjectId NI horodatage — un lien ne dit pas quand il est ne', () => {
+    const result = generateShareLinkId();
+    expect(result).not.toContain('.');
+    expect(result).not.toMatch(/[0-9a-f]{24}/);
+    expect(result).not.toContain(String(new Date().getUTCFullYear()));
+  });
+
+  it('tire une valeur differente a chaque appel', () => {
+    const drawn = new Set(Array.from({ length: 200 }, () => generateShareLinkId()));
+    // 200 tirages dans 62^8 : une repetition serait un defaut du generateur,
+    // pas de la malchance.
+    expect(drawn.size).toBe(200);
+  });
+
+  it('accepte une longueur explicite (escalade anti-collision)', () => {
+    expect(generateShareLinkId(16)).toMatch(/^mshy_[A-Za-z0-9]{16}$/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generateUniqueShareLinkId — la garde anti-collision
+// ---------------------------------------------------------------------------
+
+describe('generateUniqueShareLinkId', () => {
+  it('rend le premier candidat libre', async () => {
+    const prisma = makePrisma(null);
+    const result = await generateUniqueShareLinkId(prisma);
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
+    expect(prisma.conversationShareLink.findFirst).toHaveBeenCalledTimes(1);
+  });
+
+  it('verifie l UNION des deux colonnes publiques, jamais la seule `linkId`', async () => {
+    // La resolution accepte les deux colonnes (`getShareLinkByIdentifier`,
+    // `TrackingLinkService.resolveTarget`) : une valeur unique dans SA colonne
+    // mais presente dans l autre resoudrait le MAUVAIS lien.
+    const prisma = makePrisma(null);
+    await generateUniqueShareLinkId(prisma);
+    const where = prisma.conversationShareLink.findFirst.mock.calls[0][0].where;
+    expect(where.OR).toHaveLength(2);
+    expect(where.OR[0]).toHaveProperty('linkId');
+    expect(where.OR[1]).toHaveProperty('identifier');
+  });
+
+  it('retire un candidat deja pris et en tire un autre', async () => {
+    const prisma = {
+      conversationShareLink: {
+        findFirst: jest.fn()
+          .mockResolvedValueOnce({ id: 'taken' })
+          .mockResolvedValueOnce(null),
+      },
+    } as any;
+    const result = await generateUniqueShareLinkId(prisma);
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
+    expect(prisma.conversationShareLink.findFirst).toHaveBeenCalledTimes(2);
+  });
+
+  it('ESCALADE la longueur plutot que d insister quand 8 caracteres collisionnent', async () => {
+    const findFirst = jest.fn()
+      .mockResolvedValueOnce({ id: 'a' })
+      .mockResolvedValueOnce({ id: 'b' })
+      .mockResolvedValueOnce({ id: 'c' })
+      .mockResolvedValueOnce({ id: 'd' })
+      .mockResolvedValueOnce(null);
+    const result = await generateUniqueShareLinkId({ conversationShareLink: { findFirst } } as any);
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{12}$/);
+  });
+
+  it('leve plutot que de boucler quand TOUTES les longueurs collisionnent', async () => {
+    const findFirst = jest.fn().mockResolvedValue({ id: 'always-taken' });
+    await expect(
+      generateUniqueShareLinkId({ conversationShareLink: { findFirst } } as any)
+    ).rejects.toThrow(/unique/i);
+    // 3 longueurs x 4 tentatives : borne, jamais une boucle infinie.
+    expect(findFirst).toHaveBeenCalledTimes(12);
   });
 });
 
@@ -208,17 +289,23 @@ describe('generateConversationIdentifier', () => {
 
   it('falls back to random ID when title is empty string', () => {
     const result = generateConversationIdentifier('');
-    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+    // Le repli n a plus de suffixe horodate : sans titre a rendre lisible,
+    // l identifiant est COMPACT et opaque (mshy_ + 12 base64url = 17 car.).
+    expect(result).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('falls back to random ID when title reduces to empty after sanitization', () => {
     const result = generateConversationIdentifier('!!! ---');
-    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+    // Le repli n a plus de suffixe horodate : sans titre a rendre lisible,
+    // l identifiant est COMPACT et opaque (mshy_ + 12 base64url = 17 car.).
+    expect(result).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('falls back to random ID when title is undefined', () => {
     const result = generateConversationIdentifier(undefined);
-    expect(result).toMatch(/^mshy_[a-z0-9]+-\d+$/);
+    // Le repli n a plus de suffixe horodate : sans titre a rendre lisible,
+    // l identifiant est COMPACT et opaque (mshy_ + 12 base64url = 17 car.).
+    expect(result).toMatch(/^mshy_[A-Za-z0-9_-]{12}$/);
   });
 
   it('includes a numeric timestamp suffix', () => {
@@ -254,25 +341,6 @@ describe('generateConversationIdentifier', () => {
 });
 
 // ---------------------------------------------------------------------------
-// generateFinalLinkId
-// ---------------------------------------------------------------------------
-
-describe('generateFinalLinkId', () => {
-  it('generates mshy_{shareId}.{initialId} format', () => {
-    const result = generateFinalLinkId('abc123', 'init456');
-    expect(result).toBe('mshy_abc123.init456');
-  });
-
-  it('prefixes with mshy_', () => {
-    expect(generateFinalLinkId('x', 'y').startsWith('mshy_')).toBe(true);
-  });
-
-  it('includes a dot separator between ids', () => {
-    expect(generateFinalLinkId('share', 'init')).toContain('.');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // ensureUniqueShareLinkIdentifier
 // ---------------------------------------------------------------------------
 
@@ -283,55 +351,86 @@ describe('ensureUniqueShareLinkIdentifier', () => {
     expect(result).toBe('my-link');
   });
 
-  it('appends timestamp when base identifier conflicts', async () => {
+  it('verifie l UNION des deux colonnes publiques', async () => {
+    // Meme loi que `generateUniqueShareLinkId`, et pour la meme raison : la
+    // resolution accepte `linkId` OU `identifier`. Un slug personnalise egal au
+    // `linkId` d un AUTRE lien resoudrait le mauvais — `findFirst` choisirait
+    // sans le dire.
+    const prisma = makePrisma(null);
+    await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
+    const where = prisma.conversationShareLink.findFirst.mock.calls[0][0].where;
+    expect(where.OR).toEqual([{ linkId: 'my-link' }, { identifier: 'my-link' }]);
+  });
+
+  it('desambigue par un suffixe ALEATOIRE, jamais par un horodatage', async () => {
+    // L ancien suffixe `-YYYYmmddHHMMSS` publiait l instant de creation sur un
+    // identifiant que l utilisateur a justement choisi de rendre public.
     const prisma = {
       conversationShareLink: {
         findFirst: jest.fn()
-          .mockResolvedValueOnce({ id: 'existing' })  // first call: base conflicts
-          .mockResolvedValueOnce(null),               // second call: timestamped is free
+          .mockResolvedValueOnce({ id: 'existing' })
+          .mockResolvedValueOnce(null),
       },
     } as any;
     const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
-    expect(result).toMatch(/^my-link-\d+$/);
+    expect(result).toMatch(/^my-link-[A-Za-z0-9]{6}$/);
+    expect(result).not.toContain(String(new Date().getUTCFullYear()));
   });
 
-  it('appends counter when base+timestamp also conflicts', async () => {
+  it('retire un suffixe deja pris et en tire un autre', async () => {
     const prisma = {
       conversationShareLink: {
         findFirst: jest.fn()
-          .mockResolvedValueOnce({ id: 'base' })         // base conflicts
-          .mockResolvedValueOnce({ id: 'timestamp' })    // base+timestamp conflicts
-          .mockResolvedValueOnce(null),                  // base+timestamp+1 free
+          .mockResolvedValueOnce({ id: 'base' })
+          .mockResolvedValueOnce({ id: 'suffix-1' })
+          .mockResolvedValueOnce(null),
       },
     } as any;
     const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
-    expect(result).toMatch(/-1$/);
+    expect(result).toMatch(/^my-link-[A-Za-z0-9]{6}$/);
+    expect(prisma.conversationShareLink.findFirst).toHaveBeenCalledTimes(3);
   });
 
-  it('generates a fallback when identifier is empty string', async () => {
+  it('abandonne la lisibilite plutot que de boucler quand le slug reste indisponible', async () => {
+    // L ancienne forme incrementait un compteur dans un `while (true)` : elle
+    // supposait que la base finirait par ceder. Ici on borne, et on retombe sur
+    // un identifiant opaque, qui a sa propre escalade.
+    const findFirst = jest.fn()
+      // 1 (base) + 6 suffixes = 7 refus, puis le repli opaque est libre
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce({ id: 'x' })
+      .mockResolvedValueOnce(null);
+    const result = await ensureUniqueShareLinkIdentifier(
+      { conversationShareLink: { findFirst } } as any,
+      'my-link'
+    );
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
+    expect(findFirst).toHaveBeenCalledTimes(8);
+  });
+
+  it('rend un identifiant COMPACT quand rien de lisible n est propose (chaine vide)', async () => {
+    // Le repli valait `mshy_link-<Date.now()>-<Math.random()>` : 30 caracteres,
+    // l instant de creation a la milliseconde, et un PRNG predictible.
     const prisma = makePrisma(null);
     const result = await ensureUniqueShareLinkIdentifier(prisma, '');
-    expect(result).toMatch(/^mshy_link-/);
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
+    expect(result).not.toContain('mshy_link-');
   });
 
-  it('generates a fallback when identifier is whitespace', async () => {
+  it('idem pour une chaine d espaces', async () => {
     const prisma = makePrisma(null);
     const result = await ensureUniqueShareLinkIdentifier(prisma, '   ');
-    expect(result).toMatch(/^mshy_link-/);
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
   });
 
-  it('increments counter past 1 when multiple conflicts exist (covers counter++ branch)', async () => {
-    const prisma = {
-      conversationShareLink: {
-        findFirst: jest.fn()
-          .mockResolvedValueOnce({ id: 'base' })         // base conflicts
-          .mockResolvedValueOnce({ id: 'ts' })           // base+timestamp conflicts
-          .mockResolvedValueOnce({ id: 'ts1' })          // base+timestamp+1 conflicts
-          .mockResolvedValueOnce(null),                  // base+timestamp+2 is free
-      },
-    } as any;
-    const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
-    expect(result).toMatch(/-2$/);
-    expect(prisma.conversationShareLink.findFirst).toHaveBeenCalledTimes(4);
+  it('tolere un identifiant absent (undefined)', async () => {
+    const prisma = makePrisma(null);
+    const result = await ensureUniqueShareLinkIdentifier(prisma, undefined as any);
+    expect(result).toMatch(/^mshy_[A-Za-z0-9]{8}$/);
   });
 });

@@ -260,7 +260,7 @@ extension StoryCanvasUIView {
             return
         }
         let nextSeconds = CMTimeGetSeconds(currentTime) + dt
-        let effectiveDuration = slide.computedTotalDuration()
+        let effectiveDuration = effectiveSlideTotalDuration
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         // Publie le playhead pour les overlays SwiftUI (chip audio foreground).
@@ -447,7 +447,7 @@ extension StoryCanvasUIView {
     /// drive the seam directly, so the gate isn't relevant for unit testing.
     /// Émet aussi `onPlaybackTime` pour parité avec le tick réel.
     public func simulateTickAt(seconds: Double) {
-        let effectiveDuration = slide.computedTotalDuration()
+        let effectiveDuration = effectiveSlideTotalDuration
         let clamped = min(seconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         onPlaybackTime?(clamped)

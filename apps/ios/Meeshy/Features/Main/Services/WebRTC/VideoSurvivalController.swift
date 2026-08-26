@@ -2,16 +2,25 @@
 //  VideoSurvivalController.swift
 //  Meeshy
 //
-//  Graceful audio-only survival for an unstable link, layered on top of the
-//  existing adaptive bitrate ladder (`WebRTCService.applyVideoQuality`).
+//  Graceful survival for an unstable link, layered on top of the existing
+//  adaptive bitrate ladder (`WebRTCService.applyVideoQuality`).
 //
 //  WHY THIS EXISTS
 //  iOS already sheds bitrate/resolution down to a `.critical` floor
 //  (360p15 @ ~100 kbps, `degradationPreference = .maintainFramerate`). That
 //  rescues *most* congestion. This controller adds the LAST-RESORT layer the
 //  ladder deliberately omits: when the link stays degraded long enough that
-//  even the floor tier can't survive, DROP outbound video so the call lives on
-//  as audio-only — then bring video back once the link has clearly recovered.
+//  even the floor tier can't survive, FREEZE the outbound video — the encoder
+//  is pinned to 2 fps with `.maintainResolution` so the picture holds still and
+//  legible while the audio gets the bandwidth — then thaw once the link has
+//  clearly recovered.
+//
+//  L6-1 (2026-08-25) — this layer used to DROP the video: stop capture, detach
+//  the track, flip the transceiver to recvOnly and renegotiate. That killed the
+//  picture at the peer, cost an SDP round-trip in each direction on the very
+//  link that couldn't carry one, and was announced as a deliberate camera-off.
+//  The POLICY (thresholds, hysteresis, state machine) is unchanged; only the
+//  actuator's meaning moved from "gone" to "frozen".
 //
 //  DESIGNED FOR ULTRA-LONG CALLS (tens to hundreds of hours)
 //  • Monotonic clock (not wall-clock): NTP/DST/user clock jumps never trigger a
@@ -31,16 +40,16 @@ import Foundation
 /// The decision a quality sample yields.
 enum VideoSurvivalAction: Equatable {
     case none
-    /// Drop outbound video → audio-only (sustained degraded link).
+    /// Freeze the outbound video encoder at its floor (sustained degraded link).
     case suspend
-    /// Re-acquire the camera and resume sending video (link recovered).
+    /// Hand the encoder back to the quality ladder (link recovered).
     case resume
 }
 
 /// Immutable state of the survival state machine. Timestamps are MONOTONIC
 /// seconds (see `VideoSurvivalController.now`), never wall-clock.
 struct VideoSurvivalState: Equatable {
-    /// true: sending (or intending to send) video; false: audio-only survival.
+    /// true: sending video at ladder rate; false: frozen at the survival floor.
     var isSending: Bool
     /// Monotonic time the current sustained *degraded* streak began (while sending).
     var degradedSince: TimeInterval?
@@ -140,10 +149,10 @@ struct VideoSurvivalPolicy {
 /// dans une closure @Sendable est une erreur de data-race. Les deux conformeurs
 /// (`CallManager`, `MockVideoSurvivalActuator`) sont `@MainActor` donc déjà Sendable.
 protocol VideoSurvivalActuating: AnyObject, Sendable {
-    /// Stop sending outbound video (audio-only) WITHOUT changing the user's
-    /// camera intent. Returns true on success.
+    /// Freeze the outbound video encoder at its floor WITHOUT changing the
+    /// user's camera intent, the track, or the capture. Returns true on success.
     func suspendOutboundVideo() async -> Bool
-    /// Re-acquire the camera and resume sending video. Returns true on success.
+    /// Thaw: hand the encoder back to the quality ladder. Returns true on success.
     func resumeOutboundVideo() async -> Bool
 }
 
@@ -160,7 +169,13 @@ protocol VideoSurvivalControlling: AnyObject {
 
 @MainActor
 final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling {
-    /// Outbound video auto-suspended by survival (distinct from user camera intent).
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
+    /// Outbound video frozen at the survival floor (distinct from user camera
+    /// intent, and distinct from "the camera is released" — it never is here).
     @Published private(set) var isVideoSuspended: Bool = false
 
     private let policy: VideoSurvivalPolicy
@@ -169,18 +184,19 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     private let now: () -> TimeInterval
     private weak var actuator: VideoSurvivalActuating?
     private var state: VideoSurvivalState = .initial
-    /// At most one media transition (renegotiation) in flight at a time, to avoid
-    /// SDP offer glare and Task pile-up on a flaky link.
+    /// At most one media transition in flight at a time, to avoid Task pile-up
+    /// on a flaky link (the actuator serialises behind every other in-flight
+    /// video transition, so a queued one can wait a long time).
     private var isTransitioning = false
-    /// Default hard cap (seconds) on a single suspend/resume renegotiation. A
-    /// renegotiation can hang on a dead link; without this, `isTransitioning`
+    /// Default hard cap (seconds) on a single suspend/resume actuation. An
+    /// actuation can hang on a dead link; without this, `isTransitioning`
     /// would stay `true` forever and freeze survival for the rest of a
     /// (potentially multi-hour) call. Named + centralised here rather than left
     /// as a literal in `init`. `nonisolated` so the init default argument can
     /// read it without hopping onto the main actor.
     nonisolated static let defaultTransitionTimeout: TimeInterval = 20
 
-    /// Per-instance cap on a single suspend/resume renegotiation. Injectable for
+    /// Per-instance cap on a single suspend/resume actuation. Injectable for
     /// tests; defaults to `defaultTransitionTimeout`.
     private let transitionTimeout: TimeInterval
 
@@ -227,7 +243,7 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     /// fantôme qu'aucun resume ne viendrait lever.
     private var generation = 0
     /// Cancelled by `reset()` so a call ending mid-transition doesn't leave the
-    /// suspend/resume renegotiation running for up to `transitionTimeout` (20s
+    /// suspend/resume actuation running for up to `transitionTimeout` (20s
     /// default) after the call has visibly ended — cancellation makes the
     /// `Task.sleep` timeout race resolve immediately instead of waiting it out.
     private var transitionTask: Task<Void, Never>?
@@ -258,7 +274,7 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
         // Task — deliberately NOT a `withTaskGroup` child of the race below.
         // `withTaskGroup` implicitly awaits every child task before returning
         // to its caller (`cancelAll()` only requests cooperative cancellation;
-        // it does not force a child to stop). A renegotiation that hangs inside
+        // it does not force a child to stop). An actuation that hangs inside
         // real `AVCaptureSession`/WebRTC calls — which don't observe Swift's
         // cooperative cancellation the way `Task.sleep` does — would therefore
         // keep this function suspended long past `transitionTimeout`, silently

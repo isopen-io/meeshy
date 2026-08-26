@@ -18,16 +18,19 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
-const mockResolvePrefsOnly = jest.fn<any>();
+const mockResolveForTargets = jest.fn<any>();
+const mockResolveForTarget = jest.fn<any>();
 
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+    resolveForTarget: (...args: any[]) => mockResolveForTarget(...args),
   }),
 }));
 
 beforeEach(() => {
-  mockResolvePrefsOnly.mockReset().mockResolvedValue(new Map());
+  mockResolveForTargets.mockReset().mockResolvedValue(new Map());
+  mockResolveForTarget.mockReset().mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
 });
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
@@ -186,7 +189,10 @@ describe('GET /communities/:id/members — presence visibility gating', () => {
     await app.close();
   });
 
-  it('returns a member unchanged when no presence entry exists for its user', async () => {
+  // Défaut `'hide'` (critère strict) : contrairement à l'ancien régime
+  // préférences-seules (co-appartenance ⇒ accès garanti), une entrée absente
+  // n'est plus la situation normale — elle masque.
+  it('hides isOnline when the strict resolver returns no entry for its user', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
     prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
@@ -197,18 +203,18 @@ describe('GET /communities/:id/members — presence visibility gating', () => {
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data[0].user.isOnline).toBe(true);
+    expect(res.json().data[0].user.isOnline).toBe(false);
     await app.close();
   });
 
-  it('hides isOnline when the member has disabled showOnlineStatus', async () => {
+  it('hides isOnline when the strict resolver denies visibility', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
     prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
       { id: 'mem-hidden', userId: 'user-hidden', role: 'member', user: { id: 'user-hidden', username: 'hidden', isOnline: true } }
     ]);
     prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
-    mockResolvePrefsOnly.mockResolvedValue(new Map([['user-hidden', { showOnline: false, showLastSeenTimestamp: true }]]));
+    mockResolveForTargets.mockResolvedValue(new Map([['user-hidden', { showOnline: false, showLastSeenTimestamp: true }]]));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);
@@ -216,14 +222,14 @@ describe('GET /communities/:id/members — presence visibility gating', () => {
     await app.close();
   });
 
-  it('keeps isOnline visible when the member allows showOnlineStatus', async () => {
+  it('keeps isOnline visible when the strict resolver allows it (e.g. an accepted friend)', async () => {
     const prisma = makePrisma();
     prisma.community.findFirst = jest.fn<any>().mockResolvedValue(publicCommunityWithUserAsMember());
     prisma.communityMember.findMany = jest.fn<any>().mockResolvedValue([
       { id: 'mem-visible', userId: 'user-visible', role: 'member', user: { id: 'user-visible', username: 'visible', isOnline: true } }
     ]);
     prisma.communityMember.count = jest.fn<any>().mockResolvedValue(1);
-    mockResolvePrefsOnly.mockResolvedValue(new Map([['user-visible', { showOnline: true, showLastSeenTimestamp: true }]]));
+    mockResolveForTargets.mockResolvedValue(new Map([['user-visible', { showOnline: true, showLastSeenTimestamp: true }]]));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({ method: 'GET', url: `/communities/${COMMUNITY_ID}/members` });
     expect(res.statusCode).toBe(200);

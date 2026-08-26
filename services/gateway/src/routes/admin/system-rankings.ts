@@ -5,6 +5,8 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { RankingsQuerySchema } from '../../validation/admin-schemas.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { permissionsService } from '../../services/admin/permissions.service';
+import type { UserRoleEnum } from '@meeshy/shared/types';
 
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -59,7 +61,16 @@ async function fetchUserDetails(fastify: FastifyInstance, userIds: string[]): Pr
   return new Map(users.map(u => [u.id, u]));
 }
 
-function buildUserRankings(sorted: Array<[string, number]>, userMap: Map<string, UserInfo>) {
+// Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+// supérieur peuvent constamment avoir l'état de présence » — `requireAdmin`
+// laisse passer AUDIT/ANALYST, qui n'ont plus le droit de voir `lastActivity`
+// (dérivé de `User.lastActiveAt`). `canSeePresence` gouverne la clé : absente
+// (jamais `undefined` ni une date fabriquée) quand le viewer n'y a pas droit.
+function buildUserRankings(
+  sorted: Array<[string, number]>,
+  userMap: Map<string, UserInfo>,
+  canSeePresence: boolean,
+) {
   return sorted.map(([userId, count]) => {
     const user = userMap.get(userId);
     return {
@@ -68,7 +79,7 @@ function buildUserRankings(sorted: Array<[string, number]>, userMap: Map<string,
       displayName: user?.displayName,
       avatar: user?.avatar,
       count,
-      lastActivity: user?.lastActiveAt?.toISOString()
+      ...(canSeePresence ? { lastActivity: user?.lastActiveAt?.toISOString() } : {})
     };
   });
 }
@@ -136,7 +147,7 @@ async function foldParticipantCountsToUsers(
 // RANK USERS
 // ═══════════════════════════════════════════════════════════════════
 
-async function rankUsers(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
+async function rankUsers(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number, canSeePresence: boolean) {
   const msgDateFilter = dateWhere(startDate);
 
   switch (criterion) {
@@ -156,7 +167,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'reactions_given':
@@ -175,7 +186,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'reactions_received': {
@@ -200,7 +211,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'replies_received': {
@@ -227,7 +238,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     // Seul compteur de cette famille qui n'a PAS à être replié : `Mention` est
@@ -248,7 +259,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'mentions_sent': {
@@ -266,7 +277,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, senderCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'conversations_joined':
@@ -282,7 +293,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topConversors.map(c => [c.userId, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -307,7 +319,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(creatorCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'share_links_created': {
@@ -322,7 +334,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topCreators.map(c => [c.createdBy, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -346,7 +359,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'reports_sent': {
@@ -361,7 +374,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topReporters.map(r => [r.reporterId!, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -377,7 +391,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topReported.map(r => [r.reportedEntityId, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -393,7 +408,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topSenders.map(s => [s.senderId, s._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -409,7 +425,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topReceivers.map(r => [r.receiverId, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -425,7 +442,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topInitiators.map(c => [c.initiatorId, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -444,7 +462,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userCounts = await foldParticipantCountsToUsers(fastify, participantCounts);
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'most_referrals_via_affiliate': {
@@ -459,7 +477,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         relations.map(r => [r.affiliateUserId, r._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -476,7 +495,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'most_contacts': {
@@ -491,7 +510,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(contactCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     case 'most_tracking_links_created': {
@@ -506,7 +525,8 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       const userMap = await fetchUserDetails(fastify, userIds);
       return buildUserRankings(
         topCreators.map(c => [c.createdBy!, c._count.id] as [string, number]),
-        userMap
+        userMap,
+        canSeePresence
       );
     }
 
@@ -523,7 +543,7 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
       }
       const sorted = sortAndLimit(userCounts, limit);
       const userMap = await fetchUserDetails(fastify, sorted.map(([id]) => id));
-      return buildUserRankings(sorted, userMap);
+      return buildUserRankings(sorted, userMap, canSeePresence);
     }
 
     default:
@@ -887,6 +907,11 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(RankingsQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Directive produit 2026-08-25 : `requireAdmin` laisse passer AUDIT/ANALYST,
+      // qui n'ont plus le droit de voir `lastActivity` sur un classement.
+      const viewerRole = (request as UnifiedAuthRequest).authContext!.registeredUser!.role as UserRoleEnum;
+      const canSeePresence = permissionsService.canViewPresence(viewerRole);
+
       const { entityType = 'users', criterion = 'messages_sent', period = '30d', limit = '50' } = request.query as RankingQuery;
       const limitNum = Math.min(Math.max(1, parseInt(limit || '50', 10) || 50), 100);
       const startDate = getPeriodStartDate(period || '30d');
@@ -895,7 +920,7 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
 
       switch (entityType) {
         case 'users':
-          rankings = await rankUsers(fastify, criterion || 'messages_sent', startDate, limitNum);
+          rankings = await rankUsers(fastify, criterion || 'messages_sent', startDate, limitNum, canSeePresence);
           break;
         case 'conversations':
           rankings = await rankConversations(fastify, criterion || 'message_count', startDate, limitNum);

@@ -218,6 +218,7 @@ extension StoryComposerView {
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        persistAccessibility()
         StoryDraftStore.shared.saveMedia(
             draftId: viewModel.draftId,
             images: viewModel.loadedImages,
@@ -253,6 +254,18 @@ extension StoryComposerView {
         StoryDraftStore.shared.saveCommandHistoryBlob(blob, draftId: viewModel.draftId)
     }
 
+    /// F2 — la collecte d'accessibilité accompagne chaque persistance du
+    /// brouillon. Sans elle, refermer le composer perdait le texte alternatif
+    /// saisi : il ne vivait que dans le store de session.
+    ///
+    /// Écrite même vide : le brouillon reflète toujours la DERNIÈRE collecte,
+    /// jamais une collecte périmée qu'une suppression de texte aurait dû
+    /// effacer.
+    func persistAccessibility() {
+        StoryDraftStore.shared.saveAccessibility(accessibilityStore.draftSnapshot(),
+                                                 draftId: viewModel.draftId)
+    }
+
     func saveDraft() {
         persistDraft()
         HapticFeedback.light()
@@ -284,8 +297,9 @@ extension StoryComposerView {
     ///   auto-appliqué ne compte pas, cf. `composerHasContent`) ;
     /// - **publication partie** : l'upload possède l'état.
     ///
-    /// Les écritures EXPLICITES (« Sauvegarder » à la sortie) ne passent PAS
-    /// par ce gate : l'utilisateur les demande, elles ont le droit d'écraser.
+    /// Les écritures EXPLICITES ne passent PAS par ce gate : l'utilisateur les
+    /// demande, elles ont le droit d'écraser. Depuis M10 il n'en reste qu'une,
+    /// et c'est la fermeture elle-même (`handleDismiss` → `saveDraftAndDismiss`).
     nonisolated static func mayOverwriteStoredDraft(
         draftResume: DraftResumeState,
         isAutosaveSuspended: Bool,
@@ -298,12 +312,20 @@ extension StoryComposerView {
             && !didHandOffPublish
     }
 
-    /// D1 — auto-save au passage en background : une story en cours d'édition
-    /// survit au kill de l'app. JAMAIS sur onDisappear : le discard fire
-    /// onDisappear et re-persisterait le draft que l'utilisateur vient de
-    /// jeter. Un discard explicite postérieur (`cancelAndDismiss` →
-    /// `clearAllDrafts`) efface ce qui a été auto-sauvé.
-    func autoSaveDraftForBackground() {
+    /// Écriture silencieuse d'une session INTERROMPUE — deux entrées, un seul
+    /// chemin :
+    /// - **D1**, le passage en background : la story en cours survit au kill de
+    ///   l'app. JAMAIS sur onDisappear — le discard fire onDisappear et
+    ///   re-persisterait le brouillon que l'utilisateur vient de jeter ;
+    /// - **C6b**, le 426 : le binaire est périmé, une porte bloquante va
+    ///   recouvrir le composer. Perdre le travail parce que la version a
+    ///   expiré serait une double peine.
+    ///
+    /// Les deux sont des interruptions SUBIES, pas des commandes : elles
+    /// passent donc par le gate des écritures silencieuses, là où la fermeture
+    /// par la croix (`handleDismiss`) écrit sans condition — l'utilisateur l'a
+    /// demandé en fermant.
+    func autoSaveDraftOnInterruption() {
         guard mayOverwriteStoredDraft else { return }
         persistDraft()
     }
@@ -369,6 +391,7 @@ extension StoryComposerView {
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        persistAccessibility()
         // Cover composite local-first (même pipeline pixel-parfait que la publication) —
         // « première slide dans l'ordre », même convention que l'ancienne heuristique
         // brute qu'elle remplace côté My Stories > Drafts.
@@ -475,11 +498,11 @@ extension StoryComposerView {
         return true
     }
 
-    /// Application aux magasins vivants. Les DEUX sorties non explicites
-    /// l'empruntent : la fermeture par le X (`handleDismiss`) et la publication
-    /// d'un composer sans contenu (`publishAllSlides`). Les discards EXPLICITES
-    /// (« Quitter », « Recommencer ») passent, eux, par `clearAllDrafts()` :
-    /// l'utilisateur les a demandés.
+    /// Application aux magasins vivants. Les DEUX fermetures SANS TRAVAIL
+    /// l'empruntent : la croix sur un composer vierge (`handleDismiss`) et la
+    /// publication d'un composer sans contenu (`publishAllSlides`). Le discard
+    /// EXPLICITE (« Recommencer ») passe, lui, par `clearCurrentDraft()` :
+    /// l'utilisateur l'a demandé.
     func clearPhantomDraftsOnly() {
         Self.clearPhantomDrafts(store: .shared, defaults: .standard)
     }
@@ -622,6 +645,10 @@ extension StoryComposerView {
             // E4 inc.2 — AVANT tout bootstrap timeline : l'undo/redo de
             // chaque slide revit avec le draft, même après un crash dur.
             viewModel.applyPersistedCommandHistory(StoryDraftStore.shared.loadCommandHistoryBlob(draftId: viewModel.draftId))
+            // F2 — le texte alternatif et l'opt-in d'extraction de son
+            // reviennent avec le brouillon : persistés sans être reposés, ils
+            // seraient écrits puis relus par personne.
+            accessibilityStore.restore(from: StoryDraftStore.shared.loadAccessibility(draftId: viewModel.draftId))
             let media = StoryDraftStore.shared.loadMedia(draftId: viewModel.draftId)
             let sessionDir = Self.sessionMediaDirectory(for: viewModel.draftId)
             viewModel.mergeRestoredMedia(
@@ -685,6 +712,7 @@ extension StoryComposerView {
                                     originalLanguage: storyLanguage,
                                     editingPostId: viewModel.editingPostId)
         persistCommandHistory()
+        persistAccessibility()
         StoryDraftStore.shared.markPendingPublish(draftId: viewModel.draftId)
         UserDefaults.standard.removeObject(forKey: StoryComposerDraft.userDefaultsKey)
     }
@@ -706,11 +734,25 @@ extension StoryComposerView {
         /// Session vierge : découverte PASSIVE d'un brouillon éventuel, offre
         /// par bandeau (`checkForDraft`).
         case offerDraftResume
+        /// Session SEMÉE par une porte (`StoryComposerViewModel(seeding:)`) :
+        /// le canvas porte déjà son média, et l'ouverture doit l'ADOPTER —
+        /// c'est-à-dire le recopier dans l'état de la vue — sans offrir la
+        /// moindre reprise de brouillon.
+        ///
+        /// Ce cas ferme DEUX défauts, qu'il faut nommer séparément parce que
+        /// n'en fermer qu'un laisserait un produit parfaitement plausible :
+        /// sans lui, le fond semé n'est jamais recopié dans `selectedImage`
+        /// (`restoreCanvas` est le seul écrivain de cet instantané) ⇒ canvas
+        /// VIDE ; et la carte « Reprendre » se propose par-dessus la graine,
+        /// alors que `restoreDraft()` écrase `slides` sans condition ⇒ le média
+        /// disparaît d'un tap, sans un mot.
+        case adoptSeededCanvas
     }
 
     nonisolated static func openingDraftAction(
         isEditingExistingStory: Bool,
-        isAdoptedDraftSession: Bool
+        isAdoptedDraftSession: Bool,
+        isSeededSession: Bool
     ) -> ComposerOpeningDraftAction {
         // L'ADOPTION prime (2026-08-02, point c) : un brouillon portant
         // `editingPostId` rouvre le mode édition en session adoptée — c'est
@@ -718,6 +760,10 @@ extension StoryComposerView {
         // qui écraserait le travail repris. Une entrée en édition FRAÎCHE
         // (« Modifier », jamais adoptée) reste hydratée depuis la story.
         if isAdoptedDraftSession { return .restoreAdoptedDraft }
+        // La GRAINE vient ensuite, et avant l'édition : un composer semé n'a
+        // rien à hydrater depuis le serveur — son média est déjà là, et le
+        // relire écraserait exactement ce que la porte vient de poser.
+        if isSeededSession { return .adoptSeededCanvas }
         return isEditingExistingStory ? .hydratedByEditMode : .offerDraftResume
     }
 

@@ -12,6 +12,13 @@ import type { PostComment } from '@meeshy/shared/types/post';
 export interface CommentItemProps {
   comment: PostComment;
   userLanguage?: string;
+  /**
+   * Prisme ORDONNÉ du lecteur (rangs 1→4 + fallback). Fourni, `TranslationToggle`
+   * DESCEND le prisme et sert la première langue disponible ; absent, il retombe
+   * sur `userLanguage` (rang 1 seul). Parité avec la surface POSTS
+   * (`PostCard`/`PostDetail`) et les jumeaux iOS/Android.
+   */
+  preferredLanguages?: string[];
   isAuthor?: boolean;
   onLike?: (commentId: string) => void;
   onUnlike?: (commentId: string) => void;
@@ -53,6 +60,7 @@ function translationsToItems(translations: unknown): TranslationItem[] {
 function CommentItem({
   comment,
   userLanguage,
+  preferredLanguages,
   isAuthor = false,
   onLike,
   onUnlike,
@@ -121,6 +129,7 @@ function CommentItem({
               originalLanguage={comment.originalLanguage ?? 'unknown'}
               translations={translationItems}
               userLanguage={userLanguage}
+              preferredLanguages={preferredLanguages}
               variant="inline"
             />
           ) : (

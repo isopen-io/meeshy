@@ -399,6 +399,11 @@ struct ContactData: Codable {
 
 // MARK: - Legacy Intent Handler (for iOS 14-15 compatibility)
 class IntentHandler: NSObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     // This will be extended for specific intent types if needed
 }
 

@@ -805,9 +805,13 @@ struct CallView: View {
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
                 pipView
             } else if callManager.isVideoEnabled && callManager.isVideoSuspended {
-                // Survival: outbound video dropped to audio-only on a weak link.
-                // The live local track is gone, so show a dedicated "paused" tile
-                // over the user's avatar rather than letting the self-view vanish.
+                // Survie réseau : depuis L6-1 la piste locale RESTE attachée
+                // (l'encodeur est au plancher), donc `hasLocalVideoTrack` est
+                // vrai et c'est la PiP qui gagne — elle montre l'image
+                // réellement gelée. Cette branche ne sert plus que si la piste
+                // disparaît pour une AUTRE raison (échec de ré-acquisition) :
+                // une tuile « en pause » sur l'avatar plutôt qu'une self-view
+                // qui s'évapore.
                 localVideoSuspendedTile
             }
         }
@@ -929,7 +933,7 @@ struct CallView: View {
                     // (and FloatingCallPillView 211i): the label reads once, the
                     // timer updates via .accessibilityValue under .updatesFrequently.
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.formattedDuration)
+                    .accessibilityValue(callManager.spokenDuration)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 6)
@@ -944,7 +948,7 @@ struct CallView: View {
             // announcement. Reuses the existing `call.duration.a11y.label` key.
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-            .accessibilityValue(callManager.formattedDuration)
+            .accessibilityValue(callManager.spokenDuration)
             .accessibilityAddTraits(.updatesFrequently)
 
             // Status indicators
@@ -1007,13 +1011,13 @@ struct CallView: View {
                         // caption-mode header has no status-pill row, so the
                         // labelled value is the only place the timer gains meaning.
                         .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                        .accessibilityValue(callManager.formattedDuration)
+                        .accessibilityValue(callManager.spokenDuration)
                 }
                 // Same naked-readout fix as audioCallLayout — captions-active
                 // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                .accessibilityValue(callManager.formattedDuration)
+                .accessibilityValue(callManager.spokenDuration)
                 .accessibilityAddTraits(.updatesFrequently)
             }
 
@@ -1153,7 +1157,7 @@ struct CallView: View {
                     // (top-trailing) se pose dessous via `pipTopClearance`.
                     .frame(height: 44)
                     .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
-                    .accessibilityValue(callManager.formattedDuration)
+                    .accessibilityValue(callManager.spokenDuration)
                     .accessibilityAddTraits(.updatesFrequently)
                 }
                 .padding(.horizontal, 16)
@@ -1585,7 +1589,7 @@ struct CallView: View {
                     // Final call-total duration: same naked-readout fix, static
                     // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.formattedDuration)
+                    .accessibilityValue(callManager.spokenDuration)
             }
 
             if callManager.canRetryCall {

@@ -64,6 +64,36 @@ public struct ComposerControlsLayer: View {
     /// repliée (aucune réserve).
     var onBandTopYChange: ((CGFloat) -> Void)? = nil
 
+    /// C7-UI — texte alternatif commité pour un média (id, texte). Le store
+    /// ci-dessous en garde l'état ; ce rappel est le canal SORTANT vers le
+    /// point de publication, qui vit chez le parent (`StoryComposerView`).
+    var onMediaAltCommitted: ((String, String) -> Void)? = nil
+
+    /// C7-UI — opt-in `allowSoundExtraction` de l'auteur. Flag UNIQUE du post
+    /// (`Post.allowSoundExtraction`), donc pas d'id de média ici.
+    var onAllowSoundExtractionChanged: ((Bool) -> Void)? = nil
+
+    /// C7-UI — PROPRIÉTAIRE de la collecte d'accessibilité média.
+    ///
+    /// Ce niveau est le plus bas qui survive aux démontages du panneau :
+    /// `ComposerBottomBand` n'est monté que sous `if !chrome.isBandHidden`, et
+    /// il démonte lui-même `ComposerToolPanelHost` à chaque bascule vers
+    /// `.hidden` / `.formatPanel`. Un `@StateObject` dans le host mourait donc
+    /// à la première fermeture du panneau Média — le texte alternatif déjà
+    /// saisi disparaissait sans que rien ne le signale. Cette couche, elle,
+    /// reste montée pendant toute la session de composition.
+    @StateObject private var ownedAccessibilityStore = MediaAccessibilityStore()
+
+    /// Store fourni par le parent quand il veut LIRE la collecte au moment de
+    /// publier (`mediaAltPayload()` / `allowSoundExtractionPayload()`). Absent,
+    /// la couche retombe sur le sien : le champ reste alors saisissable et
+    /// persistant, seuls les rappels sortants portent la donnée.
+    private let injectedAccessibilityStore: MediaAccessibilityStore?
+
+    private var accessibilityStore: MediaAccessibilityStore {
+        injectedAccessibilityStore ?? ownedAccessibilityStore
+    }
+
     public init(
         viewModel: StoryComposerViewModel,
         chrome: ComposerChromeContext,
@@ -82,7 +112,10 @@ public struct ComposerControlsLayer: View {
         onDismissActivePanel: @escaping () -> Void,
         onOpenStickerPicker: (() -> Void)? = nil,
         onOpenLocationPicker: (() -> Void)? = nil,
-        onOpenMentionPicker: (() -> Void)? = nil
+        onOpenMentionPicker: (() -> Void)? = nil,
+        accessibilityStore: MediaAccessibilityStore? = nil,
+        onMediaAltCommitted: ((String, String) -> Void)? = nil,
+        onAllowSoundExtractionChanged: ((Bool) -> Void)? = nil
     ) {
         self.viewModel = viewModel
         self.chrome = chrome
@@ -102,6 +135,9 @@ public struct ComposerControlsLayer: View {
         self.onOpenStickerPicker = onOpenStickerPicker
         self.onOpenLocationPicker = onOpenLocationPicker
         self.onOpenMentionPicker = onOpenMentionPicker
+        self.injectedAccessibilityStore = accessibilityStore
+        self.onMediaAltCommitted = onMediaAltCommitted
+        self.onAllowSoundExtractionChanged = onAllowSoundExtractionChanged
     }
 
     /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
@@ -212,6 +248,7 @@ public struct ComposerControlsLayer: View {
                 ComposerBottomBand(
                     state: chrome.effectiveBandState,
                     viewModel: viewModel,
+                    accessibilityStore: accessibilityStore,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
@@ -291,6 +328,12 @@ public struct ComposerControlsLayer: View {
                     onOpenStickerPicker: onOpenStickerPicker,
                     onOpenLocationPicker: onOpenLocationPicker,
                     onOpenMentionPicker: onOpenMentionPicker,
+                    // C7-UI — dernier maillon INTERNE à cette couche : le
+                    // texte alternatif et l'opt-in son remontent jusqu'ici,
+                    // d'où le parent (qui tient le publish) les récupère, soit
+                    // par ces rappels, soit en lisant le store qu'il injecte.
+                    onMediaAltCommitted: onMediaAltCommitted,
+                    onAllowSoundExtractionChanged: onAllowSoundExtractionChanged,
                     resizableHeight: isBandResizable ? $resizableBandHeight : nil,
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,

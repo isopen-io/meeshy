@@ -110,6 +110,56 @@ beforeEach(() => {
 // getComments — currentUserReactions enrichment
 // ---------------------------------------------------------------------------
 
+describe('PostCommentService — isLikedByMe sur un commentaire', () => {
+  // Le pendant, sur les commentaires, du défaut corrigé le 2026-08-25 pour les
+  // posts : l'API ne servait PAS `isLikedByMe`, donc un commentaire que le
+  // lecteur avait liké s'affichait éteint — le SDK décode un champ absent en
+  // `?? false`. Aucune requête n'est ajoutée : le like d'un commentaire EST une
+  // `CommentReaction`, et `currentUserReactions` est déjà calculé ici.
+
+  it('dit vrai quand le lecteur a réagi au commentaire', async () => {
+    const comment = makeComment('c-1');
+    mockPostCommentFindMany.mockResolvedValue([comment]);
+    mockCommentReactionFindMany.mockResolvedValue([{ commentId: 'c-1', emoji: '❤️' }]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getComments('post-1', undefined, 20, 'user-1');
+
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
+
+  it('dit faux — explicitement, jamais un champ absent — quand il n a pas réagi', async () => {
+    const comment = makeComment('c-2');
+    mockPostCommentFindMany.mockResolvedValue([comment]);
+    mockCommentReactionFindMany.mockResolvedValue([]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getComments('post-1', undefined, 20, 'user-1');
+
+    expect(result.items[0]).toHaveProperty('isLikedByMe', false);
+  });
+
+  it('dit faux pour un lecteur anonyme, sans interroger les réactions', async () => {
+    mockPostCommentFindMany.mockResolvedValue([makeComment('c-3')]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getComments('post-1', undefined, 20, undefined);
+
+    expect(result.items[0]).toHaveProperty('isLikedByMe', false);
+    expect(mockCommentReactionFindMany).not.toHaveBeenCalled();
+  });
+
+  it('sert aussi le flag sur les RÉPONSES — même règle, même surface', async () => {
+    mockPostCommentFindMany.mockResolvedValue([makeComment('r-1')]);
+    mockCommentReactionFindMany.mockResolvedValue([{ commentId: 'r-1', emoji: '👍' }]);
+
+    const service = new PostCommentService(mockPrisma);
+    const result = await service.getReplies('c-1', undefined, 20, 'user-1');
+
+    expect((result.items[0] as any).isLikedByMe).toBe(true);
+  });
+});
+
 describe('PostCommentService.getComments', () => {
   it('returns currentUserReactions: [] when the user has not reacted to any comment', async () => {
     const comment = makeComment('c-1');
@@ -780,7 +830,11 @@ describe('PostCommentService.likeComment', () => {
     expect(mockPrisma.commentReaction.upsert as jest.Mock).not.toHaveBeenCalled();
   });
 
-  it('purges the user\'s other-emoji reactions so at most 1 reaction survives (parity with socket)', async () => {
+  // Ce témoin affirmait l'INVERSE, sous un nom qui invoquait la « parity with
+  // socket » : il assérait la purge `emoji: { not }` alors que le chemin socket
+  // EMPILE. Un témoin qui grave un défaut le rend indéboulonnable — la session
+  // suivante lit une assertion verte et conclut que la règle est voulue.
+  it('empile un second emoji sans toucher au premier — la VRAIE parité avec le socket', async () => {
     (mockPrisma.postComment.findFirst as jest.Mock).mockResolvedValue({ id: 'c-1' });
     (mockPrisma.commentReaction.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
     (mockPrisma.commentReaction.upsert as jest.Mock).mockResolvedValue({});
@@ -789,9 +843,7 @@ describe('PostCommentService.likeComment', () => {
 
     await service.likeComment('c-1', 'u-1', '👍');
 
-    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
-      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '👍' } },
-    });
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).not.toHaveBeenCalled();
     expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { comment_user_reaction_unique: { commentId: 'c-1', userId: 'u-1', emoji: '👍' } },
@@ -809,9 +861,7 @@ describe('PostCommentService.likeComment', () => {
 
     await service.likeComment('c-1', 'u-1', '❤️');
 
-    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).toHaveBeenCalledWith({
-      where: { commentId: 'c-1', userId: 'u-1', emoji: { not: '❤️' } },
-    });
+    expect(mockPrisma.commentReaction.deleteMany as jest.Mock).not.toHaveBeenCalled();
     expect(mockPrisma.commentReaction.upsert as jest.Mock).toHaveBeenCalledWith(
       expect.objectContaining({ update: {} }),
     );

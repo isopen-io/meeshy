@@ -98,7 +98,17 @@ enum class StoryEasing {
 /** A single animation keyframe — port of StoryKeyframe (StoryModels.swift). */
 @Serializable
 data class StoryKeyframe(
-    val id: String,
+    /**
+     * Le fil n'envoie PAS cet identifiant — il n'en a jamais envoyé. iOS en
+     * synthétise un à la lecture (`StoryModels.swift:4137`) ; l'exiger ici
+     * faisait échouer kotlinx sur le DOCUMENT entier, donc emportait le post
+     * complet dès qu'un objet portait une animation.
+     *
+     * Il ne sert que de clé de liste : le repli doit rester UNIQUE, jamais une
+     * constante partagée. Corollaire assumé, identique à iOS : deux lectures
+     * du même JSON ne sont pas `equals` si l'identifiant a été synthétisé.
+     */
+    val id: String = java.util.UUID.randomUUID().toString(),
     val time: Float = 0f,
     val x: Double? = null,
     val y: Double? = null,
@@ -200,11 +210,22 @@ data class StoryAudioPlayerObject(
     val sourceLanguage: String? = null,
 )
 
-/** An emoji sticker on a story canvas — port of StorySticker (StoryModels.swift). */
+/**
+ * A sticker on a story canvas — port of StorySticker (StoryModels.swift).
+ *
+ * [postMediaId]/[provider] carry an image sticker as an INTEGRATED asset —
+ * same id space as any post media, never a third-party URL — port of iOS's
+ * `StorySticker.postMediaId`/`.provider`. Both are optional with a neutral
+ * default so a document from before this field existed still decodes: the
+ * codebase has already paid for a stricter-than-the-wire model on this exact
+ * type of field (keyframes, transitions) making the WHOLE document fail.
+ */
 @Serializable
 data class StorySticker(
     val id: String,
     val emoji: String = "",
+    val postMediaId: String = "",
+    val provider: String? = null,
     val x: Double = 0.5,
     val y: Double = 0.5,
     val scale: Double = 1.0,
@@ -216,7 +237,10 @@ data class StorySticker(
     val duration: Double? = null,
     val fadeIn: Double? = null,
     val fadeOut: Double? = null,
-)
+) {
+    /** True once an integrated image backs this sticker — the renderer's cue to paint it over the emoji. */
+    val hasImage: Boolean get() = postMediaId.isNotBlank()
+}
 
 /** Inter-slide transition effect — port of StoryTransitionEffect (StoryModels.swift). */
 @Serializable
@@ -276,7 +300,9 @@ data class StoryEffects(
     val backgroundAudioEnd: Double? = null,
     val voiceAttachmentId: String? = null,
     val voiceTranscriptions: List<StoryVoiceTranscription>? = null,
+    @Serializable(with = StoryTransitionTolerantSerializer::class)
     val opening: StoryTransitionEffect? = null,
+    @Serializable(with = StoryTransitionTolerantSerializer::class)
     val closing: StoryTransitionEffect? = null,
     val textObjects: List<StoryTextObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject>? = null,
@@ -285,6 +311,14 @@ data class StoryEffects(
     val thumbHash: String? = null,
     val backgroundTransform: StoryBackgroundTransform? = null,
     val slideDuration: Float? = null,
+    /**
+     * Author-pinned slide duration (seconds) set via the timeline editor — the
+     * priority-0 override in [StorySlideDuration]. Distinct from the legacy
+     * [slideDuration], which carries arbitrary backend values and is ignored.
+     * `null` for everything published before the timeline editor existed, so the
+     * duration falls back to the content-derived rule with zero regression.
+     */
+    val timelineDuration: Double? = null,
     val clipTransitions: List<StoryClipTransition>? = null,
     val musicTrackId: String? = null,
     val musicStartTime: Double? = null,
@@ -297,6 +331,7 @@ data class StorySlide(
     val id: String,
     val mediaURL: String? = null,
     val content: String? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val effects: StoryEffects = StoryEffects(),
     val duration: Double = 12.0,
     val order: Int = 0,

@@ -28,7 +28,16 @@ extension ConversationView {
         AnyView(ConversationHeaderAvatarView(
             composerState: $composerState,
             headerState: $headerState,
-            conversation: conversation,
+            // La bande d'avatars est le SEUL endroit de l'en-tête que les
+            // réglages peuvent changer sous les yeux du lecteur (titre →
+            // `name`, avatar → `avatarURL`). Elle reçoit donc la conversation
+            // VIVANTE : l'override serveur remonté par la feuille d'info après
+            // un enregistrement, sinon la valeur figée de la navigation. Tous
+            // ses autres champs (`type`, `participantUserId`,
+            // `participantAvatarURL`) sortent inchangés de la fusion serveur
+            // (`MeeshyConversation.mergingMetadata` ne reporte QUE les
+            // métadonnées du conteneur), donc une seule source ici suffit.
+            conversation: liveConversation,
             topActiveMembers: topActiveMembers,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
@@ -92,8 +101,13 @@ extension ConversationView {
     // MARK: - Header Tags Row (category first, then colored tags, horizontally scrollable)
     @ViewBuilder
     var headerTagsRow: some View {
-        let isEncrypted = conversation?.encryptionMode != nil
-        let hasTags = conversationSection != nil || !(conversation?.tags.isEmpty ?? true) || isEncrypted
+        // F11 (revue adversariale 2026-08-25) : `encryptionMode`/`tags`
+        // lisent la conversation VIVANTE — un réglage (changement de mode de
+        // chiffrement, ajout/retrait d'un tag) doit se refléter sur CETTE
+        // bande sans réouverture, exactement comme la bande d'avatars juste
+        // au-dessus dans le même en-tête.
+        let isEncrypted = liveConversation?.encryptionMode != nil
+        let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 4) {
@@ -127,7 +141,7 @@ extension ConversationView {
                         )
                     }
 
-                    if let conv = conversation {
+                    if let conv = liveConversation {
                         ForEach(conv.tags) { tag in
                             Text(tag.name)
                                 .font(MeeshyFont.relative(8, weight: .semibold))
@@ -423,15 +437,23 @@ private struct ConversationHeaderAvatarView: View {
         // on n'ajoute que les entrées profil / conversation / message.
         var items: [AvatarContextMenuItem] = []
         if isDirect {
-            items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle.fill") {
+            // F10 (revue adversariale 2026-08-25) : clé app (`.main`) alors
+            // que le pendant SDK (`MeeshyAvatar.swift`) réserve
+            // `avatar.menu.view_profile` (`.module`) à ce même geste pour
+            // que la dédup par LIBELLÉ ne divise jamais deux entrées
+            // « profil ». Sans danger ICI UNIQUEMENT parce que ce site ne
+            // passe jamais `onViewProfile` à `MeeshyAvatar` — sinon la dédup
+            // casserait. Si `onViewProfile` est un jour câblé sur cet
+            // avatar, basculer sur la clé SDK.
+            items.append(AvatarContextMenuItem(label: String(localized: "Voir le profil", bundle: .main), icon: "person.circle.fill") {
                 onViewProfile?()
             })
         }
-        items.append(AvatarContextMenuItem(label: "Conversation", icon: "info.circle.fill") {
+        items.append(AvatarContextMenuItem(label: String(localized: "Conversation", bundle: .main), icon: "info.circle.fill") {
             composerState.showConversationInfo = true
         })
         if !isDirect {
-            items.append(AvatarContextMenuItem(label: "Envoyer un message", icon: "bubble.left.fill") {
+            items.append(AvatarContextMenuItem(label: String(localized: "Envoyer un message", bundle: .main), icon: "bubble.left.fill") {
                 onNavigateToDM(userId, name)
             })
         }

@@ -13,7 +13,6 @@ import {
   useUnbookmarkPostMutation,
   useDeletePostMutation,
   useUpdatePostMutation,
-  useRepostMutation,
   useTranslatePostMutation,
 } from '@/hooks/queries/use-post-mutations';
 import {
@@ -24,15 +23,21 @@ import {
 } from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePostRoom } from '@/hooks/social/use-post-room';
-import { usePreferredLanguage } from '@/hooks/use-post-translation';
+import { usePreferredLanguage, usePreferredLanguages } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
 import { postBackgroundSound } from '@/lib/story-transforms';
 import { PostDetail } from '@/components/v2/PostDetail';
-import { PostEditor } from '@/components/v2/PostEditor';
-import { RepostModal } from '@/components/v2/RepostModal';
+import type { PostType } from '@meeshy/shared/types/post';
+import { repostTargetId } from '@meeshy/shared/utils/repost-target';
 import { useToast } from '@/components/v2';
+import { Dialog, DialogBody, DialogHeader } from '@/components/v2/Dialog';
 import { Skeleton } from '@/components/v2/Skeleton';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { MeeshyComposer } from '@/components/composer/MeeshyComposer';
+import { composerFormatOf } from '@/lib/composer-door';
+import type { ComposerDocumentEditPayload, ComposerRepostPayload } from '@/components/composer/payload';
+import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
+import { useI18n } from '@/hooks/use-i18n';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService, recordAnonymousView } from '@/services/posts.service';
 import { reportService } from '@/services/report.service';
@@ -61,6 +66,7 @@ export default function PostDetailPage() {
   const currentUser = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const userLanguage = usePreferredLanguage();
+  const preferredLanguages = usePreferredLanguages();
 
   // Notification → comment navigation: the link builder appends a
   // `#comment-<id>` anchor (plus `?parent=<id>` when the target is a reply, or
@@ -86,8 +92,10 @@ export default function PostDetailPage() {
   const unbookmarkMutation = useUnbookmarkPostMutation();
   const deleteMutation = useDeletePostMutation();
   const updateMutation = useUpdatePostMutation();
-  const repostMutation = useRepostMutation();
+  // W8 — le site UNIQUE de la charge repost, voir `useComposerRepost.ts`.
+  const { repost: submitRepost, isPending: isReposting } = useComposerRepost();
   const translateMutation = useTranslatePostMutation();
+  const { t: tc } = useI18n('common');
   const createCommentMutation = useCreateCommentMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const likeCommentMutation = useLikeCommentMutation();
@@ -180,12 +188,9 @@ export default function PostDetailPage() {
 
   const handleEdit = () => setEditorOpen(true);
 
-  const handleSaveEdit = (data: { content: string; visibility: string }) => {
+  const handleSaveEdit = (payload: ComposerDocumentEditPayload) => {
     updateMutation.mutate(
-      {
-        postId: post.id,
-        data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
-      },
+      { postId: payload.postId, data: payload.data },
       {
         onSuccess: () => {
           setEditorOpen(false);
@@ -196,18 +201,43 @@ export default function PostDetailPage() {
     );
   };
 
-  const handleRepost = () => {
-    repostMutation.mutate(
-      { postId: post.id, data: { isQuote: false } },
+  /**
+   * Le miroir et l'ancrage partent ENSEMBLE, et c'est ici qu'ils manquaient le
+   * plus. Cette page est montée sur TROIS routes — `/feeds/post/:id`,
+   * `/post/:id` et `/mood/:id`, cible officielle de résolution des liens
+   * tracés de type STATUS (`buildWebFallbackTarget`) — donc sa carte peut être
+   * éphémère, contrairement à `/reel/:id` (garde `seedIsReel`) et
+   * `/story/:id` (garde `postIsStory`).
+   *
+   * Le miroir seul y serait DESTRUCTEUR : un mood republié en STATUS vit une
+   * heure, puis `ExpiredStoriesCleanupService` détruit la ligne — là où le
+   * même geste donnait un post permanent. L'ancrage est le recours.
+   *
+   * W8 — `submitRepost` est désormais le site UNIQUE (`useComposerRepost.ts`) ;
+   * `repostAs` reste la primitive PARTAGÉE par les DEUX gestes de cette page :
+   * l'ancrage DIRECT (`handleRepostAsPost`, un tap, aucun dialogue) et la
+   * porte `repost` du meuble (`handleRepostSubmit`, dialogue avec choix
+   * repost/citation ET, désormais, son propre éventail d'ancrage).
+   */
+  const repostAs = (targetType: PostType, isQuote: boolean, content?: string) => {
+    submitRepost(
+      // La RÉFÉRENCE remonte la chaîne, le FORMAT reste celui de la carte agie.
+      { targetId: repostTargetId(post), targetType, isQuote, content },
       {
         onSuccess: () => {
           setRepostModalOpen(false);
-          showToast('Reposted!', 'success');
+          showToast(isQuote ? 'Quoted!' : 'Reposted!', 'success');
         },
-        onError: () => showToast('Failed to repost', 'error'),
+        onError: () => showToast(isQuote ? 'Failed to quote' : 'Failed to repost', 'error'),
       },
     );
   };
+
+  /** L'ANCRAGE — « garder ça pour de bon » : la seule cible permanente. */
+  const handleRepostAsPost = () => repostAs('POST', false);
+
+  const handleRepostSubmit = (payload: ComposerRepostPayload) =>
+    repostAs(payload.targetType, payload.isQuote, payload.content);
 
   const handleReportPost = () => {
     if (!window.confirm('Report this post?')) return;
@@ -215,19 +245,6 @@ export default function PostDetailPage() {
       .reportPost(post.id, 'inappropriate', '')
       .then(() => showToast('Post reported', 'success'))
       .catch(() => showToast("Couldn't report the post.", 'error'));
-  };
-
-  const handleQuote = (content: string) => {
-    repostMutation.mutate(
-      { postId: post.id, data: { content, isQuote: true } },
-      {
-        onSuccess: () => {
-          setRepostModalOpen(false);
-          showToast('Quoted!', 'success');
-        },
-        onError: () => showToast('Failed to quote', 'error'),
-      },
-    );
   };
 
   return (
@@ -244,6 +261,7 @@ export default function PostDetailPage() {
             currentUserId={currentUser?.id}
             currentUser={currentUser ? { username: currentUser.username, avatar: currentUser.avatar } : null}
             userLanguage={userLanguage}
+            preferredLanguages={preferredLanguages}
             isLiked={isHeartLikedByMe(post)}
             isBookmarked={!!post.bookmarkedAt}
             userReaction={post.currentUserReactions?.[0]}
@@ -277,6 +295,10 @@ export default function PostDetailPage() {
             onUnbookmark={() => unbookmarkMutation.mutate(post.id)}
             onShare={handleShare}
             onRepost={() => setRepostModalOpen(true)}
+            /* Reposter un POST ne propose pas l'ancrage deux fois : il est
+               déjà son propre ancrage (jumeau iOS : `offeredFormats`,
+               `ComposerIntent.swift`). */
+            onRepostAsPost={post.type === 'POST' ? undefined : handleRepostAsPost}
             onEdit={isAuthor ? handleEdit : undefined}
             onDelete={isAuthor ? handleDeletePost : undefined}
             onReport={isAuthor ? undefined : handleReportPost}
@@ -298,25 +320,59 @@ export default function PostDetailPage() {
           />
         </main>
 
-        <PostEditor
-          open={editorOpen}
-          initialContent={post.content ?? ''}
-          initialVisibility={post.visibility}
-          onSave={handleSaveEdit}
-          onClose={() => setEditorOpen(false)}
-          saving={updateMutation.isPending}
-        />
+        {/* Édition — porte `edit` (Task W8). */}
+        {editorOpen && (
+          <Dialog open onClose={() => setEditorOpen(false)} labelledBy="post-detail-edit-title">
+            <DialogHeader>
+              <h2 id="post-detail-edit-title" className="text-base font-semibold text-[var(--gp-text-primary)]">
+                {tc('composer.edit.title')}
+              </h2>
+            </DialogHeader>
+            <DialogBody>
+              <MeeshyComposer
+                door={{ kind: 'edit', documentFormat: composerFormatOf(post.type) }}
+                onPublish={NOOP_PUBLISH}
+                editSource={{
+                  postId: post.id,
+                  content: post.content ?? '',
+                  visibility: post.visibility,
+                  visibilityUserIds: post.visibilityUserIds ?? [],
+                  media: post.media ?? [],
+                  postType: post.type,
+                }}
+                onSaveEdit={handleSaveEdit}
+                disabled={updateMutation.isPending}
+              />
+            </DialogBody>
+          </Dialog>
+        )}
 
-        <RepostModal
-          open={repostModalOpen}
-          originalAuthor={post.author?.displayName ?? post.author?.username}
-          originalContent={post.content ?? undefined}
-          onRepost={handleRepost}
-          onQuote={handleQuote}
-          onClose={() => setRepostModalOpen(false)}
-          saving={repostMutation.isPending}
-        />
+        {/* Repost — porte `repost` (Task W8). */}
+        {repostModalOpen && (
+          <Dialog open onClose={() => setRepostModalOpen(false)} labelledBy="post-detail-repost-title">
+            <DialogHeader>
+              <h2 id="post-detail-repost-title" className="text-base font-semibold text-[var(--gp-text-primary)]">
+                {tc('composer.repost.title')}
+              </h2>
+            </DialogHeader>
+            <DialogBody>
+              <MeeshyComposer
+                door={{ kind: 'repost', sourceFormat: composerFormatOf(post.type) }}
+                onPublish={NOOP_PUBLISH}
+                repostSource={{ author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined }}
+                onRepost={handleRepostSubmit}
+                disabled={isReposting}
+                repostSaving={isReposting}
+              />
+            </DialogBody>
+          </Dialog>
+        )}
       </div>
     </DashboardLayout>
   );
 }
+
+// Ce montage ne sert que les portes `edit`/`repost` — aucun composer de
+// CRÉATION n'existe sur cette page. `onPublish` reste requis par le contrat
+// mais n'est jamais servi par ces formats, voir `MeeshyComposer.tsx`.
+function NOOP_PUBLISH(): void {}

@@ -19,9 +19,10 @@
 import type { Message, MessageTranslation } from '@meeshy/shared/types';
 import type { Attachment } from '@meeshy/shared/types/attachment';
 import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
-import { resolveLastMessagePreview } from '@meeshy/shared/utils/conversation-helpers';
+import { resolveLastMessagePreview, resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { startOfLocalDayMs } from '@meeshy/shared/utils/calendar-date';
+import { isFirstInGroup as computeIsFirstInGroup } from '@/utils/message-grouping';
 
 /** Tableau `Message.translations` → dictionnaire `{ langue: texte }` attendu par `resolveLastMessagePreview`. */
 export function buildFocalTranslationsRecord(
@@ -55,61 +56,38 @@ export function resolveFocalMessageText(
 /**
  * Le texte du fil AVEC la langue réellement servie — parité 2026-08-17.
  *
- * Le Prisme reste UNIQUE : `resolveLastMessagePreview` est appelé UNE fois,
- * ici, et son résultat est la seule source du texte affiché. La langue
- * servie n'est pas une SECONDE loi : elle est LUE du résultat de la première
- * (l'entrée du dictionnaire qui a gagné), jamais recalculée par une règle
- * parallèle. Sans elle, le fil ne pouvait pas dire « affiché en fr, écrit en
- * en » — l'information que la vue Bulles montre dans sa méta et que le fil
- * plat taisait.
+ * Le Prisme reste UNIQUE : une SEULE descente, `resolvePrismTranslation`
+ * (`@meeshy/shared`), qui rend la PAIRE `{ language, text }` — précisément
+ * l'API que la SSOT expose « pour les consommateurs qui doivent DIRE dans
+ * quelle langue ils servent » (CLAUDE.md § « La descente elle-même est UNE
+ * fonction »). `resolveLastMessagePreview` n'en est qu'une projection texte :
+ * s'appuyer sur lui puis re-dériver la langue par une SECONDE boucle rouvrait
+ * une divergence. C'est ce que faisait `focalServedLanguage`, qui rapprochait
+ * les clés par `.toLowerCase()` : une clé région-taguée (`pt-BR`) ne matchait
+ * jamais une préférence `pt`, et le libellé retombait sur la langue ORIGINALE
+ * alors que le texte affiché était bien la traduction portugaise — la même
+ * source (`normalizeLanguageForDedup`, région strippée) sert désormais le
+ * texte ET son étiquette.
  *
- * `language === originalLanguage` ⇒ rien n'a été traduit : c'est exactement
- * ce que `resolveLastMessagePreview` signifie en renvoyant `preview`.
+ * `null` de `resolvePrismTranslation` ⇒ servir l'original : soit la langue
+ * d'origine a gagné à son rang, soit aucune langue du lecteur n'est servie.
+ * Dans les deux cas le fil affiche `message.content` étiqueté de sa langue
+ * d'origine — « affiché en X, écrit en X », rien n'a été traduit.
  */
 export function resolveFocalMessageDisplay(
   message: Pick<Message, 'content' | 'originalLanguage' | 'translations'>,
   preferredLanguages: readonly string[]
 ): { readonly text: string | null | undefined; readonly language: string | undefined } {
-  const record = buildFocalTranslationsRecord(message.translations);
-  const text = resolveLastMessagePreview({
-    preview: message.content,
-    translations: record,
+  const resolved = resolvePrismTranslation({
+    translations: buildFocalTranslationsRecord(message.translations),
     originalLanguage: message.originalLanguage,
     preferredLanguages,
   });
 
-  if (!record || text == null || text === message.content) {
-    return { text, language: message.originalLanguage };
+  if (resolved) {
+    return { text: resolved.text, language: resolved.language };
   }
-
-  const served = focalServedLanguage(record, preferredLanguages);
-  return { text, language: served ?? message.originalLanguage };
-}
-
-/**
- * La langue RÉELLEMENT servie, LUE dans le MÊME ordre de priorité que
- * `resolveLastMessagePreview` (la première langue préférée présente dans le
- * dictionnaire) — jamais par correspondance de VALEUR. Deux traductions au
- * texte identique (ex. `pt`/`gl` = « Olá ») rendaient l'ancienne recherche par
- * valeur ambiguë : elle attribuait la langue de la PREMIÈRE entrée insérée dont
- * la valeur égalait le texte, et non celle que le Prisme a réellement servie.
- * Même filtrage que la loi partagée (chaîne non vide, minusculée) ; la casse du
- * `targetLanguage` d'origine est préservée dans la valeur rendue.
- */
-function focalServedLanguage(
-  record: Readonly<Record<string, string>>,
-  preferredLanguages: readonly string[]
-): string | undefined {
-  const keyByLower = new Map<string, string>();
-  for (const key of Object.keys(record)) keyByLower.set(key.toLowerCase(), key);
-  for (const lang of preferredLanguages) {
-    if (typeof lang !== 'string') continue;
-    const normalized = lang.trim().toLowerCase();
-    if (normalized === '') continue;
-    const key = keyByLower.get(normalized);
-    if (key !== undefined) return key;
-  }
-  return undefined;
+  return { text: message.content, language: message.originalLanguage };
 }
 
 /**
@@ -174,13 +152,35 @@ export function resolveFocalAuthorAccent(displayName: string): string {
   return colorForName(displayName);
 }
 
-/** Deux messages sont dans le même groupe visuel s'ils partagent l'expéditeur (§WS-4 : « en tête de groupe uniquement »). */
+/**
+ * Deux messages sont dans le même groupe visuel s'ils partagent l'expéditeur
+ * (§WS-4 : « en tête de groupe uniquement ») ET le même jour calendaire — MAIS
+ * un message SYSTÈME n'est jamais une prise de parole : il ouvre toujours son
+ * propre groupe et ne continue jamais celui d'un voisin. L'avis d'arrivée est
+ * écrit avec l'arrivant pour auteur (`packages/shared/utils/join-notice.ts`) ;
+ * comparer les seuls `senderId` groupait la première vraie bulle du nouveau venu
+ * avec l'annonce de sa propre arrivée — la bulle perdait alors avatar, nom et
+ * horodatage ensemble (`FocalIdentityHeader` n'est monté qu'en tête de groupe).
+ * Même défaut que la vue Bulles, corrigé le 2026-08-20 dans
+ * `utils/message-grouping.ts` mais laissé dans ce mode de lecture Focal —
+ * pourtant monté par `ConversationMessages`. La dimension JOUR y a rejoint la
+ * règle le 2026-08-26 (it. 270) : sans elle, la première bulle sous une capsule
+ * de date masquait son identité.
+ *
+ * La règle est déclarée UNE SEULE FOIS (`utils/message-grouping.ts`) : ce
+ * prédicat n'en est qu'un adaptateur de forme (`senderId` plat → `sender.id`,
+ * `createdAt` descendu tel quel), il ne recopie pas le raisonnement.
+ */
 export function isFirstInFocalGroup(
-  current: Pick<Message, 'senderId'>,
-  previous: Pick<Message, 'senderId'> | null | undefined
+  current: Pick<Message, 'senderId' | 'messageSource' | 'createdAt'>,
+  previous: Pick<Message, 'senderId' | 'messageSource' | 'createdAt'> | null | undefined
 ): boolean {
-  if (!previous) return true;
-  return previous.senderId !== current.senderId;
+  return computeIsFirstInGroup(
+    previous
+      ? { sender: { id: previous.senderId }, messageSource: previous.messageSource, createdAt: previous.createdAt }
+      : previous,
+    { sender: { id: current.senderId }, messageSource: current.messageSource, createdAt: current.createdAt }
+  );
 }
 
 /**

@@ -50,8 +50,10 @@ data class ApiRepostOf(
     val content: String? = null,
     val originalLanguage: String? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val audioUrl: String? = null,
+    val moodEmoji: String? = null,
     val originalRepostOfId: String? = null,
     val author: ApiAuthor? = null,
     val media: List<ApiPostMedia>? = null,
@@ -59,6 +61,12 @@ data class ApiRepostOf(
     val likeCount: Int? = null,
     val commentCount: Int? = null,
     val isQuote: Boolean? = null,
+    /**
+     * The reposted (source) post's shared place, hoisted by the gateway from
+     * `metadata.location` — mirror of iOS `APIRepostOf.location` (PostModels.swift).
+     * Rendered as a tappable sticker inside the quote embed.
+     */
+    val location: SharedPlace? = null,
 )
 
 /** A comment on a post — port of APIPostComment (PostModels.swift). */
@@ -107,6 +115,7 @@ data class ApiPost(
     val moodEmoji: String? = null,
     val audioUrl: String? = null,
     val audioDuration: Int? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
     val storyEffects: StoryEffects? = null,
     val translations: Map<String, ApiPostTranslationEntry>? = null,
     val isLikedByMe: Boolean? = null,
@@ -115,6 +124,7 @@ data class ApiPost(
     val currentUserReactions: List<String>? = null,
     val mentionedUsers: List<MentionedUser>? = null,
     val viaUsername: String? = null,
+    val location: SharedPlace? = null,
 )
 
 /**

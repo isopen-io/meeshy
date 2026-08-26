@@ -1,9 +1,10 @@
 import SwiftUI
 import Combine
+import MeeshySDK
 
 public struct ConversationScrollControlsView: View {
     public var unreadCount: Int
-    public var typingUsernames: [String]
+    public var typingParticipants: [TypingParticipant]
     public var lastUnreadMessageContent: String?
     public var unreadAttachmentTypeLabel: String?
     public var unreadAttachmentThumbHash: String?
@@ -36,7 +37,7 @@ public struct ConversationScrollControlsView: View {
     
     public init(
         unreadCount: Int,
-        typingUsernames: [String],
+        typingParticipants: [TypingParticipant],
         lastUnreadMessageContent: String?,
         unreadAttachmentTypeLabel: String?,
         unreadAttachmentThumbHash: String?,
@@ -56,7 +57,7 @@ public struct ConversationScrollControlsView: View {
         onPlayAudio: @escaping () -> Void
     ) {
         self.unreadCount = unreadCount
-        self.typingUsernames = typingUsernames
+        self.typingParticipants = typingParticipants
         self.lastUnreadMessageContent = lastUnreadMessageContent
         self.unreadAttachmentTypeLabel = unreadAttachmentTypeLabel
         self.unreadAttachmentThumbHash = unreadAttachmentThumbHash
@@ -77,7 +78,18 @@ public struct ConversationScrollControlsView: View {
     }
     
     private var hasTypingIndicator: Bool {
-        !typingUsernames.isEmpty
+        !typingParticipants.isEmpty
+    }
+
+    /// Noms seuls — `typingLabel(for:)` reste une fonction pure sur `[String]`.
+    private var typingUsernames: [String] { typingParticipants.displayNames }
+
+    /// Visages montrés dans la pile, dédupliqués par identité et bornés à trois :
+    /// au-delà la pile déborderait la largeur utile du bouton (260 pt), et le
+    /// libellé dit déjà « +N ».
+    private var typingFaces: [TypingParticipant] {
+        var seen = Set<String>()
+        return typingParticipants.filter { seen.insert($0.id).inserted }.prefix(3).map { $0 }
     }
     
     private var hasUnreadContent: Bool {
@@ -199,10 +211,6 @@ public struct ConversationScrollControlsView: View {
             )
         }
         .allowsHitTesting(!isSearchingQuotedMessage)
-        .onReceive(typingDotTimer) { _ in
-            guard hasTypingIndicator else { return }
-            typingDotPhase = (typingDotPhase + 1) % 3
-        }
     }
 
     // MARK: - Quoted Message Search Indicator
@@ -305,8 +313,15 @@ public struct ConversationScrollControlsView: View {
             VStack(alignment: .leading, spacing: 2) {
                 // Typing indicator (top priority — someone is composing now).
                 if hasTypingIndicator {
-                    HStack(spacing: 4) {
-                        typingDotsView
+                    // Les visages des frappeurs, points animés PAR-DESSUS, sur
+                    // LEUR propre ligne — et non dans le slot de gauche : celui-ci
+                    // appartient à l'aperçu du dernier message (miniature
+                    // image/vidéo, bouton audio, glyphe de type, notice d'appel).
+                    // Y loger les visages faisait disparaître la miniature pendant
+                    // toute la durée d'une frappe, alors que les deux
+                    // informations sont vraies en même temps.
+                    HStack(spacing: 6) {
+                        typingAvatarStack
                         Text(typingLabel)
                             .font(.system(size: 11, weight: .semibold))
                             .lineLimit(1)
@@ -428,6 +443,68 @@ public struct ConversationScrollControlsView: View {
         }
     }
     
+    /// Les visages de ceux qui écrivent, avec les trois points animés
+    /// PAR-DESSUS.
+    ///
+    /// Les avatars se chevauchent (décalage 14 pt pour un cercle de 28) comme
+    /// une pile de participants, le plus récent derrière — l'ordre du roster est
+    /// celui de première apparition, donc le premier frappeur reste en tête et
+    /// la pile ne se réordonne pas à chaque frappe. Les points sont posés en
+    /// `overlay` centré sur la pile entière, sur une pastille sombre translucide
+    /// qui les garde lisibles quelle que soit la photo dessous.
+    /// La pile vit sur la LIGNE de frappe, à côté d'un libellé de 11 pt — d'où
+    /// des visages de 22 pt plutôt que la pastille de 36 pt du slot d'aperçu.
+    private static let typingFaceSize: CGFloat = 22
+    private static let typingFaceOverlap: CGFloat = 11
+
+    /// Largeur de la pile : un visage, plus le débord de chaque suivant.
+    private var typingStackWidth: CGFloat {
+        let extra = CGFloat(max(0, typingFaces.count - 1)) * Self.typingFaceOverlap
+        return Self.typingFaceSize + extra
+    }
+
+    /// Un visage de la pile. Extrait de `typingAvatarStack` : inline, la chaîne
+    /// ZStack → ForEach → overlay → frame → overlay dépassait le budget de
+    /// type-check de Swift (« unable to type-check this expression in
+    /// reasonable time »).
+    private func typingFace(_ face: TypingParticipant, at index: Int) -> some View {
+        let offsetX = CGFloat(index) * Self.typingFaceOverlap
+        return MeeshyAvatar(
+            name: face.displayName,
+            context: .custom(Self.typingFaceSize),
+            accentColor: accentColor,
+            avatarURL: face.avatarURL
+        )
+        .overlay(Circle().strokeBorder(Color(hex: accentColor), lineWidth: 1.5))
+        .offset(x: offsetX)
+    }
+
+    /// Les points animés, posés sur une pastille sombre qui les garde lisibles
+    /// quelle que soit la photo dessous.
+    private var typingDotsBadge: some View {
+        typingDotsView
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Color.black.opacity(0.55)))
+    }
+
+    /// Les visages de ceux qui écrivent, avec les trois points animés
+    /// PAR-DESSUS.
+    ///
+    /// Les avatars se chevauchent comme une pile de participants ; l'ordre du
+    /// roster étant celui de première apparition, la pile ne se réordonne pas à
+    /// chaque frappe.
+    private var typingAvatarStack: some View {
+        ZStack(alignment: .leading) {
+            ForEach(Array(typingFaces.enumerated()), id: \.element.id) { index, face in
+                typingFace(face, at: index)
+            }
+        }
+        .frame(width: typingStackWidth, height: Self.typingFaceSize, alignment: .leading)
+        .overlay(typingDotsBadge)
+        .accessibilityHidden(true)
+    }
+
     private var typingDotsView: some View {
         HStack(spacing: 3) {
             ForEach(0..<3, id: \.self) { i in
@@ -441,6 +518,20 @@ public struct ConversationScrollControlsView: View {
                         value: typingDotPhase
                     )
             }
+        }
+        // L'abonnement vit sur la VUE DES POINTS, pas sur le bouton entier :
+        // attaché au bouton, l'`autoconnect` réveillait le main thread 2×/s
+        // tant que la pill « retour au bas » était montée (tout le temps qu'un
+        // lecteur remonte l'historique), pour un garde qui jetait le tick sans
+        // frappe en cours (audit chauffe 2026-08-26 — même forme que le
+        // `dotTimer` de SyncPill). Ici, pas de frappe ⇒ pas de vue ⇒ pas de
+        // timer ; et la réapparition repart d'un publisher NEUF plutôt que de
+        // parier sur la reconnexion d'un `autoconnect` déjà annulé.
+        .onReceive(typingDotTimer) { _ in
+            typingDotPhase = (typingDotPhase + 1) % 3
+        }
+        .onAppear {
+            typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
         }
     }
 }

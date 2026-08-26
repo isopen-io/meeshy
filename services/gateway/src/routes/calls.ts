@@ -19,6 +19,7 @@ import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendUnauthorized, sendInternalError } from '../utils/response.js';
 import { toCallSessionResponse } from '../utils/call-session-response.js';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -35,6 +36,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { MEMBER_ROLE_HIERARCHY, MemberRole } from '@meeshy/shared/types/role-types';
+import { viewerFromRequest } from './users/presence-gate';
 
 /**
  * Numeric conversation-role rank (creator=40 > admin=30 > moderator=20 >
@@ -119,7 +121,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           conversationId: {
             type: 'string',
             description: 'Conversation ID where the call will be initiated (MongoDB ObjectId format)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           },
           type: {
             type: 'string',
@@ -252,7 +254,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -267,17 +269,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - Invalid call ID format',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', description: 'Error code' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         401: {
           description: 'Unauthorized - Authentication required',
@@ -289,17 +281,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Not found - Call does not exist',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'CALL_NOT_FOUND' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         429: {
           description: 'Too many requests - Rate limit exceeded (20 req/min)',
@@ -362,7 +344,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -484,7 +466,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -499,17 +481,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - Invalid call ID or call already ended',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', description: 'Error code' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         401: {
           description: 'Unauthorized - Authentication required',
@@ -517,31 +489,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         403: {
           description: 'Forbidden - Anonymous users cannot end calls, or the requester is not an active participant of this call',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'PERMISSION_DENIED' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         404: {
           description: 'Not found - Call does not exist',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'CALL_NOT_FOUND' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         429: {
           description: 'Too many requests - Rate limit exceeded (10 req/min)',
@@ -672,7 +624,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -708,17 +660,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - Invalid call ID or call not active',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', description: 'Error code (e.g., CALL_ENDED, ALREADY_IN_CALL)' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         401: {
           description: 'Unauthorized - Authentication required',
@@ -730,17 +672,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'Not found - Call does not exist',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'CALL_NOT_FOUND' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         429: {
           description: 'Too many requests - Rate limit exceeded (20 req/min)',
@@ -817,7 +749,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           callId: {
             type: 'string',
             description: 'Call session unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           },
           participantId: {
             type: 'string',
@@ -837,17 +769,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - Invalid parameters or participant not in call',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', description: 'Error code' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         401: {
           description: 'Unauthorized - Authentication required',
@@ -855,31 +777,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         403: {
           description: 'Forbidden - Cannot remove other participants without moderator privileges',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'PERMISSION_DENIED' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         404: {
           description: 'Not found - Call does not exist',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'CALL_NOT_FOUND' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         429: {
           description: 'Too many requests - Rate limit exceeded (10 req/min)',
@@ -1002,9 +904,22 @@ export default async function callRoutes(fastify: FastifyInstance) {
         (p) => p.participantId === leaveParticipantId && !p.leftAt
       );
 
+      // Bug fix (Vague 175) — `userId` here (and below, `broadcastCallEndedIfTerminal`'s
+      // actor) must be the AUTHENTICATED CALLER, never the route's raw
+      // `:participantId` param. For a self-leave the two coincide
+      // (`participantId === userId`), which hid this on every OTHER site
+      // exercising this route; a moderator KICK makes them diverge — the
+      // route used to attribute the leave/end to the KICKED target instead
+      // of the moderator who performed it, the one place in the codebase
+      // where `endedBy`/`userId` didn't name the actor (every socket
+      // handler — call:leave/call:end/call:force-leave — always passes its
+      // own authenticated userId; there is no kick path through sockets).
+      // `CallSession.metadata.endedBy` feeds `wasCancelledByInitiator()`
+      // (packages/shared/utils/call-summary.ts) and `CallEndedEvent.endedBy`
+      // is broadcast to every client on `call:ended`.
       const callSession = await callService.leaveCall({
         callId,
-        userId: participantId,
+        userId,
         participantId: leaveParticipantId,
       });
       // Parité socket call:leave — invalide le cache de session `call:signal`
@@ -1018,7 +933,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       callService.finalizeCallSummary(callId);
       // Parité socket call:leave — diffuse `call:ended` au pair UNIQUEMENT si le
       // leave a rendu l'appel terminal (broadcastCallEndedIfTerminal auto-gardé).
-      callService.broadcastCallEndedIfTerminal(callSession, participantId);
+      callService.broadcastCallEndedIfTerminal(callSession, userId);
       // Bug fix — cette route (self-leave ET kick modérateur) ne diffusait
       // JAMAIS `call:participant-left`, contrairement au handler socket
       // `call:leave` : les autres pairs d'un appel de groupe qui continue
@@ -1072,7 +987,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
           conversationId: {
             type: 'string',
             description: 'Conversation unique identifier (MongoDB ObjectId)',
-            pattern: '^[0-9a-fA-F]{24}$'
+            pattern: OBJECT_ID_PATTERN
           }
         }
       },
@@ -1097,17 +1012,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         400: {
           description: 'Bad request - Invalid conversation ID format',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', description: 'Error code' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         401: {
           description: 'Unauthorized - Authentication required',
@@ -1115,17 +1020,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         403: {
           description: 'Forbidden - User not a member of conversation',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'NOT_A_PARTICIPANT' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         429: {
           description: 'Too many requests - Rate limit exceeded (10 req/min)',
@@ -1133,17 +1028,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         500: {
           description: 'Internal server error',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'INTERNAL_ERROR' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         }
       }
     }
@@ -1203,45 +1088,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         404: {
           description: 'No active call found',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'NO_ACTIVE_CALL' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         401: {
           description: 'Authentication required',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'NOT_AUTHENTICATED' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         500: {
           description: 'Internal server error',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'INTERNAL_ERROR' },
-                message: { type: 'string', description: 'Error message' }
-              }
-            }
-          }
+          ...errorResponseSchema
         }
       }
     }
@@ -1370,31 +1225,11 @@ export default async function callRoutes(fastify: FastifyInstance) {
         },
         401: {
           description: 'Authentication required',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'NOT_AUTHENTICATED' },
-                message: { type: 'string' }
-              }
-            }
-          }
+          ...errorResponseSchema
         },
         500: {
           description: 'Internal server error',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: {
-              type: 'object',
-              properties: {
-                code: { type: 'string', example: 'INTERNAL_ERROR' },
-                message: { type: 'string' }
-              }
-            }
-          }
+          ...errorResponseSchema
         }
       }
     }
@@ -1412,7 +1247,12 @@ export default async function callRoutes(fastify: FastifyInstance) {
         ? parsed.data
         : { limit: 30, cursor: undefined as string | undefined, filter: 'all' as const };
 
-      const result = await callService.listHistory(userId, { limit, cursor, filter });
+      const result = await callService.listHistory(userId, {
+        limit,
+        cursor,
+        filter,
+        viewer: viewerFromRequest(request)
+      });
 
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor }

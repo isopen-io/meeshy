@@ -18,6 +18,11 @@ private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications
 /// `UIApplication.setBadgeCount` or to the App Group defaults.
 @MainActor
 public final class NotificationToastManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = NotificationToastManager()
 
     /// Mirrors `NotificationCoordinator.inAppNotificationUnread`. Kept as a
@@ -26,8 +31,29 @@ public final class NotificationToastManager: ObservableObject {
     @Published public private(set) var unreadCount: Int = 0
 
     @Published public private(set) var currentToast: SocketNotificationEvent?
-    @Published public private(set) var activeConversationId: String?
-    @Published public var activePostId: String?
+
+    /// Délibérément PAS `@Published` — aucune vue ne les observe.
+    ///
+    /// Ce sont des gardes de suppression, lues SYNCHRONIQUEMENT au moment de
+    /// décider si une notification doit se signaler (`handleNewNotification`),
+    /// et une fois par `FeedCommentsSheet` à l'ouverture. Personne n'en dérive
+    /// d'affichage.
+    ///
+    /// Publiées, elles coûtaient très cher : `RootView` et `iPadRootView`
+    /// observent ce singleton en `@ObservedObject`, donc CHAQUE ouverture ou
+    /// fermeture de conversation, et chaque slide de story (`onPostOpened` est
+    /// ré-annoncé à chaque révélation), ré-évaluait la racine entière. Cette
+    /// ré-évaluation reconstruit un `ConversationViewModel` jetable — donc un
+    /// `ConversationSocketHandler` jetable — dont la boucle create/destroy est
+    /// documentée en tête de `ConversationSocketHandler.swift` (pic CPU, storm
+    /// 429 sur `/read`) et n'était jusqu'ici que CONTENUE par des gardes
+    /// idempotents, jamais tarie à la source.
+    ///
+    /// Même raisonnement, et même formulation, que
+    /// `ConversationStateStore.messages`. Ne pas les republier sans montrer
+    /// d'abord une vue qui les LIT.
+    public private(set) var activeConversationId: String?
+    public var activePostId: String?
 
     public let newNotificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     public let notificationMarkedRead = PassthroughSubject<String, Never>()
@@ -46,13 +72,8 @@ public final class NotificationToastManager: ObservableObject {
     /// dédié (demandes d'ajout).
     public let typeNotificationsRead = PassthroughSubject<[String], Never>()
 
-    /// Optional hook the app target uses to inject the current iOS Focus
-    /// filter snapshot. The SDK can't observe `SetFocusFilterIntent` directly
-    /// (it lives in the app target), so we ask for a pull closure instead.
-    public var focusFilterProvider: (@MainActor () -> FocusFilterSnapshot)?
-
     /// Joueur d'haptique injecté par la cible app (le SDK core n'importe pas
-    /// UIKit) — même pattern que `focusFilterProvider`. Appelé à l'apparition
+    /// UIKit) — même pattern que `conversationPresentationProvider`. Appelé à l'apparition
     /// d'un toast, UNIQUEMENT si la préférence « Vibrations »
     /// (`vibrationEnabled`) est active : c'est le consommateur réel de ce
     /// toggle côté in-app.
@@ -61,7 +82,7 @@ public final class NotificationToastManager: ObservableObject {
     /// Présentation Local-First (nom renommé + emoji favori) d'une conversation
     /// pour les toasts in-app. Le SDK ne peut pas lire le snapshot local des
     /// conversations de l'app, donc la cible app injecte une closure de pull —
-    /// même pattern que `focusFilterProvider`. Retourne `nil` → on retombe sur
+    /// même pattern que `hapticPlayer`. Retourne `nil` → on retombe sur
     /// le titre serveur (`event.toastSubtitle`).
     public var conversationPresentationProvider: (@MainActor (_ conversationId: String) -> ConversationPresentation?)?
 
@@ -457,6 +478,20 @@ public final class NotificationToastManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        socket.notificationReadBulk
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationReadBulk(event)
+            }
+            .store(in: &cancellables)
+
+        socket.notificationDeletedBulk
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleNotificationDeletedBulk(event)
+            }
+            .store(in: &cancellables)
+
         // `notification:counts` is handled by NotificationCoordinator directly —
         // we used to duplicate the subscription here, but that race was the
         // source of the drift between the bell and the badge.
@@ -477,15 +512,14 @@ public final class NotificationToastManager: ObservableObject {
             return
         }
 
-        // Même traitement pour un contenu social déjà à l'écran (story ouverte,
-        // détail de post) : le serveur a créé la notification et incrémenté SON
-        // compteur. Un simple `return` laissait la ligne non lue côté serveur et
-        // le compteur client en retard — au prochain `notification:counts` la
-        // cloche remontait toute seule. On consomme donc explicitement.
-        if let postId = event.postId, postId == activePostId {
-            markConsumedOnArrival(event)
-            return
-        }
+        // NOTE — un contenu social à l'écran (story ouverte, détail de post) ne
+        // supprime PLUS la bannière. La règle produit ne connaît qu'UNE
+        // exception, la conversation ouverte ci-dessus : tout le reste doit
+        // remonter à l'utilisateur tant qu'il est dans l'application. Une story
+        // ouverte reste donc signalée, et sa notification suit le chemin
+        // nominal — persistée NON lue, comptée, affichée. `activePostId` garde
+        // ses autres emplois (`onPostOpened` marque lu à l'OUVERTURE, ce qui
+        // couvre le rattrapage du compteur).
 
         // Keep FriendshipCache in sync with real-time friend request events
         updateFriendshipCacheIfNeeded(event)
@@ -513,14 +547,13 @@ public final class NotificationToastManager: ObservableObject {
         NotificationCoordinator.shared.incrementInAppNotificationUnread()
         newNotificationReceived.send(event)
 
+        // La bannière in-app a sa propre règle, plus permissive que celle du
+        // push : `allowsInAppBanner` n'applique que les interrupteurs PAR TYPE.
+        // `pushEnabled`, la fenêtre « Ne pas déranger » et le Focus iOS
+        // protègent l'attention de l'utilisateur ABSENT — ici il est devant
+        // l'écran. Cf. le doc-comment de `allowsInAppBanner(type:)`.
         let prefs = UserPreferencesManager.shared.notification
-        let focus = focusFilterProvider?() ?? .permissive
-        let isDirect = event.isDirect
-        if prefs.allowsNotification(
-            type: event.notificationType,
-            isDirectConversation: isDirect,
-            focus: focus
-        ) {
+        if prefs.allowsInAppBanner(type: event.notificationType) {
             showToast(event)
         }
     }
@@ -593,6 +626,86 @@ public final class NotificationToastManager: ObservableObject {
     private func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
         applyDeletionToCache(event.notificationId)
         notificationWasDeleted.send(event.notificationId)
+    }
+
+    /// Un AUTRE appareil du même compte vient de marquer un LOT lu. Les chemins
+    /// bulk du gateway ne rendent AUCUN id : ils annoncent le PRÉDICAT qu'ils
+    /// viennent d'appliquer, que chaque client rejoue sur son propre cache.
+    ///
+    /// Une portée qu'on ne sait pas traduire n'est PAS appliquée : rejouer un
+    /// prédicat approximatif marquerait lues des lignes qui ne le sont pas —
+    /// pire que de ne rien faire, le refresh REST suivant rétablissant la
+    /// vérité. Aucun refetch n'est déclenché ici : le compteur autoritatif
+    /// arrive par `notification:counts`, déjà traité par
+    /// `NotificationCoordinator`.
+    ///
+    /// Interne (pas `private`) : point d'entrée des tests, faute de mock
+    /// Socket.IO.
+    func handleNotificationReadBulk(_ event: NotificationReadBulkEvent) {
+        guard let scope = NotificationBulkScopeMapping.readScope(from: event.scope) else {
+            logger.error("notification:read-bulk ignoré — portée non traduisible (kind: \(event.scope.kind))")
+            return
+        }
+        applyReadToCache(scope)
+        republishRead(scope)
+    }
+
+    /// Republication vers les vues MONTÉES : le patch cache ci-dessus est
+    /// durable mais muet, et `NotificationListView` sert son tableau depuis sa
+    /// propre copie mémoire. On réutilise les subjects par lesquels le geste
+    /// LOCAL équivalent passe déjà — aucun canal neuf, donc aucun abonné à
+    /// câbler.
+    ///
+    /// `.all` n'a AUCUN canal partiel : `NotificationReadScope.all` ne
+    /// correspond à aucun subject existant, et en créer un exigerait son
+    /// abonné dans `MeeshyUI/Notifications/NotificationListView.swift` (hors
+    /// de ce lot). Conséquence assumée : une cloche DÉJÀ montée n'est pas
+    /// repeinte sur ce chemin — contrairement au geste LOCAL, où
+    /// `NotificationListView.markAllRead()` patche lui-même son tableau ;
+    /// seul le cache est patché, la liste se recale à sa prochaine lecture.
+    /// Ne PAS fabriquer une portée de repli pour emprunter un autre canal —
+    /// ce serait marquer lues des lignes hors portée.
+    private func republishRead(_ scope: NotificationReadScope) {
+        switch scope {
+        case .notification(let id):
+            notificationMarkedRead.send(id)
+        case .conversation(let id):
+            conversationNotificationsRead.send(id)
+        case .post(let id):
+            postNotificationsRead.send(id)
+        case .types(let types):
+            typeNotificationsRead.send(types)
+        case .all:
+            break
+        }
+    }
+
+    /// Jumeau côté PURGE. Cas plus fort que le précédent : `notification:counts`
+    /// est MUET sur une purge des lues (`unread` est inchangé par
+    /// construction), donc sans ce prédicat rien n'annoncerait la purge à cet
+    /// appareil — les lignes purgées ressusciteraient à la prochaine lecture du
+    /// cache.
+    ///
+    /// Les ids sont relevés AVANT l'écriture pour republier ligne à ligne par
+    /// `notificationWasDeleted`, le canal que la liste montée écoute déjà :
+    /// patcher le seul cache laisserait les lignes purgées à l'écran jusqu'au
+    /// prochain chargement.
+    ///
+    /// Interne (pas `private`) : point d'entrée des tests.
+    func handleNotificationDeletedBulk(_ event: NotificationDeletedBulkEvent) {
+        guard NotificationBulkScopeMapping.purgesReadRows(event.scope) else {
+            logger.error("notification:deleted-bulk ignoré — portée inconnue (kind: \(event.scope.kind))")
+            return
+        }
+        Task { [weak self] in
+            let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all")
+            let purgedIds = (cached?.items ?? []).filter { $0.isRead }.map(\.id)
+            guard !purgedIds.isEmpty else { return }
+            await CacheCoordinator.shared.notifications.update(for: "all") { items in
+                NotificationBulkScopeMapping.removingRead(items)
+            }
+            purgedIds.forEach { self?.notificationWasDeleted.send($0) }
+        }
     }
 
     // MARK: - Toast

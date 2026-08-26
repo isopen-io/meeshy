@@ -341,4 +341,71 @@ final class APIMessageToMessageTests: XCTestCase {
                        "un public sans titre garde un nom affichable — même repli que MeeshyConversation.name")
         XCTAssertEqual(msg.forwardedFrom?.conversationType, "public")
     }
+
+    // MARK: - Avis d'arrivée — charge RÉELLE du gateway (2026-08-24)
+
+    /// Capturée sur `GET /conversations/:id/messages` en production : c'est
+    /// mot pour mot ce que le serveur envoie quand un visiteur rejoint. Un
+    /// test bâti sur une charge inventée aurait pu passer sur une forme que
+    /// personne n'émet.
+    private static let realJoinNoticePayload = """
+    {
+      "id": "6a86b5f43d04f22eeeba09d1",
+      "conversationId": "691b5178f2a610248cec4f5d",
+      "senderId": "6a86b5f43d04f22eeeba09d0",
+      "content": "ano_daily_l378 a rejoint la conversation — visiteur sans compte",
+      "originalLanguage": "fr",
+      "messageType": "system",
+      "messageSource": "system",
+      "metadata": {
+        "kind": "member-joined",
+        "participantId": "6a86b5f43d04f22eeeba09d0",
+        "displayName": "ano_daily_l378",
+        "isAnonymous": true,
+        "viaShareLink": true
+      },
+      "createdAt": "2026-08-20T08:08:20.156Z",
+      "updatedAt": "2026-08-20T08:08:20.156Z",
+      "sender": {
+        "id": "6a86b5f43d04f22eeeba09d0",
+        "userId": null,
+        "username": "ano_daily_l378",
+        "displayName": "Daily Moon",
+        "avatar": null,
+        "isOnline": false,
+        "type": "anonymous"
+      },
+      "attachments": []
+    }
+    """
+
+    /// **Le décodeur du VRAI client**, pas un décodeur de test : un
+    /// `.iso8601` strict refuse les fractions de seconde que le gateway
+    /// envoie (`…:20.156Z`), et le test aurait rougi sur son propre outillage
+    /// au lieu de mesurer le code.
+    private func decodeRealJoinNotice() throws -> APIMessage {
+        try APIClient.makeAPIPayloadDecoder()
+            .decode(APIMessage.self, from: Data(Self.realJoinNoticePayload.utf8))
+    }
+
+    /// L'avis doit se reconnaître comme SYSTÈME : sans cela il s'affiche avec
+    /// l'avatar et le nom de l'arrivant, comme une parole ordinaire, et le
+    /// repli textuel du gateway tient lieu de rendu.
+    func test_realJoinNotice_decodesAsASystemMessage() throws {
+        let api = try decodeRealJoinNotice()
+        XCTAssertEqual(api.messageSource, "system", "le champ arrive bien du serveur")
+        let message = api.toMessage(currentUserId: "someone-else")
+        XCTAssertEqual(message.messageSource, MeeshyMessage.MessageSource.system, "et survit à la conversion domaine")
+    }
+
+    /// Et il doit porter son `joinNotice` — c'est lui qui déclenche la bulle
+    /// dédiée plutôt que la ligne de texte.
+    func test_realJoinNotice_carriesItsMetadata() throws {
+        let api = try decodeRealJoinNotice()
+        let notice = try XCTUnwrap(api.joinNotice, "metadata.kind == member-joined doit décoder")
+        XCTAssertEqual(notice.displayName, "ano_daily_l378")
+        XCTAssertTrue(notice.isAnonymous)
+        XCTAssertTrue(notice.viaShareLink)
+        XCTAssertNotNil(api.toMessage(currentUserId: "someone-else").joinNotice, "et voyager jusqu'au modèle domaine")
+    }
 }

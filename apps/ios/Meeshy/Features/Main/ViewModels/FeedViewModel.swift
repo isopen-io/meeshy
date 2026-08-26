@@ -10,6 +10,11 @@ import MeeshyUI
 
 @MainActor
 class FeedViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var posts: [FeedPost] = []
     @Published var isLoading = false
     @Published var isLoadingMore = false
@@ -539,20 +544,39 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// `mobileTranscription` a été RETIRÉ de cette signature : plus aucun site
+    /// de production ne le passait depuis que les deux jumeaux vocaux publient
+    /// par `publish(_:)`. Un paramètre que personne ne remplit est du code mort
+    /// testé vert — et, ici, la porte par laquelle un troisième chemin vocal
+    /// pouvait renaître EN DEHORS de `PublishIntent`, sans faire rougir la
+    /// garde qui compte les appelants de la fabrique.
+    ///
     /// - Parameter mentions: les personnes que l'auteur a nommées SANS les
     ///   écrire — note sous le contenu, métadonnée silencieuse. `nil` quand il
     ///   n'en a déclaré aucune : le serveur relit alors les `@handle` du texte
     ///   lui-même, et déclarer `[]` lui ferait entendre un effacement.
-    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
+    /// - Parameter discoverabilityPrecision: le SECOND opt-in de position
+    ///   (spec du 2026-08-02 §2), indépendant du badge gouverné par
+    ///   `location`. `nil` — le défaut — laisse le contenu non trouvable ;
+    ///   aucun appelant ne doit poser une valeur que l'utilisateur n'a pas
+    ///   choisie. Il voyage sur les DEUX branches ci-dessous : la file durable
+    ///   emporte le cas nominal (un post texte + lieu), le chemin direct celui
+    ///   d'une position SEULE, sans texte.
+    func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) async {
         publishError = nil
         publishSuccess = false
 
         // U1 ST3 — a text-only POST routes through the durable outbox so it
         // survives offline + app kill (the direct postService.create below was
         // silently lost when offline). Media / audio posts stay on the direct
-        // path for now (their assets are not yet durably queued — U1b). The
-        // gateway only echoes the cmid on the POST branch of post:created, so
-        // only type == "POST" can be reconciled by FeedViewModel.postCreated.
+        // path for now (their assets are not yet durably queued — U1b).
+        //
+        // NE PAS réécrire ici que « seul type == "POST" peut être réconcilié » :
+        // `core.ts` ne bifurque qu'entre STORY, STATUS et TOUT LE RESTE, et un
+        // RÉEL passe par la même branche `else` qu'un POST — son cmid EST
+        // échoué, et `postCreated` réconcilie par cmid SEUL, sans regarder le
+        // type. La phrase énonçait plus étroit que le code, et un vocal enfilé
+        // en `"REEL"` en dépend directement.
         let hasMedia = !(mediaIds?.isEmpty ?? true)
         // Task 17 — `CreatePostPayload` porte désormais `location` : un post
         // texte + position peut passer par la file durable comme n'importe
@@ -560,11 +584,10 @@ class FeedViewModel: ObservableObject {
         let isDurableTextOnly = type == "POST"
             && !hasMedia
             && audioUrl == nil
-            && mobileTranscription == nil
         if isDurableTextOnly,
            let text = content,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage, location: location, mentions: mentions)
+            await enqueueDurableTextPost(content: text, visibility: visibility, visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage, location: location, mentions: mentions, discoverabilityPrecision: discoverabilityPrecision)
             return
         }
 
@@ -573,15 +596,19 @@ class FeedViewModel: ObservableObject {
                 content: content,
                 type: type,
                 visibility: visibility,
+                visibilityUserIds: visibilityUserIds,
                 moodEmoji: nil,
                 mediaIds: mediaIds,
                 audioUrl: audioUrl,
                 audioDuration: audioDuration,
                 originalLanguage: originalLanguage,
-                mobileTranscription: mobileTranscription,
+                mobileTranscription: nil,
                 repostOfId: nil,
                 location: location,
-                mentions: mentions
+                mentions: mentions,
+                allowSoundExtraction: nil,
+                mediaAlt: nil,
+                discoverabilityPrecision: discoverabilityPrecision
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             posts.insert(feedPost, at: 0)
@@ -648,7 +675,7 @@ class FeedViewModel: ObservableObject {
     /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
     /// optimistic post in place (cmid -> server id). Rolls back if the outbox
     /// refuses the row synchronously, or later exhausts its retry budget.
-    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil) async {
+    private func enqueueDurableTextPost(content: String, visibility: String, visibilityUserIds: [String]? = nil, originalLanguage: String?, location: SharedPlace? = nil, mentions: [PostMentionInput]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) async {
         let cmid = ClientMutationId.generate()
         let currentUser = AuthManager.shared.currentUser
         var optimistic = FeedPost(
@@ -672,10 +699,16 @@ class FeedViewModel: ObservableObject {
             attachmentIds: [],
             visibility: visibility,
             originalLanguage: originalLanguage,
+            visibilityUserIds: visibilityUserIds,
             location: location,
             // `nil` et non `[]` quand rien n'est déclaré : le payload persisté
             // porte un VERDICT, et « je n'en parle pas » n'est pas « efface ».
-            mentions: (mentions?.isEmpty ?? true) ? nil : mentions
+            mentions: (mentions?.isEmpty ?? true) ? nil : mentions,
+            // Le consentement de découvrabilité survit au flush pour la même
+            // raison que `location` : sans lui ici, cocher « trouvable à
+            // proximité » sur un post TEXTE — le cas nominal, qui n'emprunte
+            // que cette file — n'aurait aucun effet, et rien ne le dirait.
+            discoverabilityPrecision: discoverabilityPrecision
         )
         do {
             try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
@@ -697,11 +730,40 @@ class FeedViewModel: ObservableObject {
 
     /// Returns the last POST/REEL that got stuck offline (unsent for more than
     /// `offlineStuckThreshold`) so the feed composer can pre-fill it as a draft.
+    ///
+    /// **Une ligne dont un média est de l'AUDIO n'est jamais proposée, et c'est
+    /// une garde de CONTENU, pas une préférence d'ergonomie.**
+    ///
+    /// Le composer du feed ne sait pas rouvrir un enregistrement : sa
+    /// restauration ne traite que l'image et la vidéo
+    /// (`FeedView+Attachments.restoreRecoveredMedia`). Offrir la ligne quand
+    /// même produisait une chaîne complète de DESTRUCTION — brouillon
+    /// « restauré » VIDE (un vocal n'a pas de texte), `recoveredPostCmid` posé
+    /// malgré tout, puis, à la publication suivante quelle qu'elle soit,
+    /// `supersedeRecoveredPost` → `cancelCreatePost`, qui efface le fichier
+    /// relocalisé ET la ligne. L'enregistrement n'a alors JAMAIS été vu par son
+    /// auteur, et rien ne le lui dit.
+    ///
+    /// Le trou n'existait pas avant que les deux jumeaux audio entrent dans
+    /// cette file : `case .audio: break` y était juste, et son commentaire
+    /// (« audio offline posts aren't queued through this composer path yet »)
+    /// était vrai. Un lot qui fait CONVERGER une chaîne doit énumérer les
+    /// CONSOMMATEURS de la ligne qu'il vient de créer, pas seulement les
+    /// producteurs.
+    ///
+    /// Prix assumé : tant qu'un vocal est bloqué en file, aucun brouillon plus
+    /// ancien n'est proposé. Une affordance de reprise retardée n'est pas
+    /// comparable à un enregistrement détruit.
     func recoverUnsentPost() async -> RecoveredOfflinePost? {
-        await offlineQueue.recoverLastUnsentPost(
+        let draft = await offlineQueue.recoverLastUnsentPost(
             matchingTypes: ["POST", "REEL"],
             olderThan: Self.offlineStuckThreshold
         )
+        guard let draft else { return nil }
+        let porteUneVoix = draft.localMediaURLs.contains { url in
+            AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)) == .audio
+        }
+        return porteUneVoix ? nil : draft
     }
 
     /// Supersedes a recovered post/reel when the user re-sends it from the
@@ -746,14 +808,27 @@ class FeedViewModel: ObservableObject {
     /// call sites can pass `pendingPlace` — Task 17 a donné à `CreatePostPayload`
     /// / `enqueuePostMedia` un champ `location`, donc un média posté hors-ligne
     /// avec une position attachée la conserve désormais jusqu'au flush.
+    ///
+    /// `discoverabilityPrecision` fait le même trajet, et devait le faire :
+    /// sans lui, la position d'un REEL hors ligne survivait au flush pendant
+    /// que le consentement, lui, se perdait entre le composer et la file.
     func createOfflineMediaPost(
         localMediaURLs: [URL],
         content: String?,
         visibility: String = "PUBLIC",
+        visibilityUserIds: [String]? = nil,
         originalLanguage: String? = nil,
         type: String = "POST",
         location: SharedPlace? = nil,
-        mentions: [PostMentionInput]? = nil
+        mentions: [PostMentionInput]? = nil,
+        discoverabilityPrecision: DiscoverabilityPrecision? = nil,
+        /// SANS défaut, délibérément : un média VISUEL n'a pas de voix, et il
+        /// le DIT en toutes lettres. Un défaut ici ferait disparaître la
+        /// transcription d'un site d'appel sans casser la moindre compilation
+        /// — le mécanisme exact par lequel la branche hors ligne de
+        /// `StatusViewModel.setStatus` avait perdu la source et la voix d'un
+        /// mood pendant que sa jumelle en ligne les passait.
+        mobileTranscription: MobileTranscriptionPayload?
     ) async {
         publishError = nil
         publishSuccess = false
@@ -761,14 +836,98 @@ class FeedViewModel: ObservableObject {
             await enqueueDurableTextPost(
                 content: content ?? "",
                 visibility: visibility,
+                // Le repli perdait la liste NOMMÉE d'une audience
+                // `ONLY`/`EXCEPT` — `visibilityUserIds` porte un défaut `nil`
+                // chez le destinataire, et un défaut fait disparaître un champ
+                // d'un site d'appel sans casser la moindre compilation. Le
+                // gateway refuse alors la charge (`CreatePostSchema.refine`),
+                // le rejet est PERMANENT, et le post est perdu.
+                visibilityUserIds: visibilityUserIds,
                 originalLanguage: originalLanguage,
                 location: location,
-                mentions: mentions
+                mentions: mentions,
+                discoverabilityPrecision: discoverabilityPrecision
             )
             return
         }
 
-        let cmid = ClientMutationId.generate()
+        await enqueueDurableMediaPost(
+            clientMutationId: ClientMutationId.generate(),
+            localMediaURLs: localMediaURLs,
+            // Ce chemin n'a AUCUN MIME sous la main — il le DIT plutôt que de
+            // laisser un défaut le dire pour lui. Le dispatcher retombe alors
+            // sur l'extension, ce qui suffit pour des médias VISUELS (toutes
+            // leurs extensions sont dans la table) et ne suffisait pas pour une
+            // voix importée depuis Fichiers.
+            localMediaMimeTypes: nil,
+            content: content,
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds,
+            originalLanguage: originalLanguage,
+            type: type,
+            location: location,
+            mentions: mentions,
+            discoverabilityPrecision: discoverabilityPrecision,
+            mobileTranscription: mobileTranscription
+        )
+    }
+
+    /// **Le geste « je publie ce que j'ai produit ».**
+    ///
+    /// Un `PublishIntent` est une matière composée UNE fois, à un endroit
+    /// nommé : ce publieur ne la recompose pas, il la transporte. C'est tout
+    /// l'objet du lot — deux points d'entrée d'un même geste (un enregistrement
+    /// vocal) le composaient chacun à leur façon et divergeaient sur trois
+    /// points à la fois, dont la DESTRUCTION du fichier de l'utilisateur.
+    ///
+    /// **Aucune condition réseau ici, et c'est une décision.** Un enregistrement
+    /// local part par la file durable EN LIGNE COMME HORS LIGNE. Ce qu'on y perd
+    /// est mesuré et nul (aucun des deux jumeaux n'écrivait `uploadProgress`) ;
+    /// ce qu'on y gagne, c'est un post optimiste immédiat qui survit à un kill.
+    /// Y remettre une condition ferait renaître deux comportements, et la
+    /// branche la moins empruntée serait — comme hier — celle qui détruit. Une
+    /// garde de source le retient.
+    ///
+    /// Le jeton de l'intention est repris tel quel : c'est LUI qui clé le post
+    /// optimiste, et c'est par lui que l'écho du gateway le remplacera au flush.
+    func publish(_ intent: PublishIntent) async {
+        publishError = nil
+        publishSuccess = false
+        await enqueueDurableMediaPost(
+            clientMutationId: intent.clientMutationId,
+            localMediaURLs: intent.localMediaURLs,
+            localMediaMimeTypes: intent.localMediaMimeTypes,
+            content: intent.content,
+            visibility: intent.visibility,
+            visibilityUserIds: intent.visibilityUserIds,
+            originalLanguage: intent.originalLanguage,
+            type: intent.type,
+            location: intent.location,
+            mentions: intent.mentions,
+            discoverabilityPrecision: intent.discoverabilityPrecision,
+            mobileTranscription: intent.mobileTranscription
+        )
+    }
+
+    /// Le cœur PARTAGÉ des deux entrées ci-dessus — insertion optimiste +
+    /// enfilage durable. Il prend le jeton en paramètre plutôt que de le
+    /// fabriquer : `publish(_:)` doit reprendre celui de l'intention, sans quoi
+    /// le post optimiste serait clé par un identifiant que rien n'échoue, et le
+    /// vocal apparaîtrait EN DOUBLE au flush.
+    private func enqueueDurableMediaPost(
+        clientMutationId cmid: String,
+        localMediaURLs: [URL],
+        localMediaMimeTypes: [String]?,
+        content: String?,
+        visibility: String,
+        visibilityUserIds: [String]?,
+        originalLanguage: String?,
+        type: String,
+        location: SharedPlace?,
+        mentions: [PostMentionInput]?,
+        discoverabilityPrecision: DiscoverabilityPrecision?,
+        mobileTranscription: MobileTranscriptionPayload?
+    ) async {
         let currentUser = AuthManager.shared.currentUser
         let optimistic = FeedPost(
             id: cmid,
@@ -779,7 +938,14 @@ class FeedViewModel: ObservableObject {
             type: type,
             content: content ?? "",
             timestamp: Date(),
-            media: localMediaURLs.map(Self.optimisticFeedMedia(forLocalURL:)),
+            media: localMediaURLs.enumerated().map { index, url in
+                Self.optimisticFeedMedia(
+                    forLocalURL: url,
+                    declaredMimeType: localMediaMimeTypes.flatMap {
+                        $0.indices.contains(index) ? $0[index] : nil
+                    }
+                )
+            },
             originalLanguage: originalLanguage
         )
         posts.insert(optimistic, at: 0)
@@ -788,13 +954,28 @@ class FeedViewModel: ObservableObject {
         do {
             _ = try await offlineQueue.enqueuePostMedia(
                 sourceMediaURLs: localMediaURLs,
+                // Le MIME que l'expéditeur a DÉCLARÉ, et non celui que
+                // l'extension laissera deviner : les deux divergent dès qu'un
+                // conteneur audio sort de la table, et le gateway perd alors la
+                // nature audio du fichier.
+                sourceMediaMimeTypes: localMediaMimeTypes,
                 clientMutationId: cmid,
                 content: content,
                 visibility: visibility,
+                visibilityUserIds: visibilityUserIds,
                 originalLanguage: originalLanguage,
                 type: type,
                 location: location,
-                mentions: (mentions?.isEmpty ?? true) ? nil : mentions
+                mentions: (mentions?.isEmpty ?? true) ? nil : mentions,
+                // Voyage avec `location`, et pour la même raison : un REEL
+                // composé hors ligne emportait sa position mais jamais son
+                // consentement, donc le gateway laissait `geoPoint` nul et la
+                // case cochée par l'utilisateur n'avait aucun effet.
+                discoverabilityPrecision: discoverabilityPrecision,
+                // Ce qui QUALIFIE un enregistrement vocal : sans lui, le
+                // serveur re-transcrit et jette en silence le texte que
+                // l'auteur a relu avant d'envoyer.
+                mobileTranscription: mobileTranscription
             )
             publishSuccess = true
             observeOutcome(cmid: cmid, rollback: { [weak self] in
@@ -807,10 +988,18 @@ class FeedViewModel: ObservableObject {
     }
 
     /// Builds the optimistic `FeedMedia` for a not-yet-uploaded local file,
-    /// deriving the type from its extension so the preview renders as image vs
-    /// video. The `file://` URL is replaced by the server media URL on reconcile.
-    private static func optimisticFeedMedia(forLocalURL url: URL) -> FeedMedia {
-        let mime = MimeTypeResolver.mimeType(forExtension: url.pathExtension)
+    /// deriving the type from its DECLARED mime — and only from its extension
+    /// when nothing was declared. The `file://` URL is replaced by the server
+    /// media URL on reconcile.
+    ///
+    /// La distinction n'est pas cosmétique : un vocal importé en `.caf` se
+    /// re-dérivait en `application/octet-stream`, donc `AttachmentKind` le
+    /// classait autrement qu'audio et la carte optimiste s'affichait comme une
+    /// IMAGE — un lecteur absent là où l'auteur venait d'enregistrer sa voix.
+    private static func optimisticFeedMedia(
+        forLocalURL url: URL, declaredMimeType: String?
+    ) -> FeedMedia {
+        let mime = declaredMimeType ?? MimeTypeResolver.mimeType(forExtension: url.pathExtension)
         let type: FeedMediaType
         switch AttachmentKind(mimeType: mime) {
         case .video: type = .video
@@ -874,30 +1063,47 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// L'ÉCRIVAIN UNIQUE de la republication (lot 7, tâche 7.5), construit sur
+    /// les dépendances DÉJÀ injectées de ce modèle : un double de test continue
+    /// donc d'observer l'envoi, et la branche hors ligne écrit dans la même
+    /// file que les autres gestes de ce modèle.
+    private var repostPublisher: RepostPublisher {
+        RepostPublisher(postService: postService, offlineQueue: offlineQueue)
+    }
+
     func repostPost(_ postId: String, content: String? = nil, isQuote: Bool = false) async {
         do {
-            _ = try await postService.repost(
-                postId: resolveRepostTargetId(postId),
-                targetType: nil,           // nil = le serveur cree un POST (2026-08-19)
-                content: isQuote ? content : nil,
-                isQuote: isQuote ? (content != nil) : false,
-                // Le feed ne propose pas de sélecteur d'audience : on hérite de l'original.
-                visibility: nil
+            // La RÉFÉRENCE remonte à la racine, le FORMAT reste celui de la
+            // carte : reposter depuis le fil le repost-de-story de quelqu'un
+            // doit donner un post dans son fil, jamais une story dans son tray.
+            let cible = RepostTargeting.target(
+                cardId: postId,
+                cardType: posts.first(where: { $0.id == postId })?.type,
+                repostOfId: posts.first(where: { $0.id == postId })?.repost?.id,
+                originalRepostOfId: posts.first(where: { $0.id == postId })?.repost?.originalRepostOfId
             )
+            // Le feed ne propose pas de sélecteur d'audience : on hérite de
+            // l'original (`visibility: nil`). La règle « un commentaire blanc
+            // n'est pas une citation » vit dans `RepostIntent.quoted`, avec les
+            // trois autres sites qui l'écrivaient chacun de leur côté.
+            let intention: RepostIntent = isQuote
+                ? RepostIntent.quoted(postId: cible.postId, targetType: cible.targetType,
+                                      comment: content, visibility: nil)
+                : RepostIntent.simple(postId: cible.postId, targetType: cible.targetType,
+                                      visibility: nil)
+            try await repostPublisher.publish(intention)
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main))
         }
     }
 
-    /// Re-sharing a SHARE must reference the ORIGINAL reel/post (root), never the
-    /// intermediate share — otherwise the new post embeds an empty share card
-    /// (the gateway hydrates `repostOf` only one level deep). When `postId` is
-    /// itself a repost, resolve to its recorded root (`originalRepostOfId`, else
-    /// the directly reposted content's id). Non-shares repost with their own id.
-    private func resolveRepostTargetId(_ postId: String) -> String {
-        guard let repost = posts.first(where: { $0.id == postId })?.repost else { return postId }
-        return repost.originalRepostOfId ?? repost.id
-    }
+    // `resolveRepostTargetId(_:)` a vécu ici sans site d'appel. La règle qu'elle
+    // portait — re-partager un PARTAGE doit référencer la RACINE, jamais le
+    // partage intermédiaire — est bien appliquée, mais par `ComposerIntent`
+    // (`let reference = originalRepostOfId ?? repostOfId ?? cardId`), que ce
+    // fichier alimente déjà en lui passant `originalRepostOfId` directement.
+    // Le retrait ne relâche donc aucun invariant : il retire la SECONDE
+    // implémentation d'une règle qui n'en veut qu'une.
 
     /// Server-side payload returned by `POST /posts/:postId/share`. The
     /// counter fields are always present; `shortUrl` + `token` are only
@@ -971,7 +1177,17 @@ class FeedViewModel: ObservableObject {
     /// are cleared (the gateway re-translates in background and pushes
     /// `post:updated` via socket). Rolls back the snapshot on API failure.
     /// No-op if the post isn't found in the current feed.
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        _ postId: String,
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
+    ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         // Apply optimistic mutation: new content + clear translations so the
@@ -986,10 +1202,24 @@ class FeedViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        // L'audience bouge tout de suite, comme le texte : sans cela le badge
+        // de visibilité garde l'ancienne valeur jusqu'au prochain
+        // rafraîchissement et l'auteur croit son resserrement perdu.
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         posts[idx] = optimistic
         debouncedCacheSave()
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             // Re-hydrate from the server response so the gateway-authoritative
             // fields (updatedAt, isEdited, sanitized content, …) replace the
             // optimistic in-memory copy. Preserves the resolved translation
@@ -1385,12 +1615,50 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// Décision PURE : ce média de post doit-il être PRÉCHARGÉ, la politique
+    /// d'auto-téléchargement étant déjà résolue ? Miroir de
+    /// `BubbleCarouselView.shouldPrefetchAttachment`, avec l'axe que le feed
+    /// ajoute : une vidéo n'est pas UN chemin mais DEUX.
+    ///
+    /// - vidéo AVEC vignette : la branche ne tire qu'une image distante → `prefs.image` ;
+    /// - vidéo SANS vignette : `StoryMediaLoader.videoThumbnail` décode la
+    ///   première frame du MP4 **distant** (moov + premier GOP) — ce sont des
+    ///   octets VIDÉO, donc `prefs.video` (`.wifiOnly` par défaut), sans quoi un
+    ///   bon cellulaire tirerait de la vidéo sous couvert de « vignette ».
+    /// - document : jamais préchargé (branche `default` du routage ci-dessous).
+    nonisolated static func shouldPrefetchFeedMedia(
+        kind: FeedMediaType,
+        hasThumbnail: Bool,
+        allowImage: Bool,
+        allowVideo: Bool,
+        allowAudio: Bool
+    ) -> Bool {
+        switch kind {
+        case .image: return allowImage
+        case .video: return hasThumbnail ? allowImage : allowVideo
+        case .audio: return allowAudio
+        case .document: return false
+        }
+    }
+
     /// Prefetch media for posts in the visible window + next 5.
     func prefetchMedia(around index: Int) {
         prefetchTask?.cancel()
         let slice = Array(posts[max(0, index - 2)..<min(posts.count, index + 7)])
         prefetchTask = Task(priority: .utility) {
             guard !slice.isEmpty else { return }
+
+            // Respecte la politique d'auto-téléchargement — miroir de
+            // `ConversationMediaHandler.prefetchRecentMedia`. Sans elle, la
+            // fenêtre de 9 posts tirait le fichier AUDIO ENTIER de chaque post
+            // jamais joué, et l'image pleine taille, en cellulaire contraint.
+            // Résolus UNE fois ici : la garde thermique du preroll consulte déjà
+            // l'appareil, il manquait le RÉSEAU.
+            let condition = NetworkConditionMonitor.shared.condition
+            let prefs = MediaDownloadPreferencesStore.shared.preferences
+            let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
+            let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
+            let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
 
             let imageStore = await CacheCoordinator.shared.images
             let thumbStore = await CacheCoordinator.shared.thumbnails
@@ -1400,6 +1668,13 @@ class FeedViewModel: ObservableObject {
                 for post in slice {
                     for media in post.media {
                         guard !Task.isCancelled else { return }
+                        guard FeedViewModel.shouldPrefetchFeedMedia(
+                            kind: media.type,
+                            hasThumbnail: media.thumbnailUrl.flatMap { MeeshyConfig.resolveMediaURL($0) } != nil,
+                            allowImage: allowImage,
+                            allowVideo: allowVideo,
+                            allowAudio: allowAudio
+                        ) else { continue }
 
                         switch media.type {
                         case .image:
@@ -1439,8 +1714,10 @@ class FeedViewModel: ObservableObject {
             // Video preroll: separate from main group — non-blocking, fire-and-forget.
             // Suspended while the device is critically hot (SOTA thermal back-off,
             // WWDC19 #422) so fast scrolling stops spawning new decode sessions until
-            // it cools down.
-            if MediaThermalPolicy.shouldPrefetchVideo(thermalState: ProcessInfo.processInfo.thermalState),
+            // it cools down. `allowVideo` : le preroll charge le MP4 lui-même,
+            // c'est la branche la plus coûteuse de tout le prefetch.
+            if allowVideo,
+               MediaThermalPolicy.shouldPrefetchVideo(thermalState: ProcessInfo.processInfo.thermalState),
                let firstVideo = slice.flatMap(\.media).first(where: { $0.type == .video }),
                let url = firstVideo.url, let resolved = MeeshyConfig.resolveMediaURL(url) {
                 Task(priority: .utility) {

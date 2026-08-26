@@ -284,9 +284,11 @@ struct ProfileUserPostsList: View {
                 originalType: post.type,
                 media: post.media.map { EditablePostMedia($0) },
                 originalLocation: post.location,
+                originalVisibility: post.visibility,
+                originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -544,6 +546,11 @@ enum ProfilePostsOpener {
 // the network increment only happens when the throttle actually allows it.
 @MainActor
 final class PostViewThrottle {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = PostViewThrottle()
 
     private let defaults: UserDefaults
@@ -590,6 +597,11 @@ final class PostViewThrottle {
 
 @MainActor
 final class ProfileUserPostsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var posts: [FeedPost] = [] { didSet { refreshDerivedState() } }
     /// Chargement INITIAL uniquement (plein écran). La page suivante vit dans
     /// `isLoadingMore` — un seul flag pour les deux forçait la vue à afficher
@@ -966,8 +978,13 @@ final class ProfileUserPostsViewModel: ObservableObject {
         do {
             // `visibility: nil` = héritage de l'original. Un repost simple
             // depuis le profil n'offre aucun sélecteur d'audience.
-            _ = try await postService.repost(postId: postId, targetType: nil, content: nil,
-                                             isQuote: false, visibility: nil)
+            let cible = RepostTargeting.target(
+                cardId: postId, cardType: post.type,
+                repostOfId: post.repost?.id, originalRepostOfId: post.repost?.originalRepostOfId
+            )
+            try await RepostPublisher(postService: postService).publish(
+                .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+            )
             FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.repost.success", defaultValue: "Repartagé", bundle: .main))
         } catch {
             repostedOverrides[postId] = nil
@@ -1015,7 +1032,17 @@ final class ProfileUserPostsViewModel: ObservableObject {
         }
     }
 
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        _ postId: String,
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
+    ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
         var optimistic = snapshot
@@ -1027,9 +1054,20 @@ final class ProfileUserPostsViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         posts[idx] = optimistic
         do {
-            let updated = try await postService.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
                 let edited = updated.toFeedPost(preferredLanguages: languageProvider.preferredLanguages)
                 posts[newIdx] = edited

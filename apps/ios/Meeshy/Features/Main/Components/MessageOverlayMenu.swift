@@ -10,12 +10,16 @@ struct MessageOverlayMenu: View {
     let message: Message
     let contactColor: String
     let messageBubbleFrame: CGRect
-    /// Focal : les PIXELS de la cellule vivante, capturés au moment du geste
-    /// (`MessageListViewController.focalOverlayPreview`). Quand présent,
-    /// l'aperçu élevé rend cette image au lieu de reconstruire un
-    /// `ThemedMessageBubble` — aucun second chemin de rendu, toute évolution
-    /// de `FocalRow` se propage ici par construction. `nil` en mode bulles.
-    var focalPreviewImage: UIImage? = nil
+    // `focalPreviewImage` a vécu ici : en mode Focal, l'aperçu élevé rendait
+    // les PIXELS de la cellule vivante, capturés au geste. L'intention était
+    // bonne — « aucun second chemin de rendu » — mais le résultat ne l'était
+    // pas : la cellule Focal fait tenir l'identité et la barre de méta À CHEVAL
+    // sur son cadre, si bien que la capture, bornée aux `bounds` de la cellule,
+    // les tranchait en deux. Directive produit 2026-08-23 : « le mode focal,
+    // lorsqu'on y fait long-press, doit afficher le message NORMAL ; ici on a
+    // les éléments coupés, ce n'est pas élégant. » L'aperçu élevé rend donc le
+    // même `ThemedMessageBubble` que partout ailleurs — un message entier, à
+    // sa taille naturelle, quel que soit le mode de lecture du fil.
     @Binding var isPresented: Bool
     var canDelete: Bool = false
     var canEdit: Bool = false
@@ -32,6 +36,11 @@ struct MessageOverlayMenu: View {
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
     var onSaveMedia: (() -> Void)? = nil
+    /// « Composer » — ouvre l'atelier sur le média reçu (lot 5, O13).
+    /// L'overlay ne monte RIEN lui-même : il rend la main à son hôte, qui pose
+    /// le même état de présentation que le second déclencheur (la feuille de
+    /// transfert). Un montage ici en ferait un second contrat d'envoi.
+    var onCompose: (() -> Void)? = nil
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
     // overlay renders a REAL `ThemedMessageBubble` at the source position
@@ -50,6 +59,12 @@ struct MessageOverlayMenu: View {
     /// Ouvre la feuille « Plus… » native (MessageMoreSheet) — action `.more`
     /// de la liste verticale.
     var onShowMore: (() -> Void)? = nil
+    /// Ouvre la feuille de détail d'un appel — action `.callDetail`, présente
+    /// uniquement pour un message qui porte un `callSummary`. Cette
+    /// destination vivait sur l'appui long de la carte d'appel ; l'appui long
+    /// étant rendu au menu du message (directive 2026-08-24), elle entre dans
+    /// le menu plutôt que de disparaître.
+    var onShowCallDetail: (() -> Void)? = nil
     /// Ouvre le picker d'emoji complet (bouton `+` de la barre de réactions).
     var onExpandFullPicker: (() -> Void)? = nil
 
@@ -59,6 +74,9 @@ struct MessageOverlayMenu: View {
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
     @State private var isEmojiPickerOpen = false
+    /// Classement des emojis rapides figé pour la durée de la présentation —
+    /// cf. `emojiQuickBar`.
+    @State private var cachedTopEmojis: [String]?
     /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
     /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
     /// `@GestureState` : reset automatique (spring) au release ET à
@@ -165,7 +183,9 @@ struct MessageOverlayMenu: View {
             // séparément (ConversationView) avec la vraie valeur
             // `!editRevisions(for:).isEmpty`.
             hasEditRevisions: true,
+            hasCallSummary: message.callSummary != nil,
             saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
+            canComposeMedia: ComposableAttachment.offers(message: message),
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
             isForwardable: message.isForwardable
         )
@@ -185,6 +205,8 @@ struct MessageOverlayMenu: View {
             onCopy?()
         case .saveMedia:
             onSaveMedia?()
+        case .compose:
+            onCompose?()
         case .pin, .unpin:
             onPin?()
         case .star, .unstar:
@@ -193,6 +215,8 @@ struct MessageOverlayMenu: View {
             onShowMore?()
         case .delete:
             onDelete?()
+        case .callDetail:
+            onShowCallDetail?()
         }
         dismiss()
     }
@@ -310,6 +334,35 @@ struct MessageOverlayMenu: View {
                         .offset(y: isVisible ? 0 : 18)
                     }
 
+                    if !useSourceFrame {
+                        // Legacy : la LISTE D'ACTIONS vit elle aussi dans le
+                        // VStack, sous la barre d'emojis.
+                        //
+                        // Elle n'existait que dans la branche `useSourceFrame`
+                        // jusqu'au 2026-08-23 : ce chemin n'était plus emprunté
+                        // que par des call sites sans frame source, et personne
+                        // n'avait remarqué qu'il ne présentait plus AUCUNE
+                        // action. Le retrait de la capture Focal (voir
+                        // `focalPreviewImage` plus haut) l'a rendu de nouveau
+                        // vivant — un appui long en mode Focal/Script y passe —
+                        // et le trou est devenu visible immédiatement : bulle,
+                        // emojis, puis rien.
+                        //
+                        // Positionnée par le FLUX, jamais par `.position(…)` :
+                        // toute la géométrie de l'autre branche (`nlMenuY`,
+                        // `nlBubbleMidY`…) se calcule depuis `bubbleRect`, qui
+                        // vaut précisément `.zero` ici.
+                        MessageActionsMenu(
+                            actions: primaryActions,
+                            accentHex: contactColor,
+                            onSelect: { handlePrimaryAction($0) }
+                        )
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 12)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
+                    }
+
                     // Panneau grille retiré (native-lean) — les détails
                     // passent désormais par la feuille « Plus… » (MessageMoreSheet).
                 }
@@ -353,39 +406,32 @@ struct MessageOverlayMenu: View {
                     // visible — la position du cluster (action bar / emoji
                     // bar) reste cohérente.
                     Group {
-                        if let focalPreviewImage {
-                            // Focal : l'aperçu EST la cellule vivante — ses
-                            // pixels, capturés au geste. Pas de second rendu.
-                            Image(uiImage: focalPreviewImage)
-                                .resizable()
-                        } else {
-                            ThemedMessageBubble(
-                                message: message,
-                                contactColor: contactColor,
-                                isDirect: isDirect,
-                                isDark: isDark,
-                                transcription: transcription,
-                                translatedAudios: translatedAudios,
-                                textTranslations: textTranslations,
-                                preferredTranslation: preferredTranslation,
-                                showAvatar: !isDirect,
-                                isLastInGroup: true,
-                                isLastReceivedMessage: true,
-                                isLastSentMessage: true,
-                                mentionDisplayNames: mentionDisplayNames,
-                                currentUserId: currentUserId,
-                                userLanguages: (
-                                    regional: userRegionalLanguage,
-                                    custom: userCustomDestinationLanguage
-                                )
+                        ThemedMessageBubble(
+                            message: message,
+                            contactColor: contactColor,
+                            isDirect: isDirect,
+                            isDark: isDark,
+                            transcription: transcription,
+                            translatedAudios: translatedAudios,
+                            textTranslations: textTranslations,
+                            preferredTranslation: preferredTranslation,
+                            showAvatar: !isDirect,
+                            isLastInGroup: true,
+                            isLastReceivedMessage: true,
+                            isLastSentMessage: true,
+                            mentionDisplayNames: mentionDisplayNames,
+                            currentUserId: currentUserId,
+                            userLanguages: (
+                                regional: userRegionalLanguage,
+                                custom: userCustomDestinationLanguage
                             )
-                            // Gate Equatable (H3) : pendant le drag 60 fps
-                            // (`clusterDragOffset`) le body du GeometryReader se
-                            // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
-                            // re-rendrait à chaque frame. Ses inputs sont stables
-                            // pendant le drag → EquatableView saute son body.
-                            .equatable()
-                        }
+                        )
+                        // Gate Equatable (H3) : pendant le drag 60 fps
+                        // (`clusterDragOffset`) le body du GeometryReader se
+                        // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
+                        // re-rendrait à chaque frame. Ses inputs sont stables
+                        // pendant le drag → EquatableView saute son body.
+                        .equatable()
                     }
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)
@@ -437,7 +483,13 @@ struct MessageOverlayMenu: View {
         // embarque deja son chrome (capsule glass + shadow), son padding
         // interne et la cascade d'entree gauche→droite (`WaveTileModifier`),
         // donc aucun wrapper supplementaire ici.
-        let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+        //
+        // Le classement (lecture UserDefaults + tri) est calculé UNE fois par
+        // présentation via le cache @State — le body de l'overlay se
+        // ré-évalue à chaque frame du spring d'entrée, et la table d'usage ne
+        // change pas pendant que le menu est ouvert (recordUsage ⇒ dismiss).
+        let topEmojis = cachedTopEmojis
+            ?? EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
             style: isDark ? .dark : .light,
@@ -454,6 +506,11 @@ struct MessageOverlayMenu: View {
             }
         )
         .frame(maxWidth: 280)
+        .onAppear {
+            if cachedTopEmojis == nil {
+                cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
+            }
+        }
     }
 
     // MARK: - Dismiss Background (dim only, no full-screen blur → glass stays vibrant)
@@ -874,7 +931,7 @@ private struct PreviewAudioPlayer: View {
                 .accessibilityLabel(player.isPlaying
                     ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.timeLabel(totalDuration: attachment.duration)))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(totalDuration: attachment.duration)))
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
@@ -931,10 +988,10 @@ private struct PreviewAudioPlayer: View {
                 )
                 .tint(accent)
                 .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
-                .accessibilityValue("\(player.percentInt) %")
+                .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
                 // Pourcentage d'avancement
-                Text("\(player.percentInt)%")
+                Text(LocalizedNumber.percent(player.percentInt))
                     .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
@@ -1033,7 +1090,7 @@ private struct PreviewVideoPlayer: View {
             )
             .tint(accent)
             .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
-            .accessibilityValue("\(player.percentInt) %")
+            .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
             HStack(spacing: 8) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
@@ -1061,7 +1118,7 @@ private struct PreviewVideoPlayer: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
-                Text("\(player.percentInt)%")
+                Text(LocalizedNumber.percent(player.percentInt))
                     .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 32)
@@ -1254,15 +1311,25 @@ private class OverlayAudioPlayer: ObservableObject {
 
     func timeLabel(totalDuration: Int?) -> String {
         let current = formatTime(currentTime)
-        let total = formatTime(duration > 0 ? duration : Double(totalDuration ?? 0))
+        let total = formatTime(totalSeconds(fallback: totalDuration))
         return "\(current) / \(total)"
     }
 
+    /// Ce qu'un indice VoiceOver DIT de cet audio : sa longueur, en toutes
+    /// lettres. L'indice servait `timeLabel` — deux horloges séparées d'une
+    /// barre oblique (« 0:12 / 1:30 »), que le synthétiseur lit comme deux
+    /// heures. Un indice se lit une fois, après le libellé : la POSITION
+    /// courante n'y a rien à faire, seule la durée totale renseigne.
+    func spokenTotalDuration(totalDuration: Int?) -> String {
+        LocalizedNumber.spokenDuration(seconds: totalSeconds(fallback: totalDuration))
+    }
+
+    private func totalSeconds(fallback: Int?) -> TimeInterval {
+        duration > 0 ? duration : TimeInterval(fallback ?? 0)
+    }
+
     private func formatTime(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite && seconds >= 0 else { return "0:00" }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: seconds)
     }
 
     private func setupTimeObserver() {

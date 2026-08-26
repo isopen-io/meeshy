@@ -80,14 +80,17 @@ struct BubblePinnedIndicator: View, Equatable {
 
 // MARK: - Forwarded Indicator (was: ThemedMessageBubble.forwardedIndicator)
 
-/// Badge "Forwarded" affiche au dessus des bulles transferees. Les inputs
-/// sont les champs primitifs extraits de `ForwardReference` afin que la vue
-/// reste `Equatable` sans dependre du type SDK (qui n'est pas Equatable).
+/// Badge "Forwarded" affiche au dessus des bulles transferees.
+///
+/// La vue ne prend plus deux `String?` independants : cette signature laissait
+/// l'appelant choisir de nommer la PERSONNE des que le groupe manquait. Elle
+/// recoit une attribution DEJA tranchee par `ForwardBadgePolicy` — trois cas
+/// exhaustifs, aucun repli implicite. `ForwardAttribution` est `Equatable`,
+/// donc la vue le reste sans dependre du type SDK.
 struct BubbleForwardedIndicator: View, Equatable {
     let isMe: Bool
     let isDark: Bool
-    let senderName: String?
-    let conversationName: String?
+    let attribution: ForwardAttribution
 
     var body: some View {
         let theme = ThemeManager.shared
@@ -96,30 +99,26 @@ struct BubbleForwardedIndicator: View, Equatable {
                 .font(.caption2.weight(.medium))
                 .foregroundColor(theme.textMuted)
 
-            if let senderName {
-                if let conversationName {
-                    Text(String(localized: "bubble.meta.forwarded.fromConversation", defaultValue: "Fwd. from \(senderName) \u{2022} \(conversationName)", bundle: .main))
-                        .font(.caption2)
-                        .italic()
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                } else {
-                    Text(String(localized: "bubble.meta.forwarded.from", defaultValue: "Fwd. from \(senderName)", bundle: .main))
-                        .font(.caption2)
-                        .italic()
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                }
-            } else {
-                Text(String(localized: "bubble.meta.forwarded", defaultValue: "Forwarded", bundle: .main))
-                    .font(.caption2)
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
+            Text(Self.label(for: attribution))
+                .font(.caption2)
+                .italic()
+                .foregroundColor(theme.textMuted)
+                .lineLimit(1)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
         .accessibilityElement(children: .combine)
+    }
+
+    static func label(for attribution: ForwardAttribution) -> String {
+        switch attribution {
+        case .group(let name):
+            return String(localized: "bubble.meta.forwarded.fromGroup", defaultValue: "Forwarded from \(name)", bundle: .main)
+        case .person(let name):
+            return String(localized: "bubble.meta.forwarded.from", defaultValue: "Fwd. from \(name)", bundle: .main)
+        case .anonymous:
+            return String(localized: "bubble.meta.forwarded", defaultValue: "Forwarded", bundle: .main)
+        }
     }
 }
 

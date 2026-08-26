@@ -73,6 +73,17 @@ class StoryComposerViewModelTest {
         thumbnailUrl = null,
     )
 
+    private fun uploadedVideo(id: String, durationMs: Long): UploadedMedia = UploadedMedia(
+        id = id,
+        url = "https://cdn/$id.mp4",
+        mimeType = "video/mp4",
+        fileSize = 456,
+        width = 100,
+        height = 100,
+        durationMs = durationMs,
+        thumbnailUrl = null,
+    )
+
     @Test
     fun `onTextChange updates the draft text and can publish`() = runTest {
         val vm = viewModel()
@@ -308,6 +319,199 @@ class StoryComposerViewModelTest {
 
         assertThat(vm.state.value.attachments.map { it.id }).containsExactly("m2")
         assertThat(vm.state.value.draft.mediaIds).containsExactly("m2")
+    }
+
+    @Test
+    fun `onToggleSlideBackgroundMedia designates attached media as the slide background`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onToggleSlideBackgroundMedia("m2")
+
+        assertThat(vm.state.value.deck.selectedSlideBackgroundMediaId).isEqualTo("m2")
+    }
+
+    @Test
+    fun `onToggleSlideBackgroundMedia clears the designation on a second tap`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onToggleSlideBackgroundMedia("m1")
+        vm.onToggleSlideBackgroundMedia("m1")
+
+        assertThat(vm.state.value.deck.selectedSlideBackgroundMediaId).isNull()
+    }
+
+    @Test
+    fun `onToggleSlideBackgroundMedia is inert for an unknown media id`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+
+        vm.onToggleSlideBackgroundMedia("ghost")
+
+        assertThat(vm.state.value.deck.selectedSlideBackgroundMediaId).isNull()
+    }
+
+    @Test
+    fun `publishing a designated video background emits an isBackground media object with its duration`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.postMediaId).isEqualTo("v1")
+        assertThat(obj?.mediaURL).isEqualTo("https://cdn/v1.mp4")
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.duration).isEqualTo(5.0)
+    }
+
+    @Test
+    fun `onSetSlideBackgroundLoop turns off looping for a designated video background`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+
+        vm.onSetSlideBackgroundLoop(false)
+
+        assertThat(vm.state.value.selectedSlideBackgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `publishing a non-looping video background emits loop false on the media object`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+        vm.onSetSlideBackgroundLoop(false)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.loop).isFalse()
+    }
+
+    @Test
+    fun `selectedSlideBackgroundIsVideo is true only when a designated background is a video`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(
+            listOf(uploaded("m1"), uploadedVideo("v1", durationMs = 5000)),
+        )
+        vm.onMediaPicked(listOf(item()))
+
+        assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isFalse() // none designated
+
+        vm.onToggleSlideBackgroundMedia("m1")
+        assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isFalse() // image designated
+
+        vm.onToggleSlideBackgroundMedia("v1")
+        assertThat(vm.state.value.selectedSlideBackgroundIsVideo).isTrue() // video designated
+    }
+
+    @Test
+    fun `publishing a panned and zoomed image background carries the framing onto the wire object`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        vm.onToggleSlideBackgroundMedia("m1")
+        // One pinch-out + pan gesture on the measured 1080x1920 canvas.
+        vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.mediaType).isEqualTo("image")
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+        assertThat(obj.y).isWithin(1e-6).of(0.5)
+    }
+
+    @Test
+    fun `publishing an unframed image background carries the centred defaults`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        vm.onToggleSlideBackgroundMedia("m1")
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `framing is not projected when the designated background is not the framed media`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1"), uploaded("m2")))
+        vm.onMediaPicked(listOf(item()))
+        // The canvas frames the FIRST slide media (m1); designate the SECOND (m2) as background.
+        vm.onToggleSlideBackgroundMedia("m2")
+        vm.onCanvasTransform(panX = 200f, panY = 0f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.postMediaId).isEqualTo("m2")
+        assertThat(obj?.x).isEqualTo(0.5)
+        assertThat(obj?.y).isEqualTo(0.5)
+        assertThat(obj?.scale).isEqualTo(1.0)
+    }
+
+    @Test
+    fun `publishing a panned and zoomed video background carries the framing onto the wire object`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploadedVideo("v1", durationMs = 5000)))
+        vm.onMediaPicked(listOf(item("clip.mp4")))
+        vm.onToggleSlideBackgroundMedia("v1")
+        vm.onCanvasTransform(panX = 200f, panY = 100f, zoom = 2f, canvasWidth = 1080f, canvasHeight = 1920f)
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        val obj = request.captured.storyEffects?.mediaObjects?.single()
+        assertThat(obj?.isBackground).isTrue()
+        assertThat(obj?.mediaType).isEqualTo("video")
+        assertThat(obj?.scale).isWithin(1e-6).of(2.0)
+        assertThat(obj?.x!!).isWithin(1e-6).of(0.5 + 200.0 / 1080.0)
+        assertThat(obj.y).isWithin(1e-6).of(0.5 + 100.0 / 1920.0)
+        // The video-only fields survive alongside the framing.
+        assertThat(obj.loop).isTrue()
+    }
+
+    @Test
+    fun `publishing with no designated background emits no media objects`() = runTest {
+        val vm = viewModel()
+        coEvery { media.upload(any()) } returns NetworkResult.Success(listOf(uploaded("m1")))
+        vm.onMediaPicked(listOf(item()))
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+
+        vm.publish()
+
+        assertThat(request.captured.storyEffects?.mediaObjects).isNull()
     }
 
     @Test
@@ -1443,6 +1647,225 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `onTextElementBackground re-backs only the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementBackground(id, StoryTextBackground.Solid(hex = "6366F1"))
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.background).isEqualTo(StoryTextBackground.Solid(hex = "6366F1"))
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementBackground on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementBackground("ghost", StoryTextBackground.Glass(radius = 24.0))
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().background)
+            .isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
+    fun `onTextElementCycleOutline thickens the edited element and posts the default colour`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleOutline(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.outline.width).isEqualTo(2f)
+        assertThat(element.outline.color).isEqualTo(StoryTextOutlineCycle.DEFAULT_COLOR)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleOutline wraps past the thickest step back to no-stroke`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(5) { vm.onTextElementCycleOutline(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().outline.width)
+            .isEqualTo(StoryTextOutline.NONE_WIDTH)
+    }
+
+    @Test
+    fun `onTextElementCycleOutline on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleOutline("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().outline.width)
+            .isEqualTo(StoryTextOutline.NONE_WIDTH)
+    }
+
+    @Test
+    fun `onTextElementCycleSize advances the edited element to the next larger step`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleSize(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.size).isEqualTo(StoryTextSize.LARGE)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleSize wraps past the largest step back to the smallest`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(3) { vm.onTextElementCycleSize(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().size)
+            .isEqualTo(StoryTextSize.SMALL)
+    }
+
+    @Test
+    fun `onTextElementCycleSize on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleSize("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().size)
+            .isEqualTo(StoryTextSize.MEDIUM)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeIn advances only the fade-in of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleFadeIn(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.fade.inSeconds).isEqualTo(0.5f)
+        assertThat(element.fade.outSeconds).isEqualTo(StoryTextFade.NONE_SECONDS)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeOut advances only the fade-out of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleFadeOut(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.fade.outSeconds).isEqualTo(0.5f)
+        assertThat(element.fade.inSeconds).isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeIn wraps past the longest step back to no-fade`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(6) { vm.onTextElementCycleFadeIn(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().fade.inSeconds)
+            .isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeIn on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleFadeIn("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().fade.inSeconds)
+            .isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleFadeOut on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleFadeOut("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().fade.outSeconds)
+            .isEqualTo(StoryTextFade.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleStart advances only the start of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleStart(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.timing.startSeconds).isEqualTo(1f)
+        assertThat(element.timing.durationSeconds).isEqualTo(StoryElementTiming.NONE_SECONDS)
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+    }
+
+    @Test
+    fun `onTextElementCycleDuration advances only the duration of the edited element`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onTextElementCycleDuration(id)
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.timing.durationSeconds).isEqualTo(1f)
+        assertThat(element.timing.startSeconds).isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleStart wraps past the longest step back to none`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        repeat(8) { vm.onTextElementCycleStart(id) }
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().timing.startSeconds)
+            .isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleStart on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleStart("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().timing.startSeconds)
+            .isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
+    fun `onTextElementCycleDuration on an unknown id is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onTextElementCycleDuration("ghost")
+
+        assertThat(vm.state.value.selectedSlideTextElements.single().timing.durationSeconds)
+            .isEqualTo(StoryElementTiming.NONE_SECONDS)
+    }
+
+    @Test
     fun `onTextElementTransform pinch-scales and rotates the edited element`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
@@ -1826,5 +2249,180 @@ class StoryComposerViewModelTest {
         coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
         assertThat(request.captured.storyEffects?.stickerObjects?.map { it.emoji }).containsExactly("🎉")
         assertThat(request.captured.content).isNull()
+    }
+
+    @Test
+    fun `onSlideDurationChange pins the selected slide's duration through the public state`() = runTest {
+        val vm = viewModel()
+
+        vm.onSlideDurationChange(9.0)
+
+        assertThat(vm.state.value.deck.selectedSlide.durationSecondsPin).isEqualTo(9.0)
+        assertThat(vm.state.value.selectedSlideDurationSeconds).isEqualTo(9.0)
+    }
+
+    @Test
+    fun `onSlideDurationChange clamps an out-of-range request to the iOS bounds`() = runTest {
+        val vm = viewModel()
+
+        vm.onSlideDurationChange(10_000.0)
+
+        assertThat(vm.state.value.selectedSlideDurationSeconds)
+            .isEqualTo(me.meeshy.sdk.model.StoryDurationPin.MAX_SECONDS)
+    }
+
+    @Test
+    fun `a pinned duration rides into the wire request as timelineDuration on publish`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onTextChange("bonjour")
+        vm.onSlideDurationChange(7.0)
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.timelineDuration).isEqualTo(7.0)
+    }
+
+    @Test
+    fun `onSlideBackgroundChange sets the selected slide backdrop through the public state`() = runTest {
+        val vm = viewModel()
+        val teal = me.meeshy.sdk.model.StoryBackgroundValue.Hex("08D9D6")
+
+        vm.onSlideBackgroundChange(teal)
+
+        assertThat(vm.state.value.deck.selectedSlide.background).isEqualTo(teal)
+        assertThat(vm.state.value.selectedSlideBackground).isEqualTo(teal)
+    }
+
+    @Test
+    fun `onSlideBackgroundChange(null) clears the selected slide backdrop`() = runTest {
+        val vm = viewModel()
+        vm.onSlideBackgroundChange(me.meeshy.sdk.model.StoryBackgroundValue.Hex("08D9D6"))
+
+        vm.onSlideBackgroundChange(null)
+
+        assertThat(vm.state.value.selectedSlideBackground).isNull()
+    }
+
+    @Test
+    fun `a chosen backdrop rides into the wire request as effects background on publish`() = runTest {
+        val vm = viewModel()
+        val request = slot<CreateStoryRequest>()
+        coEvery { repo.enqueuePublish(capture(request), any()) } returns "cmid"
+        vm.onTextChange("bonjour")
+        vm.onSlideBackgroundChange(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+
+        vm.publish()
+
+        coVerify(exactly = 1) { repo.enqueuePublish(any(), any()) }
+        assertThat(request.captured.storyEffects?.background).isEqualTo("gradient:FF2E63:08D9D6")
+    }
+
+    // --- unified element context menu ---
+
+    @Test
+    fun `onOpenElementMenu selects the element and exposes its resolved menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+
+        vm.onOpenElementMenu(id)
+
+        val menu = vm.state.value.elementContextMenu!!
+        assertThat(menu.elementId).isEqualTo(id)
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(id)
+        assertThat(vm.state.value.selectedStickerId).isNull()
+    }
+
+    @Test
+    fun `onOpenElementMenu on an id absent from the selected slide is inert`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+
+        vm.onOpenElementMenu("ghost")
+
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onDismissElementMenu closes the menu without disturbing the selection`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(id)
+
+        vm.onDismissElementMenu()
+
+        assertThat(vm.state.value.elementContextMenu).isNull()
+        assertThat(vm.state.value.selectedTextElementId).isEqualTo(id)
+    }
+
+    @Test
+    fun `onElementMenuAction DUPLICATE clones the element and closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(id)
+
+        vm.onElementMenuAction(StoryElementAction.DUPLICATE)
+
+        assertThat(vm.state.value.selectedSlideTextElements).hasSize(2)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction DELETE removes the element and closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val id = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(id)
+
+        vm.onElementMenuAction(StoryElementAction.DELETE)
+
+        assertThat(vm.state.value.selectedSlideTextElements).isEmpty()
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction BRING_TO_FRONT restacks the element and closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val back = vm.state.value.selectedTextElement!!.id
+        vm.onAddTextElement() // a second element sits in front of the first
+        vm.onOpenElementMenu(back)
+
+        vm.onElementMenuAction(StoryElementAction.BRING_TO_FRONT)
+
+        assertThat(vm.state.value.selectedSlideTextElements.last().id).isEqualTo(back)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction on a disabled action leaves the deck untouched but closes the menu`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val only = vm.state.value.selectedTextElement!!.id
+        vm.onOpenElementMenu(only)
+        // A single-element slide: SEND_TO_BACK is a disabled row (already at the back).
+        val before = vm.state.value.deck
+
+        vm.onElementMenuAction(StoryElementAction.SEND_TO_BACK)
+
+        assertThat(vm.state.value.deck).isSameInstanceAs(before)
+        assertThat(vm.state.value.elementContextMenu).isNull()
+    }
+
+    @Test
+    fun `onElementMenuAction with no menu open is a safe no-op`() = runTest {
+        val vm = viewModel()
+        vm.onAddTextElement()
+        val before = vm.state.value.deck
+
+        vm.onElementMenuAction(StoryElementAction.DELETE)
+
+        assertThat(vm.state.value.deck).isSameInstanceAs(before)
+        assertThat(vm.state.value.elementContextMenu).isNull()
     }
 }

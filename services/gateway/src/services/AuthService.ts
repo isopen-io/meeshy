@@ -22,6 +22,8 @@ import {
 } from './SessionService';
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { recipientLanguage } from '../utils/recipient-language';
+import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -169,7 +171,8 @@ export class AuthService {
           pendingEmail: true,
           pendingPhoneNumber: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+          ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
 
@@ -339,7 +342,8 @@ export class AuthService {
           pendingEmail: true,
           pendingPhoneNumber: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+          ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
 
@@ -708,7 +712,8 @@ export class AuthService {
           lastActiveAt: true,
           twoFactorEnabledAt: true,
           createdAt: true,
-          updatedAt: true
+          updatedAt: true,
+          ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
 
@@ -955,7 +960,7 @@ export class AuthService {
         verificationLink,
         verificationCode,
         expiryHours: tokenExpiryHours,
-        language: user.systemLanguage || 'fr'
+        language: recipientLanguage(user, 'fr')
       });
 
       logger.info(`[AUTH_SERVICE] ✅ Email de vérification renvoyé à user.email=${normalizedEmail}`);
@@ -1220,8 +1225,7 @@ export class AuthService {
       systemLanguage: user.systemLanguage,
       regionalLanguage: user.regionalLanguage,
       customDestinationLanguage: user.customDestinationLanguage,
-      // TODO: Load from UserPreferences.application
-      autoTranslateEnabled: true,
+      autoTranslateEnabled: resolveAutoTranslateEnabled(user),
       isActive: user.isActive,
       deactivatedAt: user.deactivatedAt,
       createdAt: user.createdAt,

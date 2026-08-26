@@ -1,5 +1,14 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { protectedPreview, type NotificationActorProfile } from '../notifications/NotificationService';
+import {
+  maskedAttachment,
+  protectedPreview,
+  type NotificationActorProfile,
+  type PreviewPrismBasis,
+} from '../notifications/NotificationService';
+import {
+  transcriptTranslationTexts,
+  transcriptTranslationTracks,
+} from '@meeshy/shared/types/attachment-audio';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import {
   retractMessageNotifications,
@@ -93,6 +102,23 @@ export function extractTranscriptionText(att: { transcription?: unknown } | null
     if (joined.length > 0) return joined;
   }
   return undefined;
+}
+
+/**
+ * La langue dans laquelle le vocal a été PARLÉ, telle que Whisper l'a rendue.
+ *
+ * Elle concourt à son RANG dans le Prisme du lecteur (règle #3), et n'est
+ * jamais un court-circuit : un prisme `['fr','es']` sur un vocal espagnol
+ * traduit en français sert le FRANÇAIS. `null` quand la transcription ne la
+ * porte pas — la descente traite alors toutes les langues du lecteur comme
+ * servables par traduction, ce qui est le comportement sûr : au pire elle sert
+ * une traduction vers une langue où le vocal était déjà, jamais une langue que
+ * le lecteur ne lit pas.
+ */
+export function transcriptionLanguage(att: { transcription?: unknown } | null | undefined): string | null {
+  if (!att?.transcription || typeof att.transcription !== 'object') return null;
+  const language = (att.transcription as Record<string, unknown>).language;
+  return typeof language === 'string' && language.trim() !== '' ? language.trim() : null;
 }
 
 /**
@@ -306,6 +332,12 @@ export async function notifyMessageRecipients(params: {
     });
     const notificationPreview = protectedOverride?.preview ?? processedContent;
     const notificationLocKey = protectedOverride?.locKey;
+    // Cycle 122 — l'aperçu est-il le CONTENU du message, donc substituable par
+    // sa traduction dans la bannière ? Un placeholder de protection ne l'est
+    // pas : y substituer la traduction relâcherait le texte que la protection
+    // masque. `Message.translations` ne traduisant que `Message.content`, c'est
+    // ici — où l'on sait ce que l'aperçu montre — que la question se tranche.
+    const previewIsProtectedPlaceholder = protectedOverride !== null;
 
     const sender = await resolveNotificationSender({ prisma, senderParticipantId });
     if (!sender) return;
@@ -351,34 +383,145 @@ export async function notifyMessageRecipients(params: {
       select: {
         mimeType: true, fileName: true, fileSize: true, duration: true,
         width: true, height: true, fileUrl: true, transcription: true,
+        // Cycle 123 — les traductions de la TRANSCRIPTION, que la bannière d'un
+        // vocal sert : elles vivent ici, jamais sur `Message.translations`.
+        translations: true,
+        // Cycle 125 — les drapeaux de masquage de la PIÈCE JOINTE, que ce
+        // `select` ne lisait pas : `MessageAttachment` porte les siens, et ils
+        // ne suivent pas ceux du message qui la porte. Cf. `maskedAttachment`.
+        isViewOnce: true, isBlurred: true, effectFlags: true,
       },
     });
 
     const first = attachments[0];
-    const attachmentInfo = {
-      hasAttachments: attachments.length > 0,
-      attachmentCount: attachments.length,
-      firstAttachmentType: attachmentTypeOf(first?.mimeType),
-      attachments: attachments.map(att => ({
-        type: attachmentTypeOf(att.mimeType),
-        filename: att.fileName,
-      })),
-      firstAttachmentFilename: first?.fileName,
-      firstAttachmentFileSize: first?.fileSize,
-      firstAttachmentDuration: first?.duration,
-      firstAttachmentWidth: first?.width,
-      firstAttachmentHeight: first?.height,
-      firstAttachmentUrl: first?.fileUrl || undefined,
-      firstAttachmentMimeType: first?.mimeType || undefined,
-    };
+
+    // Cycle 125 — le média a-t-il le droit de VOYAGER ?
+    //
+    // Le cycle 124 a refermé le CORPS d'un message protégé ; une ligne plus bas,
+    // dans le même objet, `firstAttachmentUrl` partait sans aucune condition. La
+    // NSE iOS télécharge ce fichier et l'attache en `UNNotificationAttachment`
+    // sans regarder `notificationLocKey` : une photo à VUE UNIQUE, FLOUTÉE,
+    // ÉPHÉMÈRE ou CHIFFRÉE s'affichait donc ENTIÈRE sur l'écran verrouillé, sous
+    // une bannière disant « 👁️ 🖼️ ». Aucun texte n'avait besoin de fuir pour
+    // que le secret parte.
+    //
+    // La protection se lit aux DEUX niveaux qui la déclarent : celui du MESSAGE
+    // (`protectedOverride`, déjà calculé pour le corps) et celui de la PIÈCE
+    // JOINTE (`maskedAttachment`), que ce site ne lisait pas du tout.
+    //
+    // Retenu en BLOC, fichier ET étiquette : le nom de fichier est persisté dans
+    // `metadata.attachments.firstFilename`, donc relu longtemps après que la
+    // bannière a disparu — et le placeholder porte déjà l'icône de type
+    // (`contentTypeIcon`), si bien que le corps ne perd rien à ce silence.
+    const mediaMayTravel = protectedOverride === null && !maskedAttachment(first);
+
+    // Cycle 125 bis — ce que le média donne au CORPS d'une bannière, et que les
+    // TROIS éventails doivent recevoir : `buildMessageNotificationBodyI18n`
+    // remplace un texte ABSENT par le libellé détaillé de la première pièce
+    // jointe (« 🎵 Audio · 0:07 ») et suffixe les badges des suivantes. Sans
+    // ces champs, répondre par un vocal ou mentionner quelqu'un sous une photo
+    // sans légende poussait une bannière au corps VIDE, pendant que les autres
+    // membres du fil recevaient la transcription.
+    const bannerMedia = mediaMayTravel
+      ? {
+          attachments: attachments.map(att => ({
+            type: attachmentTypeOf(att.mimeType),
+            filename: att.fileName,
+          })),
+          firstAttachmentFileSize: first?.fileSize,
+          firstAttachmentDuration: first?.duration,
+          firstAttachmentWidth: first?.width,
+          firstAttachmentHeight: first?.height,
+        }
+      : {};
+
+    // Ce que seule la bannière d'un message SIMPLE porte : l'inventaire
+    // dénormalisé dans `metadata.attachments` et le média inline du rich-push
+    // (que la NSE télécharge et attache). Ni la réponse ni la mention n'en ont
+    // d'usage aujourd'hui — cf. le suivi du lot.
+    const richPushMedia = mediaMayTravel
+      ? {
+          hasAttachments: attachments.length > 0,
+          attachmentCount: attachments.length,
+          firstAttachmentType: attachmentTypeOf(first?.mimeType),
+          firstAttachmentFilename: first?.fileName,
+          firstAttachmentUrl: first?.fileUrl || undefined,
+          firstAttachmentMimeType: first?.mimeType || undefined,
+        }
+      : {};
+
+    const attachmentInfo = { ...bannerMedia, ...richPushMedia };
 
     // Phase A — un vocal déjà transcrit affiche son texte sur l'écran verrouillé ;
     // le fichier reste attaché pour la lecture inline.
+    //
+    // Cycle 124 — et il ne l'affiche PAS quand le message est protégé. Cette
+    // condition manquait : la transcription gagnait inconditionnellement sur le
+    // placeholder que `protectedPreview` venait de composer, si bien qu'un vocal
+    // ÉPHÉMÈRE / à VUE UNIQUE / FLOUTÉ / CHIFFRÉ poussait son texte transcrit
+    // ENTIER sur l'écran verrouillé — exactement ce que la protection masque.
+    //
+    // Le cycle 123 a fermé le FIL de ce même message (sa traduction ne part
+    // plus sur le canal push) et laissé le CORPS ouvert : le texte nu de la
+    // transcription était déjà substitué à l'aperçu une couche PLUS HAUT que
+    // toute déclaration de base. `previewIsProtectedPlaceholder` gouvernait
+    // `previewBasis`, jamais l'aperçu lui-même — la protection était donc
+    // ANNONCÉE par deux champs et APPLIQUÉE par aucun.
+    //
+    // Conséquence de forme, et elle n'est pas accessoire : `pushPreviewBasis`
+    // ne peut plus élire `transcript` sur un message protégé, puisqu'il n'y a
+    // plus de transcription à ce moment-là. La base retombe sur
+    // `protected-placeholder`, et le second verrou (`notificationLocKey`) cesse
+    // d'être la seule chose qui retienne la traduction du texte masqué.
+    //
+    // Cycle 125 — et `mediaMayTravel` porte la MÊME question un niveau plus
+    // bas : la parole d'un vocal MASQUÉ à son propre niveau est son contenu,
+    // exactement comme le fichier qui la porte. Un seul prédicat gouverne donc
+    // les deux, sans quoi le texte repartirait par la porte que le fichier
+    // vient de fermer.
     const firstAttachmentTranscript =
-      first?.mimeType?.startsWith('audio/')
+      mediaMayTravel && first?.mimeType?.startsWith('audio/')
         ? extractTranscriptionText(first as { transcription?: unknown })
         : undefined;
     const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
+
+    // Cycle 128 — la carte des PISTES traduites, jumelle du dépouillement du
+    // TEXTE juste au-dessus. La MÊME colonne les porte : le cycle 123 n'en a
+    // pris que la transcription, si bien que la bannière d'un vocal servait la
+    // bonne langue en texte et attachait le fichier ORIGINAL en son.
+    //
+    // Le tri par langue se fait PAR DESTINATAIRE, chez le créateur, où le Prisme
+    // est déjà descendu : ce site ne peut que remettre les candidates. Et il ne
+    // les remet qu'au lot `regular`, seul porteur du média de rich-push (cf.
+    // `richPushMedia` et la décision du cycle 125 bis).
+    //
+    // Gardé par `mediaMayTravel`, comme le fichier original et la transcription
+    // : une piste traduite est le CONTENU d'un message protégé au même titre
+    // que la parole dont elle sort. Sans cette condition, le lot rouvrirait par
+    // une porte neuve exactement ce que le cycle 125 vient de fermer.
+    const attachmentTracks =
+      mediaMayTravel && first?.mimeType?.startsWith('audio/')
+        ? transcriptTranslationTracks((first as { translations?: unknown }).translations)
+        : undefined;
+
+    // Cycle 123 — ce que l'aperçu EST décide de ce qui le traduit. Un
+    // placeholder de protection n'a pas de source (et sa traduction ne doit pas
+    // partir sur le fil non plus) ; une transcription a la SIENNE, sur
+    // l'attachment. Le message reste le cas nominal.
+    const previewBasis: PreviewPrismBasis = previewIsProtectedPlaceholder
+      ? { kind: 'protected-placeholder' }
+      : { kind: 'message-content' };
+    const pushPreviewBasis: PreviewPrismBasis = firstAttachmentTranscript !== undefined
+      ? {
+          kind: 'transcript',
+          source: {
+            translations: transcriptTranslationTexts(
+              (first as { translations?: unknown } | undefined)?.translations
+            ),
+            originalLanguage: transcriptionLanguage(first as { transcription?: unknown }),
+          },
+        }
+      : previewBasis;
 
     // Les trois valeurs ci-dessous disent ce qui est réellement PARTI, pas ce
     // qui était visé — même règle de compte rendu que
@@ -399,10 +542,25 @@ export async function notifyMessageRecipients(params: {
             replierUserId: sender.actorId,
             messageId: message.id,
             conversationId,
-            messagePreview: notificationPreview,
+            // Cycle 125 bis — le MÊME aperçu et la MÊME base que la bannière
+            // d'un message simple. `notificationPreview` (l'original) laissait
+            // le corps d'une réponse VIDE dès que le message n'avait pas de
+            // texte : un vocal, une photo sans légende. Les deux valeurs sont
+            // déjà gardées par `mediaMayTravel` — un message protégé retombe
+            // sur son placeholder, ici comme là.
+            messagePreview: notificationPreviewForPush,
             originalMessageId: message.replyToId!,
             senderProfile: sender.profile,
             messageExpiresAt: message.expiresAt ?? null,
+            previewBasis: pushPreviewBasis,
+            ...bannerMedia,
+            // Cycle 126 — la clé de PROTECTION, que seul le lot regular
+            // recevait. Le cycle 125 bis a fait converger le TEXTE des trois
+            // bannières ; celle-ci ne compose aucun texte, elle le QUALIFIE —
+            // et c'est ce qui l'a laissée hors du lot. Elle vaut ici la
+            // localisation cliente du placeholder et le second verrou de
+            // `createNotification`.
+            notificationLocKey,
           });
           return created != null;
         })
@@ -415,7 +573,12 @@ export async function notifyMessageRecipients(params: {
             {
               senderId: sender.actorId,
               senderProfile: sender.profile,
-              messageContent: notificationPreview,
+              // Cycle 125 bis — cf. `createReplyNotification` : le même aperçu,
+              // la même base et le même résumé de média que la bannière d'un
+              // message simple. Un mentionné sous une photo sans légende
+              // recevait un corps vide.
+              messageContent: notificationPreviewForPush,
+              ...bannerMedia,
               conversationId,
               messageId: message.id,
               // L'éventail tient déjà l'échéance du message : la transmettre
@@ -424,6 +587,10 @@ export async function notifyMessageRecipients(params: {
               // pas. Le chemin `new_message`, lui, la prend de sa propre
               // relecture vivante — il en fait une de toute façon.
               messageExpiresAt: message.expiresAt ?? null,
+              previewBasis: pushPreviewBasis,
+              // Cycle 126 — cf. `createReplyNotification` : la clé de protection
+              // qualifie l'aperçu que ce lot vient de recevoir.
+              notificationLocKey,
             },
             memberIds
           )
@@ -461,7 +628,15 @@ export async function notifyMessageRecipients(params: {
           messagePreview: notificationPreviewForPush,
           encryptedContent: message.encryptedContent || undefined,
           notificationLocKey,
+          // La transcription d'un vocal n'est PAS `Message.content` : ses
+          // traductions vivent sur `MessageAttachment.translations`. Le cycle 122
+          // s'en tenait à ne RIEN substituer ; le cycle 123 lui donne sa propre
+          // source, et la bannière d'un vocal descend enfin le Prisme.
+          previewBasis: pushPreviewBasis,
           ...attachmentInfo,
+          // Cycle 128 — les candidates de PISTE. L'élection est par lecteur, et
+          // elle suit la langue du texte SERVI : cf. `servedAttachmentMedia`.
+          attachmentTracks,
         })
       ));
 

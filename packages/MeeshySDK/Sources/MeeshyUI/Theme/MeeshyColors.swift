@@ -16,6 +16,20 @@ public nonisolated struct MeeshyColors {
     public static let indigo900 = Color(hex: "312E81")
     public static let indigo950 = Color(hex: "1E1B4B")
 
+    // MARK: - Plateau du composer (O6)
+    //
+    // Les deux teintes que la rampe indigo ne couvrait pas. Le plateau du
+    // composer est un fond CHOISI par l'auteur, et un fond choisi doit rester
+    // un jeton : un `Color.black` local dans la vue échapperait au design
+    // system et aux mesures de contraste qui le gardent lisible.
+    //
+    // `violet950` vient de la même provenance que la rampe indigo (Tailwind),
+    // pour que les trois teintes se lisent comme une famille et non comme trois
+    // décisions séparées.
+
+    public static let plateauNoir = Color(hex: "000000")
+    public static let violet950 = Color(hex: "2E1065")
+
     // MARK: - Additional Brand Accents
 
     public static let purple500 = Color(hex: "A855F7")
@@ -124,6 +138,16 @@ public nonisolated struct MeeshyColors {
     /// Verrouillé par `TextMutedContrastAATests` (`MeeshyTests`).
     public static func textMuted(isDark: Bool) -> Color {
         isDark ? indigo300.opacity(0.7) : indigo700.opacity(0.8)
+    }
+
+    /// Fond PRIMAIRE de l'app — le blanc/noir sur lequel les écrans plats
+    /// posent leur contenu. Il vivait uniquement en propriété d'instance de
+    /// `ThemeManager` (qui délègue désormais ici, comme il le fait déjà pour
+    /// `backgroundSecondary`) : une vue sans accès au thème observé, mais qui
+    /// connaît son `isDark`, ne pouvait pas le nommer sans recopier les deux
+    /// hexadécimaux.
+    public static func backgroundPrimary(isDark: Bool) -> Color {
+        isDark ? Color(hex: "09090B") : Color(hex: "FFFFFF")
     }
 
     public static func backgroundSecondary(isDark: Bool) -> Color {

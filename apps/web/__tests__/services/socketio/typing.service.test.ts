@@ -287,6 +287,75 @@ describe('TypingService', () => {
     });
   });
 
+  // ─── clearTypingForUser (un message rétracte la frappe) ─────────────────────
+
+  describe('clearTypingForUser', () => {
+    it('removes the typer immediately — no 3s linger', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTyping(listener);
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      listener.mockClear();
+
+      service.clearTypingForUser('conv-1', 'u1');
+
+      expect(service.getTypingUsers('conv-1')).toEqual([]);
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationId: 'conv-1', userId: 'u1', isTyping: false })
+      );
+    });
+
+    it('cancels a linger already in flight so the stop is not re-emitted', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTyping(listener);
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      socket._trigger('typing:stop', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      listener.mockClear();
+
+      service.clearTypingForUser('conv-1', 'u1');
+      jest.advanceTimersByTime(15000);
+
+      const stops = listener.mock.calls.filter(([e]) => e.isTyping === false);
+      expect(stops).toHaveLength(1);
+    });
+
+    it('leaves the other typers of the conversation untouched', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      socket._trigger('typing:start', makeEvent({ userId: 'u2', conversationId: 'conv-1' }));
+
+      service.clearTypingForUser('conv-1', 'u1');
+
+      expect(service.getTypingUsers('conv-1')).toEqual(['u2']);
+    });
+
+    it('does not throw for a user who was never typing', () => {
+      expect(() => service.clearTypingForUser('conv-1', 'ghost')).not.toThrow();
+    });
+
+    it('keeps the 3s linger for a plain typing:stop — a PAUSE is not a send', () => {
+      const socket = makeSocket();
+      service.setupEventListeners(socket as any);
+      const listener = jest.fn();
+      service.onTyping(listener);
+      socket._trigger('typing:start', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      listener.mockClear();
+
+      socket._trigger('typing:stop', makeEvent({ userId: 'u1', conversationId: 'conv-1' }));
+      jest.advanceTimersByTime(2999);
+      expect(listener).not.toHaveBeenCalled();
+
+      jest.advanceTimersByTime(1);
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'u1', isTyping: false })
+      );
+    });
+  });
+
   // ─── clearConversationTypingState ───────────────────────────────────────────
 
   describe('clearConversationTypingState', () => {

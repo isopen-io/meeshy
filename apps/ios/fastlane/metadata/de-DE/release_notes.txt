@@ -1,0 +1,7 @@
+Neu: „In der Nähe“
+• Entdecke Posts rund um dich auf einer Karte – als Dichte, Punkte oder Liste, im Radius deiner Wahl
+• Mach deine eigenen Posts in der Nähe auffindbar, so genau wie DU es willst: exakt, Viertel, Stadt oder Region – nie genauer als deine Wahl
+• „Was ist hier in der Nähe?“ von jedem Ort aus, der auf einem Post angezeigt wird
+
+Außerdem
+• Mehr Stabilität: ein Absturz beim Öffnen von „In der Nähe“ ist behoben

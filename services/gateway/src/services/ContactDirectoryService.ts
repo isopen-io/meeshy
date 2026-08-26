@@ -30,6 +30,12 @@ const MAX_USERNAME_CLAUSES = 200;
 /** Écritures d'upsert menées de front pendant une synchronisation. */
 const UPSERT_CONCURRENCY = 25;
 const MAX_PAGE_SIZE = 200;
+/**
+ * Un filigrane (`syncStartedAt`) plus vieux que ceci n'autorise plus la purge
+ * du lot final — une synchronisation reprise après une longue interruption
+ * ne doit pas purger sur la foi d'une horloge de départ obsolète.
+ */
+const MAX_WATERMARK_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type MatchedBy = 'phone' | 'email' | 'username';
 
@@ -181,18 +187,36 @@ export class ContactDirectoryService {
   /**
    * Synchronise le carnet : upsert idempotent sur `(ownerId, contactKey)`.
    *
-   * `mode: 'replace'` (synchronisation complète du carnet) purge les entrées
-   * absentes du lot ; `'merge'` (défaut) ne supprime jamais rien — un envoi
-   * partiel ne doit pas amputer le répertoire.
+   * Deux stratégies de purge, mutuellement exclusives :
+   *  - **historique** (ni `syncStartedAt` ni `isFinalBatch` fourni) :
+   *    `mode: 'replace'` purge les entrées absentes de CE lot unique
+   *    (`contactKey notIn`) ; `'merge'` (défaut) ne supprime jamais rien —
+   *    un envoi partiel ne doit pas amputer le répertoire. Adaptée à un
+   *    appel unique, non paginé.
+   *  - **par lots** (`syncStartedAt` et/ou `isFinalBatch` fourni) : la purge
+   *    `contactKey notIn` est structurellement incompatible avec plusieurs
+   *    requêtes successives pour un même carnet — chaque lot ne voit qu'une
+   *    tranche. `mode` est alors ignoré pour la purge : aucun lot
+   *    intermédiaire ne supprime rien, et seul le lot `isFinalBatch: true`
+   *    purge — par FILIGRANE (`lastSyncedAt < syncStartedAt`, ou à défaut
+   *    `receivedAt` pour un lot unique et final), déjà posé par chaque
+   *    upsert des DEUX stratégies. Un filigrane plus vieux que 24h est
+   *    ignoré (`removed: 0`).
    */
   async sync(options: {
     ownerId: string;
     contacts: NormalizedContact[];
     mode?: SyncMode;
+    /** Filigrane client, identique sur tous les lots d'une même synchronisation. */
+    syncStartedAt?: Date;
+    /** `true` sur le dernier lot d'une synchronisation par lots. */
+    isFinalBatch?: boolean;
+    /** Horloge serveur prise à la réception de la requête, avant tout upsert. */
+    receivedAt?: Date;
   }): Promise<{ synced: number; matched: number; removed: number }> {
-    const { ownerId, contacts, mode = 'merge' } = options;
+    const { ownerId, contacts, mode = 'merge', syncStartedAt, isFinalBatch, receivedAt = new Date() } = options;
     const matches = await this.match({ contacts, excludeUserId: ownerId });
-    const syncedAt = new Date();
+    const syncedAt = receivedAt;
 
     await inBatches(contacts, UPSERT_CONCURRENCY, async (contact) => {
       const match = matches.get(contact.contactKey);
@@ -216,8 +240,27 @@ export class ContactDirectoryService {
       });
     });
 
+    const batched = syncStartedAt !== undefined || isFinalBatch !== undefined;
     let removed = 0;
-    if (mode === 'replace') {
+
+    if (batched) {
+      if (isFinalBatch === true) {
+        // Un filigrane demandé APRÈS `receivedAt` (horloge client en avance,
+        // ou dérive NTP entre le premier et le dernier lot) doit être
+        // ramené à `receivedAt` : au-delà, `watermarkAgeMs` deviendrait
+        // négatif et la purge `lastSyncedAt < watermark` engloutirait les
+        // upserts que CE lot vient d'estampiller — tous à `receivedAt`.
+        const requested = syncStartedAt ?? receivedAt;
+        const watermark = requested.getTime() > receivedAt.getTime() ? receivedAt : requested;
+        const watermarkAgeMs = receivedAt.getTime() - watermark.getTime();
+        if (watermarkAgeMs <= MAX_WATERMARK_AGE_MS) {
+          const deletion = await this.prisma.userContact.deleteMany({
+            where: { ownerId, lastSyncedAt: { lt: watermark } },
+          });
+          removed = deletion.count;
+        }
+      }
+    } else if (mode === 'replace') {
       const deletion = await this.prisma.userContact.deleteMany({
         where: { ownerId, contactKey: { notIn: contacts.map((contact) => contact.contactKey) } },
       });
@@ -229,7 +272,7 @@ export class ContactDirectoryService {
       synced: contacts.length,
       matched: matches.size,
       removed,
-      mode,
+      mode: batched ? (isFinalBatch === true ? 'watermark-final' : 'watermark-batch') : mode,
     });
 
     return { synced: contacts.length, matched: matches.size, removed };

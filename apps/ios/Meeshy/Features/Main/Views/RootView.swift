@@ -174,6 +174,11 @@ struct CallPresentationLayer: ViewModifier {
 /// jamais à cause de lui. Les vues enfants observent le VM via `@EnvironmentObject`.
 @MainActor
 final class ConversationListVMOwner: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     let viewModel = ConversationListViewModel()
 }
 
@@ -267,6 +272,11 @@ struct RootView: View {
     /// question posée.
     @State private var shareLinkChoice: ShareLinkIdentityChoice?
 
+    /// C4b — rupture cliente. Deux entrées (le 426 vécu, le plancher lu au
+    /// démarrage), une porte qui ne se referme pas. `iPadRootView` porte le
+    /// jumeau : l'iPad a sa racine PROPRE et n'hérite rien d'ici.
+    @StateObject private var upgradeGate = UpgradeGateController()
+
     // Helper to get ButtonPosition for menu ladder alignment
     private var menuButtonPos: ButtonPosition {
         let parts = menuButtonPosition.split(separator: ",")
@@ -337,6 +347,9 @@ struct RootView: View {
                             .navigationBarHidden(true)
                     case .peopleDiscovery(let initialTab):
                         PeopleDiscoveryView(initialTab: initialTab)
+                            .navigationBarHidden(true)
+                    case .nearbyDiscovery(let initialCoordinate):
+                        NearbyDiscoveryView(initialCoordinate: initialCoordinate?.coordinate)
                             .navigationBarHidden(true)
                     case .communityList:
                         CommunityListView(
@@ -615,14 +628,45 @@ struct RootView: View {
                 onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = choice.identifier }
             )
         }
+        // Lot 4.7 — la republication d'un mood passe par le MEUBLE. La porte
+        // PORTE son format (`sourceFormat: .status`) au lieu de le deviner : une
+        // entrée de bulle de mood EST un statut par construction, et
+        // `RepostTargeting` n'entre pas ici — son rôle est de lire le type d'une
+        // CARTE de fil, pas d'un type déjà connu.
+        //
+        // `repostOfId` n'est pas dans la graine : la porte le porte déjà
+        // (`ofPostId:`), et le meuble le lit par `ComposerOrigin.repostedPostId`.
+        //
+        // CE QUE CE SITE LIVRE. La loi 5 est câblée des DEUX côtés depuis le
+        // 2026-08-25. Le MIROIR repart en `STATUS`, avec son emoji, sa phrase
+        // et son attribution ; l'ANCRAGE — le second chip « Post », offert par
+        // `offeredFormats == [.status, .post]` — atteint un écran : le plateau
+        // est monté par le `body` du meuble sous `ComposerFormatFanPlacement`,
+        // et la porte du mood aiguille sur le format vers
+        // `StatusViewModel.anchorStatusAsPost` (`POST /posts/:id/repost`).
+        // Gardes : `ComposerDocumentSurfaceTests`
+        // `.test_leRepostDUnMood_offreLAncrage_ET_unEcranLePeint` et
+        // `ComposerMoodSurfaceTests`
+        // `.test_laPorteDuMood_aiguilleSurLeFORMAT_etRefuseLesDeuxQuElleNeSaitPasPublier`.
+        //
+        // CE QU'IL NE LIVRE TOUJOURS PAS : le plafond d'ÉLARGISSEMENT de la loi
+        // 10. Ce site ne sème pas `visibility:` dans sa graine, et c'est
+        // DÉLIBÉRÉ — `APIPost.toStatusEntry()` ne transmet pas l'audience de
+        // l'original, si bien qu'un semis ne sèmerait qu'un `nil` et que
+        // `StoryRepostAudience.allowed(fromRawValue: nil)` ne concéderait que
+        // `[.private]` : un sélecteur à UN chip. Le trou pèse identiquement sur
+        // le ruban du mood, peint ici depuis le lot 4.6 ; l'ancrage n'en ajoute
+        // aucun. Levée : la ligne de `StoryModels.swift`, PUIS le semis.
         .sheet(item: $republishStatusEntry) { entry in
-            StatusComposerView(
-                viewModel: statusViewModel,
-                initialEmoji: entry.moodEmoji,
-                initialText: entry.content,
-                viaUsername: entry.username,
-                repostOfId: entry.id,
-                repostAudioUrl: entry.audioUrl
+            MoodComposerDoor(
+                intent: ComposerIntent(origin: .repost(ofPostId: entry.id, sourceFormat: .status)),
+                seed: ComposerMoodSeed(
+                    emoji: entry.moodEmoji,
+                    text: entry.content,
+                    viaUsername: entry.username,
+                    audioUrl: entry.audioUrl
+                ),
+                viewModel: statusViewModel
             )
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
@@ -783,11 +827,16 @@ struct RootView: View {
             // guaranteed-fail call.
             StoryPublishService.shared.setExecutor(storyViewModel)
 
+            // C4b — plancher de version lu au démarrage. Best-effort et
+            // SILENCIEUX : sans lui, un binaire périmé qui ne fait que LIRE ne
+            // rencontre jamais de 426 et se croit à jour indéfiniment.
+            // Parallélisé comme les autres : il ne doit rien retenir.
+            async let versionFloor: Void = upgradeGate.checkFloor()
             async let storiesLoad: Void = storyViewModel.loadStories()
             async let statusesLoad: Void = statusViewModel.loadStatuses()
             async let conversationsLoad: Void = conversationViewModel.loadConversations()
             async let unreadRefresh: Void = notificationManager.refreshUnreadCount()
-            _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh)
+            _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
         }
         .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
             StoryViewerContainer(
@@ -866,7 +915,9 @@ struct RootView: View {
                     onItemTap: handleSyncPillTap,
                     activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id }
                 )
-                .padding(.top, router.currentConversationId != nil ? 72 : 0)
+                .padding(.top, ConnectionBanner.liftedTopPadding(
+                    base: router.currentConversationId != nil ? 72 : 0
+                ))
             }
         }
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
@@ -1090,6 +1141,19 @@ struct RootView: View {
         // to process.
         .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
             handleDeepLink(newValue)
+        }
+        // C4b — la rupture. Posée EN DERNIER dans la chaîne, donc la plus
+        // extérieure : elle doit recouvrir les feuilles et les covers déjà
+        // montés, pas passer derrière eux.
+        //
+        // Le binding est CONSTANT, et c'est le point : `UpgradeGateController`
+        // n'expose aucun moyen de repasser à `nil`, et un `fullScreenCover`
+        // piloté par une constante n'a aucun geste de fermeture. La porte est
+        // une rupture, pas un avertissement.
+        .fullScreenCover(isPresented: .constant(upgradeGate.isBlocked)) {
+            if let requirement = upgradeGate.requirement {
+                UpgradeGateView(requirement: requirement)
+            }
         }
     }
 
@@ -2084,7 +2148,7 @@ struct RootView: View {
 
             // Calculate button position on screen
             let minEdgePadding: CGFloat = MeeshySpacing.xl
-            let topSafeZone: CGFloat = 50
+            let topSafeZone: CGFloat = FloatingButtonSafeZone.top
             let bottomSafeZone: CGFloat = isScrollingDown ? 50 : 110
             let buttonSize: CGFloat = 52
             let halfButton = buttonSize / 2
@@ -2122,6 +2186,12 @@ struct RootView: View {
                     label: entry.label,
                     hint: String(localized: "a11y.menu.item.hint", defaultValue: "Ouvrir cette section", bundle: .main),
                     badge: menuBadgeCount(entry.badge),
+                    // L'échelle est montée EN PERMANENCE (opacité 0, zIndex −1
+                    // menu fermé) pour que le ressort d'ouverture parte d'un
+                    // état existant : le glow/pulse ne doit vivre que menu
+                    // OUVERT — six ombres re-rasterisées par frame en continu
+                    // derrière la liste, sinon (audit chauffe 2026-08-26).
+                    isGlowEnabled: showMenu,
                     action: { openMenuEntry(entry) }
                 )
                 .position(x: menuX, y: itemY)
@@ -2261,13 +2331,14 @@ private struct ReelsRevealMaskModifier: ViewModifier {
 /// to a `UnitPoint` (0-1 fraction of the full screen rect) for the reveal focus.
 ///
 /// Mirrors `FreeFloatingButton.screenPosition(for:)` EXACTLY (same constants:
-/// buttonSize 52, minEdgePadding 20, topSafeZone 50, bottomSafeZone 110/50) so
+/// buttonSize 52, minEdgePadding 20, topSafeZone `FloatingButtonSafeZone.top`,
+/// bottomSafeZone 110/50) so
 /// the disc is born at the button's true center, not a naive linear corner map.
 /// Kept as a standalone helper so the math is unit-testable without SwiftUI.
 enum FeedButtonAnchor {
     static let buttonSize: CGFloat = 52
     static let minEdgePadding: CGFloat = 20
-    static let topSafeZone: CGFloat = 50
+    static let topSafeZone: CGFloat = FloatingButtonSafeZone.top
     static let bottomSafeZoneWithSearch: CGFloat = 110
     static let bottomSafeZoneNoSearch: CGFloat = 50
 

@@ -274,7 +274,9 @@ struct ConversationPreviewView: View {
     private var headerBackground: some View {
         if let bannerURL {
             ZStack {
-                CachedAsyncImage(url: bannerURL.absoluteString) {
+                // Carte fixée à 340pt de large par le call site — inutile de
+                // décoder la bannière au plafond plein format 1200 px.
+                CachedAsyncImage(url: bannerURL.absoluteString, targetSize: CGSize(width: 340, height: 160)) {
                     LinearGradient(
                         colors: [
                             Color(hex: accentColor).opacity(0.6),
@@ -451,13 +453,13 @@ struct ThemedCommunityCard: View, Equatable {
                     HStack(spacing: 2) {
                         Image(systemName: "person.2.fill")
                             .font(.caption2)
-                        Text(formatCount(community.memberCount))
+                        Text(CompactCountLabel.text(community.memberCount))
                             .font(.caption2.weight(.semibold))
                     }
                     HStack(spacing: 2) {
                         Image(systemName: "bubble.left.fill")
                             .font(.caption2)
-                        Text(formatCount(community.conversationCount))
+                        Text(CompactCountLabel.text(community.conversationCount))
                             .font(.caption2.weight(.semibold))
                     }
                 }
@@ -488,15 +490,6 @@ struct ThemedCommunityCard: View, Equatable {
             + "\(community.conversationCount) " + String(localized: "tab.conversations", defaultValue: "Conversations")
         )
         .accessibilityAddTraits(.isButton)
-    }
-
-    private func formatCount(_ count: Int) -> String {
-        if count >= 1000000 {
-            return String(format: "%.1fM", Double(count) / 1000000.0)
-        } else if count >= 1000 {
-            return String(format: "%.1fk", Double(count) / 1000.0)
-        }
-        return "\(count)"
     }
 }
 

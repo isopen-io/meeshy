@@ -70,6 +70,12 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -80,6 +86,7 @@ jest.mock('../../../../utils/sanitize.js', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../../routes/posts/core';
+import { registerClientMutationIdHook } from '../../../../middleware/clientMutationId';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -129,6 +136,12 @@ async function buildApp(opts: {
       broadcastStatusDeleted: jest.fn<any>().mockResolvedValue(undefined),
     });
   }
+
+  // Topologie réelle : le hook cmid est enregistré AVANT les routes, comme
+  // dans `server.ts` — nécessaire pour les tests d'écho U1 STORY/STATUS
+  // ci-dessous. Sans header envoyé, il ne fait rien (aucun risque pour les
+  // suites existantes).
+  registerClientMutationIdHook(app);
 
   registerCoreRoutes(app, prisma, requiredAuth);
   await app.ready();
@@ -1556,5 +1569,67 @@ describe('DELETE /posts/:postId — broadcastPostDeleted rejects (line 324)', ()
     expect(res.statusCode).toBe(200);
     await new Promise((resolve) => setImmediate(resolve));
     await postApp.close();
+  });
+});
+
+// ─── POST /posts — U1 parity: cmid echoed to STORY/STATUS broadcasts ────────
+//
+// `broadcastPostCreated` échoue déjà `request.clientMutationId` en 3e
+// argument (U1) pour qu'un auteur hors-ligne réconcilie son post optimiste
+// avec le post serveur. Les branches STORY/STATUS de cette même route ne le
+// faisaient pas — un repost `POST /posts { repostOfId, type: 'STORY' }`
+// créé hors-ligne ne pouvait jamais réconcilier. Lot 7, tâche 7.1.
+
+const CMID = 'cmid_550e8400-e29b-41d4-a716-446655440042';
+
+describe('POST /posts — echoes clientMutationId to broadcastStoryCreated (U1 parity)', () => {
+  it('passes the X-Client-Mutation-Id header as the 3rd argument for type STORY', async () => {
+    mockCreatePost.mockResolvedValueOnce({ id: 'story-cmid-1', content: 'My story', type: 'STORY', visibility: 'FRIENDS', createdAt: new Date() });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/posts',
+      headers: { 'x-client-mutation-id': CMID },
+      payload: { content: 'My story', type: 'STORY' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const socialEvents = (app as any).socialEvents;
+    expect(socialEvents.broadcastStoryCreated).toHaveBeenCalledTimes(1);
+    expect(socialEvents.broadcastStoryCreated.mock.calls[0][2]).toBe(CMID);
+    await app.close();
+  });
+
+  it('passes undefined (no header) — legacy behaviour unchanged', async () => {
+    mockCreatePost.mockResolvedValueOnce({ id: 'story-nocmid-1', content: 'My story', type: 'STORY', visibility: 'FRIENDS', createdAt: new Date() });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({ method: 'POST', url: '/posts', payload: { content: 'My story', type: 'STORY' } });
+
+    expect(res.statusCode).toBe(201);
+    const socialEvents = (app as any).socialEvents;
+    expect(socialEvents.broadcastStoryCreated.mock.calls[0][2]).toBeUndefined();
+    await app.close();
+  });
+});
+
+describe('POST /posts — echoes clientMutationId to broadcastStatusCreated (U1 parity)', () => {
+  it('passes the X-Client-Mutation-Id header as the 3rd argument for type STATUS', async () => {
+    mockCreatePost.mockResolvedValueOnce({ id: 'status-cmid-1', content: 'Feeling good', type: 'STATUS', visibility: 'PUBLIC', createdAt: new Date() });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/posts',
+      headers: { 'x-client-mutation-id': CMID },
+      payload: { content: 'Feeling good', type: 'STATUS' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    const socialEvents = (app as any).socialEvents;
+    expect(socialEvents.broadcastStatusCreated).toHaveBeenCalledTimes(1);
+    expect(socialEvents.broadcastStatusCreated.mock.calls[0][2]).toBe(CMID);
+    await app.close();
   });
 });

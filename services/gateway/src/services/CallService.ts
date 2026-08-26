@@ -28,6 +28,8 @@ import {
   type CallHistoryPeer,
   type CallHistoryRow
 } from './callHistory';
+import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 
 /** Call journal sliding window: 3 months. */
 const CALL_HISTORY_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
@@ -44,6 +46,26 @@ const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.rejected,
   CallStatus.failed
 ];
+
+/**
+ * Thrown by `joinCallAttempt` when the call is already in a terminal state.
+ * Carries the call's REAL `endReason` (Prisma `CallSession.endReason`) on top
+ * of the usual `CODE: message` string `parseCallHandlerError` still parses
+ * from `.message` (unchanged, so every existing `CALL_ENDED` gate keeps
+ * working unmodified) — `CallEventsHandler`'s `call:join` catch block reads
+ * `.endReason` off the instance to enrich the ack. Without this, a client
+ * rejoining after a reconnect (`rejoinActiveCallAfterReconnect`, web) cannot
+ * tell a benign hangup (`completed`, `missed`, `rejected`) from a transient
+ * failure the reconnect grace window lost the race against
+ * (`connectionLost`, `heartbeatTimeout`) — the one case where offering the
+ * caller a "Retry" affordance is correct.
+ */
+export class CallAlreadyEndedError extends Error {
+  constructor(readonly endReason: CallEndReason) {
+    super(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
+    this.name = 'CallAlreadyEndedError';
+  }
+}
 
 const ACTIVE_STATUSES: CallStatus[] = [
   CallStatus.initiated,
@@ -1399,8 +1421,8 @@ export class CallService {
 
     // Validate call is not in a terminal state (ended/missed/rejected/failed)
     if (TERMINAL_STATUSES.includes(call.status)) {
-      logger.error('❌ Call is in terminal state', { callId, status: call.status });
-      throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
+      logger.error('❌ Call is in terminal state', { callId, status: call.status, endReason: call.endReason });
+      throw new CallAlreadyEndedError(call.endReason ?? CallEndReason.completed);
     }
 
     // Check if user is participant of conversation. See the matching guard in
@@ -1608,6 +1630,20 @@ export class CallService {
       if (!idemIsDirect && idemRemaining > 1) {
         // Group call with others still active and this leaver already gone:
         // nothing to end. Return the live session unchanged.
+        //
+        // Vague 157 — this is the third branch that resolves a departed
+        // participant without ending the call (siblings: the terminal-guard
+        // branch below and the main-branch mid-call-leave `else`), and until
+        // now the only one that skipped the per-participant in-memory
+        // cleanup they both do. Reachable in production via
+        // CallEventsHandler.forceCleanupParticipationAfterLeaveFailure (which
+        // stamps leftAt directly, bypassing this method's normal cleanup) or
+        // a raced/duplicate call:leave. Without this, the departed
+        // participant's heartbeat entry lingers in `this.heartbeats` for the
+        // rest of the call, inflating CallCleanupService's stale-vs-live
+        // ratio and risking a force-end of a call still legitimately active.
+        this.clearParticipantBackgrounded(callId, participantId);
+        this.heartbeats.get(callId)?.delete(participantId);
         logger.info('ℹ️ Idempotent leave — leaver gone, group call continues', { callId, userId });
         return this.getCallSession(callId);
       }
@@ -2275,12 +2311,20 @@ export class CallService {
    * call participants — so a missed outgoing call (callee never joined) still
    * shows who was dialed. Group calls carry no peer (the conversation
    * name/avatar identifies them).
+   *
+   * Peer presence (`CallHistoryPeer.isOnline`) is gated STRICT (directive
+   * produit 2026-08-25) — `options.viewer` (the caller themselves, from
+   * `viewerFromRequest`) must be the peer, an ADMIN/BIGBOSS, or their accepted
+   * friend, else `isOnline` reads `false`. Being the conversation's other
+   * member is what makes them a *peer* in this journal, never what makes them
+   * *visible* — the two used to be conflated by loading `isOnline` raw off the
+   * `Participant.user` roster query.
    */
   async listHistory(
     userId: string,
-    options: { limit: number; cursor?: string; filter: 'all' | 'missed' }
+    options: { limit: number; cursor?: string; filter: 'all' | 'missed'; viewer: PresenceViewer }
   ): Promise<{ items: CallHistoryItem[]; hasMore: boolean; nextCursor?: string }> {
-    const { limit, cursor, filter } = options;
+    const { limit, cursor, filter, viewer } = options;
     const windowStart = new Date(Date.now() - CALL_HISTORY_WINDOW_MS);
 
     const where: Prisma.CallSessionWhereInput = {
@@ -2367,6 +2411,20 @@ export class CallService {
             isOnline: m.user.isOnline
           });
         }
+      }
+    }
+
+    // Gate peer presence STRICT — one batched resolution for the whole page,
+    // keyed the same way `resolveForTargets` is everywhere else. `isOnline` is
+    // NON-nullable on the wire (`CallHistoryPeer`, mirrored by the SDK's
+    // `APICallRecord.peer.isOnline: Bool`), so `applyPresenceVisibilityAsOffline`
+    // — not `applyPresenceVisibility` — keeps the key and folds "hidden" to
+    // `false` rather than `null`.
+    if (peerByConv.size > 0) {
+      const peerUserIds = Array.from(new Set(Array.from(peerByConv.values(), (p) => p.userId)));
+      const visibility = await getPresenceVisibilityService(this.prisma).resolveForTargets(viewer, peerUserIds);
+      for (const [conversationId, peer] of peerByConv) {
+        peerByConv.set(conversationId, applyPresenceVisibilityAsOffline(peer, visibility.get(peer.userId)));
       }
     }
 

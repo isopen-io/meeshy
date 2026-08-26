@@ -55,6 +55,24 @@ struct LentilleConversationRow: View {
     /// Tap sur le bouton Rejoindre — jamais invoqué si `liveCall.joined`
     /// (pas de bouton, contrat §3.3 « rien de plus »).
     var onJoinLiveCall: (() -> Void)? = nil
+    /// MAGNIFICATION EN PLACE (2026-08-23) — `nil` au repos, non-`nil` sur la
+    /// rangée élue. La rangée ne devient pas une AUTRE vue : elle reste
+    /// elle-même et gagne trois choses, sans qu'aucune de ses features ne
+    /// soit à recopier ailleurs (directive produit : « mettre à jour la
+    /// rangée cible avec des données et un style adéquats afin qu'elle hérite
+    /// des features du mode normal »).
+    ///
+    /// 1. Une ligne AU-DESSUS du titre : la catégorie (actionnable) puis les
+    ///    étiquettes NOMMÉES — points colorés de 6 px au repos.
+    /// 2. L'aperçu coule sur DEUX lignes au lieu d'une.
+    /// 3. La ligne de date — vide à gauche au repos — accueille la pastille
+    ///    de mode de lecture et l'effectif (tous deux actionnables), et la
+    ///    date passe du relatif court (« 5d ») au complet (« Lundi à 17:36 »).
+    ///
+    /// Aucune bordure, aucun fond, aucun agrandissement : « sans que
+    /// l'utilisateur ne sente un changement si ce n'est le surplus
+    /// d'information, l'objet reste le même ».
+    var magnification: LentilleMagnification? = nil
 
     private var accentColorHex: String { conversation.accentColor }
     private var accent: Color { Color(hex: accentColorHex) }
@@ -108,18 +126,44 @@ struct LentilleConversationRow: View {
         typingUsername != nil ? .online : presenceState
     }
 
+    private var isMagnified: Bool { magnification != nil }
+
     var body: some View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             avatarView
 
             VStack(alignment: .leading, spacing: 2) {
+                if let magnification {
+                    LentilleMagnifiedTopLine(
+                        conversation: conversation,
+                        magnification: magnification,
+                        isDark: isDark
+                    )
+                }
                 headerLine
                 line2
+                dateLine
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, LentilleMetrics.Row.paddingHorizontal)
         .padding(.vertical, LentilleMetrics.Row.paddingVertical)
+        // DEUX hauteurs, et c'est la clé du « zéro relayout » (R2).
+        //
+        // 1. Hauteur VISUELLE — 100 en magnification, 84 au repos. C'est la
+        //    place que le contenu occupe à l'écran : la 4ᵉ ligne (catégorie +
+        //    étiquettes) et l'aperçu qui coule sur deux lignes ont besoin des
+        //    16 pt de plus.
+        // 2. Hauteur de LAYOUT — `Row.height`, TOUJOURS. C'est elle que la
+        //    `LazyVStack` mesure. Sans ce second cadre, magnifier une rangée
+        //    poussait de 16 pt tout ce qui la suit, à chaque changement d'élu,
+        //    en pleine inertie de défilement : la liste sautait sous le doigt.
+        //
+        // SwiftUI ne rogne pas un enfant plus grand que son cadre : la
+        // magnification déborde donc de 8 pt de chaque côté, exactement dans
+        // les marges que la respiration (`FocusCard.breathing`, la même valeur)
+        // vient d'ouvrir entre l'élue et ses voisines.
+        .frame(height: isMagnified ? LentilleMetrics.FocusInline.height : LentilleMetrics.Row.height)
         .frame(height: LentilleMetrics.Row.height)
         .opacity(rowOpacity)
         .scaleEffect(isDragging ? 1.02 : 1.0)
@@ -272,7 +316,12 @@ struct LentilleConversationRow: View {
                     .accessibilityHidden(true)
             }
 
-            tagPastilles
+            // Au repos, les étiquettes sont des points colorés ici. En
+            // magnification elles montent NOMMÉES sur la ligne du haut : les
+            // peindre deux fois dirait deux fois la même chose.
+            if !isMagnified {
+                tagPastilles
+            }
 
             // behaviour-matrix:L13 — appel en cours (Scène) : « … remplace
             // toute autre info à droite » (contrat §3.3). `liveCall == nil`
@@ -286,24 +335,109 @@ struct LentilleConversationRow: View {
                     joinLiveCallButton
                 }
             } else {
-                Text("·")
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(textMuted)
-
-                LentilleRowTimestamp(date: conversation.lastMessageAt)
-                    .font(LentilleMetrics.Time.font)
-                    .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
-                    .layoutPriority(1)
-
+                // La date a QUITTÉ cette ligne le 2026-08-22 : elle vit seule,
+                // en bas à droite (`dateLine`). Le nom possède donc toute la
+                // ligne, et l'aperçu commence à la même abscisse que lui.
                 Spacer(minLength: 0)
 
-                if conversation.userState.hasPendingSync {
-                    Image(systemName: "arrow.triangle.2.circlepath")
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(accent.opacity(0.7))
-                        .accessibilityHidden(true)
+                // Pile de non-lus — MÊME place et MÊME rouge qu'en magnification
+                // (retour produit 2026-08-22, soir : « enlever l'effectif sur les
+                // rows non magnifiées, mais mettre le chip rouge si messages non
+                // lus »). La loupe n'ajoute que l'effectif et la précision de la
+                // date : elle agrandit, elle ne recompose pas.
+                //
+                // **Supersession assumée du contrat §LWS-7** (« aucun badge
+                // chiffré nulle part », vol.5 « badge rouge 99+ supprimé ») :
+                // cette règle datait d'un rang où le non-lu se disait par le seul
+                // point accent du pont ✦. Or le pont n'apparaît QUE si la
+                // conversation en a un — une conversation non lue SANS pont ne
+                // disait donc rien du tout. Le chip, lui, parle toujours.
+                //
+                // Le chrome vient de l'ATOME PARTAGÉ, jamais d'une copie locale :
+                // la matrice L06 l'exige nommément (« via l'atome partagé
+                // UnreadCountBadge »), et c'est ce câblage qu'une fusion avait
+                // perdu — l'atome existait, testé, sans un seul consommateur.
+                if conversation.userState.unreadCount > 0 {
+                    UnreadCountBadge(count: conversation.userState.unreadCount, isDark: isDark)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
             }
+        }
+    }
+
+    /// Troisième ligne — la date SEULE, poussée à droite (retour produit
+    /// 2026-08-22 : « en bas sur une nouvelle ligne à droite mettre la date ;
+    /// la date gardera cette place même en magnificence »).
+    ///
+    /// **Le glyphe d'outbox ⟳ ne la précède plus** (behaviour-matrix L09,
+    /// amendement du lot 2, CONFIRMÉ par le porteur produit le 2026-08-23).
+    /// L'outbox continue de renvoyer toute seule — le retrait ne touche que
+    /// l'AFFORDANCE de liste, jamais le mécanisme. Une rangée n'est pas le bon
+    /// endroit pour dire l'état d'un envoi : elle le disait pour toutes les
+    /// conversations à la fois, sans rien offrir à faire de cette information.
+    ///
+    /// `LentilleRowTimestamp` garde son `TimelineView` — l'horodatage relatif
+    /// doit ticker hors du portillon `.equatable()`, qui n'a délibérément
+    /// aucune composante temporelle.
+    private var dateLine: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            // Le flanc GAUCHE de cette ligne est vide au repos — c'est le
+            // seul espace libre de la rangée, et c'est donc là que le surplus
+            // atterrit : « le pill de mode de lecture se met exactement où
+            // c'est actuellement, avec la chip du nombre d'utilisateurs qui
+            // doit être actionnable » (directive 2026-08-23).
+            if let magnification {
+                LentilleModePill(
+                    conversation: conversation,
+                    isAnonymous: magnification.isAnonymous,
+                    isDark: isDark
+                )
+                if conversation.type != .direct {
+                    LentilleMemberCountChip(
+                        conversation: conversation,
+                        onShowParticipants: magnification.onShowParticipants
+                    )
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            // Le glyphe d'outbox a quitté cette ligne en amont (amendement
+            // L09 : « l'outbox continue de renvoyer, sans affordance de
+            // liste ») — la magnification ne le rétablit pas. Elle n'ajoute
+            // que de la PRÉCISION à la date, jamais une affordance que le
+            // repos n'a pas.
+            timestampText
+                .font(LentilleMetrics.Time.font)
+                .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent, isDark: isDark))
+                .lineLimit(1)
+                .fixedSize()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// La date garde EXACTEMENT sa place en magnification (« la date gardera
+    /// cette place même en magnificence », 2026-08-22) : seule sa PRÉCISION
+    /// change — relatif court au repos, date complète sous la loupe, par la
+    /// même loi que le message en focus du fil.
+    ///
+    /// `LentilleRowTimestamp` garde son `TimelineView` au repos : l'horodatage
+    /// relatif doit ticker hors du portillon `.equatable()`, qui n'a
+    /// délibérément aucune composante temporelle. La date complète, elle, n'a
+    /// rien à ticker.
+    @ViewBuilder
+    private var timestampText: some View {
+        if let magnification {
+            Text(LentilleFocusCard.fullTimestamp(
+                lastMessageAt: conversation.lastMessageAt,
+                now: magnification.now,
+                calendar: .current,
+                locale: .current
+            ))
+        } else {
+            LentilleRowTimestamp(date: conversation.lastMessageAt)
         }
     }
 
@@ -504,17 +638,21 @@ struct LentilleConversationRow: View {
         let totalCount = conversation.lastMessageAttachmentCount
 
         if hasText {
+            // « Auteur : message » en UN SEUL texte (retour produit
+            // 2026-08-22 : « juste mettre l'auteur : message »), même
+            // grammaire que la carte de magnification — deux `Text` côte à
+            // côte dans un `HStack` laissaient l'auteur occuper sa propre
+            // colonne et tronquaient le message avant le bord.
             HStack(spacing: 4) {
                 if showEphemeralIcon {
                     Image(systemName: "timer")
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(accent)
                 }
-                senderLabel
-                Text(resolvedPreviewText)
+                (senderPrefix + Text(resolvedPreviewText)
                     .font(LentilleMetrics.Line2.font)
-                    .foregroundColor(textSecondary)
-                    .lineLimit(1)
+                    .foregroundColor(textSecondary))
+                    .lineLimit(isMagnified ? 2 : 1)
             }
         } else if let first = attachments.first {
             let display = AttachmentDisplay.make(for: first.mimeType)
@@ -555,6 +693,26 @@ struct LentilleConversationRow: View {
         }
     }
 
+    /// « Auteur : » — la règle, pure et partagée avec la carte de
+    /// magnification (`LentilleFocusCard.senderPrefix`), pour que les deux
+    /// vues ne puissent pas dériver l'une de l'autre. `nil` quand il n'y a
+    /// personne à nommer : le message commence alors la ligne.
+    nonisolated static func authorPrefix(name: String?) -> String? {
+        guard let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return "\(trimmed) : "
+    }
+
+    /// Le préfixe, en `Text` concaténable — teinté accent, comme la carte.
+    private var senderPrefix: Text {
+        guard let prefix = Self.authorPrefix(name: conversation.lastMessageSenderName) else { return Text("") }
+        return Text(prefix)
+            .font(MeeshyFont.relative(LentilleMetrics.Line2.size, weight: .semibold))
+            .foregroundColor(accent)
+    }
+
+    /// Conservé pour les branches qui INTERCALENT un glyphe entre l'auteur et
+    /// le libellé (pièce jointe, localisation, masqué, vue unique) : là, la
+    /// concaténation en un seul `Text` est impossible.
     private var senderLabel: some View {
         Group {
             if let name = conversation.lastMessageSenderName, !name.isEmpty {
@@ -597,7 +755,11 @@ extension LentilleConversationRow: @MainActor Equatable {
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
-        lhs.liveCall == rhs.liveCall
+        lhs.liveCall == rhs.liveCall &&
+        // La magnification décide de TROIS lignes de rendu : elle doit passer
+        // le portillon. Ses fermetures en sont exclues — comparées, elles le
+        // feraient rater à chaque passe de body de la liste.
+        LentilleMagnification.rendersIdentically(lhs.magnification, rhs.magnification)
     }
 }
 
@@ -693,8 +855,16 @@ private struct LentilleRowTimestamp: View {
     let date: Date
 
     var body: some View {
-        TimelineView(.periodic(from: date, by: 60)) { _ in
+        // Miroir de `ThemedConversationRow.RelativeTimestampText.liveTickWindow`
+        // (audit chauffe 2026-08-26) : le tick minute ne vit que tant que le
+        // libellé change à la minute ; une rangée ancienne rend un texte
+        // statique, rafraîchi au prochain passage de body de la liste.
+        if Date().timeIntervalSince(date) > 3600 {
             Text(RelativeTimeFormatter.shortString(for: date))
+        } else {
+            TimelineView(.periodic(from: date, by: 60)) { _ in
+                Text(RelativeTimeFormatter.shortString(for: date))
+            }
         }
     }
 }

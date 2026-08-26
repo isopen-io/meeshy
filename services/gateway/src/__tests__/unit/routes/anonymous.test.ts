@@ -189,6 +189,39 @@ describe('POST /anonymous/join/:linkId', () => {
     expect(res.json().success).toBe(true);
   });
 
+  // La porte compare le `body.language` du joignant (canonicalisé au boundary
+  // Zod via `normalizeLanguageForDedup`) aux `allowedLanguages` du lien. Ces
+  // dernières viennent de la BASE, configurées par le créateur du lien, et
+  // peuvent porter des tags de région, des codes 3-lettres ou une casse mixte.
+  // Un `.toLowerCase()` brut sur le côté lien les fait diverger de la forme
+  // canonique du joignant, et REFUSE un accès qui doit être accordé — c'est une
+  // décision d'accès, pas un défaut d'affichage.
+  it('admet un joignant `fr` quand le lien autorise la forme région-taguée `fr-FR`', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, allowedLanguages: ['fr-FR', 'de'] });
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('admet un joignant `fr` quand le lien autorise le code 3-lettres `fra`', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, allowedLanguages: ['fra'] });
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('admet un joignant région-tagué `fr-FR` quand le lien autorise `fr` (les deux côtés canonicalisés)', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, allowedLanguages: ['fr'] });
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr-FR' } });
+    expect(res.statusCode).toBe(201);
+  });
+
+  // CONTRE-ÉPREUVE : la canonicalisation des deux côtés ne doit JAMAIS ouvrir la
+  // porte à une langue réellement absente du lien.
+  it('refuse toujours un joignant `fr` quand le lien n’autorise que `en`/`de`, même après canonicalisation', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce({ ...mockShareLink, allowedLanguages: ['en-US', 'de'] });
+    const res = await app.inject({ method: 'POST', url: '/anonymous/join/' + LINK_ID, payload: { firstName: 'Bob', lastName: 'Smith', language: 'fr' } });
+    expect(res.statusCode).toBe(403);
+  });
+
   // Les neuf refus ci-dessus portent tous sur le LIEN. Aucun ne portait sur ce
   // vers quoi il POINTE — et une clôture n'éteint aucun lien de partage. Pour
   // un anonyme le dégât est terminal : ce participant EST son identité, il n'a

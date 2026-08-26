@@ -197,6 +197,91 @@ describe('MessagingService', () => {
     mockAnonymousCanSendViaLink.mockReturnValue(false);
   });
 
+  // ─── setTypingRetractor (un message rétracte la frappe) ───────────────────
+
+  describe('setTypingRetractor', () => {
+    it('retracts the sender typing indicator when their message arrives', () => {
+      const svc = new MessagingService();
+      const retract = jest.fn();
+      svc.setTypingRetractor(retract);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(
+        SERVER_EVENTS_MOCK.MESSAGE_NEW,
+        makeSocketMessage({ id: 'm-1', conversationId: 'conv-9', senderId: 'alice' })
+      );
+
+      expect(retract).toHaveBeenCalledWith('conv-9', 'alice');
+    });
+
+    it('reads the sender from the nested sender object when present', () => {
+      const svc = new MessagingService();
+      const retract = jest.fn();
+      svc.setTypingRetractor(retract);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(
+        SERVER_EVENTS_MOCK.MESSAGE_NEW,
+        makeSocketMessage({ id: 'm-2', conversationId: 'conv-9', sender: { userId: 'bob' } })
+      );
+
+      expect(retract).toHaveBeenCalledWith('conv-9', 'bob');
+    });
+
+    it('retracts BEFORE decryption — an encrypted message must not delay the retraction', async () => {
+      const svc = new MessagingService();
+      const order: string[] = [];
+      svc.setTypingRetractor(() => order.push('retract'));
+      svc.onNewMessage(() => order.push('deliver'));
+      svc.setEncryptionHandlers({
+        encrypt: jest.fn(),
+        decrypt: jest.fn(async () => {
+          order.push('decrypt');
+          return 'clear';
+        }),
+        isConversationEncrypted: () => true,
+      } as never);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      socket._trigger(
+        SERVER_EVENTS_MOCK.MESSAGE_NEW,
+        makeSocketMessage({ id: 'm-3', conversationId: 'conv-9', senderId: 'alice' })
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(order[0]).toBe('retract');
+    });
+
+    it('does not retract for a duplicate message', () => {
+      const svc = new MessagingService();
+      const retract = jest.fn();
+      svc.setTypingRetractor(retract);
+
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+      const msg = makeSocketMessage({ id: 'm-4', conversationId: 'conv-9', senderId: 'alice' });
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_NEW, msg);
+      retract.mockClear();
+      socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_NEW, msg);
+
+      expect(retract).not.toHaveBeenCalled();
+    });
+
+    it('stays silent when no retractor is wired', () => {
+      const svc = new MessagingService();
+      const socket = makeSocket();
+      svc.setupEventListeners(socket as unknown as TypedSocket, convertMessageFn);
+
+      expect(() =>
+        socket._trigger(SERVER_EVENTS_MOCK.MESSAGE_NEW, makeSocketMessage({ id: 'm-5' }))
+      ).not.toThrow();
+    });
+  });
+
   // ─── setCurrentUserId / isOwnMessage ──────────────────────────────────────
 
   describe('setCurrentUserId / isOwnMessage', () => {
@@ -1669,10 +1754,174 @@ describe('MessagingService', () => {
     });
   });
 
-  // ─── determineMessageTypeFromMime ─────────────────────────────────────────
+  // ─── Liste explicite de mentionnés ─────────────────────────────────────────
 
-  describe('determineMessageTypeFromMime (via sendMessage with attachments)', () => {
-    async function getMessageType(mimeType: string): Promise<string> {
+  /**
+   * Ce que le compositeur RETIENT et ce que le fil PORTE.
+   *
+   * `useMentions` mémorise les utilisateurs que l'auteur a effectivement
+   * choisis, et la liste descend jusqu'ici. Elle voyageait déjà sur la charge
+   * socket — mais dans un `Record<string, unknown>`, contre un contrat qui ne la
+   * déclarait pas et un schéma de passerelle qui la STRIPPAIT.
+   *
+   * La perte ne se voyait pas, parce que la passerelle retombe sur l'extraction
+   * des `@` du CONTENU. Ce repli couvre le clair, `server` et `hybrid` — et pas
+   * `e2ee`, le seul mode où `content` est remplacé par un littéral avant de
+   * partir. Nommer quelqu'un dans une conversation chiffrée ne produisait alors
+   * aucune mention du tout.
+   */
+  describe('mentionedUserIds (via sendMessage)', () => {
+    it('porte la liste du compositeur sur la charge socket', async () => {
+      const svc = new MessagingService();
+      const socket = makeSocket();
+      let capturedPayload: Record<string, unknown> = {};
+
+      socket.emit.mockImplementation((_event: string, data: unknown, cb: (r: unknown) => void) => {
+        capturedPayload = data as Record<string, unknown>;
+        cb({ success: true, data: { messageId: '1' } });
+      });
+
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
+        content: 'coucou @alice',
+        mentionedUserIds: ['u-alice'],
+      }));
+
+      expect(capturedPayload.mentionedUserIds).toEqual(['u-alice']);
+    });
+
+    // Le cas qui décide du lot : en `e2ee`, `content` part en `[Encrypted]`.
+    // La liste explicite est le SEUL canal qui reste, et elle doit voyager AVEC
+    // le chiffré.
+    it('porte la liste sur un envoi e2ee, dont le contenu ne porte aucun @', async () => {
+      const svc = new MessagingService();
+      svc.setEncryptionHandlers(makeEncryptionHandlers({
+        getConversationMode: jest.fn().mockResolvedValue('e2ee'),
+        encrypt: jest.fn().mockResolvedValue({ ciphertext: 'enc', metadata: { mode: 'e2ee' } }),
+      }));
+
+      const socket = makeSocket();
+      let capturedPayload: Record<string, unknown> = {};
+      socket.emit.mockImplementation((_event: string, data: unknown, cb: (r: unknown) => void) => {
+        capturedPayload = data as Record<string, unknown>;
+        cb({ success: true, data: { messageId: '1' } });
+      });
+
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
+        content: 'coucou @alice',
+        mentionedUserIds: ['u-alice'],
+      }));
+
+      expect(capturedPayload.content).toBe('[Encrypted]');
+      expect(capturedPayload.content).not.toContain('@');
+      expect(capturedPayload.mentionedUserIds).toEqual(['u-alice']);
+      expect(capturedPayload.encryptedContent).toBe('enc');
+    });
+
+    it('n’invente aucune liste quand l’auteur n’a nommé personne', async () => {
+      const svc = new MessagingService();
+      const socket = makeSocket();
+      let capturedPayload: Record<string, unknown> = {};
+
+      socket.emit.mockImplementation((_event: string, data: unknown, cb: (r: unknown) => void) => {
+        capturedPayload = data as Record<string, unknown>;
+        cb({ success: true, data: { messageId: '1' } });
+      });
+
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions());
+
+      expect(capturedPayload).not.toHaveProperty('mentionedUserIds');
+    });
+
+    // Le repli REST la laissait tomber aussi — sur une route qui la DÉCLARE et
+    // l'honore. Un message parti par là après un accusé socket en échec ne
+    // notifiait que ceux que l'extraction des `@` retrouvait.
+    it('porte la liste jusqu’au repli REST', async () => {
+      const svc = new MessagingService();
+      const socket = makeSocket();
+
+      socket.emit.mockImplementation((_event: string, _data: unknown, cb: (r: unknown) => void) => {
+        cb({ success: false, message: 'ack failed' });
+      });
+      mockConversationsServiceSendMessage.mockResolvedValue({ id: 'm-1' });
+
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
+        content: 'coucou @alice',
+        mentionedUserIds: ['u-alice'],
+      }));
+
+      const body = mockConversationsServiceSendMessage.mock.calls[0][1] as Record<string, unknown>;
+      expect(body.mentionedUserIds).toEqual(['u-alice']);
+    });
+  });
+
+  // ─── messageType des pièces jointes ───────────────────────────────────────
+
+  /**
+   * Le web portait un exemplaire MANUSCRIT de la règle
+   * (`determineMessageTypeFromMime(mimeTypes[0])`), et il divergeait de la
+   * canonique sur deux points : il ne regardait que la PREMIÈRE pièce jointe,
+   * et il rendait `'text'` pour un `text/*`.
+   *
+   * Ce n'était pas une redondance inoffensive. La dérivation serveur
+   * (`deriveMessageTypeForAttachments`) est ADDITIVE : elle se tait dès que la
+   * colonne porte autre chose que `'text'`. Un `'image'` déclaré par le client
+   * sur un lot photo + PDF n'est donc corrigé par personne — il s'écrit tel
+   * quel, et `contentTypeIcon` sert 🖼️ là où l'utilisateur a envoyé un dossier
+   * mixte.
+   *
+   * Les deux sites d'appel passent maintenant par
+   * `messageTypeForClientAttachments` (`@meeshy/shared`), qui regarde le LOT.
+   */
+  describe('messageType des pièces jointes (via sendMessage)', () => {
+    /**
+     * RECALIBRÉ : ces témoins lisaient `messageType` sur la charge SOCKET.
+     *
+     * La valeur y était posée, juste, et sans effet : le contrat
+     * `MessageSendWithAttachmentsData` ne déclare aucun champ de ce nom, et
+     * `SocketMessageSendWithAttachmentsSchema` — un `z.object` — le STRIPPE en
+     * silence. Le serveur dérive la même règle de son côté
+     * (`messageTypeFromMimeTypes`), donc rien n'était perdu ; mais huit témoins
+     * attestaient une clé que la passerelle ne reçoit jamais.
+     *
+     * Le motif écrit à côté du site de production — « l'objet sert aussi de
+     * charge au repli REST » — était FAUX : `sendMessageViaRest` reconstruit sa
+     * charge depuis `options` et recalcule `messageType` lui-même. Le champ
+     * socket ne servait donc rien du tout.
+     *
+     * La règle qu'ils gardent est réelle, et son site l'est aussi : REST est le
+     * SEUL des deux transports où la valeur soit autoritative (la route
+     * l'accepte et la persiste, et la dérivation serveur, additive, ne repasse
+     * jamais derrière une déclaration explicite). Les témoins visent désormais
+     * ce site-là — celui dont un changement CASSE quelque chose.
+     */
+    async function getMessageType(mimeTypes: string[]): Promise<string> {
+      const svc = new MessagingService();
+      const socket = makeSocket();
+
+      // L'accusé socket échoue (sans expirer, et sans chiffrement) : c'est la
+      // seule porte vers le repli REST.
+      socket.emit.mockImplementation((_event: string, _data: unknown, cb: (r: unknown) => void) => {
+        cb({ success: false, message: 'ack failed' });
+      });
+      mockConversationsServiceSendMessage.mockResolvedValue({ id: 'm-1' });
+
+      const attachmentIds = mimeTypes.length > 0
+        ? mimeTypes.map((_, i) => `att-${i + 1}`)
+        : ['att-1'];
+
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
+        attachmentIds,
+        attachmentMimeTypes: mimeTypes,
+      }));
+
+      const body = mockConversationsServiceSendMessage.mock.calls[0][1] as Record<string, unknown>;
+      return body.messageType as string;
+    }
+
+    // Le négatif du recalibrage : la charge SOCKET ne porte plus la clé. Si
+    // quelqu'un la repose, ce témoin le fera voir — et l'obligera à constater
+    // qu'aucun schéma de la passerelle ne la déclare.
+    it('la charge socket ne porte PAS messageType — le schéma le strippe', async () => {
       const svc = new MessagingService();
       const socket = makeSocket();
       let capturedPayload: Record<string, unknown> = {};
@@ -1684,52 +1933,98 @@ describe('MessagingService', () => {
 
       await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
         attachmentIds: ['att-1'],
-        attachmentMimeTypes: mimeType ? [mimeType] : [],
+        attachmentMimeTypes: ['image/jpeg'],
       }));
 
-      return capturedPayload.messageType as string;
-    }
+      expect(capturedPayload).not.toHaveProperty('messageType');
+      expect(capturedPayload.attachmentIds).toEqual(['att-1']);
+    });
 
-    it('empty mimeType array → "file"', async () => {
-      const svc = new MessagingService();
-      const socket = makeSocket();
-      let messageType: string = '';
-
-      socket.emit.mockImplementation((_event: string, data: unknown, cb: (r: unknown) => void) => {
-        messageType = (data as any).messageType;
-        cb({ success: true, data: { messageId: '1' } });
-      });
-
-      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions({
-        attachmentIds: ['att-1'],
-        attachmentMimeTypes: [],
-      }));
-
-      expect(messageType).toBe('file');
+    it('des pièces jointes sans MIME connu → "file"', async () => {
+      expect(await getMessageType([])).toBe('file');
     });
 
     it('image/jpeg → "image"', async () => {
-      expect(await getMessageType('image/jpeg')).toBe('image');
+      expect(await getMessageType(['image/jpeg'])).toBe('image');
     });
 
     it('audio/mp3 → "audio"', async () => {
-      expect(await getMessageType('audio/mp3')).toBe('audio');
+      expect(await getMessageType(['audio/mp3'])).toBe('audio');
     });
 
     it('video/mp4 → "video"', async () => {
-      expect(await getMessageType('video/mp4')).toBe('video');
+      expect(await getMessageType(['video/mp4'])).toBe('video');
     });
 
     it('application/pdf → "file"', async () => {
-      expect(await getMessageType('application/pdf')).toBe('file');
+      expect(await getMessageType(['application/pdf'])).toBe('file');
     });
 
-    it('text/plain → "text"', async () => {
-      expect(await getMessageType('text/plain')).toBe('text');
+    it('text/plain est une PIÈCE JOINTE, donc "file" — jamais "text"', async () => {
+      expect(await getMessageType(['text/plain'])).toBe('file');
     });
 
     it('unknown mime type → "file"', async () => {
-      expect(await getMessageType('application/octet-stream')).toBe('file');
+      expect(await getMessageType(['application/octet-stream'])).toBe('file');
+    });
+
+    it('plusieurs pièces jointes de la même catégorie → cette catégorie', async () => {
+      expect(await getMessageType(['image/jpeg', 'image/png'])).toBe('image');
+    });
+
+    it('lot HÉTÉROGÈNE → "file", même quand la première est une image', async () => {
+      expect(await getMessageType(['image/jpeg', 'application/pdf'])).toBe('file');
+    });
+
+    it('lot HÉTÉROGÈNE → "file", même quand la première est une vidéo', async () => {
+      expect(await getMessageType(['video/mp4', 'audio/mp3'])).toBe('file');
+    });
+  });
+
+  /**
+   * Le repli REST est le SEUL des deux chemins où la valeur est autoritative :
+   * le path socket `message:send-with-attachments` la strippe (son schéma Zod
+   * n'a pas ce champ) et le serveur y dérive lui-même. La route REST, elle,
+   * accepte l'enum et la persiste — puis se tait.
+   */
+  describe('repli REST — le messageType qui, lui, atteint la base', () => {
+    async function restMessageType(options: {
+      attachmentIds?: string[];
+      attachmentMimeTypes?: string[];
+    }): Promise<string> {
+      mockConversationsServiceSendMessage.mockResolvedValue({ data: { id: 'rest-1' } });
+
+      const socket = makeSocket();
+      socket.emit.mockImplementation((_e: string, _d: unknown, cb: (r: unknown) => void) => {
+        cb({ success: false });
+      });
+
+      const svc = new MessagingService();
+      await svc.sendMessage(socket as unknown as TypedSocket, makeSendOptions(options));
+
+      const body = mockConversationsServiceSendMessage.mock.calls.at(-1)?.[1] as
+        | { messageType?: string }
+        | undefined;
+      return body?.messageType as string;
+    }
+
+    it('sans pièce jointe → "text"', async () => {
+      expect(await restMessageType({})).toBe('text');
+    });
+
+    it('lot HÉTÉROGÈNE → "file", là où la première pièce jointe disait "image"', async () => {
+      expect(
+        await restMessageType({
+          attachmentIds: ['a', 'b'],
+          attachmentMimeTypes: ['image/jpeg', 'application/pdf'],
+        })
+      ).toBe('file');
+    });
+
+    it('des pièces jointes sans MIME connu → "file", jamais "text"', async () => {
+      expect(
+        await restMessageType({ attachmentIds: ['a'], attachmentMimeTypes: [] })
+      ).toBe('file');
     });
   });
 

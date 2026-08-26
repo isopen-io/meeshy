@@ -20,7 +20,13 @@ jest.mock('../services/PostService', () => ({
 }));
 jest.mock('../services/MediaService', () => ({ MediaService: jest.fn().mockImplementation(() => ({})) }));
 jest.mock('../middleware/rate-limiter', () => ({ createPostRouteRateLimitConfig: jest.fn().mockReturnValue({}) }));
-jest.mock('../utils/withMutationLog', () => ({ withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()) }));
+jest.mock('../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../utils/withMutationLog') as object), withMutationLog: jest.fn().mockImplementation(({ op }: any) => op()) }));
 jest.mock('../services/MentionService', () => ({ resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]) }));
 
 const POST_ID = '507f1f77bcf86cd799439011';

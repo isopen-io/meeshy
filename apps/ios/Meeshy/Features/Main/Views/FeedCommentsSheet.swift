@@ -323,6 +323,15 @@ struct CommentsSheetView: View {
     private var comments: [FeedComment] { liveComments ?? post.comments }
     private var commentCount: Int { liveCommentCount ?? post.commentCount }
 
+    /// Second arrêt du dégradé servi au composer de commentaire. Dérivé de
+    /// l'accent de l'hôte par la formule de palette du SDK
+    /// (`secondary = shiftHue(primary, +30°)`) : sans lui, le composer retombe
+    /// sur son défaut de marque et le bouton d'envoi rend un dégradé hybride
+    /// accent → indigo.
+    private var composerSecondaryColor: String {
+        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
+    }
+
     private var topLevelComments: [FeedComment] {
         comments.filter { $0.parentId == nil }
     }
@@ -379,6 +388,65 @@ struct CommentsSheetView: View {
     /// tête à chaque relecture puisque le serveur ne le renverra jamais.
     static func persistableComments(_ comments: [FeedComment]) -> [FeedComment] {
         comments.filter { !$0.id.hasPrefix("cmid_") && !$0.id.hasPrefix("tmp_") }
+    }
+
+    /// Une réécriture de cache commentaires : la clé et son contenu déjà filtré.
+    struct CommentCacheWrite {
+        let key: String
+        let comments: [FeedComment]
+    }
+
+    /// Clés à réécrire après une mutation de commentaire DÉJÀ appliquée en
+    /// mémoire. PURE : `CommentsSheetView` est une `View` à `@State`, donc non
+    /// instrumentable — la décision « quelles clés porter, et lesquelles TAIRE »
+    /// vit ici pour être testable.
+    ///
+    /// Deux gardes, reprises telles quelles de `submitCommentEdit` :
+    /// - `post-<postId>` n'est écrit QUE si l'appelant fournit `liveComments`.
+    ///   Un sink peut tirer AVANT que `.task { loadFullCommentsIfNeeded() }`
+    ///   n'ait chargé la page complète : persister le repli `post.comments`
+    ///   (les 3 commentaires que le feed embarque) écraserait la page de 20
+    ///   déjà écrite sous la même clé par `PostDetailViewModel` / `FeedViewModel`.
+    /// - `replies-<parentId>` n'est écrit que pour un fil MONTÉ dans
+    ///   `repliesMap`. La clé orpheline `replies-<commentId>` d'un top-level
+    ///   supprimé n'est jamais écrite : plus rien ne la relira, son parent
+    ///   n'existe plus.
+    static func commentCacheWrites(
+        postId: String,
+        liveComments: [FeedComment]?,
+        repliesMap: [String: [FeedComment]],
+        touchedThreadIds: [String]
+    ) -> [CommentCacheWrite] {
+        let threads = touchedThreadIds.compactMap { parentId -> CommentCacheWrite? in
+            guard let replies = repliesMap[parentId] else { return nil }
+            return CommentCacheWrite(key: "replies-\(parentId)", comments: persistableComments(replies))
+        }
+        guard let current = liveComments else { return threads }
+        return threads + [CommentCacheWrite(key: "post-\(postId)", comments: persistableComments(current))]
+    }
+
+    /// Réécrit le cache après une mutation reçue À DISTANCE — ce que le
+    /// doc-comment de `loadFullCommentsIfNeeded` affirmait déjà (« la
+    /// modification invalide le cache par réécriture ») alors qu'aucun sink ne
+    /// le faisait : seules les écritures LOCALES persistaient.
+    ///
+    /// `topLevelWasLoaded` est capturé AVANT la mutation : les `apply…`
+    /// promeuvent `post.comments` dans `liveComments` dès que la ligne touchée
+    /// s'y trouve, donc relire `liveComments != nil` après coup ne dirait plus
+    /// si la page complète avait été chargée.
+    private func persistCommentCache(touchedThreadIds: [String], topLevelWasLoaded: Bool) {
+        let writes = Self.commentCacheWrites(
+            postId: post.id,
+            liveComments: topLevelWasLoaded ? liveComments : nil,
+            repliesMap: repliesMap,
+            touchedThreadIds: touchedThreadIds
+        )
+        guard !writes.isEmpty else { return }
+        Task {
+            for write in writes {
+                try? await CacheCoordinator.shared.comments.savePreservingFreshness(write.comments, for: write.key)
+            }
+        }
     }
 
     /// Réconciliation par l'agrégat absolu d'un événement cœur de commentaire —
@@ -839,7 +907,12 @@ struct CommentsSheetView: View {
                 currentUserReactions: data.comment.currentUserReactions,
                 media: (data.comment.media ?? []).map { $0.toFeedMedia() }
             )
+            let topLevelWasLoaded = liveComments != nil
             applyCommentEdit(updated)
+            persistCommentCache(
+                touchedThreadIds: updated.parentId.map { [$0] } ?? [],
+                topLevelWasLoaded: topLevelWasLoaded
+            )
         }
         // Traduction de commentaire arrivée (pipeline async ou demande à la
         // demande) : pose `translatedContent` si la langue est préférée et
@@ -853,16 +926,19 @@ struct CommentsSheetView: View {
             let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
             guard langs.contains(where: { $0.caseInsensitiveCompare(data.language) == .orderedSame }) else { return }
             let text = data.translation.text
+            let topLevelWasLoaded = liveComments != nil
             var current = liveComments ?? post.comments
             if let idx = current.firstIndex(where: { $0.id == data.commentId }), current[idx].translatedContent == nil {
                 current[idx].translatedContent = text
                 liveComments = current
+                persistCommentCache(touchedThreadIds: [], topLevelWasLoaded: topLevelWasLoaded)
                 return
             }
             for (key, var replies) in repliesMap {
                 if let idx = replies.firstIndex(where: { $0.id == data.commentId }), replies[idx].translatedContent == nil {
                     replies[idx].translatedContent = text
                     repliesMap[key] = replies
+                    persistCommentCache(touchedThreadIds: [key], topLevelWasLoaded: topLevelWasLoaded)
                     return
                 }
             }
@@ -910,7 +986,11 @@ struct CommentsSheetView: View {
         ) { data in
             let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
             guard !media.isEmpty else { return }
-            applyCommentMediaUpdate(commentId: data.commentId, parentId: data.comment.parentId, media: media)
+            let topLevelWasLoaded = liveComments != nil
+            let touchedThreadIds = applyCommentMediaUpdate(
+                commentId: data.commentId, parentId: data.comment.parentId, media: media
+            )
+            persistCommentCache(touchedThreadIds: touchedThreadIds, topLevelWasLoaded: topLevelWasLoaded)
         }
         // Suppression en temps réel : retire le commentaire et resynchronise le
         // compteur sur la valeur autoritative serveur (heale la dérive optimiste).
@@ -920,7 +1000,11 @@ struct CommentsSheetView: View {
                 .receive(on: DispatchQueue.main)
                 .filter { [postId = post.id] in $0.postId == postId }
         ) { data in
-            applyCommentDeletion(commentId: data.commentId, commentCount: data.commentCount)
+            let topLevelWasLoaded = liveComments != nil
+            let touchedThreadIds = applyCommentDeletion(
+                commentId: data.commentId, commentCount: data.commentCount
+            )
+            persistCommentCache(touchedThreadIds: touchedThreadIds, topLevelWasLoaded: topLevelWasLoaded)
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
@@ -1427,6 +1511,7 @@ struct CommentsSheetView: View {
             mode: .comment,
             onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
+            secondaryColor: composerSecondaryColor,
             // Opt comments into the attachment carousel + voice (parity with
             // message-with-attachments). Pickers are wired below.
             forceShowAttachment: true,
@@ -1957,43 +2042,53 @@ struct CommentsSheetView: View {
     /// Remplace le média (enrichi) d'un commentaire en cache, qu'il soit top-level
     /// (`liveComments`) ou une réponse (`repliesMap`). Déclenché par
     /// `comment:media-updated` quand la transcription / les variantes TTS arrivent.
-    private func applyCommentMediaUpdate(commentId: String, parentId: String?, media: [FeedMedia]) {
+    /// Rend les fils de réponses touchés, pour que l'appelant sache quelle clé
+    /// de cache réécrire (`[]` = la mutation a atterri dans le top-level).
+    private func applyCommentMediaUpdate(commentId: String, parentId: String?, media: [FeedMedia]) -> [String] {
         if let parentId, var existing = repliesMap[parentId] {
             if let idx = existing.firstIndex(where: { $0.id == commentId }) {
                 existing[idx].media = media
                 repliesMap[parentId] = existing
-                return
+                return [parentId]
             }
         }
         var current = liveComments ?? post.comments
         if let idx = current.firstIndex(where: { $0.id == commentId }) {
             current[idx].media = media
             liveComments = current
-            return
+            return []
         }
         // Réponse non encore montée dans repliesMap : tente tous les threads chargés.
         for (key, var replies) in repliesMap {
             if let idx = replies.firstIndex(where: { $0.id == commentId }) {
                 replies[idx].media = media
                 repliesMap[key] = replies
-                return
+                return [key]
             }
         }
+        return []
     }
 
     /// Retire un commentaire (racine + ses réponses chargées, ou réponse avec
     /// décrément du compteur de son parent) et resynchronise le total sur la valeur
     /// autoritative serveur. Déclenché par le socket `comment:deleted` — idempotent
     /// avec le retrait optimiste local.
-    private func applyCommentDeletion(commentId: String, commentCount: Int) {
+    /// Rend les fils de réponses touchés : une RÉPONSE supprimée sort de
+    /// `replies-<parentId>` ET fait bouger le compteur de son parent dans le
+    /// top-level, donc l'appelant a DEUX clés à réécrire. La clé orpheline
+    /// `replies-<commentId>` d'un top-level supprimé n'est jamais rendue :
+    /// plus rien ne la relira, son parent n'existe plus.
+    private func applyCommentDeletion(commentId: String, commentCount: Int) -> [String] {
         var current = liveComments ?? post.comments
         current.removeAll { $0.id == commentId }
         repliesMap[commentId] = nil
         expandedThreads.remove(commentId)
+        var touchedThreadIds: [String] = []
         for (key, var replies) in repliesMap {
             if let idx = replies.firstIndex(where: { $0.id == commentId }) {
                 replies.remove(at: idx)
                 repliesMap[key] = replies
+                touchedThreadIds.append(key)
                 if let pIdx = current.firstIndex(where: { $0.id == key }), current[pIdx].replies > 0 {
                     current[pIdx].replies -= 1
                 }
@@ -2001,6 +2096,7 @@ struct CommentsSheetView: View {
         }
         liveComments = current
         liveCommentCount = commentCount
+        return touchedThreadIds
     }
 
     // MARK: - Comment Deletion
@@ -2334,10 +2430,25 @@ struct CommentRowView: View, Equatable {
                     } label: {
                         HStack(spacing: 4) {
                             let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
-                            Image(systemName: isLiked || likeCount > 0 ? "heart.fill" : "heart")
-                                .font(MeeshyFont.relative(isReply ? 12 : 14))
-                                .foregroundColor(heartColor)
-                                .scaleEffect(isLiked ? 1.1 : 1.0)
+                            // Le contour d'accent — « c'est MOI qui ai liké » —
+                            // manquait ici alors que le fil des posts le porte
+                            // depuis toujours : un commentaire que j'avais aimé
+                            // ne se distinguait que par sa teinte, la même que
+                            // celle d'un commentaire simplement aimé par
+                            // d'autres. `filledWhenInactive` garde le cœur plein
+                            // dès qu'il existe des likes, sans revendiquer les
+                            // miens.
+                            EngagementGlyph(
+                                outline: "heart",
+                                filled: "heart.fill",
+                                participated: isLiked,
+                                accentHex: accentColor,
+                                activeTint: MeeshyColors.error,
+                                inactiveTint: heartColor,
+                                filledWhenInactive: likeCount > 0,
+                                size: isReply ? 12 : 14
+                            )
+                            .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(likeCount)")
                                 .font(MeeshyFont.relative(12, weight: .medium))
@@ -2351,7 +2462,7 @@ struct CommentRowView: View, Equatable {
                     .accessibilityLabel(isLiked
                         ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
                         : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue("\(likeCount)")
+                    .accessibilityValue(LocalizedNumber.exact(likeCount))
                     .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
                     // Réponses plates à 2 niveaux : on peut répondre à un commentaire
@@ -2378,7 +2489,7 @@ struct CommentRowView: View, Equatable {
                             }
                             .frame(minHeight: 44)
                             .accessibilityLabel(String(localized: "a11y.comment.reply", defaultValue: "Répondre", bundle: .main))
-                            .accessibilityValue(comment.replies > 0 ? String(format: String(localized: "a11y.comment.replies.count", defaultValue: "%d réponses", bundle: .main), comment.replies) : "")
+                            .accessibilityValue(comment.replies > 0 ? PostStatAccessibility.repliesLabel(comment.replies) : "")
                             .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
 
                             if showSeeReplies {
@@ -2399,7 +2510,7 @@ struct CommentRowView: View, Equatable {
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityLabel(comment.replies > 0
-                                    ? String(format: String(localized: "a11y.comment.show_replies", defaultValue: "Voir %d réponses", bundle: .main), comment.replies)
+                                    ? String(localized: "a11y.comment.show_replies", defaultValue: "Voir \(comment.replies) réponses", bundle: .main)
                                     : String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
                             }
                         }

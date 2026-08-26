@@ -236,4 +236,37 @@ final class LentilleSkeletonGeometryTests: XCTestCase {
             "la Partie B (I-067bis) n'ouvre QUE la branche cache vide pour LentilleSkeletonRow."
         )
     }
+
+    /// **D1 — le saut de 8 pt à l'hydratation.** Le contrat de cette suite est
+    /// « aucun saut à l'hydratation » ; les témoins ci-dessus le vérifient
+    /// SOUS la rangée (hauteur, paddings internes, polices), mais aucun ne
+    /// regardait la marge que la LISTE pose AUTOUR d'elle.
+    ///
+    /// Or elles divergent. Les rangées réelles ont été ramenées à la cote de
+    /// design (`LentilleMetrics.Row.marginHorizontal`, 8) par le retour
+    /// produit « la liste de conversation semble décalée » ; le `LazyVStack`
+    /// du squelette, lui, est resté sur le `16` littéral — et ce padding est
+    /// posé sur le CONTENEUR, donc il s'applique aux DEUX branches du mux,
+    /// alors que le mux ne porte que sur le type de rang.
+    ///
+    /// Conséquence mesurée au simulateur : au démarrage à froid, les six
+    /// placeholders s'affichent à 16 pt du bord, puis les vraies rangées les
+    /// remplacent à 8 pt — toute la liste saute latéralement de 8 pt sous
+    /// l'oeil de l'utilisateur. C'est exactement le saut que cette suite
+    /// existe pour interdire.
+    ///
+    /// La branche OFF garde son `16` : le contrat de la Partie B est que le
+    /// chemin historique reste inchangé, et c'est la peau Lentille qui porte
+    /// la cote de design.
+    func test_emptyBranchSkeleton_usesTheSameHorizontalMarginAsTheRealRows() throws {
+        let code = normalizedCode(try listViewSource())
+        XCTAssertTrue(
+            code.contains("LentilleFeatureFlag.isLentilleListEnabled ? LentilleMetrics.Row.marginHorizontal :"),
+            "Le LazyVStack du squelette doit muxer sa marge horizontale : peau Lentille ⇒ "
+            + "LentilleMetrics.Row.marginHorizontal (la cote que lisent les rangées réelles, "
+            + "ConversationListView.swift, sectionConversations), peau historique ⇒ 16 inchangé. "
+            + "Un padding littéral posé sur le conteneur s'applique aux DEUX branches et fait "
+            + "sauter la liste de 8 pt quand les vraies rangées remplacent les placeholders."
+        )
+    }
 }

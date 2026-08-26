@@ -1,5 +1,7 @@
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { linkMessageEmissions } from './linkMessageEmissions';
+import { emitServerEvent, type ServerEmitIO } from './serverEmit';
+import type { QueuedPayloadFor } from './queuedEventContract';
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
@@ -7,12 +9,12 @@ import { linkMessageEmissions } from './linkMessageEmissions';
  * file never has to import the manager class.
  */
 export interface LinkMessageManager {
-  getIO(): { to(room: string): { emit(event: string, payload: unknown): void } } | null | undefined;
+  getIO(): ServerEmitIO | null | undefined;
   enqueueOfflineLinkMessage(params: {
     conversationId: string;
     actorParticipantId: string | null | undefined;
     messageId: string;
-    payload: Record<string, unknown>;
+    payload: QueuedPayloadFor<'link-message'>;
   }): Promise<void>;
   emitUnreadCountsToRecipients(params: {
     conversationId: string;
@@ -87,7 +89,12 @@ export async function broadcastLinkMessage(params: {
   conversationId: string;
   senderParticipantId: string | null | undefined;
   messageId: string;
-  payload: Record<string, unknown>;
+  /**
+   * L'ENVELOPPE `{ message }`, pas le message nu — c'est elle que la room
+   * reçoit sous `link:message:new`, elle que la file stocke, et elle que
+   * `linkMessageEmissions` déplie en DEUX événements au rejeu (cycle 106).
+   */
+  payload: QueuedPayloadFor<'link-message'>;
   onError?: (error: unknown) => void;
 }): Promise<void> {
   const { manager, conversationId, senderParticipantId, messageId, payload, onError } = params;
@@ -100,7 +107,7 @@ export async function broadcastLinkMessage(params: {
     // d'un participant anonyme.
     if (room) {
       for (const emission of linkMessageEmissions(payload)) {
-        room.emit(emission.event, emission.payload);
+        emitServerEvent(room, emission);
       }
     }
   } catch (error) {

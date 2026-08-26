@@ -250,4 +250,61 @@ final class ConversationPrismeRankOrderTests: XCTestCase {
             "Guten Tag"
         )
     }
+
+    // MARK: - Region-tagged original competes at its NORMALIZED rank
+    //
+    // Mirror of the TypeScript twin's region-tag suite. `preferredContentLanguages`
+    // resolves the reader's languages (region-stripped for deviceLocale), but
+    // `lastMessageOriginalLanguage` arrives raw and legacy messages carry a
+    // region-tagged code. With `.lowercased()` alone, `en-us` never matched the
+    // normalized rank `en`, so a lower-ranked translation won — demoting the
+    // reader's primary language.
+
+    func test_resolvedPreview_regionTaggedOriginalAtPrimaryRank_returnsRawPreview() {
+        let conv = makeConversation(
+            lastMessagePreview: "Hello everyone",
+            lastMessageOriginalLanguage: "en-US",
+            lastMessageTranslations: ["fr": "Bonjour à tous"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["en", "fr"]),
+            "Hello everyone"
+        )
+    }
+
+    func test_resolvedPreview_regionTaggedOriginalAtTopRank_stopsBeforeLowerRankedTranslation() {
+        let conv = makeConversation(
+            lastMessagePreview: "Olá pessoal",
+            lastMessageOriginalLanguage: "pt-BR",
+            lastMessageTranslations: ["en": "Hello everyone"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["pt", "en"]),
+            "Olá pessoal"
+        )
+    }
+
+    func test_resolvedPreview_regionTaggedTranslationKey_matchesNormalizedReaderRank() {
+        let conv = makeConversation(
+            lastMessagePreview: "Hello",
+            lastMessageOriginalLanguage: "en",
+            lastMessageTranslations: ["fr-FR": "Bonjour"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["fr"]),
+            "Bonjour"
+        )
+    }
+
+    func test_resolvedPreview_regionTaggedReaderLanguage_matchesNormalizedTranslationKey() {
+        let conv = makeConversation(
+            lastMessagePreview: "Hello",
+            lastMessageOriginalLanguage: "en",
+            lastMessageTranslations: ["pt": "Olá"]
+        )
+        XCTAssertEqual(
+            conv.resolvedLastMessagePreview(preferredLanguages: ["pt-BR"]),
+            "Olá"
+        )
+    }
 }

@@ -104,6 +104,175 @@ class StoryTextElementTest {
     }
 
     @Test
+    fun `a fresh element has no text backing`() {
+        assertThat(StoryTextElement(id = "e1").background).isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
+    fun `toTextObject omits the backgroundStyle when the element has no backing`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.backgroundStyle).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a solid backing as the solid tagged union`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            background = StoryTextBackground.Solid(hex = "F472B6"),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.backgroundStyle?.type).isEqualTo("solid")
+        assertThat(wire.backgroundStyle?.hex).isEqualTo("F472B6")
+    }
+
+    @Test
+    fun `toTextObject carries a glass backing as the glass tagged union`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            background = StoryTextBackground.Glass(radius = 24.0),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.backgroundStyle?.type).isEqualTo("glass")
+        assertThat(wire.backgroundStyle?.radius).isEqualTo(24.0)
+    }
+
+    @Test
+    fun `a fresh element has no outline`() {
+        val outline = StoryTextElement(id = "e1").outline
+        assertThat(outline.width).isEqualTo(StoryTextOutline.NONE_WIDTH)
+        assertThat(outline.color).isNull()
+    }
+
+    @Test
+    fun `toTextObject omits the border when the element has no outline`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.borderWidth).isNull()
+        assertThat(wire.borderColor).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a stroked outline as borderColor and borderWidth`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            outline = StoryTextOutline(width = 4f, color = "FF2E63"),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.borderWidth).isWithin(1e-9).of(4.0)
+        assertThat(wire.borderColor).isEqualTo("FF2E63")
+    }
+
+    @Test
+    fun `toTextObject keeps a retained colour off the wire while the outline has no width`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            outline = StoryTextOutline(width = 0f, color = "FF2E63"),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.borderWidth).isNull()
+        assertThat(wire.borderColor).isNull()
+    }
+
+    @Test
+    fun `a fresh element is born at the iOS-parity medium size`() {
+        assertThat(StoryTextElement(id = "e1").size).isEqualTo(StoryTextSize.MEDIUM)
+    }
+
+    @Test
+    fun `toTextObject carries the default medium size as the iOS-parity fontSize 96`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fontSize).isWithin(1e-9).of(96.0)
+    }
+
+    @Test
+    fun `toTextObject carries a chosen size onto the wire fontSize`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", size = StoryTextSize.XLARGE)
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fontSize).isWithin(1e-9).of(200.0)
+    }
+
+    @Test
+    fun `a fresh element has no fade timing`() {
+        val fade = StoryTextElement(id = "e1").fade
+        assertThat(fade.hasFadeIn).isFalse()
+        assertThat(fade.hasFadeOut).isFalse()
+    }
+
+    @Test
+    fun `toTextObject omits both fade fields when the element has no fade`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeIn).isNull()
+        assertThat(wire.fadeOut).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen fade-in onto the wire fadeIn only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", fade = StoryTextFade(inSeconds = 2f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeIn).isWithin(1e-9).of(2.0)
+        assertThat(wire.fadeOut).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen fade-out onto the wire fadeOut only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", fade = StoryTextFade(outSeconds = 3f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeOut).isWithin(1e-9).of(3.0)
+        assertThat(wire.fadeIn).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries both fade ends when both are set`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            fade = StoryTextFade(inSeconds = 0.5f, outSeconds = 5f),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.fadeIn).isWithin(1e-9).of(0.5)
+        assertThat(wire.fadeOut).isWithin(1e-9).of(5.0)
+    }
+
+    @Test
+    fun `a fresh element has no visibility timing`() {
+        val timing = StoryTextElement(id = "e1").timing
+        assertThat(timing.hasStart).isFalse()
+        assertThat(timing.isTimed).isFalse()
+    }
+
+    @Test
+    fun `toTextObject omits both timing fields when the element has no timing`() {
+        val wire = StoryTextElement(id = "e1", text = "hi").toTextObject(sourceLanguage = "fr")
+        assertThat(wire.startTime).isNull()
+        assertThat(wire.duration).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen start onto the wire startTime only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", timing = StoryElementTiming(startSeconds = 2f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.startTime).isWithin(1e-9).of(2.0)
+        assertThat(wire.duration).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries a chosen duration onto the wire duration only`() {
+        val wire = StoryTextElement(id = "e1", text = "hi", timing = StoryElementTiming(durationSeconds = 5f))
+            .toTextObject(sourceLanguage = "fr")
+        assertThat(wire.duration).isWithin(1e-9).of(5.0)
+        assertThat(wire.startTime).isNull()
+    }
+
+    @Test
+    fun `toTextObject carries both timing ends when both are set`() {
+        val wire = StoryTextElement(
+            id = "e1",
+            text = "hi",
+            timing = StoryElementTiming(startSeconds = 3f, durationSeconds = 10f),
+        ).toTextObject(sourceLanguage = "fr")
+        assertThat(wire.startTime).isWithin(1e-9).of(3.0)
+        assertThat(wire.duration).isWithin(1e-9).of(10.0)
+    }
+
+    @Test
     fun `every style and align exposes a distinct lowercase wire token`() {
         assertThat(StoryTextStyle.entries.map { it.wire })
             .containsExactly("bold", "neon", "typewriter", "handwriting", "classic")
@@ -230,5 +399,24 @@ class StoryTextElementTest {
             .toTextObject(sourceLanguage = "fr")
         assertThat(wire.scale).isWithin(1e-6).of(2.5)
         assertThat(wire.rotation).isWithin(1e-4).of(42.0)
+    }
+
+    // --- baseDirection: derived from the caption, iOS-parity render-time direction ---
+
+    @Test
+    fun `a fresh empty element lays out left-to-right`() {
+        assertThat(StoryTextElement(id = "e1").baseDirection).isEqualTo(StoryTextDirection.LTR)
+    }
+
+    @Test
+    fun `a latin caption lays out left-to-right`() {
+        assertThat(StoryTextElement(id = "e1", text = "Bonjour").baseDirection)
+            .isEqualTo(StoryTextDirection.LTR)
+    }
+
+    @Test
+    fun `an arabic caption lays out right-to-left`() {
+        assertThat(StoryTextElement(id = "e1", text = "مرحبا").baseDirection)
+            .isEqualTo(StoryTextDirection.RTL)
     }
 }

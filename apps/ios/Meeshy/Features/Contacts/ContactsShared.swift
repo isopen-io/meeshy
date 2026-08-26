@@ -67,6 +67,25 @@ enum ContactFilter: String, CaseIterable {
     case offline = "Hors ligne"
     case phonebook = "Repertoire"
     case affiliates = "Affilies"
+
+    /// Libellé affiché. Le `rawValue` reste la clé stable d'identité et de
+    /// persistance (littéraux FR non accentués) ; ce titre est la SEULE
+    /// surface livrée à l'écran, donc il passe par `String(localized:)`.
+    /// Même doctrine que `PeopleTab.title` et `RequestFilter`.
+    var title: String {
+        switch self {
+        case .all:
+            return String(localized: "contacts.list.filter.all", defaultValue: "Tous", bundle: .main)
+        case .online:
+            return String(localized: "contacts.list.filter.online", defaultValue: "En ligne", bundle: .main)
+        case .offline:
+            return String(localized: "contacts.list.filter.offline", defaultValue: "Hors ligne", bundle: .main)
+        case .phonebook:
+            return String(localized: "contacts.list.filter.phonebook", defaultValue: "Répertoire", bundle: .main)
+        case .affiliates:
+            return String(localized: "contacts.list.filter.affiliates", defaultValue: "Affiliés", bundle: .main)
+        }
+    }
 }
 
 enum RequestFilter: String, CaseIterable {

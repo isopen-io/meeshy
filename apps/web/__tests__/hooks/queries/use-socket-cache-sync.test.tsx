@@ -52,6 +52,7 @@ let messageUnpinnedCallback: ((data: { messageId: string; conversationId: string
 let userUpdatedCallback: ((data: { userId: string; changes: Record<string, unknown> }) => void) | null = null;
 let preferencesUpdatedCallback: ((data: { category: string } | { conversationId: string } | { communityId: string; reset: boolean; preferences: unknown }) => void) | null = null;
 let preferencesReorderedCallback: ((data: { userId: string; updates: Array<{ conversationId: string; orderInCategory: number }> }) => void) | null = null;
+let communityPreferencesReorderedCallback: ((data: { userId: string; updates: Array<{ communityId: string; orderInCategory: number }> }) => void) | null = null;
 
 // Mock unsubscribe functions
 const mockUnsubscribeMessage = jest.fn();
@@ -68,10 +69,11 @@ jest.mock('@/stores/auth-store', () => ({
 }));
 
 const mockApiGet = jest.fn();
+const mockApiPost = jest.fn().mockResolvedValue({});
 
 jest.mock('@/services/api.service', () => ({
   apiService: {
-    post: jest.fn().mockResolvedValue({}),
+    post: (...args: unknown[]) => mockApiPost(...args),
     get: (...args: unknown[]) => mockApiGet(...args),
   },
 }));
@@ -140,6 +142,10 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
     },
     onPreferencesReordered: (callback: (data: { userId: string; updates: Array<{ conversationId: string; orderInCategory: number }> }) => void) => {
       preferencesReorderedCallback = callback;
+      return jest.fn();
+    },
+    onCommunityPreferencesReordered: (callback: (data: { userId: string; updates: Array<{ communityId: string; orderInCategory: number }> }) => void) => {
+      communityPreferencesReorderedCallback = callback;
       return jest.fn();
     },
     onConversationJoined: (callback: (data: { conversationId: string; userId: string }) => void) => {
@@ -2133,6 +2139,86 @@ describe('useSocketCacheSync', () => {
       expect(queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite'])).toBeUndefined();
     });
 
+    // Cycle 99 — les deux témoins ci-dessus n'exercent que `banned` et
+    // `not_a_member`, c'est-à-dire les deux seuls motifs où purger est JUSTE.
+    // Le producteur en émet sept, dont quatre transitoires : le gestionnaire
+    // les recevait tous et purgeait pareil, parce qu'aucun témoin ne les
+    // faisait passer. Ceux-ci écrivent l'invariant en NÉGATIF — le cache
+    // SURVIT — pour garder la forme exacte du défaut.
+    it.each([
+      ['rate_limited', 'Trop de requêtes. Veuillez réessayer.'],
+      ['server_error', 'Erreur serveur lors du join'],
+      ['not_authenticated', 'Non authentifié'],
+      ['invalid_payload', 'conversationId invalide'],
+    ])('garde la conversation et ses messages sur un refus TRANSITOIRE (%s)', (reason, message) => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [
+          {
+            conversations: [{ ...mockConversation, id: 'conv-1' }] as Conversation[],
+            pagination: { total: 1, offset: 0, limit: 20, hasMore: false },
+          },
+        ],
+        pageParams: [0],
+      });
+      queryClient.setQueryData(['conversations', 'detail', 'conv-1'], { ...mockConversation });
+      queryClient.setQueryData(['messages', 'list', 'conv-1', 'infinite'], {
+        pages: [{ messages: [], hasMore: false, total: 0 }],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason, message });
+      });
+
+      const convs = (queryClient.getQueryData(['conversations', 'infinite']) as {
+        pages: { conversations: Conversation[] }[];
+      }).pages.flatMap((page) => page.conversations);
+      expect(convs.map((c) => c.id)).toContain('conv-1');
+      expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeDefined();
+      expect(queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite'])).toBeDefined();
+    });
+
+    // Ne pas savoir lire n'autorise pas à détruire : une passerelle plus récente
+    // que ce client peut émettre un motif qu'il ne connaît pas.
+    it('garde le cache sur un motif INCONNU', () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+
+      queryClient.setQueryData(['conversations', 'detail', 'conv-1'], { ...mockConversation });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({
+          conversationId: 'conv-1',
+          reason: 'a_reason_a_future_gateway_adds',
+          message: '',
+        });
+      });
+
+      expect(queryClient.getQueryData(['conversations', 'detail', 'conv-1'])).toBeDefined();
+    });
+
+    // Le signal reste émis dans TOUS les cas : c'est ce qui permet à l'UI de
+    // dire « réessaie » sur un transitoire. Seule la PURGE est conditionnelle.
+    it('émet quand même le CustomEvent sur un refus transitoire', () => {
+      const { wrapper } = createWrapperWithClient();
+      const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'conv-1' }), { wrapper });
+
+      act(() => {
+        conversationJoinErrorCallback?.({ conversationId: 'conv-1', reason: 'rate_limited', message: 'slow down' });
+      });
+
+      const call = dispatchSpy.mock.calls.find(([e]) => (e as CustomEvent).type === 'meeshy:conversation-join-error');
+      expect(call).toBeDefined();
+      expect((call![0] as CustomEvent).detail).toMatchObject({ conversationId: 'conv-1', reason: 'rate_limited' });
+    });
+
     it('dispatches meeshy:conversation-join-error CustomEvent on window', () => {
       const { wrapper } = createWrapperWithClient();
       const dispatchSpy = jest.spyOn(window, 'dispatchEvent');
@@ -2543,6 +2629,117 @@ describe('useSocketCacheSync — suite', () => {
       });
 
       expect(rowBridge()?.bridge).toEqual(fresher);
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+  // Le hook est désormais monté AUSSI par `BubbleStreamPage` (`/`,
+  // `/chat/:linkId`) — deux écrans qui ne montent AUCUNE liste de
+  // conversations, et dont la liste de messages est clé-ée sur un SLUG. Ces
+  // deux faits gouvernent les gardes ci-dessous.
+  // ─────────────────────────────────────────────────────────────────────────
+  describe('Écrans sans liste de conversations et listes clé-ées sur un alias', () => {
+    const UNKNOWN_CONV_ID = '64b7f2a1c3d4e5f6a7b8c9d1';
+
+    const arrivingMessage = () => ({
+      ...createMockMessage('msg-arriving', 'Salut'),
+      conversationId: UNKNOWN_CONV_ID,
+      senderId: 'someone-else',
+    }) as Message;
+
+    it('ne lit PAS `GET /conversations/:id` quand aucune liste de conversations n’est en cache', async () => {
+      const { wrapper } = createWrapperWithClient();
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      await act(async () => {
+        newMessageCallback?.(arrivingMessage());
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiGet).not.toHaveBeenCalledWith(`/conversations/${UNKNOWN_CONV_ID}`);
+    });
+
+    // Jumeau POSITIF — sans lui la garde ci-dessus serait satisfaite par un
+    // hook qui ne lit plus JAMAIS la ligne manquante, ce qui priverait
+    // `/conversations` d’une conversation toute neuve.
+    it('lit la ligne manquante dès qu’une liste existe pour la recevoir', async () => {
+      const { wrapper, queryClient } = createWrapperWithClient();
+      mockApiGet.mockResolvedValue({
+        data: { ...mockConversation, id: UNKNOWN_CONV_ID } as Conversation,
+      });
+      queryClient.setQueryData(['conversations', 'infinite'], {
+        pages: [{ conversations: [], pagination: { limit: 20, offset: 0, total: 0, hasMore: false } }],
+        pageParams: [0],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      await act(async () => {
+        newMessageCallback?.(arrivingMessage());
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiGet).toHaveBeenCalledWith(`/conversations/${UNKNOWN_CONV_ID}`);
+    });
+
+    // L'accusé de RÉCEPTION appartient à la couche TRANSPORT
+    // (`messaging.service.markAsReceivedDebounced`, débouncé 500 ms par
+    // conversation), qui sert ce handler et poste juste après l'avoir servi.
+    // Le doubler ici coûtait UNE requête par message — invisible tant que le
+    // hook n'était monté que par `ConversationLayout`, payée sur la
+    // conversation la plus bavarde dès qu'il l'est par `BubbleStreamPage`.
+    it('ne poste PAS l’accusé de réception : la couche transport le fait déjà, débouncée', async () => {
+      const { wrapper } = createWrapperWithClient();
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      await act(async () => {
+        newMessageCallback?.(arrivingMessage());
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockApiPost).not.toHaveBeenCalledWith(
+        `/conversations/${UNKNOWN_CONV_ID}/mark-as-received`
+      );
+    });
+
+    // `message:restored-for-me` demande une RELECTURE. Elle nommait la clé
+    // ObjectId, que la page d’accueil ne monte pas : l’invalidation ne visait
+    // aucune requête existante. Le témoin s’écrit donc sur une entrée ALIAS —
+    // au rang où la règle et le raccourci divergent.
+    it('invalide la liste clé-ée sur l’ALIAS, pas seulement celle clé-ée sur l’ObjectId', async () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: Infinity } },
+      });
+      const wrapper = function Wrapper({ children }: { children: React.ReactNode }) {
+        return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+      };
+      const aliasKey = ['messages', 'list', 'meeshy', 'infinite'];
+
+      queryClient.setQueryData(aliasKey, {
+        pages: [
+          {
+            messages: [{ ...createMockMessage('msg-1', 'Hello'), conversationId: UNKNOWN_CONV_ID }],
+            hasMore: false,
+            total: 1,
+          },
+        ],
+        pageParams: [1],
+      });
+
+      renderHook(() => useSocketCacheSync({ conversationId: 'meeshy', enabled: true }), { wrapper });
+
+      await act(async () => {
+        messageRestoredForMeCallback?.({
+          messages: [{ messageId: 'msg-restored', conversationId: UNKNOWN_CONV_ID }],
+        } as never);
+        await Promise.resolve();
+      });
+
+      expect(queryClient.getQueryState(aliasKey)?.isInvalidated).toBe(true);
     });
   });
 });

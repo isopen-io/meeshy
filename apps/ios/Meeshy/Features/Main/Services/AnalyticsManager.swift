@@ -4,6 +4,11 @@ import os
 
 @MainActor
 final class AnalyticsManager {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = AnalyticsManager()
 
     private let logger = Logger(subsystem: "me.meeshy.app", category: "analytics")
@@ -47,6 +52,7 @@ extension Route {
         case .profile: return "Profile"
         case .contacts: return "Contacts"
         case .peopleDiscovery: return "PeopleDiscovery"
+        case .nearbyDiscovery: return "NearbyDiscovery"
         case .communityList: return "CommunityList"
         case .communityDetail: return "CommunityDetail"
         case .communityCreate: return "CommunityCreate"

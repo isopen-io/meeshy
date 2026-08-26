@@ -15,6 +15,8 @@ import {
   TUS_CHUNK_SIZE,
   SMALL_FILE_THRESHOLD,
   ACCEPTED_MIME_TYPES,
+  MAX_POST_MEDIA,
+  isPostMediaUploadContext,
 } from '../../types/attachment.js';
 
 describe('UPLOAD_LIMITS constants', () => {
@@ -28,6 +30,29 @@ describe('UPLOAD_LIMITS constants', () => {
   it('MAX_CONCURRENT_UPLOADS is 3', () => expect(MAX_CONCURRENT_UPLOADS).toBe(3));
   it('TUS_CHUNK_SIZE is 10MB', () => expect(TUS_CHUNK_SIZE).toBe(10 * 1024 * 1024));
   it('SMALL_FILE_THRESHOLD is 50MB', () => expect(SMALL_FILE_THRESHOLD).toBe(50 * 1024 * 1024));
+});
+
+describe('MAX_POST_MEDIA', () => {
+  it('is 10 — the mediaIds cap shared by CreatePostSchema/UpdatePostSchema', () => {
+    expect(MAX_POST_MEDIA).toBe(10);
+  });
+});
+
+describe('isPostMediaUploadContext', () => {
+  it.each(['post', 'story', 'status', 'comment'])(
+    'returns true for %s',
+    (context) => expect(isPostMediaUploadContext(context)).toBe(true),
+  );
+
+  it.each(['message', 'POST', '', 'unknown'])(
+    'returns false for the string %s',
+    (context) => expect(isPostMediaUploadContext(context)).toBe(false),
+  );
+
+  it.each([undefined, null, 42, {}, []])(
+    'returns false for the non-string %j',
+    (context) => expect(isPostMediaUploadContext(context)).toBe(false),
+  );
 });
 
 describe('ACCEPTED_MIME_TYPES constants', () => {
@@ -161,6 +186,48 @@ describe('isAcceptedMimeType', () => {
     'returns false for %s',
     (mimeType) => expect(isAcceptedMimeType(mimeType)).toBe(false),
   );
+});
+
+// Régression It. 267 — quatre gardes sur six ignoraient les paramètres MIME
+// (`; charset=utf-8`), classant `text/plain; charset=utf-8` differemment de
+// `audio/webm;codecs=opus` à la frontière accept/reject. Le nettoyage doit
+// être cohérent sur les SIX familles.
+describe('MIME parameter tolerance (regression It. 267)', () => {
+  it('isImageMimeType strips params (image/png; charset=utf-8 → image/png)', () => {
+    expect(isImageMimeType('image/png; charset=utf-8')).toBe(true);
+  });
+
+  it('isTextMimeType strips params (text/plain; charset=utf-8 → text/plain)', () => {
+    expect(isTextMimeType('text/plain; charset=utf-8')).toBe(true);
+  });
+
+  it('isDocumentMimeType strips params (application/pdf; charset=binary → application/pdf)', () => {
+    expect(isDocumentMimeType('application/pdf; charset=binary')).toBe(true);
+  });
+
+  it('isCodeMimeType strips params (application/json; charset=utf-8 → application/json)', () => {
+    expect(isCodeMimeType('application/json; charset=utf-8')).toBe(true);
+  });
+
+  it('isAcceptedMimeType accepts a parametrised text type, like it does audio', () => {
+    expect(isAcceptedMimeType('text/plain; charset=utf-8')).toBe(true);
+    expect(isAcceptedMimeType('application/json; charset=utf-8')).toBe(true);
+  });
+
+  it('getAttachmentType routes a parametrised code type to code, not the document default', () => {
+    expect(getAttachmentType('application/json; charset=utf-8')).toBe('code');
+  });
+
+  it('getAttachmentType routes a parametrised text type to text', () => {
+    expect(getAttachmentType('text/plain; charset=utf-8')).toBe('text');
+  });
+
+  // Le nettoyage n'ÉLARGIT jamais aux types de base non listés : une base
+  // absente de la liste reste rejetée, paramètre ou non.
+  it('does not widen acceptance to an unlisted base type carrying a param', () => {
+    expect(isImageMimeType('image/svg+xml; charset=utf-8')).toBe(false);
+    expect(isAcceptedMimeType('image/svg+xml; charset=utf-8')).toBe(false);
+  });
 });
 
 describe('getAttachmentType — MIME-based detection (priority 1)', () => {
@@ -408,5 +475,27 @@ describe('formatFileSize', () => {
   it('ignores decimals for exact and zero values', () => {
     expect(formatFileSize(0, { decimals: 1 })).toBe('0 B');
     expect(formatFileSize(1024, { decimals: 1 })).toBe('1 KB');
+  });
+
+  it('renders sub-1-byte positive values in bytes (low-end clamp)', () => {
+    // Regression: Math.floor(Math.log(0.5) / Math.log(1024)) === -1, and the
+    // former Math.min(i, 4) clamped only the high end, leaving the index
+    // negative → FILE_SIZE_UNITS[-1] was undefined and Math.pow(1024, -1)
+    // scaled the value up, so 0.5 rendered as "512 undefined". The index must
+    // be clamped at the low end too.
+    expect(formatFileSize(0.5)).toBe('0.5 B');
+    expect(formatFileSize(0.001)).toBe('0 B');
+  });
+
+  it('folds negative and non-finite inputs to "0 B" (parity with formatClock)', () => {
+    // Math.log of a negative or of NaN is NaN → the index became NaN and the
+    // output "NaN undefined". Negative/non-finite byte counts are nonsensical;
+    // the twin duration formatter (formatClock, duration-format.ts) already
+    // ramène ces entrées à zéro — same contract for this SSOT.
+    expect(formatFileSize(-1)).toBe('0 B');
+    expect(formatFileSize(-1024)).toBe('0 B');
+    expect(formatFileSize(Number.NaN)).toBe('0 B');
+    expect(formatFileSize(Number.POSITIVE_INFINITY)).toBe('0 B');
+    expect(formatFileSize(Number.NEGATIVE_INFINITY)).toBe('0 B');
   });
 });

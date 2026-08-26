@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,7 +48,9 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -142,20 +146,35 @@ fun PostDetailScreen(
                     )
                     else -> PostDetailContent(
                         post = state.post!!,
+                        isReposted = state.isReposted,
                         onFlagTap = viewModel::onFlagTap,
                         onOpenPost = onOpenPost,
+                        onRepost = viewModel::repost,
+                        onQuote = viewModel::beginQuote,
                     )
                 }
             }
         }
+    }
+
+    state.quoteComposer?.let { composer ->
+        QuoteComposerSheet(
+            composer = composer,
+            onTextChange = viewModel::onQuoteTextChange,
+            onSubmit = viewModel::submitQuote,
+            onDismiss = viewModel::cancelQuote,
+        )
     }
 }
 
 @Composable
 private fun PostDetailContent(
     post: FeedPostPresentation,
+    isReposted: Boolean,
     onFlagTap: (String) -> Unit,
     onOpenPost: (String) -> Unit,
+    onRepost: () -> Unit,
+    onQuote: () -> Unit,
 ) {
     val unknownAuthor = stringResource(R.string.feed_unknown_author)
     Column(
@@ -263,7 +282,12 @@ private fun PostDetailContent(
                 }
 
                 Spacer(Modifier.height(MeeshySpacing.md))
-                DetailStatsRow(post = post)
+                DetailStatsRow(
+                    post = post,
+                    isReposted = isReposted,
+                    onRepost = onRepost,
+                    onQuote = onQuote,
+                )
             }
         }
 
@@ -309,7 +333,12 @@ private fun PostReachLine(post: FeedPostPresentation) {
 }
 
 @Composable
-private fun DetailStatsRow(post: FeedPostPresentation) {
+private fun DetailStatsRow(
+    post: FeedPostPresentation,
+    isReposted: Boolean,
+    onRepost: () -> Unit,
+    onQuote: () -> Unit,
+) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         verticalAlignment = Alignment.CenterVertically,
@@ -328,12 +357,11 @@ private fun DetailStatsRow(post: FeedPostPresentation) {
             count = post.commentCount,
             active = false,
         )
-        DetailStat(
-            icon = { tint ->
-                Icon(Icons.Filled.Repeat, contentDescription = stringResource(R.string.feed_reposts), tint = tint, modifier = Modifier.size(18.dp))
-            },
+        DetailRepostStat(
             count = post.repostCount,
-            active = false,
+            active = isReposted,
+            onRepost = onRepost,
+            onQuote = onQuote,
         )
         DetailStat(
             icon = { tint ->
@@ -360,6 +388,59 @@ private fun DetailStat(
                 text = count.toString(),
                 style = MaterialTheme.typography.labelMedium,
                 color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+    }
+}
+
+/**
+ * The repost stat, made interactive: a tap opens a Repost / Quote choice — the Android take on
+ * iOS's post-detail repost button + alert (`PostDetailView.toggleDetailRepost`). The icon fills
+ * once the reader has reposted (optimistic [active]); the menu items route to the ViewModel,
+ * whose tested [RepostCommand] SSOT decides what to send.
+ */
+@Composable
+private fun DetailRepostStat(
+    count: Int,
+    active: Boolean,
+    onRepost: () -> Unit,
+    onQuote: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val tint = if (active) MeeshyPalette.Indigo500 else MeeshyTheme.tokens.textSecondary
+    val a11y = stringResource(R.string.feed_reposts)
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(MeeshyRadius.sm))
+                .clickable { expanded = true }
+                .semantics { contentDescription = a11y },
+        ) {
+            Icon(Icons.Filled.Repeat, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+            if (count > 0) {
+                Spacer(Modifier.width(MeeshySpacing.xs))
+                Text(
+                    text = count.toString(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MeeshyTheme.tokens.textSecondary,
+                )
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.feed_action_repost)) },
+                onClick = {
+                    expanded = false
+                    onRepost()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.feed_action_quote)) },
+                onClick = {
+                    expanded = false
+                    onQuote()
+                },
             )
         }
     }

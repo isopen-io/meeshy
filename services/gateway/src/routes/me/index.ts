@@ -15,6 +15,7 @@ import { deleteAccountRoutes } from './delete-account';
 import { dataExportRoutes } from './export';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendNotFound } from '../../utils/response.js';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 export default async function meRoutes(fastify: FastifyInstance) {
   // Register preferences routes under /me/preferences
@@ -54,20 +55,8 @@ export default async function meRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          401: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: false },
-              message: { type: 'string' }
-            }
-          },
-          404: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: false },
-              message: { type: 'string' }
-            }
-          }
+          401: errorResponseSchema,
+          404: errorResponseSchema
         }
       }
     },

@@ -910,6 +910,12 @@ struct StoryHeaderView: View {
     /// 2026-07-13, angle optimisation).
     @State private var cachedProfileLabel: String = ""
 
+    /// Stickers IMAGE de la slide courante, copiables dans « Mes stickers ».
+    /// Caché pour la MÊME raison que `cachedProfileLabel` : le header est
+    /// reconstruit à chaque tick de la barre de progression, et le contenu
+    /// d'un `Menu` est construit avec lui.
+    @State private var savableStickers: [StoryStickerLibrary.Savable] = []
+
     /// Label VoiceOver du bouton profil auteur — inclut l'attribution de
     /// republication (icône + @handle visuels que ce label unique remplace).
     private func computeProfileLabel(for group: StoryGroup) -> String {
@@ -1152,6 +1158,35 @@ struct StoryHeaderView: View {
                             Label(String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.fill")
                         }
 
+                        // S5 — « enregistrer ce sticker », depuis le contenu
+                        // REÇU. Le lecteur de stories est la surface où l'on
+                        // rencontre le sticker d'un autre ; le menu (…) y est
+                        // déjà l'endroit des actions sur la slide courante,
+                        // aux côtés des trois formes de partage.
+                        //
+                        // Loi 4 : rien à copier, rien d'offert. La liste est
+                        // vide dès que la slide ne porte aucun sticker IMAGE —
+                        // un sticker emoji n'a aucune image à garder.
+                        if !savableStickers.isEmpty {
+                            Button {
+                                HapticFeedback.light()
+                                let stickers = savableStickers
+                                Task { await StickerLibraryReceive.saveAndAnnounce(stickers) }
+                            } label: {
+                                Label(
+                                    savableStickers.count == 1
+                                        ? String(localized: "story.viewer.sticker.save.one",
+                                                 defaultValue: "Enregistrer le sticker",
+                                                 bundle: .main)
+                                        : String(format: String(localized: "story.viewer.sticker.save.many",
+                                                                defaultValue: "Enregistrer les %d stickers",
+                                                                bundle: .main),
+                                                 savableStickers.count),
+                                    systemImage: "square.and.arrow.down"
+                                )
+                            }
+                        }
+
                         // ── Les TROIS formes de partage (demande produit
                         // 2026-08-19) ─────────────────────────────────────────
                         //
@@ -1177,11 +1212,22 @@ struct StoryHeaderView: View {
 
                         // 1. Republier en post — DIRECT, un tap (arbitrage D3).
                         // Sans `visibility` : le serveur hérite de l'audience de
-                        // l'original, donc jamais plus large.
+                        // l'original, donc jamais plus large. C'est l'ANCRAGE web
+                        // (`onRepostAsPost` / `KeepOnFeedIcon`, StoryViewer.tsx) :
+                        // glyphe DISTINCT du bouton du rail (:519, composeur), qui
+                        // portait le même `arrow.2.squarepath` avant le premier
+                        // correctif — deux permanences différentes n'ont pas le
+                        // même dessin. `bookmark.fill` (premier choix) désigne
+                        // déjà « Publications enregistrées » ailleurs dans l'app
+                        // (SettingsView.swift:606 et 4 autres sites, constat de
+                        // revue R3, 2026-08-25) : collision levée dans CE fichier,
+                        // rouverte à l'échelle de l'app. `infinity` reste libre de
+                        // tout sens produit concurrent et porte la permanence
+                        // (story éphémère → post durable).
                         Button {
                             repostAsPostDirect()
                         } label: {
-                            Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "arrow.2.squarepath")
+                            Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
                         }
 
                         // 2. Citer en post — ouvre le composeur de POST avec la
@@ -1275,6 +1321,9 @@ struct StoryHeaderView: View {
             .frame(minWidth: 44, minHeight: 44)
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
             .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
+        }
+        .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
+            savableStickers = currentStory.map { StoryStickerLibrary.savable(in: $0) } ?? []
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(

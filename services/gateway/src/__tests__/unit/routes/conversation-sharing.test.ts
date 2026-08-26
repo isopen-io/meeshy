@@ -3,8 +3,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 // ─── Module mocks (must be hoisted before imports) ────────────────────────────
 
 const mockResolveConversationId = jest.fn<any>();
-const mockGenerateInitialLinkId = jest.fn<any>().mockReturnValue('initial-link-id');
-const mockGenerateFinalLinkId = jest.fn<any>().mockReturnValue('final-link-id');
+const mockGenerateUniqueShareLinkId = jest.fn<any>().mockResolvedValue('mshy_TestLnk1');
 const mockEnsureUniqueShareLinkIdentifier = jest.fn<any>().mockResolvedValue('mshy_unique');
 
 const mockSendSuccess = jest.fn<any>((reply: any, data: any) => {
@@ -44,9 +43,12 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
 
+// PROLONGER le module, jamais le REMPLACER (CLAUDE.md § « Un double PARTIEL
+// d'un module perd en silence tout ce que le module GAGNE ») : un double qui
+// énumère ses exports rend `undefined` au premier que le module gagne.
 jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
-  generateInitialLinkId: (...args: any[]) => mockGenerateInitialLinkId(...args),
-  generateFinalLinkId: (...args: any[]) => mockGenerateFinalLinkId(...args),
+  ...(jest.requireActual('../../../routes/conversations/utils/identifier-generator') as object),
+  generateUniqueShareLinkId: (...args: any[]) => mockGenerateUniqueShareLinkId(...args),
   ensureUniqueShareLinkIdentifier: (...args: any[]) => mockEnsureUniqueShareLinkIdentifier(...args),
 }));
 
@@ -77,13 +79,16 @@ jest.mock('@meeshy/shared/utils/errors', () => ({
   sendErrorResponse: jest.fn<any>(),
 }));
 
-// Gate de présence — les profils servis par ces deux routes sont des
-// CO-PARTICIPANTS de la conversation : contexte d'accès déjà garanti des deux
-// côtés, donc `resolvePrefsOnly` (et non le critère strict).
-const mockResolvePrefsOnly = jest.fn<any>();
+// Gate de présence. Régime STRICT (2026-08-25) : partager une conversation
+// n'ouvre plus rien — la réponse à l'inviteur montre la présence de l'invité
+// selon SA propre autorisation (soi/ADMIN+/ami), via `resolveForTarget`
+// (cible unique), jamais sur la seule co-participation qu'il vient de créer.
+// Le service n'est doublé que sur son I/O : `lawFaithfulTargetResolver`
+// applique la VRAIE loi partagée à un ensemble d'amis piloté par le test.
+const mockResolveForTarget = jest.fn<any>(async () => ({ showOnline: false, showLastSeenTimestamp: false }));
 jest.mock('../../../services/PresenceVisibilityService', () => ({
   getPresenceVisibilityService: () => ({
-    resolvePrefsOnly: (...args: any[]) => mockResolvePrefsOnly(...args),
+    resolveForTarget: (...args: any[]) => mockResolveForTarget(...args),
   }),
 }));
 
@@ -96,6 +101,8 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer, PresenceTarget } from '../../../services/PresenceVisibilityService';
 import { registerSharingRoutes } from '../../../routes/conversations/sharing';
 
 // ─── IDs ──────────────────────────────────────────────────────────────────────
@@ -104,16 +111,22 @@ const CONV_ID = '507f1f77bcf86cd799439011';
 const USER_ID = '507f1f77bcf86cd799439022';
 const INVITEE_ID = '507f1f77bcf86cd799439033';
 
-const PREFS_FULL = { showOnline: true, showLastSeenTimestamp: true };
-const PREFS_HIDDEN = { showOnline: false, showLastSeenTimestamp: false };
+const PREFS_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
 
-// Défaut du double : tout montrable, pour que les cas de ce fichier qui ne
-// parlent pas de présence restent inchangés.
-beforeEach(() => {
-  mockResolvePrefsOnly.mockImplementation(async (ids: string[]) =>
-    new Map((ids ?? []).map((id) => [id, PREFS_FULL])),
-  );
-});
+const lawFaithfulTargetResolver =
+  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  async (viewer: PresenceViewer, target: PresenceTarget) =>
+    viewer
+      ? resolvePresenceVisibility({
+          isSelf: viewer.userId === target.id,
+          viewerRole: viewer.role,
+          areConnected: friendsOfViewer.has(target.id),
+          targetShowOnlineStatus: true,
+          targetShowLastSeen: true,
+          targetIsDeactivated: false,
+          isBlockedEitherWay: false,
+        })
+      : PREFS_HIDDEN;
 const PART_ID = '507f1f77bcf86cd799439044';
 const LINK_ID = '507f1f77bcf86cd799439055';
 
@@ -225,11 +238,14 @@ function getRoute(fastify: ReturnType<typeof createMockFastify>, method: string,
   return r;
 }
 
+// `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit : c'est sur elle que `viewerFromRequest` construit le viewer
+// de présence.
 function makeRequest(overrides: Record<string, any> = {}) {
   return {
     params: {},
     body: {},
-    authContext: { userId: USER_ID, isAuthenticated: true, registeredUser: { id: USER_ID, role: 'USER' } },
+    authContext: { type: 'user', userId: USER_ID, isAuthenticated: true, registeredUser: { id: USER_ID, role: 'USER' } },
     ...overrides,
   };
 }
@@ -279,8 +295,7 @@ function setup() {
 describe('POST /conversations/:id/new-link', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGenerateInitialLinkId.mockReturnValue('initial-link-id');
-    mockGenerateFinalLinkId.mockReturnValue('final-link-id');
+    mockGenerateUniqueShareLinkId.mockResolvedValue('mshy_TestLnk1');
     mockEnsureUniqueShareLinkIdentifier.mockResolvedValue('mshy_unique');
   });
 
@@ -381,7 +396,7 @@ describe('POST /conversations/:id/new-link', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
     expect(mockSendSuccess).toHaveBeenCalled();
-    expect(reply._body?.data).toMatchObject({ code: 'final-link-id' });
+    expect(reply._body?.data).toMatchObject({ code: 'mshy_TestLnk1' });
   });
 
   it('creates link with name-based identifier', async () => {
@@ -408,15 +423,17 @@ describe('POST /conversations/:id/new-link', () => {
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
-  it('creates link with timestamp-based identifier when no name or description', async () => {
+  // 2026-08-23 — la route ne FABRIQUE plus d'identifiant horodaté quand elle
+  // n'a ni nom ni description : elle passe une base VIDE, et le repli compact
+  // et opaque est décidé par `ensureUniqueShareLinkIdentifier` (source unique).
+  // L'ancien témoin gravait `mshy_link-<Date.now()>-<Math.random()>` dans la
+  // route, c'est-à-dire à l'endroit exact où la règle ne doit pas vivre.
+  it('passes an EMPTY base when there is neither name nor description', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
     stubSuccess(prisma);
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
-    expect(mockEnsureUniqueShareLinkIdentifier).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.stringMatching(/^mshy_link-\d+-.+/)
-    );
+    expect(mockEnsureUniqueShareLinkIdentifier).toHaveBeenCalledWith(expect.anything(), '');
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
@@ -426,12 +443,12 @@ describe('POST /conversations/:id/new-link', () => {
     const req = makeRequest({ params: { id: CONV_ID }, body: { name: 'Test Link', maxUses: 10 } });
     await route.handler(req, reply);
     expect(reply._body?.data).toMatchObject({
-      code: 'final-link-id',
+      code: 'mshy_TestLnk1',
       // `/chat/:linkId` est l'URL canonique d'un lien de partage — `/join`
       // n'est plus qu'une redirection 308 : le lien FABRIQUÉ ne doit plus
       // jamais prendre le détour.
-      link: expect.stringContaining('/chat/final-link-id'),
-      shareLink: expect.objectContaining({ linkId: 'final-link-id' }),
+      link: expect.stringContaining('/chat/mshy_TestLnk1'),
+      shareLink: expect.objectContaining({ linkId: 'mshy_TestLnk1' }),
     });
   });
 
@@ -459,173 +476,23 @@ describe('POST /conversations/:id/new-link', () => {
 // PATCH /conversations/:id — Update conversation
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('PATCH /conversations/:id', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  function getPatchRoute() {
-    const { fastify, prisma, reply } = setup();
-    const route = getRoute(fastify, 'PATCH', '/conversations/:id');
-    return { prisma, reply, route };
-  }
-
-  function stubMembership(prisma: any, membershipOverrides: Record<string, any> = {}) {
-    mockResolveConversationId.mockResolvedValue(CONV_ID);
-    prisma.participant.findFirst.mockResolvedValue(
-      makeParticipant({ role: 'member', ...membershipOverrides })
-    );
-  }
-
-  it('returns 401 when not authenticated', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    const req = makeRequest({
-      params: { id: CONV_ID },
-      body: { title: 'New Title' },
-      authContext: { userId: USER_ID, isAuthenticated: false, registeredUser: null },
-    });
-    await route.handler(req, reply);
-    expect(mockSendUnauthorized).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('returns 403 when resolveConversationId returns null', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    mockResolveConversationId.mockResolvedValue(null);
-    const req = makeRequest({
-      params: { id: 'unknown-slug' },
-      body: { title: 'New' },
-      authContext: { userId: USER_ID, isAuthenticated: true },
-    });
-    await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('returns 403 when user is not a member', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    mockResolveConversationId.mockResolvedValue(CONV_ID);
-    prisma.participant.findFirst.mockResolvedValue(null);
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } });
-    await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('allows any member to update title', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'New Title' } });
-    await route.handler(req, reply);
-    expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ title: 'New Title' }) })
-    );
-    expect(mockSendSuccess).toHaveBeenCalled();
-  });
-
-  it('allows any member to update description', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    const req = makeRequest({ params: { id: CONV_ID }, body: { description: 'New desc' } });
-    await route.handler(req, reply);
-    expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ description: 'New desc' }) })
-    );
-    expect(mockSendSuccess).toHaveBeenCalled();
-  });
-
-  it('returns 403 when non-admin/non-creator tries to change type', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma, { role: 'member', user: { id: USER_ID, role: 'USER' } });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { type: 'public' } });
-    await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('allows creator to change type', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma, { role: 'creator', user: { id: USER_ID, role: 'USER' } });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { type: 'public' } });
-    await route.handler(req, reply);
-    expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ type: 'public' }) })
-    );
-    expect(mockSendSuccess).toHaveBeenCalled();
-  });
-
-  it('allows ADMIN to change type', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma, { role: 'member', user: { id: USER_ID, role: 'ADMIN' } });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { type: 'group' } });
-    await route.handler(req, reply);
-    expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ type: 'group' }) })
-    );
-    expect(mockSendSuccess).toHaveBeenCalled();
-  });
-
-  it('allows BIGBOSS to change type', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma, { role: 'member', user: { id: USER_ID, role: 'BIGBOSS' } });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { type: 'public' } });
-    await route.handler(req, reply);
-    expect(mockSendSuccess).toHaveBeenCalled();
-  });
-
-  it('handles P2002 (duplicate name) with conflict response', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    prisma.conversation.update.mockRejectedValue({ code: 'P2002' });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'Taken' } });
-    await route.handler(req, reply);
-    expect(mockSendConflict).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('handles P2025 (not found) with not-found response', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    prisma.conversation.update.mockRejectedValue({ code: 'P2025' });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'Any' } });
-    await route.handler(req, reply);
-    expect(mockSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('handles P2003 (bad ref) with bad-request response', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    prisma.conversation.update.mockRejectedValue({ code: 'P2003' });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'Any' } });
-    await route.handler(req, reply);
-    expect(mockSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('handles ValidationError with bad-request response', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    prisma.conversation.update.mockRejectedValue({ name: 'ValidationError', message: 'bad data' });
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'Any' } });
-    await route.handler(req, reply);
-    expect(mockSendBadRequest).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('handles unexpected error with internal error response', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    prisma.conversation.update.mockRejectedValue(new Error('network timeout'));
-    const req = makeRequest({ params: { id: CONV_ID }, body: { title: 'Any' } });
-    await route.handler(req, reply);
-    expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
-  });
-
-  it('does not include title in update if undefined', async () => {
-    const { prisma, reply, route } = getPatchRoute();
-    stubMembership(prisma);
-    const req = makeRequest({ params: { id: CONV_ID }, body: { description: 'Only desc' } });
-    await route.handler(req, reply);
-    const updateCall = prisma.conversation.update.mock.calls[0][0];
-    expect(updateCall.data).not.toHaveProperty('title');
-    expect(updateCall.data).toHaveProperty('description', 'Only desc');
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /conversations/:conversationId/links — Get share links
-// ─────────────────────────────────────────────────────────────────────────────
+// `PATCH /conversations/:id` NE VIT PLUS DANS `sharing.ts`.
+//
+// Ce fichier portait trois blocs de témoins pour la route jumelle du `PUT` de
+// `core.ts`. Elle a été supprimée : deux exemplaires d'un même geste avaient
+// divergé, et celui-ci acceptait `title`/`description`/`type` seulement, sans
+// garde de rang ni événement — le web lui postait `avatar`/`banner`, qu'il
+// ignorait sous une réponse 200.
+//
+// Ce qui a été PORTÉ vers `conversation-update-route.test.ts`, sur les DEUX
+// verbes : le gate de présence des participants (désormais en régime STRICT
+// — soi/ADMIN+/ami —, préférences indépendantes comprises) — c'est ce que cet
+// exemplaire-ci avait de PLUS, et le `PUT` ne l'avait jamais eu.
+//
+// Ce qui a été RETIRÉ avec la route, délibérément : « n'importe quel membre
+// peut renommer » (la faille d'autorisation), et les quatre témoins de mutation
+// de `type` (aucun client ne l'envoie, et la changer déplace les invariants
+// d'admission d'écriture sans que rien ne les recalcule).
 
 describe('GET /conversations/:conversationId/links', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -1142,6 +1009,150 @@ describe('POST /conversations/:id/invite', () => {
     expect(mockSendSuccess).toHaveBeenCalled();
   });
 
+  // ── Cycle 92 : la charge utile de l'invitation ────────────────────────────
+  //
+  // Cette route déclarait `membership` et envoyait `member` : fast-json-stringify
+  // supprimait donc TOUT le participant, et personne ne s'en apercevait — le seul
+  // client (web `invite-user-modal`) ne lit que l'enveloppe `success` et recharge
+  // la liste. Le lot du cycle 91 bis (§6) refusait d'aligner les deux noms SANS
+  // poser le gate dans le même commit, parce que `Participant.isOnline` et
+  // `lastActiveAt` sont DÉCLARÉS par `conversationParticipantSchema` : un rang
+  // brut les aurait publiés sans garde. Les deux arrivent donc ensemble, ici.
+  describe('la charge utile du nouvel adhérent', () => {
+    const invitedRow = (over: Record<string, unknown> = {}) => ({
+      id: 'new-part',
+      conversationId: CONV_ID,
+      userId: INVITEE_ID,
+      type: 'user',
+      displayName: 'Bob',
+      avatar: null,
+      role: 'member',
+      language: 'fr',
+      isActive: true,
+      isOnline: true,
+      lastActiveAt: new Date('2026-08-22T09:00:00.000Z'),
+      joinedAt: new Date('2026-08-22T10:00:00.000Z'),
+      permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true },
+      user: makeTargetUser(),
+      // État privé par paire : le rang Prisma le porte, aucune surface ne le sert.
+      bannedAt: null,
+      leftAt: null,
+      deletedForMe: null,
+      nickname: 'surnom privé',
+      shareLinkId: 'lnk-1',
+      sessionTokenHash: null,
+      ...over,
+    });
+
+    async function invite(row: Record<string, unknown>, viewerRole: string = 'USER') {
+      const { fastify, reply, route } = getInviteRoute();
+      fastify.prisma.conversation.findUnique.mockResolvedValue(
+        makeConversation([makeInviterParticipant('admin')]),
+      );
+      fastify.prisma.user.findUnique.mockResolvedValue(makeTargetUser());
+      fastify.prisma.participant.create.mockResolvedValue(row);
+      const req = makeRequest({
+        params: { id: CONV_ID },
+        body: { userId: INVITEE_ID },
+        authContext: { type: 'user', userId: USER_ID, isAuthenticated: true, registeredUser: { id: USER_ID, role: viewerRole } },
+      });
+      await route.handler(req, reply);
+      return mockSendSuccess.mock.calls.at(-1)?.[1];
+    }
+
+    it('sert le participant sous la clé que le schéma déclare', async () => {
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant).toBeDefined();
+      expect(payload.participant.participantId).toBe('new-part');
+      expect(payload.participant.userId).toBe(INVITEE_ID);
+    });
+
+    it('sépare le rang de conversation du rôle global', async () => {
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.conversationRole).toBe('member');
+      expect(payload.participant.role).toBe('USER');
+    });
+
+    it('masque la présence quand l\'invité refuse de montrer son statut', async () => {
+      mockResolveForTarget.mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.isOnline).toBe(false);
+      expect(payload.participant.lastActiveAt).toBeNull();
+    });
+
+    // La porte : le viewer DEMANDEUR — identité ET rôle — atteint le service,
+    // avec l'invité pour cible. Sans le rôle, ADMIN et USER seraient
+    // indiscernables ; sans l'identité, l'amitié le serait.
+    it('consulte le gate sur l\'invité, pour l\'inviteur (identité + rôle)', async () => {
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
+
+      await invite(invitedRow());
+
+      expect(mockResolveForTarget).toHaveBeenCalledWith(
+        { userId: USER_ID, role: 'USER' },
+        { id: INVITEE_ID, deactivatedAt: null },
+      );
+    });
+
+    // Régime STRICT : l'invitation crée une co-participation, et une
+    // co-participation n'est pas une relation — la présence de l'invité suit
+    // l'autorisation PROPRE de l'inviteur.
+    it('invité ami accepté ⇒ présence servie', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([INVITEE_ID])));
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.isOnline).toBe(true);
+      expect(payload.participant.lastActiveAt).toEqual(new Date('2026-08-22T09:00:00.000Z'));
+    });
+
+    it('invité NON ami ⇒ isOnline false et lastActiveAt null, malgré la co-participation créée', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant.isOnline).toBe(false);
+      expect(payload.participant.lastActiveAt).toBeNull();
+    });
+
+    it('inviteur ADMIN non ami ⇒ présence servie', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
+
+      const payload = await invite(invitedRow(), 'ADMIN');
+
+      expect(payload.participant.isOnline).toBe(true);
+      expect(payload.participant.lastActiveAt).toEqual(new Date('2026-08-22T09:00:00.000Z'));
+    });
+
+    it('inviteur MODERATOR non ami ⇒ cachée, comme un utilisateur ordinaire', async () => {
+      mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
+
+      const payload = await invite(invitedRow(), 'MODERATOR');
+
+      expect(payload.participant.isOnline).toBe(false);
+      expect(payload.participant.lastActiveAt).toBeNull();
+    });
+
+    it('ne recopie pas l\'état privé par paire du rang Prisma', async () => {
+      mockResolveForTarget.mockResolvedValue({ showOnline: true, showLastSeenTimestamp: true });
+
+      const payload = await invite(invitedRow());
+
+      expect(payload.participant).not.toHaveProperty('nickname');
+      expect(payload.participant).not.toHaveProperty('shareLinkId');
+      expect(payload.participant).not.toHaveProperty('bannedAt');
+      expect(payload.participant).not.toHaveProperty('deletedForMe');
+    });
+  });
+
   it('returns 404 when user to invite not found', async () => {
     const { fastify, reply, route } = getInviteRoute();
     const inviter = makeInviterParticipant('admin');
@@ -1276,8 +1287,12 @@ describe('POST /conversations/:id/invite', () => {
     fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', user: targetUser });
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
+    // Ce témoin assertait `member` — le nom que le HANDLER employait, et que le
+    // schéma de réponse supprimait. Il était vert parce qu'il mocke `sendSuccess`
+    // et ne traverse donc jamais le sérialiseur : il attestait une clé que le
+    // client n'a jamais reçue. Repointé sur la clé DÉCLARÉE.
     expect(reply._body?.data).toMatchObject({
-      member: expect.objectContaining({ id: 'new-part' }),
+      participant: expect.objectContaining({ participantId: 'new-part' }),
       message: expect.stringContaining('Bob'),
     });
   });
@@ -1422,135 +1437,6 @@ describe('Avis d’arrivée — POST /conversations/join/:linkId', () => {
     expect(mockSendSuccess).toHaveBeenCalledWith(reply, expect.objectContaining({ conversationId: CONV_ID }));
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Gate de présence — PATCH /conversations/:id et POST /conversations/:id/invite
-// ─────────────────────────────────────────────────────────────────────────────
-//
-// Les deux routes servent des profils de CO-PARTICIPANTS avec la présence
-// portée par la ligne `Participant` elle-même (`isOnline` / `lastActiveAt`),
-// que `conversationParticipantSchema` déclare — donc qui atteint le fil. Aucune
-// des deux ne passait par `PresenceVisibilityService`, quand la liste de
-// participants (`routes/conversations/participants.ts`) le fait depuis
-// longtemps, à trois lignes de distance dans le même domaine.
-//
-// Régime : `resolvePrefsOnly`. La co-participation est un contexte d'accès
-// garanti des DEUX côtés — seules les préférences s'appliquent. Et un id
-// ABSENT de la carte vaut MONTRABLE, à l'inverse du critère strict : les
-// participants anonymes n'ont pas de `userId`, donc pas de préférences, et ils
-// doivent rester visibles.
-
-describe('PATCH /conversations/:id — gate de présence des participants', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  function participantRow(over: Record<string, any> = {}) {
-    return {
-      id: PART_ID,
-      displayName: 'Alice',
-      avatar: null,
-      type: 'user',
-      role: 'member',
-      language: 'fr',
-      userId: USER_ID,
-      isOnline: true,
-      lastActiveAt: new Date('2026-08-22T10:00:00.000Z'),
-      user: { id: USER_ID, username: 'alice', isOnline: true, lastActiveAt: new Date('2026-08-22T10:00:00.000Z') },
-      ...over,
-    };
-  }
-
-  async function patchWith(participants: any[]) {
-    const { fastify, prisma, reply } = setup();
-    const route = getRoute(fastify, 'PATCH', '/conversations/:id');
-    mockResolveConversationId.mockResolvedValue(CONV_ID);
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'admin' }));
-    prisma.conversation.update.mockResolvedValue({ id: CONV_ID, title: 'T', participants });
-    await route.handler(
-      makeRequest({ params: { id: CONV_ID }, body: { title: 'New Title' } }),
-      reply,
-    );
-    const [, served] = mockSendSuccess.mock.calls[0];
-    return served as any;
-  }
-
-  it('masque la présence d un participant qui l a coupée', async () => {
-    mockResolvePrefsOnly.mockResolvedValue(new Map([[USER_ID, PREFS_HIDDEN]]));
-
-    const served = await patchWith([participantRow()]);
-
-    expect(served.participants[0].isOnline).toBe(false);
-    expect(served.participants[0].lastActiveAt).toBeNull();
-  });
-
-  it('conserve la présence quand les préférences l autorisent', async () => {
-    const served = await patchWith([participantRow()]);
-
-    expect(served.participants[0].isOnline).toBe(true);
-    expect(served.participants[0].lastActiveAt).not.toBeNull();
-  });
-
-  it('résout les userId des participants enregistrés', async () => {
-    await patchWith([participantRow()]);
-
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([USER_ID]);
-  });
-
-  // Un anonyme n'a pas de compte : aucune préférence à appliquer, et il reste
-  // visible. C'est l'inverse du défaut du critère strict, et c'est voulu.
-  it('laisse un participant anonyme visible malgré l absence de préférences', async () => {
-    const served = await patchWith([
-      participantRow({ id: 'part-anon', userId: null, type: 'anonymous' }),
-    ]);
-
-    expect(served.participants[0].isOnline).toBe(true);
-    expect(mockResolvePrefsOnly).toHaveBeenCalledWith([]);
-  });
-});
-
-// Les deux préférences sont INDÉPENDANTES : couper le seul horodatage laisse la
-// pastille. Un collapse qui les traiterait comme un seul drapeau passerait les
-// témoins ci-dessus sans que celui-ci tienne.
-describe('PATCH /conversations/:id — showLastSeen coupé seul', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('retire l horodatage et garde la pastille', async () => {
-    const { fastify, prisma, reply } = setup();
-    const route = getRoute(fastify, 'PATCH', '/conversations/:id');
-    mockResolveConversationId.mockResolvedValue(CONV_ID);
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'admin' }));
-    prisma.conversation.update.mockResolvedValue({
-      id: CONV_ID,
-      title: 'T',
-      participants: [{
-        id: PART_ID,
-        userId: USER_ID,
-        displayName: 'Alice',
-        isOnline: true,
-        lastActiveAt: new Date('2026-08-22T10:00:00.000Z'),
-      }],
-    });
-    mockResolvePrefsOnly.mockResolvedValue(
-      new Map([[USER_ID, { showOnline: true, showLastSeenTimestamp: false }]])
-    );
-
-    await route.handler(makeRequest({ params: { id: CONV_ID }, body: { title: 'New' } }), reply);
-
-    const [, served] = mockSendSuccess.mock.calls[0] as [unknown, any];
-    expect(served.participants[0].isOnline).toBe(true);
-    expect(served.participants[0].lastActiveAt).toBeNull();
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /conversations/:id/invite — ne charger que ce qui a un destinataire
-//
-// Le schéma de réponse déclare `data.membership` quand le handler renvoie
-// `data.member` : fast-json-stringify supprime l'objet en entier, et `isOnline`
-// n'a donc jamais eu de lecteur. Ce témoin garde une décision de CHARGEMENT —
-// il n'atteste pas la réponse, et c'est assumé : le jour où la dérive
-// `member`/`membership` est corrigée, un champ qu'on ne charge pas ne peut pas
-// fuir par cette réparation-là.
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('POST /conversations/:id/invite — profil de l invité', () => {
   beforeEach(() => jest.clearAllMocks());

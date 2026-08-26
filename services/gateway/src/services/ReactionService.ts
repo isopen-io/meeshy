@@ -8,13 +8,19 @@ import { PrismaClient, Reaction } from '@meeshy/shared/prisma/client';
 import type {
   ReactionData,
   ReactionAggregation,
+  ReactionBroadcastAggregation,
   ReactionSync,
   ReactionUpdateEvent
 } from '@meeshy/shared/types';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
-import { isReactionAllowed, REACTION_LIMIT_REACHED_MESSAGE } from '@meeshy/shared/utils/reaction-limit';
+import {
+  resolveParticipantAvatar,
+  resolveParticipantDisplayName
+} from '@meeshy/shared/utils/participant-helpers';
+import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { ConflictError } from '../errors/custom-errors.js';
+import { assertValidObjectId } from '../utils/object-id.js';
 
 /**
  * Le motif « le conteneur est terminé », sous forme de CONSTANTE et non de
@@ -60,12 +66,8 @@ export interface AddReactionResult {
 }
 
 export class ReactionService {
-  private static readonly OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
-
   private validateMessageId(messageId: string): void {
-    if (!messageId || !ReactionService.OBJECT_ID_REGEX.test(messageId)) {
-      throw new Error(`Invalid message ID format: ${messageId.substring(0, 20)}`);
-    }
+    assertValidObjectId(messageId, 'message');
   }
 
   constructor(private readonly prisma: PrismaClient) {}
@@ -167,13 +169,12 @@ export class ReactionService {
     const existingReactionCount = await this.prisma.reaction.count({
       where: { messageId, participantId }
     });
-    if (!isReactionAllowed(existingReactionCount)) {
-      // `ConflictError`, pas une `Error` nue : les routes REST qui exposent ce
-      // service (`routes/reactions.ts`, `routes/conversations/messages-advanced.ts`)
-      // trient sur `instanceof ConflictError` pour répondre 409 (refus légitime)
-      // plutôt que de laisser leur catch générique retomber sur un 500.
-      throw new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED');
-    }
+    // `assertReactionAllowed` jette `ConflictError` (jamais une `Error` nue) : les
+    // routes REST qui exposent ce service (`routes/reactions.ts`,
+    // `routes/conversations/messages-advanced.ts`) trient sur `instanceof
+    // ConflictError` pour répondre 409 (refus légitime) plutôt que de laisser
+    // leur catch générique retomber sur un 500.
+    assertReactionAllowed(existingReactionCount);
 
     // Multi-réactions (2026-08-18) : la clé unique DB porte le TRIPLET
     // (messageId, participantId, emoji) — poser un second emoji EMPILE, il
@@ -283,7 +284,13 @@ export class ReactionService {
     const participants = allParticipantIds.size > 0
       ? await this.prisma.participant.findMany({
           where: { id: { in: Array.from(allParticipantIds) } },
-          select: { id: true, displayName: true, avatar: true, userId: true }
+          select: {
+            id: true,
+            displayName: true,
+            avatar: true,
+            userId: true,
+            user: { select: { displayName: true, avatar: true } }
+          }
         })
       : [];
 
@@ -296,8 +303,8 @@ export class ReactionService {
         const reaction = reactions.find(r => r.emoji === agg.emoji && r.participantId === pid);
         return {
           participantId: pid,
-          username: participant?.displayName ?? 'Anonymous',
-          avatar: participant?.avatar ?? null,
+          username: resolveParticipantDisplayName(participant) ?? 'Anonymous',
+          avatar: resolveParticipantAvatar(participant),
           createdAt: reaction?.createdAt?.toISOString() ?? new Date().toISOString()
         };
       })
@@ -315,11 +322,18 @@ export class ReactionService {
     };
   }
 
-  async getEmojiAggregation(
+  /**
+   * L'état ABSOLU d'un emoji sur un message : ce qui est vrai pour tout le monde.
+   *
+   * C'est la seule forme qu'une DIFFUSION peut porter — elle n'a pas de lecteur,
+   * donc pas de « moi » à résoudre. La résolution par-lecteur est un étage
+   * au-dessus (`getEmojiAggregation`), et elle n'est appelable que là où l'on
+   * sait à qui l'on répond.
+   */
+  async getBroadcastAggregation(
     messageId: string,
-    emoji: string,
-    currentParticipantId?: string
-  ): Promise<ReactionAggregation> {
+    emoji: string
+  ): Promise<ReactionBroadcastAggregation> {
     this.validateMessageId(messageId);
 
     const sanitized = sanitizeEmoji(emoji);
@@ -334,17 +348,33 @@ export class ReactionService {
       }
     });
 
-    const participantIds = reactions.map(r => r.participantId);
-
-    const hasCurrentUser = reactions.some(r =>
-      currentParticipantId && r.participantId === currentParticipantId
-    );
-
     return {
       emoji: sanitized,
       count: reactions.length,
-      participantIds,
-      hasCurrentUser
+      participantIds: reactions.map(r => r.participantId)
+    };
+  }
+
+  /**
+   * L'agrégation absolue, RÉSOLUE pour un lecteur nommé.
+   *
+   * Chemin REST uniquement : `currentParticipantId` y est le lecteur de la
+   * requête, ce qui donne à `hasCurrentUser` un sens. Ne pas rappeler cette
+   * méthode pour construire une charge diffusée — l'id qu'on aurait à lui passer
+   * serait celui de l'ACTEUR, et sa réponse partirait à toute la room.
+   */
+  async getEmojiAggregation(
+    messageId: string,
+    emoji: string,
+    currentParticipantId?: string
+  ): Promise<ReactionAggregation> {
+    const aggregation = await this.getBroadcastAggregation(messageId, emoji);
+
+    return {
+      ...aggregation,
+      hasCurrentUser: aggregation.participantIds.some(
+        participantId => !!currentParticipantId && participantId === currentParticipantId
+      )
     };
   }
 
@@ -429,11 +459,13 @@ export class ReactionService {
     conversationId: string,
     userId: string
   ): Promise<ReactionUpdateEvent> {
-    const aggregation = await this.getEmojiAggregation(
-      messageId,
-      emoji,
-      participantId
-    );
+    // `getBroadcastAggregation`, PAS `getEmojiAggregation(…, participantId)` :
+    // cet événement part vers toute la room. Résoudre « moi » ici ne pouvait le
+    // résoudre que pour l'ACTEUR, et le résultat était de surcroît sans
+    // information — l'agrégat étant relu APRÈS la mutation, il valait `true`
+    // sur tout `add` et `false` sur tout `remove`, soit `action` réécrit une
+    // couche plus bas. Chaque destinataire dérive le sien de `userId`.
+    const aggregation = await this.getBroadcastAggregation(messageId, emoji);
 
     return {
       messageId,

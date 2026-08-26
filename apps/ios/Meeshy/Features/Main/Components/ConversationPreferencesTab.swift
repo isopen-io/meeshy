@@ -350,7 +350,7 @@ struct ConversationPreferencesTab: View {
     }
 
     private var actionsSection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.actions", defaultValue: "Actions", bundle: .main), icon: "ellipsis.circle.fill", color: "6B7280") {
+        settingsSection(title: String(localized: "conversation.prefs.section.actions", defaultValue: "Actions", bundle: .main), icon: "ellipsis.circle.fill", color: MeeshyColors.neutral500Hex) {
             Button {
                 showArchiveConfirm = true
             } label: {
@@ -380,7 +380,7 @@ struct ConversationPreferencesTab: View {
             Button {
                 showDeleteConfirm = true
             } label: {
-                settingsRow(icon: "trash.fill", iconColor: "F87171", title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
+                settingsRow(icon: "trash.fill", iconColor: MeeshyColors.errorHex, title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
                     EmptyView()
                 }
                 .foregroundColor(MeeshyColors.error)

@@ -394,13 +394,29 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         } catch { return nil }
     }()
 
+    /// Pré-enregistre la bulle d'un message qui ARRIVE, et rien d'autre.
+    ///
+    /// Deux verrous, et aucun ne subsume l'autre :
+    ///
+    ///  1. **le TYPE** — `prePersistedMessagePlan` refuse tout push dont le
+    ///     `messageId` ne désigne pas un message qui arrive. Il n'y avait aucun
+    ///     gate ici, alors que le frère d'en dessous (`postDeliveryReceipt`) en
+    ///     porte un et que son commentaire NOMME le cas exclu. Une notification
+    ///     de RÉACTION porte le `messageId` du message RÉAGI — celui que le
+    ///     destinataire a le plus souvent écrit lui-même — et un `senderId` qui
+    ///     est celui du réacteur : `save()` étant un UPSERT sur la clé primaire
+    ///     `localId`, réagir à un message VIDAIT son texte en base, lui
+    ///     réassignait son auteur, le rehorodatait à l'instant du push et
+    ///     jetait ses pièces jointes, ses réactions et sa citation.
+    ///
+    ///  2. **la LIGNE** — une bulle pré-enregistrée est un PLACEHOLDER pour la
+    ///     fenêtre qui précède la synchro REST. Elle n'a donc jamais à
+    ///     remplacer une ligne canonique déjà là, quel que soit le type qui
+    ///     l'amène : l'écriture est un INSERT, jamais un UPSERT. C'est ce
+    ///     second verrou qui couvre le cas du chemin d'ÉDITION, où une mention
+    ///     ajoutée à un message EXISTANT produit un `user_mentioned` légitime
+    ///     sur un `messageId` que le destinataire peut déjà détenir.
     private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
-        guard let messageId = userInfo["messageId"] as? String,
-              let conversationId = userInfo["conversationId"] as? String,
-              let senderId = userInfo["senderId"] as? String,
-              let pool = Self.sharedPool
-        else { return }
-
         // Audit 2026-05-11: For E2EE messages we deliberately skip the
         // pre-persist path. The push payload's plaintext `content` field
         // is just the placeholder ("Encrypted message"), and writing
@@ -416,32 +432,31 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // NOTHING: no pre-persist (skipped here, correctly) and no canonical
         // fetch (404). The skip is only safe while the fetch works; whoever
         // changes `NSEDataSync.syncMessage`'s endpoint owns this branch too.
-        let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
-        if isEncryptedPush { return }
-
-        let content = userInfo["content"] as? String ?? ""
-
-        // N4 — derive the media kind from the attachment mime so the
-        // pre-persisted bubble renders as audio/image/video instead of an
-        // empty text bubble until the canonical REST fetch overwrites it.
-        let media = NotificationPayloadHelpers.mediaMessageTypes(
-            forAttachmentMimeType: userInfo["attachmentMimeType"] as? String
-        )
+        //
+        // Ce refus, comme le gate de type et la lecture des champs GW5, vit
+        // désormais dans `prePersistedMessagePlan` — pur, donc gardé par des
+        // témoins.
+        guard let pool = Self.sharedPool,
+              let plan = NotificationPayloadHelpers.prePersistedMessagePlan(
+                  userInfo: userInfo,
+                  now: Date()
+              )
+        else { return }
 
         do {
             let now = Date()
             let record = MessageRecord(
-                localId: messageId, serverId: messageId,
-                conversationId: conversationId, senderId: senderId,
+                localId: plan.messageId, serverId: plan.messageId,
+                conversationId: plan.conversationId, senderId: plan.senderId,
                 // Don't hardcode "fr" — read from push payload if present, else
                 // default to "en" (the safer fake for an unknown language than
                 // the previous "fr" which guaranteed wrong Prisme Linguistique
                 // resolution for non-French speakers). The NSEDataSync API
                 // fetch will overwrite with the canonical value seconds later.
-                content: content,
-                originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
-                messageType: media.messageType, messageSource: "user",
-                contentType: media.contentType,
+                content: plan.content,
+                originalLanguage: plan.originalLanguage,
+                messageType: plan.messageType, messageSource: "user",
+                contentType: plan.contentType,
                 // Incoming messages are .delivered (received by us), not
                 // .sent (which means "sent BY us and acked by server").
                 // The previous .sent value broke any GRDB query that
@@ -455,11 +470,17 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 maxViewOnceCount: nil, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
-                senderName: userInfo["senderName"] as? String,
-                senderUsername: nil, senderColor: nil, senderAvatarURL: nil,
+                // `senderName` était lu sous une clé qu'AUCUN producteur
+                // n'émet : la bulle pré-enregistrée était anonyme. Les trois
+                // clés réelles (`senderDisplayName`, `senderUsername`,
+                // `senderAvatar`) sont celles que `applyCommunicationIntent`
+                // lit cent lignes plus bas, dans ce même fichier.
+                senderName: plan.senderName,
+                senderUsername: plan.senderUsername,
+                senderColor: nil, senderAvatarURL: plan.senderAvatarURL,
                 deliveredCount: 0, readCount: 0,
                 deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: now, sentAt: nil,
+                createdAt: plan.createdAt, sentAt: nil,
                 deliveredAt: nil, readAt: nil, updatedAt: now,
                 attachmentsJson: nil, reactionsJson: nil,
                 reactionCount: 0, currentUserReactionsJson: nil,
@@ -471,7 +492,13 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 changeVersion: 0
             )
 
-            try pool.write { db in try record.save(db) }
+            // INSERT, jamais UPSERT (verrou 2 ci-dessus) : un placeholder ne
+            // remplace pas une ligne canonique. `save()` écrasait TOUTES les
+            // colonnes de la ligne existante.
+            try pool.write { db in
+                guard try MessageRecord.fetchOne(db, key: plan.messageId) == nil else { return }
+                try record.insert(db)
+            }
         } catch {
             // Silent fail — the app will fetch the message from the API on launch.
         }

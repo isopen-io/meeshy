@@ -449,6 +449,66 @@ final class MessageStoreTests: XCTestCase {
         )
     }
 
+    // MARK: - Coalescence des refreshes temps réel
+
+    /// Une rafale de notifications d'écriture (lot d'accusés de lecture,
+    /// burst de livraisons) ne doit pas déclencher une lecture de fenêtre
+    /// complète PAR écriture : la première part immédiatement, celles qui
+    /// tombent pendant la lecture en vol fusionnent en UNE lecture de queue.
+    /// Le contrat observable : après la rafale, la fenêtre publiée est
+    /// FRAÎCHE (rien n'est perdu par la fusion).
+    func test_requestRealtimeRefresh_burst_servesFreshWindow() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-coalesce", persistence: persistence)
+
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "m0", conversationId: "conv-coalesce",
+            content: "premier", createdAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        try await MessageStoreObservationHelper.insertRecord(r0, into: persistence)
+
+        // Rafale synchrone — simule huit écritures GRDB coup sur coup.
+        for _ in 0..<8 { store.requestRealtimeRefresh() }
+
+        try await Task.sleep(for: .milliseconds(400))
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["m0"],
+            "la fusion des refreshes ne doit jamais perdre l'état le plus frais"
+        )
+    }
+
+    /// Un événement arrivé PENDANT la lecture en vol n'est pas perdu : la
+    /// lecture de queue relit l'état postérieur à l'écriture tardive.
+    func test_requestRealtimeRefresh_writeDuringInFlightRefresh_isPickedUpByTrailingRefresh() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-trail", persistence: persistence)
+
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "m0", conversationId: "conv-trail",
+            content: "premier", createdAt: base
+        )
+        try await MessageStoreObservationHelper.insertRecord(r0, into: persistence)
+
+        store.requestRealtimeRefresh()
+        // Seconde écriture + refresh demandé pendant que le premier est
+        // (probablement) encore en vol — le trailing doit la ramasser.
+        let r1 = MessageStoreObservationHelper.makeRecord(
+            localId: "m1", conversationId: "conv-trail",
+            content: "second", createdAt: base.addingTimeInterval(10)
+        )
+        try await MessageStoreObservationHelper.insertRecord(r1, into: persistence)
+        store.requestRealtimeRefresh()
+
+        try await Task.sleep(for: .milliseconds(500))
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["m0", "m1"],
+            "une écriture pendant la lecture en vol doit être servie par la lecture de queue"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryDatabase() throws -> DatabaseQueue {

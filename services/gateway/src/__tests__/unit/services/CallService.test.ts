@@ -56,7 +56,7 @@ jest.mock('@meeshy/shared/types/video-call', () => ({
   }
 }));
 
-import { CallService, MAX_CALL_PARTICIPANTS } from '../../../services/CallService';
+import { CallService, MAX_CALL_PARTICIPANTS, CallAlreadyEndedError } from '../../../services/CallService';
 import { CallMode, CallStatus, ParticipantRole, CallEndReason } from '@meeshy/shared/prisma/client';
 import { buildCallSummaryWithMetadata } from '@meeshy/shared/utils/call-summary';
 
@@ -178,6 +178,7 @@ interface MockCallSession {
   initiator?: MockUser;
   conversation?: MockConversation;
   version: number;
+  endReason?: CallEndReason | null;
 }
 
 // Test data factories
@@ -209,6 +210,7 @@ const createMockCallSession = (overrides: Partial<MockCallSession> = {}): MockCa
   metadata: { type: 'video' },
   participants: [],
   version: 1,
+  endReason: null,
   ...overrides
 });
 
@@ -676,6 +678,31 @@ describe('CallService', () => {
       await expect(callService.joinCall(validJoinData)).rejects.toThrow(
         'CALL_ENDED: This call has already ended'
       );
+    });
+
+    // Vague 161 — `rejoinActiveCallAfterReconnect` (web) used to hardcode
+    // `reason: 'completed'` on every CALL_ENDED ack, regardless of why the
+    // call actually ended. `CallAlreadyEndedError.endReason` is the fix's
+    // server-side half: the real Prisma `endReason` of the terminal call,
+    // carried on the thrown error instead of lost to a generic `Error`.
+    it('throws CallAlreadyEndedError carrying the call\'s REAL endReason, not just the generic CALL_ENDED code', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue(
+        createMockCallSession({ status: CallStatus.missed, endReason: CallEndReason.connectionLost })
+      );
+
+      const rejection = callService.joinCall(validJoinData);
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.connectionLost });
+    });
+
+    it('falls back to endReason=completed when the terminal call predates the endReason column (legacy null)', async () => {
+      mockPrisma.callSession.findUnique.mockResolvedValue(
+        createMockCallSession({ status: CallStatus.ended, endReason: null })
+      );
+
+      const rejection = callService.joinCall(validJoinData);
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should throw error when user not a conversation member', async () => {

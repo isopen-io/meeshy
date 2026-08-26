@@ -15,9 +15,14 @@ import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.EmojiCatalog
 import me.meeshy.sdk.model.FeedMediaType
 import me.meeshy.sdk.model.LanguageData
+import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StoryKeyframe
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StorySlideDuration
+import me.meeshy.sdk.model.StoryTextObjectTranslationMerge
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -26,23 +31,111 @@ import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
+import me.meeshy.sdk.story.toStoryItem
 import javax.inject.Inject
 
 /**
  * A foreground media layer on a slide — a non-background [StoryMediaObject]
  * (video or image) composited on top of the background. Position/scale are
- * normalised canvas fractions (0..1), matching the wire model; keyframe
- * animation, rotation and transitions are not applied in this projection.
+ * normalised canvas fractions (0..1), matching the wire model. [x]/[y]/[scale]/
+ * [opacity] are the layer's *static* base transform; when the clip carries
+ * [keyframes] or participates in a slide [clipTransitions] entry, call [animated]
+ * with the playhead to obtain the transform for that instant. [id] matches the
+ * clip against transitions; [duration] bounds its own timing window. Rotation is
+ * still not applied in this projection.
  */
 @Immutable
 data class StoryForegroundMediaView(
+    val id: String,
     val url: String,
     val isVideo: Boolean,
     val x: Double,
     val y: Double,
     val scale: Double,
     val aspectRatio: Double,
-)
+    val opacity: Double = 1.0,
+    val startTime: Double = 0.0,
+    val duration: Double = 0.0,
+    val fadeIn: Double = 0.0,
+    val fadeOut: Double = 0.0,
+    val keyframes: List<StoryKeyframe> = emptyList(),
+    val clipTransitions: List<StoryClipTransition> = emptyList(),
+) {
+    /**
+     * The layer's transform at [atSeconds] (absolute playhead). Returns `this`
+     * unchanged when nothing animates — no keyframes that key a channel, no clip
+     * transition this layer takes part in, AND no fadeIn/fadeOut envelope active at
+     * this instant. Otherwise a copy whose [x]/[y]/[scale] follow the interpolated
+     * keyframe animation (un-keyed channels holding their static base) and whose
+     * [opacity] folds together, in iOS render order, the clip's own fade envelope,
+     * its keyframe opacity, and any clip-transition ramp.
+     *
+     * Opacity precedence mirrors iOS `StoryRenderer` (`fade ?? keyframeOpacity ??
+     * base`): a live [fadeIn]/[fadeOut] envelope value OVERRIDES the keyframe/static
+     * opacity, and the result is then multiplied by the crossfade/dissolve ramp of
+     * any transition naming this clip. Keyframe and fade times are offsets from
+     * [startTime], per the timeline spec.
+     *
+     * A layer that participates in a transition but carries no [duration] is left
+     * untouched for the transition ramp: window-clipping on a zero-length window
+     * (`end == start`) would hide the clip at almost every instant. Pure — the
+     * Compose canvas ticks a clock in and renders the result.
+     */
+    /**
+     * Whether this foreground layer is drawn at [atSeconds] (absolute playhead) —
+     * the sharp play-mode timing-window gate the Compose canvas consults before
+     * compositing the layer. Delegates to [StoryElementVisibility]: an untimed clip
+     * (duration `0`) is always visible; a timed one only inside
+     * `[startTime, startTime + duration)`. Pure.
+     */
+    fun isVisible(atSeconds: Float): Boolean =
+        StoryElementVisibility.isVisible(startTime, duration, atSeconds.toDouble())
+
+    fun animated(atSeconds: Float): StoryForegroundMediaView {
+        val resolved = StoryKeyframeResolver.resolve(
+            keyframes = keyframes,
+            currentTime = atSeconds,
+            startTime = startTime.toFloat(),
+            baseX = x,
+            baseY = y,
+            baseScale = scale,
+            baseOpacity = opacity,
+        )
+        val transitions = if (duration > 0.0) {
+            clipTransitions.filter { it.fromClipId == id || it.toClipId == id }
+        } else {
+            emptyList()
+        }
+        val fadeEnvelope = StoryMediaFadeResolver.fadeOpacity(
+            fadeIn = fadeIn.takeIf { it > 0.0 },
+            fadeOut = fadeOut.takeIf { it > 0.0 },
+            startTime = startTime,
+            duration = duration.takeIf { it > 0.0 },
+            currentTime = atSeconds.toDouble(),
+        )
+        if (resolved == null && transitions.isEmpty() && fadeEnvelope == null) return this
+
+        val base = resolved ?: ResolvedKeyframeTransform(x = x, y = y, scale = scale, opacity = opacity)
+        val transitionOpacity = if (transitions.isEmpty()) {
+            1.0
+        } else {
+            StoryClipTransitionResolver.opacity(
+                mediaId = id,
+                startTime = startTime,
+                duration = duration,
+                transitions = transitions,
+                currentTime = atSeconds.toDouble(),
+            )
+        }
+        val opacityBase = fadeEnvelope ?: base.opacity
+        return copy(
+            x = base.x,
+            y = base.y,
+            scale = base.scale,
+            opacity = opacityBase * transitionOpacity,
+        )
+    }
+}
 
 /**
  * A single slide projected for the viewer. Pure data.
@@ -65,9 +158,36 @@ data class StorySlideView(
     val backgroundVideoUrl: String? = null,
     val backgroundLoop: Boolean = true,
     val foregroundMedia: List<StoryForegroundMediaView> = emptyList(),
+    val textObjects: List<StoryTextObjectView> = emptyList(),
     val backgroundAudioUrl: String? = null,
     val foregroundAudioUrl: String? = null,
     val languageCode: String? = null,
+    /**
+     * How long this slide stays on screen before auto-advancing, in milliseconds.
+     * Resolved once at projection time from the slide's effects via the shared
+     * [StorySlideDuration] rule (author-pinned timeline duration → content-derived
+     * → 6s default), so the viewer countdown honours per-slide timing instead of a
+     * flat constant. Defaults to the 6s static baseline.
+     */
+    val autoAdvanceMillis: Int = StorySlideDuration.DEFAULT_STATIC_MS,
+    /**
+     * The author's colour backdrop (`StoryEffects.background`), parsed once at
+     * projection time via the shared [StoryBackgroundValue] rule: a solid colour or
+     * a two-colour gradient. `null` when the slide carries no background string — the
+     * viewer then keeps its accent→black fallback. Painted only as the base layer when
+     * the slide has no background media (media covers it), mirroring iOS's
+     * `renderBackground` priority.
+     */
+    val background: StoryBackgroundValue? = null,
+    /**
+     * The framing (pan/zoom) the author applied to a background IMAGE, projected once
+     * from the background media object via [StoryBackgroundObjectTransform]. iOS
+     * aspect-fills the background then applies this on top (an Instagram-style "zoom
+     * inside the background"); the viewer mirrors that with a `graphicsLayer` on the
+     * image. [StoryBackgroundObjectTransform.IDENTITY] (the default) means a plain
+     * aspect-fill — a video background or a legacy/flat story never carries one yet.
+     */
+    val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
 )
 
 /**
@@ -162,6 +282,80 @@ class StoryViewerViewModel @Inject constructor(
     init {
         load()
         observeReactionDeltas()
+        observeTranslationUpdates()
+        observeStoryDeletions()
+        observeStoryUpdates()
+    }
+
+    /**
+     * Fold a realtime `story:updated` into the open viewer. The gateway broadcasts the
+     * COMPLETE edited story; the matched slide is re-projected in place through the same
+     * [toSlideView] conversion the initial load used (repopulating [rawItems], the single
+     * source of truth for the current-slide re-projection in [emit]), and the pure
+     * [StoryPlayback.replacingSlide] swaps it while keeping the cursor on the same slot so
+     * the reader's content simply refreshes. On an `engagementReset` (a content edit that
+     * wiped views/reactions server-side) the per-slide [reactionStates] cache is purged so
+     * the count re-seeds from the fresh story (typically 0); a metadata-only update leaves
+     * any live reaction count in place. An event for a story not in this playback is inert.
+     * Mirror of iOS `StoryViewModel.storyUpdated`.
+     */
+    private fun observeStoryUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyUpdated.collect { event ->
+                val storyId = event.story.id
+                val existingSlide = playback.groups.firstNotNullOfOrNull { group ->
+                    group.slides.firstOrNull { it.id == storyId }
+                } ?: return@collect
+                val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
+                val newSlide = event.story.toStoryItem().toSlideView(existingSlide.accentHex, prefs)
+                playback = playback.replacingSlide(newSlide)
+                if (event.engagementReset == true) reactionStates.remove(storyId)
+                emit()
+            }
+        }
+    }
+
+    /**
+     * Fold a realtime `story:deleted` out of the open viewer. The pure
+     * [StoryPlayback.removingSlide] drops the matched slide (and an emptied author
+     * group), re-anchoring the cursor so the reader keeps watching surviving content;
+     * [emit] re-projects and dismisses when nothing remains. An event for a story not
+     * in this playback changes nothing. The per-slide caches keyed by story id
+     * ([rawItems], [reactionStates]) are purged so a deleted id leaves no stale
+     * projection behind. Mirror of iOS `storyDeleted` (`purgeDeadStories`).
+     */
+    private fun observeStoryDeletions() {
+        viewModelScope.launch {
+            socialSocket.storyDeleted.collect { event ->
+                val next = playback.removingSlide(event.storyId)
+                if (next == playback) return@collect
+                playback = next
+                rawItems.remove(event.storyId)
+                reactionStates.remove(event.storyId)
+                emit()
+            }
+        }
+    }
+
+    /**
+     * Fold realtime overlay translations into the open viewer. The gateway
+     * broadcasts `story:translation-updated` after translating a story's on-canvas
+     * text object; the pure [StoryTextObjectTranslationMerge.merge] upserts the new
+     * languages into the cached item, and [emit] re-projects the current slide so a
+     * reader whose preferred language just became available reads it at once — no
+     * tap, no refetch (parity with iOS `storyTranslationUpdated`). An event for an
+     * unknown story, or one whose merge is a no-op, changes nothing.
+     */
+    private fun observeTranslationUpdates() {
+        viewModelScope.launch {
+            socialSocket.storyTranslationUpdated.collect { event ->
+                val item = rawItems[event.postId] ?: return@collect
+                val merged = StoryTextObjectTranslationMerge.merge(item, event.textObjectIndex, event.translations)
+                if (merged == item) return@collect
+                rawItems[event.postId] = merged
+                emit()
+            }
+        }
     }
 
     /**
@@ -335,15 +529,25 @@ class StoryViewerViewModel @Inject constructor(
         if (languageOverride != null && languageOverride?.first != currentId) languageOverride = null
         val override = languageOverride?.second
         val reaction = playback.currentSlide?.let { reactionStateFor(it) } ?: StoryReactionState()
-        val slides = if (override == null) playback.slides else playback.slides.map { slideView ->
+        // The current slide is always re-projected from its raw item: [rawItems] is the
+        // single source of truth for translated content and can change at runtime (a
+        // tapped exploration [override], an on-demand pull, or a realtime
+        // `story:translation-updated` merge). With no override and no runtime merge this
+        // reproduces the projection [toSlideView] already computed, so non-current slides
+        // pass through untouched.
+        val slides = playback.slides.map { slideView ->
             if (slideView.id != currentId) return@map slideView
             val item = rawItems[slideView.id] ?: return@map slideView
             val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
             val resolved = StoryContentResolver.resolve(item, prefs, override)
+            val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+            val textObjects = item.storyEffects?.textObjects.orEmpty()
+                .map { StoryTextObjectProjection.project(it, preferredLanguages, override) }
             slideView.copy(
                 text = resolved.content,
                 isTranslated = resolved.isTranslated,
                 languageCode = resolved.languageCode,
+                textObjects = textObjects,
             )
         }
         _state.value = StoryViewerUiState(
@@ -372,20 +576,32 @@ class StoryViewerViewModel @Inject constructor(
      * pure-original story (no translations) from dumping every preferred language as
      * a request affordance; an anonymous/logged-out viewer (no prefs) sees only the
      * present translations.
+     *
+     * The Prisme applies to ALL of a slide's content (CLAUDE.md §Cohérence), so a
+     * present language is any language a translation exists for across the caption
+     * **and** the on-canvas text overlays — not the caption alone. A slide whose
+     * overlays are translated but whose caption is not would otherwise expose no way
+     * to explore them. Caption languages lead (in caption order), then each
+     * overlay-only language, all deduped case-insensitively.
      */
     private fun availableLanguagesFor(storyId: String?): List<StoryLanguageOption> {
         val item = storyId?.let { rawItems[it] } ?: return emptyList()
-        val present = item.translations.orEmpty()
+        val captionCodes = item.translations.orEmpty()
             .filter { it.language.isNotBlank() && it.content.isNotBlank() }
-            .distinctBy { it.language.lowercase() }
-            .map { languageOption(it.language, storyId, isTranslatable = false) }
+            .map { it.language }
+        val overlayCodes = item.storyEffects?.textObjects.orEmpty()
+            .flatMap { it.translations.orEmpty().entries }
+            .filter { it.key.isNotBlank() && it.value.isNotBlank() }
+            .map { it.key }
+        val presentCodes = (captionCodes + overlayCodes).distinctBy { it.lowercase() }
+        val present = presentCodes.map { languageOption(it, storyId, isTranslatable = false) }
         if (present.isEmpty()) return emptyList()
 
         val user = sessionRepository.currentUser.value ?: return present
-        val presentCodes = present.mapTo(mutableSetOf()) { it.code.lowercase() }
+        val presentLower = presentCodes.mapTo(mutableSetOf()) { it.lowercase() }
         val translatable = LanguageResolver.preferredContentLanguages(user)
             .distinctBy { it.lowercase() }
-            .filter { it.lowercase() !in presentCodes }
+            .filter { it.lowercase() !in presentLower }
             .map { languageOption(it, storyId, isTranslatable = true) }
         return present + translatable
     }
@@ -459,9 +675,13 @@ class StoryViewerViewModel @Inject constructor(
         rawItems[id] = this
         val resolved = StoryContentResolver.resolve(this, prefs)
         val background = resolveBackgroundMedia()
+        val clipTransitions = storyEffects?.clipTransitions.orEmpty()
         val foreground = storyEffects?.mediaObjects.orEmpty()
             .filterNot { it.isBackground }
-            .mapNotNull { it.toForegroundMediaView() }
+            .mapNotNull { it.toForegroundMediaView(clipTransitions) }
+        val preferredLanguages = LanguageResolver.preferredContentLanguages(prefs)
+        val textObjects = storyEffects?.textObjects.orEmpty()
+            .map { StoryTextObjectProjection.project(it, preferredLanguages) }
         return StorySlideView(
             id = id,
             text = resolved.content,
@@ -472,13 +692,24 @@ class StoryViewerViewModel @Inject constructor(
             languageCode = resolved.languageCode,
             backgroundVideoUrl = background.videoUrl,
             backgroundLoop = background.loop,
+            backgroundTransform = background.transform,
             foregroundMedia = foreground,
+            textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),
             foregroundAudioUrl = resolveAudioUrl(preferBackground = false),
+            autoAdvanceMillis = StorySlideDuration.computeMillis(storyEffects),
+            background = storyEffects?.background
+                ?.takeIf { it.isNotBlank() }
+                ?.let { StoryBackgroundValue.parse(it) },
         )
     }
 
-    private data class BackgroundMedia(val imageUrl: String?, val videoUrl: String?, val loop: Boolean)
+    private data class BackgroundMedia(
+        val imageUrl: String?,
+        val videoUrl: String?,
+        val loop: Boolean,
+        val transform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
+    )
 
     /**
      * Resolves the slide's single background layer. `storyEffects.mediaObjects`
@@ -502,22 +733,51 @@ class StoryViewerViewModel @Inject constructor(
             ?.let { resolveMediaUrl(it, config.socketUrl) }
 
         if (isVideo) {
-            return BackgroundMedia(imageUrl = null, videoUrl = resolvedUrl, loop = backgroundObject?.loop ?: true)
+            // The framing rides only on a modern `isBackground` object whose OWN
+            // mediaURL produced the resolved url; a legacy/flat fallback video never
+            // carries one, so it stays a plain aspect-fill (IDENTITY). The viewer
+            // applies the projection to the player surface via `graphicsLayer`, the
+            // exact mirror of the image branch (iOS's "zoom inside the background").
+            val videoTransform = backgroundObject
+                ?.takeIf { it.mediaURL != null && resolvedUrl != null }
+                ?.let { StoryBackgroundObjectTransform.from(it) }
+                ?: StoryBackgroundObjectTransform.IDENTITY
+            return BackgroundMedia(
+                imageUrl = null,
+                videoUrl = resolvedUrl,
+                loop = backgroundObject?.loop ?: true,
+                transform = videoTransform,
+            )
         }
         val imageUrl = resolvedUrl
             ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
-        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true)
+        // The framing rides only on a modern `isBackground` object; a legacy/flat
+        // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
+        val transform = backgroundObject
+            ?.takeIf { imageUrl == resolvedUrl && resolvedUrl != null }
+            ?.let { StoryBackgroundObjectTransform.from(it) }
+            ?: StoryBackgroundObjectTransform.IDENTITY
+        return BackgroundMedia(imageUrl = imageUrl, videoUrl = null, loop = true, transform = transform)
     }
 
-    private fun StoryMediaObject.toForegroundMediaView(): StoryForegroundMediaView? {
+    private fun StoryMediaObject.toForegroundMediaView(
+        clipTransitions: List<StoryClipTransition>,
+    ): StoryForegroundMediaView? {
         val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
         return StoryForegroundMediaView(
+            id = id,
             url = url,
             isVideo = mediaType == "video",
             x = x,
             y = y,
             scale = scale,
             aspectRatio = aspectRatio,
+            startTime = startTime ?: 0.0,
+            duration = duration ?: 0.0,
+            fadeIn = fadeIn ?: 0.0,
+            fadeOut = fadeOut ?: 0.0,
+            keyframes = keyframes.orEmpty(),
+            clipTransitions = clipTransitions,
         )
     }
 

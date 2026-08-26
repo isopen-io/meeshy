@@ -170,7 +170,7 @@ struct MemberManagementSection: View {
 
             Spacer()
 
-            let actions = availableActions(for: participant, targetRole: targetRole)
+            let actions = availableActions(for: participant)
             if !actions.isEmpty {
                 Menu {
                     ForEach(actions, id: \.label) { action in
@@ -340,57 +340,62 @@ struct MemberManagementSection: View {
         let handler: () async -> Void
     }
 
-    private func availableActions(for participant: APIParticipant, targetRole: MemberRole) -> [MemberAction] {
-        guard currentUserRole > targetRole else { return [] }
+    /// Les gestes offerts sur un membre — construits À PARTIR de
+    /// `MemberActionPolicy`, qui décide seule ce qui est permis et, surtout, quel
+    /// identifiant part au gateway.
+    ///
+    /// Cette fabrique passait `participant.id` — un `Participant.id` — aux trois
+    /// routes qui filtrent sur `userId`. Promouvoir répondait 404 ; retirer
+    /// répondait 200 sans rien faire. Le bon identifiant était calculé juste à
+    /// côté et ne servait qu'au bannissement.
+    private func availableActions(for participant: APIParticipant) -> [MemberAction] {
+        MemberActionPolicy.actions(for: participant, currentUserRole: currentUserRole)
+            .map { action in
+                MemberAction(
+                    label: label(for: action.kind),
+                    icon: icon(for: action.kind),
+                    isDestructive: action.kind == .expel || action.kind == .ban,
+                    handler: { await perform(action) }
+                )
+            }
+    }
 
-        var actions: [MemberAction] = []
-
-        let participantId = participant.id
-        let userId = participant.userId ?? participant.id
-
-        if currentUserRole == .creator && targetRole < .admin {
-            actions.append(MemberAction(
-                label: String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir Admin", bundle: .main),
-                icon: "shield.fill",
-                isDestructive: false,
-                handler: { await viewModel.updateRole(participantId: participantId, newRole: "ADMIN") }
-            ))
+    private func perform(_ action: MemberActionPolicy.Action) async {
+        switch action.kind {
+        case .promoteToAdmin, .promoteToModerator, .demoteToMember:
+            // La policy ne propose un changement de rang qu'aux comptes : la clé
+            // est donc bien un `User.id` ici.
+            guard let role = action.kind.targetRole else { return }
+            await viewModel.updateRole(userId: action.targetKey, newRole: role)
+        case .expel:
+            await viewModel.expelParticipant(key: action.targetKey)
+        case .ban:
+            await viewModel.banParticipant(key: action.targetKey)
         }
+    }
 
-        if currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
-            actions.append(MemberAction(
-                label: String(localized: "member-management.action.promote-moderator", defaultValue: "Promouvoir Modérateur", bundle: .main),
-                icon: "checkmark.shield.fill",
-                isDestructive: false,
-                handler: { await viewModel.updateRole(participantId: participantId, newRole: "MODERATOR") }
-            ))
+    private func label(for kind: MemberActionPolicy.Kind) -> String {
+        switch kind {
+        case .promoteToAdmin:
+            return String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir Admin", bundle: .main)
+        case .promoteToModerator:
+            return String(localized: "member-management.action.promote-moderator", defaultValue: "Promouvoir Modérateur", bundle: .main)
+        case .demoteToMember:
+            return String(localized: "member-management.action.demote-member", defaultValue: "Rétrograder Membre", bundle: .main)
+        case .expel:
+            return String(localized: "member-management.action.expel", defaultValue: "Expulser", bundle: .main)
+        case .ban:
+            return String(localized: "member-management.action.ban", defaultValue: "Bannir", bundle: .main)
         }
+    }
 
-        if currentUserRole > targetRole && targetRole > .member {
-            actions.append(MemberAction(
-                label: String(localized: "member-management.action.demote-member", defaultValue: "Rétrograder Membre", bundle: .main),
-                icon: "person.fill",
-                isDestructive: false,
-                handler: { await viewModel.updateRole(participantId: participantId, newRole: "MEMBER") }
-            ))
+    private func icon(for kind: MemberActionPolicy.Kind) -> String {
+        switch kind {
+        case .promoteToAdmin: return "shield.fill"
+        case .promoteToModerator: return "checkmark.shield.fill"
+        case .demoteToMember: return "person.fill"
+        case .expel: return "person.fill.xmark"
+        case .ban: return "hand.raised.fill"
         }
-
-        actions.append(MemberAction(
-            label: String(localized: "member-management.action.expel", defaultValue: "Expulser", bundle: .main),
-            icon: "person.fill.xmark",
-            isDestructive: true,
-            handler: { await viewModel.expelParticipant(participantId: participantId) }
-        ))
-
-        if currentUserRole.hasMinimumRole(.admin) {
-            actions.append(MemberAction(
-                label: String(localized: "member-management.action.ban", defaultValue: "Bannir", bundle: .main),
-                icon: "hand.raised.fill",
-                isDestructive: true,
-                handler: { await viewModel.banParticipant(userId: userId) }
-            ))
-        }
-
-        return actions
     }
 }

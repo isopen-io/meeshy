@@ -18,7 +18,7 @@ struct LinksHubView: View {
     @State private var showCreateShareLink = false
     @State private var showCreateTrackingLink = false
     @State private var showCreateAffiliate = false
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     var body: some View {
         ZStack {
@@ -46,18 +46,22 @@ struct LinksHubView: View {
                     .padding(.bottom, 40)
                 }
                 .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }   // iOS 16–17
-                .trackScrollContentOffset { scrollOffset = -$0 }                            // iOS 18+ (preference path is dead there)
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
+                .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
 
             VStack(spacing: 0) {
-                CollapsibleHeader(
-                    title: String(localized: "links.hub.title", defaultValue: "Mes liens", bundle: .main),
-                    scrollOffset: scrollOffset,
-                    onBack: { router.pop() },
-                    titleColor: theme.textPrimary,
-                    backArrowColor: MeeshyColors.communityAccent,
-                    backgroundColor: theme.backgroundPrimary
-                )
+                // Seul ce reader se re-rend au fil du scroll — la racine écrit
+                // `scrollRelay.offset` sans s'y abonner (P1-1).
+                ScrollOffsetReader(relay: scrollRelay) { offset in
+                    CollapsibleHeader(
+                        title: String(localized: "links.hub.title", defaultValue: "Mes liens", bundle: .main),
+                        scrollOffset: offset,
+                        onBack: { router.pop() },
+                        titleColor: theme.textPrimary,
+                        backArrowColor: MeeshyColors.communityAccent,
+                        backgroundColor: theme.backgroundPrimary
+                    )
+                }
                 Spacer()
             }
         }

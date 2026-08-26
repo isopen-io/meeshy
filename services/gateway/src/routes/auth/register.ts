@@ -91,12 +91,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         400: validationErrorResponseSchema,
         429: {
           description: 'Too many registration attempts',
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            message: { type: 'string' },
-            error: { type: 'string' },
-            retryAfter: { type: 'number' }
+            ...errorResponseSchema.properties,
+            retryAfter: { type: 'number' },
           }
         },
         500: errorResponseSchema

@@ -26,12 +26,23 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
+    /// 247i pins the SPOKEN twin, not the displayed one. The intent of 206i/210i/211i
+    /// is unchanged — label once, value separately — but `formattedDuration` is a
+    /// clock spelling, and a speech synthesiser reads "02:05" as a time of day. The
+    /// negative half matters as much as the positive one: re-pointing the value at
+    /// the on-screen form is precisely the regression this guards.
     func test_videoDurationBadge_hasAccessibilityValue() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("accessibilityValue(callManager.formattedDuration)"),
+            source.contains("accessibilityValue(callManager.spokenDuration)"),
             "The video duration badge must expose the timer via .accessibilityValue " +
             "so VoiceOver reads the label once and the dynamic value separately."
+        )
+        XCTAssertFalse(
+            source.contains("accessibilityValue(callManager.formattedDuration)"),
+            "No accessibility value may carry the CLOCK spelling: VoiceOver announces " +
+            "'02:05' as an hour. The spoken twin (CallManager.spokenDuration) says " +
+            "'2 minutes 5 seconds'."
         )
     }
 
@@ -607,10 +618,11 @@ final class CallViewAccessibilityTests: XCTestCase {
             "glyph is invisible on a healthy link."
         )
         XCTAssertTrue(
-            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
+            vicinity.contains("accessibilityValue(callManager.spokenDuration)"),
             "audioCallLayout's duration Text must expose the timer via .accessibilityValue so the " +
             "static label reads once and the dynamic value updates separately (paired with the " +
-            "capsule's existing .updatesFrequently trait)."
+            "capsule's existing .updatesFrequently trait) — in its SPOKEN form (247i), since a " +
+            "speech synthesiser reads the clock spelling '1:23' as a time of day."
         )
     }
 
@@ -624,8 +636,9 @@ final class CallViewAccessibilityTests: XCTestCase {
             "labelled value is the only place the timer gains meaning for VoiceOver."
         )
         XCTAssertTrue(
-            vicinity.contains("accessibilityValue(callManager.formattedDuration)"),
-            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue."
+            vicinity.contains("accessibilityValue(callManager.spokenDuration)"),
+            "compactAudioCallHeader's duration Text must expose the timer via .accessibilityValue, " +
+            "in its spoken form (247i)."
         )
     }
 

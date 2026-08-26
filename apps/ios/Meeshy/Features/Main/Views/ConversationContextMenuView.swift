@@ -38,13 +38,6 @@ struct ConversationContextMenuView: View {
     let isBlocked: Bool
     /// Renommable = conversation de groupe/communauté (pas un DM).
     let canRename: Bool
-    /// I-075 — gardé par `BetaFeaturesPreference.isEnabled` (préférence
-    /// utilisateur « Activer les bêta », défaut ON — amendement produit
-    /// 2026-08-16) : visibilité de l'item « Focal (bêta) » du panneau
-    /// « Plus d'options ». Résolu par l'appelant (comme `isLocked`/
-    /// `isArchived`, ce menu restant self-contained) — jamais lu ici
-    /// directement.
-    let isFocalBetaPreviewEnabled: Bool
     // Callbacks — chacun = action ; la fermeture est faite par l'appelant via onDismiss
     let onPin: () -> Void
     let onMute: () -> Void

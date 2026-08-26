@@ -9,6 +9,11 @@ import MeeshyUI
 /// the incremental split.
 @MainActor
 final class ConversationSearchHandler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let state: ConversationStateStore
     private let conversationId: String
     private let messageService: MessageServiceProviding

@@ -3,12 +3,12 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
+import { resolveTargetParticipant, identifyTarget } from './utils/target-participant'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
-import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants'
+import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 
 const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
@@ -62,14 +62,15 @@ export function registerBanRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
-      // `isActive` et `leftAt` sont lus, pas seulement filtrés : la cible peut
-      // être un ancien membre — bannir quelqu'un qui est déjà parti est ce qui
-      // l'empêche de revenir par un lien de partage — et l'écriture ne doit
-      // alors pas réécrire la date de son départ.
-      const targetParticipant = await prisma.participant.findFirst({
-        where: { conversationId: id, userId: targetUserId },
-        select: { id: true, role: true, bannedAt: true, displayName: true, isActive: true, leftAt: true },
-      })
+      // La cible se résout sous les DEUX colonnes. `:userId` porte un `User.id`
+      // pour un membre inscrit, un `Participant.id` pour un visiteur venu par un
+      // lien partagé — qui n'a aucune ligne `User`, donc qu'un filtre sur la
+      // seule colonne `userId` ne trouvait jamais.
+      //
+      // `isActive` et `leftAt` sont lus, pas filtrés : la cible peut être un
+      // ancien membre — bannir quelqu'un déjà parti est ce qui l'empêche de
+      // revenir — et l'écriture ne doit alors pas réécrire la date de son départ.
+      const targetParticipant = await resolveTargetParticipant(prisma, id, targetUserId)
 
       if (!targetParticipant) {
         return sendNotFound(reply, 'Participant introuvable')
@@ -94,6 +95,30 @@ export function registerBanRoutes(
       })
       invalidateParticipantLookup(targetParticipant.id, id)
 
+      // Bannir sort la personne ET ferme la porte par laquelle elle est entrée.
+      // Sortir quelqu'un en laissant son lien ouvert ne protège de rien : il
+      // suffit de le rouvrir pour revenir sous un autre pseudonyme, et un
+      // visiteur sans compte n'a QUE ce chemin.
+      //
+      // Ce qui est fermé, c'est la PORTE, pas la salle : les personnes déjà
+      // entrées par ce lien restent membres. Et il n'y a rien à fermer pour un
+      // créateur ou un membre ajouté à la main, qui n'ont pas de `shareLinkId`.
+      let closedShareLinkId: string | null = null
+      if (targetParticipant.shareLinkId) {
+        try {
+          await prisma.conversationShareLink.update({
+            where: { id: targetParticipant.shareLinkId },
+            data: { isActive: false },
+          })
+          closedShareLinkId = targetParticipant.shareLinkId
+        } catch (linkError) {
+          // Le bannissement, lui, est ÉCRIT. Un lien déjà supprimé ne doit pas
+          // faire échouer le geste qui compte — mais il se dit, sans quoi
+          // l'appelant croirait la porte fermée.
+          logger.error('ban: share link close failed', linkError as Error)
+        }
+      }
+
       const io = socketIOHandler?.getManager()?.getIO()
 
       const manager = socketIOHandler?.getManager()
@@ -103,7 +128,10 @@ export function registerBanRoutes(
         // LISTE, qui rend pourtant cet effectif.
         const remaining = await prisma.participant.findMany({
           where: { conversationId: id, isActive: true },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+          // connaître PAR DESTINATAIRE.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         })
 
         // Le banni ferme la chaîne. La room de conversation ne l'atteint que
@@ -116,25 +144,28 @@ export function registerBanRoutes(
         // Vrai même quand `membershipEnded` est faux : bannir un ex-membre ne
         // retire aucune ligne de sa liste, il n'y en avait plus. Le retrait
         // côté client est idempotent, c'est ce qui permet de ne pas gater ici.
-        const audience = [...remaining, { id: targetParticipant.id, userId: targetUserId }]
-        emitToConversationParticipants({
+        const audience = [...remaining, { id: targetParticipant.id, userId: targetParticipant.userId }]
+        emitConversationMemberCountEvent({
           io,
           conversationId: id,
           participants: audience,
           event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED,
           payload: {
             conversationId: id,
-            userId: targetUserId,
+            // `participantId` TOUJOURS, `userId` NUL sans compte — cf.
+            // `identifyTarget`. Les clients retirent sur `participantId`.
+            ...identifyTarget(targetParticipant),
             bannedBy: { id: currentUserId },
             bannedAt: now.toISOString(),
+            ...(closedShareLinkId ? { closedShareLinkId } : {}),
             // Faux quand la cible avait déjà quitté : sans cette distinction, tout
             // client qui décrémente son compteur de membres sur cet événement le
             // décrémente pour quelqu'un qui n'y était plus. `memberCount`
             // ci-dessous rend ce raisonnement inutile pour qui le lit — le
             // drapeau reste pour les clients qui décomptent encore.
             membershipEnded: ban.membershipEnded,
-            ...presentMemberCount(remaining.length),
           },
+          memberCount: remaining.length,
         })
 
         // La fin d'appartenance, en un seul geste : `endConversationMembership`
@@ -147,10 +178,23 @@ export function registerBanRoutes(
         // n'éteint rien qui vive (le départ l'a déjà fait), et l'extinction est
         // idempotente — c'est ce qui permet de ne pas gater ici, exactement comme
         // pour l'annonce ci-dessus.
-        await endConversationMembership({ io, manager, conversationId: id, userId: targetUserId })
+        // Room personnelle : `userId ?? id` — un participant sans ligne `User` en
+        // a une, nommée d'après son `Participant.id`.
+        await endConversationMembership({
+          io,
+          manager,
+          conversationId: id,
+          userId: targetParticipant.userId ?? targetParticipant.id,
+        })
       }
 
-      return sendSuccess(reply, { userId: targetUserId, bannedAt: now.toISOString() })
+      return sendSuccess(reply, {
+        ...identifyTarget(targetParticipant),
+        bannedAt: now.toISOString(),
+        // Nommé plutôt que deviné : l'écran des liens doit pouvoir marquer CE
+        // lien fermé sans relire toute la liste.
+        closedShareLinkId,
+      })
     }
   )
 
@@ -193,14 +237,21 @@ export function registerBanRoutes(
         return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
       }
 
+      // Mêmes deux colonnes qu'au bannissement — sans quoi on saurait bannir un
+      // visiteur sans compte et jamais le débannir.
+      //
       // `leftAt` et `bannedAt` disent si le bannissement avait mis fin à une
       // appartenance ou frappé quelqu'un qui était déjà parti — cf.
       // `conversationBanState.ts`. Sans eux, débannir REND une appartenance que
       // le bannissement n'avait jamais prise.
-      const targetParticipant = await prisma.participant.findFirst({
-        where: { conversationId: id, userId: targetUserId, bannedAt: { not: null } },
-        select: { id: true, isActive: true, leftAt: true, bannedAt: true },
-      })
+      //
+      // Le lien fermé par le bannissement n'est PAS rouvert : c'est une décision
+      // séparée, qui se prend sur l'écran des liens. Rouvrir d'office
+      // rétablirait une porte que l'hôte a peut-être fermée pour d'autres
+      // raisons — et le débannissement ne rend que ce que le bannissement a pris
+      // à CETTE personne.
+      const resolved = await resolveTargetParticipant(prisma, id, targetUserId)
+      const targetParticipant = resolved?.bannedAt ? resolved : null
 
       if (!targetParticipant) {
         return sendNotFound(reply, 'Participant banni introuvable')
@@ -238,11 +289,15 @@ export function registerBanRoutes(
       // ses sockets le ferait entrer dans une conversation qu'il avait quittée
       // de lui-même.
       if (manager && unban.membershipRestored) {
+        // Room personnelle : `userId ?? id`, comme partout ailleurs — un
+        // participant sans ligne `User` a une room nommée d'après son
+        // `Participant.id`.
+        const targetRoomKey = targetParticipant.userId ?? targetParticipant.id
         try {
-          await manager.joinUserToConversationRoom(targetUserId, id)
+          await manager.joinUserToConversationRoom(targetRoomKey, id)
         } catch (err) {
           logger.error('Failed to re-join unbanned user to conversation room', {
-            userId: targetUserId,
+            userId: targetRoomKey,
             conversationId: id,
             err,
           })
@@ -256,27 +311,32 @@ export function registerBanRoutes(
         // liste, ce que la room de conversation ne pouvait pas lui dire.
         const remaining = await prisma.participant.findMany({
           where: { conversationId: id, isActive: true },
-          select: { id: true, userId: true },
+          // `role` et `user.role` en plus : les deux titres qui ouvrent
+          // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
+          // connaître PAR DESTINATAIRE.
+          select: { id: true, userId: true, role: true, user: { select: { role: true } } },
         })
 
-        emitToConversationParticipants({
+        emitConversationMemberCountEvent({
           io,
           conversationId: id,
           participants: remaining,
           event: SERVER_EVENTS.CONVERSATION_PARTICIPANT_UNBANNED,
           payload: {
             conversationId: id,
-            userId: targetUserId,
+            // `participantId` TOUJOURS, `userId` NUL sans compte — cf.
+            // `identifyTarget`.
+            ...identifyTarget(targetParticipant),
             // Le bannissement est levé dans tous les cas ; l'appartenance, non.
             // Les compteurs de membres des clients suivent ce champ, pas
             // l'événement.
             membershipRestored: unban.membershipRestored,
-            ...presentMemberCount(remaining.length),
           },
+          memberCount: remaining.length,
         })
       }
 
-      return sendSuccess(reply, { userId: targetUserId })
+      return sendSuccess(reply, identifyTarget(targetParticipant))
     }
   )
 }

@@ -47,9 +47,12 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
   resolveConversationId: (...args: any[]) => mockResolveConversationId(...args),
 }));
 
+// PROLONGER le module, jamais le REMPLACER (CLAUDE.md § « Un double PARTIEL
+// d'un module perd en silence tout ce que le module GAGNE ») : un double qui
+// énumère ses exports rend `undefined` au premier que le module gagne.
 jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
-  generateInitialLinkId: jest.fn<any>().mockReturnValue('initial-link-id'),
-  generateFinalLinkId: jest.fn<any>().mockReturnValue('final-link-id'),
+  ...(jest.requireActual('../../../routes/conversations/utils/identifier-generator') as object),
+  generateUniqueShareLinkId: jest.fn<any>().mockResolvedValue('mshy_TestLnk1'),
   ensureUniqueShareLinkIdentifier: jest.fn<any>().mockResolvedValue('mshy_unique'),
 }));
 

@@ -60,8 +60,22 @@ type QueueItem = {
   file: File;
   fileId: string;
   metadata?: Record<string, string>;
+  /**
+   * Force le chemin résumable même sous `SMALL_FILE_THRESHOLD` — le transport
+   * post (`attachmentTransport.ts`) l'utilise : le handler TUS est le SEUL
+   * créateur de `PostMedia` côté upload, et `POST /attachments/upload`
+   * (chemin direct) ne connaît aucun `uploadcontext`.
+   */
+  forceResumable?: boolean;
   resolve: (value: UploadedAttachmentResponse) => void;
   reject: (error: Error) => void;
+};
+
+export type TusUploadOptions = {
+  /** cf. `QueueItem.forceResumable` — s'applique à TOUS les fichiers de cet appel. */
+  readonly forceResumable?: boolean;
+  /** Plafond du nombre de fichiers pour CET appel — défaut `MAX_ATTACHMENTS_PER_MESSAGE`. */
+  readonly maxFiles?: number;
 };
 
 export class TusUploadService {
@@ -80,12 +94,58 @@ export class TusUploadService {
     this.onProgressCallback = callback;
   }
 
+  /**
+   * TOUT-OU-RIEN : un fichier en échec rejette l'appel entier. C'est le
+   * contrat historique, et celui dont dépend le chemin MESSAGE.
+   */
   async uploadFiles(
     files: File[],
-    metadataArray?: Record<string, string>[]
+    metadataArray?: Record<string, string>[],
+    options?: TusUploadOptions
   ): Promise<UploadedAttachmentResponse[]> {
-    if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-      throw new Error(`Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} files allowed per message`);
+    return Promise.all(this.enqueue(files, metadataArray, options));
+  }
+
+  /**
+   * PAR FICHIER : rend le sort de chacun, jamais un rejet global.
+   *
+   * ─── POURQUOI CETTE SECONDE PORTE ─────────────────────────────────────
+   * `Promise.all` fait perdre à l'utilisateur les fichiers qui ont RÉUSSI
+   * dès qu'un voisin échoue : le hook tombe dans son `catch` global et purge
+   * toute la sélection, pendant que les lignes `PostMedia` des réussis
+   * existent déjà côté serveur — et plus aucun id ne subsiste pour les
+   * relâcher. Le transport MESSAGE n'a jamais eu ce défaut : la route
+   * `/attachments/upload` rend un tableau plus court sous `success: true`, et
+   * l’appariement du hook (`pairUploads`) ne purge que les fichiers réellement perdus.
+   * Cette variante rend au transport POST la même tolérance.
+   *
+   * Les refus PRÉ-VOL (plafond de nombre, taille) restent des rejets GLOBAUX :
+   * rien n'est parti, donc il n'y a rien à réconcilier.
+   */
+  async uploadFilesSettled(
+    files: File[],
+    metadataArray?: Record<string, string>[],
+    options?: TusUploadOptions
+  ): Promise<PromiseSettledResult<UploadedAttachmentResponse>[]> {
+    return Promise.allSettled(this.enqueue(files, metadataArray, options));
+  }
+
+  /**
+   * Valide, met en file, démarre — et rend UNE promesse par fichier. Le sort
+   * de ces promesses (toutes ensemble, ou chacune pour soi) appartient à
+   * l'appelant : c'est la SEULE différence entre les deux portes ci-dessus.
+   *
+   * Les refus de validation LÈVENT ici, avant qu'aucune promesse n'existe —
+   * ils remontent donc en rejet de l'appel, quelle que soit la porte.
+   */
+  private enqueue(
+    files: File[],
+    metadataArray?: Record<string, string>[],
+    options?: TusUploadOptions
+  ): Promise<UploadedAttachmentResponse>[] {
+    const maxFiles = options?.maxFiles ?? MAX_ATTACHMENTS_PER_MESSAGE;
+    if (files.length > maxFiles) {
+      throw new Error(`Maximum ${maxFiles} files allowed per message`);
     }
 
     for (const file of files) {
@@ -112,14 +172,14 @@ export class TusUploadService {
       });
 
       return new Promise<UploadedAttachmentResponse>((resolve, reject) => {
-        this.queue.push({ file, fileId, metadata, resolve, reject });
+        this.queue.push({ file, fileId, metadata, forceResumable: options?.forceResumable, resolve, reject });
       });
     });
 
     this.emitProgress();
     this.processQueue();
 
-    return Promise.all(promises);
+    return promises;
   }
 
   pauseAll() {
@@ -169,7 +229,7 @@ export class TusUploadService {
   private startUpload(item: QueueItem) {
     const { file } = item;
 
-    if (file.size <= SMALL_FILE_THRESHOLD) {
+    if (!item.forceResumable && file.size <= SMALL_FILE_THRESHOLD) {
       this.startDirectUpload(item);
       return;
     }

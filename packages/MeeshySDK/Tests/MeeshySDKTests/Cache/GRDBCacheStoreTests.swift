@@ -7,6 +7,31 @@ private struct CacheTestItem: CacheIdentifiable, Codable, Equatable {
     var name: String
 }
 
+/// Chiffreur réversible qui compte ses appels — observable du skip P2-2a
+/// (« payload identique ⇒ pas de re-chiffrement »), sans horloge ni état DB.
+private final class CountingCipher: DatabaseEncryptionProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    var encryptCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+
+    func encrypt(_ plaintext: Data) -> Data? {
+        lock.lock()
+        count += 1
+        lock.unlock()
+        return Data("X".utf8) + plaintext
+    }
+
+    func decrypt(_ ciphertext: Data) -> Data? {
+        guard ciphertext.first == UInt8(ascii: "X") else { return nil }
+        return Data(ciphertext.dropFirst())
+    }
+}
+
 final class GRDBCacheStoreTests: XCTestCase {
 
     private func makeDB() throws -> DatabaseQueue {
@@ -220,6 +245,76 @@ final class GRDBCacheStoreTests: XCTestCase {
             try CacheEntry.filter(Column("key") == "cleankey").fetchCount(db)
         }
         XCTAssertEqual(count, 1)
+    }
+
+    /// P2-2a — un flush dont les payloads n'ont pas changé ne réécrit AUCUNE
+    /// rangée : l'empreinte plaintext (`contentHash`) court-circuite le
+    /// re-chiffrement + l'UPDATE. Observable direct et sans horloge : un
+    /// chiffreur-stub qui COMPTE ses appels — le contrat est littéralement
+    /// « pas de re-chiffrement des rangées inchangées ».
+    func test_flushDirtyKeys_unchangedItems_skipRewrite() async throws {
+        let db = try makeDB()
+        let cipher = CountingCipher()
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5),
+                                 maxItemCount: nil, storageLocation: .grdb)
+        let store = GRDBCacheStore<String, CacheTestItem>(
+            policy: policy, db: db, encrypted: true, encryption: cipher
+        )
+        try await store.save([CacheTestItem(id: "1", name: "Alice"),
+                              CacheTestItem(id: "2", name: "Bob")], for: "hashkey")
+        XCTAssertEqual(cipher.encryptCount, 2, "précondition : un chiffrement par rangée au save")
+
+        // Mutation identité : le contenu publié est le même — la clé devient
+        // dirty mais aucun payload ne change.
+        await store.update(for: "hashkey") { existing in existing }
+        await store.flushDirtyKeys()
+
+        XCTAssertEqual(cipher.encryptCount, 2,
+            "aucune rangée inchangée ne doit être re-chiffrée ni réécrite")
+
+        let after = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "hashkey").fetchAll(db)
+        }
+        XCTAssertEqual(after.compactMap(\.contentHash).count, 2,
+            "les rangées portent leur empreinte plaintext")
+    }
+
+    /// L'écriture-diff conserve les rowids des rangées inchangées : l'ordre de
+    /// la liste doit donc être porté par la colonne `position` (v8), sinon une
+    /// conversation remontée en tête relirait dans l'ordre PÉRIMÉ au cold
+    /// start. Ce test échoue sans la persistance d'ordre.
+    func test_save_reorderedItems_persistsNewOrder() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+        try await store.save([CacheTestItem(id: "1", name: "A"),
+                              CacheTestItem(id: "2", name: "B")], for: "orderkey")
+        try await store.save([CacheTestItem(id: "2", name: "B"),
+                              CacheTestItem(id: "1", name: "A")], for: "orderkey")
+
+        // Purge L1 pour forcer la relecture disque — c'est l'ordre PERSISTÉ
+        // qu'on verrouille, pas la copie mémoire.
+        await store.evictL1()
+        let result = await store.load(for: "orderkey")
+        XCTAssertEqual(result.value?.map(\.id), ["2", "1"],
+            "le nouvel ordre doit survivre au round-trip L2 même à payloads identiques")
+    }
+
+    /// La contrepartie : un payload réellement modifié est bien réécrit.
+    func test_flushDirtyKeys_changedItem_isRewritten() async throws {
+        let db = try makeDB()
+        let store = try makeStore(db: db)
+        try await store.save([CacheTestItem(id: "1", name: "Alice")], for: "hashkey2")
+        let blobBefore = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "hashkey2").fetchOne(db)
+        }?.encodedData
+
+        await store.update(for: "hashkey2") { _ in [CacheTestItem(id: "1", name: "Alicia")] }
+        await store.flushDirtyKeys()
+
+        let rowAfter = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "hashkey2").fetchOne(db)
+        }
+        XCTAssertNotEqual(rowAfter?.encodedData, blobBefore)
     }
 
     func test_flushDirtyKeys_removesDeletedItems() async throws {

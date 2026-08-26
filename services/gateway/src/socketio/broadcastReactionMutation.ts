@@ -1,9 +1,10 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { ReactionEventType, ReactionOfflineQueueParams } from './reactionOfflineQueue';
+import type { ReactionUpdateEventData } from '@meeshy/shared/types/socketio-events';
+import type { Anonymized, ServerEmitIO, ServerEmitTarget } from './serverEmit';
 
-export interface ReactionEmitIO {
-  to(room: string): { emit(event: string, payload: unknown): void };
-}
+/** Alias de la porte typée du contrat — voir `serverEmit.ts` (cycle 104). */
+export type ReactionEmitIO = ServerEmitIO;
 
 /**
  * The `MeeshySocketIOManager` surface this helper needs, kept structural so it
@@ -15,10 +16,44 @@ export interface ReactionMutationManager {
   enqueueOfflineReactionMutation(params: ReactionOfflineQueueParams): Promise<void>;
 }
 
-const EVENT_NAME = {
-  'reaction-added': SERVER_EVENTS.REACTION_ADDED,
-  'reaction-removed': SERVER_EVENTS.REACTION_REMOVED,
-} as const;
+/**
+ * Ce que ce transport a le droit de mettre sur le fil.
+ *
+ * `payload: Record<string, unknown>` — un sac de clés — ne satisfait AUCUN champ
+ * du contrat, et les QUATRE routes appelantes portaient le double cast qui le
+ * dit : `updateEvent as unknown as Record<string, unknown>`. C'est exactement la
+ * marque relevée au cycle 103 sur la jumelle des messages : un cast de cette
+ * forme sur un objet de contrat NOMME la gouvernance qui manque.
+ *
+ * Le contrat déclare `ReactionUpdateEventData` ; `ReactionService.createUpdateEvent`
+ * rend `ReactionUpdateEvent` (`@meeshy/shared/types/reaction`), son jumeau
+ * structurel écrit dans un second fichier. Les quatre casts disparaissent parce
+ * que la charge était DÉJÀ juste — ce qui manquait n'était pas la valeur, c'était
+ * quoi que ce soit qui la vérifie.
+ */
+export type ReactionMutationPayload = Anonymized<ReactionUpdateEventData>;
+
+/**
+ * L'émission de la room, discriminée sur `eventType`.
+ *
+ * Les deux réactions partagent leur charge (`ReactionUpdateEventData` pour les
+ * deux), donc le `switch` n'est pas ici ce qui choisit un TYPE — c'est ce qui
+ * empêche une table indexée de laisser croire que le couple est vérifié quand il
+ * ne l'est pas. La porte typée refuse `EVENT_NAME[eventType]` pour cette raison
+ * seule, et elle a raison : elle vaudra le jour où les deux charges divergeront.
+ */
+function emitToConversationRoom(
+  target: ServerEmitTarget | undefined,
+  eventType: ReactionEventType,
+  payload: ReactionMutationPayload,
+): void {
+  if (!target) return;
+  if (eventType === 'reaction-added') {
+    target.emit(SERVER_EVENTS.REACTION_ADDED, payload);
+    return;
+  }
+  target.emit(SERVER_EVENTS.REACTION_REMOVED, payload);
+}
 
 /**
  * The single REST-side broadcaster for a message reaction toggle.
@@ -61,14 +96,14 @@ export async function broadcastReactionMutation(params: {
   eventType: ReactionEventType;
   messageId: string;
   emoji: string;
-  payload: Record<string, unknown>;
+  payload: ReactionMutationPayload;
   onError?: (error: unknown) => void;
 }): Promise<void> {
   const { manager, conversationId, actorParticipantId, eventType, messageId, emoji, payload, onError } = params;
   if (!manager) return;
 
   try {
-    manager.getIO()?.to(ROOMS.conversation(conversationId)).emit(EVENT_NAME[eventType], payload);
+    emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), eventType, payload);
   } catch (error) {
     onError?.(error);
   }

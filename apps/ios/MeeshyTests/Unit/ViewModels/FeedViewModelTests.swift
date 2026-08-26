@@ -830,7 +830,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
         let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
 
-        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en")
+        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en", mobileTranscription: nil)
 
         // Optimistic post with a local-media preview, keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
@@ -862,7 +862,8 @@ final class FeedViewModelTests: XCTestCase {
             localMediaURLs: urls,
             content: "My reel",
             originalLanguage: "en",
-            type: "REEL"
+            type: "REEL",
+            mobileTranscription: nil
         )
 
         // The optimistic post is a REEL so it surfaces on the reel pager
@@ -889,7 +890,8 @@ final class FeedViewModelTests: XCTestCase {
         await sut.createOfflineMediaPost(
             localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")],
             content: "Vue depuis le toit",
-            location: place
+            location: place,
+            mobileTranscription: nil
         )
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
@@ -902,7 +904,7 @@ final class FeedViewModelTests: XCTestCase {
         queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed")
+        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed", mobileTranscription: nil)
 
         XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
@@ -913,12 +915,44 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
-        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text")
+        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text", mobileTranscription: nil)
 
         XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
         XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
         XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
         XCTAssertEqual(sut.posts.count, 1)
+    }
+
+    /// **Le repli « aucun média » perdait la liste NOMMÉE de l'audience.**
+    ///
+    /// `enqueueDurableTextPost` porte un défaut `nil` sur `visibilityUserIds`,
+    /// et le repli ne le passait pas : un post `ONLY`/`EXCEPT` qui retombait là
+    /// partait sans ses destinataires. Le gateway le refuse
+    /// (`CreatePostSchema.refine`), le rejet est PERMANENT — la ligne est
+    /// épuisée, le post est perdu.
+    ///
+    /// C'est le mécanisme même que ce lot documente partout ailleurs : un
+    /// défaut fait disparaître un champ d'un site d'appel sans casser la
+    /// moindre compilation.
+    func test_createOfflineMediaPost_sansMedia_nePerdPasLAudienceNommee() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createOfflineMediaPost(
+            localMediaURLs: [],
+            content: "Pour vous deux",
+            visibility: "ONLY",
+            visibilityUserIds: ["u1", "u2"],
+            mobileTranscription: nil
+        )
+
+        let payload = queue.lastPayload as? CreatePostPayload
+        XCTAssertEqual(
+            payload?.visibilityUserIds, ["u1", "u2"],
+            "L'audience nommée est perdue par le repli sans média : le gateway refusera la charge, et le "
+                + "rejet étant permanent, le post ne repartira jamais."
+        )
+        XCTAssertEqual(payload?.visibility, "ONLY")
     }
 
     // MARK: - Offline draft recovery (post / reel)
@@ -1039,6 +1073,190 @@ final class FeedViewModelTests: XCTestCase {
         await sut.updatePost("p1", content: "body", removeMediaIds: ["m1", "m2"])
 
         XCTAssertEqual(postService.lastUpdateRemoveMediaIds, ["m1", "m2"])
+    }
+
+    // MARK: - updatePost() — audience
+
+    /// Loi produit 2026-08-23 : l'auteur change l'audience de sa publication à
+    /// TOUT MOMENT. Le chemin d'édition envoyait `visibility: nil` en dur, donc
+    /// la sheet ne pouvait rien resserrer une fois le post parti.
+    func test_updatePost_forwardsVisibilityAndNamedAudienceToService() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", visibility: "ONLY", visibilityUserIds: ["u1", "u2"])
+
+        XCTAssertEqual(postService.lastUpdateVisibility, "ONLY")
+        XCTAssertEqual(postService.lastUpdateVisibilityUserIds, ["u1", "u2"])
+    }
+
+    /// Après l'aller-retour, le post local PORTE la nouvelle audience — c'est
+    /// ce qui fait bouger son badge sans attendre un rafraîchissement.
+    ///
+    /// Le service rend ici un post déjà resserré, comme le vrai gateway : la
+    /// réponse serveur fait foi et écrase l'écriture optimiste. Stubber une
+    /// réponse SANS visibilité prouverait l'inverse de ce qu'on croit (la
+    /// valeur nil du stub effacerait l'audience et le test le lirait comme un
+    /// défaut du ViewModel).
+    func test_updatePost_leavesThePostCarryingItsNewAudience() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+        postService.createResult = .success(JSONStub.decode("""
+        {"id":"p1","type":"POST","visibility":"PRIVATE","content":"body",
+         "createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
+        """))
+
+        await sut.updatePost("p1", content: "body", visibility: "PRIVATE", visibilityUserIds: [])
+
+        XCTAssertEqual(sut.posts.first?.visibility, "PRIVATE")
+    }
+
+    /// Une édition qui ne touche PAS à l'audience ne doit rien envoyer sur ce
+    /// champ : un `visibility` recopié écraserait une audience changée
+    /// entre-temps depuis une autre surface.
+    func test_updatePost_withoutAudienceChange_leavesVisibilityAbsent() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body")
+
+        XCTAssertNil(postService.lastUpdateVisibility)
+        XCTAssertNil(postService.lastUpdateVisibilityUserIds)
+    }
+
+    // MARK: - createPost() — audience nommée
+
+    /// Une publication peut NAÎTRE avec une audience nommée. `EXCEPT`/`ONLY`
+    /// étaient offertes au composer story et hors d'atteinte du composer post :
+    /// `CreatePostRequest` portait le champ, aucune surcharge de
+    /// `PostService.create` ne le remplissait.
+    ///
+    /// Le post porte un média : un post TEXTE seul ne passe pas par le service
+    /// mais par la file durable (`isDurableTextOnly`) — c'est l'objet du test
+    /// suivant, et prendre ce chemin ici rendrait le mock muet.
+    func test_createPost_carriesANamedAudience_toTheService() async {
+        let (sut, _, _, postService) = makeSUT()
+
+        await sut.createPost(content: "Salut", visibility: "ONLY", visibilityUserIds: ["u1", "u2"], mediaIds: ["m1"])
+
+        XCTAssertEqual(postService.lastCreateVisibility, "ONLY")
+        XCTAssertEqual(postService.lastCreateVisibilityUserIds, ["u1", "u2"])
+    }
+
+    /// Le chemin DURABLE — celui de l'immense majorité des posts, le texte seul
+    /// — doit porter la même liste : sans elle, un post à audience nommée écrit
+    /// hors ligne partirait au flush sans ses destinataires et le gateway le
+    /// refuserait (`CreatePostSchema`).
+    func test_createPost_textOnly_persistsTheNamedAudience_inTheDurableQueue() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createPost(content: "Salut", visibility: "EXCEPT", visibilityUserIds: ["u3"])
+
+        let payload = queue.lastPayload as? CreatePostPayload
+        XCTAssertEqual(payload?.visibility, "EXCEPT")
+        XCTAssertEqual(payload?.visibilityUserIds, ["u3"])
+    }
+
+    /// Une publication ordinaire n'envoie AUCUNE liste — `nil`, jamais `[]` :
+    /// le payload porte un verdict, et « je n'en parle pas » n'est pas
+    /// « efface » (même règle que `mentions`).
+    func test_createPost_withoutANamedAudience_sendsNoList() async {
+        let (sut, _, _, postService) = makeSUT()
+
+        await sut.createPost(content: "Salut", visibility: "PUBLIC", mediaIds: ["m1"])
+
+        XCTAssertNil(postService.lastCreateVisibilityUserIds)
+    }
+
+    // MARK: - EditPostSheet — règle d'audience (pure)
+
+    func test_editPostAudience_reportsUnchangedVisibilityAsAbsent() {
+        XCTAssertNil(EditPostAudienceRule.draftVisibility(selected: .public, original: "PUBLIC", touched: true))
+        XCTAssertEqual(
+            EditPostAudienceRule.draftVisibility(selected: .only, original: "PUBLIC", touched: true), "ONLY"
+        )
+    }
+
+    /// Ouvrir puis fermer la sheet sans toucher au sélecteur ne dit RIEN sur
+    /// l'audience — y compris quand l'original est inconnu, cas où l'état
+    /// initial (« Public ») parlerait à la place de l'auteur.
+    func test_editPostAudience_untouchedSelectorStaysSilent() {
+        XCTAssertNil(EditPostAudienceRule.draftVisibility(selected: .public, original: nil, touched: false))
+        XCTAssertNil(EditPostAudienceRule.draftVisibility(selected: .only, original: "PUBLIC", touched: false))
+    }
+
+    /// Mais une fois le choix POSÉ sur un post dont la visibilité n'a pas pu
+    /// être hydratée, il part : sans cela, choisir « Privé » ne ferait rien.
+    func test_editPostAudience_touchedChoiceWinsOverAnUnknownOriginal() {
+        XCTAssertEqual(
+            EditPostAudienceRule.draftVisibility(selected: .private, original: nil, touched: true), "PRIVATE"
+        )
+    }
+
+    func test_editPostAudience_dropsTheListWhenLeavingExceptOrOnly() {
+        XCTAssertEqual(EditPostAudienceRule.draftAudience(selected: .only, ids: ["u1"]), ["u1"])
+        XCTAssertEqual(EditPostAudienceRule.draftAudience(selected: .public, ids: ["u1"]), [])
+    }
+
+    func test_editPostAudience_blocksSavingExceptOrOnlyWithNobody() {
+        XCTAssertFalse(EditPostAudienceRule.isComplete(visibility: .only, audienceCount: 0))
+        XCTAssertFalse(EditPostAudienceRule.isComplete(visibility: .except, audienceCount: 0))
+        XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .only, audienceCount: 1))
+        XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .public, audienceCount: 0))
+        XCTAssertTrue(EditPostAudienceRule.isComplete(visibility: .community, audienceCount: 0))
+    }
+
+    // MARK: - EditPostSheet — ce que la feuille a su RENDRE (loi 3)
+
+    /// **On n'écrit que ce qu'on sait complet et qu'on a su rendre.** Six
+    /// champs du corps d'édition ne sont JAMAIS déclarés par cette feuille :
+    /// elle ne les a jamais peints, donc elle ne peut pas les réécrire. Les
+    /// déclarer les rendrait écrasables par une surface qui ne les a jamais
+    /// montrés à l'auteur — et `mentions: []` RÉVOQUE.
+    func test_editPostDraft_neverDeclaresWhatTheSheetHasNeverPainted() {
+        let neverPainted: Set<PostEditField> = [
+            .moodEmoji, .storyEffects, .mediaIds, .mentions, .allowSoundExtraction, .mediaAlt
+        ]
+
+        XCTAssertTrue(EditPostDraft.documentFields.isDisjoint(with: neverPainted))
+        XCTAssertEqual(EditPostDraft.documentFields, [
+            .content, .visibility, .visibilityUserIds, .originalLanguage,
+            .type, .removeMediaIds, .location
+        ])
+    }
+
+    /// La déclaration VOYAGE avec le brouillon, et son effet se mesure sur ce
+    /// qui part : un `nil` reçu par le ViewModel ne dirait pas si le champ est
+    /// INCHANGÉ ou JAMAIS AFFICHÉ. Ici il porte une valeur, et il est tu.
+    func test_updatePost_whenTypeWasNeverRendered_omitsItEvenThoughTheDraftCarriesOne() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", type: "REEL",
+                             known: EditPostDraft.documentFields.subtracting([.type]))
+
+        XCTAssertNil(postService.lastUpdateType,
+                     "le sélecteur POST/RÉEL n'existe pas sur un repost — le serveur doit préserver le sien")
+        XCTAssertEqual(postService.lastUpdateContent, "body")
+    }
+
+    /// Non-régression : sans déclaration explicite, un appelant reçoit la
+    /// déclaration la plus LARGE de la feuille — exactement ce que les quatre
+    /// chemins d'édition envoyaient avant ce lot.
+    func test_updatePost_defaultDeclaration_carriesEverythingTheSheetPaints() async {
+        let (sut, _, _, postService) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "p1")]
+
+        await sut.updatePost("p1", content: "body", language: "fr", type: "REEL",
+                             removeMediaIds: ["m1"], visibility: "ONLY", visibilityUserIds: ["u1"])
+
+        XCTAssertEqual(postService.lastUpdateContent, "body")
+        XCTAssertEqual(postService.lastUpdateOriginalLanguage, "fr")
+        XCTAssertEqual(postService.lastUpdateType, "REEL")
+        XCTAssertEqual(postService.lastUpdateRemoveMediaIds, ["m1"])
+        XCTAssertEqual(postService.lastUpdateVisibility, "ONLY")
+        XCTAssertEqual(postService.lastUpdateVisibilityUserIds, ["u1"])
     }
 
     // MARK: - refresh()
@@ -2029,6 +2247,110 @@ final class FeedViewModelTests: XCTestCase {
 
         XCTAssertFalse(result[0].isLiked)
         XCTAssertEqual(result[0].likes, 4)
+    }
+
+
+    // MARK: - BW-IOS-03 : politique d'auto-téléchargement du préchargement du feed
+
+    /// La fenêtre de 9 posts tirait le fichier AUDIO ENTIER de chaque post
+    /// audio, jamais joué, sans consulter `MediaDownloadPolicyEngine`.
+    func test_shouldPrefetchFeedMedia_audioOnBadCellular_returnsFalse() {
+        let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .audio, condition: .badCellular, prefs: .defaults
+        )
+
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .audio, hasThumbnail: false,
+            allowImage: true, allowVideo: true, allowAudio: allowAudio
+        ), "sur cellulaire contraint, l'audio se charge à l'appui sur lecture")
+    }
+
+    func test_shouldPrefetchFeedMedia_imageOnWifi_returnsTrue() {
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .image, condition: .wifi, prefs: .defaults
+        )
+
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .image, hasThumbnail: true,
+            allowImage: allowImage, allowVideo: false, allowAudio: false
+        ), "en Wi-Fi, le fil reste préchargé comme avant")
+    }
+
+    /// Une vidéo AVEC vignette ne tire qu'une image distante : `prefs.image`.
+    /// `hasThumbnail` signifie « vignette RÉSOLVABLE » (l'appelant le calcule
+    /// via `media.thumbnailUrl.flatMap { MeeshyConfig.resolveMediaURL($0) } != nil`),
+    /// pas seulement « champ non-nil » — sinon une `thumbnailUrl` mal formée
+    /// ferait passer ce prédicat sous `allowImage` pendant que le code exécuté
+    /// bascule sur le décodage de la première frame du MP4 (`prefs.video`).
+    func test_shouldPrefetchFeedMedia_videoWithThumbnail_followsImagePolicy() {
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: true,
+            allowImage: true, allowVideo: false, allowAudio: false
+        ))
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: true,
+            allowImage: false, allowVideo: true, allowAudio: true
+        ))
+    }
+
+    /// Une vidéo SANS vignette passe par `StoryMediaLoader.videoThumbnail`, qui
+    /// décode la première frame du MP4 DISTANT : ce sont des octets VIDÉO, donc
+    /// `prefs.video` (`.wifiOnly` par défaut). La ranger sous `prefs.image`
+    /// (`.wifiAndGoodCellular`) laisserait tirer de la vidéo en bon cellulaire.
+    func test_shouldPrefetchFeedMedia_videoWithoutThumbnail_followsVideoPolicy() {
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: false,
+            allowImage: true, allowVideo: false, allowAudio: true
+        ), "pas de lecture réseau sur le MP4 quand prefs.video refuse")
+        XCTAssertTrue(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .video, hasThumbnail: false,
+            allowImage: false, allowVideo: true, allowAudio: false
+        ))
+    }
+
+    /// Un document n'a jamais été préchargé (branche `default` du routage) —
+    /// la garde ne doit pas lui ouvrir une porte au passage.
+    func test_shouldPrefetchFeedMedia_document_isNeverPrefetched() {
+        XCTAssertFalse(FeedViewModel.shouldPrefetchFeedMedia(
+            kind: .document, hasThumbnail: true,
+            allowImage: true, allowVideo: true, allowAudio: true
+        ))
+    }
+
+    // MARK: - Source guard — le prefetch consulte bien la politique (câblage, pas seulement la table de vérité)
+
+    /// Les tests `test_shouldPrefetchFeedMedia_*` ci-dessus couvrent la table
+    /// de vérité du prédicat PUR, jamais son câblage : supprimer le
+    /// `guard FeedViewModel.shouldPrefetchFeedMedia(…) else { … }` ou le
+    /// `if allowVideo,` du preroll dans `prefetchMedia(around:)` les
+    /// laisserait tous verts alors que le défaut BW-IOS-03 serait entièrement
+    /// rétabli. Garde de SOURCE visant le BLOC de la fonction (jamais le
+    /// fichier entier), équilibrée par accolades via `DeclarationBodyScanner`
+    /// — insensible aux commentaires ajoutés au-dessus.
+    func test_prefetchMedia_blockConsultsTheDownloadPolicy() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedViewModel.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        guard let body = DeclarationBodyScanner.body(containing: "func prefetchMedia(around index: Int)", in: source) else {
+            XCTFail("prefetchMedia(around:) body not found — FeedViewModel.swift changed shape, update this guard's anchor.")
+            return
+        }
+
+        XCTAssertTrue(
+            body.contains("shouldPrefetchFeedMedia("),
+            "prefetchMedia(around:) must consult FeedViewModel.shouldPrefetchFeedMedia(...) before touching a URL — " +
+            "otherwise the truth-table tests above stay green while the download policy is silently bypassed."
+        )
+        XCTAssertTrue(
+            body.contains("if allowVideo,"),
+            "the video preroll inside prefetchMedia(around:) must stay gated on allowVideo — " +
+            "otherwise a good-cellular connection preloads the AVPlayer's MP4 regardless of prefs.video."
+        )
     }
 
 }

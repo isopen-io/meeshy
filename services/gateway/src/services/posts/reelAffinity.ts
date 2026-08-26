@@ -21,6 +21,8 @@
  * ranking) — c'est la limite assumée de cette fondation.
  */
 
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+
 export type ReelCandidate = {
   id: string;
   authorId: string;
@@ -47,7 +49,12 @@ export type ReelAffinityContext = {
   viewerId: string;
   /** Amis + contacts DM de l'utilisateur connecté. */
   contactIds: ReadonlySet<string>;
-  /** Langues que l'utilisateur lit (system + regional + custom destination). */
+  /**
+   * Langues que l'utilisateur lit — le prisme ORDONNÉ complet (system > regional
+   * > customDestination > deviceLocale), CANONICALISÉES via
+   * `normalizeLanguageForDedup` à la construction (`getViewerLanguages`) — la
+   * comparaison `.has()` du scoring en dépend.
+   */
   viewerLanguages: ReadonlySet<string>;
   /** Réels déjà vus par l'utilisateur (PostView). */
   seenReelIds: ReadonlySet<string>;
@@ -106,12 +113,19 @@ export function reelAffinityBreakdown(
   const W = REEL_AFFINITY_WEIGHTS;
   const seed = ctx.seed;
 
+  // Codes de langue canonicalisés via la SSOT `normalizeLanguageForDedup` avant
+  // TOUTE comparaison : `c.originalLanguage` (candidat) et `seed.originalLanguage`
+  // arrivent BRUTS de la base (`Post.originalLanguage`), potentiellement
+  // région-tagués (`'fr-FR'`) ou 3-lettres (`'fra'`). Un `===` verbatim comptait
+  // `'fr-FR'` et `'fr'` comme deux langues distinctes et faisait perdre au réel
+  // les poids `seedSameLanguage`/`viewerLanguage` — ranking dégradé silencieux.
+  // `ctx.viewerLanguages` est déjà canonicalisé à la source (`getViewerLanguages`).
+  const candidateLang = c.originalLanguage ? normalizeLanguageForDedup(c.originalLanguage) : null;
+  const seedLang = seed?.originalLanguage ? normalizeLanguageForDedup(seed.originalLanguage) : null;
+
   const seedSameAuthor = seed && c.authorId === seed.authorId ? W.seedSameAuthor : 0;
   const seedSameLanguage =
-    seed &&
-    c.originalLanguage &&
-    seed.originalLanguage &&
-    c.originalLanguage === seed.originalLanguage
+    seed && candidateLang && seedLang && candidateLang === seedLang
       ? W.seedSameLanguage
       : 0;
   const seedSharedMention =
@@ -121,7 +135,7 @@ export function reelAffinityBreakdown(
 
   const contactAuthor = ctx.contactIds.has(c.authorId) ? W.contactAuthor : 0;
   const viewerLanguage =
-    c.originalLanguage && ctx.viewerLanguages.has(c.originalLanguage)
+    candidateLang && ctx.viewerLanguages.has(candidateLang)
       ? W.viewerLanguage
       : 0;
 

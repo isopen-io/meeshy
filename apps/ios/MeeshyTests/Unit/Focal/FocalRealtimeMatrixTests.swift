@@ -129,30 +129,29 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     // behaviour-matrix:F04
 
     /// Preuve exhaustive du glyphe/des couleurs : `BubbleDeliveryCheck` lui-
-    /// même (§1.3, non re-testé). Amendement user 2026-08-18 : « le double
-    /// coche à côté du nom est doublon avec le double coche à côté de
-    /// l'heure » — la coche quitte le flanc du NOM et rejoint le groupe de
-    /// droite de l'en-tête (après le Spacer, à côté du stamp), exactement là
-    /// où `FocalMetaRow` la pose déjà pour les rangées de suite. Invariant :
-    /// la coche existe (gardée `isMe`) ET vit APRÈS le Spacer (côté heure),
-    /// jamais entre le nom et le Spacer.
+    /// même (§1.3, non re-testé). F04 dit que la coche vit à côté de
+    /// l'HEURE, jamais à côté du NOM — l'invariant n'a pas bougé, l'heure si :
+    /// directive 2026-08-23, elle a quitté l'en-tête pour la ligne BASSE
+    /// (`FocalMetaRow`), et la coche l'a suivie. La garde vise donc désormais
+    /// la méta ; l'absence de coche dans l'en-tête est tenue par
+    /// `FocalFocusedRowDetailsGuardTests`.
     func test_F04_deliveryCheckSitsBesideTheTime_neverBesideTheName() throws {
-        let header = AppSourceGuard.stripComments(
-            try source(rowRoot().appendingPathComponent("FocalIdentityHeader.swift"))
+        let meta = AppSourceGuard.stripComments(
+            try source(rowRoot().appendingPathComponent("FocalMetaRow.swift"))
         )
         XCTAssertTrue(
-            header.contains("BubbleDeliveryCheck(") && header.contains("if isMe, let deliveryStatus"),
-            "FocalIdentityHeader.swift doit poser BubbleDeliveryCheck, gardé par `isMe` (F04 : les accusés " +
+            meta.contains("BubbleDeliveryCheck(") && meta.contains("if isMe, let deliveryStatus"),
+            "FocalMetaRow.swift doit poser BubbleDeliveryCheck, gardé par `isMe` (F04 : les accusés " +
             "ne concernent que les messages « Toi »)"
         )
-        guard let spacerIndex = header.range(of: "Spacer(minLength: 0)")?.lowerBound,
-              let checkIndex = header.range(of: "BubbleDeliveryCheck(")?.lowerBound else {
-            return XCTFail("FocalIdentityHeader.swift doit contenir Spacer(minLength: 0) et BubbleDeliveryCheck(")
+        guard let spacerIndex = meta.range(of: "Spacer(minLength: 0)")?.lowerBound,
+              let checkIndex = meta.range(of: "BubbleDeliveryCheck(")?.lowerBound else {
+            return XCTFail("FocalMetaRow.swift doit contenir Spacer(minLength: 0) et BubbleDeliveryCheck(")
         }
         XCTAssertLessThan(
             spacerIndex, checkIndex,
-            "F04 (amendement 2026-08-18) : BubbleDeliveryCheck doit être posé APRÈS le Spacer de " +
-            "l'en-tête — à côté de l'heure, comme FocalMetaRow — jamais à côté du nom (doublon perçu)"
+            "F04 : BubbleDeliveryCheck doit être posé APRÈS le Spacer — à côté de l'heure — " +
+            "jamais à côté du nom (doublon perçu)"
         )
     }
 
@@ -287,13 +286,14 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         let body = code[start.lowerBound..<end.lowerBound]
         XCTAssertTrue(
             body.contains("onReplyTap?(reference.messageId)"),
-            "F09 : le tap du bloc citation (hors zones nom/média) doit déclencher `onReplyTap(reference.messageId)` — " +
+            "F09 : le tap du bloc citation (hors zones avatar/média) doit déclencher `onReplyTap(reference.messageId)` — " +
             "c'est ce callback que l'hôte fait atterrir via scrollToItem(.centeredVertically) — voir test_F12"
         )
         XCTAssertTrue(
             code.contains(".onTapGesture {\n            jumpToOriginal()"),
-            "F09 : le tap GLOBAL du bloc reste le saut à l'original — les zones nom (profil) et média (lecture) " +
-            "sont des enclaves, jamais un remplacement du saut"
+            "F09 : le tap GLOBAL du bloc reste le saut à l'original — les zones avatar (profil) et média (lecture) " +
+            "sont des enclaves, jamais un remplacement du saut. Depuis la LOI DES ZONES (2026-08-24) le NOM " +
+            "n'est plus une enclave : il retombe sous ce tap global"
         )
     }
 

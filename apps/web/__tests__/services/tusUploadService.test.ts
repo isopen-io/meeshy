@@ -261,6 +261,120 @@ describe('TusUploadService', () => {
     });
   });
 
+  describe('uploadFiles — options.forceResumable et options.maxFiles (transport post)', () => {
+    // Sans ce forçage, un média de publication sous 50 Mo (la quasi-totalité)
+    // atterrissait sur `POST /attachments/upload` — une route qui ne connaît
+    // aucun `uploadcontext` — et créait un `MessageAttachment` au lieu d'un
+    // `PostMedia`. C'est le témoin du défaut mesuré (§0-A du plan composer).
+    it('force le chemin résumable pour un petit fichier et ne touche jamais XMLHttpRequest', async () => {
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+
+      const promise = service.uploadFiles([file], undefined, { forceResumable: true });
+      await Promise.resolve();
+
+      expect(Upload).toHaveBeenCalled();
+      expect(mockXhrInstance.open).not.toHaveBeenCalled();
+      expect(mockXhrInstance.send).not.toHaveBeenCalled();
+
+      const att = makeAttachmentResponse();
+      mockUploadInstance.lastResponse = { getBody: () => JSON.stringify({ data: { attachment: att } }) };
+      capturedCallbacks.onSuccess?.();
+
+      await expect(promise).resolves.toEqual([expect.objectContaining({ id: att.id })]);
+    });
+
+    it('sans forceResumable, un petit fichier reste sur le chemin direct (XHR)', async () => {
+      const service = new TusUploadService();
+      const file = makeSmallFile();
+
+      service.uploadFiles([file]).catch(() => undefined);
+      await Promise.resolve();
+
+      expect(Upload).not.toHaveBeenCalled();
+      expect(mockXhrInstance.send).toHaveBeenCalled();
+    });
+
+    it('rejette avant tout octet quand maxFiles est dépassé', async () => {
+      const service = new TusUploadService();
+      const files = Array.from({ length: 11 }, (_, i) => makeSmallFile(`file${i}.jpg`));
+
+      await expect(
+        service.uploadFiles(files, undefined, { maxFiles: 10 })
+      ).rejects.toThrow('Maximum 10 files allowed per message');
+
+      expect(Upload).not.toHaveBeenCalled();
+      expect(mockXhrInstance.send).not.toHaveBeenCalled();
+    });
+
+    it('maxFiles ne change rien au comportement par défaut (199)', async () => {
+      const service = new TusUploadService();
+      const files = Array.from({ length: MAX_ATTACHMENTS_PER_MESSAGE + 1 }, (_, i) =>
+        makeSmallFile(`file${i}.jpg`)
+      );
+
+      await expect(service.uploadFiles(files)).rejects.toThrow(
+        `Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} files allowed per message`
+      );
+    });
+  });
+
+  describe('uploadFilesSettled — un voisin en échec n’emporte pas les fichiers déjà téléversés', () => {
+    // `uploadFiles` rend `Promise.all` : UN fichier en échec rejette TOUT, et
+    // le hook part alors dans son `catch` global qui purge la sélection
+    // entière — pendant que les lignes `PostMedia` des fichiers réussis
+    // existent déjà côté serveur, sans qu'aucun id ne subsiste pour les
+    // relâcher. Le transport MESSAGE, lui, tolérait l'échec partiel depuis
+    // toujours (`pairUploads` du hook). Cette variante rend au transport
+    // POST la même tolérance.
+    it('rend un résultat PAR FICHIER : le réussi ET l’échoué', async () => {
+      const service = new TusUploadService();
+      const files = [makeSmallFile('ok.jpg'), makeSmallFile('ko.jpg')];
+
+      const promise = service.uploadFilesSettled(files, undefined, {
+        forceResumable: true,
+        maxFiles: 10,
+      });
+      await Promise.resolve();
+
+      const att = makeAttachmentResponse('media-ok');
+      mockUploadInstances[0].lastResponse = { getBody: () => JSON.stringify({ data: { attachment: att } }) };
+      allCapturedCallbacks[0].onSuccess?.();
+      allCapturedCallbacks[1].onError?.(new Error('boom'));
+
+      const settled = await promise;
+      expect(settled).toHaveLength(2);
+      expect(settled[0]).toEqual({ status: 'fulfilled', value: expect.objectContaining({ id: 'media-ok' }) });
+      expect(settled[1].status).toBe('rejected');
+    });
+
+    it('un refus PRÉ-VOL reste GLOBAL — rien n’est parti, donc rien à réconcilier', async () => {
+      const service = new TusUploadService();
+      const files = Array.from({ length: 11 }, (_, i) => makeSmallFile(`file${i}.jpg`));
+
+      await expect(
+        service.uploadFilesSettled(files, undefined, { maxFiles: 10 })
+      ).rejects.toThrow('Maximum 10 files allowed per message');
+
+      expect(Upload).not.toHaveBeenCalled();
+    });
+
+    it('uploadFiles garde son contrat TOUT-OU-RIEN — le chemin message ne bouge pas', async () => {
+      const service = new TusUploadService();
+      const files = [makeSmallFile('ok.jpg'), makeSmallFile('ko.jpg')];
+
+      const promise = service.uploadFiles(files, undefined, { forceResumable: true, maxFiles: 10 });
+      await Promise.resolve();
+
+      const att = makeAttachmentResponse('media-ok');
+      mockUploadInstances[0].lastResponse = { getBody: () => JSON.stringify({ data: { attachment: att } }) };
+      allCapturedCallbacks[0].onSuccess?.();
+      allCapturedCallbacks[1].onError?.(new Error('boom'));
+
+      await expect(promise).rejects.toThrow('boom');
+    });
+  });
+
   describe('uploadFiles — small files (direct upload via XHR)', () => {
     it('resolves with uploaded attachment for a small file', async () => {
       const service = new TusUploadService();

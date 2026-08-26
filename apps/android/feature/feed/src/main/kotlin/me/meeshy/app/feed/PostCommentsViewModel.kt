@@ -25,7 +25,9 @@ import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.SocketCommentReactionUpdateData
+import me.meeshy.sdk.model.SocketCommentTranslationUpdatedData
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.post.PostRepository
@@ -171,6 +173,12 @@ class PostCommentsViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            socialSocket.commentUpdated.collect { event ->
+                if (event.postId != postId) return@collect
+                onCommentUpdated(event.comment)
+            }
+        }
+        viewModelScope.launch {
             socialSocket.commentDeleted.collect { event ->
                 if (event.postId != postId) return@collect
                 onCommentDeleted(event.commentId)
@@ -182,6 +190,27 @@ class PostCommentsViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.commentReactionRemoved.collect { event -> onCommentReaction(event, added = false) }
         }
+        viewModelScope.launch {
+            socialSocket.commentTranslationUpdated.collect { event -> onCommentTranslationUpdated(event) }
+        }
+    }
+
+    /**
+     * A live `comment:translation-updated` for the open post: the gateway finished translating a
+     * comment and pushed the entry. Fold it into whichever collection holds the comment (top-level
+     * [thread] or a loaded [replies] thread — each transition is inert for the other) via the
+     * metadata-preserving [PostTranslationMerge], so the row re-renders in the reader's preferred
+     * language the instant it lands. Unlike [requestCommentTranslation] no [activeLanguages]
+     * override is forced — the reader did not tap, so their own Prisme chain decides whether the
+     * newly-available language is the one displayed (parity with iOS `applyCommentTranslationUpdate`).
+     * Inert for another post, an unknown/unloaded comment, or a no-op merge (blank/identical entry).
+     */
+    private fun onCommentTranslationUpdated(event: SocketCommentTranslationUpdatedData) {
+        if (event.postId != postId) return
+        val comment = findComment(event.commentId) ?: return
+        val merged = PostTranslationMerge.mergeTranslation(comment, event.language, event.translation) ?: return
+        thread.update { it.retranslated(event.commentId, merged.translations) }
+        replies.update { it.retranslated(event.commentId, merged.translations) }
     }
 
     /**
@@ -195,6 +224,19 @@ class PostCommentsViewModel @Inject constructor(
         if (event.postId != postId || event.emoji != HEART_EMOJI) return
         val isOwn = event.userId == sessionRepository.currentUser.value?.id
         likes.update { it.reactionApplied(event.commentId, isOwn = isOwn, added = added) }
+    }
+
+    /**
+     * A live `comment:updated` for the open post: a comment was edited server-side and the gateway
+     * pushed the COMPLETE new comment. Replace the matched row in place in whichever collection holds
+     * it (top-level [thread] or a loaded [replies] thread — each transition is inert for the other),
+     * so the edited content/effects/translations repaint instantly with no refetch. Unlike a
+     * translation push this adopts every field (mirror of iOS `applyCommentEdit`). Inert for another
+     * post, an unknown/unloaded comment, or an id not currently present.
+     */
+    private fun onCommentUpdated(comment: ApiPostComment) {
+        thread.update { it.replaced(comment) }
+        replies.update { it.replacedReply(comment) }
     }
 
     private fun onCommentAdded(comment: ApiPostComment) {

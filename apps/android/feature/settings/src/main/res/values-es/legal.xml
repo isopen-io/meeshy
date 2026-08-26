@@ -2,7 +2,7 @@
 <resources>
     <string name="legal_terms_title">Condiciones de servicio</string>
     <string name="legal_privacy_title">Política de privacidad</string>
-    <string name="legal_terms_last_updated">Última actualización: 24 de febrero de 2026</string>
+    <string name="legal_terms_last_updated">Última actualización: 23 de agosto de 2026</string>
     <string name="legal_privacy_last_updated">Última actualización: 24 de febrero de 2026</string>
 
     <string name="legal_tos_acceptance_title">Aceptación de las condiciones</string>
@@ -12,7 +12,7 @@
     <string name="legal_tos_user_conduct_title">Conducta del usuario</string>
     <string name="legal_tos_user_conduct_body">Te comprometes a no usar Meeshy para enviar spam, contenido ilegal, acoso o contenido que vulnere los derechos de terceros. Cualquier abuso conllevará la suspensión o el cierre de tu cuenta.</string>
     <string name="legal_tos_content_title">Contenido</string>
-    <string name="legal_tos_content_body">Conservas la propiedad de tu contenido. Al usar Meeshy, nos concedes una licencia limitada para transmitir y almacenar tu contenido con el fin de prestar nuestros servicios.</string>
+    <string name="legal_tos_content_body">Conservas la propiedad de tu contenido. Al usar Meeshy, nos concedes una licencia limitada para transmitir y almacenar tu contenido con el fin de prestar nuestros servicios. A cambio, nos comprometemos a acreditar al autor de todo contenido publicado, incluso cuando se reenvía o se vuelve a publicar, siempre que su origen pueda rastrearse. Se trata de un compromiso de medios: la mención puede faltar o ser incompleta si nuestros sistemas no conservan ese vínculo, o si los ajustes de privacidad de las personas afectadas, incluidos los del autor, lo impiden.</string>
     <string name="legal_tos_account_termination_title">Cancelación de la cuenta</string>
     <string name="legal_tos_account_termination_body">Puedes eliminar tu cuenta en cualquier momento. Nos reservamos el derecho de suspender o cerrar las cuentas que infrinjan estas condiciones.</string>
     <string name="legal_tos_disclaimer_title">Descargo de responsabilidad</string>

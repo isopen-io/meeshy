@@ -23,13 +23,9 @@ import {
   KyberPreKeyStore,
   SenderKeyStore,
   Direction,
+  IdentityChange,
   Uuid,
 } from '@signalapp/libsignal-client';
-
-import type {
-  SignalProtocolStores,
-  SignalStoreConfig,
-} from '@meeshy/shared/encryption/signal/signal-store-interface';
 
 const logger = enhancedLogger.child({ module: 'NodeSignalStores' });
 
@@ -61,7 +57,21 @@ export class NodeIdentityKeyStore extends IdentityKeyStore {
     return this.registrationId;
   }
 
-  async saveIdentity(address: ProtocolAddress, identityKey: PublicKey): Promise<boolean> {
+  /**
+   * `IdentityChange`, pas `boolean` — la signature que `IdentityKeyStore`
+   * DÉCLARE depuis que libsignal a remplacé le booléen par l'énumération.
+   *
+   * Ce fichier a porté le booléen sans que rien ne le dise, parce qu'aucun
+   * compilateur ne le lisait : il est hors du `include` de `tsconfig.json`, et
+   * aucun test ne l'atteint, donc `ts-jest` ne le compilait pas non plus. Le
+   * cycle 105 bis l'a fait entrer dans le premier des deux.
+   *
+   * La correction ne change AUCUNE valeur observable : `NewOrUnchanged` vaut 0
+   * et `ReplacedExisting` vaut 1, exactement ce que le booléen produisait par
+   * coercition. Ce qui change est que la promesse rendue DIT ce que l'appelant
+   * attend, au lieu d'y coïncider par accident.
+   */
+  async saveIdentity(address: ProtocolAddress, identityKey: PublicKey): Promise<IdentityChange> {
     const key = this.getAddressKey(address);
     const existing = this.trustedIdentities.get(key);
     const newKey = identityKey.serialize();
@@ -74,11 +84,11 @@ export class NodeIdentityKeyStore extends IdentityKeyStore {
         logger.warn('Identity key changed', { address: `${address.name()}:${address.deviceId()}` });
       }
       this.trustedIdentities.set(key, newKey);
-      return changed;
+      return changed ? IdentityChange.ReplacedExisting : IdentityChange.NewOrUnchanged;
     } else {
       // First time seeing this identity
       this.trustedIdentities.set(key, newKey);
-      return false;
+      return IdentityChange.NewOrUnchanged;
     }
   }
 
@@ -263,10 +273,15 @@ export class NodeSenderKeyStore extends SenderKeyStore {
 
 /**
  * Create all Signal Protocol stores for Node.js
+ *
+ * Le paramètre `config: SignalStoreConfig` que cette fonction déclarait n'était
+ * lu par aucune de ses lignes, et son type n'existait plus dans
+ * `@meeshy/shared/encryption/signal/signal-store-interface` — lequel exporte
+ * `SignalProtocolStore` au singulier. Deux imports fantômes que rien ne
+ * compilait ; le paramètre part avec eux plutôt que d'être retypé, parce qu'il
+ * ne configure rien.
  */
-export async function createNodeSignalStores(
-  config: SignalStoreConfig
-): Promise<{
+export async function createNodeSignalStores(): Promise<{
   identityStore: NodeIdentityKeyStore;
   preKeyStore: NodePreKeyStore;
   signedPreKeyStore: NodeSignedPreKeyStore;

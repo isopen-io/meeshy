@@ -3,6 +3,11 @@ import Combine
 import Contacts
 import MeeshySDK
 import MeeshyUI
+import os
+
+// `nonisolated` : `os.Logger` est un type valeur thread-safe (doc Apple) et ce
+// journal est écrit depuis `DirectoryPaging`, marqué `nonisolated`.
+private nonisolated let phonebookPagingLogger = Logger(subsystem: "me.meeshy.app", category: "phonebook")
 
 /// Répertoire — le carnet d'adresses de l'appareil, synchronisé et CONSERVÉ
 /// côté serveur, consultable sans re-scanner les contacts.
@@ -287,14 +292,25 @@ final class PhonebookViewModel: ObservableObject {
 // MainActor par défaut du module) — un défaut d'argument isolé fait tomber SILGen.
 nonisolated enum DirectoryPaging {
     static let pageSize = 200
-    /// Filet contre un serveur qui répondrait toujours `hasMore` : 25 pages
-    /// de 200 = 5 000 contacts, au-delà du plus gros carnet d'adresses.
-    static let maxPages = 25
+    /// Filet contre un serveur qui répondrait toujours `hasMore` : 250 pages de
+    /// 200 = 50 000 contacts. Le plafond précédent (25 pages = 5 000) datait de
+    /// l'ÉCRITURE tronquée à 2 000 fiches ; depuis que la synchronisation part
+    /// en lots sans plafond, un répertoire peut légitimement dépasser 5 000 et
+    /// ce filet le tronquait en LECTURE, en silence.
+    static let maxPages = 250
 
     static func hasMore(received: Int, pageSize: Int, serverHasMore: Bool?) -> Bool {
         guard received > 0 else { return false }
         if let serverHasMore { return serverHasMore }
         return received >= pageSize
+    }
+
+    /// Le filet a servi : la lecture s'arrête sur un plafond, pas sur la fin du
+    /// répertoire. Un filet atteint est un incident, jamais une fin normale.
+    static func logCapReached(maxPages: Int, read: Int) {
+        phonebookPagingLogger.warning(
+            "Répertoire tronqué en lecture : plafond de \(maxPages, privacy: .public) pages atteint, \(read, privacy: .public) contacts lus"
+        )
     }
 }
 
@@ -308,11 +324,18 @@ extension ContactDirectoryServiceProviding {
     ) async throws -> [DirectoryContact] {
         var all: [DirectoryContact] = []
         var offset = 0
+        var reachedTheEnd = false
         for _ in 0..<maxPages {
             let page = try await list(offset: offset, limit: pageSize, filter: filter, query: query)
             all += page.data
-            guard DirectoryPaging.hasMore(received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore) else { break }
+            guard DirectoryPaging.hasMore(received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore) else {
+                reachedTheEnd = true
+                break
+            }
             offset += page.data.count
+        }
+        if !reachedTheEnd {
+            DirectoryPaging.logCapReached(maxPages: maxPages, read: all.count)
         }
         return all
     }

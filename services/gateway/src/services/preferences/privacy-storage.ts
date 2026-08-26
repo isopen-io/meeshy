@@ -65,13 +65,25 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   PRIVACY_KEY_MAPPING,
   PRIVACY_KEY_REVERSE_MAPPING,
+  PRIVACY_PREFERENCES_DEFAULTS,
   type PrivacyPreferencesDefaults,
 } from '../../config/user-preferences-defaults';
 
 /** Ce que la base porte VRAIMENT : les clés absentes relèvent des défauts. */
 export type StoredPrivacyPreferences = Partial<Record<keyof PrivacyPreferencesDefaults, boolean>>;
 
-const PRIVACY_DTO_KEYS = Object.keys(PRIVACY_KEY_MAPPING) as Array<
+/**
+ * Les clés que le serveur OBÉIT, lues du document JSON.
+ *
+ * Elles se dérivent des DÉFAUTS, pas du mapping hérité. Les deux ensembles ont
+ * coïncidé tant qu'aucune préférence n'était née après janvier 2026, et cette
+ * coïncidence a été prise pour une définition : `PRIVACY_KEY_MAPPING` est FIGÉ
+ * par l'histoire des lignes kebab-case, tandis que l'ensemble des préférences
+ * obéies, lui, grandit. Dériver d'ici plutôt que de là fait qu'une préférence
+ * neuve est lue du seul fait d'avoir un défaut — au lieu d'exiger qu'on lui
+ * invente une clé héritée qui n'a jamais existé en base.
+ */
+const PRIVACY_DTO_KEYS = Object.keys(PRIVACY_PREFERENCES_DEFAULTS) as Array<
   keyof PrivacyPreferencesDefaults
 >;
 

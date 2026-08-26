@@ -20,11 +20,19 @@ import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.StorySlideDuration
+import me.meeshy.sdk.model.SocketStoryDeletedData
 import me.meeshy.sdk.model.SocketStoryReactedData
+import me.meeshy.sdk.model.SocketStoryTranslationUpdatedData
 import me.meeshy.sdk.model.SocketStoryUnreactedData
+import me.meeshy.sdk.model.SocketStoryUpdatedData
 import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryClipTransition
 import me.meeshy.sdk.model.StoryEffects
+import me.meeshy.sdk.model.StoryKeyframe
 import me.meeshy.sdk.model.StoryMediaObject
+import me.meeshy.sdk.model.StoryTextObject
+import me.meeshy.sdk.model.StoryTransitionKind
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.session.SessionRepository
@@ -51,9 +59,16 @@ class StoryViewerViewModelTest {
     private val session: SessionRepository = mockk(relaxed = true)
     private val reactedFlow = MutableSharedFlow<SocketStoryReactedData>(extraBufferCapacity = 8)
     private val unreactedFlow = MutableSharedFlow<SocketStoryUnreactedData>(extraBufferCapacity = 8)
+    private val translationUpdatedFlow =
+        MutableSharedFlow<SocketStoryTranslationUpdatedData>(extraBufferCapacity = 8)
+    private val deletedFlow = MutableSharedFlow<SocketStoryDeletedData>(extraBufferCapacity = 8)
+    private val updatedFlow = MutableSharedFlow<SocketStoryUpdatedData>(extraBufferCapacity = 8)
     private val socialSocket: SocialSocketManager = mockk(relaxed = true) {
         every { storyReacted } returns reactedFlow
         every { storyUnreacted } returns unreactedFlow
+        every { storyTranslationUpdated } returns translationUpdatedFlow
+        every { storyDeleted } returns deletedFlow
+        every { storyUpdated } returns updatedFlow
     }
     private val config = MeeshyConfig()
 
@@ -66,6 +81,7 @@ class StoryViewerViewModelTest {
         hoursAgo: Long,
         reactionSummary: Map<String, Int>? = null,
         translations: Map<String, ApiPostTranslationEntry>? = null,
+        storyEffects: StoryEffects? = null,
     ) = ApiPost(
         id = id,
         type = "STORY",
@@ -75,6 +91,7 @@ class StoryViewerViewModelTest {
         isViewedByMe = false,
         reactionSummary = reactionSummary,
         translations = translations,
+        storyEffects = storyEffects,
     )
 
     private fun viewModel(
@@ -110,6 +127,65 @@ class StoryViewerViewModelTest {
             assertThat(s.index).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `a slide with no effects projects the 6s static auto-advance default`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.autoAdvanceMillis)
+            .isEqualTo(StorySlideDuration.DEFAULT_STATIC_MS)
+    }
+
+    @Test
+    fun `an author-pinned timelineDuration drives the slide's auto-advance timing`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(timelineDuration = 3.0)),
+            ),
+        )
+        assertThat(vm.state.value.current?.autoAdvanceMillis).isEqualTo(3000)
+    }
+
+    @Test
+    fun `a gradient background string projects onto the slide as a parsed gradient`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(background = "gradient:FF2E63:08D9D6")),
+            ),
+        )
+        assertThat(vm.state.value.current?.background)
+            .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+    }
+
+    @Test
+    fun `a solid hex background string projects onto the slide as a solid colour`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(background = "1A1A2E")),
+            ),
+        )
+        assertThat(vm.state.value.current?.background)
+            .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Hex("1A1A2E"))
+    }
+
+    @Test
+    fun `a slide with no background string leaves the projected background null`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors())
+        assertThat(vm.state.value.current?.background).isNull()
+    }
+
+    @Test
+    fun `a blank background string leaves the projected background null`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(
+                storyPost("a1", "a", hoursAgo = 1, storyEffects = StoryEffects(background = "   ")),
+            ),
+        )
+        assertThat(vm.state.value.current?.background).isNull()
     }
 
     @Test
@@ -477,6 +553,156 @@ class StoryViewerViewModelTest {
     }
 
     @Test
+    fun `a background image with author framing projects that transform onto the slide`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                        x = 0.7,
+                        y = 0.5,
+                        scale = 1.5,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val transform = vm.state.value.current?.backgroundTransform
+        assertThat(transform?.scale).isWithin(1e-6f).of(1.5f)
+        assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.2f)
+        assertThat(transform?.offsetYFraction).isEqualTo(0f)
+        assertThat(transform?.isIdentity).isFalse()
+    }
+
+    @Test
+    fun `a background image with default framing leaves the transform at identity`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/photo.jpg", mimeType = "image/jpeg")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/photo.jpg",
+                        mediaType = "image",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a background VIDEO with author framing projects that transform onto the slide`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                        x = 0.8,
+                        scale = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val transform = vm.state.value.current?.backgroundTransform
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(transform?.scale).isWithin(1e-6f).of(2.0f)
+        assertThat(transform?.offsetXFraction).isWithin(1e-6f).of(0.3f)
+        assertThat(transform?.offsetYFraction).isEqualTo(0f)
+        assertThat(transform?.isIdentity).isFalse()
+    }
+
+    @Test
+    fun `a background VIDEO with default framing leaves the transform at identity`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/bg.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = "http://cdn/bg.mp4",
+                        mediaType = "video",
+                        isBackground = true,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/bg.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a legacy video-only story carries no framing (identity), never the object's transform`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/legacy.mp4", mimeType = "video/mp4")),
+            storyEffects = null,
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/legacy.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a background VIDEO object without its own url does not project framing from a fallback video`() = runTest {
+        // The framing rides only on the object's OWN mediaURL. A modern isBackground
+        // object with a null mediaURL but a matching fallback video item must NOT
+        // steal that item's pixels to reframe with an unrelated object's transform.
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(ApiPostMedia(id = "m1", fileUrl = "http://cdn/fallback.mp4", mimeType = "video/mp4")),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "obj1",
+                        postMediaId = "m1",
+                        mediaURL = null,
+                        mediaType = "video",
+                        isBackground = true,
+                        x = 0.9,
+                        scale = 3.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        assertThat(vm.state.value.current?.backgroundVideoUrl).isEqualTo("http://cdn/fallback.mp4")
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a slide with no background media leaves the transform at identity`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = listOf(storyPost("a1", "a", hoursAgo = 1)))
+
+        assertThat(vm.state.value.current?.backgroundTransform)
+            .isEqualTo(StoryBackgroundObjectTransform.IDENTITY)
+    }
+
+    @Test
     fun `a non-background mediaObject is exposed as foreground media`() = runTest {
         val post = storyPost("a1", "a", hoursAgo = 1).copy(
             media = listOf(
@@ -514,6 +740,145 @@ class StoryViewerViewModelTest {
         assertThat(fg.first().isVideo).isTrue()
         assertThat(fg.first().x).isEqualTo(0.3)
         assertThat(fg.first().y).isEqualTo(0.7)
+    }
+
+    @Test
+    fun `a foreground mediaObject carries its keyframes and startTime into the projection`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "fgObj",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        x = 0.2,
+                        y = 0.2,
+                        startTime = 1.0,
+                        keyframes = listOf(
+                            StoryKeyframe(time = 0f, x = 0.2),
+                            StoryKeyframe(time = 4f, x = 0.8),
+                        ),
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.startTime).isEqualTo(1.0)
+        assertThat(fg.keyframes).hasSize(2)
+        // The keyframes are live, not dropped: the layer animates across its window.
+        assertThat(fg.animated(atSeconds = 1f).x).isWithin(1e-9).of(0.2)
+        assertThat(fg.animated(atSeconds = 3f).x).isWithin(1e-9).of(0.5)
+    }
+
+    @Test
+    fun `a foreground mediaObject carries the slide's clip transitions and fades on the ramp`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "toClip",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        startTime = 3.0,
+                        duration = 4.0,
+                    ),
+                ),
+                clipTransitions = listOf(
+                    StoryClipTransition(
+                        id = "t1",
+                        fromClipId = "fromClip",
+                        toClipId = "toClip",
+                        kind = StoryTransitionKind.CROSSFADE,
+                        duration = 2f,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.id).isEqualTo("toClip")
+        assertThat(fg.duration).isEqualTo(4.0)
+        assertThat(fg.clipTransitions).hasSize(1)
+        // The transition is live, not dropped: the incoming clip fades in across its window [3,5].
+        assertThat(fg.animated(atSeconds = 3f).opacity).isWithin(1e-4).of(0.0)
+        assertThat(fg.animated(atSeconds = 4f).opacity).isWithin(1e-4).of(0.5)
+    }
+
+    @Test
+    fun `a foreground mediaObject carries its fadeIn fadeOut envelope into the projection`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            media = listOf(
+                ApiPostMedia(id = "fg", fileUrl = "http://cdn/fg.mp4", mimeType = "video/mp4"),
+            ),
+            storyEffects = StoryEffects(
+                mediaObjects = listOf(
+                    StoryMediaObject(
+                        id = "fgObj",
+                        postMediaId = "fg",
+                        mediaURL = "http://cdn/fg.mp4",
+                        mediaType = "video",
+                        isBackground = false,
+                        startTime = 0.0,
+                        duration = 10.0,
+                        fadeIn = 2.0,
+                        fadeOut = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val fg = vm.state.value.current?.foregroundMedia.orEmpty().first()
+        assertThat(fg.fadeIn).isEqualTo(2.0)
+        assertThat(fg.fadeOut).isEqualTo(2.0)
+        // The envelope is live, not dropped: the clip fades in over [0,2] and out over [8,10].
+        assertThat(fg.animated(atSeconds = 1f).opacity).isWithin(1e-4).of(0.5)
+        assertThat(fg.animated(atSeconds = 5f).opacity).isWithin(1e-4).of(1.0)
+        assertThat(fg.animated(atSeconds = 9f).opacity).isWithin(1e-4).of(0.5)
+    }
+
+    @Test
+    fun `a slide's text objects are projected into the view and animate their fade envelope`() = runTest {
+        val post = storyPost("a1", "a", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(
+                        id = "txt",
+                        text = "Hello",
+                        x = 0.4,
+                        y = 0.6,
+                        startTime = 0.0,
+                        duration = 10.0,
+                        fadeIn = 2.0,
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a", posts = listOf(post))
+
+        val texts = vm.state.value.current?.textObjects.orEmpty()
+        assertThat(texts).hasSize(1)
+        val text = texts.first()
+        assertThat(text.id).isEqualTo("txt")
+        assertThat(text.text).isEqualTo("Hello")
+        assertThat(text.x).isEqualTo(0.4)
+        assertThat(text.y).isEqualTo(0.6)
+        // The fade envelope is live, not dropped: the object ramps in over its window [0,2].
+        assertThat(text.animated(atSeconds = 1f).opacity).isWithin(1e-4).of(0.5)
+        assertThat(text.animated(atSeconds = 5f).opacity).isWithin(1e-4).of(1.0)
     }
 
     @Test
@@ -759,6 +1124,249 @@ class StoryViewerViewModelTest {
         assertThat(vm.state.value.current?.text).isEqualTo("text-s1")
     }
 
+    @Test
+    fun `toggling a language override re-resolves the current slide's text objects`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(
+                        id = "txt",
+                        text = "Hello",
+                        translations = mapOf("fr" to "Bonjour", "es" to "Hola"),
+                    ),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        // Default projection follows the reader's chain (fr).
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hola")
+
+        // Re-tapping clears the override, returning the object to the automatic resolution.
+        vm.toggleLanguageOverride("es")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a language override with no matching text-object translation falls back to the preferred chain`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(
+                    StoryTextObject(id = "txt", text = "Hello", translations = mapOf("fr" to "Bonjour")),
+                ),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        vm.toggleLanguageOverride("de")
+        // No "de" text-object translation exists, so the reader's fr chain still resolves.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    // --- Realtime overlay translation merge (story:translation-updated) ---
+
+    @Test
+    fun `a realtime overlay translation merges and repaints in the reader's language without a tap`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        // No fr translation yet: the overlay shows its original text.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "s1",
+                textObjectIndex = 0,
+                translations = mapOf("fr" to "Bonjour"),
+            ),
+        )
+
+        // The reader prefers fr, so the freshly-merged overlay translation repaints — no tap.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Bonjour")
+    }
+
+    @Test
+    fun `a realtime overlay translation surfaces as a present content chip`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "en"), posts = listOf(post))
+
+        // No translations anywhere → no language strip.
+        assertThat(vm.state.value.availableLanguages).isEmpty()
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "s1",
+                textObjectIndex = 0,
+                translations = mapOf("es" to "Hola"),
+            ),
+        )
+
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).contains("es")
+        assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+    }
+
+    @Test
+    fun `a realtime overlay translation for an unknown story is inert`() = runTest {
+        val post = storyPost("s1", "a1", hoursAgo = 1).copy(
+            storyEffects = StoryEffects(
+                textObjects = listOf(StoryTextObject(id = "txt", text = "Hello")),
+            ),
+        )
+        val vm = viewModel(startUserId = "a1", user = viewer(systemLanguage = "fr"), posts = listOf(post))
+
+        translationUpdatedFlow.emit(
+            SocketStoryTranslationUpdatedData(
+                postId = "does-not-exist",
+                textObjectIndex = 0,
+                translations = mapOf("fr" to "Bonjour"),
+            ),
+        )
+
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+    }
+
+    // --- Realtime story deletion (story:deleted) ---
+
+    @Test
+    fun `a realtime story deletion drops a later slide from the open viewer`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // at b1, group b = [b1, b2]
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "b2", authorId = "b"))
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1")
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `deleting the current slide advances to the next slide in the group`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors()) // at b1, group b = [b1, b2]
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "b1", authorId = "b"))
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b2")
+        assertThat(vm.state.value.current?.id).isEqualTo("b2")
+    }
+
+    @Test
+    fun `deleting the only slide of the current group rolls onto the next group`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // at a1, group a = [a1]
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "a1", authorId = "a"))
+
+        assertThat(vm.state.value.authorName).isEqualTo("name-b")
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `deleting the last remaining slide dismisses the viewer`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1)),
+        )
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "a1", authorId = "a"))
+
+        assertThat(vm.state.value.isDismissed).isTrue()
+    }
+
+    @Test
+    fun `a deletion for a story not in the viewer is inert`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        deletedFlow.emit(SocketStoryDeletedData(storyId = "ghost", authorId = "z"))
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+    }
+
+    // --- Realtime story update (story:updated) ---
+
+    @Test
+    fun `a realtime story update swaps the current slide's content in the open viewer`() = runTest {
+        val vm = viewModel(startUserId = "a", posts = twoAuthors()) // at a1, content "text-a1"
+        assertThat(vm.state.value.current?.text).isEqualTo("text-a1")
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("a1", "a", hoursAgo = 1).copy(content = "text-edited"),
+                engagementReset = false,
+            ),
+        )
+
+        assertThat(vm.state.value.current?.id).isEqualTo("a1")
+        assertThat(vm.state.value.current?.text).isEqualTo("text-edited")
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("a1")
+        assertThat(vm.state.value.isDismissed).isFalse()
+    }
+
+    @Test
+    fun `an engagement-reset story update wipes the reaction count to zero`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        reactedFlow.emit(SocketStoryReactedData(storyId = "a1", userId = "stranger", emoji = "🔥"))
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("a1", "a", hoursAgo = 1, reactionSummary = null),
+                engagementReset = true,
+            ),
+        )
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a metadata-only story update keeps the live reaction count`() = runTest {
+        val vm = viewModel(
+            startUserId = "a",
+            posts = listOf(storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2))),
+        )
+        reactedFlow.emit(SocketStoryReactedData(storyId = "a1", userId = "stranger", emoji = "🔥"))
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("a1", "a", hoursAgo = 1, reactionSummary = mapOf("❤️" to 2)),
+                engagementReset = false,
+            ),
+        )
+
+        assertThat(vm.state.value.reactionCount).isEqualTo(3)
+    }
+
+    @Test
+    fun `an update for a story not in the viewer is inert`() = runTest {
+        val vm = viewModel(startUserId = "b", posts = twoAuthors())
+
+        updatedFlow.emit(
+            SocketStoryUpdatedData(
+                story = storyPost("ghost", "z", hoursAgo = 1).copy(content = "nope"),
+                engagementReset = true,
+            ),
+        )
+
+        assertThat(vm.state.value.slides.map { it.id }).containsExactly("b1", "b2").inOrder()
+        assertThat(vm.state.value.current?.id).isEqualTo("b1")
+        assertThat(vm.state.value.current?.text).isEqualTo("text-b1")
+    }
+
     // --- On-demand story translation (the flag strip's request arm) ---
 
     private fun viewer(systemLanguage: String) =
@@ -883,5 +1491,115 @@ class StoryViewerViewModelTest {
         gate.complete(null)
 
         coVerify(exactly = 1) { storyRepository.translateStory(any(), "en") }
+    }
+
+    // --- The language bar descends the Prisme over ALL slide content (§Cohérence) ---
+    // A slide's translatable content is not just its caption: on-canvas text overlays
+    // carry their own per-language translations. The exploration bar must surface every
+    // language present across caption AND text objects, or a slide whose overlays are
+    // translated but whose caption is not offers the reader no way to reach them.
+
+    private fun storyWithTextObjectTranslations(
+        captionTranslations: Map<String, ApiPostTranslationEntry>? = null,
+        textObjectTranslations: Map<String, String>?,
+    ) = storyPost(id = "s1", authorId = "a1", hoursAgo = 1, translations = captionTranslations).copy(
+        storyEffects = StoryEffects(
+            textObjects = listOf(
+                StoryTextObject(id = "txt", text = "Hello", translations = textObjectTranslations),
+            ),
+        ),
+    )
+
+    @Test
+    fun `a text-object-only translation language surfaces as a present content chip`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("es" to "Hola", "de" to "Hallo"),
+                ),
+            ),
+        )
+
+        val languages = vm.state.value.availableLanguages
+        assertThat(languages.map { it.code }).containsAtLeast("es", "de")
+        assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+        assertThat(languages.first { it.code == "de" }.isTranslatable).isFalse()
+    }
+
+    @Test
+    fun `caption and text-object languages are unioned with the caption first and no duplicates`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "fr"),
+                posts = listOf(
+                    storyWithTextObjectTranslations(
+                        captionTranslations = mapOf("es" to ApiPostTranslationEntry(text = "hola")),
+                        textObjectTranslations = mapOf("es" to "Hola", "de" to "Hallo"),
+                    ),
+                ),
+            )
+
+            val present = vm.state.value.availableLanguages.filter { !it.isTranslatable }
+            // es (caption + overlay) appears once, ahead of the overlay-only de.
+            assertThat(present.map { it.code }).containsExactly("es", "de").inOrder()
+        }
+
+    @Test
+    fun `a blank text-object translation value is not offered as a language`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("de" to "   ", "es" to "Hola"),
+                ),
+            ),
+        )
+
+        val codes = vm.state.value.availableLanguages.map { it.code }
+        assertThat(codes).contains("es")
+        assertThat(codes).doesNotContain("de")
+    }
+
+    @Test
+    fun `an overlay-only translated story still offers a configured absent language as translatable`() =
+        runTest {
+            val vm = viewModel(
+                startUserId = "a1",
+                user = viewer(systemLanguage = "en"),
+                posts = listOf(
+                    storyWithTextObjectTranslations(
+                        textObjectTranslations = mapOf("es" to "Hola"),
+                    ),
+                ),
+            )
+
+            val languages = vm.state.value.availableLanguages
+            assertThat(languages.first { it.code == "es" }.isTranslatable).isFalse()
+            assertThat(languages.first { it.code == "en" }.isTranslatable).isTrue()
+        }
+
+    @Test
+    fun `tapping an overlay-only present language re-resolves the overlays into it`() = runTest {
+        val vm = viewModel(
+            startUserId = "a1",
+            user = viewer(systemLanguage = "fr"),
+            posts = listOf(
+                storyWithTextObjectTranslations(
+                    textObjectTranslations = mapOf("de" to "Hallo"),
+                ),
+            ),
+        )
+        // The chip is offered even though no caption or fr translation exists…
+        assertThat(vm.state.value.availableLanguages.map { it.code }).contains("de")
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hello")
+
+        vm.toggleLanguageOverride("de")
+
+        // …and it is actionable: the overlay repaints in the tapped language.
+        assertThat(vm.state.value.current?.textObjects?.first()?.text).isEqualTo("Hallo")
     }
 }

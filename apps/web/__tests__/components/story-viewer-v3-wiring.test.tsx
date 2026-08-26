@@ -11,7 +11,7 @@
  * REMPLACÉ par une sonde qui capture les props REÇUES à chaque rendu — ces
  * tests jugent le CÂBLAGE, jamais le composant pur lui-même.
  */
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import React from 'react';
 import type { CanvasV3SceneProps } from '@/components/v2/CanvasV3Scene';
 
@@ -203,5 +203,155 @@ describe('StoryViewer — câblage réel de CanvasV3Scene (F7b)', () => {
   it('does NOT arm the ticker for a static v3 slide without keyframes or clip transitions', () => {
     render(<StoryViewer stories={[staticV3Story()]} initialIndex={0} onClose={jest.fn()} onReply={jest.fn()} />);
     expect(global.requestAnimationFrame).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * W2 — l'enchaînement multi-scènes (parité iOS ⇄ Web, directive du 2026-08-23).
+ *
+ * `CanvasV3Scene` ne peint que `scenes[sceneIndex]` — c'est son contrat, et le
+ * miroir exact de `MeeshyScenePlayer`, qui reçoit lui aussi un `sceneIndex`
+ * (Binding) et laisse l'HÔTE décider quand il change. Sauf que l'hôte web ne le
+ * faisait jamais bouger : un document à 3 scènes n'en montrait qu'une, et la
+ * story passait à la suivante à la fin de la scène 1.
+ *
+ * L'écart était LATENT (iOS n'émet qu'une scène aujourd'hui) ; il devient LIVE
+ * au multi-diapositives du lot C. D'où W2 AVANT le lot C.
+ *
+ * Ces tests jugent le CÂBLAGE de l'hôte : la sonde capture le `sceneIndex` reçu
+ * et la tête de lecture qui l'accompagne, jamais le composant pur lui-même.
+ */
+function multiSceneStory(): StoryData {
+  const scene = (id: string, text: string) => ({
+    id,
+    objects: [{
+      id: `t-${id}`,
+      kind: 'text',
+      anchor: { t: 'free', x: 0.5, y: 0.5 },
+      plane: 'fg',
+      z: 0,
+      transform: { scale: 1, rotation: 0, opacity: 1 },
+      timing: { start: 0, keyframes: [{ time: 0, opacity: 0.2 }, { time: 2, opacity: 1 }] },
+      payload: { text },
+    }],
+  });
+  return {
+    id: 's-multi',
+    author: { name: 'Alice', avatar: undefined },
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 86400000).toISOString(),
+    viewCount: 0,
+    storyEffects: {
+      v: 3,
+      // Trois scènes STATIQUES : 6 s chacune (`defaultStaticDuration`), 18 s en
+      // tout — la durée que `computeStoryDurationMs` somme désormais.
+      scenes: [scene('s1', 'Premiere'), scene('s2', 'Deuxieme'), scene('s3', 'Troisieme')],
+      // Ce que `postToStoryData` pose en production. Il est PORTANT et non
+      // décoratif : sans lui, la tête de lecture story-absolue (le défaut que
+      // W2 corrige) rendrait la même valeur que la tête relative, et le test
+      // ci-dessous passerait au vert en ayant perdu sa garde.
+      slideDurationMs: 18000,
+    } as unknown as StoryData['storyEffects'],
+  };
+}
+
+describe('StoryViewer — enchaînement multi-scènes (W2)', () => {
+  let rafCallback: FrameRequestCallback | null = null;
+
+  beforeEach(() => {
+    capturedProps = null;
+    rafCallback = null;
+    mockAuthUser = { id: 'user-1', username: 'alice', avatar: null, systemLanguage: 'fr' };
+    // ORDRE IMPOSÉ : `useFakeTimers` réinstalle SON propre `requestAnimationFrame`
+    // (il fait partie des minuteries qu'il feint). L'installer après la sonde
+    // l'écraserait, `rafCallback` resterait nul, et le test de la tête de
+    // lecture se jugerait sur un tick qu'il ne contrôle pas.
+    jest.useFakeTimers();
+    // rAF PILOTÉ à la main : le tick de la tête de lecture doit pouvoir être
+    // déclenché à un instant choisi, sans quoi `playheadSec` reste figé à 0 et
+    // ne prouve rien de sa relativité à la scène.
+    global.requestAnimationFrame = jest.fn((cb: FrameRequestCallback) => {
+      rafCallback = cb;
+      return 1;
+    }) as unknown as typeof requestAnimationFrame;
+    global.cancelAnimationFrame = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('walks the scenes one after another at each scene duration, and only THEN leaves the story', () => {
+    const onClose = jest.fn();
+    render(
+      <StoryViewer stories={[multiSceneStory()]} initialIndex={0} onClose={onClose} onReply={jest.fn()} />,
+    );
+    expect(capturedProps?.sceneIndex).toBe(0);
+
+    act(() => { jest.advanceTimersByTime(6000); });
+    expect(capturedProps?.sceneIndex).toBe(1);
+    // La story ne s'est PAS refermée : c'est tout l'écart que W2 corrige — avant
+    // lui, la fin de la scène 1 était la fin de la story.
+    expect(onClose).not.toHaveBeenCalled();
+
+    act(() => { jest.advanceTimersByTime(6000); });
+    expect(capturedProps?.sceneIndex).toBe(2);
+    expect(onClose).not.toHaveBeenCalled();
+
+    // Dernière scène épuisée → la story cède la place (ici : dernière story de
+    // la pile, donc fermeture).
+    act(() => { jest.advanceTimersByTime(6000); });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('serves the scene-RELATIVE playhead — a keyframe at t=2s fires in every scene, not only the first', () => {
+    render(
+      <StoryViewer stories={[multiSceneStory()]} initialIndex={0} onClose={jest.fn()} onReply={jest.fn()} />,
+    );
+
+    // Deux avances DISTINCTES, et non un saut de 9 s : `act` ne vide sa file de
+    // rendu qu'à sa sortie, si bien qu'un seul bond ferait rearmer le timer de
+    // la scène 1 à t=9 s — l'horloge de la scène naîtrait déjà en retard, et le
+    // test mesurerait cet artefact plutôt que le comportement.
+    act(() => { jest.advanceTimersByTime(6000); });
+    // 3 s DANS la scène 1 (= 9 s de story). Les `timing.start`/`keyframes` d'un
+    // objet sont écrits dans le repère de SA scène (une scène projetée par
+    // `StoryEffects(rendering:sceneIndex:)` démarre à 0) : servir 9 s ferait
+    // jouer toutes les scènes suivantes hors de leur fenêtre d'animation.
+    act(() => { jest.advanceTimersByTime(3000); });
+    act(() => { rafCallback?.(0); });
+
+    expect(capturedProps?.sceneIndex).toBe(1);
+    expect(capturedProps?.playheadSec).toBeCloseTo(3, 3);
+  });
+
+  it('restarts at the first scene when the reader moves to another story', () => {
+    const onClose = jest.fn();
+    render(
+      <StoryViewer
+        stories={[multiSceneStory(), staticV3Story()]}
+        initialIndex={0}
+        onClose={onClose}
+        onReply={jest.fn()}
+      />,
+    );
+
+    act(() => { jest.advanceTimersByTime(6000); });
+    expect(capturedProps?.sceneIndex).toBe(1);
+
+    // Tap à droite : la story suivante n'a qu'une scène — l'index doit repartir
+    // de zéro, jamais rester sur un rang que le nouveau document n'a pas.
+    act(() => { fireEvent.keyDown(document, { key: 'ArrowRight' }); });
+    expect(capturedProps?.sceneIndex).toBe(0);
+  });
+
+  it('leaves a single-scene story exactly as before — its only scene ends the story', () => {
+    const onClose = jest.fn();
+    render(<StoryViewer stories={[staticV3Story()]} initialIndex={0} onClose={onClose} onReply={jest.fn()} />);
+    expect(capturedProps?.sceneIndex).toBe(0);
+
+    act(() => { jest.advanceTimersByTime(6000); });
+    expect(onClose).toHaveBeenCalled();
+    expect(capturedProps?.sceneIndex).toBe(0);
   });
 });

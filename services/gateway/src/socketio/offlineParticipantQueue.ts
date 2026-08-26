@@ -6,6 +6,7 @@ import {
 } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import type { QueuedEventVariant } from './queuedEventContract';
 
 const logger = enhancedLogger.child({ module: 'offlineParticipantQueue' });
 
@@ -38,7 +39,14 @@ interface OfflineQueueParticipant {
   } | null;
 }
 
-export interface OfflineParticipantQueueParams {
+/**
+ * Le couple `(eventType, payload)` est désormais CORRÉLÉ (cycle 106) : il vient
+ * de `QueuedEventVariant`, dérivé de la table `DRAINED_EVENT` et donc du
+ * contrat de fil. Un transport ne peut plus diffuser une forme et en enfiler
+ * une autre — la divergence n'aurait eu pour témoin qu'un destinataire hors
+ * ligne au mauvais moment.
+ */
+export type OfflineParticipantQueueParams = QueuedEventVariant & {
   conversationId: string;
   /**
    * Who caused the event, in whichever identity the calling transport holds.
@@ -50,9 +58,7 @@ export interface OfflineParticipantQueueParams {
    */
   actorParticipantId?: string | null;
   actorUserId?: string | null;
-  eventType: QueuedMessagePayload['eventType'];
   messageId: string;
-  payload: Record<string, unknown>;
   /**
    * Overrides the (messageId, eventType) dedup identity `RedisDeliveryQueue`
    * uses by default. Required whenever more than one distinct occurrence of the
@@ -91,6 +97,19 @@ export interface OfflineParticipantQueueParams {
    * restreint.
    */
   restrictToReadersOfLanguage?: string;
+  /**
+   * Adapte le payload AU DESTINATAIRE, juste avant de l'enfiler.
+   *
+   * La file est le troisième point de sortie d'un événement, et le plus facile
+   * à oublier : une règle posée sur le rendu REST et sur la diffusion live
+   * laisse la file rejouer au reconnect exactement ce qu'on venait de taire.
+   * Elle est déjà PAR destinataire (`enqueue(queueKey, …)`) — la granularité
+   * existe, il ne manquait qu'un moyen de s'en servir.
+   *
+   * Reçoit la clé de file (le `User.id`, ou le `Participant.id` d'un anonyme) ;
+   * rend le payload à déposer pour LUI. Absent, tout le monde reçoit `payload`.
+   */
+  resolvePayloadForReader?: (queueKey: string) => Record<string, unknown>;
 }
 
 /**
@@ -159,7 +178,7 @@ export async function enqueueForOfflineParticipants(
   const { deliveryQueue, prisma, connectedUsers } = deps;
   if (!deliveryQueue) return;
 
-  const { conversationId, actorParticipantId, actorUserId, eventType, messageId, payload, dedupKey } = params;
+  const { conversationId, actorParticipantId, actorUserId, eventType, messageId, payload, dedupKey, resolvePayloadForReader } = params;
   // Normalisée une fois, du MÊME côté que le prisme : `resolveUserLanguagesOrdered`
   // et `resolveParticipantLanguage` rendent des codes réduits et minusculés
   // ('PT-BR' → 'pt'). Comparer une langue cible brute à un prisme normalisé
@@ -217,7 +236,7 @@ export async function enqueueForOfflineParticipants(
         .enqueue(queueKey, {
           messageId,
           conversationId,
-          payload,
+          payload: resolvePayloadForReader ? resolvePayloadForReader(queueKey) : payload,
           enqueuedAt: new Date().toISOString(),
           eventType,
           ...(dedupKey ? { dedupKey } : {}),

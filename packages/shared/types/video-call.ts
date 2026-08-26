@@ -443,6 +443,27 @@ export interface CallInitiatedEvent {
    * untitled group. Mirrors `CallHistoryItem.conversationTitle`.
    */
   readonly conversationTitle?: string | null;
+  /**
+   * Les identifiants TURN/STUN du DESTINATAIRE de cette copie de l'événement.
+   *
+   * **Déclaré au cycle 107 ; il voyageait sans contrat depuis toujours.** Les
+   * deux émetteurs de `call:initiated` l'attachent chacun par-dessus l'événement
+   * de base (`{ ...event, iceServers }`), avec des identifiants calculés PAR
+   * destinataire (`generateIceServers(memberId)`) — d'où l'attachement au moment
+   * de l'émission plutôt que dans l'événement construit une fois pour tous.
+   *
+   * Le SDK iOS le décode (`CallOfferData.iceServers`) : c'est ce qui donne au
+   * destinataire de quoi traverser un NAT dès la SONNERIE, sans attendre le
+   * `call:ice-servers-refreshed` qui n'arrive qu'au renouvellement du TTL. Un
+   * futur émetteur qui l'omettait ne cassait rien à la compilation et retirait
+   * TURN à l'appelé — même famille que `_seq` et `location` (cycle 105) : un
+   * champ que les clients lisent et qu'aucun contrat ne déclare ne tient qu'à la
+   * lecture du code voisin.
+   *
+   * Optionnel, comme le décodeur iOS le suppose : un déploiement progressif peut
+   * placer une passerelle plus ancienne devant un client plus récent.
+   */
+  readonly iceServers?: readonly RTCIceServer[];
 }
 
 /**
@@ -490,7 +511,23 @@ export interface CallSignalEvent {
 export interface CallEndedEvent {
   readonly callId: string;
   readonly duration: number;
-  readonly endedBy: string;             // userId ou participantId
+  /**
+   * userId ou participantId de qui a raccroché.
+   *
+   * **Optionnel depuis le cycle 107, parce que l'émetteur l'a toujours été.**
+   * `broadcastCallEnded` déclare sa charge
+   * `Omit<CallEndedEvent, 'endedBy'> & { endedBy?: string }` — un élargissement
+   * DÉLIBÉRÉ : les fins d'appel d'origine serveur (ramassage de zombies,
+   * expiration de heartbeat, arrêt gracieux) n'ont personne à nommer.
+   *
+   * Le contrat promettait pourtant une chaîne. L'écart ne se voyait pas tant que
+   * la diffusion passait par un `Server` non typé ; la porte du cycle 107 l'a
+   * fait tomber en une ligne. C'est la règle « un contrat doit porter autant
+   * d'états que l'émetteur a de choses à dire » : ici l'émetteur a deux choses à
+   * dire — « untel a raccroché » et « personne, c'est le serveur » — et le
+   * contrat n'en portait qu'une.
+   */
+  readonly endedBy?: string;
   readonly reason: CallEndReason;
 }
 
@@ -599,6 +636,45 @@ export interface CallModeChangedEvent {
 /**
  * Event: call:media-toggled (Server → Client)
  */
+/**
+ * Client → Server: `call:toggle-audio` / `call:toggle-video`.
+ *
+ * À ne pas confondre avec `CallMediaToggleEvent`, qui est la DIFFUSION
+ * serveur→client du même geste. Le listener de la passerelle a déclaré le type
+ * de diffusion pour ce qu'il RECEVAIT jusqu'au cycle 107, ce qui faisait trois
+ * sources en désaccord :
+ *
+ * | source | forme | ack |
+ * |---|---|---|
+ * | `ClientToServerEvents` | `{ callId, enabled }` | REQUIS |
+ * | le listener | `CallMediaToggleEvent` — `participantId`/`mediaType` REQUIS | aucun |
+ * | `socketMediaToggleSchema` (Zod, autorité d'exécution) | `{ callId, enabled, mediaType?, participantId? }` | — |
+ * | les trois clients, sur le fil | `{ callId, enabled }` | aucun |
+ *
+ * Ce type est réconcilié sur les deux seules sources qui décident vraiment :
+ * ce que les clients ENVOIENT, et ce que Zod ACCEPTE.
+ *
+ * **`participantId` et `mediaType` sont OPTIONNELS et ne sont lus par personne.**
+ * La passerelle résout le participant elle-même
+ * (`resolveActiveCallParticipant`) et connaît le média par le NOM de
+ * l'événement. Les déclarer requis était un piège armé, pas une panne : sous
+ * `strict: false`, `data.participantId` se lit `string` non-optionnel là où le
+ * fil ne porte jamais rien.
+ *
+ * **L'ack a été retiré** plutôt que rendu optionnel : aucun client ne l'envoie,
+ * la passerelle ne l'appelle jamais. Un client écrit contre l'ancien contrat
+ * l'aurait attendu indéfiniment — déclarer un ack qui n'existe pas est une
+ * promesse, pas une tolérance.
+ */
+export interface CallMediaToggleClientEvent {
+  readonly callId: string;
+  readonly enabled: boolean;
+  /** Toléré par le schéma, jamais lu : le NOM de l'événement porte le média. */
+  readonly mediaType?: 'audio' | 'video';
+  /** Toléré par le schéma, jamais lu : la passerelle résout le participant. */
+  readonly participantId?: string;
+}
+
 export interface CallMediaToggleEvent {
   readonly callId: string;
   readonly participantId: string;      // Database Participant ID (legacy) — the FK
@@ -705,7 +781,14 @@ export interface CallInitiateAck {
 export interface CallJoinAck {
   readonly success: boolean;
   readonly data?: { callSession: CallSession; iceServers: RTCIceServer[] };
-  readonly error?: { code: string; message: string };
+  /**
+   * `endReason` is populated only when `code === 'CALL_ENDED'` — the real
+   * reason the call already ended server-side (Prisma `CallSession.endReason`),
+   * so a caller rejoining after a reconnect can distinguish a benign hangup
+   * from a transient failure (`connectionLost`/`heartbeatTimeout`) instead of
+   * assuming `completed`. @see CallService.joinCallAttempt
+   */
+  readonly error?: { code: string; message: string; endReason?: CallEndReason };
 }
 
 /**
@@ -947,6 +1030,64 @@ export interface CallRequestIceServersEvent {
   readonly callId: string;
 }
 
+/**
+ * Répartition du temps d'appel entre les quatre paliers de qualité, en
+ * FRACTIONS sommant à 1 — jamais en secondes (`socketCallAnalyticsSchema` borne
+ * chaque membre à `[0, 1]`).
+ */
+export interface CallQualityDistribution {
+  readonly excellent: number;
+  readonly good: number;
+  readonly fair: number;
+  readonly poor: number;
+}
+
+/**
+ * Client → Server: le rapport de télémétrie terminal d'un appel, émis UNE fois
+ * au raccrochage (« fire-and-forget », sans ack).
+ *
+ * Déclaré au cycle 107. Il ne l'était nulle part jusque-là : ni dans
+ * `CLIENT_EVENTS`, ni dans `ClientToServerEvents`. Il ne vivait que dans
+ * `CALL_EVENTS.ANALYTICS` et dans la signature en ligne de son listener — dix-neuf
+ * champs transcrits à la main — pendant que les TROIS clients l'émettaient,
+ * chacun contre sa propre transcription de la forme.
+ *
+ * C'est `conversation:join-error` (cycle 99) dans l'autre sens : là, huit
+ * émetteurs serveur sans déclaration ; ici, un listener sans déclaration. La
+ * réception est le sens le plus cher des deux — la forme y vient du réseau, donc
+ * d'un émetteur que le dépôt ne contrôle pas.
+ *
+ * **L'autorité d'exécution reste `socketCallAnalyticsSchema`** (Zod, côté
+ * passerelle) : cette interface en est la transcription au type, pas une seconde
+ * source. Les deux se modifient ensemble — c'est le schéma qui REFUSE, ce type ne
+ * fait que dire ce qui est attendu.
+ */
+export interface CallAnalyticsEvent {
+  readonly callId: string;
+  /** Sonnerie humaine INCLUSE. `-1` = jamais connecté (manqué, rejeté, échec). */
+  readonly setupTimeMs: number;
+  /**
+   * Négociation WebRTC SEULE (answer/join → connected), sans le temps de
+   * sonnerie. Optionnel : absent des builds iOS antérieurs au 2026-07-03.
+   */
+  readonly negotiationTimeMs?: number;
+  readonly durationSeconds: number;
+  readonly reconnectionCount: number;
+  readonly networkTransitions: number;
+  readonly averageRtt: number;
+  readonly averagePacketLoss: number;
+  readonly maxPacketLoss: number;
+  readonly codec: string;
+  readonly effectsUsed: readonly string[];
+  readonly filtersUsed: boolean;
+  readonly transcriptionUsed: boolean;
+  readonly qualityDistribution: CallQualityDistribution;
+  readonly platform: string;
+  readonly deviceModel: string;
+  readonly isVideo: boolean;
+  readonly endReason: string;
+}
+
 // ===== SOCKET.IO EVENT NAMES =====
 
 /**
@@ -1095,33 +1236,3 @@ export const CALL_ERROR_CODES = {
 } as const;
 
 export type CallErrorCode = typeof CALL_ERROR_CODES[keyof typeof CALL_ERROR_CODES];
-
-// ===== TYPE GUARDS =====
-
-/**
- * Vérifie si un CallSession est actif
- */
-export function isActiveCall(call: CallSession): boolean {
-  return call.status === 'active' || call.status === 'ringing' || call.status === 'connecting' || call.status === 'reconnecting';
-}
-
-/**
- * Vérifie si un appel est en mode P2P
- */
-export function isP2PCall(call: CallSession): boolean {
-  return call.mode === 'p2p';
-}
-
-/**
- * Vérifie si un appel est en mode SFU
- */
-export function isSFUCall(call: CallSession): boolean {
-  return call.mode === 'sfu';
-}
-
-/**
- * Détermine le mode d'appel basé sur le nombre de participants
- */
-export function determineCallMode(participantCount: number): CallMode {
-  return participantCount <= 2 ? 'p2p' : 'sfu';
-}

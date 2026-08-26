@@ -16,6 +16,7 @@ import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.session.SessionTeardown
+import me.meeshy.sdk.sync.SyncSeqTracker
 import org.junit.Test
 
 class AuthRepositoryTest {
@@ -76,9 +77,10 @@ class AuthRepositoryTest {
         api: AuthApi,
         store: TokenStore,
         teardown: SessionTeardown = RecordingSessionTeardown(),
+        syncSeqTracker: SyncSeqTracker = SyncSeqTracker(),
     ): Pair<AuthRepository, SessionRepository> {
         val session = SessionRepository(api, store)
-        return AuthRepository(api, store, session, teardown) to session
+        return AuthRepository(api, store, session, teardown, syncSeqTracker) to session
     }
 
     @Test
@@ -158,6 +160,24 @@ class AuthRepositoryTest {
 
         assertThat(store.isAuthenticated).isFalse()
         assertThat(session.currentUser.value).isNull()
+    }
+
+    @Test
+    fun logout_resetsTheSyncSeqCursor() = runTest {
+        // `_seq` est alloué PAR USER : le curseur d'un compte ne veut rien dire
+        // pour le suivant, et hérité il masquerait ses trous.
+        val store = InMemoryTokenStore(jwt = "j", sessionToken = "s")
+        val tracker = SyncSeqTracker()
+        tracker.observe(9_000L)
+        val (repo, _) = repository(
+            FakeAuthApi(ApiResponse(success = false)),
+            store,
+            syncSeqTracker = tracker,
+        )
+
+        repo.logout()
+
+        assertThat(tracker.lastSeq).isNull()
     }
 
     @Test

@@ -4,7 +4,19 @@ import {
   resolveUserPreferredLanguage as resolveUserPreferredLanguageUtil,
   getUserLanguagePreferences as getUserLanguagePreferencesUtil,
 } from '@/utils/user-language-preferences';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { LRUCache } from '@/lib/lru-cache';
+
+/**
+ * Égalité de langue conforme au Prisme : les codes comparés ici sont verbatim et
+ * peuvent être région-tagués (`en-US`), sous-tagués script (`zh-Hant`) ou en casse
+ * mixte (`EN`). Une comparaison brute `===` traiterait `en-US` et `en` comme deux
+ * langues distinctes — le message serait réputé « hors langue préférée » alors qu'il
+ * y est, et une traduction keyée `fr-FR` ne matcherait jamais la préférence `fr`.
+ * SSOT de la canonicalisation : normalizeLanguageForDedup (language-normalize.ts).
+ */
+const sameLanguage = (a?: string, b?: string): boolean =>
+  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 const TRANSLATION_MODEL_RANK: Record<TranslationModel, number> = {
   premium: 3,
@@ -136,10 +148,18 @@ export function useMessageTranslations({
         const content = t.translatedContent || t.content;
         const currentTimestamp = new Date(t.createdAt || message.createdAt);
         
+        // Clé de dédup canonicalisée : `fr` et `fr-FR` (ou `FR`) désignent la même
+        // langue et ne doivent former qu'UNE entrée, sinon le classement qualité
+        // ci-dessous ne les compare jamais et un `.find` ultérieur peut servir la
+        // basic plutôt que la premium. La valeur `language` stockée reste verbatim
+        // (le code du gagnant) — les comparaisons aval passent déjà par sameLanguage.
+        // SSOT : normalizeLanguageForDedup (language-normalize.ts).
+        const dedupKey = normalizeLanguageForDedup(language ?? '');
+
         // Dédup ordre-indépendant : la qualité du modèle prime (premium > medium >
         // basic), la récence ne départage que les ex æquo de qualité. Empêche une
         // traduction basic/medium plus récente de rétrograder une premium déjà retenue.
-        const existingTranslation = translationsMap.get(language ?? '');
+        const existingTranslation = translationsMap.get(dedupKey);
         const currentRank = translationModelRank(t.translationModel);
         const existingRank = existingTranslation
           ? translationModelRank(existingTranslation.translationModel)
@@ -159,7 +179,7 @@ export function useMessageTranslations({
             cached: t.cached || false
           };
 
-          translationsMap.set(language ?? '', translation);
+          translationsMap.set(dedupKey, translation);
         }
       });
     
@@ -173,10 +193,10 @@ export function useMessageTranslations({
     let translatedFrom: string | undefined;
     
     // Si le message n'est pas dans la langue préférée de l'utilisateur
-    if (originalLanguage !== preferredLanguage) {
+    if (!sameLanguage(originalLanguage, preferredLanguage)) {
       // Chercher une traduction dans la langue préférée
-      const preferredTranslation = translations.find(t => 
-        t.language === preferredLanguage && t.status === 'completed'
+      const preferredTranslation = translations.find(t =>
+        sameLanguage(t.language, preferredLanguage) && t.status === 'completed'
       );
       
       if (preferredTranslation) {
@@ -212,16 +232,16 @@ export function useMessageTranslations({
     const preferredLanguage = resolveUserPreferredLanguage();
     
     // Si c'est déjà dans la langue préférée
-    if (message.originalLanguage === preferredLanguage) {
+    if (sameLanguage(message.originalLanguage, preferredLanguage)) {
       return {
         content: message.content,
         isTranslated: false
       };
     }
-    
+
     // Chercher une traduction dans la langue préférée
-    const preferredTranslation = message.translations?.find(t => 
-      t.language === preferredLanguage && t.status === 'completed'
+    const preferredTranslation = message.translations?.find(t =>
+      sameLanguage(t.language, preferredLanguage) && t.status === 'completed'
     );
     
     if (preferredTranslation) {
@@ -247,13 +267,13 @@ export function useMessageTranslations({
     const targetLang = targetLanguage || resolveUserPreferredLanguage();
     
     // Pas besoin de traduire si c'est déjà dans la langue cible
-    if (message.originalLanguage === targetLang) {
+    if (sameLanguage(message.originalLanguage, targetLang)) {
       return false;
     }
-    
+
     // Vérifier si la traduction existe déjà
-    const existingTranslation = message.translations?.find(t => 
-      t.language === targetLang && t.status === 'completed'
+    const existingTranslation = message.translations?.find(t =>
+      sameLanguage(t.language, targetLang) && t.status === 'completed'
     );
     
     return !existingTranslation;

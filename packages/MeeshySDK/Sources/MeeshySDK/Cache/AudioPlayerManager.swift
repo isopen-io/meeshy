@@ -91,11 +91,13 @@ public class AudioPlayerManager: ObservableObject {
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
-        // 1. Check disk cache — play instantly from local file (no network)
+        // 1. Check disk cache — play instantly from local file (no network).
+        // `AVAudioPlayer(contentsOf:)` lit le fichier en streaming — inutile de
+        // matérialiser tout l'audio en `Data` résident avant lecture.
         if let localURL = CacheCoordinator.audioLocalFileURL(for: resolved) {
             do {
-                let data = try Data(contentsOf: localURL)
-                playData(data)
+                let player = try AVAudioPlayer(contentsOf: localURL)
+                startLocalPlayback(player)
                 return
             } catch {
                 // Fall through to streaming
@@ -109,17 +111,22 @@ public class AudioPlayerManager: ObservableObject {
 
     private func playData(_ data: Data) {
         do {
-            localPlayer = try AVAudioPlayer(data: data)
-            localPlayer?.prepareToPlay()
-            duration = localPlayer?.duration ?? 0
-            localPlayer?.play()
-            isPlaying = true
-            lastError = nil
-            startLocalProgressTimer()
+            let player = try AVAudioPlayer(data: data)
+            startLocalPlayback(player)
         } catch {
             Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
             lastError = error.localizedDescription
         }
+    }
+
+    private func startLocalPlayback(_ player: AVAudioPlayer) {
+        localPlayer = player
+        player.prepareToPlay()
+        duration = player.duration
+        player.play()
+        isPlaying = true
+        lastError = nil
+        startLocalProgressTimer()
     }
 
     private func playStream(url: URL, cacheKey: String) {

@@ -27,16 +27,14 @@ export type PreviewMemberRow = { user?: PreviewMemberProfile | null };
 export type PreviewCommunityRow = { id: string; members: PreviewMemberRow[] };
 
 /**
- * Le régime se tranche par LIGNE, pas par route — même loi que le fil de
- * stories : une communauté dont le lecteur EST membre prouve un lien posé des
- * DEUX côtés (appartenance commune) et relève du contexte acquis ; une
- * communauté publique qu'il ne fait que découvrir n'en prouve aucun. La
- * recherche sert `isPrivate: false` sans aucune condition d'appartenance —
- * c'est une surface de DÉCOUVERTE, et son régime par défaut est donc strict.
- *
- * Et un membre qui prouve le lien par UNE communauté de la page le prouve pour
- * toutes : masquer sa pastille sur une ligne pendant qu'elle s'affiche sur la
- * suivante, dans la même page, ne décrirait rien.
+ * Critère STRICT pour tout id de membre rendu dans un aperçu de communauté —
+ * sans condition sur la page. Avant la directive produit du 2026-08-25, la
+ * co-appartenance à une communauté que le lecteur partageait ailleurs sur la
+ * même page basculait ces membres-là en régime préférences-seules ; ce
+ * régime PAR LIGNE a disparu avec la loi qui le fondait (« ce n'est pas
+ * parce qu'on partage une communauté qu'on doit voir la présence de
+ * l'autre »). Un seul appel à `resolveForTargets`, avec le viewer réel de la
+ * requête, tranche désormais la page entière.
  */
 export async function resolveCommunityMemberPresence(
   fastify: FastifyInstance,
@@ -49,36 +47,5 @@ export async function resolveCommunityMemberPresence(
   const allIds = new Set(communities.flatMap(memberIdsOf));
   if (allIds.size === 0) return new Map();
 
-  const viewer = viewerFromRequest(request);
-  const viewerCommunityIds = viewer
-    ? new Set(
-        (
-          await fastify.prisma.communityMember.findMany({
-            where: {
-              communityId: { in: communities.map(c => c.id) },
-              userId: viewer.userId,
-              isActive: true
-            },
-            select: { communityId: true }
-          })
-        ).map((row: { communityId: string }) => row.communityId)
-      )
-    : new Set<string>();
-
-  const contextIds = new Set(
-    communities.filter(c => viewerCommunityIds.has(c.id)).flatMap(memberIdsOf),
-  );
-  const strictIds = [...allIds].filter(id => !contextIds.has(id));
-
-  const presence = getPresenceVisibilityService(fastify.prisma);
-  const [contextVisibility, strictVisibility] = await Promise.all([
-    contextIds.size > 0
-      ? presence.resolvePrefsOnly([...contextIds])
-      : new Map<string, PresenceVisibility>(),
-    strictIds.length > 0
-      ? presence.resolveForTargets(viewer, strictIds)
-      : new Map<string, PresenceVisibility>()
-  ]);
-
-  return new Map([...contextVisibility, ...strictVisibility]);
+  return getPresenceVisibilityService(fastify.prisma).resolveForTargets(viewerFromRequest(request), [...allIds]);
 }

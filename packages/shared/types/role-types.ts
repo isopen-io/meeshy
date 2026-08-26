@@ -65,16 +65,35 @@ export const GLOBAL_ROLE_HIERARCHY: Record<GlobalUserRole, number> = {
 };
 
 /**
+ * Le niveau hiérarchique d'un rôle plateforme quelconque — la lecture qui
+ * ÉCHOUE FERMÉ, et la seule autorité du dépôt sur ce calcul.
+ *
+ * Contrepoint exact de `normalizeGlobalRole`, dont le contrat est de RÉPARER
+ * une chaîne : celui-ci rend `USER` pour n'importe quelle valeur inconnue, ce
+ * qui convient à un affichage mais promeut silencieusement un rôle bidon au
+ * niveau 10 dès que la question posée est un DROIT. Ici un rôle inconnu vaut
+ * 0 — et c'est pourquoi aucune décision d'autorisation ne doit passer par
+ * `normalizeGlobalRole`.
+ *
+ * La casse est repliée comme chez tous les voisins (`isGlobalAdmin`,
+ * `isGlobalUserRole`, `normalizeGlobalRole`) : les clés de
+ * `GLOBAL_ROLE_HIERARCHY` sont en MAJUSCULES, et un rôle arrivant dans une
+ * autre casse (valeur persistée brute, site d'appel non typé) indexerait
+ * sinon la table sur `undefined` — donc non privilégié par accident plutôt
+ * que par décision.
+ */
+export function globalRoleLevel(role: string): number {
+  return GLOBAL_ROLE_HIERARCHY[role.toUpperCase() as GlobalUserRole] ?? 0;
+}
+
+/**
  * Vérifie si un rôle a un niveau égal ou supérieur à un autre
  */
 export function hasMinimumRole(
   userRole: GlobalUserRole | GlobalUserRoleType,
   requiredRole: GlobalUserRole | GlobalUserRoleType
 ): boolean {
-  /* v8 ignore next 2 -- TypeScript types ensure roles are always in GLOBAL_ROLE_HIERARCHY; || 0 unreachable */
-  const userLevel = GLOBAL_ROLE_HIERARCHY[userRole as GlobalUserRole] || 0;
-  const requiredLevel = GLOBAL_ROLE_HIERARCHY[requiredRole as GlobalUserRole] || 0;
-  return userLevel >= requiredLevel;
+  return globalRoleLevel(userRole) >= globalRoleLevel(requiredRole);
 }
 
 /**
@@ -134,9 +153,15 @@ export function hasMinimumMemberRole(
   userRole: MemberRole | MemberRoleType | string,
   requiredRole: MemberRole | MemberRoleType
 ): boolean {
-  const userLevel = MEMBER_ROLE_HIERARCHY[userRole as MemberRole] || 0;
+  // Case-fold the input like every sibling (isMemberAdmin, isMemberCreator,
+  // isMemberRole): MEMBER_ROLE_HIERARCHY keys are lowercase, and an UPPERCASE role
+  // would otherwise index the map as undefined → level 0. apps/web already
+  // pre-lowercases at two call sites to work around this; the fix moves the
+  // normalization into the primitive so no caller has to remember it. `|| 0`
+  // still fails closed for genuinely unknown roles.
+  const userLevel = MEMBER_ROLE_HIERARCHY[userRole.toLowerCase() as MemberRole] || 0;
   /* v8 ignore next -- requiredRole is typed MemberRole|MemberRoleType, always in MEMBER_ROLE_HIERARCHY */
-  const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole as MemberRole] || 0;
+  const requiredLevel = MEMBER_ROLE_HIERARCHY[requiredRole.toLowerCase() as MemberRole] || 0;
   return userLevel >= requiredLevel;
 }
 

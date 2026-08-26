@@ -1,11 +1,14 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
+import { validatePagination } from '../../utils/pagination';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { viewerFromRequest } from '../users/presence-gate';
 import { createLegacyHybridRequest } from './utils/link-helpers';
 import { findShareLinkByIdentifier, getConversationMessages, countConversationMessages } from './utils/prisma-queries';
 import { formatMessageWithUnifiedSender } from './utils/message-formatters';
@@ -162,13 +165,16 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Accès non autorisé à ce lien');
       }
 
-      const { limit = '50', offset = '0' } = request.query as { limit?: string; offset?: string };
+      const { limit: limitStr, offset: offsetStr } = request.query as { limit?: string; offset?: string };
+      // SSOT guard: string-schema pagination (no AJV coercion). Raw parseInt
+      // yielded `NaN`/negative skip/take on malformed input, with no upper cap.
+      const { limit, offset } = validatePagination(offsetStr, limitStr, { defaultLimit: 50, maxLimit: 100 });
 
       const messages = await getConversationMessages(
         fastify.prisma,
         shareLink.conversationId,
-        parseInt(limit),
-        parseInt(offset)
+        limit,
+        offset
       );
 
       const totalMessages = await countConversationMessages(fastify.prisma, shareLink.conversationId);
@@ -217,12 +223,52 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         };
       }
 
+      // Cette route est CONSULTABLE SANS AUTHENTIFICATION (`onRequest:
+      // [authOptional]`) : `viewer` est `null` pour l'immense majorité des
+      // appels. Un participant anonyme n'a pas de `userId` — pas de ligne
+      // `User`, donc pas d'amitié ni de préférences à résoudre — seul le
+      // bypass ADMIN/BIGBOSS de la directive produit du 2026-08-25
+      // s'applique : « personne ne doit savoir ma dernière connexion si on
+      // n'est pas ami », et un visiteur d'un lien public n'est jamais un ami.
+      const viewer = viewerFromRequest(request);
+      const anonymousPresenceVisible = !!viewer && isGlobalAdmin(viewer.role);
+
+      // Construite UNE fois : la liste servie ET le compteur agrégé lisent la
+      // MÊME présence gatée, pour que `stats.onlineAnonymousParticipants` ne
+      // soit jamais un `0` fabriqué à côté — c'est la loi appliquée à un
+      // agrégat, pas une seconde règle à tenir synchronisée avec la première.
+      //
+      // `isOnline` ET `lastActiveAt` tombent sous le MÊME prédicat : la
+      // directive retient les deux hors amitié / soi / ADMIN+, et le web
+      // (`participant-mapper.ts` → `StreamSidebar`) dérive une pastille de
+      // `lastActiveAt` via `getUserPresenceStatus` — masquer l'un en laissant
+      // l'autre ne masque rien. La valeur servie à l'ADMIN est la dernière
+      // activité RÉELLE (`Participant.lastActiveAt`, écrite par `StatusService`),
+      // jamais `joinedAt` : une date d'arrivée n'est pas une dernière activité.
+      const gatedAnonymousParticipants = shareLink.conversation.participants
+        .filter(p => p.type === "anonymous")
+        .map(participant => ({
+          id: participant.id,
+          username: participant.anonymousSession?.profile?.username ?? null,
+          firstName: participant.anonymousSession?.profile?.firstName ?? null,
+          lastName: participant.anonymousSession?.profile?.lastName ?? null,
+          displayName: participant.displayName,
+          avatar: participant.avatar,
+          language: participant.language,
+          isOnline: anonymousPresenceVisible ? participant.isOnline : false,
+          lastActiveAt: anonymousPresenceVisible ? participant.lastActiveAt : null,
+          joinedAt: participant.joinedAt,
+          canSendMessages: participant.permissions?.canSendMessages ?? false,
+          canSendFiles: participant.permissions?.canSendFiles ?? false,
+          canSendImages: participant.permissions?.canSendImages ?? false
+        }));
+
       const stats = {
         totalMessages,
         totalMembers: shareLink.conversation.participants.filter(p => p.type === "user").length,
-        totalAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").length,
-        onlineAnonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").filter(p => p.isOnline).length,
-        hasMore: totalMessages > parseInt(offset) + messages.length
+        totalAnonymousParticipants: gatedAnonymousParticipants.length,
+        onlineAnonymousParticipants: gatedAnonymousParticipants.filter(p => p.isOnline).length,
+        hasMore: totalMessages > offset + messages.length
       };
 
       return sendSuccess(reply, {
@@ -268,9 +314,12 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
               displayName: member.user.displayName,
               avatar: member.user.avatar,
               // Lien de partage consultable sans authentification : ne jamais
-              // divulguer la présence réelle des membres (joinedAt non sensible).
+              // divulguer la présence réelle des membres — ni `isOnline`, ni
+              // `lastActiveAt`, dont le web dérive une pastille. Le `joinedAt`
+              // (non sensible) reste servi sous son propre nom, un niveau plus
+              // haut ; il ne se déguise plus en dernière activité.
               isOnline: false,
-              lastActiveAt: member.joinedAt
+              lastActiveAt: null
             }
           })),
           // L'identité d'un participant anonyme vit dans
@@ -279,21 +328,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           // et surtout pas de `canSend*` à plat. Le reste de l'enveloppe
           // `anonymousSession` (hash de jeton, IP, empreinte appareil) ne sort
           // JAMAIS de la gateway — d'où le `select` restreint à `profile`.
-          anonymousParticipants: shareLink.conversation.participants.filter(p => p.type === "anonymous").map(participant => ({
-            id: participant.id,
-            username: participant.anonymousSession?.profile?.username ?? null,
-            firstName: participant.anonymousSession?.profile?.firstName ?? null,
-            lastName: participant.anonymousSession?.profile?.lastName ?? null,
-            displayName: participant.displayName,
-            avatar: participant.avatar,
-            language: participant.language,
-            isOnline: participant.isOnline,
-            lastActiveAt: participant.joinedAt,
-            joinedAt: participant.joinedAt,
-            canSendMessages: participant.permissions?.canSendMessages ?? false,
-            canSendFiles: participant.permissions?.canSendFiles ?? false,
-            canSendImages: participant.permissions?.canSendImages ?? false
-          })),
+          // `isOnline` ET `lastActiveAt` sont gatés ci-dessus
+          // (`gatedAnonymousParticipants`) — `false` / `null` sauf pour un
+          // viewer ADMIN/BIGBOSS.
+          anonymousParticipants: gatedAnonymousParticipants,
           currentUser
         });
 

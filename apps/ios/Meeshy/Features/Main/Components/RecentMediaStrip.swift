@@ -841,9 +841,7 @@ private struct RecentMediaCell: View {
     }
 
     private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        LocalizedNumber.duration(seconds: seconds)
     }
 }
 
@@ -944,6 +942,11 @@ private struct PreviewVideoSurface: UIViewRepresentable {
     }
 
     final class PlayerLayerView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer {
             guard let layer = layer as? AVPlayerLayer else {

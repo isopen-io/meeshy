@@ -21,7 +21,9 @@ interface AudienceUserPickerProps {
 }
 
 /// Visibilités qui exigent une audience explicite (`visibilityUserIds`).
-/// Partagé par StoryComposer ET PostComposer (fix W6) — vit avec le picker.
+/// Partagé par `StoryComposer`, `ComposerDocumentSurface` et
+/// `ComposerMoodSurface` (fix W6 ; `PostComposer`/`PostEditor` en étaient
+/// aussi consommateurs avant leur retrait à la Task W9) — vit avec le picker.
 export const AUDIENCE_VISIBILITIES = ['EXCEPT', 'ONLY'] as const;
 
 /// Gate PUR de publication : une visibilité à audience sans aucun utilisateur

@@ -22,20 +22,31 @@ const mockGenerateIceServers = jest.fn<any>();
 const mockClearRingingTimeout2 = jest.fn<any>();
 const mockCreateCallSummaryMessage2 = jest.fn<any>();
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn().mockImplementation(() => ({
-    joinCall: mockJoinCall,
-    leaveCall: mockLeaveCall,
-    getCallSession: mockGetCallSession,
-    generateIceServers: mockGenerateIceServers,
-    clearRingingTimeout: mockClearRingingTimeout2,
-    createCallSummaryMessage: mockCreateCallSummaryMessage2,
-    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
-    endCall: jest.fn<any>(),
-    listHistory: jest.fn<any>(),
-    handleMissedCall: jest.fn<any>(),
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  class CallAlreadyEndedError extends Error {
+    readonly endReason: string;
+    constructor(endReason: string) {
+      super('CALL_ENDED: This call has already ended');
+      this.name = 'CallAlreadyEndedError';
+      this.endReason = endReason;
+    }
+  }
+  return {
+    CallService: jest.fn().mockImplementation(() => ({
+      joinCall: mockJoinCall,
+      leaveCall: mockLeaveCall,
+      getCallSession: mockGetCallSession,
+      generateIceServers: mockGenerateIceServers,
+      clearRingingTimeout: mockClearRingingTimeout2,
+      createCallSummaryMessage: mockCreateCallSummaryMessage2,
+      createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
+      endCall: jest.fn<any>(),
+      listHistory: jest.fn<any>(),
+      handleMissedCall: jest.fn<any>(),
+    })),
+    CallAlreadyEndedError,
+  };
+});
 
 jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn(),

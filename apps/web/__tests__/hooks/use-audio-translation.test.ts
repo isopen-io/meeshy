@@ -200,6 +200,49 @@ describe('useAudioTranslation', () => {
       expect(result.current.selectedLanguage).toBe('fr');
     });
 
+    // Règle 3 du Prisme (`/CLAUDE.md`) : la langue d'origine concourt à son RANG,
+    // jamais en court-circuit. Les deux témoins voisins placent tous deux
+    // l'original au rang 1, où la règle juste et le court-circuit rendent le
+    // MÊME verdict — l'écart ne peut apparaître que lorsque l'original occupe un
+    // rang INFÉRIEUR à une langue effectivement servie. C'est le cas canonique
+    // du document : prisme ['fr','en'], vocal anglais, piste française
+    // disponible ⇒ français.
+    it("sert la langue PRIMAIRE quand la langue d'origine occupe un rang inférieur", () => {
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranslations: makeInitialTranslations(), // piste 'fr'
+            initialTranscription: makeTranscription({ language: 'en' }),
+            userLanguages: ['fr', 'en'],
+          })
+        )
+      );
+
+      expect(result.current.selectedLanguage).toBe('fr');
+    });
+
+    // La locale appareil entre au rang 4 (règle 2 du Prisme) et sort LOWERCASÉE
+    // de `resolveUserLanguagesOrdered`, alors que la langue d'origine vient de
+    // Whisper et la langue cible du pipeline TTS : les deux côtés de la
+    // comparaison n'ont pas le même producteur, donc pas la même casse garantie.
+    // Miroir de `AudioTrackLanguageResolver`, qui minuscule les deux côtés.
+    it("compare les codes de langue sans tenir compte de la casse", () => {
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranslations: makeInitialTranslations(), // piste 'fr'
+            initialTranscription: makeTranscription({ language: 'EN' }),
+            userLanguages: ['en', 'fr'],
+          })
+        )
+      );
+
+      // 'en' est au rang 1 ET c'est la langue d'origine (à la casse près) :
+      // l'original gagne à son rang, la piste française du rang 2 ne le
+      // supplante pas.
+      expect(result.current.selectedLanguage).toBe('original');
+    });
+
     it('returns original when no matching translation for user languages', () => {
       const { result } = renderHook(() =>
         useAudioTranslation(
@@ -344,6 +387,38 @@ describe('useAudioTranslation', () => {
       );
 
       expect(result.current.currentAudioUrl).toBe('https://example.com/audio-fr.mp3');
+    });
+
+    // `currentAudioUrl` / `currentAudioDuration` retrouvent leur piste par
+    // égalité STRICTE sur `targetLanguage`. La résolution Prisme compare donc
+    // les codes en minuscules mais rend le code TEL QU'IL EST STOCKÉ : rendre
+    // la forme minusculée ferait élire la bonne langue puis manquer sa piste,
+    // et le lecteur retomberait silencieusement sur l'audio original.
+    it("rend le code de langue STOCKÉ, pour que la piste reste retrouvable", () => {
+      const { result } = renderHook(() =>
+        useAudioTranslation(
+          makeDefaultOptions({
+            initialTranslations: {
+              'FR-CA': {
+                type: 'audio' as const,
+                transcription: 'Bonjour le monde',
+                url: 'https://example.com/audio-fr-ca.mp3',
+                durationMs: 3000,
+                cloned: false,
+                quality: 0.9,
+                format: 'mp3',
+                ttsModel: 'chatterbox',
+                segments: [],
+              },
+            },
+            initialTranscription: makeTranscription({ language: 'de' }),
+            userLanguages: ['fr-ca'],
+          })
+        )
+      );
+
+      expect(result.current.selectedLanguage).toBe('FR-CA');
+      expect(result.current.currentAudioUrl).toBe('https://example.com/audio-fr-ca.mp3');
     });
 
     it('falls back to attachmentFileUrl when translated audio has no URL', () => {

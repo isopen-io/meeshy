@@ -37,6 +37,14 @@ struct LentilleSkeletonRow: View {
                     .font(LentilleMetrics.Name.font)
                 Text(Self.line2Placeholder)
                     .font(LentilleMetrics.Line2.font)
+                // Troisième ligne — la date, à droite, comme la rangée réelle
+                // (2026-08-22). Sans elle, l'hydratation ferait sauter la
+                // ligne 2 d'une ligne entière vers le haut.
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Text(Self.datePlaceholder)
+                        .font(LentilleMetrics.Time.font)
+                }
             }
             .redacted(reason: .placeholder)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,4 +60,5 @@ struct LentilleSkeletonRow: View {
     /// contenu littéral (jamais rendu à l'écran).
     private static let namePlaceholder = "Nom de la conversation"
     private static let line2Placeholder = "Aperçu du dernier message en cours de chargement"
+    private static let datePlaceholder = "12:00"
 }

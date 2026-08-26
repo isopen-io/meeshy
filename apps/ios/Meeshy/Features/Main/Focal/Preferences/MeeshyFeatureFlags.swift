@@ -22,12 +22,12 @@ import Foundation
 /// **I-075 RETIRÉ le 2026-08-18 (décision produit) — « défaut OFF » est de
 /// nouveau vrai.** Le paragraphe ci-dessus décrit l'état du code entre le
 /// 2026-08-16 et le 2026-08-18, conservé pour l'historique. Depuis le
-/// retrait, l'étage bêta n'est consulté que si la préférence est
-/// EXPLICITEMENT exprimée (`BetaFeaturesPreference.isExplicitlySet`) : à
-/// l'installation, rien n'étant posé, `isReadingModesEnabled` vaut `false`
-/// et le tap normal ouvre en BULLES. L'opt-in volontaire (toggle « Bêta »
-/// réellement basculé, ou clé `meeshy.flag.reading_modes` posée) reste
-/// intégralement honoré, dans les deux sens.
+/// retrait, une bêta jamais touchée ne vaut pas opt-in — et depuis le
+/// 2026-08-22 la préférence bêta naît elle-même OFF : à l'installation, rien
+/// n'étant posé, `isReadingModesEnabled` vaut `false` et le tap normal ouvre
+/// en BULLES. L'opt-in volontaire (toggle « Bêta » réellement basculé, ou clé
+/// `meeshy.flag.reading_modes` posée) reste intégralement honoré, dans les
+/// deux sens.
 ///
 /// `LentilleFeatureFlag.swift` anticipe explicitement ce fichier : « Toute
 /// évolution ultérieure qui introduirait un `MeeshyFeatureFlags` central

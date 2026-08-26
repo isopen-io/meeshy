@@ -1,5 +1,6 @@
 import { apiService } from './api.service';
 import { resolveOriginalLanguageForCreate } from './posts.service';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { Post, PostVisibility, PostView } from '@meeshy/shared/types/post';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type { PostReferenceInput } from '@meeshy/shared/types/post-reference';
@@ -86,7 +87,7 @@ class StoryService {
     const response = await apiService.post<Post>('/posts', {
       type: 'STORY' as const,
       content: data.content,
-      visibility: data.visibility ?? 'FRIENDS',
+      visibility: data.visibility ?? DEFAULT_PUBLICATION_VISIBILITY,
       visibilityUserIds: data.visibilityUserIds,
       storyEffects: data.storyEffects,
       mediaIds: data.mediaIds,

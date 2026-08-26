@@ -37,6 +37,10 @@
     <string name="stories_composer_add_media">Add photo or video</string>
     <string name="stories_composer_add_media_count">Add more (%1$d/%2$d)</string>
     <string name="stories_composer_remove_media">Remove</string>
+    <string name="stories_composer_background_media_set">Set as background</string>
+    <string name="stories_composer_background_media_clear">Clear background</string>
+    <string name="stories_composer_background_loop_on">Background loops — tap to play once</string>
+    <string name="stories_composer_background_loop_off">Background plays once — tap to loop</string>
     <string name="stories_composer_media_pending">Offline</string>
     <string name="stories_composer_canvas">Story canvas — pinch to zoom, drag to pan</string>
     <string name="stories_composer_slide_label">Slide %1$d</string>
@@ -46,6 +50,14 @@
     <string name="stories_composer_add_text">Add text</string>
     <string name="stories_composer_text_placeholder">Type something…</string>
     <string name="stories_composer_remove_text">Remove text</string>
+    <string name="stories_composer_bg_none">No background</string>
+    <string name="stories_composer_outline">Text outline</string>
+    <string name="stories_composer_size">Text size</string>
+    <string name="stories_composer_fade_in">Text fade in</string>
+    <string name="stories_composer_fade_out">Text fade out</string>
+    <string name="stories_composer_timing_start">Text start time</string>
+    <string name="stories_composer_timing_duration">Text visible duration</string>
+    <string name="stories_composer_bg_glass">Glass</string>
     <string name="stories_composer_add_sticker">Sticker</string>
     <string name="stories_composer_remove_sticker">Remove sticker</string>
     <string name="stories_composer_sticker_search">Search emoji…</string>
@@ -68,6 +80,8 @@
     <string name="stories_composer_align_center">Align centre</string>
     <string name="stories_composer_align_right">Align right</string>
     <string name="stories_composer_duplicate_element">Duplicate element</string>
+    <string name="stories_composer_edit_element">Edit text</string>
+    <string name="stories_composer_element_menu">Element actions</string>
     <string name="stories_composer_zorder_to_back">Send to back</string>
     <string name="stories_composer_zorder_backward">Send backward</string>
     <string name="stories_composer_zorder_forward">Bring forward</string>
@@ -80,6 +94,11 @@
     <string name="stories_visibility_community">Community</string>
     <string name="stories_visibility_private">Only me</string>
     <string name="stories_composer_filter_intensity">Filter strength</string>
+    <string name="stories_composer_slide_duration">Slide duration</string>
+    <string name="stories_composer_slide_duration_value">%1$ds</string>
+    <string name="stories_composer_background">Background</string>
+    <string name="stories_composer_background_none">None</string>
+    <string name="stories_composer_background_random">Random</string>
     <string name="stories_composer_filter_none">None</string>
     <string name="stories_composer_filter_vintage">Vintage</string>
     <string name="stories_composer_filter_bw">B&amp;W</string>

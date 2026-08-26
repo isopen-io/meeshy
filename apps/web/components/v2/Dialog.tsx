@@ -13,9 +13,17 @@ export interface DialogProps {
   onClose: () => void;
   children: React.ReactNode;
   className?: string;
+  /**
+   * `id` de l'élément qui NOMME ce dialogue (son titre). Un `role="dialog"`
+   * sans `aria-label` ni `aria-labelledby` n'a aucun nom accessible : les
+   * lecteurs d'écran l'annoncent « dialogue », sans dire lequel. Optionnel —
+   * les dialogues antérieurs restent inchangés ; à un appelant qui peint un
+   * titre de le déclarer.
+   */
+  labelledBy?: string;
 }
 
-function Dialog({ open, onClose, children, className }: DialogProps) {
+function Dialog({ open, onClose, children, className, labelledBy }: DialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -84,6 +92,7 @@ function Dialog({ open, onClose, children, className }: DialogProps) {
       )}
       role="dialog"
       aria-modal="true"
+      aria-labelledby={labelledBy}
     >
       <div
         ref={contentRef}

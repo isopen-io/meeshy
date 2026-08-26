@@ -16,7 +16,7 @@
 import { PrismaClient, Message, Prisma } from "@meeshy/shared/prisma/client";
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt } from '../utils/read-exactness';
+import { computeContiguousReadPrefix, computeRecipientCount, resolveReadAt, resolveReceivedAt } from '../utils/read-exactness';
 import { getExactReadTrackingCutover } from '../config/read-exactness-config';
 import { loadPrivacyPreferencesCached } from './preferences/privacy-cache';
 import {
@@ -1586,12 +1586,21 @@ export class MessageReadStatusService {
             ? cursor.lastDeliveredAt
             : null;
         const frozen = frozenByParticipant.get(participantId);
-        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
           cursorLastReadAt: cursor?.lastReadAt ?? null,
           messageCreatedAt: message.createdAt,
           cutover: getExactReadTrackingCutover(),
+        });
+        // « On ne lit pas ce qu'on n'a pas reçu » — la lecture est le
+        // DERNIER repli de la réception. Sans elle, un participant qui
+        // marque lu sans accusé de livraison comptait comme lecteur sans
+        // compter comme destinataire : `Distribué 0` en face de `Lu 2`.
+        const receivedAt = resolveReceivedAt({
+          frozenReceivedAt: frozen?.receivedAt ?? null,
+          frozenDeliveredAt: frozen?.deliveredAt ?? null,
+          cursorDeliveredAt: cursorDelivered,
+          readAt,
         });
 
         if (receivedAt) {
@@ -1894,12 +1903,21 @@ export class MessageReadStatusService {
               ? cursor.lastDeliveredAt
               : null;
           const frozen = frozenForMsg?.get(participantId);
-          const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
           const readAt = resolveReadAt({
             frozenReadAt: frozen?.readAt ?? null,
             cursorLastReadAt: cursor?.lastReadAt ?? null,
             messageCreatedAt: msg.createdAt,
             cutover: getExactReadTrackingCutover(),
+          });
+          // « On ne lit pas ce qu'on n'a pas reçu » — la lecture est le
+          // DERNIER repli de la réception. Sans elle, un participant qui
+          // marque lu sans accusé de livraison comptait comme lecteur sans
+          // compter comme destinataire : `Distribué 0` en face de `Lu 2`.
+          const receivedAt = resolveReceivedAt({
+            frozenReceivedAt: frozen?.receivedAt ?? null,
+            frozenDeliveredAt: frozen?.deliveredAt ?? null,
+            cursorDeliveredAt: cursorDelivered,
+            readAt,
           });
 
           if (receivedAt) {
@@ -2057,12 +2075,21 @@ export class MessageReadStatusService {
             : null;
         const frozen = frozenByParticipant.get(participantId);
         const deliveredAt = frozen?.deliveredAt ?? cursorDelivered;
-        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
           cursorLastReadAt: cursor?.lastReadAt ?? null,
           messageCreatedAt: message.createdAt,
           cutover: getExactReadTrackingCutover(),
+        });
+        // « On ne lit pas ce qu'on n'a pas reçu » — la lecture est le
+        // DERNIER repli de la réception. Sans elle, un participant qui
+        // marque lu sans accusé de livraison comptait comme lecteur sans
+        // compter comme destinataire : `Distribué 0` en face de `Lu 2`.
+        const receivedAt = resolveReceivedAt({
+          frozenReceivedAt: frozen?.receivedAt ?? null,
+          frozenDeliveredAt: frozen?.deliveredAt ?? null,
+          cursorDeliveredAt: cursorDelivered,
+          readAt,
         });
         const readDevice = frozen?.readDevice ?? null;
 
@@ -2737,12 +2764,21 @@ export class MessageReadStatusService {
             ? cursor.lastDeliveredAt
             : null;
         const frozen = frozenByParticipant.get(participantId);
-        const receivedAt = frozen?.receivedAt ?? frozen?.deliveredAt ?? cursorDelivered;
         const readAt = resolveReadAt({
           frozenReadAt: frozen?.readAt ?? null,
           cursorLastReadAt: cursor?.lastReadAt ?? null,
           messageCreatedAt: latestMessage.createdAt,
           cutover: getExactReadTrackingCutover(),
+        });
+        // « On ne lit pas ce qu'on n'a pas reçu » — la lecture est le
+        // DERNIER repli de la réception. Sans elle, un participant qui
+        // marque lu sans accusé de livraison comptait comme lecteur sans
+        // compter comme destinataire : `Distribué 0` en face de `Lu 2`.
+        const receivedAt = resolveReceivedAt({
+          frozenReceivedAt: frozen?.receivedAt ?? null,
+          frozenDeliveredAt: frozen?.deliveredAt ?? null,
+          cursorDeliveredAt: cursorDelivered,
+          readAt,
         });
 
         if (receivedAt) deliveredCount++;

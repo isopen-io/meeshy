@@ -9,7 +9,7 @@ Planches visuelles (24 planches — inventaire exhaustif, matrice outil × forma
 revue système P15, écart SOTA P16, entrées externes P18, continuité P19, rupture
 vécue P20, spécimen des styles P21, iconographie des contrôles P22, éditeurs
 trim·crop·cut P23, cas d'usage carrousels & audio P24) :
-`./2026-08-19-meeshy-composer-views.html`
+`./planche-meeshy-composer.html`
 Révision 2026-08-20 : revue complète (optimisation · performance · compat 16→27, §8) ;
 intégrés — vrais stickers & bibliothèque locale (§6b), collage d'image (§6b), son de
 fond sur Post & loi des deux plans audio (§6a), « l'icône est le verbe » (§6c),
@@ -757,15 +757,200 @@ Chaque phase est livrable seule et laisse le produit fonctionnel.
 
 ## 10. Statut
 
-Rien n'est encore implémenté, mais ce document n'est plus une proposition
-ouverte : **les arbitrages sont tranchés** — O1–O11 (O2 par le porteur
-produit) puis O12–O16 (revue totale du 2026-08-20) et O17 (négociation de
-lecture — l'archive toujours restituée, la sentinelle qui invite, §6h),
-gelés dans la spec d'exécution rév. 7. **Les plans d'exécution existent** : lots A–F écrits et
+**Rév. 4 (2026-08-24) — cette section disait « Rien n'est encore implémenté ».
+C'était faux, et depuis quatre jours.** La correction vient d'une sonde de
+LECTURE SEULE menée le 2026-08-24 sur le worktree `../v2_meeshy-composer`,
+branche `main` à `fb7afd471` : fichiers ouverts un par un
+(`canvas-v3.ts`, `storyEffectsV3.ts`, `core.ts`, `MeeshyScenePlayer.swift`,
+`ComposerIntent.swift`, `MeeshyComposerHost.swift`,
+`ComposerDocumentSurface.swift`, `MessageActionResolver.swift`) et
+`git log --oneline` sur les commits de bascule. **Aucun build, aucune suite de
+tests n'a été lancé** : tout ce qui suit est une lecture de source et
+d'historique, jamais une mesure d'exécution — un « sur `main` » ci-dessous
+signifie « le commit de bascule est un ancêtre de `fb7afd471` et le code est là
+quand on ouvre le fichier », pas « la suite est verte aujourd'hui ». Le phasage
+du §9 ne change pas ; cette section dit seulement OÙ il en est, et le dit avec
+des `fichier:ligne` pour que la prochaine session puisse le réfuter au lieu de
+le croire.
+
+### Ce que cette section disait de juste, et qui tient
+
+Ce document n'est pas une proposition ouverte : **les arbitrages sont
+tranchés** — O1–O11 (O2 par le porteur produit), puis O12–O16 (revue totale du
+2026-08-20) et O17 (négociation de lecture — l'archive toujours restituée, la
+sentinelle qui invite, §6h), gelés dans la spec d'exécution rév. 7. **Les plans
+d'exécution A–F existent** —
+`docs/superpowers/plans/2026-08-20-meeshy-composer-lot-{a,b,c,d,e,f}.md` —
 passés par deux cycles de revue adversariale (43 constats, 43 réels, tous
-intégrés) ; lot G (entrées externes) à écrire à son lancement ; lot H
-(Android, lockstep — condition d'armement des deux drapeaux) porté par
-l'équipe Android sur les mêmes fixtures. Les inconnues
-de §8 ne sont plus des questions ouvertes mais des GATES de lots : la mesure
-A11 est un critère de sortie du lot D (pas d'appareil ⇒ STOP), l'audit des
-blobs v1 est l'intrant du convertisseur du lot A.
+intégrés). **Le lot G reste à écrire** à son lancement : `ls` sur le répertoire
+des plans ne rend aucun `lot-g`. **Le lot H (Android) est SUSPENDU** — non par
+manque d'équipe, mais par directive produit du 2026-08-23, consignée au §G de la
+conception v2 (`2026-08-23-meeshy-composer-v2-design.md`). Les inconnues de §8
+ne sont pas des questions ouvertes mais des GATES de lots : la mesure A11 est un
+critère de sortie du lot D, l'audit des blobs v1 l'intrant du convertisseur du
+lot A.
+
+### Où en est le §9 — état mesuré le 2026-08-24
+
+| §9 | Lot | État | Ce qui le prouve, ouvert |
+|---|---|---|---|
+| 1. Le contrat | A | **sur `main`**, les deux drapeaux DÉSARMÉS | `packages/shared/types/canvas-v3.ts` · `services/gateway/src/services/posts/storyEffectsV3.ts` · bascule `23765e7c6` |
+| 2. La scène | C | **à moitié** — plateau et surfaces oui, **socle NON PEINT** | `apps/ios/.../Composer/` (11 fichiers) · `MeeshyComposerHost.swift:269` `chromeOwner = .atelier` |
+| 3. Le plan 2D | D | **sur `main`** | `MeeshyUI/Story/Timeline/` (65 fichiers `.swift`), dont `Logic/Plan2DLayout.swift` et `Views/Plan2D/Plan2DView.swift` · bascule `24d1bf752` |
+| 4. L'intention | C | **table complète, câblage à moitié** — 4 portes sur 9 routent encore vers un legacy, **1 seule porte a un appelant** | `ComposerIntent.swift` (325 l. à HEAD) · `StoryTrayActions.swift:192` |
+| 5. Les viewers | B · E · F | **sur `main`** | `MeeshyScenePlayer.swift` (274 l., 3 modes) + 4 montages de production · bascules `d36869973`, `e9e674a55`, `7f1de533f` |
+| 6. Le nettoyage | — | **non commencé** | quatre composers historiques debout, comptés ci-dessous |
+| 7. Les entrées externes | G | **non commencé** | aucun plan `lot-g` · `MessageActionResolver.swift:11-22` sans action « Créer un post » |
+
+**Phase 1 — le contrat : livré, et volontairement INERTE.** Le schéma Zod v3
+vit dans `packages/shared/types/canvas-v3.ts` (kinds réservés `hashtag` ·
+`annotation` · `interactive` refusés par `superRefine`, sept kinds actifs,
+invariant `TIMING_END_BEFORE_START`). Le convertisseur serveur et la négociation
+O17 vivent dans `services/gateway/src/services/posts/storyEffectsV3.ts` (22 Ko) :
+`negotiateWireStoryEffects` (`:510`) est réellement lu par
+`postReferences.ts:156` et `:183` — la sentinelle n'est pas du code mort. Le 426
+existe (`utils/response.ts:159`, `sendError(reply, 426, …, { code: 'UPGRADE_REQUIRED' })`)
+et sa porte cliente aussi (`apps/ios/.../Composer/UpgradeGateController.swift`,
+`UpgradeGateView.swift`). **Les trois interrupteurs restent au repos**, ce qui
+est exactement ce qu'O15 et R6 exigeaient : `CANVAS_V3_READ` est relu à chaque
+appel (`storyEffectsV3.ts:514`, `=== '1'`), `CANVAS_V3_WRITE_STRICT` aux deux
+gardes d'écriture (`routes/posts/core.ts:108` et `:146`, `!== '1'` ⇒ sortie
+immédiate), et le plancher de version rend `''` par défaut
+(`utils/appVersion.ts:2`, `process.env.MIN_APP_VERSION ?? ''` — plancher vide =
+porte désarmée). Aucun fichier d'`infrastructure/` ne pose l'une de ces trois
+variables. En revanche, **les trois clients annoncent déjà ce qu'ils savent
+lire** : iOS `ClientInfoProvider.swift:77`, web `apps/web/services/api.service.ts:115`,
+Android `ClientCapabilitiesInterceptor.kt:37` — `X-Canvas-Caps: 3` partout.
+
+**Phases 2 et 4 — la scène et l'intention (lot C) : le meuble EXISTE, il n'a
+qu'une porte et pas de socle.** Le répertoire `apps/ios/Meeshy/Features/Main/Composer/`
+porte onze fichiers : `ComposerPlateau.swift` (les trois teintes, jetons
+`MeeshyColors`), `ComposerIntent.swift` (**9 portes** — `storyTray`,
+`feedComposer`, `reelTab`, `moodChip`, `repost`, `edit`, `draft`, `share`,
+`conversationMedia`), `ComposerFormatFan.swift` (l'éventail, loi 4 : un éventail
+à une entrée ne se peint pas), `MeeshyComposerHost.swift` (le meuble),
+`ComposerDocumentSurface.swift` (419 l. — la surface « document sans scène »,
+que la spec v1 posait comme condition de bascule de `.feedComposer`),
+`PasteDestination.swift` / `PasteIntoComposer.swift` / `StickerLibraryStore.swift`
+(O12 et « Mes stickers »), `UpgradeGateController.swift` / `UpgradeGateView.swift`.
+L'Étagère à quatre onglets existe (`MyStoriesTab.swift:14`). Le meuble monte
+réellement ses deux surfaces (`MeeshyComposerHost.swift:297-300`, `.scene` ⇒
+atelier SDK, `.document` ⇒ `ComposerDocumentSurface`) et l'éventail (`:406`).
+
+Deux manques mesurés, et ils gouvernent tout le reste du chantier. **(a) Le
+socle n'est peint sur AUCUNE surface** : `chromeOwner` vaut `.atelier`
+(`MeeshyComposerHost.swift:269`), `ComposerChromeOwner.atelier.assembles(_)`
+rend `true` pour tout contrôle (`MeeshyUI/Story/StoryComposerView+TopBar.swift:37-38`),
+donc le `if !chromeOwner.assembles(.publish) { socle }` du `body` (`:277`) est
+faux en permanence — audience, œil et flèche restent ceux de l'atelier du SDK.
+Les deux conditions de levée sont NOMMÉES sur place (`:260-268`) et vivent toutes
+deux dans `MeeshyUI`. **(b) Le meuble n'a qu'UN site de construction en
+production** : `StoryTrayActions.swift:192`, `ComposerIntent(origin: .storyTray)`
+— `grep` sur `apps/ios/Meeshy` et `packages/MeeshySDK/Sources` ne rend aucune
+autre construction (les 12 autres sont dans `MeeshyTests`). À HEAD, **quatre des
+neuf portes routent encore vers un composer historique** : `.feedComposer` →
+`.feedComposer`, `.moodChip` → `.statusComposer`, `.repost` → `.repostComposer`,
+`.edit` → `.storyEdit`. Les cinq autres rendent `routesToLegacy: nil` — mais
+quatre d'entre elles (`.reelTab`, `.conversationMedia`, `.draft`, `.share`) n'ont
+aucun appelant : la table décrit un contrat que la production n'exerce pas
+encore.
+
+**Phase 3 — le plan 2D : livré.** `packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/`
+compte 65 fichiers `.swift` répartis en `Engine` · `Logic` · `Model` · `Util` ·
+`ViewModel` · `Views`, dont `Logic/Plan2DLayout.swift` et `Views/Plan2D/Plan2DView.swift`.
+Bascule sur `main` : `24d1bf752`, avec la dérogation produit sur le budget D4
+consignée par `0ee8e5429`.
+
+**Phase 5 — les viewers : livrée, y compris le viewer story que le lot E avait
+laissé bloqué.** `MeeshyScenePlayer.swift` (274 l.) déclare ses trois modes et
+**quatre montages de production** existent :
+`MeeshyComposerHost.swift:489` (l'œil du socle, `.preview`),
+`StoryViewerView+Canvas.swift:1260` et `:1316` (`.reader`),
+`FeedPostCard.swift:350` (`.card`). Le message de merge du lot E (`e9e674a55`)
+excluait encore le viewer story ; deux commits postérieurs l'ont réglé —
+`73f4a5de5` (« le viewer story lit ses scènes par le lecteur, plus par l'hôte
+nu »), puis `e09a3edc7`, qui restreint la prise de main au **v3 natif** pour que
+l'archive garde son hôte. Le miroir web est sur `main` (lot F, `7f1de533f`).
+
+**Phase 6 — le nettoyage : rien n'a commencé.** Aucun composer historique n'est
+mort. Comptés au `wc -l` le 2026-08-24 :
+`apps/ios/.../Views/StatusComposerView.swift` **361 l.** ·
+`packages/MeeshySDK/Sources/MeeshyUI/Story/UnifiedPostComposer.swift` **739 l.** ·
+`apps/ios/.../Components/EditPostSheet.swift` **658 l.** (et non 498 : le commit
+`690e575f7` du 2026-08-23 l'a agrandi) ·
+`FeedComposerSheet`, déclaré `FeedView+Attachments.swift:765` dans un fichier de
+**1 876 l.** — celui-là ne se retire pas, il s'extrait.
+
+**Phase 7 — les entrées externes : rien n'a commencé.** Pas de plan `lot-g` ;
+`MessageActionResolver.MoreItem` (`:11-22`) énumère 19 actions et aucune ne crée
+un post ; `grep` ne trouve ni `SharePendingPostConsumer` ni `share_pending_posts`
+dans l'arbre. La porte e9 `.conversationMedia` a son profil écrit
+(`ComposerIntent.swift`) et zéro appelant. **Nuance importante pour qui reprendra
+ce lot** : le « re-upload TUS local » que la mission du lot G décrit a été
+doublé par un chemin SERVEUR livré le 2026-08-23 —
+`POST /posts/from-attachment` (`routes/posts/core.ts:205`) et
+`services/posts/publishAttachment.ts`. Le lot G n'a donc plus le même contenu que
+le jour où il a été spécifié.
+
+### La suite ne s'appelle plus « lots A–H »
+
+Le chantier a une **extension** datée du 2026-08-23,
+`docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md`, qui promeut une
+partie du « Hors v1 » et découpe la suite en lots 0 · 0 bis · 1 → 7. Elle ne
+remplace ni ce document ni le contrat gelé du 2026-08-20 : elle les prolonge, et
+son §A bis dit explicitement que ses lots « deviennent la suite, pas un compte
+parallèle ». Quatre de ses lots ont un plan d'exécution écrit le 2026-08-24
+(`docs/superpowers/plans/2026-08-24-meeshy-composer-v2-lot-{4,5,6,7}.md`) ; les
+lots 3 et 0 bis étaient en cours d'implémentation à l'heure de cette sonde.
+
+### Rév. 5 (2026-08-24, quelques heures plus tard) — deux commits ont déplacé ce tableau
+
+Cette section a été écrite à `fb7afd471`. **`main` est depuis à `d4a40f600`**, et
+deux des lignes ci-dessus sont devenues fausses **le jour même** — c'est
+exactement le mode d'échec que la rév. 4 corrigeait, et il faut le dater plutôt
+que de réécrire par-dessus.
+
+- **`96b707da6` (lot 3, v2)** — `.feedComposer` passe à `routesToLegacy: nil`.
+  La ligne « 4. L'intention » et le paragraphe « Phases 2 et 4 » disent **quatre
+  portes sur neuf routent encore vers un legacy** : elles sont désormais
+  **trois** (`.moodChip → .statusComposer` `ComposerIntent.swift:231`,
+  `.repost → .repostComposer` `:249`, `.edit → .storyEdit` `:271`). Le fichier
+  fait **372 l.** et non 325. **Ce que le lot 3 n'a PAS fait, et qu'il dit
+  lui-même** : aucun écran n'est recâblé — le meuble garde son unique site de
+  construction, `StoryTrayActions.swift:191`. Il a en revanche armé une garde
+  neuve, `MeeshyComposerHostGuardTests.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse`,
+  qui rougit le jour où un site monterait le meuble sur une porte-document que le
+  document ne sait pas tenir.
+- **`d4a40f600` (lot 0 bis, v2)** — le repost web vise la RACINE et non le
+  maillon, et la page de détail gagne son ANCRAGE (`onRepostAsPost`). 27
+  fichiers, dont `packages/shared/utils/repost-target.ts` (**neuf**, jumeau de
+  `RepostTargeting` iOS) et `Post.originalRepostOfId` au contrat. Il a aussi
+  corrigé, dans `PostService.ts`, le commentaire du repli `?? PostType.POST` :
+  il porte désormais un paragraphe daté « ÉTAT AU 2026-08-24 ».
+- **Ancres remesurées** pour qui reprendra ce texte : `MeeshyComposerHost.swift`
+  **578 l.** — `chromeOwner = .atelier` **`:269`** (inchangé), les deux surfaces
+  `:294-302`, l'éventail `:437`, `MeeshyScenePlayer` **`:499`** (et non `:489`).
+  Les **quatre** montages de `MeeshyScenePlayer` sont confirmés
+  (`MeeshyComposerHost.swift:499`, `StoryViewerView+Canvas.swift:1260` et
+  `:1316`, `FeedPostCard.swift:350`).
+- **Ce qui NE bouge pas** : la phase 6 reste non commencée (les quatre composers
+  historiques sont debout, `wc -l` inchangés), la phase 7 aussi, et les trois
+  interrupteurs du contrat restent au repos.
+
+### Deux avertissements de lecture
+
+1. **Un plan n'est pas une livraison.** Ce document a menti quatre jours en
+   affirmant l'inverse de la réalité ; il mentirait tout autant en comptant un
+   plan pour du code. Les lots 4 à 7 ci-dessus ont un plan, et **aucune ligne de
+   code**. Les lots 3 et 0 bis ont du code non committé, ce qui n'est pas
+   davantage une livraison.
+2. **L'arbre de travail était VIVANT pendant cette sonde.** `git status` rendait
+   23 fichiers modifiés non committés (dont `ComposerIntent.swift` et
+   `MeeshyComposerHost.swift`) ; `git diff --stat`, quelques minutes plus tard,
+   en rendait 25 ; et `ComposerIntent.swift` a gagné 9 lignes (363 → 372) entre
+   deux `wc -l` de la même session. Toutes les lignes citées ci-dessus
+   viennent donc de `git show HEAD:` quand elles portent sur ces deux fichiers,
+   et de l'arbre de travail sinon. Le tableau de bord
+   `planche-meeshy-composer.html` n'a **pas** été touché par cette
+   révision : sa règle de maintenance veut qu'il bouge dans le MÊME commit que
+   le gate d'un lot, et deux lots étaient en vol.

@@ -64,13 +64,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
             }
           }
         },
-        429: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string' }
-          }
-        },
+        429: errorResponseSchema,
         500: errorResponseSchema
       },
       security: []
@@ -149,13 +143,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
             error: { type: 'string' }
           }
         },
-        429: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string' }
-          }
-        },
+        429: errorResponseSchema,
         500: errorResponseSchema
       },
       security: []
@@ -365,13 +353,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
             error: { type: 'string' }
           }
         },
-        429: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string' }
-          }
-        },
+        429: errorResponseSchema,
         500: errorResponseSchema
       },
       security: []

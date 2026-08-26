@@ -250,6 +250,35 @@ describe('PUT /conversations/:id/messages/:messageId/pin', () => {
     }
   });
 
+  // Confidentialité de la présence (2026-08-25) : une charge de ROOM n'est pas
+  // servie par destinataire, donc aucune présence réelle ne doit y voyager. Les
+  // deux charges d'épingle ne portent ni expéditeur ni `isOnline`/`lastActiveAt`
+  // — l'égalité STRICTE en est le témoin : ajouter un champ ici rougit.
+  it('la charge `message:pinned` diffusée à la room ne porte que l’épingle — ni expéditeur ni présence', async () => {
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID });
+    try {
+      await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(socket.emit).toHaveBeenCalledWith('message:pinned', {
+        messageId: MESSAGE_ID,
+        conversationId: CONV_ID,
+        pinnedAt: expect.any(String),
+        pinnedBy: USER_ID,
+      });
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('la charge `message:unpinned` diffusée à la room ne porte que l’identité du message', async () => {
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID });
+    try {
+      await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(socket.emit).toHaveBeenCalledWith('message:unpinned', { messageId: MESSAGE_ID, conversationId: CONV_ID });
+    } finally {
+      await app.close();
+    }
+  });
+
   it("n'épingle pas un message d'une AUTRE conversation", async () => {
     const { app, update } = await buildApp({ id: MESSAGE_ID, conversationId: OTHER_CONV_ID });
     try {

@@ -1,0 +1,7 @@
+Novedad: «Cerca de ti»
+• Descubre las publicaciones a tu alrededor en un mapa: densidad, puntos o lista, con el radio que elijas
+• Haz que tus propias publicaciones se puedan encontrar cerca, con la precisión que TÚ decidas: exacta, barrio, ciudad o región, nunca más precisa que tu elección
+• «Ver qué hay cerca» desde cualquier lugar mostrado en una publicación
+
+Y además
+• Más estabilidad: se ha corregido un cierre inesperado al abrir «Cerca de ti»

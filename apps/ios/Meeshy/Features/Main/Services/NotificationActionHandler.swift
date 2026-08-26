@@ -38,6 +38,11 @@ struct UIApplicationBackgroundTaskScheduler: BackgroundTaskScheduling {
 /// via `SilentPushState`.
 @MainActor
 final class BackgroundTaskLease {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let scheduler: BackgroundTaskScheduling
     private var identifier: UIBackgroundTaskIdentifier = .invalid
 
@@ -107,6 +112,11 @@ protocol NotificationActionHandling {
 ///     `clientMessageId` so the outbox flusher can safely retry.
 @MainActor
 final class NotificationActionHandler: NotificationActionHandling {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     static let shared = NotificationActionHandler()
 

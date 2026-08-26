@@ -1,4 +1,6 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { truncateByCodePoints } from '../../utils/truncate-text';
+import { protectedPreview } from '../notifications/NotificationService';
 import type {
   ReproducedNotification,
   ReproducedNotificationAnnouncer,
@@ -72,12 +74,6 @@ const BODY_DERIVES_FROM_MESSAGE = new Set(['new_message', 'user_mentioned', 'mes
  */
 const PREVIEW_MAX_LENGTH = 100;
 
-function truncatePreview(content: string): string {
-  return content.length > PREVIEW_MAX_LENGTH
-    ? `${content.substring(0, PREVIEW_MAX_LENGTH)}…`
-    : content;
-}
-
 type JsonBlob = Record<string, unknown> | null | undefined;
 
 interface NotificationRow {
@@ -94,6 +90,28 @@ interface NotificationRow {
  * appelant sache exactement ce qu'il autorise.
  */
 export interface EditedMessageNotificationPrisma {
+  /**
+   * Cycle 123 bis — la relecture des drapeaux de PROTECTION. Le port grandit
+   * d'un délégué parce que la question ne peut pas être posée à l'appelant :
+   * `applyMessageEditEffects` reçoit un `EditedMessageRecord` qui ne porte que
+   * l'identité et les deux contenus, et les QUATRE transports d'édition le
+   * construisent chacun de leur côté. Une garde de confidentialité qui dépend
+   * du câblage de l'appelant échoue en montrant PLUS.
+   */
+  message: {
+    findUnique(args: {
+      where: { id: string };
+      select: {
+        messageType: true;
+        isEncrypted: true;
+        isViewOnce: true;
+        isBlurred: true;
+        effectFlags: true;
+        expiresAt: true;
+        createdAt: true;
+      };
+    }): Promise<ProtectionFlagsRow | null>;
+  };
   notification: {
     // Le `select` est typé LITTÉRALEMENT (`true`, pas `boolean`) : c'est ce qui
     // permet à la signature générique de Prisma d'être structurellement
@@ -112,6 +130,45 @@ export interface EditedMessageNotificationPrisma {
     }): Promise<readonly NotificationRow[]>;
     update(args: { where: { id: string }; data: Record<string, unknown> }): Promise<unknown>;
   };
+}
+
+/** Ce que la relecture de protection rend — la forme que `protectedPreview` lit. */
+export interface ProtectionFlagsRow {
+  readonly messageType: string | null;
+  readonly isEncrypted: boolean | null;
+  readonly isViewOnce: boolean | null;
+  readonly isBlurred: boolean | null;
+  readonly effectFlags: number | null;
+  readonly expiresAt: Date | null;
+  readonly createdAt: Date | null;
+}
+
+/**
+ * Le message édité est-il PROTÉGÉ ?
+ *
+ * Fail-CLOSED, à l'inverse du reste de cette unité (best-effort) : une lecture
+ * qui ne conclut pas répond OUI, et l'édition laisse alors les copies telles
+ * quelles. Le pire cas est une ligne qui garde un texte périmé d'un cycle ;
+ * l'autre sens démasquerait un secret, et personne ne le rattraperait.
+ */
+async function isProtectedMessage(
+  prisma: EditedMessageNotificationPrisma,
+  messageId: string
+): Promise<boolean> {
+  try {
+    const row = await prisma.message.findUnique({
+      where: { id: messageId },
+      select: {
+        messageType: true, isEncrypted: true, isViewOnce: true,
+        isBlurred: true, effectFlags: true, expiresAt: true, createdAt: true,
+      },
+    });
+    if (!row) return true;
+    return protectedPreview(row) !== null;
+  } catch (error) {
+    log.warn('message edit: protection re-read failed — copies left untouched', { messageId, error });
+    return true;
+  }
 }
 
 function asBlob(value: unknown): Record<string, unknown> {
@@ -155,7 +212,7 @@ export async function reproduceEditedMessageNotifications(
   // message à pièce jointe — et non un « rien à faire » : la copie dénormalisée
   // doit bien perdre l'ancien texte. Seul `null` (aucune écriture de contenu)
   // se lit comme une chaîne vide, ce que le producteur faisait déjà.
-  const nextPreview = truncatePreview(edited.content ?? '');
+  const nextPreview = truncateByCodePoints(edited.content ?? '', PREVIEW_MAX_LENGTH, '…');
 
   const rows = await prisma.notification.findMany({
     where: { messageId: edited.messageId },
@@ -163,6 +220,20 @@ export async function reproduceEditedMessageNotifications(
   });
 
   if (rows.length === 0) return 0;
+
+  // Cycle 123 bis — un message PROTÉGÉ ne se DÉMASQUE pas par une édition.
+  //
+  // Les lignes de ce message portent un placeholder (« 👁️ 💬 »), posé par
+  // l'éventail via `protectedPreview`, et cette réécriture y substituait le
+  // nouveau texte EN CLAIR — pour tous ceux déjà notifiés, des TIERS — avant de
+  // le réannoncer (`notification:deleted` + `notification:new`). Mesuré : rien
+  // n'interdit d'éditer un message protégé.
+  //
+  // Ne RIEN réécrire est la bonne issue, pas seulement la prudente : le
+  // placeholder ne dérive pas du contenu, donc une édition du contenu ne le
+  // périme pas. Sa seule part variable — la durée d'un éphémère — ne bouge pas
+  // non plus, l'édition ne touchant aucun drapeau.
+  if (await isProtectedMessage(prisma, edited.messageId)) return 0;
 
   const reproduced: ReproducedNotification[] = [];
 

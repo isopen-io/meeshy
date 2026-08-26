@@ -116,5 +116,18 @@ public enum FeedDatabaseMigrations {
                 t.add(column: "mediaJson", .blob)
             }
         }
+
+        // Liste nommée d'une audience EXCEPT/ONLY. La colonne `visibility`
+        // existait déjà, mais seule elle ment : un post ONLY rouvert depuis le
+        // cache affichait « aucune personne sélectionnée » alors qu'il en cible
+        // plusieurs — et la loi produit 2026-08-23 veut cette audience
+        // modifiable à tout moment, donc lisible hors ligne.
+        //
+        // Enregistrée EN DERNIER, comme le veut la note ci-dessus.
+        migrator.registerMigration("feed_v4_post_audience") { db in
+            try db.alter(table: "feed_posts") { t in
+                t.add(column: "visibilityUserIdsJson", .text)
+            }
+        }
     }
 }

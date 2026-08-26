@@ -50,8 +50,8 @@ struct RelativeTimeFormatterTests {
 
     @Test func short_months() {
         let now = Date(timeIntervalSince1970: 1_700_000_000)
-        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-45 * 86_400), now: now) == "1mois")
-        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-75 * 86_400), now: now) == "2mois")
+        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-45 * 86_400), now: now) == "1 mois")
+        #expect(RelativeTimeFormatter.shortString(for: now.addingTimeInterval(-75 * 86_400), now: now) == "2 mois")
     }
 
     // MARK: - Long
@@ -104,7 +104,7 @@ struct RelativeTimeFormatterTests {
     @Test func long_months() {
         let cal = utc()
         let now = at(2026, 6, 13, cal: cal)
-        #expect(RelativeTimeFormatter.longString(for: at(2026, 4, 5, cal: cal), now: now, calendar: cal) == "il y a 2mois")
+        #expect(RelativeTimeFormatter.longString(for: at(2026, 4, 5, cal: cal), now: now, calendar: cal) == "il y a 2 mois")
     }
 
     @Test func long_absolute_sameYear_omitsYear() {

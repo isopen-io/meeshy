@@ -468,6 +468,30 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 
 ## App Extensions
 - **MeeshyNotificationExtension** (rich push) — cible `app-extension` dans `project.yml`.
+
+  **La bulle PRÉ-ENREGISTRÉE (`prePersistMessage`) obéit à deux verrous, et aucun
+  ne subsume l'autre** (cycle 125) :
+  1. **le TYPE** — quatre familles de push portent un `messageId`, et une seule
+     famille l'utilise pour désigner un message qui ARRIVE. `message_reaction`
+     nomme le message RÉAGI (que le destinataire a le plus souvent écrit) et
+     porte le `senderId` du RÉACTEUR. Le gate vit dans
+     `NotificationPayloadHelpers.messageArrivalTypes`.
+  2. **la LIGNE** — une bulle pré-enregistrée est un PLACEHOLDER pour la fenêtre
+     qui précède la synchro REST : l'écriture est un `INSERT`, **jamais** un
+     `save()`/UPSERT. `localId` est la clé primaire de `messages` ; un UPSERT
+     réécrit TOUTES les colonnes de la ligne canonique.
+
+  Corollaire de contrat : **toute clé lue dans `userInfo` se vérifie contre son
+  ÉMETTEUR, sous son nom exact.** Deux cycles consécutifs y ont trouvé leur
+  défaut principal — `content`/`originalLanguage` jamais émis (124), `senderName`
+  lu sous un nom qu'aucun producteur n'écrit (125) — et les deux lectures
+  compilaient en rendant un repli plausible. Le payload étant un
+  `Record<string,string>`, une clé absente y voyage comme `''` : distinguer
+  « absent » de « vide » se fait UNE fois, à la lecture.
+
+  Ce qui se décide sans la base vit dans `NotificationPayloadHelpers.swift`
+  (Foundation pur, compilé DANS `MeeshyTests` via `project.yml`) — c'est la
+  seule façon dont du code d'`app-extension` devient interrogeable.
 - **MeeshyWidgets** (home screen) — cible `app-extension` (iOS 17+).
 - **MeeshyShareExtension** (« Share to Meeshy ») — cible `app-extension` recâblée 2026-06-24
   (était sur disque mais absente de `project.yml` → jamais compilée). `ShareViewController`
@@ -1124,6 +1148,11 @@ Avant de migrer un composant vers le SDK, appliquer le **test du grain** (cf. `p
 - Composant qui orchestre + décide → APP
 
 Précédent : 2026-05-24 j'ai migré `AttachmentDownloader` au SDK sous prétexte de réutilisabilité. Rollback (commit `83e55297c`) — c'est de l'orchestration UX produit, pas un atome. "Réutilisable" n'est PAS un critère suffisant ; l'**atomicité** l'est.
+
+## Pilotage & maturité (règle transverse — détail dans le `CLAUDE.md` racine)
+- **Le pilotage se fait EXCLUSIVEMENT sur GitHub** (projet « Meeshy — pilotage », milestones, issues) : toute tâche de ce répertoire est une issue au titre sémantique, passée `In Progress` au démarrage et fermée par le commit qui la livre (`Closes #n`). Pas de `todo.md`, pas de page « progress » ; les artifacts servent aux brouillons, au design et aux comptes rendus — jamais à l'état.
+- **Chaque feature est portée à maturité sur les treize dimensions** (sécurité, performance, mémoire, fluidité, accessibilité, cohérence de positionnement, facilité d'usage, UX, compatibilité, utilité, maintenabilité, simplicité d'usage, complétude). Ici, les témoins qui comptent d'abord : 60/120 fps au scroll et aux transitions (Instruments, appareil réel — jamais le simulateur seul), écran servi depuis le cache au démarrage à froid, mémoire sans rétention après `pop` (Memory Graph), VoiceOver + Dynamic Type + RTL, iOS 16→26 + iPad, les 7 langues du catalogue.
+- **La complexité se paie dans le code, jamais chez l'utilisateur.** Une lenteur, une saccade, une action sans feedback immédiat sont des bugs, pas de la dette : ils ont au moins la priorité de la feature qu'ils dégradent. Le commentaire de clôture d'une issue dit quelles dimensions sont mûres et ouvre une issue par dimension restante.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { isValidEmail } from '../utils/email-validator.js';
+import { OBJECT_ID_REGEX } from '../utils/object-id.js';
 import { usernamePatternSource } from './api-schemas.js';
 
 /**
@@ -163,9 +164,12 @@ export const loginValidationSchema = z.object({
 }).strict();
 
 /**
- * Validation d'ID MongoDB
+ * Validation d'ID MongoDB — regex issue de la SSOT `utils/object-id.ts`.
+ * Portait auparavant `/^[a-f\d]{24}$/i`, forme syntaxiquement différente mais
+ * sémantiquement identique à `CommonSchemas.mongoId` : deux copies de la même
+ * règle qu'une seule édition pouvait faire diverger.
  */
-export const mongoIdSchema = z.string().regex(/^[a-f\d]{24}$/i, 'ID MongoDB invalide');
+export const mongoIdSchema = z.string().regex(OBJECT_ID_REGEX, 'ID MongoDB invalide');
 
 /**
  * Schema de pagination (offset/limit pattern)

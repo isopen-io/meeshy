@@ -35,9 +35,17 @@ final class ConversationViewModelTests: XCTestCase {
         // send semantics need the singleton to report connected. Tests that
         // exercise the offline path explicitly flip this to false.
         MessageSocketManager.shared.isConnected = true
+        // `APIClient.shared` est un singleton de processus : un SUT construit
+        // avec une session anonyme y pose son jeton, et seul un VM DÉMARRÉ le
+        // retire dans son `deinit` (`guard hasStarted`). Un SUT jamais démarré
+        // — le cas de ces tests — le laisse donc au test SUIVANT :
+        // `test_init_withNilAnonymousSession…` héritait « test-anon-token » de
+        // son jumeau. Remis à zéro ici ET au tearDown, comme tout état partagé.
+        APIClient.shared.anonymousSessionToken = nil
     }
 
     override func tearDown() async throws {
+        APIClient.shared.anonymousSessionToken = nil
         // Reset singleton so other test classes don't inherit a forced
         // connected state. The default for a fresh app session is false.
         MessageSocketManager.shared.isConnected = false
@@ -371,6 +379,73 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(
             messageCountWhenRESTFired, 201,
             "cache-FIRST : la page GRDB doit être servie AVANT l'appel réseau — un gateway mort ne doit jamais retarder des rangées déjà sur disque"
+        )
+    }
+
+    // MARK: - Rattrapage à l'OUVERTURE d'une conversation
+
+    /// Le geste rapporté par l'utilisateur le 2026-08-25 : « j'ouvre la
+    /// conversation, même après 1h, et il manque des messages récents — alors
+    /// que dans la liste on a bien le dernier ».
+    ///
+    /// `refreshMessagesFromAPI()` lit `offset: 0, limit: 30`. Au-delà de trente
+    /// messages manqués il colle les trente derniers sur le bloc GRDB ancien et
+    /// laisse un TROU au milieu : `loadOlderMessages` part du plus ancien vers
+    /// l'arrière, `syncMissedMessages` du plus récent vers l'avant, et personne
+    /// ne regarde entre les deux. Le trou n'était comblé que par redondance —
+    /// le puits `message:new` global et le rejeu serveur de 48 h —, jamais
+    /// détecté, et rien ne le couvrait après une absence plus longue.
+    func test_loadMessages_surUnCacheCHAUD_declencheLeRattrapageParWatermark() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let base = Date().addingTimeInterval(-3600)
+        let records: [MessageRecord] = (0..<5).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "chaud-\(i)", conversationId: testConversationId,
+                senderId: testUserId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        _ = await MessageStoreObservationHelper.awaitMessagesCount(equals: 5, in: sut)
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+
+        // Le rattrapage part dans une tâche de fond détachée du chargement :
+        // on attend qu'il se manifeste plutôt que de supposer son instant.
+        // `awaitCondition` prend une closure NON échappante : pas de capture
+        // faible, `self` y est capturé implicitement et sans cycle.
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+        XCTAssertTrue(
+            rattrape,
+            "ouvrir une conversation dont GRDB est CHAUD doit rejouer le rattrapage par watermark — sans lui, un trou de plus de trente messages reste invisible et définitif"
+        )
+    }
+
+    /// La moitié NÉGATIVE, et elle n'est pas décorative : sur un GRDB FROID le
+    /// refresh vient d'apporter les trente plus récents, il n'y a rien devant
+    /// eux à rattraper. Un rattrapage y serait une seconde lecture pour rien.
+    func test_loadMessages_surUnCacheFROID_neDeclenchePasLeRattrapage() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(
+            mockMessageService.listAfterCallCount, 0,
+            "GRDB froid : le refresh a déjà apporté les plus récents, aucun watermark à remonter"
         )
     }
 
@@ -746,6 +821,50 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(decoded.count, 1)
         XCTAssertEqual(decoded.first?.id, "att_image_001")
         XCTAssertEqual(decoded.first?.fileUrl, "file:///tmp/photo.jpg")
+    }
+
+    /// La citation OPTIMISTE doit porter l'avatar de l'auteur cité dès la
+    /// première frame. Le message cité est déjà en mémoire, son avatar avec :
+    /// sans ce report, la bulle optimiste s'affichait en initiales puis
+    /// « sautait » à la photo au premier refresh serveur.
+    func test_insertOptimisticMediaMessage_replyReference_carriesTheQuotedAuthorAvatar() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let quoted = Message(
+            id: "msg-quoted-001",
+            conversationId: testConversationId,
+            senderId: "000000000000000000000002",
+            content: "Salut",
+            createdAt: Date(timeIntervalSince1970: 0),
+            updatedAt: Date(timeIntervalSince1970: 0),
+            senderName: "Bob",
+            senderColor: "#31B6BA",
+            senderAvatarURL: "https://cdn.example/bob.jpg",
+            isMe: false
+        )
+        sut.messages = [quoted]
+
+        let tempId = "temp_\(UUID().uuidString)"
+        sut.insertOptimisticMediaMessage(
+            tempId: tempId,
+            content: "ma reponse",
+            attachments: [],
+            messageType: .text,
+            replyToId: "msg-quoted-001"
+        )
+
+        let record = await MessageStoreObservationHelper.awaitRecord(
+            localId: tempId,
+            from: pool
+        ) { $0.replyToJson != nil }
+
+        let json = try XCTUnwrap(record?.replyToJson,
+            "La bulle optimiste doit graver sa citation dans replyToJson")
+        let reference = try JSONDecoder().decode(ReplyReference.self, from: json)
+        XCTAssertEqual(reference.authorAvatarUrl, "https://cdn.example/bob.jpg",
+            "La citation optimiste doit porter l'avatar du message cité, déjà résolu en mémoire")
     }
 
     // MARK: - Attachment Reactions (BUG2 A')
@@ -1522,6 +1641,151 @@ final class ConversationViewModelTests: XCTestCase {
         // systemLanguage "ja" has no match, customDestinationLanguage "de" does
         XCTAssertEqual(result?.targetLanguage, "de")
         XCTAssertEqual(result?.translatedContent, "Hallo")
+    }
+
+    /// Tous les cas ci-dessus posent les traductions AVANT le premier appel :
+    /// aucun n'exerce la séquence fautive. Ici la bulle est d'abord résolue
+    /// « pas de traduction ⇒ original », puis la traduction ARRIVE (chemin
+    /// socket `translation:completed`). Le cache de résolution gardait alors le
+    /// `nil` pour toujours et la bulle ne basculait jamais — l'invalidation est
+    /// désormais une propriété du CHAMP, qu'aucun écrivain ne peut oublier.
+    func test_preferredTranslation_lateArrival_afterResolvedAsOriginal_returnsTranslation() {
+        let currentUser = MeeshyUser(
+            id: testUserId, username: "testuser",
+            systemLanguage: "es"
+        )
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+        let sut = ConversationViewModel(
+            conversationId: testConversationId,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService,
+            dependencies: makeTestDependencies()
+        )
+        sut.messages = [makeMessage(id: "msg-t", content: "Bonjour")]
+
+        XCTAssertNil(sut.preferredTranslation(for: "msg-t"),
+                     "aucune traduction reçue ⇒ l'original (règle 1 du Prisme)")
+
+        sut.messageTranslations["msg-t"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-t",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        let result = sut.preferredTranslation(for: "msg-t")
+
+        XCTAssertEqual(result?.targetLanguage, "es")
+        XCTAssertEqual(result?.translatedContent, "Hola",
+                       "la bulle doit basculer dès que la traduction arrive")
+    }
+
+    // MARK: - Édition et traductions périmées
+
+    /// Le gateway invalide les traductions à l'ÉCRITURE du nouveau contenu
+    /// (`translations: null` dans le même `updateMany` que `content`). Le
+    /// chemin d'édition OPTIMISTE du client doit poser le même verdict avant
+    /// d'écrire le nouveau texte, sinon la bulle rend le texte neuf sous
+    /// l'ancienne traduction.
+    func test_editMessage_clearsStaleTranslations() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "msg-edit-local", content: "Bonjour")]
+        sut.messageTranslations["msg-edit-local"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "msg-edit-local",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        await sut.editMessage(messageId: "msg-edit-local", newContent: "Bonsoir")
+
+        XCTAssertNil(sut.messageTranslations["msg-edit-local"],
+                     "une traduction d'un contenu périmé n'est pas une traduction")
+        XCTAssertNil(sut.preferredTranslation(for: "msg-edit-local"),
+                     "pendant la fenêtre d'édition, l'ORIGINAL est servi")
+    }
+
+    /// La bulle qu'on édite est la SIENNE, donc celle qui porte encore un id
+    /// optimiste — alors que les deux caches PERSISTANTS sont keyés par l'id
+    /// SERVEUR (`pendingServerIds`). Évincer sous le seul id de la ligne ne
+    /// touchait alors AUCUNE ligne GRDB : le texte périmé revenait au
+    /// redémarrage, exactement le symptôme que l'éviction dit fermer.
+    func test_editMessage_onOptimisticRow_alsoEvictsTheServerKeyedCaches() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        try await persistence.saveTranslation(TranslationRecord(
+            id: "tr-edit-optimistic", messageLocalId: "srv_1", messageServerId: "srv_1",
+            targetLanguage: "es", translatedContent: "Hola",
+            translationModel: "nllb-200", confidenceScore: 0.9,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        let sut = makeSUT(
+            dependencies: ConversationDependencies(dbPool: pool, persistence: persistence)
+        )
+        sut.messages = [makeMessage(id: "temp_1", content: "Bonjour", isMe: true)]
+        sut.pendingServerIds["temp_1"] = "srv_1"
+        sut.messageTranslations["srv_1"] = [
+            MessageTranslation(
+                id: "t-es", messageId: "srv_1",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            ),
+        ]
+
+        await sut.editMessage(messageId: "temp_1", newContent: "Bonsoir")
+
+        XCTAssertNil(sut.messageTranslations["srv_1"],
+                     "l'espace d'ids SERVEUR doit tomber avec l'espace local")
+
+        // L'éviction disque part dans une `Task` détachée du geste : on la
+        // laisse aboutir avant de lire la table, sans quoi le témoin
+        // mesurerait l'ordonnancement plutôt que l'éviction.
+        var attempts = 0
+        var remaining = try persistence.translations(for: "srv_1")
+        while !remaining.isEmpty && attempts < 50 {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            remaining = try persistence.translations(for: "srv_1")
+            attempts += 1
+        }
+        XCTAssertTrue(remaining.isEmpty,
+                      "la ligne persistée sous l'id serveur doit être supprimée")
+    }
+
+    /// La bascule MANUELLE court-circuite les quatre caches dans
+    /// `preferredTranslation(for:)` : sans son éviction, un lecteur qui a
+    /// exploré une langue garde le texte d'AVANT l'édition à l'écran
+    /// indéfiniment, alors même que tout le reste est vide.
+    func test_editMessage_dropsTheManualLanguageOverride() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "msg-edit-local", content: "Bonjour")]
+        // Le geste RÉEL de la vue Langue de l'appui long (ConversationView),
+        // pas une écriture directe du dictionnaire.
+        sut.setActiveTranslation(
+            for: "msg-edit-local",
+            translation: MessageTranslation(
+                id: "t-es", messageId: "msg-edit-local",
+                sourceLanguage: "fr", targetLanguage: "es",
+                translatedContent: "Hola", translationModel: "nllb",
+                confidenceScore: nil
+            )
+        )
+        XCTAssertTrue(sut.activeTranslationOverrides.keys.contains("msg-edit-local"))
+
+        await sut.editMessage(messageId: "msg-edit-local", newContent: "Bonsoir")
+
+        XCTAssertFalse(sut.activeTranslationOverrides.keys.contains("msg-edit-local"),
+                       "la clé est RETIRÉE : présente et nulle, elle graverait un « montre l'original » que le lecteur n'a pas demandé")
+        XCTAssertNil(sut.preferredTranslation(for: "msg-edit-local"),
+                     "le Prisme automatique reprend la main et sert l'ORIGINAL")
     }
 
     // MARK: - Ouvrir, c'est lire (localement)

@@ -28,6 +28,9 @@ final class ConversationRenderFingerprintTests: XCTestCase {
     private static let pinnedDate = Date(timeIntervalSince1970: 1_700_000_000)
 
     private func makeConversation(
+        type: MeeshyConversation.ConversationType = .direct,
+        memberCount: Int = 2,
+        memberCountCapped: Bool = false,
         lastMessagePreview: String? = "Hello",
         lastMessageOriginalLanguage: String? = "en",
         lastMessageTranslations: [String: String]? = nil,
@@ -36,7 +39,9 @@ final class ConversationRenderFingerprintTests: XCTestCase {
         var c = MeeshyConversation(
             id: "conv1",
             identifier: "conv1",
-            type: .direct,
+            type: type,
+            memberCount: memberCount,
+            memberCountCapped: memberCountCapped,
             lastMessageAt: Self.pinnedDate,
             lastMessagePreview: lastMessagePreview
         )
@@ -160,5 +165,111 @@ final class ConversationRenderFingerprintTests: XCTestCase {
             lastMessageLocation: SharedPlace(latitude: 48.8, longitude: 2.3, name: nil)
         )
         XCTAssertNotEqual(before.renderFingerprint, after.renderFingerprint)
+    }
+
+    // MARK: - Effectif — champs AFFICHÉS par la rangée depuis le lot 2 (2026-08-22)
+    //
+    // `memberCount`/`memberCountCapped` étaient déjà affichés par
+    // `ThemedConversationRow.typeBadge` (« 12 », « 199+ ») SANS être repliés
+    // ici : le portillon gelait donc l'effectif sur sa première valeur, sans
+    // qu'aucun test ne rougisse — exactement le défaut de classe déjà corrigé
+    // pour la traduction (B1) et pour la position hissée. Le lot 2 de la
+    // Lentille rend l'effectif une SECONDE fois (ligne d'effectif en bas à
+    // droite du cadre, `LentilleConversationRow.memberCountLine`), ce qui rend
+    // le trou visible sur deux peaux au lieu d'une.
+    //
+    // Le compte de non-lus, lui, était DÉJÀ replié (`h.combine(userState
+    // .unreadCount)`) — la pastille chiffrée du lot 2 n'a donc rien à ajouter
+    // de ce côté, et le témoin ci-dessous le RE-PROUVE plutôt que de le
+    // supposer.
+
+    func test_renderFingerprint_memberCountChanges_changes() {
+        let before = makeConversation(type: .group, memberCount: 12)
+        let after = makeConversation(type: .group, memberCount: 13)
+        XCTAssertNotEqual(
+            before.renderFingerprint, after.renderFingerprint,
+            "l'effectif est AFFICHÉ (badge de type historique + ligne d'effectif Lentille) — " +
+            "un membre qui rejoint doit rouvrir le portillon, sinon la rangée reste à jamais " +
+            "sur le nombre du premier rendu"
+        )
+    }
+
+    /// Le PLAFOND est une autre chaîne rendue (« 199 » contre « 199+ ») à
+    /// nombre EXACTEMENT égal : replier le seul `memberCount` raterait la
+    /// transition — même mécanique que la position sans nom ci-dessous.
+    func test_renderFingerprint_memberCountCappedFlips_changes() {
+        let before = makeConversation(type: .group, memberCount: 199, memberCountCapped: false)
+        let after = makeConversation(type: .group, memberCount: 199, memberCountCapped: true)
+        XCTAssertNotEqual(
+            before.renderFingerprint, after.renderFingerprint,
+            "« 199 » et « 199+ » sont deux rendus distincts du MÊME nombre — le drapeau de " +
+            "plafond doit replier à part"
+        )
+    }
+
+    /// Le TYPE décide si l'effectif est rendu du tout (`.direct` ⇒ aucun
+    /// effectif, contrat lot 2) et quel glyphe porte le badge de type
+    /// historique. Il n'était replié nulle part.
+    func test_renderFingerprint_conversationTypeChanges_changes() {
+        let before = makeConversation(type: .direct, memberCount: 2)
+        let after = makeConversation(type: .group, memberCount: 2)
+        XCTAssertNotEqual(
+            before.renderFingerprint, after.renderFingerprint,
+            "le type décide de l'AFFICHAGE de l'effectif (aucun en .direct) et du glyphe du " +
+            "badge de type — il doit replier dans le portillon"
+        )
+    }
+
+    /// Témoin de RE-PREUVE (pas de correctif) : le compte de non-lus, que la
+    /// pastille chiffrée du lot 2 rend désormais en toutes lettres, replie
+    /// bien — s'il venait à sortir du hash, la pastille se figerait sur son
+    /// premier nombre.
+    func test_renderFingerprint_unreadCountChanges_changes() {
+        var before = makeConversation(type: .group)
+        var after = makeConversation(type: .group)
+        before.userState.unreadCount = 3
+        after.userState.unreadCount = 4
+        XCTAssertNotEqual(before.renderFingerprint, after.renderFingerprint)
+    }
+
+    // MARK: - Catégorie — l'encoche haut-gauche de la carte de focus (2026-08-22)
+    //
+    // La carte de focus magnifiée AFFICHE le nom de la catégorie de la
+    // conversation, et `LentilleFocusCard.==` ne compare la conversation QUE
+    // par ce hash. `userState.sectionId` n'y était replié NULLE PART : le
+    // portillon `.equatable()` gelait donc la catégorie affichée sur sa
+    // première valeur, définitivement — déplacer la conversation depuis
+    // l'encoche elle-même laissait l'ancien nom à l'écran jusqu'à ce qu'un
+    // AUTRE champ bouge. Défaut de la MÊME famille exacte que B1 (traduction),
+    // que l'effectif et que le pont : un champ affiché mais non replié n'est
+    // pas une optimisation approximative, c'est un rendu qui ne se rafraîchit
+    // jamais, sans qu'aucun test ne rougisse.
+
+    func test_renderFingerprint_sectionIdChanges_changes() {
+        var before = makeConversation()
+        var after = makeConversation()
+        before.userState.sectionId = "cat-work"
+        after.userState.sectionId = "cat-family"
+        XCTAssertNotEqual(
+            before.renderFingerprint, after.renderFingerprint,
+            "la catégorie est AFFICHÉE par l'encoche haut-gauche de la carte de focus — " +
+            "la déplacer doit rouvrir le portillon, sinon la capsule garde le nom d'avant"
+        )
+    }
+
+    /// Sortie de toute catégorie (« Mes conversations », `sectionId` remis à
+    /// `nil`) : l'encoche doit DISPARAÎTRE. C'est la transition la plus
+    /// visible des deux, et celle qu'un repli de la seule valeur non-nulle
+    /// raterait.
+    func test_renderFingerprint_sectionIdCleared_changes() {
+        var before = makeConversation()
+        let after = makeConversation()
+        before.userState.sectionId = "cat-work"
+        XCTAssertNil(after.userState.sectionId, "témoin de contrôle : seul le sectionId diffère ici")
+        XCTAssertNotEqual(
+            before.renderFingerprint, after.renderFingerprint,
+            "sortir d'une catégorie retire la capsule — le portillon doit s'ouvrir aussi " +
+            "quand le sectionId retombe à nil"
+        )
     }
 }

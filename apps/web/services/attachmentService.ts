@@ -325,13 +325,21 @@ export class AttachmentService {
   }
 
   /**
-   * Valide plusieurs fichiers
+   * Valide plusieurs fichiers.
+   *
+   * `maxCount` — défaut `MAX_ATTACHMENTS_PER_MESSAGE` — laisse un appelant
+   * borner le NOMBRE de fichiers différemment (le transport post applique
+   * `MAX_POST_MEDIA`) sans dupliquer les règles de TAILLE ci-dessous, qui
+   * restent identiques quel que soit l'appelant.
    */
-  static validateFiles(files: File[]): { valid: boolean; errors: string[] } {
+  static validateFiles(
+    files: File[],
+    maxCount: number = MAX_ATTACHMENTS_PER_MESSAGE
+  ): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    if (files.length > MAX_ATTACHMENTS_PER_MESSAGE) {
-      errors.push(`Maximum ${MAX_ATTACHMENTS_PER_MESSAGE} files allowed. You selected ${files.length}.`);
+    if (files.length > maxCount) {
+      errors.push(`Maximum ${maxCount} files allowed. You selected ${files.length}.`);
     }
 
     files.forEach((file) => {

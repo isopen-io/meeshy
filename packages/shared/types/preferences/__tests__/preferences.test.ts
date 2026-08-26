@@ -28,6 +28,7 @@ describe('PrivacyPreferenceSchema', () => {
       showLastSeen: false,
       showReadReceipts: true,
       showTypingIndicator: true,
+      showForwardSource: false,
       allowContactRequests: true,
       allowGroupInvites: false,
       allowCallsFromNonContacts: false,
@@ -315,6 +316,7 @@ describe('ApplicationPreferenceSchema', () => {
       theme: 'dark' as const,
       accentColor: 'purple',
       interfaceLanguage: 'fr',
+      autoTranslateEnabled: false,
       fontSize: 'large' as const,
       fontFamily: 'roboto',
       lineHeight: 'relaxed' as const,
@@ -382,6 +384,27 @@ describe('ApplicationPreferenceSchema', () => {
   test('rejette un timestamp de consentement non ISO-8601', () => {
     expect(() => {
       ApplicationPreferenceSchema.parse({ voiceProfileConsentAt: 'pas-une-date' });
+    }).toThrow();
+  });
+
+  test('conserve autoTranslateEnabled=false (le rang qui distingue la clé du défaut)', () => {
+    // La préférence de traduction automatique n'avait AUCUN store : pas de
+    // colonne User, et absente de ce schéma — Zod (mode strip) la supprimait
+    // du corps de PATCH /me/preferences/application, donc personne ne pouvait
+    // jamais la poser à `false`. Le témoin s'écrit sur `false` : sur `true`,
+    // la clé strippée et le défaut rendent le même verdict.
+    const result = ApplicationPreferenceSchema.parse({ autoTranslateEnabled: false });
+    expect(result.autoTranslateEnabled).toBe(false);
+  });
+
+  test('autoTranslateEnabled vaut true par défaut, dans le schéma comme dans les défauts', () => {
+    expect(ApplicationPreferenceSchema.parse({}).autoTranslateEnabled).toBe(true);
+    expect(APPLICATION_PREFERENCE_DEFAULTS.autoTranslateEnabled).toBe(true);
+  });
+
+  test('rejette un autoTranslateEnabled non booléen', () => {
+    expect(() => {
+      ApplicationPreferenceSchema.parse({ autoTranslateEnabled: 'yes' });
     }).toThrow();
   });
 });

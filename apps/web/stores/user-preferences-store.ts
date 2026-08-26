@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type {
   NotificationPreference,
   PrivacyPreference,
@@ -172,7 +173,7 @@ const DEFAULT_LANGUAGE_PREFERENCES: LanguagePreferences = {
 };
 
 const DEFAULT_STORY_PREFERENCES: StoryPreferences = {
-  defaultVisibility: 'FRIENDS',
+  defaultVisibility: DEFAULT_PUBLICATION_VISIBILITY,
   storyNotificationsEnabled: true,
 };
 
@@ -187,6 +188,56 @@ const DEFAULT_STATE: UserPreferencesState = {
   isInitialized: false,
   lastSyncedAt: null,
   error: null,
+};
+
+// ============================================================================
+// PERSISTED STATE MIGRATION
+// ============================================================================
+
+/**
+ * v1 (2026-08-23) — l'audience par défaut d'une story passe de `FRIENDS` à
+ * `PUBLIC`, alignée sur les posts et les réels.
+ *
+ * Sans cette migration, la bascule ne toucherait que les NOUVEAUX navigateurs :
+ * tout onglet ayant déjà ouvert Meeshy porte `story.defaultVisibility:
+ * 'FRIENDS'` gravé dans `localStorage` et le rejouerait indéfiniment. C'est ce
+ * qui rend l'application IMMÉDIATE, pas différée au prochain vidage de cache.
+ *
+ * La réécriture est ciblée : seul l'ANCIEN DÉFAUT littéral est remplacé. Une
+ * valeur posée par l'utilisateur via `updateStory` (`PRIVATE`, ou `FRIENDS`
+ * re-choisi après la bascule — version courante) survit intacte.
+ */
+export const USER_PREFERENCES_STORE_VERSION = 1;
+
+export type PersistedUserPreferences = Partial<
+  Pick<
+    UserPreferencesState,
+    | 'notifications'
+    | 'encryption'
+    | 'encryptionKeys'
+    | 'privacy'
+    | 'language'
+    | 'story'
+    | 'lastSyncedAt'
+  >
+>;
+
+const LEGACY_DEFAULT_STORY_VISIBILITY: StoryPreferences['defaultVisibility'] = 'FRIENDS';
+
+export const migrateUserPreferences = (
+  persistedState: PersistedUserPreferences | null | undefined,
+  version: number,
+): PersistedUserPreferences => {
+  const state = persistedState ?? {};
+  if (version >= USER_PREFERENCES_STORE_VERSION) return state;
+
+  const story = state.story;
+  if (!story || story.defaultVisibility !== LEGACY_DEFAULT_STORY_VISIBILITY) return state;
+
+  return {
+    ...state,
+    story: { ...story, defaultVisibility: DEFAULT_STORY_PREFERENCES.defaultVisibility },
+  };
 };
 
 // ============================================================================
@@ -547,6 +598,9 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
     }),
     {
       name: 'meeshy-user-preferences',
+      version: USER_PREFERENCES_STORE_VERSION,
+      migrate: (persistedState, version) =>
+        migrateUserPreferences(persistedState as PersistedUserPreferences, version),
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         // Only persist these fields

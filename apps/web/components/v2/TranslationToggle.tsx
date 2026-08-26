@@ -4,6 +4,16 @@ import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/use-i18n';
 import { getFlag } from './flags';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+
+/**
+ * Égalité de langue conforme au Prisme : `languageCode` (traductions) et
+ * `userLanguage` sont verbatim. Un `startsWith` de préfixe sur-matche (`fry`
+ * Frisian matche une préférence `fr` ; `fil` Filipino matche `fi`) ET sous-matche
+ * (un alias legacy `iw` ne matche pas `he`). SSOT : normalizeLanguageForDedup.
+ */
+const sameLanguage = (a?: string, b?: string): boolean =>
+  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
 
 export interface TranslationItem {
   languageCode: string;
@@ -17,7 +27,17 @@ export interface TranslationToggleProps {
   originalLanguageName?: string;
   translations?: TranslationItem[];
   userLanguage?: string;
-  variant?: 'inline' | 'block';
+  /**
+   * Liste ORDONNÉE des langues préférées du lecteur (Prisme : rangs 1→4 +
+   * fallback). Quand elle est fournie, l'auto-résolution DESCEND le prisme et
+   * sert la première langue disponible — par une traduction, ou parce que le
+   * contenu est déjà écrit dedans (la langue d'origine concourt à son rang).
+   * Parité avec iOS `APIPost.resolveTranslation` et Android
+   * `LanguageResolver.preferredTranslation`. Absente, on retombe sur le
+   * comportement historique à une seule langue (`userLanguage`).
+   */
+  preferredLanguages?: string[];
+  variant?: 'inline' | 'block' | 'flags';
   /**
    * Inline variant only. When true (default) the resolved content is rendered
    * above the language chip — comments and statuses rely on the toggle to
@@ -25,6 +45,13 @@ export interface TranslationToggleProps {
    * themselves and want the toggle as a bare language indicator (StoryViewer).
    */
   showContent?: boolean;
+  /**
+   * Notifie l'hôte de la version affichée, à la résolution puis à chaque
+   * exploration. Les hôtes qui rendent le texte eux-mêmes (`showContent=false`)
+   * en ont besoin : sans lui, la rangée dit « Français » pendant que l'hôte
+   * rend l'original, et le Prisme ment.
+   */
+  onDisplayedChange?: (version: { languageCode: string; content: string; isOriginal: boolean }) => void;
   className?: string;
 }
 
@@ -47,8 +74,10 @@ function TranslationToggle({
   originalLanguageName,
   translations = [],
   userLanguage,
+  preferredLanguages,
   variant = 'inline',
   showContent = true,
+  onDisplayedChange,
   className,
 }: TranslationToggleProps) {
   const { t: tComponents } = useI18n('components');
@@ -66,12 +95,26 @@ function TranslationToggle({
   // Prisme: the preferred version is derived from the CURRENT props on every render so
   // translations pushed asynchronously (comment/post:translation-updated) surface as soon
   // as they land and a change of preferred language re-resolves live.
+  //
+  // On DESCEND le prisme ordonné (`preferredLanguages`) et on rend la première
+  // langue servie — par une traduction, ou parce que l'original est déjà écrit
+  // dedans (auquel cas la langue d'origine gagne À SON RANG, jamais en
+  // court-circuit). Sans `preferredLanguages`, comportement historique à une
+  // seule langue. Parité iOS `APIPost.resolveTranslation` / Android
+  // `LanguageResolver.preferredTranslation`.
   const autoResolved = useMemo(() => {
-    const matching = userLanguage
-      ? translations.find((t) => t.languageCode.toLowerCase().startsWith(userLanguage.toLowerCase()))
-      : undefined;
-    return matching ? { ...matching, isOriginal: false as const } : originalVersion;
-  }, [userLanguage, translations, originalVersion]);
+    const order = preferredLanguages && preferredLanguages.length > 0
+      ? preferredLanguages
+      : userLanguage
+        ? [userLanguage]
+        : [];
+    for (const lang of order) {
+      if (sameLanguage(originalLanguage, lang)) return originalVersion;
+      const match = translations.find((t) => sameLanguage(t.languageCode, lang));
+      if (match) return { ...match, isOriginal: false as const };
+    }
+    return originalVersion;
+  }, [preferredLanguages, userLanguage, translations, originalVersion, originalLanguage]);
 
   // Only the user's explicit exploration is stored (language + original flag, never the
   // content) so a manually selected language stays fresh when its text is re-translated.
@@ -86,6 +129,27 @@ function TranslationToggle({
     const picked = translations.find((t) => t.languageCode === manualSelection.languageCode);
     return picked ? { ...picked, isOriginal: false as const } : autoResolved;
   }, [manualSelection, autoResolved, originalVersion, translations]);
+
+  // Le signal part APRÈS le rendu et ne dépend que de la version affichée : un
+  // hôte qui rend le texte lui-même doit servir EXACTEMENT celle que la rangée
+  // annonce, sans quoi le drapeau et le paragraphe se contredisent.
+  //
+  // Les dépendances sont les trois PRIMITIVES envoyées, jamais l'objet qui les
+  // porte (cycle 123). `displayedVersion` est un `useMemo` dont `autoResolved`
+  // dépend de `preferredLanguages` : un hôte qui passe ce tableau en littéral —
+  // ce que son type `string[]` autorise à tout site d'appel — le recrée à chaque
+  // rendu, l'objet change d'identité, l'effet repart, l'hôte pose son état, et
+  // le rendu boucle SANS FIN. Comparer les valeurs servies referme la boucle à
+  // la source : deux rendus qui servent le même texte ne notifient qu'une fois.
+  const { languageCode: displayedLanguageCode, content: displayedContent, isOriginal: displayedIsOriginal } =
+    displayedVersion;
+  useEffect(() => {
+    onDisplayedChange?.({
+      languageCode: displayedLanguageCode,
+      content: displayedContent,
+      isOriginal: displayedIsOriginal,
+    });
+  }, [displayedLanguageCode, displayedContent, displayedIsOriginal, onDisplayedChange]);
 
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -120,11 +184,86 @@ function TranslationToggle({
     setShowMenu(false);
   }, []);
 
+  if (variant === 'flags') {
+    // Original + traductions, dans l'ordre où le lecteur les rencontre. Le
+    // parchemin qu'elle remplace recopiait un extrait par langue et plafonnait à
+    // trois : il coûtait la moitié de l'écran et rendait la quatrième langue
+    // inatteignable. Un drapeau dit la même chose en une ligne, sans plafond.
+    // Type explicite : sans lui, l'union « original | traduction » rend
+    // `version.isOriginal` de type `unknown` sous `in`, et le drapeau repart en
+    // `unknown` dans `handleSelect`.
+    const allVersions: Array<TranslationItem & { isOriginal: boolean }> = [
+      originalVersion,
+      ...translations
+        .filter((t) => !sameLanguage(t.languageCode, originalLanguage))
+        .map((t) => ({ ...t, isOriginal: false })),
+    ];
+    const hasChoice = allVersions.length > 1;
+
+    return (
+      <div className={cn('flex flex-col gap-1.5', className)}>
+        {showContent && (
+          <p
+            data-testid="translation-flags-content"
+            className="text-[var(--gp-text-primary)] whitespace-pre-wrap break-words"
+          >
+            {displayedVersion.content}
+          </p>
+        )}
+
+        {hasChoice && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {allVersions.map((version) => {
+              const isSelected = sameLanguage(version.languageCode, displayedVersion.languageCode);
+              return (
+                <button
+                  key={version.languageCode}
+                  type="button"
+                  data-testid={`translation-flag-${version.languageCode}`}
+                  aria-pressed={isSelected}
+                  aria-label={version.languageName}
+                  title={version.languageName}
+                  onClick={() =>
+                    handleSelect({
+                      languageCode: version.languageCode,
+                      languageName: version.languageName,
+                      content: version.content,
+                      isOriginal: version.isOriginal,
+                    })
+                  }
+                  className={cn(
+                    'text-base leading-none rounded-full transition-all duration-300 px-1 py-0.5',
+                    // Le choix courant se voit sans couleur de marque : un anneau
+                    // discret suffit, et il survit au thème sombre.
+                    isSelected
+                      ? 'ring-2 ring-[var(--gp-text-secondary)] opacity-100'
+                      : 'opacity-50 hover:opacity-90',
+                  )}
+                >
+                  {getFlag(version.languageCode)}
+                </button>
+              );
+            })}
+
+            <span
+              data-testid="translation-flags-current"
+              className="text-[11px] text-[var(--gp-text-muted)] ml-0.5"
+            >
+              {displayedVersion.languageName}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (variant === 'block') {
     return (
       <div className={cn('space-y-2', className)}>
-        {/* Main displayed content */}
-        <p className="text-[var(--gp-text-primary)]">{displayedVersion.content}</p>
+        {/* Le texte n'est rendu QUE si l'hôte ne le rend pas lui-même : `PostDetail`
+            montait cette variante puis son propre `PostContentText`, et le lecteur
+            voyait le contenu deux fois — traduit, puis en version originale. */}
+        {showContent && <p className="text-[var(--gp-text-primary)]">{displayedVersion.content}</p>}
 
         {/* Other translations in parchment zone */}
         {otherVersions.length > 0 && (

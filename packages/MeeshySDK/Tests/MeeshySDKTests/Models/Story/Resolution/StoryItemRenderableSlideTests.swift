@@ -141,6 +141,72 @@ struct StoryItemRenderableSlideTests {
         #expect(slide.mediaURL == "https://cdn.example.com/legacy-bg.jpg")
     }
 
+    // MARK: - Forme legacy « média seul » (TRANSITOIRE)
+
+    /// Un client sans `X-Canvas-Caps` reçoit d'une story canvas v3 une forme
+    /// dégradée : `storyEffects` OMIS, le média porteur seul dans `media[0]`
+    /// (règle 5 du gateway, `negotiateWireStoryEffects`). Le lecteur doit la
+    /// peindre comme un fond VIDÉO — pas la décoder en image (constat du
+    /// 2026-08-22 : `.mov` passé à ImageIO, écran vide). L'adaptateur migre la
+    /// forme legacy vers le modèle unique (un `StoryMediaObject` de fond) ;
+    /// il disparaîtra avec le dernier client legacy.
+    @Test func toRenderableSlide_legacyVideoMedia_becomesBackgroundMediaObject() throws {
+        let carrier = FeedMedia(id: "6a894bd7731e308cebfb49c3", type: .video,
+                                url: "https://gate.example.com/file/EDE58BC9.mov",
+                                thumbHash: "HNcJFwKVdodwanhneHhlmIiHVghndHAG",
+                                thumbnailColor: "000000",
+                                width: 1078, height: 1128, duration: 58)
+        let item = StoryItem(id: "story-1", content: "Landing soon", media: [carrier],
+                             storyEffects: nil, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let bg = try #require(slide.effects.mediaObjects?.first)
+        #expect(slide.effects.mediaObjects?.count == 1)
+        #expect(bg.kind == .video)
+        #expect(bg.isBackground)
+        #expect(bg.postMediaId == "6a894bd7731e308cebfb49c3")
+        #expect(bg.mediaURL == "https://gate.example.com/file/EDE58BC9.mov")
+        #expect(bg.thumbHash == "HNcJFwKVdodwanhneHhlmIiHVghndHAG")
+        #expect(bg.duration == 58)
+        #expect(abs(bg.aspectRatio - 1078.0 / 1128.0) < 0.001)
+        #expect(slide.mediaURL == nil, "Le média est référencé par l'objet de fond : plus de route legacy.")
+    }
+
+    /// `mimeType` est DÉCLARÉ par le client qui téléverse, jamais vérifié :
+    /// l'extension de l'URL est la vérité du contenu (`StoryMediaStoreRouter`).
+    @Test func toRenderableSlide_legacyMovDeclaredImage_isStillTreatedAsVideo() throws {
+        let carrier = FeedMedia(id: "m1", type: .image,
+                                url: "https://gate.example.com/file/clip.mov",
+                                thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [carrier],
+                             storyEffects: nil, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        let bg = try #require(slide.effects.mediaObjects?.first)
+        #expect(bg.kind == .video)
+        #expect(slide.mediaURL == nil)
+    }
+
+    /// Une story legacy dont le média est une IMAGE garde sa route historique
+    /// (`slide.mediaURL`) : elle fonctionne, on ne la déplace pas.
+    @Test func toRenderableSlide_legacyImageMedia_keepsTheHistoricalRoute() {
+        let carrier = FeedMedia(id: "m1", type: .image,
+                                url: "https://gate.example.com/file/photo.jpg",
+                                thumbnailColor: "000000")
+        let item = StoryItem(id: "story-1", content: nil, media: [carrier],
+                             storyEffects: nil, createdAt: Date(),
+                             expiresAt: nil, isViewed: false)
+
+        let slide = item.toRenderableSlide(preferredLanguages: [])
+
+        #expect(slide.effects.mediaObjects?.isEmpty ?? true)
+        #expect(slide.mediaURL == "https://gate.example.com/file/photo.jpg")
+    }
+
     @Test func toRenderableSlide_nullsLegacyMediaURL_whenBackgroundIsMediaObject() {
         // Modern story: the background IS an isBackground StoryMediaObject. The
         // legacy mediaURL must stay nil so StoryRenderer.renderBackground does

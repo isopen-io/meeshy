@@ -518,7 +518,7 @@ describe('PostReactionHandler', () => {
 
       await handler.handleRemoveReaction(makeSocket(), { postId: POST_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith({ success: true, data: { message: 'Reaction already absent' } });
+      expect(callback).toHaveBeenCalledWith({ success: true });
     });
 
     it('broadcasts removal via SocialEventsHandler for ❤️ on POST type', async () => {

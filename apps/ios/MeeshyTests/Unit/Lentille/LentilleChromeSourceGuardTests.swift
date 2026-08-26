@@ -71,6 +71,45 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         try [listViewSource()] + chromeSources()
     }
 
+    /// Les mêmes sources, **commentaires retirés** — réservé aux témoins de
+    /// LITTÉRAUX, jamais aux détecteurs.
+    ///
+    /// La distinction n'est pas cosmétique, elle sépare deux intentions
+    /// opposées :
+    ///
+    /// - un **détecteur** (`ScrollViewReader`, `onScrollGeometryChange`, un
+    ///   `PreferenceKey` de défilement) interdit jusqu'à la MENTION du symbole,
+    ///   parce qu'une mention en commentaire est déjà une invitation à le
+    ///   réintroduire. Ces trois-là lisent le BRUT, et le disent dans leur
+    ///   message (« commentaires compris ») ;
+    /// - un **littéral de loi** interdit qu'une constante soit RECOPIÉE dans le
+    ///   code au lieu d'être lue depuis son miroir Swift. En CITER une dans une
+    ///   phrase qui explique une décision n'est pas la recopier.
+    ///
+    /// Le cas qui a tranché : `463547f5d` a retiré la pilule de section, et a
+    /// laissé dans `ConversationListView.swift` le commentaire qui explique
+    /// pourquoi — « invisible 900 ms après le dernier [événement d'offset] ».
+    /// Le témoin des littéraux, qui lisait en brut, s'est mis à rougir sur la
+    /// PROSE qui documente le retrait. La garde accusait le texte qui la
+    /// justifiait.
+    ///
+    /// Même idiome que `FocalNoBubbleSourceGuardTests`, qui strippe déjà dans
+    /// son chargeur et épingle à part ses occurrences légitimes.
+    ///
+    /// Portée VOLONTAIREMENT étroite : seul le témoin des littéraux interdits
+    /// de `ConversationListView` consomme cette lecture. Les deux autres
+    /// témoins de littéraux du fichier n'en ont pas besoin et ne sont pas
+    /// touchés — `test_softLawLiterals_areNeverUsedAsNumericComparisons` ne
+    /// compte que des COMPARAISONS (un chiffre en prose n'en est pas une), et
+    /// `test_hardLawLiteral520_…` épingle un compte de 1 sur une occurrence qui
+    /// vit dans le CODE (`min(windowWidth * 0.42, 520)`), donc identique dans
+    /// les deux lectures. Élargir sans nécessité aurait déplacé les bases de
+    /// comptage de gardes actuellement justes.
+    private func listViewLiteralSource() throws -> (name: String, code: String) {
+        let source = try listViewSource()
+        return (source.name, AppSourceGuard.stripComments(source.code))
+    }
+
     private func occurrences(of needle: String, in haystack: String) -> Int {
         haystack.components(separatedBy: needle).count - 1
     }
@@ -205,12 +244,12 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
     // compte FIXE détecte toute variation dans les deux sens.
 
     func test_hardLawLiterals_thatHaveNoLegitimateOccurrence_areAbsent_fromConversationListView() throws {
-        let (name, code) = try listViewSource()
+        let (name, code) = try listViewLiteralSource()
         for literal in ["900", "380", "0.45", "0.82"] {
             let count = occurrences(of: literal, in: code)
             XCTAssertEqual(
                 count, 0,
-                "\(name) contient « \(literal) » (\(count) fois, commentaires compris) — " +
+                "\(name) contient « \(literal) » (\(count) fois, hors commentaires) — " +
                 "aucune occurrence légitime de cette constante n'existe dans ce fichier ; " +
                 "c'est une constante de loi gelée (pilule 900 ms ou courbe de focus " +
                 "380/0.45/0.82) qui doit être lue depuis son miroir Swift, jamais recopiée."
@@ -229,6 +268,134 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
     /// constante de loi ailleurs dans le fichier) comme à la baisse (le jour
     /// où ce clamp change ou disparaît, mettre à jour CE commentaire et le
     /// nombre ci-dessous, jamais relâcher la garde en la supprimant).
+    // MARK: - Une SEULE écriture de la cascade de couverture de story (lot 3)
+    //
+    // Le rail de tête de liste doit montrer la PREVIEW de la story, ce que le
+    // tray fait depuis 2026-05-27 via `latestStoryThumbnailURL` — cascade
+    // « cover composite locale > `thumbnailUrl` serveur > `url` image >
+    // avatar », dont le premier maillon touche le cache disque. Une seconde
+    // écriture app-side serait la TROISIÈME du même arbitrage (la première
+    // étant `StoryCoverThumbnail.preferredCoverURLString`, la règle pure) et
+    // la première à diverger : le rail et le tray montreraient alors deux
+    // images pour la même story.
+    //
+    // Périmètre : TOUT `apps/ios/Meeshy/**`, découvert par `FileManager` —
+    // jamais une liste de fichiers recopiée, sinon la garde laisse passer le
+    // prochain doublon (leçon 257). Commentaires RETIRÉS ici (à la différence
+    // des témoins de littéraux ci-dessus, qui doivent lire en brut comme le
+    // script) : une docstring qui NOMME `latestStoryThumbnailURL` pour
+    // expliquer d'où vient la couverture n'est pas une seconde écriture.
+
+    private func appSources() throws -> [(name: String, code: String)] {
+        let root = Self.iosRoot.appendingPathComponent("Meeshy")
+        guard let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil) else { return [] }
+        var out: [(name: String, code: String)] = []
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            let relative = url.path.replacingOccurrences(of: root.path + "/", with: "")
+            let raw = try String(contentsOf: url, encoding: .utf8)
+            out.append((relative, AppSourceGuard.stripComments(raw)))
+        }
+        return out.sorted { $0.name < $1.name }
+    }
+
+    func test_appSourceWalk_neverSilentlyEmpty() throws {
+        XCTAssertGreaterThan(
+            try appSources().count, 100,
+            "Le parcours de `Meeshy/**` n'a presque rien chargé — une garde d'ensemble qui " +
+            "ne lit aucun fichier passe TOUJOURS au vert (leçon 257)."
+        )
+    }
+
+    func test_theStoryCoverCascade_isWrittenExactlyOnce_inTheWholeApp() throws {
+        let sources = try appSources()
+
+        let definitions = sources.filter { $0.code.contains("func latestStoryThumbnailURL(") }.map(\.name)
+        XCTAssertEqual(
+            definitions, ["Features/Main/Views/StoryTrayView.swift"],
+            "Le résolveur de couverture doit exister UNE fois, dans StoryTrayView.swift. " +
+            "Trouvé : \(definitions). Le rail Lentille l'APPELLE (portée interne depuis le " +
+            "lot 3) — il ne le recopie pas."
+        )
+
+        let callers = sources.filter { $0.code.contains("StoryCoverThumbnail.preferredCoverURLString(") }.map(\.name)
+        XCTAssertEqual(
+            callers, ["Features/Main/Views/StoryTrayView.swift"],
+            "La cascade pure (`preferredCoverURLString`) ne doit être consommée que par " +
+            "`latestStoryThumbnailURL`. Un second appelant serait une troisième écriture de " +
+            "l'ordre de préférence. Trouvé : \(callers)."
+        )
+    }
+
+    func test_theRailMapping_resolvesItsCoversThroughThatSameResolver() throws {
+        let (name, raw) = try listViewSource()
+        let code = AppSourceGuard.stripComments(raw)
+        XCTAssertEqual(
+            occurrences(of: "latestStoryThumbnailURL(", in: code), 2,
+            "\(name) doit appeler le résolveur PARTAGÉ deux fois — une pour la pastille " +
+            "« moi », une pour les autres. Sans cet appel le rail retombe sur les avatars et " +
+            "l'exigence « afficher la preview de la story » redevient une régression " +
+            "silencieuse."
+        )
+    }
+
+    /// Contrôle positif : sans lui, un chemin cassé ou un motif trop étroit
+    /// rendrait les deux témoins ci-dessus verts pour toujours.
+    func test_theCoverGuardActuallyDetectsASecondWriting() {
+        let fake = "func latestStoryThumbnailURL(_ group: StoryGroup) -> String? { nil }"
+        XCTAssertTrue(fake.contains("func latestStoryThumbnailURL("))
+        XCTAssertFalse(
+            AppSourceGuard.stripComments("// func latestStoryThumbnailURL(_ g: G) -> String?\n")
+                .contains("func latestStoryThumbnailURL("),
+            "Une CITATION en commentaire ne doit pas compter pour une écriture."
+        )
+    }
+
+    // MARK: - Le rail rend la preview, le mood et l'état vu (lot 3)
+
+    private func railSource() throws -> (name: String, code: String) {
+        let url = Self.chromeDirectory.appendingPathComponent("StoriesVivantsRail.swift")
+        return ("StoriesVivantsRail.swift", AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+    }
+
+    func test_theRail_drawsItsPastillesWithTheSharedCachedAvatar_notAHandRolledLoader() throws {
+        let (name, code) = try railSource()
+        XCTAssertEqual(
+            occurrences(of: "AsyncImage(", in: code), 0,
+            "\(name) : `AsyncImage` sans repli d'initiales est ce qui peignait un cercle VIDE " +
+            "pour tout auteur sans avatar. L'atome partagé `CachedAvatarImage` sert le cache " +
+            "chaud ET les initiales."
+        )
+        XCTAssertEqual(
+            occurrences(of: "CachedAvatarImage(", in: code), 2,
+            "\(name) : les DEUX pastilles (« moi » et les autres) passent par le même atome."
+        )
+    }
+
+    func test_theRail_animatesItsMoods_throughTheSharedBadgeAtom() throws {
+        let (name, code) = try railSource()
+        XCTAssertEqual(
+            occurrences(of: "MeeshyMoodBadge(", in: code), 2,
+            "\(name) : le mood de « moi » ET celui de chaque auteur passent par l'atome " +
+            "partagé — le seul endroit où le ressort `repeatForever` est écrit, et le seul " +
+            "qui consulte Reduce Motion."
+        )
+        XCTAssertEqual(
+            occurrences(of: "repeatForever", in: code), 0,
+            "\(name) : aucun ressort écrit à la main dans une peau. Il échapperait au " +
+            "portillon d'accessibilité de l'atome."
+        )
+    }
+
+    func test_theRail_paintsItsRingThroughThePolicy_neverFromIsLiveAlone() throws {
+        let (name, code) = try railSource()
+        XCTAssertTrue(
+            code.contains("LentilleRailPolicy.ringIsAccented(entry)"),
+            "\(name) : l'anneau des autres pastilles doit demander la règle. Avant le lot 3 " +
+            "il lisait `entry.isLive` seul — toujours faux faute de modèle d'appel — donc " +
+            "tout le rail était gris, y compris les stories NON VUES."
+        )
+    }
+
     func test_hardLawLiteral520_matchesTheOneKnownUnrelatedOccurrence_inConversationListView() throws {
         let (name, code) = try listViewSource()
         XCTAssertEqual(

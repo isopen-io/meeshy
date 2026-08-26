@@ -10,6 +10,11 @@ import os
 /// Subscribes on @MainActor so Combine publisher callbacks are guaranteed on the main thread.
 @MainActor
 final class FeedSocketHandler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     private let persistence: FeedPersistenceActor
     private let socialSocket: SocialSocketProviding
     private let currentUserIdProvider: @MainActor () -> String?
@@ -66,6 +71,16 @@ final class FeedSocketHandler {
 
         socialSocket.postReposted
             .sink { [weak self] data in
+                // `post:reposted` n'est pas typé : une story repostée y arrive
+                // et s'insérait dans `feed_posts`, la table que le secours de
+                // pagination hors-ligne (`FeedViewModel.loadMoreIfNeeded`)
+                // mappe TELLE QUELLE en `FeedPost`. Le chemin socket EN DIRECT
+                // applique déjà ce partage (`FeedViewModel`) : la persistance
+                // doit le partager, sinon le tray reparaît dans le fil dès que
+                // le réseau tombe. Les lignes STORY DÉJÀ persistées ne sont pas
+                // purgées par cette garde — un résidu après mise à jour n'est
+                // donc pas un échec du filtre.
+                guard !data.repost.belongsToStoryTray else { return }
                 Task { await self?.handlePostUpsert(data.repost) }
             }
             .store(in: &cancellables)
@@ -316,7 +331,11 @@ extension PostRecord {
             // Sans ce hissage, une position affichée juste après l'envoi
             // disparaît au prochain chargement du cache : `locationJson`
             // resterait nil pour toujours (Task 16).
-            locationJson: Self.encode(post.location).flatMap { String(data: $0, encoding: .utf8) }
+            locationJson: Self.encode(post.location).flatMap { String(data: $0, encoding: .utf8) },
+            // Même hissage que `locationJson` : sans lui, l'audience nommée
+            // d'un post EXCEPT/ONLY ne survit pas au démarrage à froid.
+            visibilityUserIdsJson: Self.encode(post.visibilityUserIds)
+                .flatMap { String(data: $0, encoding: .utf8) }
         )
     }
 

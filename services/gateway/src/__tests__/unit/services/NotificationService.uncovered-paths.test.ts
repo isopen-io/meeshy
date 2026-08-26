@@ -67,6 +67,13 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
+    // Cycle 122 — les éventails RÉPONSE et MENTION relisent la carte de
+    // traductions du message pour y descendre le Prisme du destinataire. Un
+    // double sans ce délégué faisait lever `loadMessagePrismSource` : un
+    // double PARTIEL ne se signale qu'au moment où le module grandit.
+    message: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
     participant: {
       count: jest.fn().mockResolvedValue(5),
     },

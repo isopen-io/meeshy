@@ -46,10 +46,6 @@ jest.mock('@/components/v2', () => ({
   StatusComposer: () => null,
 }));
 
-jest.mock('@/components/v2/PostComposer', () => ({ PostComposer: () => null }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
-jest.mock('@/components/v2/AudioPostComposer', () => ({ AudioPostComposer: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 
 const mockCreateStoryMutate = jest.fn();
@@ -66,7 +62,7 @@ jest.mock('@/lib/story-transforms', () => ({
   groupToStoryItem: jest.fn(),
 }));
 jest.mock('@/stores/user-preferences-store', () => ({
-  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'FRIENDS' } }),
+  useStoryPreferences: () => ({ preferences: { defaultVisibility: 'PUBLIC' } }),
 }));
 jest.mock('@/hooks/social/use-statuses', () => ({
   useStatusesFeedQuery: () => ({ isLoading: false }),
@@ -116,7 +112,7 @@ jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
 // any plausible active UI locale, so a leak into `originalLanguage` is
 // unmistakable.
 jest.mock('@/hooks/use-post-translation', () => ({
-  usePreferredLanguage: () => 'fr',
+  usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'],
 }));
 jest.mock('@/hooks/use-impression-tracking', () => ({
   useImpressionTracking: () => ({ observe: jest.fn() }),

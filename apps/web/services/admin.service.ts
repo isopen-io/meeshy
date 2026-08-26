@@ -378,6 +378,15 @@ export const adminService = {
     }
   },
 
+  async sendBroadcastInApp(id: string): Promise<ApiResponse<any>> {
+    try {
+      return await apiService.post<any>(`/admin/broadcasts/${id}/send-inapp`, {});
+    } catch (error) {
+      logger.error('[Admin]', "Erreur lors de la diffusion in-app du broadcast", { error });
+      throw error;
+    }
+  },
+
   async deleteBroadcast(id: string): Promise<ApiResponse<any>> {
     try {
       return await apiService.delete<any>(`/admin/broadcasts/${id}`);

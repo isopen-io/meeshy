@@ -14,6 +14,11 @@ extension BGTaskScheduler: BGTaskCancelling {}
 
 @MainActor
 final class BackgroundTaskManager {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = BackgroundTaskManager()
 
     static let conversationSyncTaskId = "me.meeshy.app.conversation-sync"
@@ -143,6 +148,15 @@ final class BackgroundTaskManager {
         authTokenProvider() != nil
     }
 
+    /// Décision PURE : le préchargement d'arrière-plan doit-il tourner dans cet
+    /// état réseau ? Wi-Fi SEULEMENT — il tire jusqu'à 10 conversations × 30
+    /// messages (traductions et réponses incluses) toutes les ~30 min, pour du
+    /// contenu que l'utilisateur n'a pas demandé. Le videur d'outbox, lui, garde
+    /// son propre gate : ce qu'il envoie a été demandé.
+    nonisolated static func shouldRunBackgroundPrefetch(condition: NetworkCondition) -> Bool {
+        condition == .wifi
+    }
+
     /// Annule les deux BGTask requests en attente (chemin logout MeeshyApp).
     /// Ne touche PAS `me.meeshy.cache.background-flush` (filet de flush cache
     /// SDK, identifiant distinct) — volontairement absent d'ici.
@@ -195,6 +209,16 @@ final class BackgroundTaskManager {
             return
         }
         scheduleMessagePrefetch()
+
+        // Le rendez-vous suivant vient d'etre replanifie : sortir ici ne perd
+        // rien. `success: true` — un `setTaskCompleted(success: false)` ferait
+        // baisser le budget que le systeme accorde a cette tache, alors que ne
+        // PAS consommer de donnees cellulaires est le comportement attendu.
+        guard Self.shouldRunBackgroundPrefetch(condition: NetworkConditionMonitor.shared.condition) else {
+            task.setTaskCompleted(success: true)
+            logger.info("Background message prefetch skipped: not on Wi-Fi")
+            return
+        }
 
         let prefetchTask = Task {
             // Background prefetch: read whatever the cache currently has

@@ -38,6 +38,11 @@ struct CacheCoordinatorReelFeedCache: ReelFeedCacheReading {
 /// reel) pages the seedless « Pour toi » thread.
 @MainActor
 final class ReelsViewModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var reels: [FeedPost] = []
     /// Réel actuellement visible. Le `didSet` gère l'appartenance à la post room
     /// (`ROOMS.post`) du réel actif : on quitte l'ancienne, on rejoint la nouvelle.
@@ -427,7 +432,13 @@ final class ReelsViewModel: ObservableObject {
         Task {
             defer { repostInFlight.remove(id) }
             do {
-                _ = try await service.repost(postId: id, targetType: nil, content: nil, isQuote: false, visibility: nil)
+                let cible = RepostTargeting.target(
+                    cardId: id, cardType: post.type,
+                    repostOfId: post.repost?.id, originalRepostOfId: post.repost?.originalRepostOfId
+                )
+                try await RepostPublisher(postService: service).publish(
+                    .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+                )
                 FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.repost.success", defaultValue: "Repartage", bundle: .main))
             } catch {
                 repostedIds.remove(id)
@@ -498,7 +509,17 @@ final class ReelsViewModel: ObservableObject {
     /// Met à jour le texte d'un reel possédé. Miroir de `FeedViewModel.updatePost`
     /// mais sur `reels` : mutation optimiste immédiate, re-hydratation depuis la
     /// réponse serveur, rollback sur échec.
-    func updatePost(_ postId: String, content: String, language: String? = nil, type: String? = nil, removeMediaIds: [String]? = nil, location: PostLocationUpdate? = nil) async {
+    func updatePost(
+        _ postId: String,
+        content: String,
+        language: String? = nil,
+        type: String? = nil,
+        removeMediaIds: [String]? = nil,
+        location: PostLocationUpdate? = nil,
+        visibility: String? = nil,
+        visibilityUserIds: [String]? = nil,
+        known: Set<PostEditField> = EditPostDraft.documentFields
+    ) async {
         guard let idx = reels.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = reels[idx]
         var optimistic = snapshot
@@ -510,9 +531,23 @@ final class ReelsViewModel: ObservableObject {
         case .remove: optimistic.location = nil
         case nil: break
         }
+        // L'audience bouge tout de suite, comme le texte : sans cela le badge
+        // de visibilité garde l'ancienne valeur jusqu'au prochain
+        // rafraîchissement et l'auteur croit son resserrement perdu.
+        if let visibility {
+            optimistic.visibility = visibility
+            optimistic.visibilityUserIds = visibilityUserIds
+        }
         reels[idx] = optimistic
         do {
-            let updated = try await service.update(postId: postId, content: content, visibility: nil, visibilityUserIds: nil, moodEmoji: nil, originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: nil, mediaIds: nil, location: location)
+            // Le corps ne se construit plus ici : `known` dit ce que la
+            // surface a su RENDRE, `PostEditPayload.build` en tire le PUT. Un
+            // champ non déclaré est OMIS, et le serveur préserve le sien.
+            let updated = try await service.update(postId: postId, known: known, draft: PostEditDraft(
+                content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                location: location
+            ))
             if let newIdx = reels.firstIndex(where: { $0.id == postId }) {
                 reels[newIdx] = updated.toFeedPost(preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
             }

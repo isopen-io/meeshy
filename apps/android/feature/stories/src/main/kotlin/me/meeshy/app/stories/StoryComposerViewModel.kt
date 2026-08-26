@@ -87,12 +87,15 @@ data class StoryComposerUiState(
     val attachments: List<UploadedMedia> = emptyList(),
     val pendingUploads: List<PendingMediaUpload> = emptyList(),
     val selectedTextElementId: String? = null,
+    val elementMenuId: String? = null,
     val selectedStickerId: String? = null,
     val snapFeedback: SnapFeedback? = null,
     val band: ComposerBandState = ComposerBandState.Hidden,
     val isUploadingMedia: Boolean = false,
     val isPublishing: Boolean = false,
     val errorMessage: String? = null,
+    val canvasWidthPx: Float = 0f,
+    val canvasHeightPx: Float = 0f,
 ) {
     /**
      * Publishable when some slide carries text, media **or** a publishable text
@@ -172,6 +175,51 @@ data class StoryComposerUiState(
 
     /** True while the text field edits an on-canvas element rather than the slide caption. */
     val isEditingTextElement: Boolean get() = selectedTextElement != null
+
+    /**
+     * The unified long-press context menu for the element [elementMenuId] on the selected
+     * slide, or `null` when no menu is open (or the id no longer resolves, e.g. after the
+     * element was removed) — the pure [StoryElementMenu.resolve] decides which of edit /
+     * duplicate / reorder / delete may fire, so the screen renders a greyed row it can
+     * never mis-dispatch and stays glue.
+     */
+    val elementContextMenu: StoryElementContextMenu?
+        get() = elementMenuId?.let { StoryElementMenu.resolve(deck, it) }
+
+    /**
+     * The effective on-screen duration (seconds) of the **selected** slide — the
+     * author's pin when set, otherwise the content-derived value — projected from the
+     * pure [StorySlideDeck.selectedSlideDurationSeconds] so the duration control shows a
+     * live value and the screen stays glue.
+     */
+    val selectedSlideDurationSeconds: Double get() = deck.selectedSlideDurationSeconds
+
+    /**
+     * The **selected** slide's author-chosen backdrop (`null` when none), projected from
+     * the pure [StorySlideDeck.selectedSlideBackground] so the background picker can show
+     * the active swatch and the screen stays glue.
+     */
+    val selectedSlideBackground: me.meeshy.sdk.model.StoryBackgroundValue?
+        get() = deck.selectedSlideBackground
+
+    /**
+     * Whether the **selected** slide's designated background media is a VIDEO — the only
+     * background kind whose looping is authorable (an image always loops on the reader).
+     * The screen shows the loop toggle only when this is true, so the control is never a
+     * no-op. Resolved against the uploaded [attachments] by the designated background id.
+     */
+    val selectedSlideBackgroundIsVideo: Boolean
+        get() = deck.selectedSlideBackgroundMediaId
+            ?.let { id -> attachments.firstOrNull { it.id == id } }
+            ?.mimeType?.startsWith("video", ignoreCase = true) == true
+
+    /**
+     * Whether the **selected** slide's background loops — what the loop toggle reflects,
+     * projected from the pure [StorySlideDeck.selectedSlideBackgroundLoop]. Meaningful only
+     * while [selectedSlideBackgroundIsVideo] is true.
+     */
+    val selectedSlideBackgroundLoop: Boolean
+        get() = deck.selectedSlideBackgroundLoop
 
     /**
      * What the single text field shows and edits: the selected element's text while
@@ -267,6 +315,49 @@ class StoryComposerViewModel @Inject constructor(
     }
 
     /**
+     * Opens the unified long-press context menu on the on-canvas element [id], selecting it
+     * (so the menu targets the element the toolbar edits) and clearing any sticker selection.
+     * Inert when [id] is not on the selected slide, so a stale long-press never opens an empty
+     * menu. The available actions are resolved lazily by [StoryComposerUiState.elementContextMenu].
+     */
+    fun onOpenElementMenu(id: String) {
+        _state.update {
+            if (it.deck.selectedSlide.elements.none { element -> element.id == id }) it
+            else it.copy(elementMenuId = id, selectedTextElementId = id, selectedStickerId = null)
+        }
+    }
+
+    /** Dismisses the element context menu without touching the deck or the selection. */
+    fun onDismissElementMenu() {
+        _state.update { if (it.elementMenuId == null) it else it.copy(elementMenuId = null) }
+    }
+
+    /**
+     * Dispatches a chosen context-menu [action] to the existing per-element intent and then
+     * dismisses the menu. A disabled action (its row greyed by [StoryElementMenu.resolve]) or
+     * a menu that has since gone stale is a safe no-op on the deck — the menu still closes.
+     * EDIT just keeps the element selected for the text field; the others reuse the same
+     * duplicate / reorder / remove reducers the floating toolbar already drives.
+     */
+    fun onElementMenuAction(action: StoryElementAction) {
+        val menu = _state.value.elementContextMenu
+        if (menu != null && menu.isEnabled(action)) {
+            val id = menu.elementId
+            when (action) {
+                StoryElementAction.EDIT -> onSelectTextElement(id)
+                StoryElementAction.DUPLICATE -> onDuplicateTextElement(id)
+                StoryElementAction.DELETE -> onRemoveTextElement(id)
+                StoryElementAction.SEND_TO_BACK,
+                StoryElementAction.MOVE_BACKWARD,
+                StoryElementAction.MOVE_FORWARD,
+                StoryElementAction.BRING_TO_FRONT,
+                -> action.zOrder?.let { onReorderTextElement(id, it) }
+            }
+        }
+        onDismissElementMenu()
+    }
+
+    /**
      * Drags the on-canvas element [id] by the normalised canvas deltas [dx]/[dy], with
      * **magnetic snapping**: the resulting centre is run through the pure
      * [StorySnapResolver], which locks each axis onto the nearest alignment guide within
@@ -327,6 +418,120 @@ class StoryComposerViewModel @Inject constructor(
     /** Realigns the on-canvas element [id]'s lines (inert on unknown id). */
     fun onTextElementAlign(id: String, align: StoryTextAlign) {
         _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(align = align) }) }
+    }
+
+    /**
+     * Sets the text backing (none / solid / glass) of the on-canvas element [id] (inert on
+     * unknown id). Selection and editing are untouched — you restyle the element you are
+     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries it on publish.
+     */
+    fun onTextElementBackground(id: String, background: StoryTextBackground) {
+        _state.update { it.copy(deck = it.deck.updateTextElement(id) { element -> element.copy(background = background) }) }
+    }
+
+    /**
+     * Advances the base font size of the on-canvas element [id] by one tap — to the next
+     * larger step, wrapping past the largest back to the smallest (decided by the pure
+     * [StoryTextSizeCycle.next]). Inert on an unknown id; selection and editing are
+     * untouched — you resize the element you are editing. The wire mapping
+     * ([StoryTextElement.toTextObject]) carries `fontSize` on publish.
+     */
+    fun onTextElementCycleSize(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(size = StoryTextSizeCycle.next(element.size))
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the stroke outline of the on-canvas element [id] by one tap — thicken to the
+     * next step, wrap past the thickest back to no-stroke, posting the default white the first
+     * time a stroke appears (all decided by the pure [StoryTextOutlineCycle.advance]). Inert on
+     * an unknown id; selection and editing are untouched — you outline the element you are
+     * editing. The wire mapping ([StoryTextElement.toTextObject]) carries `borderColor`/
+     * `borderWidth` on publish.
+     */
+    fun onTextElementCycleOutline(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(outline = StoryTextOutlineCycle.advance(element.outline))
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the fade-in of the on-canvas element [id] by one tap — to the next longer
+     * step, wrapping past the longest back to no-fade (decided by the pure
+     * [StoryTextFadeCycle.advance]). The fade-out end is left untouched, mirroring iOS's two
+     * independent timing controls. Inert on an unknown id; selection and editing are
+     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `fadeIn` on publish.
+     */
+    fun onTextElementCycleFadeIn(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(fade = element.fade.cycledIn())
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the fade-out of the on-canvas element [id] by one tap — to the next longer
+     * step, wrapping past the longest back to no-fade (decided by the pure
+     * [StoryTextFadeCycle.advance]). The fade-in end is left untouched. Inert on an unknown id;
+     * selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
+     * carries `fadeOut` on publish.
+     */
+    fun onTextElementCycleFadeOut(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(fade = element.fade.cycledOut())
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the visibility START of the on-canvas element [id] by one tap — to the next
+     * longer step, wrapping past the longest back to no offset (decided by the pure
+     * [StoryElementTimingCycle.advance]). The duration end is left untouched, mirroring iOS's
+     * two independent timing controls. Inert on an unknown id; selection and editing are
+     * untouched. The wire mapping ([StoryTextElement.toTextObject]) carries `startTime` on
+     * publish, and the reader gate ([StoryElementVisibility]) honours the window on playback.
+     */
+    fun onTextElementCycleStart(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(timing = element.timing.cycledStart())
+                },
+            )
+        }
+    }
+
+    /**
+     * Advances the visibility DURATION of the on-canvas element [id] by one tap — to the next
+     * longer step, wrapping past the longest back to open-ended (decided by the pure
+     * [StoryElementTimingCycle.advance]). The start end is left untouched. Inert on an unknown
+     * id; selection and editing are untouched. The wire mapping ([StoryTextElement.toTextObject])
+     * carries `duration` on publish, and the reader gate ([StoryElementVisibility]) honours the
+     * window on playback.
+     */
+    fun onTextElementCycleDuration(id: String) {
+        _state.update {
+            it.copy(
+                deck = it.deck.updateTextElement(id) { element ->
+                    element.copy(timing = element.timing.cycledDuration())
+                },
+            )
+        }
     }
 
     /**
@@ -518,12 +723,20 @@ class StoryComposerViewModel @Inject constructor(
      * gesture deltas and the measured canvas size; all transform math is unit-tested
      * in one place, so the canvas stays glue.
      */
-    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) =
-        applyDeck { deck ->
-            deck.updateSelectedTransform(
-                deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
-            )
+    fun onCanvasTransform(panX: Float, panY: Float, zoom: Float, canvasWidth: Float, canvasHeight: Float) {
+        // The canvas is a single fixed 9:16 box shared by every slide, and a gesture is the
+        // only way to make a transform non-identity — so the size that produced the offset is
+        // captured here and is exactly the size needed to normalise it back at publish.
+        _state.update {
+            it.copy(
+                deck = it.deck.updateSelectedTransform(
+                    it.deck.selectedSlide.transform.apply(panX, panY, zoom, canvasWidth, canvasHeight),
+                ),
+                canvasWidthPx = canvasWidth,
+                canvasHeightPx = canvasHeight,
+            ).mirrorDraftToSelection()
         }
+    }
 
     /**
      * Sets (or clears, with null) the **selected** slide's photo filter — the Effets
@@ -537,6 +750,47 @@ class StoryComposerViewModel @Inject constructor(
      * [StoryFilterMatrix.clampIntensity]) — the Effets drawer's intensity slider.
      */
     fun onFilterIntensityChange(intensity: Float) = applyDeck { it.setSelectedFilterIntensity(intensity) }
+
+    /**
+     * Pins the **selected** slide's on-screen duration to [seconds] — the timeline
+     * "pin duration" control. The value is bounded to the iOS `[2, 600]`s range by the
+     * pure [StorySlideDeck.setSelectedDuration]/[me.meeshy.sdk.model.StoryDurationPin],
+     * and rides to the reader as `effects.timelineDuration`, which the reader honours
+     * over content ([me.meeshy.sdk.model.StorySlideDuration]).
+     */
+    fun onSlideDurationChange(seconds: Double) = applyDeck { it.setSelectedDuration(seconds) }
+
+    /**
+     * Sets (or clears, with null) the **selected** slide's backdrop — the Effets drawer's
+     * background picker (a preset solid/gradient from
+     * [me.meeshy.sdk.model.StoryBackgroundPalette], or a random pastel). Per-slide: each
+     * slide keeps its own colour. The value rides to the reader as `effects.background`,
+     * which the reader paints over its accent→black fallback
+     * ([me.meeshy.sdk.model.StoryBackgroundValue]).
+     */
+    fun onSlideBackgroundChange(background: me.meeshy.sdk.model.StoryBackgroundValue?) =
+        applyDeck { it.setSelectedBackground(background) }
+
+    /**
+     * Designates (or clears, on a second tap) which of the **selected** slide's attached
+     * media is its single looping background — the authoring counterpart of the reader's
+     * `isBackground` [me.meeshy.sdk.model.StoryMediaObject]. At most one media per slide is
+     * the background ([StorySlideDeck.toggleSelectedBackgroundMedia] enforces it); inert for
+     * an id not attached to the selected slide. On publish, [publishPlans] resolves the id to
+     * the uploaded media's URL/kind/duration so the reader picks exactly this layer.
+     */
+    fun onToggleSlideBackgroundMedia(mediaId: String) =
+        applyDeck { it.toggleSelectedBackgroundMedia(mediaId) }
+
+    /**
+     * Sets whether the **selected** slide's designated (video) background loops — the
+     * authoring counterpart of the reader's `loop` on the `isBackground`
+     * [me.meeshy.sdk.model.StoryMediaObject]. Inert when the slide has no designated
+     * background ([StorySlideDeck.setSelectedBackgroundLoop] enforces it). On publish,
+     * [publishPlans] carries this onto the emitted background media object.
+     */
+    fun onSetSlideBackgroundLoop(loop: Boolean) =
+        applyDeck { it.setSelectedBackgroundLoop(loop) }
 
     /**
      * Applies a structural deck transform and re-syncs the editor buffer to the
@@ -721,12 +975,56 @@ class StoryComposerViewModel @Inject constructor(
                 stickers = slide.stickers,
                 filter = slide.filter,
                 filterIntensity = slide.filterIntensity,
+                durationSecondsPin = slide.durationSecondsPin,
+                background = slide.background,
+                backgroundMedia = resolveBackgroundMedia(slide, current),
             )
             PublishPlan(
                 request = draft.toCreateStoryRequest(language),
                 dependsOn = slide.mediaIds.filter { it in pendingCmids },
             )
         }
+    }
+
+    /**
+     * Resolves a [slide]'s designated background media to the [StoryBackgroundMedia] the
+     * wire mapping needs, from the already-uploaded [attachments]. Returns `null` when
+     * nothing is designated or the id has no uploaded media yet (a still-pending offline
+     * upload has no server URL to point the reader's background layer at, so it publishes
+     * as a plain flat-media slide until the upload lands) — never a broken object. Carries
+     * the slide's author-chosen [StorySlide.backgroundLoop] (honoured only for a video) and
+     * the [resolveBackgroundFraming] pan/zoom (honoured for a framed image or video alike).
+     */
+    private fun resolveBackgroundMedia(slide: StorySlide, state: StoryComposerUiState): StoryBackgroundMedia? {
+        val attachments = state.attachments
+        val media = slide.backgroundMediaId?.let { bgId -> attachments.firstOrNull { it.id == bgId } } ?: return null
+        return StoryBackgroundMedia(
+            mediaId = media.id,
+            url = media.url,
+            mimeType = media.mimeType,
+            durationSeconds = media.durationMs?.let { it / 1000.0 },
+            loop = slide.backgroundLoop,
+            framing = resolveBackgroundFraming(slide, media, state),
+        )
+    }
+
+    /**
+     * Projects the slide's canvas pan/zoom onto the wire's normalised framing — but only when
+     * the designated background is the media the canvas actually frames. The composer canvas
+     * renders (and the pan/zoom gesture reframes) the slide's **first** resolved attachment;
+     * if the author designated a *different* attachment as the background, that gesture never
+     * framed it, so its framing stays [StoryBackgroundFraming.IDENTITY] rather than borrowing a
+     * pan the author applied to another attachment. Applies to an image or a video background
+     * identically — each client's reader honours the framing on both.
+     */
+    private fun resolveBackgroundFraming(
+        slide: StorySlide,
+        media: UploadedMedia,
+        state: StoryComposerUiState,
+    ): StoryBackgroundFraming {
+        val framedMediaId = slide.mediaIds.firstOrNull { id -> state.attachments.any { it.id == id } }
+        if (media.id != framedMediaId) return StoryBackgroundFraming.IDENTITY
+        return slide.transform.toBackgroundFraming(state.canvasWidthPx, state.canvasHeightPx)
     }
 
     private fun resolvePublishLanguage(): String =

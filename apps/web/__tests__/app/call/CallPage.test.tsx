@@ -18,12 +18,14 @@
 import { render, waitFor } from '@testing-library/react';
 import { SERVER_EVENTS, CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 
+const mockPush = jest.fn();
+
 jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn() }),
+  useRouter: () => ({ push: mockPush }),
 }));
 
 jest.mock('@/hooks/use-auth', () => ({
-  useAuth: () => ({ user: { id: 'user-1' }, isChecking: false }),
+  useAuth: jest.fn(() => ({ user: { id: 'user-1' }, isChecking: false })),
 }));
 
 jest.mock('@/components/video-calls/VideoCallInterface', () => ({
@@ -43,6 +45,7 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 }));
 
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useAuth } from '@/hooks/use-auth';
 import { useCallStore } from '@/stores/call-store';
 import CallPage from '@/app/call/[callId]/page';
 
@@ -98,6 +101,7 @@ function renderCallPage() {
 describe('CallPage — join effect cleanup', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (useAuth as jest.Mock).mockReturnValue({ user: { id: 'user-1' }, isChecking: false });
     useCallStore.getState().reset();
   });
 
@@ -155,5 +159,73 @@ describe('CallPage — join effect cleanup', () => {
     socket.fire(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, participantJoinedEvent());
 
     expect(useCallStore.getState().isInCall).toBe(true);
+  });
+
+  /**
+   * Vague 172 — `call:join`'s own ack is this page's ONLY completion signal
+   * for the joiner's OWN join. `CALL_PARTICIPANT_JOINED` is a broadcast the
+   * gateway explicitly skips sending back to the socket that just joined
+   * (`CallEventsHandler.ts`: `if (remoteSocket.id === socket.id) continue;`)
+   * — it exists to tell OTHER participants someone new arrived, never to
+   * confirm the joiner's own join. A user who navigates straight to
+   * `/call/:callId` for a call already active server-side (bookmarked link,
+   * shared URL) therefore never receives it and must not depend on it.
+   */
+  it("completes this user's own join from the call:join ack alone, with no participant-joined broadcast", async () => {
+    const callSession = {
+      id: CALL_ID,
+      conversationId: 'conv-1',
+      mode: 'p2p',
+      status: 'active',
+      initiatorId: 'user-2',
+      startedAt: new Date(),
+      participants: [],
+    };
+    const socket = {
+      ...makeFakeSocket(),
+    };
+    socket.emit = jest.fn((_event: string, _payload: unknown, ack?: (a: unknown) => void) => {
+      ack?.({ success: true, data: { callSession, iceServers: [] } });
+    });
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    renderCallPage();
+
+    // No CALL_PARTICIPANT_JOINED / CALL_INITIATED ever fires in this test —
+    // only the ack that the gateway actually delivers to the joiner itself.
+    await waitFor(() => expect(useCallStore.getState().isInCall).toBe(true));
+    expect(useCallStore.getState().currentCall?.id).toBe(CALL_ID);
+  });
+
+  it('surfaces the server-reported error immediately when call:join is rejected via its ack', async () => {
+    const socket = {
+      ...makeFakeSocket(),
+    };
+    socket.emit = jest.fn((_event: string, _payload: unknown, ack?: (a: unknown) => void) => {
+      ack?.({ success: false, error: { code: 'CALL_ENDED', message: 'This call has ended' } });
+    });
+    (meeshySocketIOService.getSocket as jest.Mock).mockReturnValue(socket);
+
+    const { findByText } = renderCallPage();
+
+    expect(await findByText('This call has ended')).toBeInTheDocument();
+    expect(useCallStore.getState().isInCall).toBe(false);
+  });
+
+  /**
+   * Vague 174 — the unauthenticated redirect named a `redirect` query param
+   * that `app/login/page.tsx` never reads (it only reads `returnUrl`, the
+   * convention every other caller — `use-auth.ts`, `AuthGuardV2`, the
+   * magic-link flow — already uses). A signed-out user who opens a shared
+   * call link got bounced to `/login`, authenticated successfully, and
+   * landed on `/dashboard` instead of back on the call: the destination was
+   * silently dropped by a param-name mismatch, not a missing feature.
+   */
+  it('redirects an unauthenticated visitor to login with a returnUrl the login page actually reads', () => {
+    (useAuth as jest.Mock).mockReturnValue({ user: null, isChecking: false });
+
+    renderCallPage();
+
+    expect(mockPush).toHaveBeenCalledWith(`/login?returnUrl=${encodeURIComponent(`/call/${CALL_ID}`)}`);
   });
 });

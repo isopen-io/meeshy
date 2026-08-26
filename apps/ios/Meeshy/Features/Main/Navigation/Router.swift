@@ -1,8 +1,37 @@
 import SwiftUI
 import Combine
+import CoreLocation
 import MeeshySDK
 import MeeshyUI
 import os
+
+/// Une coordonnée transportable par une `Route`.
+///
+/// `CLLocationCoordinate2D` n'est ni `Hashable` ni `Equatable` : glissée telle
+/// quelle dans une case d'énumération, elle ferait perdre à `Route` sa
+/// conformance et TOUTE la pile de navigation cesserait de compiler. Ce
+/// porteur existe pour ça, et pour rien d'autre — il ne transforme aucune
+/// valeur.
+///
+/// Aucun arrondi ici non plus : un point touché sur un post doit rouvrir la
+/// carte EXACTEMENT là où l'utilisateur a tapé.
+struct RouteCoordinate: Hashable {
+    let latitude: Double
+    let longitude: Double
+
+    init(latitude: Double, longitude: Double) {
+        self.latitude = latitude
+        self.longitude = longitude
+    }
+
+    init(_ coordinate: CLLocationCoordinate2D) {
+        self.init(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    }
+
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
 
 enum Route: Hashable {
     case conversation(Conversation)
@@ -13,6 +42,19 @@ enum Route: Hashable {
     /// the iPad panel keep the directory default.
     case contacts(PeopleTab = PeopleTab.contacts)
     case peopleDiscovery(DiscoveryTab = .discover)
+    /// Découverte de publications par PROXIMITÉ (spec du 2026-08-02 §4) —
+    /// carte de densité, carte à pins, liste.
+    ///
+    /// `initialCoordinate` est le point de départ quand l'écran est ouvert
+    /// depuis un lieu DÉJÀ visible (« Voir près d'ici » sur un badge de
+    /// position). Il est indépendant de l'opt-in de découvrabilité : c'est un
+    /// raccourci de navigation vers une coordonnée publique, pas une
+    /// autorisation. `nil` = l'écran part de la position de l'appareil.
+    ///
+    /// Conséquence testée : avec une coordonnée fournie, l'écran ne demande
+    /// JAMAIS l'autorisation de localisation — il fonctionne permission
+    /// refusée.
+    case nearbyDiscovery(initialCoordinate: RouteCoordinate? = nil)
     case communityList
     case communityDetail(String)
     case communityCreate
@@ -69,6 +111,8 @@ extension Route {
             return tab.title
         case .peopleDiscovery:
             return String(localized: "route.title.discover", defaultValue: "Discover", bundle: .main)
+        case .nearbyDiscovery:
+            return String(localized: "route.title.nearby", defaultValue: "À proximité", bundle: .main)
         case .communityList:
             return String(localized: "route.title.communities", defaultValue: "Communities", bundle: .main)
         case .communityDetail:
@@ -115,6 +159,11 @@ extension Route {
 
 @MainActor
 final class Router: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var path: [Route] = [] {
         didSet {
             AnalyticsManager.shared.trackRoute(path.last)
@@ -240,8 +289,8 @@ final class Router: ObservableObject {
 
     /// I-075 — override ÉPHÉMÈRE, JAMAIS persistant, posé par l'item « Focal
     /// (bêta) » du menu d'appui long de la liste (gardé par
-    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur défaut ON —
-    /// amendement produit 2026-08-16, ex-drapeau caché `focalDevPreview`).
+    /// `BetaFeaturesPreference.isEnabled`, préférence utilisateur — défaut OFF
+    /// depuis le 2026-08-22 ; ex-drapeau caché `focalDevPreview`).
     /// Consommé + remis à `nil` par le site d'appel de
     /// `ConversationView(forcedReadingMode:)` à l'ouverture — MÊME patron que
     /// `pendingReplyContext`/`pendingOpenSearch` ci-dessus : une propriété

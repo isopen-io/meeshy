@@ -46,7 +46,8 @@ const verifyAgeSchema = z.object({
   verified: z.boolean().optional(),
   reason: z.string().optional()
 });
-import { UserManagementService } from '../../services/admin/user-management.service';
+import { UserManagementService, type SessionRevoker } from '../../services/admin/user-management.service';
+import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
 import { permissionsService } from '../../services/admin/permissions.service';
@@ -70,9 +71,44 @@ const updateRoleSchema = updateRoleValidationSchema;
 const updateStatusSchema = updateStatusValidationSchema;
 const resetPasswordSchema = resetPasswordValidationSchema;
 
+// Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
+// ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
+// sanitizeUsers masque. Sans canViewPresence, les bornes sont IGNORÉES en
+// silence (un 403 confirmerait l'existence du filtre) et le tri retombe sur
+// createdAt.
+const PRESENCE_SORT_KEYS: ReadonlySet<string> = new Set(['lastActiveAt', 'isOnline']);
+
+type PresenceGatedFilters = Pick<UserFilters, 'lastActiveAfter' | 'lastActiveBefore' | 'sortBy'>;
+
+function presenceGatedFilters(query: UserFilters, canViewPresence: boolean): PresenceGatedFilters {
+  const requestedSort = query.sortBy || 'createdAt';
+  if (!canViewPresence) {
+    return { sortBy: PRESENCE_SORT_KEYS.has(requestedSort) ? 'createdAt' : requestedSort };
+  }
+  return {
+    lastActiveAfter: query.lastActiveAfter ? new Date(query.lastActiveAfter) : undefined,
+    lastActiveBefore: query.lastActiveBefore ? new Date(query.lastActiveBefore) : undefined,
+    sortBy: requestedSort
+  };
+}
+
+// Même chemin que `routes/auth/revoke-all-sessions.ts` : le manager est lu à
+// chaque appel, pas capturé ici — il n'existe pas encore quand les routes
+// s'enregistrent.
+function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker {
+  return (userId) => disconnectRevokedSessions({
+    io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+    userId,
+    reason: 'admin_revoke',
+    onError: (err) => fastify.log.warn({ err, userId }, '[ADMIN] socket fanout failed on user deactivation'),
+  });
+}
+
 export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Initialiser les services
-  const userManagementService = new UserManagementService(fastify.prisma);
+  const userManagementService = new UserManagementService(fastify.prisma, {
+    revokeSessions: deactivatedUserSessionRevoker(fastify),
+  });
   const userAuditService = new UserAuditService(fastify.prisma);
 
   /**
@@ -96,9 +132,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         twoFactorEnabled: request.query.twoFactorEnabled,
         createdAfter: request.query.createdAfter ? new Date(request.query.createdAfter) : undefined,
         createdBefore: request.query.createdBefore ? new Date(request.query.createdBefore) : undefined,
-        lastActiveAfter: request.query.lastActiveAfter ? new Date(request.query.lastActiveAfter) : undefined,
-        lastActiveBefore: request.query.lastActiveBefore ? new Date(request.query.lastActiveBefore) : undefined,
-        sortBy: request.query.sortBy || 'createdAt',
+        ...presenceGatedFilters(request.query, permissionsService.canViewPresence(viewerRole)),
         sortOrder: request.query.sortOrder || 'desc'
       };
 
@@ -1405,6 +1439,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     preHandler: [fastify.authenticate, requireUserViewAccess]
   }, async (request, reply) => {
     try {
+      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
+      const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
+      // Directive produit 2026-08-25 : `requireUserViewAccess` laisse passer
+      // MODERATOR/AUDIT (canViewUsers), qui n'ont plus le droit de voir la
+      // présence — seuil `canViewPresence` (ADMIN/BIGBOSS uniquement).
+      const canSeePresence = permissionsService.canViewPresence(viewerRole);
+
       const { conversationId } = request.params;
       const { offset = '0', limit } = request.query;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
@@ -1441,7 +1482,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.participant.count({ where })
       ]);
 
-      return sendPaginatedSuccess(reply, participants, {
+      const data = canSeePresence ? participants : participants.map((p) => ({ ...p, isOnline: false }));
+
+      return sendPaginatedSuccess(reply, data, {
         total,
         offset: offsetNum,
         limit: limitNum,

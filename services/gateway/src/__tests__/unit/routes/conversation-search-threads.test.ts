@@ -26,6 +26,10 @@ const mockResolveConversationId = jest.fn<any>();
 
 jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   generateDefaultConversationTitle: (...args: any[]) => mockGenerateDefaultConversationTitle(...args),
+  // Résolu dès que l'appelant porte un `registeredUser` : sans le double, tout
+  // test qui donne un rôle plateforme au lecteur tombe dans le `catch` de la
+  // route et se lit comme un échec de la règle testée, pas du harnais.
+  resolveUserLanguagesOrdered: () => ['fr'],
 }));
 
 jest.mock('../../../services/MessageReadStatusService', () => ({
@@ -68,8 +72,24 @@ jest.mock('../../../services/attachments/attachmentIncludes', () => ({
   attachmentMediaSelect: {},
 }));
 
+// Gate de présence — régime STRICT (2026-08-25) : la co-participation n'ouvre
+// rien, seul le viewer (soi / ADMIN+ / ami accepté) voit `isOnline` de
+// l'expéditeur du dernier message. Le service n'est doublé que sur son I/O :
+// `lawFaithfulResolver` applique la VRAIE loi partagée
+// (`resolvePresenceVisibility`) à un ensemble d'amis piloté par le test. Chaque
+// témoin dit donc la directive en clair — et rougit si la route cesse de
+// transmettre le viewer, ou revient à un régime aveugle à lui.
+const mockResolveForTargets = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: unknown[]) => mockResolveForTargets(...args),
+  }),
+}));
+
 // ─── Imports (after mocks) ────────────────────────────────────────────────────
 
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer } from '../../../services/PresenceVisibilityService';
 import { registerSearchRoutes } from '../../../routes/conversations/search';
 import { registerThreadsRoutes } from '../../../routes/conversations/threads';
 
@@ -141,6 +161,49 @@ function makeThreadRequest(id: string, messageId: string, userId = VALID_USER_ID
     params: { id, messageId },
     authContext: { userId, isAuthenticated: true },
   };
+}
+
+const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
+
+const lawFaithfulResolver =
+  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  async (viewer: PresenceViewer, ids: readonly string[]) =>
+    new Map(
+      ids.map((id) => [
+        id,
+        viewer
+          ? resolvePresenceVisibility({
+              isSelf: viewer.userId === id,
+              viewerRole: viewer.role,
+              areConnected: friendsOfViewer.has(id),
+              targetShowOnlineStatus: true,
+              targetShowLastSeen: true,
+              targetIsDeactivated: false,
+              isBlockedEitherWay: false,
+            })
+          : PRESENCE_HIDDEN,
+      ]),
+    );
+
+// `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit : c'est sur elle que `viewerFromRequest` construit le viewer
+// de présence. Un visiteur de lien partagé porte `type: 'anonymous'` et un
+// `Participant.id` — jamais de rôle plateforme.
+function makeViewerRequest(q: string, viewer: { role: string } | 'anonymous') {
+  return viewer === 'anonymous'
+    ? {
+        query: { q },
+        authContext: { type: 'anonymous', userId: VALID_PARTICIPANT_ID, isAuthenticated: true, isAnonymous: true },
+      }
+    : {
+        query: { q },
+        authContext: {
+          type: 'user',
+          userId: VALID_USER_ID,
+          isAuthenticated: true,
+          registeredUser: { id: VALID_USER_ID, role: viewer.role },
+        },
+      };
 }
 
 function makeSender(overrides: Record<string, any> = {}) {
@@ -241,6 +304,7 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
     jest.clearAllMocks();
     mockGenerateDefaultConversationTitle.mockReturnValue('Default Title');
     mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+    mockResolveForTargets.mockImplementation(lawFaithfulResolver());
   });
 
   function setup() {
@@ -636,21 +700,111 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
     expect(result[0].lastMessage.sender.isOnline).toBe(false);
   });
 
-  it('propagates isOnline true from sender.user', async () => {
-    const { prisma, route, reply } = setup();
-    prisma.user.findMany.mockResolvedValue([]);
-    const sender = makeSender({
-      user: { id: VALID_USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: true },
+  // ── Présence de l'expéditeur — régime STRICT (2026-08-25) ─────────────────
+  // Même règle que `GET /conversations` (core.ts) : hors soi-même, ADMIN+ et
+  // amitié acceptée, `isOnline` de l'expéditeur du dernier message est servi
+  // `false`. Un rang inférieur au premier est le seul qui distingue la règle
+  // juste du court-circuit — d'où un expéditeur AUTRE que le lecteur.
+
+  describe('présence de l\'expéditeur du dernier message (régime strict)', () => {
+    const otherSender = () =>
+      makeSender({
+        id: 'participant-other',
+        userId: VALID_USER_ID_2,
+        user: { id: VALID_USER_ID_2, username: 'bob', displayName: 'Bob', avatar: null, isOnline: true },
+      });
+
+    async function search(request: Record<string, unknown>, sender = otherSender()) {
+      const { prisma, route, reply } = setup();
+      prisma.user.findMany.mockResolvedValue([]);
+      prisma.conversation.findMany.mockResolvedValue([
+        makeConversation({ messages: [makeMessage({ sender })] }),
+      ]);
+      await route.handler(request, reply);
+      return (mockSendSuccess.mock.calls[0] as any[])[1][0].lastMessage.sender;
+    }
+
+    it('transmet le viewer demandeur (identité + rôle) et les userId des expéditeurs', async () => {
+      await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(mockResolveForTargets).toHaveBeenCalledWith(
+        { userId: VALID_USER_ID, role: 'USER' },
+        [VALID_USER_ID_2],
+      );
     });
-    prisma.conversation.findMany.mockResolvedValue([
-      makeConversation({ messages: [makeMessage({ sender })] }),
-    ]);
-    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
 
-    await route.handler(makeSearchRequest('test'), reply);
+    it('soi-même ⇒ isOnline servi', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }), makeSender());
 
-    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
-    expect(result[0].lastMessage.sender.isOnline).toBe(true);
+      expect(sender.isOnline).toBe(true);
+    });
+
+    it('ami accepté ⇒ isOnline servi', async () => {
+      mockResolveForTargets.mockImplementation(lawFaithfulResolver(new Set([VALID_USER_ID_2])));
+
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(sender.isOnline).toBe(true);
+    });
+
+    it('co-participant NON ami ⇒ isOnline false, même en ligne', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(sender.isOnline).toBe(false);
+    });
+
+    it('ADMIN non ami ⇒ isOnline servi', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'ADMIN' }));
+
+      expect(sender.isOnline).toBe(true);
+    });
+
+    it('MODERATOR non ami ⇒ caché, comme un utilisateur ordinaire', async () => {
+      const sender = await search(makeViewerRequest('test', { role: 'MODERATOR' }));
+
+      expect(sender.isOnline).toBe(false);
+    });
+
+    it('viewer anonyme ⇒ caché, et le service reçoit un viewer nul', async () => {
+      const sender = await search(makeViewerRequest('test', 'anonymous'));
+
+      expect(sender.isOnline).toBe(false);
+      expect(mockResolveForTargets).toHaveBeenCalledWith(null, [VALID_USER_ID_2]);
+    });
+
+    // Un expéditeur sans compte n'a ni `User.id` ni `user.isOnline` : aucune
+    // présence n'est chargée pour lui sur cette projection, donc rien à
+    // servir — à personne, ADMIN compris — et rien n'est résolu pour lui.
+    it('expéditeur sans compte ⇒ isOnline false même pour un ADMIN, et rien n\'est résolu pour lui', async () => {
+      const sender = await search(
+        makeViewerRequest('test', { role: 'ADMIN' }),
+        makeSender({ id: 'participant-anon', userId: null, user: null }),
+      );
+
+      expect(sender.isOnline).toBe(false);
+      expect(mockResolveForTargets).toHaveBeenCalledWith({ userId: VALID_USER_ID, role: 'ADMIN' }, []);
+    });
+
+    // Cas (b) : un id INSCRIT que la carte ne porte pas (anomalie — le
+    // résolveur rend une entrée par id passé). Le repli vit sur UN site
+    // (`presenceFor`, presence-gate) et dit la même chose partout : masqué,
+    // sauf ADMIN+. Cette route masquait strictement — un ADMIN y perdait la
+    // présence que la liste (core.ts) lui servait pour la même anomalie.
+    it('inscrit ABSENT de la carte ⇒ isOnline false pour un USER', async () => {
+      mockResolveForTargets.mockResolvedValue(new Map());
+
+      const sender = await search(makeViewerRequest('test', { role: 'USER' }));
+
+      expect(sender.isOnline).toBe(false);
+    });
+
+    it('inscrit ABSENT de la carte ⇒ isOnline servi à un ADMIN', async () => {
+      mockResolveForTargets.mockResolvedValue(new Map());
+
+      const sender = await search(makeViewerRequest('test', { role: 'ADMIN' }));
+
+      expect(sender.isOnline).toBe(true);
+    });
   });
 
   // ── attachments fallback ─────────────────────────────────────────────────
@@ -683,6 +837,128 @@ describe('registerSearchRoutes — GET /conversations/search', () => {
 
     const result = (mockSendSuccess.mock.calls[0] as any[])[1];
     expect(result[0].memberCount).toBe(7);
+  });
+
+  // ── Cap 199+ : le droit de voir l'effectif ENTIER ────────────────────────
+  // Même règle que `GET /conversations` et `GET /conversations/:id` : trois
+  // surfaces, une seule présentation. La recherche résout DÉJÀ l'appartenance
+  // de l'appelant pour toute la page (`memberships`) — c'est cette lecture qui
+  // porte son rôle de conversation, sans requête de plus.
+
+  it('plafonne memberCount à 199 pour un simple membre sans rôle plateforme', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(makeSearchRequest('test'), reply);
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(199);
+    expect(result[0].memberCountCapped).toBe(true);
+  });
+
+  it('sert l\'effectif ENTIER à l\'admin du GROUPE', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    prisma.participant.findMany.mockImplementation(async (args: any) =>
+      (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
+        conversationId,
+        role: 'admin',
+      }))
+    );
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(makeSearchRequest('test'), reply);
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(250);
+    expect(result[0].memberCountCapped).toBeUndefined();
+  });
+
+  // A4 — le jumeau du test de `GET /conversations` : même lecteur, même
+  // conversation, même réponse attendue. L'invité de lien partagé porte un
+  // `Participant.id` dans `authContext.userId`, donc la COLONNE interrogée doit
+  // être `id`. Le double ne rend le rôle QUE dans ce cas : une requête
+  // `userId: <Participant.id>` ne matche rien en base, et un double complaisant
+  // rendrait ce test tautologique.
+  it('sert l\'effectif ENTIER à un admin de groupe ANONYME', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    prisma.participant.findMany.mockImplementation(async (args: any) =>
+      args?.where?.id === VALID_PARTICIPANT_ID
+        ? (args?.where?.conversationId?.in ?? []).map((conversationId: string) => ({
+            conversationId,
+            role: 'admin',
+          }))
+        : []
+    );
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(
+      {
+        query: { q: 'test' },
+        authContext: {
+          userId: VALID_PARTICIPANT_ID,
+          type: 'anonymous',
+          isAnonymous: true,
+          isAuthenticated: true,
+        },
+      },
+      reply
+    );
+
+    expect(prisma.participant.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: VALID_PARTICIPANT_ID }) })
+    );
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(250);
+    expect(result[0].memberCountCapped).toBeUndefined();
+  });
+
+  it('sert l\'effectif ENTIER à un MODERATOR plateforme', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([
+      makeConversation({ _count: { participants: 250 } }),
+    ]);
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(
+      {
+        query: { q: 'test' },
+        authContext: {
+          userId: VALID_USER_ID,
+          isAuthenticated: true,
+          registeredUser: { id: VALID_USER_ID, role: 'MODERATOR' },
+        },
+      },
+      reply
+    );
+
+    const result = (mockSendSuccess.mock.calls[0] as any[])[1];
+    expect(result[0].memberCount).toBe(250);
+    expect(result[0].memberCountCapped).toBeUndefined();
+  });
+
+  it('demande le rôle de conversation dans la lecture d\'appartenance', async () => {
+    const { prisma, route, reply } = setup();
+    prisma.user.findMany.mockResolvedValue([]);
+    prisma.conversation.findMany.mockResolvedValue([makeConversation()]);
+    mockGetUnreadCountsForUser.mockResolvedValue(new Map());
+
+    await route.handler(makeSearchRequest('test'), reply);
+
+    const selects = prisma.participant.findMany.mock.calls.map((call: any[]) => call[0]?.select);
+    expect(selects.some((select: any) => select?.role === true)).toBe(true);
   });
 
   // ── Correct result shape ─────────────────────────────────────────────────

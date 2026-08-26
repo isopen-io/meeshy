@@ -35,6 +35,22 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
   invalidateConversationIdCache: jest.fn(),
 }));
 
+// Gate de présence — régime STRICT (2026-08-25). La fiche servait `isOnline`
+// et `lastActiveAt` BRUTS, sans aucune gate : un co-membre qui n'est ni ami ni
+// ADMIN+ apprenait la dernière connexion de n'importe quel membre inscrit rien
+// qu'en ouvrant sa fiche. Le service n'est doublé que sur son I/O :
+// `lawFaithfulTargetResolver` applique la VRAIE loi partagée à un ensemble
+// d'amis piloté par le test — chaque témoin rougit si la route cesse de
+// transmettre le viewer, ou sert de nouveau le rang brut.
+const mockResolveForTarget = jest.fn<any>();
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTarget: (...args: unknown[]) => mockResolveForTarget(...args),
+  }),
+}));
+
+import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
+import type { PresenceViewer, PresenceTarget } from '../../../services/PresenceVisibilityService';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
@@ -128,6 +144,23 @@ const registeredRow = {
   user: { id: '507f1f77bcf86cd799439055', username: 'alice', displayName: 'Alice' },
 };
 
+const PRESENCE_HIDDEN = { showOnline: false, showLastSeenTimestamp: false } as const;
+
+const lawFaithfulTargetResolver =
+  (friendsOfViewer: ReadonlySet<string> = new Set()) =>
+  async (viewer: PresenceViewer, target: PresenceTarget) =>
+    viewer
+      ? resolvePresenceVisibility({
+          isSelf: viewer.userId === target.id,
+          viewerRole: viewer.role,
+          areConnected: friendsOfViewer.has(target.id),
+          targetShowOnlineStatus: true,
+          targetShowLastSeen: true,
+          targetIsDeactivated: false,
+          isBlockedEitherWay: false,
+        })
+      : PRESENCE_HIDDEN;
+
 type Ctx = ReturnType<typeof setup>;
 
 function setup(viewerRole: string = 'member', targetRow: any = anonymousRow) {
@@ -182,12 +215,23 @@ function routeFor(ctx: Ctx, fragment: string) {
   return found;
 }
 
-async function fetchProfile(ctx: Ctx, participantId: string = ANON_ID) {
+// `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit : c'est sur elle que `viewerFromRequest` construit le viewer
+// de présence. Un visiteur de lien partagé porte `type: 'anonymous'` et un
+// `Participant.id` — jamais de rôle plateforme.
+type PresenceViewerShape = { role: string } | 'anonymous';
+
+const viewerAuthContext = (viewer: PresenceViewerShape) =>
+  viewer === 'anonymous'
+    ? { type: 'anonymous', isAuthenticated: true, isAnonymous: true, userId: 'viewer-anon-part', participantId: 'viewer-anon-part', registeredUser: null }
+    : { type: 'user', isAuthenticated: true, isAnonymous: false, userId: VIEWER_ID, registeredUser: { id: VIEWER_ID, role: viewer.role } };
+
+async function fetchProfile(ctx: Ctx, participantId: string = ANON_ID, viewer: PresenceViewerShape = { role: 'USER' }) {
   const route = routeFor(ctx, 'participants/:participantId/profile');
   await route.handler(
     {
       params: { id: CONV_ID, participantId },
-      authContext: { userId: VIEWER_ID, isAuthenticated: true, registeredUser: { id: VIEWER_ID } },
+      authContext: viewerAuthContext(viewer),
     },
     ctx.reply
   );
@@ -198,6 +242,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockCanAccess.mockResolvedValue(true);
   mockResolveConversationId.mockResolvedValue(CONV_ID);
+  mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver());
 });
 
 describe('GET /conversations/:id/participants/:participantId/profile — identité', () => {
@@ -391,5 +436,86 @@ describe('GET …/profile — la personne a quitté la conversation', () => {
 
     expect(ctx.reply._status).toBe(404);
     expect(ctx.reply._body?.code).not.toBe('PARTICIPANT_LEFT');
+  });
+});
+
+// ── Régime STRICT (2026-08-25) — la présence sur la fiche ────────────────────
+// Hors soi-même, ADMIN+ et amitié acceptée, ni `isOnline` ni `lastActiveAt`
+// d'un autre membre ne sortent — la co-participation n'est pas une relation.
+// Un rang inférieur au premier est le seul qui distingue la règle juste du
+// court-circuit : la cible est donc un membre AUTRE que le lecteur.
+describe('GET …/profile — présence (régime strict)', () => {
+  const LAST_SEEN = registeredRow.lastActiveAt;
+
+  it('transmet le viewer demandeur (identité + rôle) et la cible inscrite', async () => {
+    await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });
+
+    expect(mockResolveForTarget).toHaveBeenCalledWith(
+      { userId: VIEWER_ID, role: 'USER' },
+      { id: registeredRow.userId, deactivatedAt: null },
+    );
+  });
+
+  it('ami accepté ⇒ présence servie', async () => {
+    mockResolveForTarget.mockImplementation(lawFaithfulTargetResolver(new Set([registeredRow.userId])));
+
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });
+
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(LAST_SEEN);
+  });
+
+  it('co-membre NON ami ⇒ isOnline false et lastActiveAt null', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'USER' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+  });
+
+  it('ADMIN non ami ⇒ présence servie', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'ADMIN' });
+
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(LAST_SEEN);
+  });
+
+  it('MODERATOR non ami ⇒ cachée, comme un utilisateur ordinaire', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, { role: 'MODERATOR' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+  });
+
+  it('viewer anonyme ⇒ cachée, et le service reçoit un viewer nul', async () => {
+    const data = await fetchProfile(setup('member', registeredRow), REGISTERED_ID, 'anonymous');
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+    expect(mockResolveForTarget).toHaveBeenCalledWith(null, { id: registeredRow.userId, deactivatedAt: null });
+  });
+
+  // Un visiteur sans compte n'a pas de `User.id` : le service ne peut pas le
+  // résoudre. Régime strict : entrée absente ⇒ masqué, sauf ADMIN+ — et le
+  // MODERATOR, qui n'est ni ami ni administrateur, reste du côté masqué.
+  it('visiteur sans compte ⇒ caché pour un USER, et rien n\'est résolu pour lui', async () => {
+    const data = await fetchProfile(setup('member'), ANON_ID, { role: 'USER' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+    expect(mockResolveForTarget).not.toHaveBeenCalled();
+  });
+
+  it('visiteur sans compte ⇒ caché pour un MODERATOR', async () => {
+    const data = await fetchProfile(setup('member'), ANON_ID, { role: 'MODERATOR' });
+
+    expect(data.isOnline).toBe(false);
+    expect(data.lastActiveAt).toBeNull();
+  });
+
+  it('visiteur sans compte ⇒ servi à un ADMIN', async () => {
+    const data = await fetchProfile(setup('member'), ANON_ID, { role: 'ADMIN' });
+
+    expect(data.isOnline).toBe(true);
+    expect(data.lastActiveAt).toEqual(anonymousRow.lastActiveAt);
   });
 });

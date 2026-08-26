@@ -308,6 +308,17 @@ describe('adminService', () => {
       await expect(adminService.sendBroadcast('bc1')).rejects.toThrow('send error');
     });
 
+    it('sendBroadcastInApp calls POST /admin/broadcasts/:id/send-inapp', async () => {
+      mockPost.mockResolvedValue({ success: true, data: {} });
+      await adminService.sendBroadcastInApp('bc1');
+      expect(mockPost).toHaveBeenCalledWith('/admin/broadcasts/bc1/send-inapp', {});
+    });
+
+    it('sendBroadcastInApp re-throws on error', async () => {
+      mockPost.mockRejectedValue(new Error('inapp error'));
+      await expect(adminService.sendBroadcastInApp('bc1')).rejects.toThrow('inapp error');
+    });
+
     it('deleteBroadcast calls DELETE /admin/broadcasts/:id', async () => {
       mockDelete.mockResolvedValue({ success: true });
       await adminService.deleteBroadcast('bc1');

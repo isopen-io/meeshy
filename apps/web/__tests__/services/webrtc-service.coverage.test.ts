@@ -9,6 +9,7 @@ jest.mock('@/utils/logger', () => ({
 }));
 
 import { WebRTCService, type WebRTCServiceConfig } from '@/services/webrtc-service';
+import { logger } from '@/utils/logger';
 
 // ---------------------------------------------------------------------------
 // Fake RTCPeerConnection + supporting fakes
@@ -454,6 +455,45 @@ describe('createPeerConnection — event handlers', () => {
     // autoNegotiate is false before first createOffer
     pc.onnegotiationneeded!();
     expect(onLocalDescription).not.toHaveBeenCalled();
+  });
+
+  it('does not leave an unhandled rejection when the auto-renegotiation triggered by onnegotiationneeded fails', async () => {
+    // onnegotiationneeded's `void this.negotiate()` (unlike every other
+    // negotiate()/restartIce() call site in this file — see the deferred
+    // ICE-restart replay in negotiate()'s `finally` and scheduleIceRestart's
+    // restartIce() call, both `.catch(...)`-guarded) detaches the promise
+    // with no handler. negotiate() rethrows after calling onError, so a
+    // failure here (e.g. createOffer() rejecting mid A/V-switch) becomes an
+    // unhandled rejection instead of a caught, logged one.
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer(); // arms autoNegotiate
+
+    const negotiationError = new Error('createOffer failed');
+    pc.createOffer.mockRejectedValueOnce(negotiationError);
+
+    const captured: unknown[] = [];
+    const onUnhandledRejection = (reason: unknown) => {
+      captured.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandledRejection);
+    try {
+      pc.onnegotiationneeded!();
+      // Let the detached promise's rejection surface across a couple of
+      // macrotask boundaries — same technique as services/gateway/CLAUDE.md's
+      // `captureUnhandledRejections` pattern, adapted to setTimeout since
+      // jsdom (this file's test environment) has no `setImmediate` global.
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection);
+    }
+
+    expect(captured).toEqual([]);
+    expect(logger.error).toHaveBeenCalledWith(
+      '[WebRTCService] Auto-renegotiation (onnegotiationneeded) failed',
+      expect.objectContaining({ error: negotiationError })
+    );
   });
 });
 
@@ -1580,6 +1620,65 @@ describe('applyVideoEncoding — audio-only tier', () => {
     await service.enableVideoSend(camTrack);
 
     // Should have applied 'high' tier (maxBitrate=1_500_000)
+    const lastCall = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
+    expect(lastCall?.encodings?.[0]?.maxBitrate).toBe(1_500_000);
+  });
+});
+
+// ===========================================================================
+// applyVideoEncoding — 'frozen' tier (L6-3: network-survival floor)
+// ===========================================================================
+
+describe("applyVideoEncoding — 'frozen' tier", () => {
+  it('applies the frozen floor via setParameters — no renegotiation, no track mutation', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+    const trackBefore = videoTx.sender.track;
+
+    await service.applyVideoEncoding('frozen');
+
+    expect(videoTx.sender.replaceTrack).not.toHaveBeenCalled();
+    expect(videoTx.sender.track).toBe(trackBefore);
+    expect(videoTx.direction).not.toBe('recvonly');
+
+    const params = videoTx.sender.setParameters.mock.calls[0][0];
+    expect(params.encodings![0]).toEqual(
+      expect.objectContaining({ maxBitrate: 100_000, maxFramerate: 2, scaleResolutionDownBy: 4 })
+    );
+  });
+
+  it('keeps resolution and sheds cadence at the frozen floor — parity with iOS maintainResolution', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true, video: true }), { sendVideo: true });
+
+    const videoTx = pc._transceivers.find(
+      (t) => (t.sender.track as { kind?: string })?.kind === 'video'
+    )!;
+
+    await service.applyVideoEncoding('low');
+    const lowParams = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
+    expect(lowParams?.degradationPreference).toBe('maintain-framerate');
+
+    await service.applyVideoEncoding('frozen');
+    const frozenParams = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
+    expect(frozenParams?.degradationPreference).toBe('maintain-resolution');
+  });
+
+  it('a passive re-enable after a frozen tier restores "high", not the stale freeze', async () => {
+    const { service, pc } = setup();
+    service.addLocalMedia(makeStream({ audio: true }), { sendVideo: false });
+    await service.createOffer();
+
+    await service.applyVideoEncoding('frozen');
+
+    const videoTx = pc._transceivers.find((t) => t.direction === 'recvonly')!;
+    const camTrack = makeTrack('video') as unknown as MediaStreamTrack;
+    await service.enableVideoSend(camTrack);
+
     const lastCall = videoTx.sender.setParameters.mock.calls.at(-1)?.[0];
     expect(lastCall?.encodings?.[0]?.maxBitrate).toBe(1_500_000);
   });

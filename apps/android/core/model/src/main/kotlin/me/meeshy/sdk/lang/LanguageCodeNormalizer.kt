@@ -21,6 +21,9 @@ import me.meeshy.sdk.model.LanguageData
  *    the EXPLICIT [ISO_639_3_TO_1] table (`"eng"` → `"en"`, `"swe"` → `"sv"`), never by
  *    blind prefix truncation (`"swe"` ≠ `"sw"` Swahili; `"fil"` is rejected, not `"fi"`).
  *    The reduced target is re-validated against [LanguageData.supportedCodeSet].
+ *  - A deprecated ISO 639-1 alias (`iw`/`in`/`ji`, emitted by the JVM's own
+ *    `Locale.getLanguage()`) is reduced via the EXPLICIT [LEGACY_ISO_639_1] table
+ *    (`iw` -> `he`, `in` -> `id`), likewise re-validated (`ji` -> `yi`, absent, -> `null`).
  *  - Returns `null` for invalid input (blank, < 2 alphabetic chars, non-letters, or a
  *    3-letter code absent from the table). The caller decides its own fallback
  *    (`"fr"` for [LanguageResolver.resolveUserLanguage], omission for lists).
@@ -51,6 +54,21 @@ object LanguageCodeNormalizer {
         "chi" to "zh", "zul" to "zu",
     )
 
+    /**
+     * Deprecated ISO 639-1 aliases → their current canonical code (mirror of
+     * `LEGACY_ISO_639_1` in language-normalize.ts and `legacyISO6391Map` in
+     * AuthModels.swift). `iw`/`in`/`ji` are the retired codes for Hebrew,
+     * Indonesian and Yiddish. The JVM keeps them for backward compat —
+     * `java.util.Locale.getLanguage()` normalises he->iw, id->in, yi->ji — so an
+     * Android device (this very platform) on a Hebrew locale emits "iw", which
+     * left verbatim matches no `MessageTranslation` (keyed "he") and violates the
+     * Prisme Linguistique. Each target is re-validated against the catalogue, so
+     * `ji` -> `yi` (absent) falls back to `null` like the TS/iOS mirrors.
+     */
+    private val LEGACY_ISO_639_1: Map<String, String> = mapOf(
+        "iw" to "he", "in" to "id", "ji" to "yi",
+    )
+
     fun normalize(input: String?): String? {
         val trimmed = input?.trim() ?: return null
         if (trimmed.length < 2) return null
@@ -68,7 +86,36 @@ object LanguageCodeNormalizer {
             return if (reduced != null && reduced in LanguageData.supportedCodeSet) reduced else null
         }
 
+        // Deprecated 2-letter alias (iw/in/ji): reduce via the explicit table,
+        // re-validated against the catalogue (mirror of TS/iOS). Without this an
+        // Android Hebrew locale ("iw") would never match its "he" translations.
+        LEGACY_ISO_639_1[primary]?.let { legacy ->
+            return if (legacy in LanguageData.supportedCodeSet) legacy else null
+        }
+
         // Unknown 2-letter code: preserved (historical behaviour; won't match a translation).
         return primary
+    }
+
+    /**
+     * The canonical key under which two language identifiers are considered THE SAME.
+     *
+     * Faithful port of `normalizeLanguageForDedup`
+     * (`packages/shared/utils/language-normalize.ts`) — `normalize` first, then the
+     * primary subtag lowercased, then the raw string lowercased. Unlike [normalize] it
+     * is TOTAL: it never returns `null`, because a comparison has to yield something
+     * for every token it is handed.
+     *
+     * Why it exists separately, and why the TS twin is the one mirrored rather than the
+     * Swift one: the gateway builds the wire map's KEYS with this exact function
+     * (`buildLastMessagePreviewTranslations` → `normalizeLanguageForDedup`). Matching it
+     * is what guarantees a reader language canonicalises onto the key that is actually
+     * on the wire. [normalize] alone rejects what it does not recognise (`"fil-PH"` →
+     * `null`), which would silently drop a comparison instead of making it.
+     */
+    fun normalizeForDedup(code: String): String {
+        normalize(code)?.let { return it }
+        val primary = code.trim().split('-', '_').firstOrNull()?.lowercase()
+        return if (!primary.isNullOrEmpty()) primary else code.lowercase()
     }
 }

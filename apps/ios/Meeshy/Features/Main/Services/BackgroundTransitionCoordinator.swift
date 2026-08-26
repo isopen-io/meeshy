@@ -20,6 +20,11 @@ protocol BackgroundTransitioning: AnyObject {
 /// coordinator can cancel or degrade gracefully on OS expiration.
 @MainActor
 final class BackgroundTransitionCoordinator: BackgroundTransitioning {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = BackgroundTransitionCoordinator()
 
     private var activeTaskId: UIBackgroundTaskIdentifier = .invalid
@@ -252,6 +257,11 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
 /// orchestration primitives, the app wires them together.
 @MainActor
 final class MediaLifecycleBridge {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = MediaLifecycleBridge()
     private init() {}
 

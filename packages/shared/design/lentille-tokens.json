@@ -2,12 +2,13 @@
   "$source": "tasks/lentille-implementation-contract.md §4.3 (Cotes relevées sur les maquettes) — toutes les valeurs sont lues dans les maquettes interactives (Lentille et Focal) et dans les métriques LWS-5",
   "list": {
     "row": {
-      "height": 64,
+      "height": 84,
       "padding": {
-        "vertical": 10,
+        "vertical": 8,
         "horizontal": 16
       },
       "marginHorizontal": 8,
+      "marginVertical": 8,
       "radius": 16,
       "transformOriginX": "16%",
       "transformOriginY": "50%"
@@ -39,20 +40,23 @@
     },
     "unreadDot": {
       "size": 8,
-      "colorAccent": true
+      "colorAccent": true,
+      "$note": "Lot 2 (2026-08-22) — la peau iOS NE LE CONSOMME PLUS : la pastille chiffrée rétablie sur la ligne de titre porte la même donnée (unreadCount > 0), le point était un doublon. Le token RESTE parce que la peau WEB le consomme toujours (apps/web/components/conversations/lentille/LentilleRow.tsx, --lentille-list-unread-dot-size) : le retirer y ferait un point de 0×0 en silence. À supprimer quand le lot 2 web aura fait le même arbitrage."
     },
     "focusCard": {
       "ringSize": 1.5,
       "ringType": "internal",
       "radius": 16,
       "colorAccent": true,
-      "height": 104,
+      "height": 124,
+      "breathing": 8,
       "padding": {
         "vertical": 14
       },
       "avatarSize": 52,
       "nameSize": 17,
-      "magnified": true
+      "magnified": true,
+      "$noteBreathing": "breathing = amplitude de la respiration : de combien les rangees voisines s ecartent de l elue pendant la scene. Elle vaut EXACTEMENT row.marginVertical, et ce n est pas un hasard : a 18 pt pour une marge de 8, une rangee poussee mangeait la marge et mordait le header suivant de 18-8-(88-h)/2, soit 9,6 pt mesures. La respiration ne peut depasser ce que la marge lui offre — sinon elle ne deplace pas les rangees, elle les fait se chevaucher."
     },
     "modeNotch": {
       "size": 9.5,
@@ -79,8 +83,10 @@
     "rail": {
       "size": 48,
       "ring": 3.5,
+      "paddingVertical": 8,
       "maxEntries": 6,
-      "ringPulsedWhenLive": true
+      "ringPulsedWhenLive": true,
+      "$noteRail": "paddingVertical = respiration VERTICALE du rail de stories. Le rail iOS n'en avait AUCUNE (`.padding(.horizontal)` seul) alors que son jumeau web porte `py-2` depuis toujours : la trail finissait donc a 199.3 et le premier sticker commencait a 199.3, 0 pt de jonction, quand toutes les autres jonctions de la liste valent 8. Mesure reproduite deux fois au repos, iPhone 16 Pro."
     },
     "tags": {
       "size": 6,
@@ -102,7 +108,7 @@
   "thread": {
     "row": {
       "padding": {
-        "vertical": 5,
+        "vertical": 3,
         "horizontal": 16
       }
     },

@@ -249,7 +249,8 @@ struct MagicLinkView: View {
                         .padding(.top, MeeshySpacing.sm)
                         .accessibilityLabel(String(localized: "auth.magiclink.countdown.a11yLabel",
                                                    defaultValue: "Le lien expire dans", bundle: .main))
-                        .accessibilityValue(formattedCountdown)
+                        .accessibilityValue(spokenCountdown)
+                        .accessibilityAddTraits(.updatesFrequently)
                 }
             }
 
@@ -289,9 +290,16 @@ struct MagicLinkView: View {
     // MARK: - Actions
 
     private var formattedCountdown: String {
-        let minutes = countdownRemaining / 60
-        let seconds = countdownRemaining % 60
-        return String(format: "%d:%02d", minutes, seconds)
+        LocalizedNumber.duration(seconds: countdownRemaining)
+    }
+
+    /// « Le lien expire dans **4 minutes 32 secondes** ».
+    ///
+    /// La valeur d'horloge « 4:32 », passée telle quelle, se lisait « 4 heures
+    /// 32 » — l'annonce se trompait d'un facteur soixante sur la seule
+    /// information que ce compte à rebours porte.
+    private var spokenCountdown: String {
+        LocalizedNumber.spokenDuration(seconds: countdownRemaining)
     }
 
     private func sendMagicLink() {

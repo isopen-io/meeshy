@@ -262,7 +262,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
 
 // MARK: - Notification Actor (who triggered)
 
-public struct NotificationActor: Codable, Sendable {
+public struct NotificationActor: Codable, Sendable, Equatable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -275,7 +275,7 @@ public struct NotificationActor: Codable, Sendable {
 
 // MARK: - Notification Context (where it happened)
 
-public struct NotificationContext: Codable, Sendable {
+public struct NotificationContext: Codable, Sendable, Equatable {
     public let conversationId: String?
     public let conversationTitle: String?
     public let conversationType: String?
@@ -347,7 +347,7 @@ public struct NotificationContext: Codable, Sendable {
 
 // MARK: - Notification State
 
-public struct NotificationState: Codable, Sendable {
+public struct NotificationState: Codable, Sendable, Equatable {
     public let isRead: Bool
     public let readAt: String?
     public let createdAt: String
@@ -361,16 +361,16 @@ public struct NotificationState: Codable, Sendable {
 
 // MARK: - Notification Delivery
 
-public struct NotificationDelivery: Codable, Sendable {
+public struct NotificationDelivery: Codable, Sendable, Equatable {
     public let emailSent: Bool
     public let pushSent: Bool
 }
 
 // MARK: - Notification Metadata
 
-public struct NotificationMetadata: Codable, Sendable {
+public struct NotificationMetadata: Codable, Sendable, Equatable {
     /// Résumé léger d'un attachment de message (média inline + détails).
-    public struct Attachments: Codable, Sendable {
+    public struct Attachments: Codable, Sendable, Equatable {
         public let count: Int?
         /// "image" | "video" | "audio" | "document" | "text" | "code"
         public let firstType: String?
@@ -468,7 +468,7 @@ public struct NotificationMetadata: Codable, Sendable {
 
 // MARK: - API Notification (matches gateway NotificationFormatter output)
 
-public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiable {
+public struct APINotification: Codable, Identifiable, Sendable, Equatable, CacheIdentifiable {
     public let id: String
     public let userId: String
     public let type: String

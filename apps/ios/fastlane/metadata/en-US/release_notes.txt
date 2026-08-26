@@ -1,0 +1,7 @@
+New: "Nearby"
+• Discover posts around you on a map — density, pins or a list, within the radius you choose
+• Make your own posts discoverable nearby, at the precision YOU decide: exact, neighborhood, city or region — never more precise than your choice
+• "See what's nearby" from any place shown on a post
+
+Also
+• More stable: a crash when opening "Nearby" is fixed

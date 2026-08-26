@@ -591,9 +591,18 @@ export function formatFileSizeI18n(lang: string | null | undefined, bytes: numbe
 }
 
 function interpolate(template: string, tokens: Record<string, string>): string {
-  return template.replace(/\{(\w+)\}/g, (_, k: string) => {
-    const v = tokens[k];
-    return v === undefined ? '' : v;
+  // Chaque `{token}` capture aussi l'espace qui le flanque. Un token absent
+  // (`emoji` est optionnel, mais les templates l'enchâssent entre deux espaces)
+  // ne doit pas laisser d'espace orphelin : entre deux espaces il se réduit à un
+  // seul, en bord il disparaît. Une valeur NON vide conserve ses espaces
+  // littéraux tels quels — le contenu utilisateur n'est jamais altéré, et le
+  // contexte à espace-en-tête de `COMMENT_CONTEXT` reste intact.
+  return template.replace(/( ?)\{(\w+)\}( ?)/g, (_match, lead: string, key: string, tail: string) => {
+    const value = tokens[key];
+    if (value === undefined || value === '') {
+      return lead && tail ? ' ' : '';
+    }
+    return lead + value + tail;
   });
 }
 

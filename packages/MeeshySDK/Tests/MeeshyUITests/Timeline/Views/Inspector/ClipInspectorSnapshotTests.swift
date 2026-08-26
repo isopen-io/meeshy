@@ -52,7 +52,8 @@ final class ClipInspectorSnapshotTests: XCTestCase {
         )
         SnapshotHelpers.assertLightDarkSnapshot(
             of: snapshot(video),
-            named: "inspector-videoSelected"
+            named: "inspector-videoSelected",
+            perOSBaseline: true
         )
     }
 
@@ -67,7 +68,8 @@ final class ClipInspectorSnapshotTests: XCTestCase {
         )
         SnapshotHelpers.assertLightDarkSnapshot(
             of: snapshot(audio),
-            named: "inspector-audioSelected"
+            named: "inspector-audioSelected",
+            perOSBaseline: true
         )
     }
 
@@ -82,7 +84,8 @@ final class ClipInspectorSnapshotTests: XCTestCase {
         )
         SnapshotHelpers.assertLightDarkSnapshot(
             of: snapshot(text),
-            named: "inspector-textSelected"
+            named: "inspector-textSelected",
+            perOSBaseline: true
         )
     }
 
@@ -108,7 +111,8 @@ final class ClipInspectorSnapshotTests: XCTestCase {
         )
         SnapshotHelpers.assertLightDarkSnapshot(
             of: snapshot(text),
-            named: "inspector-followingSlide-hidesButton"
+            named: "inspector-followingSlide-hidesButton",
+            perOSBaseline: true
         )
     }
 
@@ -126,7 +130,8 @@ final class ClipInspectorSnapshotTests: XCTestCase {
         )
         SnapshotHelpers.assertLightDarkSnapshot(
             of: snapshot(empty, presentation: .popover),
-            named: "inspector-noSelection"
+            named: "inspector-noSelection",
+            perOSBaseline: true
         )
     }
 }

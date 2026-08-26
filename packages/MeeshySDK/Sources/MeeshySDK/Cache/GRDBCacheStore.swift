@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import GRDB
 import os
@@ -518,33 +519,82 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
 
     // MARK: - nonisolated DB operations
 
+    /// Écriture-diff partagée par les trois chemins de persistance (save,
+    /// save-préservant-fraîcheur, flush dirty) : supprime les rangées sorties
+    /// du jeu, saute (empreinte `contentHash`) celles dont le plaintext n'a
+    /// pas changé, ne chiffre et n'écrit que le reste. Remplace l'ancien
+    /// delete-all + réécriture-chiffrement intégrale — même résultat
+    /// ensembliste, coût proportionnel au CHANGEMENT.
+    private nonisolated func upsertEntriesDiffed(
+        _ db: Database,
+        keyStr: String,
+        items: [Value],
+        encoder: JSONEncoder,
+        now: Date
+    ) throws {
+        let encrypt = encrypted
+        let existingRows = try Row.fetchAll(
+            db,
+            sql: "SELECT itemId, contentHash, position FROM cache_entries WHERE key = ?",
+            arguments: [keyStr]
+        )
+        var existingHashes: [String: String] = [:]
+        var existingPositions: [String: Int] = [:]
+        var existingIds: [String] = []
+        for row in existingRows {
+            let id: String = row["itemId"]
+            existingIds.append(id)
+            if let hash: String = row["contentHash"] { existingHashes[id] = hash }
+            if let position: Int = row["position"] { existingPositions[id] = position }
+        }
+        let currentIds = Set(items.map(\.id))
+        for removedId in existingIds where !currentIds.contains(removedId) {
+            try CacheEntry.filter(Column("key") == keyStr && Column("itemId") == removedId).deleteAll(db)
+        }
+        for (index, item) in items.enumerated() {
+            let json = try encoder.encode(item)
+            let hash = contentHash(of: json)
+            if existingHashes[item.id] == hash {
+                // Payload identique — pas de re-chiffrement ni de réécriture.
+                // Seul le RANG est réaligné s'il a bougé (un déplacement dans
+                // la liste, ex. conversation remontée en tête, n'est pas un
+                // changement de contenu).
+                if existingPositions[item.id] != index {
+                    try db.execute(
+                        sql: "UPDATE cache_entries SET position = ? WHERE key = ? AND itemId = ?",
+                        arguments: [index, keyStr, item.id]
+                    )
+                }
+                continue
+            }
+            let data: Data
+            if encrypt {
+                guard let encryptedData = encryption.encrypt(json) else {
+                    logger.error("Encryption failed for store \(self.namespace, privacy: .public), refusing to persist")
+                    throw GRDBCacheError.encryptionFailed
+                }
+                data = encryptedData
+            } else {
+                data = json
+            }
+            let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now, contentHash: hash, position: index)
+            try entry.save(db)
+        }
+    }
+
     private nonisolated func writeToL2(_ items: [Value], for keyStr: String) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let encrypt = encrypted
-        let encryption = self.encryption
-        let namespace = self.namespace
-        let logger = self.logger
+        // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
+        // pour un même payload — sans ordre de clés garanti, deux encodes du
+        // même item peuvent différer et le skip ne fire jamais (réécriture
+        // intégrale silencieuse). Le décodage est insensible à l'ordre, les
+        // rangées historiques restent lisibles.
+        encoder.outputFormatting = [.sortedKeys]
         do {
             try db.write { db in
-                try CacheEntry.filter(Column("key") == keyStr).deleteAll(db)
-
                 let now = Date()
-                for item in items {
-                    let json = try encoder.encode(item)
-                    let data: Data
-                    if encrypt {
-                        guard let encryptedData = encryption.encrypt(json) else {
-                            logger.error("Encryption failed for store \(namespace, privacy: .public), refusing to persist")
-                            throw GRDBCacheError.encryptionFailed
-                        }
-                        data = encryptedData
-                    } else {
-                        data = json
-                    }
-                    let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
-                    try entry.save(db)
-                }
+                try upsertEntriesDiffed(db, keyStr: keyStr, items: items, encoder: encoder, now: now)
 
                 // Preserve any cursor state that callers persisted via
                 // `saveCursor` — `save()` only owns lastFetchedAt and
@@ -576,29 +626,16 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
     private nonisolated func writeToL2PreservingFreshness(_ items: [Value], for keyStr: String) throws -> Date {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let encrypt = encrypted
-        let encryption = self.encryption
-        let namespace = self.namespace
-        let logger = self.logger
+        // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
+        // pour un même payload — sans ordre de clés garanti, deux encodes du
+        // même item peuvent différer et le skip ne fire jamais (réécriture
+        // intégrale silencieuse). Le décodage est insensible à l'ordre, les
+        // rangées historiques restent lisibles.
+        encoder.outputFormatting = [.sortedKeys]
         do {
             return try db.write { db in
-                try CacheEntry.filter(Column("key") == keyStr).deleteAll(db)
                 let now = Date()
-                for item in items {
-                    let json = try encoder.encode(item)
-                    let data: Data
-                    if encrypt {
-                        guard let encryptedData = encryption.encrypt(json) else {
-                            logger.error("Encryption failed for store \(namespace, privacy: .public), refusing to persist")
-                            throw GRDBCacheError.encryptionFailed
-                        }
-                        data = encryptedData
-                    } else {
-                        data = json
-                    }
-                    let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
-                    try entry.save(db)
-                }
+                try upsertEntriesDiffed(db, keyStr: keyStr, items: items, encoder: encoder, now: now)
                 let existingMeta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
                 let preservedAt = existingMeta?.lastFetchedAt ?? now
                 let meta = DBCacheMetadata(
@@ -631,7 +668,13 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
                     return nil
                 }
 
-                let entries = try CacheEntry.filter(Column("key") == keyStr).fetchAll(db)
+                // Ordre explicite (v8) — repli rowid pour les rangées pré-v8,
+                // qui reproduisent l'ancien ordre d'insertion du delete-all.
+                let entries = try CacheEntry.fetchAll(
+                    db,
+                    sql: "SELECT * FROM cache_entries WHERE key = ? ORDER BY COALESCE(position, rowid)",
+                    arguments: [keyStr]
+                )
                 guard !entries.isEmpty else { return nil }
 
                 let items: [Value] = entries.compactMap { entry in
@@ -784,39 +827,37 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
         }
     }
 
+    /// Empreinte de changement d'un item (SHA-256 hex du JSON plaintext,
+    /// préfixé de l'identité de la clé sur les stores chiffrés). Le blob
+    /// chiffré est non déterministe (nonce frais à chaque encrypt) — seul un
+    /// hash du plaintext permet de détecter « payload identique ». Mélanger
+    /// l'identité de clé garantit qu'un changement de clé (perte Keychain,
+    /// destroyKey) invalide TOUTES les empreintes : chaque rangée est alors
+    /// réécrite sous la clé courante au lieu de rester indéchiffrable.
+    private nonisolated func contentHash(of json: Data) -> String {
+        var hasher = SHA256()
+        if encrypted {
+            hasher.update(data: Data(encryption.keyFingerprint.utf8))
+        }
+        hasher.update(data: json)
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     private nonisolated func flushKeyToL2(keyStr: String, items: [Value]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        let encrypt = encrypted
-        let encryption = self.encryption
-        let namespace = self.namespace
-        let logger = self.logger
+        // .sortedKeys : l'empreinte contentHash exige des octets DÉTERMINISTES
+        // pour un même payload — sans ordre de clés garanti, deux encodes du
+        // même item peuvent différer et le skip ne fire jamais (réécriture
+        // intégrale silencieuse). Le décodage est insensible à l'ordre, les
+        // rangées historiques restent lisibles.
+        encoder.outputFormatting = [.sortedKeys]
         do {
             try db.write { db in
-                let existingIds = try String.fetchAll(db, sql: "SELECT itemId FROM cache_entries WHERE key = ?", arguments: [keyStr])
-                let currentIds = Set(items.map(\.id))
-
-                let removedIds = existingIds.filter { !currentIds.contains($0) }
-                for removedId in removedIds {
-                    try CacheEntry.filter(Column("key") == keyStr && Column("itemId") == removedId).deleteAll(db)
-                }
-
-                let now = Date()
-                for item in items {
-                    let json = try encoder.encode(item)
-                    let data: Data
-                    if encrypt {
-                        guard let encryptedData = encryption.encrypt(json) else {
-                            logger.error("Encryption failed for store \(namespace, privacy: .public) during flush, refusing to persist")
-                            throw GRDBCacheError.encryptionFailed
-                        }
-                        data = encryptedData
-                    } else {
-                        data = json
-                    }
-                    let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
-                    try entry.save(db)
-                }
+                // P2-2a — écriture-diff : un flush dirty de 600 items dont 1 a
+                // changé n'écrit plus qu'1 rangée (ni re-chiffrement ni UPDATE
+                // pour les payloads identiques).
+                try upsertEntriesDiffed(db, keyStr: keyStr, items: items, encoder: encoder, now: Date())
 
                 // Preserve cursor state AND the network-fetch freshness clock
                 // across flushes. A dirty flush is triggered by purely-LOCAL
@@ -833,7 +874,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore, GRDBDirtyFlushing
                     nextCursor: existingMeta?.nextCursor,
                     hasMore: existingMeta?.hasMore ?? false,
                     totalCount: items.count,
-                    lastFetchedAt: existingMeta?.lastFetchedAt ?? now
+                    lastFetchedAt: existingMeta?.lastFetchedAt ?? Date()
                 )
                 try meta.save(db)
             }

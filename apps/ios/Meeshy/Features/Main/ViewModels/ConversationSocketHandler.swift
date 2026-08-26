@@ -10,7 +10,14 @@ import os
 @MainActor
 protocol ConversationSocketDelegate: AnyObject {
     var messages: [Message] { get set }
-    var typingUsernames: [String] { get set }
+    var typingParticipants: [TypingParticipant] { get set }
+
+    /// Avatar CONNU LOCALEMENT de cet auteur, ou `nil`.
+    ///
+    /// `TypingEvent` n'en transporte aucun : c'est au client de le retrouver
+    /// dans ce qu'il a déjà. Aucune requête ne doit partir pour afficher une
+    /// frappe — d'où le retour synchrone et l'optionnel assumé.
+    func localAvatarURL(forSender userId: String) -> String?
     var lastUnreadMessage: Message? { get set }
     var messageTranslations: [String: [MessageTranslation]] { get set }
     var messageTranscriptions: [String: MessageTranscription] { get set }
@@ -40,6 +47,12 @@ protocol ConversationSocketDelegate: AnyObject {
     func containsMessage(id: String) -> Bool
 
     func evictViewOnceMedia(message: Message)
+    /// Évince les traductions d'un message dont le CONTENU vient de changer —
+    /// dictionnaire en mémoire, cache de résolution du Prisme ET les deux
+    /// caches PERSISTANTS (CacheCoordinator, GRDB). Un site unique côté
+    /// ViewModel : ne vider que ce que le handler voit (`messageTranslations`)
+    /// laisserait l'hydratation réinjecter le texte d'avant l'édition.
+    func invalidateTranslations(for messageId: String)
     func markMessageAsConsumed(messageId: String)
     func handleParticipantRoleUpdated(participantId: String, newRole: String)
     func syncMissedMessages() async
@@ -122,7 +135,7 @@ final class ConversationSocketHandler {
     // caused one user's typing:stop to wipe the other's still-active entry.
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
     nonisolated(unsafe) private var typingUserOrder: [String] = []
-    nonisolated(unsafe) private var typingUserNames: [String: String] = [:]
+    nonisolated(unsafe) private var typingUserEntries: [String: TypingParticipant] = [:]
 
     /// `true` une fois `activate()` exécuté (instance réelle, installée par
     /// `@StateObject`). SwiftUI alloue EAGER un `ConversationViewModel`
@@ -197,7 +210,7 @@ final class ConversationSocketHandler {
         typingSafetyTimers.values.forEach { $0.invalidate() }
         typingSafetyTimers.removeAll()
         typingUserOrder.removeAll()
-        typingUserNames.removeAll()
+        typingUserEntries.removeAll()
         // Snapshot `delegate` now, while `self` is still valid, and hand the
         // snapshot (not `self`) to the Task. ARC zeroes weak references to
         // `self` as soon as `deinit` begins — a `[weak self]` capture inside
@@ -206,7 +219,7 @@ final class ConversationSocketHandler {
         // and leaving stale typing indicators on the delegate after teardown.
         let delegateSnapshot = delegate
         Task { @MainActor in
-            delegateSnapshot?.typingUsernames.removeAll()
+            delegateSnapshot?.typingParticipants.removeAll()
         }
     }
 
@@ -322,20 +335,37 @@ final class ConversationSocketHandler {
 
     /// Roster of currently-typing users, keyed by userId so a same-name
     /// collision can't make one user's departure clear another's entry.
-    /// `delegate.typingUsernames` is recomputed from this roster on every
+    /// `delegate.typingParticipants` is recomputed from this roster on every
     /// change, preserving first-seen order.
     private func addTypingUser(id: String, name: String) {
-        typingUserNames[id] = name
+        // L'avatar est relu à CHAQUE `typing:start`, pas seulement à la
+        // première frappe : au tout premier événement l'auteur n'a
+        // peut-être encore rien écrit dans ce fil (aucun `senderAvatarURL`
+        // en mémoire), et le keepalive de frappe — un `typing:start` toutes
+        // les ~3 s — rattrape le visage dès qu'il devient connu.
+        typingUserEntries[id] = TypingParticipant(
+            id: id,
+            displayName: name,
+            avatarURL: delegate?.localAvatarURL(forSender: id)
+        )
         if !typingUserOrder.contains(id) {
             typingUserOrder.append(id)
         }
-        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
+        publishTypingRoster()
     }
 
     private func removeTypingUser(id: String) {
-        guard typingUserNames.removeValue(forKey: id) != nil else { return }
+        guard typingUserEntries.removeValue(forKey: id) != nil else { return }
         typingUserOrder.removeAll { $0 == id }
-        delegate?.typingUsernames = typingUserOrder.compactMap { typingUserNames[$0] }
+        publishTypingRoster()
+    }
+
+    /// Republie le roster dans l'ordre de première apparition. Site unique :
+    /// les deux mutations ci-dessus doivent produire exactement la même
+    /// projection, sans quoi la rangée du fil et le bouton de retour au bas
+    /// désigneraient des personnes différentes.
+    private func publishTypingRoster() {
+        delegate?.typingParticipants = typingUserOrder.compactMap { typingUserEntries[$0] }
     }
 
     // MARK: - Socket Subscriptions
@@ -549,14 +579,28 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Conversation join refused by the server (banned, no longer member,
-        // never a member, conversation deleted, etc.). The ViewModel reuses
-        // the REST 403 path: purge per-conversation cache + flip the
-        // accessRevoked flag so the View dismisses with a toast.
+        // Jonction refusée par le serveur. Le MOTIF décide, et il ne le faisait
+        // pas : ce puits appelait `handleSocketAccessRevoked` sur les SEPT
+        // motifs qu'émet la passerelle — donc aussi sur `rate_limited`,
+        // `server_error`, `not_authenticated` et `invalid_payload`, qui ne
+        // disent rien de l'appartenance. Une limite de débit franchie par une
+        // tempête de reconnexion (elle rejoint toutes les rooms d'un coup)
+        // purgeait le cache du fil et le fermait sous un bandeau « accès
+        // révoqué », alors que l'utilisateur était en train de le lire.
+        //
+        // `isMembershipDenied` est le jumeau Swift de la règle partagée
+        // `isMembershipDeniedJoinError()`. Un refus transitoire ne détruit plus
+        // rien ; la room sera rejointe par le cycle de reconnexion du socket.
         socketManager.conversationJoinError
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
+                guard event.isMembershipDenied else {
+                    Logger.socket.notice(
+                        "conversation:join-error TRANSITOIRE — cache et vue conservés (reason=\(event.reason ?? "nil", privacy: .public))"
+                    )
+                    return
+                }
                 self?.delegate?.handleSocketAccessRevoked(reason: event.message)
             }
             .store(in: &cancellables)
@@ -567,6 +611,17 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiMsg in
                 guard let self else { return }
+                // Une édition de CONTENU périme les traductions du message : le
+                // gateway pose `translations: null` dans le même `updateMany`
+                // que `content`, le client doit poser le même verdict sinon la
+                // bulle (et la copie, et le partage) servent le texte traduit
+                // d'AVANT. Hors branche `callSummary` : la transition live →
+                // terminal d'un avis d'appel n'est pas une édition de contenu.
+                // Posé avant l'écriture persistée et indépendamment d'elle —
+                // l'invalidation ne dépend pas de la présence du store.
+                if apiMsg.callSummary == nil {
+                    self.delegate?.invalidateTranslations(for: apiMsg.id)
+                }
                 if let persistence = self.persistence {
                     // Write through persistence; store observation surfaces the edit.
                     let msgId = apiMsg.id
@@ -913,8 +968,12 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let delegate = self?.delegate else { return }
+                // `participant` est optionnel : ce bloc n'est ici qu'informatif
+                // (le délégué le journalise, puis invalide le cache). Renoncer à
+                // l'invalidation parce qu'il manque coûterait un trombinoscope
+                // périmé pour un nom absent.
                 delegate.handleParticipantRoleUpdated(
-                    participantId: event.participant.id,
+                    participantId: event.participant?.id ?? event.userId,
                     newRole: event.newRole
                 )
             }
@@ -1249,8 +1308,8 @@ final class ConversationSocketHandler {
                 self.typingSafetyTimers.values.forEach { $0.invalidate() }
                 self.typingSafetyTimers.removeAll()
                 self.typingUserOrder.removeAll()
-                self.typingUserNames.removeAll()
-                self.delegate?.typingUsernames.removeAll()
+                self.typingUserEntries.removeAll()
+                self.delegate?.typingParticipants.removeAll()
                 self.triggerSyncIfNeeded()
             }
             .store(in: &cancellables)

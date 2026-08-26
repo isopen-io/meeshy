@@ -20,7 +20,18 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findUnique: jest.fn<any>().mockResolvedValue({ userId: 'u-sender' }),
     },
     user: { findMany: jest.fn<any>().mockResolvedValue([]) },
-    message: { update: jest.fn<any>().mockResolvedValue(undefined) },
+    // Cycle 123 bis — la notification d'un ENTRANT relit les drapeaux de
+    // PROTECTION du message édité, et la relecture est fail-CLOSED : sans ce
+    // délégué, tout message passerait pour protégé et l'aperçu servi serait un
+    // placeholder. Le double sert donc un message ORDINAIRE par défaut.
+    message: {
+      update: jest.fn<any>().mockResolvedValue(undefined),
+      findUnique: jest.fn<any>().mockResolvedValue({
+        messageType: 'text', isEncrypted: false, isViewOnce: false,
+        isBlurred: false, effectFlags: 0, expiresAt: null,
+        createdAt: new Date('2026-08-24T10:00:00Z'),
+      }),
+    },
     mention: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
@@ -72,6 +83,36 @@ describe('resolveMessageMentions — court-circuit', () => {
     expect(result.validatedUserIds).toEqual(['u-alice']);
     expect(result.validatedUsernames).toEqual(['alice']);
     expect(mentionService.extractMentionsWithParticipants).not.toHaveBeenCalled();
+  });
+
+  // Le plafond appartient à la RÉSOLUTION, pas au transport : l'extraction
+  // depuis le contenu tronque à `MAX_MENTIONS_PER_MESSAGE` depuis toujours
+  // (`MentionService`, deux sites), la liste EXPLICITE n'était bornée nulle
+  // part. L'écart était sans conséquence tant qu'elle n'était honorée que par
+  // REST ; le déclarer sur le transport socket — celui qui porte le trafic —
+  // aurait ouvert une entrée non bornée de plus.
+  //
+  // Elle TRONQUE comme l'extraction plutôt que de rejeter l'envoi : les deux
+  // sources décrivent la même intention, et un message ne doit pas échouer pour
+  // avoir nommé trop de monde là où l'autre chemin en retient cinquante.
+  it('tronque la liste explicite au même plafond que l’extraction', async () => {
+    const explicit = Array.from({ length: 60 }, (_, i) => `u-${i}`);
+    const prisma = makePrisma({
+      user: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    });
+    const mentionService = makeMentionService({
+      validateMentionPermissions: jest.fn<any>().mockResolvedValue({ validUserIds: [] }),
+    });
+
+    await resolveMessageMentions({
+      prisma, mentionService, message: MESSAGE,
+      content: 'sans arobase', explicitMentionedUserIds: explicit,
+    });
+
+    const candidates = mentionService.validateMentionPermissions.mock.calls[0][1];
+    expect(candidates).toHaveLength(50);
+    expect(candidates[0]).toBe('u-0');
+    expect(candidates).not.toContain('u-50');
   });
 
   it('rend le lot vide sans service de mentions câblé', async () => {
@@ -546,6 +587,15 @@ describe('reconcileEditedMentions', () => {
     const prisma = makeEditPrisma();
     const notificationService = makeNotifier();
     const expiresAt = new Date('2026-08-10T12:00:00Z');
+    // Le double dit la MÊME chose que le paramètre : depuis le cycle 123 bis,
+    // la protection se relit en base, et un harnais où le paramètre annonce un
+    // éphémère pendant que la ligne dit « ordinaire » atteste un message qui
+    // n'existe pas.
+    prisma.message.findUnique.mockResolvedValue({
+      messageType: 'text', isEncrypted: false, isViewOnce: false,
+      isBlurred: false, effectFlags: 0, expiresAt,
+      createdAt: new Date('2026-08-09T12:00:00Z'),
+    });
 
     await reconcileEditedMentions({
       prisma, mentionService: makeMentionService(), notificationService,
@@ -557,6 +607,47 @@ describe('reconcileEditedMentions', () => {
       expect.objectContaining({ messageExpiresAt: expiresAt }),
       expect.anything()
     );
+  });
+
+  /**
+   * Cycle 123 bis — le contenu ÉDITÉ d'un message PROTÉGÉ ne part pas vers un
+   * ENTRANT. Ce sont des TIERS, et l'éventail d'ENVOI masque exactement ce
+   * texte : éditer un message à vue unique pour y nommer quelqu'un lui poussait
+   * le texte en clair sur son écran verrouillé.
+   */
+  it('ne pousse pas le texte d\u2019un message PROT\u00c9G\u00c9 \u00e0 l\u2019entrant', async () => {
+    const prisma = makeEditPrisma();
+    const notificationService = makeNotifier();
+    prisma.message.findUnique.mockResolvedValue({
+      messageType: 'text', isEncrypted: false, isViewOnce: true,
+      isBlurred: false, effectFlags: 0, expiresAt: null,
+      createdAt: new Date('2026-08-24T10:00:00Z'),
+    });
+
+    await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice, le code est 4242', editorUserId: 'u-sender',
+    });
+
+    const commonData = notificationService.createMentionNotificationsBatch.mock.calls[0][1];
+    expect(commonData.messageContent).not.toContain('4242');
+    // Le masque du TEXTE ne suffit pas : sans base déclarée, le Prisme
+    // réinjecterait la TRADUCTION du même secret dans le corps servi.
+    expect(commonData.previewBasis).toEqual({ kind: 'protected-placeholder' });
+  });
+
+  it('fail-CLOSED \u2014 une relecture de protection qui L\u00c8VE masque quand m\u00eame', async () => {
+    const prisma = makeEditPrisma();
+    const notificationService = makeNotifier();
+    prisma.message.findUnique.mockRejectedValue(new Error('mongo down'));
+
+    await reconcileEditedMentions({
+      prisma, mentionService: makeMentionService(), notificationService,
+      message: MESSAGE, content: 'salut @alice, le code est 4242', editorUserId: 'u-sender',
+    });
+
+    const commonData = notificationService.createMentionNotificationsBatch.mock.calls[0][1];
+    expect(commonData.messageContent).not.toContain('4242');
   });
 
   // Dix corrections de frappe ne valent pas dix pushes à quelqu'un déjà nommé

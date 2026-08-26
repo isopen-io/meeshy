@@ -438,8 +438,12 @@ struct MessageListView: UIViewControllerRepresentable {
     var onSwipeForward: ((String) -> Void)?
     /// Long-press on a bubble — opens the contextual options menu for that
     /// message (reply, forward, react, copy, delete, …). Le second paramètre
-    /// est l'aperçu Focal (pixels de la cellule vivante), `nil` en bulles.
-    var onLongPress: ((String, FocalLongPressPreview?) -> Void)?
+    /// portait l'aperçu Focal (pixels de la cellule vivante) jusqu'au
+    /// 2026-08-23 : la capture, bornée aux `bounds` de la cellule, tranchait
+    /// en deux l'identité et la barre de méta que le mode Focal fait tenir à
+    /// cheval sur son cadre. L'overlay rend désormais le message NORMAL, dans
+    /// tous les modes de lecture.
+    var onLongPress: ((String) -> Void)?
     /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
     /// construit par `ConversationView` (là où toutes les actions sont déjà
     /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
@@ -492,6 +496,11 @@ struct MessageListView: UIViewControllerRepresentable {
     @Environment(\.colorScheme) private var colorScheme
 
     class Coordinator {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         var lastScrollToBottomTrigger: Int = 0
         var lastScrollToMessageTrigger: Int = 0
         var lastFlushSeenTrigger: Int = 0

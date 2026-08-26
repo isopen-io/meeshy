@@ -154,6 +154,23 @@ data class CommentRepliesState(
         )
     }
 
+    /**
+     * Replace a reply edited elsewhere (a live `comment:updated`) wherever it lives: swap the
+     * whole row for the server-authoritative [reply] in place, preserving its position in its
+     * parent thread. Adopts every field (content/effects/translations/counts) because the payload
+     * carries the COMPLETE new comment — the reply counterpart of [CommentThreadState.replaced] and
+     * mirror of iOS `applyCommentEdit` replacing the row in `repliesMap`. Inert (same instance)
+     * when no loaded thread holds [reply]'s id (it may be a top-level comment, or on an unloaded
+     * thread page).
+     */
+    fun replacedReply(reply: ApiPostComment): CommentRepliesState {
+        val parent = parentOfReply(reply.id) ?: return this
+        return copy(
+            repliesByParent = repliesByParent +
+                (parent to repliesFor(parent).map { if (it.id == reply.id) reply else it }),
+        )
+    }
+
     /** The parent id whose loaded thread contains [replyId], or `null` if no thread holds it. */
     fun parentOfReply(replyId: String): String? =
         repliesByParent.entries.firstOrNull { (_, rows) -> rows.any { it.id == replyId } }?.key

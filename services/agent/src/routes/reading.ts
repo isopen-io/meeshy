@@ -13,6 +13,13 @@ import type { BridgeReadingOutlet } from '../reading/bridge-reading-outlet';
  * La route ne s'exécute que si on l'appelle : aucun scan, aucun abonnement, aucune horloge.
  */
 
+// La règle ObjectId est INLINE ici, à dessein : ce chemin de lecture (G-126)
+// prouve, via `non-writing-path.test.ts`, que sa clôture d'imports externes est
+// EXACTEMENT `{zod, fastify}` — aucun client réseau, aucune base. Importer le
+// SSOT `@meeshy/shared/utils/object-id` élargirait cette surface de confiance
+// pour un dédoublonnage cosmétique ; on garde le littéral pour préserver la
+// minimalité de la preuve. Le SSOT reste la source pour les routes SANS cette
+// contrainte (voir `routes/config.ts`).
 const paramsSchema = z.object({
   conversationId: z.string().regex(/^[0-9a-fA-F]{24}$/),
 });

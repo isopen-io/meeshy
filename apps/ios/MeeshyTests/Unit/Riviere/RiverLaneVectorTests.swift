@@ -307,20 +307,34 @@ final class RiverLaneVectorTests: XCTestCase {
         XCTAssertFalse((Self.loadVectors(resourceBaseName: "river-headers.vectors") as [HeadersVectorCase]).isEmpty)
     }
 
-    /// Re-preuve mécanique (règle RE-PROUVER) : 24+20+15 = 59 cas au total.
+    /// Re-preuve mécanique (règle RE-PROUVER) : 24+22+15 = 61 cas au total.
     /// Un changement de l'un de ces comptes doit être investigué avant
     /// d'ajuster ce nombre. (53 jusqu'à la règle « un avis système n'est la
     /// voix de personne », qui a ajouté 3 cas `river-lanes`, 1 `river-step` et
     /// 2 `river-headers`.)
-    func test_vectors_totalCaseCount_isFiftyNine() {
+    ///
+    /// **59 → 61 le 2026-08-22** : l'itération 245 (`2a75b1775`, « les couloirs
+    /// vivants par colonne, pas par naissance ») a ajouté DEUX vecteurs
+    /// `river-step` sans toucher à ce fichier, qui les compte — le compteur a
+    /// donc rougi sur `main` pour tout le monde. Les deux cas ont été
+    /// VÉRIFIÉS un par un avant d'ajuster le nombre, comme cette docstring
+    /// l'exige : `colonne-partagee-pas-a-droite-atteint-la-colonne-voisine`
+    /// (curseur `laneIndex 2, rank 7`) et
+    /// `colonne-partagee-pas-a-gauche-atteint-la-plus-proche` (`laneIndex 4,
+    /// rank 10`), tous deux `reason: "moved"`. Ce ne sont pas des cas de
+    /// remplissage : ils visent exactement le défaut que ce correctif répare —
+    /// un pas latéral en COLONNES PARTAGÉES, là où l'ordre de naissance
+    /// faisait sauter par-dessus une branche adjacente. L'assertion reste une
+    /// ÉGALITÉ : la relâcher en `>=` rendrait un jeu amputé vert (leçon 257).
+    func test_vectors_totalCaseCount_isSixtyOne() {
         let lanesCount = (Self.loadVectors(resourceBaseName: "river-lanes.vectors") as [LanesVectorCase]).count
         let stepCount = (Self.loadVectors(resourceBaseName: "river-step.vectors") as [StepVectorCase]).count
         let headersCount = (Self.loadVectors(resourceBaseName: "river-headers.vectors") as [HeadersVectorCase]).count
 
         XCTAssertEqual(lanesCount, 24, "river-lanes.vectors.json ne contient plus 24 cas.")
-        XCTAssertEqual(stepCount, 20, "river-step.vectors.json ne contient plus 20 cas.")
+        XCTAssertEqual(stepCount, 22, "river-step.vectors.json ne contient plus 22 cas.")
         XCTAssertEqual(headersCount, 15, "river-headers.vectors.json ne contient plus 15 cas.")
-        XCTAssertEqual(lanesCount + stepCount + headersCount, 59, "59 vecteurs Rivière attendus au total.")
+        XCTAssertEqual(lanesCount + stepCount + headersCount, 61, "61 vecteurs Rivière attendus au total.")
     }
 
     /// Les vecteurs EXERCENT-ils la règle système ? Un jeu amputé de ses cas
@@ -548,6 +562,22 @@ final class RiverLaneVectorTests: XCTestCase {
         XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 0)?.laneId, "mia")
         XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 1)?.laneId, "sarah")
         XCTAssertNil(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 1, rank: 0))
+    }
+
+    // Transposé de river-lanes.test.ts « sérialisée, ne nomme AUCUNE colonne au
+    // rang d'une annonce — même quand l'arrivant parlera ensuite » : aucun
+    // vecteur JSON n'exerce `resolveRiverLaneAt`, le miroir se tient à la main.
+    func test_resolveRiverLaneAt_serialized_namesNoColumnAtTheRankOfANotice_evenWhenTheNewcomerSpeaksNext() {
+        let geometry = Self.geometry([
+            Self.notice("j", "mia", 0),
+            Self.message("a", "mia", 1),
+            Self.message("b", "sarah", 2),
+        ])
+
+        XCTAssertEqual(geometry.layout, .serialized)
+        XCTAssertNil(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 0))
+        XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 1)?.laneId, "mia")
+        XCTAssertEqual(RiverLaneResolver.resolveRiverLaneAt(geometry, laneIndex: 0, rank: 2)?.laneId, "sarah")
     }
 
     // — Un avis système n'est la voix de personne (river-lanes.test.ts,

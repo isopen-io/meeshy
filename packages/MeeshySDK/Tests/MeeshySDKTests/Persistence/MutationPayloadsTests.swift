@@ -390,6 +390,54 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertNil(decoded.location)
     }
 
+    /// Spec 2026-08-02 §2 — le CONSENTEMENT de découvrabilité doit survivre au
+    /// flush exactement comme `location`.
+    ///
+    /// Un post TEXTE + lieu, le cas nominal de cette fonctionnalité, ne passe
+    /// PAS par `PostService.create` : `FeedViewModel.createPost` le range dans
+    /// la file durable (`isDurableTextOnly`). Sans cette clé, l'utilisateur
+    /// coche « trouvable à proximité », voit sa publication partir, et le
+    /// consentement disparaît au flush — silencieusement, même en ligne.
+    func test_outboxPayload_survivesAFlushWithItsDiscoverabilityPrecision() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "ici",
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            location: SharedPlace(latitude: 48.8583736, longitude: 2.2944813, name: "Tour Eiffel"),
+            discoverabilityPrecision: .neighborhood
+        )
+
+        let restored = try decoder.decode(CreatePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertEqual(restored.discoverabilityPrecision, .neighborhood)
+        XCTAssertEqual(restored, payload)
+    }
+
+    /// L'ABSENCE vaut « non découvrable » : une charge sans consentement ne
+    /// doit pas fabriquer de palier par défaut au décodage.
+    func test_createPostPayload_withoutDiscoverabilityPrecision_staysNil() throws {
+        let payload = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "hi",
+            attachmentIds: [],
+            visibility: "PUBLIC"
+        )
+
+        let restored = try decoder.decode(CreatePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertNil(restored.discoverabilityPrecision)
+    }
+
+    /// Une ligne persistée avant ce champ décode toujours — aucune migration.
+    func test_createPostPayload_decodesLegacyRowWithoutDiscoverabilityPrecision() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy4","content":"hi","attachmentIds":[],"visibility":"PUBLIC"}
+        """
+        let decoded = try decoder.decode(CreatePostPayload.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(decoded.discoverabilityPrecision)
+    }
+
     // MARK: - ToggleLikePostPayload (Phase C)
 
     func test_toggleLikePostPayload_encodes_likedBool() throws {
@@ -402,6 +450,55 @@ final class MutationPayloadsTests: XCTestCase {
         let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
         XCTAssertEqual(object["liked"] as? Bool, true)
         XCTAssertEqual(object["postId"] as? String, "post-1")
+    }
+
+    /// Une réaction à une story emprunte le MÊME endpoint que le like d'un post
+    /// (`POST /posts/:id/like`) et le même `kind` de `MutationLog` côté gateway
+    /// (`toggleLikePost`) : pas d'`OutboxKind` à elle, mais l'emoji doit
+    /// voyager jusqu'au dispatcher.
+    func test_toggleLikePostPayload_withReactionEmoji_roundTripsTheEmoji() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000013",
+            postId: "story-1",
+            liked: true,
+            emoji: "🔥"
+        )
+
+        let decoded = try decoder.decode(ToggleLikePostPayload.self, from: try encoder.encode(payload))
+
+        XCTAssertEqual(decoded.emoji, "🔥")
+        XCTAssertEqual(decoded, payload)
+    }
+
+    /// Un like simple garde la forme qu'il avait avant ce champ : la clé ne
+    /// part pas, plutôt qu'un `null` que le dispatcher aurait à interpréter.
+    func test_toggleLikePostPayload_withoutEmoji_omitsTheEmojiKey() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000014",
+            postId: "post-1",
+            liked: false
+        )
+
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertNil(object["emoji"])
+        XCTAssertEqual(Set(object.keys), ["clientMutationId", "postId", "liked"])
+    }
+
+    /// Rétro-compatibilité : les lignes DÉJÀ en file au moment de la migration
+    /// ont été encodées sans `emoji`. Elles doivent continuer à se décoder —
+    /// sinon la mise à jour ferait perdre des mutations en attente.
+    func test_toggleLikePostPayload_decodesRowsWrittenBeforeTheEmojiField_asPlainLike() throws {
+        let legacy = Data("""
+        {"clientMutationId":"cmid_00000000-0000-4000-8000-000000000012","postId":"post-1","liked":true}
+        """.utf8)
+
+        let decoded = try decoder.decode(ToggleLikePostPayload.self, from: legacy)
+
+        XCTAssertNil(decoded.emoji, "Un like simple n'a pas d'emoji.")
+        XCTAssertTrue(decoded.liked)
+        XCTAssertEqual(decoded.postId, "post-1")
     }
 
     // MARK: - CreateCommentPayload (Phase C)
@@ -481,5 +578,53 @@ final class MutationPayloadsTests: XCTestCase {
             let decoded = try decoder.decode(ToggleLikeCommentPayload.self, from: data)
             XCTAssertEqual(decoded, original)
         }
+    }
+
+    // MARK: - RepostPostPayload (fil rouge du repost, lot 7 tâche 7.5)
+
+    /// `targetType` voyage OBLIGATOIRE (Loi 5 — « le repost miroite »),
+    /// jamais optionnel : la clé DOIT figurer sur le fil, pas seulement
+    /// exister à l'appel.
+    func test_repostPostPayload_encoding_includesPostIdAndTargetType() throws {
+        let payload = RepostPostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000002",
+            postId: "post-source-1",
+            targetType: "POST"
+        )
+
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(object["postId"] as? String, "post-source-1")
+        XCTAssertEqual(object["targetType"] as? String, "POST")
+        XCTAssertNotNil(object["isQuote"], "isQuote a un défaut mémoire mais reste ENCODÉ — pas de clé absente")
+    }
+
+    func test_repostPostPayload_roundtrip_withQuoteAndVisibility() throws {
+        let original = RepostPostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: "post-source-2",
+            targetType: "STORY",
+            content: "Regardez ça",
+            isQuote: true,
+            visibility: "COMMUNITY"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(RepostPostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    func test_repostPostPayload_roundtrip_defaultsSimpleRepost() throws {
+        let original = RepostPostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: "post-source-3",
+            targetType: "POST"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(RepostPostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+        XCTAssertNil(decoded.content)
+        XCTAssertFalse(decoded.isQuote)
+        XCTAssertNil(decoded.visibility)
     }
 }

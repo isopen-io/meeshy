@@ -82,7 +82,7 @@ export function PostContentText({
     : null;
   const segments = parseSegments(content);
   return (
-    <p className={`whitespace-pre-wrap ${className ?? ''}`}>
+    <p data-testid="post-content-text" className={`whitespace-pre-wrap ${className ?? ''}`}>
       {segments.map((segment, i) => {
         switch (segment.type) {
           case 'mention': {

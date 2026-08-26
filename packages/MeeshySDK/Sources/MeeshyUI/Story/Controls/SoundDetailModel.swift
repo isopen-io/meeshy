@@ -11,6 +11,11 @@ import MeeshySDK
 /// qu'un lecteur qui doute peut recompter.
 @MainActor
 public final class SoundDetailModel: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published public private(set) var posts: [APISoundPost] = []
     @Published public private(set) var isLoading = false
     @Published public private(set) var didFail = false

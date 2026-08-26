@@ -1,6 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import { broadcastReactionMutation } from '../broadcastReactionMutation';
+import { broadcastReactionMutation, type ReactionMutationPayload } from '../broadcastReactionMutation';
 
 type Emitted = { room: string; event: string; payload: any };
 
@@ -18,6 +18,37 @@ function makeManager(sink: Emitted[], overrides: Partial<{ getIO: any; enqueue: 
   return { getIO, enqueueOfflineReactionMutation: enqueue } as any;
 }
 
+/**
+ * La charge RÉELLE de `ReactionService.createUpdateEvent`, copiée clé par clé —
+ * pas une esquisse.
+ *
+ * Les fixtures de ce fichier étaient partielles (`{ messageId, emoji, action }`,
+ * et trois fois `{}`), ce que `payload: Record<string, unknown>` acceptait
+ * puisqu'un sac de clés satisfait n'importe quoi. Depuis que le transport
+ * déclare `ReactionUpdateEventData` (cycle 104), une esquisse ne compile plus —
+ * et c'est le sens de la garde : « un témoin se construit depuis la sortie
+ * réelle du collaborateur, pas depuis le type qu'on aimerait qu'il ait ».
+ */
+function makePayload(overrides: Partial<ReactionMutationPayload> = {}): ReactionMutationPayload {
+  return {
+    messageId: 'msg-1',
+    conversationId: 'conv-1',
+    participantId: 'participant-A',
+    userId: 'user-A',
+    emoji: '👍',
+    action: 'add',
+    // Pas de `hasCurrentUser` : une diffusion n'a pas de lecteur, donc pas de
+    // « moi » à résoudre (cycle 115, `ReactionBroadcastAggregation`).
+    aggregation: {
+      emoji: '👍',
+      count: 1,
+      participantIds: ['participant-A'],
+    },
+    timestamp: new Date('2026-08-23T10:00:00.000Z'),
+    ...overrides,
+  };
+}
+
 const base = {
   conversationId: 'conv-1',
   actorParticipantId: 'participant-A',
@@ -29,7 +60,7 @@ describe('broadcastReactionMutation', () => {
   it('reaches both audiences: the live conversation room and the offline queue', async () => {
     const emitted: Emitted[] = [];
     const enqueue = jest.fn(async (_params: any) => {});
-    const payload = { messageId: 'msg-1', emoji: '👍', action: 'add' };
+    const payload = makePayload({ action: 'add' });
 
     await broadcastReactionMutation({
       manager: makeManager(emitted, { enqueue }),
@@ -56,7 +87,7 @@ describe('broadcastReactionMutation', () => {
   it('maps a removal to reaction:removed and queues it under the reaction-removed eventType', async () => {
     const emitted: Emitted[] = [];
     const enqueue = jest.fn(async (_params: any) => {});
-    const payload = { messageId: 'msg-1', emoji: '👍', action: 'remove' };
+    const payload = makePayload({ action: 'remove' });
 
     await broadcastReactionMutation({
       manager: makeManager(emitted, { enqueue }),
@@ -95,7 +126,7 @@ describe('broadcastReactionMutation', () => {
       manager,
       ...base,
       eventType: 'reaction-added',
-      payload: {},
+      payload: makePayload(),
       onError,
     });
 
@@ -116,7 +147,7 @@ describe('broadcastReactionMutation', () => {
       manager,
       ...base,
       eventType: 'reaction-added',
-      payload: { a: 1 },
+      payload: makePayload(),
       onError,
     });
 
@@ -130,7 +161,7 @@ describe('broadcastReactionMutation', () => {
         manager: null,
         ...base,
         eventType: 'reaction-added',
-        payload: {},
+        payload: makePayload(),
       }),
     ).resolves.toBeUndefined();
   });
@@ -155,7 +186,7 @@ describe('broadcastReactionMutation', () => {
         manager,
         ...base,
         eventType: 'reaction-added',
-        payload: {},
+        payload: makePayload(),
         onError,
       }),
     ).resolves.toBeUndefined();
@@ -169,7 +200,7 @@ describe('broadcastReactionMutation', () => {
         manager: { getIO: () => null, enqueueOfflineReactionMutation: enqueue } as any,
         ...base,
         eventType: 'reaction-added',
-        payload: {},
+        payload: makePayload(),
       }),
     ).resolves.toBeUndefined();
     // The offline audience is still served — it does not depend on io.

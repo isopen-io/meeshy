@@ -10,6 +10,7 @@ import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -96,10 +97,10 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Email already in use or invalid' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Email already in use or invalid' },
           }
         },
         401: errorResponseSchema,
@@ -120,7 +121,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       // Get current user
       const user = await fastify.prisma.user.findUnique({
         where: { id: userId },
-        select: { id: true, email: true, firstName: true, lastName: true, displayName: true, systemLanguage: true }
+        select: { id: true, email: true, firstName: true, lastName: true, displayName: true, ...RECIPIENT_LANG_SELECT }
       });
 
       if (!user) {
@@ -173,7 +174,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
         expiryHours: tokenExpiryHours,
-        language: user.systemLanguage || 'fr'
+        language: recipientLanguage(user, 'fr')
       });
 
       logger.info(`[EMAIL_CHANGE] Verification email sent to ${newEmail} for user ${userId}`);
@@ -226,10 +227,10 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Invalid or expired token' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Invalid or expired token' },
           }
         },
         401: errorResponseSchema,
@@ -347,18 +348,18 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'No pending email change' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'No pending email change' },
           }
         },
         401: errorResponseSchema,
         429: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Rate limit exceeded' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Rate limit exceeded' },
           }
         },
         500: errorResponseSchema
@@ -381,7 +382,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
           firstName: true,
           lastName: true,
           displayName: true,
-          systemLanguage: true,
+          ...RECIPIENT_LANG_SELECT,
           pendingEmail: true,
           pendingEmailVerificationExpiry: true
         }
@@ -435,7 +436,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
         name: user.displayName || `${user.firstName} ${user.lastName}`,
         verificationLink,
         expiryHours: tokenExpiryHours,
-        language: user.systemLanguage || 'fr'
+        language: recipientLanguage(user, 'fr')
       });
 
       logger.info(`[EMAIL_CHANGE] Verification email resent to ${user.pendingEmail} for user ${userId}`);
@@ -484,10 +485,10 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Phone number already in use or invalid' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Phone number already in use or invalid' },
           }
         },
         401: errorResponseSchema,
@@ -605,10 +606,10 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
           }
         },
         400: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
-            error: { type: 'string', description: 'Invalid or expired code' }
+            ...errorResponseSchema.properties,
+            error: { type: 'string', description: 'Invalid or expired code' },
           }
         },
         401: errorResponseSchema,

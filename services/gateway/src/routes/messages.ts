@@ -5,13 +5,20 @@ import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSe
 import { hoistLocationOnto } from '../services/location/sharedPlace';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
+import { validatePagination } from '../utils/pagination';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitToConversationParticipants } from '../socketio/emitToConversationParticipants';
 import { broadcastReadStatus } from '../socketio/broadcastReadStatus';
 import { broadcastMessageMutation } from '../socketio/broadcastMessageMutation';
+import { buildMessageEditedCore } from '../socketio/messageEditedPayload';
+import type { Message } from '@meeshy/shared/types/index';
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { getPresenceVisibilityService } from '../services/PresenceVisibilityService';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import {
+  applyPresenceVisibilityAsOffline,
+  type PresenceVisibility,
+} from '@meeshy/shared/utils/presence-visibility';
+import { presenceFor, viewerFromRequest } from './users/presence-gate';
 import { ConversationBridgeService } from '../services/ConversationBridgeService.js';
 import { emitMentionCreated } from '../socketio/emitMentionCreated';
 import { reconcileEditedMentions } from '../services/messaging/messageMentions';
@@ -43,6 +50,7 @@ import {
   AttachmentStatusBodySchema,
 } from '../validation/messages-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { errorResponseSchema, messageSchema } from '@meeshy/shared/types/api-schemas';
 import {
   sendSuccess,
   sendPaginatedSuccess,
@@ -69,6 +77,130 @@ interface MessageStatusBody {
   timestamp?: string;
   language?: string;
 }
+
+/**
+ * L'expéditeur tel que `GET /messages/:messageId` le CHARGE — un `Participant`,
+ * et son `User` imbriqué.
+ *
+ * `messageSchema.sender` est `userMinimalSchema` : il couvre le participant
+ * (il déclare `userId` et `type` pour lui) mais reste MINIMAL, et ce `select`
+ * charge en plus le bloc `user`. Le grain juste est celui qui CHARGE — c'est
+ * cette route qui charge plus, c'est elle qui déclare plus, localement.
+ *
+ * **Différence assumée avec `editedMessageSenderSchema`** (cycle 93,
+ * `conversations/messages-advanced.ts`), et c'est pourquoi les deux ne
+ * fusionnent pas en un `participantSenderSchema` partagé : les deux routes ne
+ * chargent pas le même participant. Là-bas c'est `role` + `language` sans
+ * `isOnline` (fail-closed : le `select` ne le charge pas). Ici c'est l'inverse
+ * — pas de `role`/`language`, mais `isOnline` sur les DEUX porteurs, chargé
+ * DÉLIBÉRÉMENT et gaté à la source par `applyPresenceVisibilityAsOffline`
+ * (critère STRICT — `resolveForTargets` : soi-même, ADMIN/BIGBOSS, ou ami
+ * accepté de l'expéditeur, jamais la seule co-présence dans la conversation ;
+ * directive produit du 2026-08-25). Le déclarer est donc juste, et la garde
+ * reste où elle doit être : dans le handler, pas dans le sérialiseur.
+ */
+const messageDetailSenderSchema = {
+  type: 'object',
+  nullable: true,
+  properties: {
+    id: { type: 'string', description: 'Participant ID' },
+    userId: { type: 'string', nullable: true, description: 'Real User ID (null for anonymous participants)' },
+    displayName: { type: 'string', nullable: true },
+    avatar: { type: 'string', nullable: true },
+    isOnline: { type: 'boolean', description: 'Presence — gated by applyPresenceVisibilityAsOffline in the handler' },
+    type: { type: 'string', enum: ['user', 'anonymous', 'bot'] },
+    user: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        id: { type: 'string' },
+        username: { type: 'string' },
+        avatar: { type: 'string', nullable: true },
+        isOnline: { type: 'boolean', description: 'Presence — gated with the same visibility as its participant' }
+      }
+    }
+  }
+} as const;
+
+/**
+ * L'enveloppe RÉELLE de `GET /messages/:messageId`.
+ *
+ * Ce qu'elle remplace était la dernière ligne de `FROZEN_INVENTORY`, et la
+ * seule de la **forme 3** : un schéma qui décrit le MESSAGE (`id`, `content`,
+ * `sender`…) quand `sendSuccess` répond `{ success, data }`. Aucune de ses
+ * déclarations ne matchait, `success`/`data` n'étaient pas déclarés, et
+ * l'`additionalProperties: true` du bloc laissait la charge utile traverser
+ * ENTIÈRE et non gouvernée. Le balayage la signalait donc en FAUX POSITIF —
+ * `sender: { type: 'object' }` n'y vidait rien, il masquait au contraire une
+ * fuite de présence ACTIVE, fermée au cycle 88 par le gate du handler.
+ *
+ * Aligner ce schéma était « un lot en soi » parce que déclarer partiellement ce
+ * qui passait entier TRONQUE. Les 42 clés servies ont donc été relevées
+ * mécaniquement depuis le `select` et les surcharges du handler, puis passées
+ * au sérialiseur : la mesure a fait apparaître les DEUX défauts que
+ * l'enveloppe inerte cachait — `translations` servi en CARTE là où le contrat
+ * dit tableau (corrigé dans le handler), et `encryptionMode` absent de
+ * `messageSchema` (corrigé dans le schéma partagé, où il manquait pour la
+ * liste aussi). *Réparer une enveloppe rend lisibles les défauts de ce qu'elle
+ * contenait.*
+ *
+ * Composée depuis `messageSchema` et **non** en descendant dans
+ * `messageResponseSchema.properties.data` : plusieurs suites mockent
+ * `@meeshy/shared/types/api-schemas` avec un sous-ensemble des exports, et une
+ * chaîne d'accès y lève à l'IMPORT (cycles 91 bis et 93, deux suites qui ont
+ * cessé de CHARGER).
+ */
+export const messageDetailResponseSchema = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean', example: true },
+    data: {
+      ...messageSchema,
+      description: 'The message, served flat — never wrapped under `data.message`',
+      properties: {
+        ...messageSchema.properties,
+        sender: messageDetailSenderSchema,
+        // Le `select` charge la conversation POUR LE CONTRÔLE D'ACCÈS (le 403
+        // vingt lignes plus bas), et l'étalement `...message` la sert depuis
+        // toujours. Le `where` ne rend que la ligne de l'APPELANT
+        // (`{ userId, isActive: true }`) : c'est sa propre appartenance, jamais
+        // celle d'un tiers. Déclarée telle qu'elle est servie — la retirer
+        // serait un changement de contrat, qui se décide sur des preuves de
+        // consommation client, pas en passant.
+        conversation: {
+          type: 'object',
+          nullable: true,
+          description: "Caller's own participation row, loaded for the access check",
+          properties: {
+            participants: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  userId: { type: 'string', nullable: true },
+                  role: { type: 'string', nullable: true }
+                }
+              }
+            }
+          }
+        },
+        // Les trois compteurs sont servis DEUX fois : à plat (les trois clients
+        // y décodent leurs coches) et groupés ici. Le doublon est antérieur à ce
+        // lot et parfaitement servi aujourd'hui ; le déclarer maintient la
+        // charge utile à l'identique.
+        statusSummary: {
+          type: 'object',
+          description: 'Grouped mirror of the three flat delivery counters',
+          properties: {
+            deliveredCount: { type: 'number' },
+            readCount: { type: 'number' },
+            recipientCount: { type: 'number' }
+          }
+        }
+      }
+    }
+  }
+} as const;
 
 export default async function messageRoutes(fastify: FastifyInstance) {
   // Récupérer prisma décoré par le serveur
@@ -101,48 +233,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       response: {
         200: {
           description: 'Message details',
-          type: 'object',
-          // Le schéma ne liste qu'un sous-ensemble illustratif des champs
-          // (déjà le cas avant ce correctif — metadata/messageType/etc. n'y
-          // figuraient pas non plus). `additionalProperties: true` empêche
-          // fast-json-stringify de tronquer silencieusement tout champ non
-          // listé ici — dont le `location` hissé par hoistLocationOnto —
-          // à la sérialisation de la réponse.
-          additionalProperties: true,
-          properties: {
-            id: { type: 'string' },
-            content: { type: 'string' },
-            // ATTENTION — aucune de ces déclarations ne s'applique.
-            //
-            // Ce schéma décrit le MESSAGE (id, content, sender…) alors que
-            // `sendSuccess` répond `{ success, data }`. Les six propriétés
-            // listées ici ne correspondent donc à aucune clé de l'objet réel ;
-            // `success` et `data` sont non déclarés et traversent par
-            // l'`additionalProperties: true` ci-dessus, **entiers et non
-            // gouvernés**. Vérifié en isolant le compilateur.
-            //
-            // Conséquence à retenir avant de « corriger » ce bloc : le
-            // `sender: { type: 'object' }` nu qu'il portait ne vidait RIEN, et
-            // la présence brute de l'expéditeur atteignait bel et bien le fil —
-            // ce n'est pas une non-fuite accidentelle, c'était une fuite. Le
-            // gate posé dans le handler est ce qui la ferme.
-            //
-            // Aligner ce schéma sur l'enveloppe est un lot en soi : il faudrait
-            // décrire TOUT ce que la route sert (une trentaine de colonnes,
-            // pièces jointes et bloc de statut compris), sans quoi la
-            // déclaration tronquerait ce qui passe aujourd'hui.
-            sender: { type: 'object' },
-            attachments: { type: 'array' },
-            translations: { type: 'array' },
-            createdAt: { type: 'string', format: 'date-time' }
-          }
+          ...messageDetailResponseSchema
         },
         404: {
           description: 'Message not found',
-          type: 'object',
-          properties: {
-            error: { type: 'string' }
-          }
+          ...errorResponseSchema
         }
       }
     },
@@ -267,43 +362,48 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         logger.warn('[MESSAGES] Failed to compute read status summary', err as Error);
       }
 
-      // Présence de l'expéditeur : montrable — l'appelant est un participant
-      // ACTIF de la conversation, vérifié vingt lignes plus haut (403 sinon),
-      // donc contexte d'accès garanti des deux côtés — mais soumise aux
-      // préférences `showOnlineStatus` / `showLastSeen` de l'auteur.
+      // Présence de l'expéditeur : gate STRICT (directive produit 2026-08-25).
+      // Être co-participant ACTIF de cette conversation (le 403 vingt lignes
+      // plus haut) donne accès au MESSAGE, jamais à la présence de son auteur —
+      // une conversation n'est pas une relation. `isOnline`/`lastActiveAt` ne
+      // se montrent donc qu'à soi-même, à un ADMIN/BIGBOSS, ou à un ami accepté
+      // de l'expéditeur (sous ses préférences `showOnlineStatus`/`showLastSeen`).
+      // Tout autre lecteur reçoit `isOnline: false` sur les DEUX porteurs — la
+      // ligne `Participant` (`sender.isOnline`) ET le `User` imbriqué
+      // (`sender.user.isOnline`), qui voyagent tous deux depuis le `select`.
       //
       // Ce site N'EST PAS une non-fuite accidentelle, contrairement à ce que
       // le balayage `{ type: 'object' }` laissait croire : le schéma de cette
       // route décrit le message quand `sendSuccess` répond `{ success, data }`,
       // si bien que ses déclarations ne s'appliquent à rien et que `data`
       // traverse entier (voir la note sur `sender` dans le schéma). `isOnline`
-      // brut — sur la ligne `Participant` ET sur le `user` imbriqué —
-      // atteignait donc réellement le fil. C'était une fuite, pas un piège
-      // armé, et ce gate est ce qui la ferme.
+      // brut atteignait donc réellement le fil sans ce gate.
       //
-      // `onMissingEntry: 'reveal'` : sous `resolvePrefsOnly`, une entrée
-      // absente est NORMALE — un expéditeur anonyme n'a pas de `userId`, donc
-      // pas de préférences, et reste visible. C'est le défaut inverse du
-      // critère strict.
+      // Un expéditeur ANONYME (`userId` absent) n'a pas de ligne `User` à
+      // résoudre via `resolveForTargets` (elle est indexée par `User.id`) —
+      // rien n'est demandé au résolveur, et sa carte reste vide. Le sort d'une
+      // entrée ABSENTE (anonyme, ou inscrit non résolu) n'est pas réécrit ici :
+      // `presenceFor` (`presence-gate`) applique la loi partagée — révélé à
+      // ADMIN/BIGBOSS, à qui la directive garantit la présence de façon
+      // inconditionnelle, masqué sinon — et ne rend jamais `undefined`.
+      const viewer = viewerFromRequest(request);
       const senderUserId = (message as { sender?: { userId?: string | null } }).sender?.userId;
-      const senderVisibility = senderUserId
-        ? (await getPresenceVisibilityService(prisma).resolvePrefsOnly([senderUserId])).get(senderUserId)
-        : undefined;
+      const senderVisibilityById = senderUserId
+        ? await getPresenceVisibilityService(prisma).resolveForTargets(viewer, [senderUserId])
+        : new Map<string, PresenceVisibility>();
+      const senderVisibility = presenceFor(viewer, senderVisibilityById, senderUserId);
       const gatedSender = (message as { sender?: Record<string, unknown> | null }).sender
         ? (() => {
             const raw = (message as unknown as { sender: Record<string, unknown> }).sender;
             const gated = applyPresenceVisibilityAsOffline(
               raw as unknown as { isOnline: boolean | null },
               senderVisibility,
-              { onMissingEntry: 'reveal' },
             ) as Record<string, unknown>;
             const nested = raw.user as { isOnline: boolean | null } | null | undefined;
             return nested
               ? {
                   ...gated,
-                  user: applyPresenceVisibilityAsOffline(nested, senderVisibility, {
-                    onMissingEntry: 'reveal',
-                  }),
+                  user: applyPresenceVisibilityAsOffline(nested, senderVisibility),
                 }
               : gated;
           })()
@@ -315,6 +415,28 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       return sendSuccess(reply, hoistLocationOnto({
         ...message,
         sender: gatedSender,
+        // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
+        // jamais un tableau — le contrat, lui, déclare un TABLEAU d'objets
+        // `{targetLanguage, translatedContent, …}`, et c'est ce que décodent
+        // les clients (`APIMessage.translations: [APITextTranslation]?`).
+        //
+        // Les DEUX autres transports de ce fichier appliquaient déjà
+        // `transformTranslationsToArray` (l'édition, la suppression) ; ce
+        // GET-ci étalait `...message` et servait donc la carte BRUTE. Le
+        // symptôme n'était pas côté web (permissif) mais sur le chemin PUSH :
+        // l'extension de notification appelle cette route, dépose le blob dans
+        // l'App Group, et `NSEPendingMessageConsumer` le décode en `APIMessage`
+        // — où `translations` se décode avec un `try` NON tolérant, contrairement
+        // à ses voisins `callSummary`/`trackingLinks`. Une carte y fait donc
+        // échouer le décodage du message ENTIER, le consommateur SUPPRIME le
+        // fichier, et le démarrage à froid depuis une notification se retrouve
+        // sans son message — la garantie même que cette route avait été choisie
+        // pour rétablir, reperdue une couche plus bas, pour tout message portant
+        // au moins une traduction.
+        translations: transformTranslationsToArray(
+          messageId,
+          (message as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        ),
         // Les mêmes valeurs écrasent aussi les champs de premier niveau issus
         // du `select` : les trois clients y décodent leurs coches de livraison.
         // Les laisser au contenu de la ligne aurait servi zéro ici pendant que
@@ -614,7 +736,21 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         actorUserId: userId,
         eventType: 'edited',
         messageId,
-        payload: { ...transformedMessage, conversationId: message.conversationId },
+        // Le NOYAU du contrat vient de `buildMessageEditedCore`, source unique
+        // partagée avec les deux producteurs socket. Étalé APRÈS la ligne
+        // relue, il n'ajoute rien qui ne soit déjà servi — il corrige la seule
+        // valeur que l'étalement brut servait fausse : `senderId`, qui portait
+        // le `Participant.id` de la colonne là où les clients comparent un
+        // `User.id` pour reconnaître leurs propres bulles.
+        payload: {
+          ...transformedMessage,
+          ...buildMessageEditedCore(updatedMessage as unknown as Message, {
+            conversationId: message.conversationId,
+            content: editedContent,
+            isEdited: updatedMessage.isEdited,
+            editedAt,
+          }),
+        },
         onError: (err) => logger.error('Erreur lors de la diffusion Socket.IO', err as Error),
       });
 
@@ -1013,9 +1149,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
+      // SSOT guard: `?offset`/`?limit` are plain strings (validated by
+      // `MessageStatusDetailsQuerySchema`, no numeric coercion), so a malformed
+      // value would otherwise reach the service as `NaN` skip/take → HTTP 500.
+      const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
       const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
-        offset: parseInt(offset, 10),
-        limit: Math.min(parseInt(limit, 10), 100), // Max 100 par page
+        offset: pageOffset,
+        limit: pageLimit,
         filter
       });
 
@@ -1076,9 +1216,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
+      // SSOT guard: same string-schema pagination as the message variant above.
+      const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
       const statusDetails = await readStatusService.getAttachmentStatusDetails(attachmentId, {
-        offset: parseInt(offset, 10),
-        limit: Math.min(parseInt(limit, 10), 100), // Max 100 par page
+        offset: pageOffset,
+        limit: pageLimit,
         filter
       });
 

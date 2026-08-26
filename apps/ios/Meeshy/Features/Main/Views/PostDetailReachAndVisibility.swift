@@ -10,23 +10,29 @@ import Foundation
 /// the same Post (unified 2026-07-14). `postOpenCount` stays server-side for analytics
 /// but is no longer the displayed "views" label.
 enum PostReachFormatter {
-    /// Compact count: 1.2k / 3.4M. Mirrors the per-card `compactCount` copies.
-    static func compact(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
-    }
 
+    /// Ce que la ligne de portée doit AFFICHER — plus les nombres eux-mêmes.
+    ///
+    /// Elle a porté `views` / `impressions` sous forme de chaînes déjà abrégées
+    /// jusqu'à 239i. Depuis que chaque métrique se rend par `ReachMetricLabel`
+    /// — qui doit recevoir le COMPTE, pour pouvoir en dire l'abrégé à l'écran et
+    /// la valeur exacte à VoiceOver — ces deux chaînes n'étaient plus lues que
+    /// pour leur nullité. Les garder aurait laissé un second chemin de formatage
+    /// vivant et non rendu : exactement la branche morte que 238i a trouvée dans
+    /// `StatRing`.
+    ///
+    /// Il reste donc à ce type ce que lui seul décide : le pseudo, et le fait
+    /// que les statistiques soient **réservées à l'auteur**.
     struct Components: Equatable {
-        let pseudo: String?       // "@marie" or nil
-        let views: String?        // "1.2k" or nil (author-only)
-        let impressions: String?  // "3.4k" or nil (author-only)
+        let pseudo: String?     // "@marie" or nil
+        let showsStats: Bool    // author-only
     }
 
-    static func components(username: String?, isAuthor: Bool, viewCount: Int, impressionCount: Int) -> Components {
-        let pseudo = username.flatMap { $0.isEmpty ? nil : "@\($0)" }
-        guard isAuthor else { return Components(pseudo: pseudo, views: nil, impressions: nil) }
-        return Components(pseudo: pseudo, views: compact(viewCount), impressions: compact(impressionCount))
+    static func components(username: String?, isAuthor: Bool) -> Components {
+        Components(
+            pseudo: username.flatMap { $0.isEmpty ? nil : "@\($0)" },
+            showsStats: isAuthor
+        )
     }
 }
 

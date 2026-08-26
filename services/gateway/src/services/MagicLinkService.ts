@@ -19,6 +19,8 @@ import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
+import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
+import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 
 const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
@@ -92,7 +94,7 @@ export class MagicLinkService {
           email: true,
           firstName: true,
           lastName: true,
-          systemLanguage: true
+          ...RECIPIENT_LANG_SELECT
         }
       });
 
@@ -254,7 +256,8 @@ export class MagicLinkService {
               updatedAt: true,
               emailVerifiedAt: true,
               phoneVerifiedAt: true,
-              twoFactorEnabledAt: true
+              twoFactorEnabledAt: true,
+              ...AUTO_TRANSLATE_PREFERENCE_SELECT
             }
           }
         }
@@ -365,8 +368,7 @@ export class MagicLinkService {
         systemLanguage: user.systemLanguage,
         regionalLanguage: user.regionalLanguage,
         customDestinationLanguage: user.customDestinationLanguage,
-        // TODO: Load from UserPreferences.application
-        autoTranslateEnabled: true,
+        autoTranslateEnabled: resolveAutoTranslateEnabled(user),
         isActive: user.isActive,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -420,7 +422,7 @@ export class MagicLinkService {
    * Send magic link email
    */
   private async sendMagicLinkEmail(
-    user: { email: string; firstName: string; lastName: string; systemLanguage: string },
+    user: { email: string; firstName: string; lastName: string } & RecipientLanguagePrefs,
     token: string,
     location: string
   ): Promise<void> {
@@ -432,7 +434,7 @@ export class MagicLinkService {
       name: user.firstName,
       magicLink: magicLinkUrl,
       location,
-      language: user.systemLanguage
+      language: recipientLanguage(user, 'fr')
     });
   }
 

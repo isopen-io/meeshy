@@ -227,7 +227,7 @@ struct FloatingCallPillView: View {
         .accessibilityLabel(pillStatus.isConnected
             ? String(localized: "a11y.call.pill.duration", defaultValue: "Dur\u{00E9}e d'appel", bundle: .main)
             : pillStatus.label)
-        .accessibilityValue(pillStatus.isConnected ? formattedDuration : "")
+        .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
         .accessibilityAddTraits(.updatesFrequently)
     }
 
@@ -420,5 +420,11 @@ struct FloatingCallPillView: View {
 
     private var formattedDuration: String {
         callManager.formattedDuration
+    }
+
+    /// Jumelle PARLÉE de `formattedDuration`, et même règle de délégation : le
+    /// pill ne réimplémente ni l'une ni l'autre.
+    private var spokenDuration: String {
+        callManager.spokenDuration
     }
 }

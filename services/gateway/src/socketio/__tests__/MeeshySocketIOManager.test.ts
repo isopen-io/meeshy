@@ -80,6 +80,7 @@ jest.mock('../../services/MaintenanceService', () => ({
       startMaintenanceTasks: jest.fn().mockResolvedValue(undefined),
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
+      setSessionRevoker: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),
@@ -158,6 +159,10 @@ jest.mock('../../services/MessagingService', () => ({
 }));
 
 let mockCallEventsHandlerInstance: any;
+jest.mock('../disconnectRevokedSessions', () => ({
+  disconnectRevokedSessions: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../CallEventsHandler', () => ({
   CallEventsHandler: jest.fn().mockImplementation(() => {
     mockCallEventsHandlerInstance = {
@@ -437,13 +442,10 @@ function makePrisma(): any {
   return {
     conversation: {
       findUnique: fn(),
-      // Écho par défaut : toute conversation demandée existe (base saine).
-      // Les témoins d'orphelins la surchargent pour faire « disparaître » des
-      // conversations, comme une suppression hors Prisma le fait en prod.
-      findMany: fn().mockImplementation(({ where }: any = {}) =>
-        Promise.resolve(
-          (where?.id?.in ?? []).map((id: string) => ({ id, lastMessageAt: null }))
-        )
+      // Par défaut, chaque conversation demandée EXISTE (sans `lastMessageAt`).
+      // Un test qui veut une conversation disparue surcharge ce mock.
+      findMany: jest.fn(async (args: { where?: { id?: { in?: string[] } } }) =>
+        (args?.where?.id?.in ?? []).map((id) => ({ id, lastMessageAt: null }))
       ),
     },
     message: { findUnique: fn(), findFirst: fn() },
@@ -456,6 +458,12 @@ function makePrisma(): any {
     user: {
       findUnique: fn(),
       findMany: fn().mockResolvedValue([]),
+    },
+    // La présence se résout désormais sur la RELATION (amitié acceptée), pas
+    // sur le partage d'une conversation — directive produit du 2026-08-25.
+    friendRequest: {
+      findMany: fn().mockResolvedValue([]),
+      findFirst: fn().mockResolvedValue(null),
     },
   };
 }
@@ -531,6 +539,24 @@ function makeMessage(overrides: Record<string, unknown> = {}) {
     ...overrides,
   } as any;
 }
+
+/**
+ * Un id de conversation de la forme que Prisma accepte, mnémonique conservé.
+ *
+ * Les fixtures de rejeu hors ligne portaient `'conv-kept'`, `'conv-1'`… — des
+ * chaînes qu'aucun `conversationId` de production ne peut prendre, la colonne
+ * étant un ObjectId. Le double Prisma de ce harnais les acceptait sans rien
+ * dire, si bien que TOUTE la suite `_drainPendingMessages` attestait un drain
+ * dont la requête d'appartenance aurait levé chez le vrai client (mesuré sans
+ * base : `PrismaClientValidationError` pour un non-string, `Malformed ObjectID`
+ * pour une chaîne quelconque). C'est la leçon « un double permissif rend le
+ * témoin trivialement vert », appliquée à l'ARGUMENT plutôt qu'au RÉSULTAT.
+ *
+ * `convId('kept')` rend 24 hexadécimaux stables et distincts par nom, donc
+ * lisible au site d'appel et acceptable par la garde d'adressabilité.
+ */
+const convId = (name: string): string =>
+  Buffer.from(name).toString('hex').padEnd(24, '0').slice(0, 24);
 
 // ---------------------------------------------------------------------------
 // Suite setup
@@ -608,6 +634,13 @@ describe('MeeshySocketIOManager', () => {
 
     it('registers isCurrentlyConnected predicate on MaintenanceService', () => {
       expect(mockMaintenanceServiceInstance.setIsCurrentlyConnected).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    // F9 bis : le balayage journalier des demandes de suppression met des comptes
+    // HORS SERVICE (isActive:false) — leurs sockets doivent tomber. Le seul
+    // producteur du révocateur est le manager (il tient `io`).
+    it('registers a session revoker on MaintenanceService', () => {
+      expect(mockMaintenanceServiceInstance.setSessionRevoker).toHaveBeenCalledWith(expect.any(Function));
     });
 
     it('wires CallEventsHandler message broadcaster', () => {
@@ -1726,7 +1759,7 @@ describe('MeeshySocketIOManager', () => {
       it('never carries a delivery receipt on drain', async () => {
         const fakeQueue = {
           drain: jest.fn().mockResolvedValue([
-            { messageId: 'msg-txt-1', conversationId: 'conv-tr', payload: {}, eventType: 'translation' },
+            { messageId: 'msg-txt-1', conversationId: convId('tr'), payload: {}, eventType: 'translation' },
           ]),
         };
         manager.setDeliveryQueue(fakeQueue as any);
@@ -2002,338 +2035,359 @@ describe('MeeshySocketIOManager', () => {
   // -------------------------------------------------------------------------
 
   describe('_broadcastUserStatus', () => {
-    it('returns early when showOnlineStatus is false', async () => {
+    /**
+     * Enregistre les émissions de `user:status` AVEC leurs rooms et leur charge.
+     *
+     * L'éventail n'émet plus une charge unique : les privilégiés (ADMIN+ et les
+     * autres appareils du sujet) et les AMIS reçoivent deux charges distinctes,
+     * dont l'une peut manquer. `ioState.toEmit` ne sait dire que « un emit a eu
+     * lieu » — insuffisant pour une règle dont tout l'enjeu est QUI reçoit QUOI.
+     */
+    function recordPresenceEmissions() {
+      const emissions: Array<{ rooms: string[]; excluded: string[]; payload: any }> = [];
+      const chain = (rooms: string[], excluded: string[]): any => ({
+        to: (r: string | string[]) => chain([...rooms, ...(Array.isArray(r) ? r : [r])], excluded),
+        except: (e: string | string[]) => chain(rooms, [...excluded, ...(Array.isArray(e) ? e : [e])]),
+        emit: (event: string, payload: unknown) => {
+          if (event === SERVER_EVENTS.USER_STATUS) emissions.push({ rooms, excluded, payload });
+        },
+      });
+      ioState.to.mockImplementation(((r: string | string[]) =>
+        chain(Array.isArray(r) ? [...r] : [r], [])) as never);
+      return {
+        emissions,
+        rooms: () => emissions.flatMap((e) => e.rooms),
+        payloadForRoom: (room: string) => emissions.find((e) => e.rooms.includes(room))?.payload,
+        restore: () => { ioState.to.mockImplementation((() => ioState.toChain) as never); },
+      };
+    }
+
+    /**
+     * Les DEUX lectures relationnelles que l'éventail fait désormais :
+     * `friendRequest.findMany` (amitiés acceptées du sujet) et
+     * `user.findMany` (les ADMIN+ de la plateforme, puis ceux qui l'ont bloqué).
+     * Les deux dernières partagent le même délégué, d'où l'aiguillage sur la
+     * FORME du `where`.
+     */
+    function stubPresenceRelations(opts: {
+      friendIds?: string[];
+      adminIds?: string[];
+      blockerIds?: string[];
+    } = {}) {
+      const { friendIds = [], adminIds = [], blockerIds = [] } = opts;
+      // `senderId` porte l'ami : le résolveur rend l'AUTRE bout, quel que soit
+      // le sens de la demande — ce témoin n'a donc pas à connaître le sujet.
+      prisma.friendRequest.findMany.mockResolvedValue(
+        friendIds.map((id) => ({ senderId: id, receiverId: 'subject-side' })),
+      );
+      prisma.user.findMany.mockImplementation(async (args: any) =>
+        args?.where?.role ? adminIds.map((id: string) => ({ id })) : blockerIds.map((id: string) => ({ id })),
+      );
+    }
+
+    function stubSubject(over: Record<string, unknown> = {}) {
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-subject',
+        username: 'alice',
+        displayName: 'Alice',
+        firstName: 'Alice',
+        lastName: 'Smith',
+        lastActiveAt: SEEN_AT,
+        ...over,
+      });
+    }
+
+    const SEEN_AT = new Date('2026-08-25T09:00:00.000Z');
+    let rec: ReturnType<typeof recordPresenceEmissions>;
+
+    beforeEach(() => {
+      rec = recordPresenceEmissions();
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: true,
+        showLastSeen: true,
+      });
+    });
+
+    afterEach(() => { rec.restore(); });
+
+    // -----------------------------------------------------------------------
+    // Directive produit (2026-08-25) : « Lorsqu'on n'est pas ami (aucune
+    // connexion) : je veux supprimer ma présence en ligne […] et personne ne
+    // doit savoir ma dernière connexion sur l'application si on n'est pas ami.
+    // Les utilisateurs avec le rôle ADMIN et supérieur peuvent constamment
+    // avoir l'état de présence. »
+    //
+    // Les témoins qui suivaient jusqu'ici gardaient l'inverse : ils EXIGEAIENT
+    // que la room du fil, puis la room personnelle de chaque co-participant,
+    // reçoivent la transition. C'était la fuite, décrite comme un contrat.
+    // -----------------------------------------------------------------------
+
+    it("n'adresse plus AUCUNE room de conversation", async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms().some((room) => room.startsWith('conversation:'))).toBe(false);
+      expect(prisma.participant.findMany).not.toHaveBeenCalled();
+    });
+
+    it("ne dit RIEN à un co-participant qui n'est ni ami ni administrateur", async () => {
+      stubSubject();
+      stubPresenceRelations({});
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).not.toContain(ROOMS.user('user-stranger'));
+      // Seuls ses propres appareils restent adressés.
+      expect(rec.rooms()).toEqual([ROOMS.user('user-subject')]);
+    });
+
+    it('adresse la transition à un AMI accepté', async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).toContain(ROOMS.user('user-friend'));
+      expect(rec.payloadForRoom(ROOMS.user('user-friend'))).toEqual({
+        userId: 'user-subject',
+        username: 'Alice',
+        isOnline: true,
+        lastActiveAt: SEEN_AT,
+      });
+    });
+
+    it('sert un ADMIN même quand showOnlineStatus est FAUX — et tait alors l\'ami', async () => {
       mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
         showOnlineStatus: false,
         showLastSeen: true,
       });
-      await (manager as any)._broadcastUserStatus('user-1', true, false);
-      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).toContain(ROOMS.user('user-admin'));
+      expect(rec.rooms()).not.toContain(ROOMS.user('user-friend'));
+      // Le `return` précoce d'avant coupait TOUT sur cette préférence, y compris
+      // les autres appareils du sujet lui-même.
+      expect(rec.rooms()).toContain(ROOMS.user('user-subject'));
+      expect(rec.payloadForRoom(ROOMS.user('user-admin'))).toEqual(
+        expect.objectContaining({ isOnline: true, lastActiveAt: SEEN_AT }),
+      );
     });
 
-    it('broadcasts anonymous participant status to their conversation room', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
+    it("n'adresse ni MODERATOR, ni AUDIT, ni ANALYST : seuls ADMIN et BIGBOSS sont privilégiés", async () => {
+      stubSubject();
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      // Le mock répond comme la base : il ne rend que les rôles DEMANDÉS. Un
+      // éventail qui demanderait « MODERATOR et au-dessus » le recevrait — et
+      // ce témoin tomberait.
+      const roster = [
+        { id: 'user-boss', role: 'BIGBOSS' },
+        { id: 'user-admin', role: 'ADMIN' },
+        { id: 'user-mod', role: 'MODERATOR' },
+        { id: 'user-audit', role: 'AUDIT' },
+        { id: 'user-analyst', role: 'ANALYST' },
+        { id: 'user-plain', role: 'USER' },
+      ];
+      prisma.user.findMany.mockImplementation(async (args: any) => {
+        const wanted: string[] | undefined = args?.where?.role?.in;
+        return wanted ? roster.filter((u) => wanted.includes(u.role)).map(({ id }) => ({ id })) : [];
+      });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.rooms()).toEqual(expect.arrayContaining([ROOMS.user('user-boss'), ROOMS.user('user-admin')]));
+      for (const id of ['user-mod', 'user-audit', 'user-analyst', 'user-plain']) {
+        expect(rec.rooms()).not.toContain(ROOMS.user(id));
+      }
+    });
+
+    it("showOnlineStatus=false n'interroge même pas les amitiés (rien à leur servir)", async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: false,
+        showLastSeen: true,
+      });
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it('efface lastActiveAt pour les AMIS sur showLastSeen=false, et le garde pour les privilégiés', async () => {
+      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({
+        showOnlineStatus: true,
+        showLastSeen: false,
+      });
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.payloadForRoom(ROOMS.user('user-friend'))).toEqual(
+        expect.objectContaining({ lastActiveAt: null }),
+      );
+      expect(rec.payloadForRoom(ROOMS.user('user-admin'))).toEqual(
+        expect.objectContaining({ lastActiveAt: SEEN_AT }),
+      );
+    });
+
+    it("n'émet rien quand l'utilisateur inscrit est introuvable", async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      stubPresenceRelations({ adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-ghost', false, false);
+
+      expect(rec.emissions).toEqual([]);
+    });
+
+    // -----------------------------------------------------------------------
+    // Un compte DÉSACTIVÉ n'a plus de présence pour PERSONNE. La loi partagée
+    // (`resolvePresenceVisibility`) rend HIDDEN sur `targetIsDeactivated` AVANT
+    // le privilège : ni un ami, ni un ADMIN, ni le sujet lui-même n'en apprend
+    // rien — et `resolveForTargets` l'applique déjà à l'instantané comme à la
+    // porte REST. Or la désactivation (`user-management.service.updateStatus`)
+    // pose `deactivatedAt` SANS révoquer les sockets : un compte désactivé
+    // encore connecté annonçait chacune de ses transitions à tout son éventail.
+    // -----------------------------------------------------------------------
+
+    it("n'émet RIEN pour un sujet DÉSACTIVÉ — ni aux amis, ni aux ADMIN, ni à lui-même", async () => {
+      stubSubject({ deactivatedAt: new Date('2026-08-20T00:00:00.000Z') });
+      stubPresenceRelations({ friendIds: ['user-friend'], adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.emissions).toEqual([]);
+      // Rien à servir ⇒ l'amitié n'est même pas interrogée.
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it("DEMANDE `deactivatedAt` à la base — un mock rend ce qu'on lui donne, Prisma rend ce qu'on lui demande", async () => {
+      stubSubject();
+      stubPresenceRelations({ adminIds: ['user-admin'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-subject' },
+          select: expect.objectContaining({ deactivatedAt: true }),
+        }),
+      );
+    });
+
+    // -----------------------------------------------------------------------
+    // La porte ANONYME. Un invité de lien partagé n'a pas de compte, donc pas
+    // d'ami : la directive ne lui laisse que les ADMIN/BIGBOSS. Son nom
+    // d'affichage voyage À CÔTÉ de sa présence — il ne part plus dans le fil.
+    // -----------------------------------------------------------------------
+
+    it("n'annonce un invité de lien QU'AUX administrateurs", async () => {
+      stubPresenceRelations({ adminIds: ['user-admin'] });
       prisma.participant.findUnique.mockResolvedValue({
         id: 'anon-1',
         displayName: 'Anonymous',
         nickname: 'Anon',
-        lastActiveAt: new Date(),
-        conversationId: 'conv-123456789012',
+        lastActiveAt: SEEN_AT,
       });
 
       await (manager as any)._broadcastUserStatus('anon-1', true, true);
 
-      expect(ioState.to).toHaveBeenCalledWith(ROOMS.conversation('conv-123456789012'));
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
+      expect(rec.rooms()).toEqual([ROOMS.user('user-admin')]);
+      expect(rec.payloadForRoom(ROOMS.user('user-admin'))).toEqual({
         userId: 'anon-1',
+        username: 'Anon',
         isOnline: true,
-      }));
+        lastActiveAt: SEEN_AT,
+      });
     });
 
-    it('respects showLastSeen=false for anonymous participant', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
-      prisma.participant.findUnique.mockResolvedValue({
-        id: 'anon-2',
-        displayName: 'Incognito',
-        nickname: null,
-        lastActiveAt: new Date(),
-        conversationId: 'conv-test',
-      });
+    it("ne lit même pas l'invité de lien quand aucun administrateur n'existe", async () => {
+      stubPresenceRelations({ adminIds: [] });
 
       await (manager as any)._broadcastUserStatus('anon-2', true, true);
 
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        lastActiveAt: null,
-      }));
+      expect(prisma.participant.findUnique).not.toHaveBeenCalled();
+      expect(rec.emissions).toEqual([]);
     });
 
-    it('broadcasts registered user status to all their conversation rooms', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-1',
-        username: 'alice',
-        displayName: 'Alice',
-        firstName: 'Alice',
-        lastName: 'Smith',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([
-        { conversationId: 'conv-aaa' },
-        { conversationId: 'conv-bbb' },
-      ]);
+    // -----------------------------------------------------------------------
+    // Le blocage bidirectionnel survit au changement d'audience : il exclut par
+    // socket.id, et s'applique à TOUTES les charges — y compris celle des
+    // administrateurs, un cran plus strict que `resolveForTargets`.
+    // -----------------------------------------------------------------------
 
-      await (manager as any)._broadcastUserStatus('user-reg-1', false, false);
-
-      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([
-        ROOMS.conversation('conv-aaa'),
-        ROOMS.conversation('conv-bbb'),
-      ]));
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-1',
-        isOnline: false,
-      }));
-    });
-
-    it('skips broadcast when registered user not found', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue(null);
-      await (manager as any)._broadcastUserStatus('user-ghost', false, false);
-      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
-    });
-
-    it('skips broadcast when registered user has no participant rows', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-lonely',
-        username: 'lonely',
-        displayName: null,
-        firstName: '',
-        lastName: '',
-        lastActiveAt: null,
-      });
-      prisma.participant.findMany.mockResolvedValue([]);
-      await (manager as any)._broadcastUserStatus('user-lonely', true, false);
-      // to(rooms) is called with an empty array — .emit should not be called with USER_STATUS
-      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.anything());
-    });
-
-    it('excludes the socket of an online viewer blocked either way with the broadcaster (privacy parity with GET /users/presence)', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-2',
-        username: 'alice',
-        displayName: 'Alice',
-        firstName: 'Alice',
-        lastName: 'Smith',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
-      // Two other users are currently online, only one of them blocked the broadcaster.
-      (manager as any).connectedUsers.set('user-blocker', {
-        id: 'user-blocker', socketId: 'sock-blocker', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
-      (manager as any).connectedUsers.set('user-friend', {
-        id: 'user-friend', socketId: 'sock-friend', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
+    it("exclut le socket d'un AMI qui a bloqué le sujet", async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-blocker'], blockerIds: ['user-blocker'] });
       (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
-      (manager as any).userSockets.set('user-friend', new Set(['sock-friend']));
-      // 'user-blocker' blocked 'user-reg-2' (findMany branch of getBlockedUserIdsAmong).
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker' }]);
 
-      await (manager as any)._broadcastUserStatus('user-reg-2', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
 
-      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([ROOMS.conversation('conv-shared')]));
-      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker']);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-2',
-        isOnline: true,
-      }));
+      expect(rec.rooms()).toContain(ROOMS.user('user-blocker'));
+      expect(rec.emissions.every((e) => e.excluded.includes('sock-blocker'))).toBe(true);
     });
 
-    it('resolves the blocked viewers WITHOUT enumerating the connected population', async () => {
-      // The privacy filter must cost what the BLOCK RELATION costs, never what
-      // the server population costs. `_broadcastUserStatus` fires on every
-      // presence transition — each connect, each disconnect, and every user the
-      // maintenance sweep marks offline at once. Passing `connectedUsers.keys()`
-      // as the candidate list made one presence transition carry an `$in` sized
-      // by the whole gateway, so the cost of a single connect grew with the
-      // number of people already connected.
-      //
-      // The typing channel next door already got this right
-      // (`StatusHandler._getBlockedSocketIdsInRoom` bounds its candidates to the
-      // conversation's participants); this witness is what keeps the presence
-      // channel from drifting back.
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-crowded',
-        username: 'crowded',
-        displayName: 'Crowded',
-        firstName: 'C',
-        lastName: 'R',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
+    it("n'appelle pas except() quand aucun bloqueur n'a de socket vivant", async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'], blockerIds: ['user-offline-blocker'] });
+
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+
+      expect(rec.emissions.every((e) => e.excluded.length === 0)).toBe(true);
+    });
+
+    // -----------------------------------------------------------------------
+    // COÛT. Ce chemin s'exécute à chaque connexion, chaque déconnexion, et pour
+    // chaque compte que le balayage de maintenance passe hors ligne d'un coup.
+    // Aucune de ses requêtes ne doit être dimensionnée par la population
+    // connectée de la passerelle.
+    // -----------------------------------------------------------------------
+
+    it('résout son audience SANS énumérer la population connectée', async () => {
+      stubSubject();
+      stubPresenceRelations({ friendIds: ['user-friend'] });
       for (let i = 0; i < 50; i++) {
         (manager as any).connectedUsers.set(`bystander-${i}`, {
           id: `bystander-${i}`, socketId: `sock-${i}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
         });
       }
-      prisma.user.findMany.mockResolvedValue([]);
 
-      await (manager as any)._broadcastUserStatus('user-crowded', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
 
-      const blockQueryArgs = prisma.user.findMany.mock.calls.map((c: unknown[]) => c[0]) as Array<{
+      const userFindManyArgs = prisma.user.findMany.mock.calls.map((c: unknown[]) => c[0]) as Array<{
         where?: { id?: unknown };
       }>;
-      expect(blockQueryArgs.length).toBeGreaterThan(0);
-      for (const args of blockQueryArgs) {
+      expect(userFindManyArgs.length).toBeGreaterThan(0);
+      for (const args of userFindManyArgs) {
         expect(args.where?.id).toBeUndefined();
       }
+      // L'amitié se lit sur le seul sujet — jamais sur une liste de candidats.
+      expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            status: 'accepted',
+            OR: [{ senderId: 'user-subject' }, { receiverId: 'user-subject' }],
+          }),
+        }),
+      );
     });
 
-    it('still excludes a blocked viewer who is connected, now resolved from the block relation', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-9',
-        username: 'nine',
-        displayName: 'Nine',
-        firstName: 'N',
-        lastName: 'I',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared' }]);
-      (manager as any).userSockets.set('user-blocker-9', new Set(['sock-blocker-9']));
-      // Someone who blocked the broadcaster but is NOT connected: they own no
-      // socket, so they contribute nothing to the exclusion list — the reason
-      // dropping the `connectedUsers` pre-filter is behaviour-preserving.
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker-9' }, { id: 'user-offline-blocker' }]);
+    it("ne relit pas la liste des administrateurs à chaque transition (cache TTL)", async () => {
+      stubSubject();
+      stubPresenceRelations({ adminIds: ['user-admin'] });
 
-      await (manager as any)._broadcastUserStatus('user-reg-9', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', true, false);
+      await (manager as any)._broadcastUserStatus('user-subject', false, false);
 
-      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker-9']);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-9',
-        isOnline: true,
-      }));
-    });
-
-    it('does not call except() when no online user is blocked with the broadcaster', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-3',
-        username: 'bob',
-        displayName: 'Bob',
-        firstName: 'Bob',
-        lastName: 'Jones',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-shared-2' }]);
-      (manager as any).connectedUsers.set('user-friend-2', {
-        id: 'user-friend-2', socketId: 'sock-friend-2', isAnonymous: false, language: 'fr', resolvedLanguages: [],
-      });
-      (manager as any).userSockets.set('user-friend-2', new Set(['sock-friend-2']));
-      prisma.user.findMany.mockResolvedValue([]);
-
-      await (manager as any)._broadcastUserStatus('user-reg-3', true, false);
-
-      expect(ioState.except).not.toHaveBeenCalled();
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        userId: 'user-reg-3',
-      }));
-    });
-
-    // -----------------------------------------------------------------------
-    // La pastille de présence se REGARDE hors du fil : liste de conversations,
-    // écrans de contacts, en-têtes. La room `conversation:<id>` ne peut donc pas
-    // être la seule adresse de `user:status` — un client qui referme un fil en
-    // sort (`conversation:leave` → `socket.leave`, iOS
-    // `ConversationSocketHandler.deinit`) tout en restant connecté, et sa liste
-    // continue d'afficher la pastille de ce pair.
-    // -----------------------------------------------------------------------
-
-    it('adresse la présence aux rooms PERSONNELLES des pairs, pas seulement au fil', async () => {
-      const chains = recordEmitChains(ioState);
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-away', username: 'alice', displayName: 'Alice',
-        firstName: 'Alice', lastName: 'Smith', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-aaa' }])
-        .mockResolvedValueOnce([
-          { id: 'part-peer', userId: 'user-peer' },
-          { id: 'part-self', userId: 'user-away' },
-        ]);
-      prisma.user.findMany.mockResolvedValue([]);
-
-      await (manager as any)._broadcastUserStatus('user-away', true, false);
-
-      const rooms = chains.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chains.restore();
-      expect(rooms).toContain(ROOMS.user('user-peer'));
-    });
-
-    it("adresse la présence d'un pair SANS COMPTE par son Participant.id", async () => {
-      const chains = recordEmitChains(ioState);
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-host', username: 'host', displayName: 'Host',
-        firstName: 'Host', lastName: '', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-link' }])
-        .mockResolvedValueOnce([
-          { id: 'part-guest', userId: null },
-          { id: 'part-host', userId: 'user-host' },
-        ]);
-      prisma.user.findMany.mockResolvedValue([]);
-
-      await (manager as any)._broadcastUserStatus('user-host', true, false);
-
-      const rooms = chains.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chains.restore();
-      expect(rooms).toContain(ROOMS.user('part-guest'));
-    });
-
-    // La garde de PARITÉ — celle qui a de la valeur. Les deux témoins ci-dessus
-    // décrivent la porte inscrite ; ils resteraient verts si la porte anonyme
-    // gardait son unique `to(ROOMS.conversation(...))`. Or c'est elle qui porte
-    // le pire cas : un invité de lien partagé n'a QU'UNE conversation, donc « la
-    // room quittée » y vaut la totalité de sa présence (corollaire de la
-    // Leçon 233 : le chemin à 1 objet n'est pas le cas facile). Le témoin ne
-    // nomme aucun nombre de rooms — il exige des DEUX portes qu'elles adressent
-    // le pair par sa room personnelle, et tombe dès que l'une diverge.
-    it('les DEUX portes de présence adressent le pair par sa room personnelle', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findMany.mockResolvedValue([]);
-
-      const chainsRegistered = recordEmitChains(ioState);
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-reg-parity', username: 'reg', displayName: 'Reg',
-        firstName: 'Reg', lastName: '', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-parity' }])
-        .mockResolvedValueOnce([{ id: 'part-witness', userId: 'user-witness' }]);
-      await (manager as any)._broadcastUserStatus('user-reg-parity', true, false);
-      const registeredRooms = chainsRegistered.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chainsRegistered.restore();
-
-      const chainsAnonymous = recordEmitChains(ioState);
-      prisma.participant.findUnique.mockResolvedValue({
-        id: 'anon-parity', displayName: 'Guest', nickname: null,
-        lastActiveAt: new Date(), conversationId: 'conv-parity',
-      });
-      prisma.participant.findMany.mockResolvedValue([{ id: 'part-witness', userId: 'user-witness' }]);
-      await (manager as any)._broadcastUserStatus('anon-parity', true, true);
-      const anonymousRooms = chainsAnonymous.roomsFor(SERVER_EVENTS.USER_STATUS).flat();
-      chainsAnonymous.restore();
-
-      const peerRoom = ROOMS.user('user-witness');
-      expect({
-        porteInscrite: registeredRooms.includes(peerRoom),
-        porteAnonyme: anonymousRooms.includes(peerRoom),
-      }).toEqual({ porteInscrite: true, porteAnonyme: true });
-    });
-
-    // L'élargissement de l'audience ne doit RIEN retirer au filtre de blocage :
-    // il exclut par socket.id, donc il doit survivre au changement d'adressage.
-    it("l'exclusion des bloqueurs survit à l'adressage par rooms personnelles", async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: true });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-blocked-parity', username: 'alice', displayName: 'Alice',
-        firstName: 'Alice', lastName: 'Smith', lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany
-        .mockResolvedValueOnce([{ conversationId: 'conv-blocked' }])
-        .mockResolvedValueOnce([{ id: 'part-blocker', userId: 'user-blocker' }]);
-      (manager as any).userSockets.set('user-blocker', new Set(['sock-blocker']));
-      prisma.user.findMany.mockResolvedValue([{ id: 'user-blocker' }]);
-
-      await (manager as any)._broadcastUserStatus('user-blocked-parity', true, false);
-
-      expect(ioState.to).toHaveBeenCalledWith(expect.arrayContaining([ROOMS.user('user-blocker')]));
-      expect(ioState.except).toHaveBeenCalledWith(['sock-blocker']);
+      const roleQueries = prisma.user.findMany.mock.calls
+        .map((c: unknown[]) => c[0] as { where?: { role?: unknown } })
+        .filter((args) => args?.where?.role !== undefined);
+      expect(roleQueries).toHaveLength(1);
     });
   });
 
@@ -2796,24 +2850,24 @@ describe('MeeshySocketIOManager', () => {
     it('emits MESSAGE_NEW to the user room (all devices) for each pending message and PENDING_MESSAGES_DELIVERED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-p1', conversationId: 'conv-1' } },
-          { payload: { id: 'msg-p2', conversationId: 'conv-1' } },
+          { payload: { id: 'msg-p1', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-p1' },
+          { payload: { id: 'msg-p2', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-p2' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain', false);
       expect(ioState.to).toHaveBeenCalledWith(ROOMS.user('user-drain'));
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: 'conv-1' });
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: 'conv-1' });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p1', conversationId: convId('1') });
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-p2', conversationId: convId('1') });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, expect.objectContaining({ count: 2 }));
     });
 
     it('routes entries by eventType: edited → MESSAGE_EDITED, deleted → MESSAGE_DELETED, default → MESSAGE_NEW', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-new' }, eventType: undefined },
-          { payload: { id: 'msg-edit' }, eventType: 'edited' },
-          { payload: { messageId: 'msg-del' }, eventType: 'deleted' },
+          { payload: { id: 'msg-new' }, conversationId: convId('1'), messageId: 'msg-new', eventType: undefined },
+          { payload: { id: 'msg-edit' }, conversationId: convId('1'), messageId: 'msg-edit', eventType: 'edited' },
+          { payload: { messageId: 'msg-del' }, conversationId: convId('1'), messageId: 'msg-del', eventType: 'deleted' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2826,8 +2880,8 @@ describe('MeeshySocketIOManager', () => {
     it('routes reaction entries: reaction-added → REACTION_ADDED, reaction-removed → REACTION_REMOVED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { messageId: 'msg-r', emoji: '👍' }, eventType: 'reaction-added' },
-          { payload: { messageId: 'msg-r', emoji: '👍' }, eventType: 'reaction-removed' },
+          { payload: { messageId: 'msg-r', emoji: '👍' }, conversationId: convId('1'), messageId: 'msg-r', eventType: 'reaction-added' },
+          { payload: { messageId: 'msg-r', emoji: '👍' }, conversationId: convId('1'), messageId: 'msg-r', eventType: 'reaction-removed' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2839,8 +2893,8 @@ describe('MeeshySocketIOManager', () => {
     it('routes pin entries: pinned → MESSAGE_PINNED, unpinned → MESSAGE_UNPINNED', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { messageId: 'msg-pin', pinnedBy: 'u1' }, eventType: 'pinned' },
-          { payload: { messageId: 'msg-pin' }, eventType: 'unpinned' },
+          { payload: { messageId: 'msg-pin', pinnedBy: 'u1' }, conversationId: convId('1'), messageId: 'msg-pin', eventType: 'pinned' },
+          { payload: { messageId: 'msg-pin' }, conversationId: convId('1'), messageId: 'msg-pin', eventType: 'unpinned' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2855,13 +2909,13 @@ describe('MeeshySocketIOManager', () => {
       // replay, a peer who was offline at that instant keeps the un-enriched
       // attachment for as long as their cache lives.
       const enriched = {
-        conversationId: 'conv-a',
+        conversationId: convId('a'),
         messageId: 'msg-audio',
         attachment: { id: 'att-1', transcription: { text: 'Bonjour' } },
       };
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: enriched, eventType: 'attachment-updated', dedupKey: 'att-1' },
+          { payload: enriched, conversationId: convId('a'), messageId: 'msg-audio', eventType: 'attachment-updated', dedupKey: 'att-1' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2881,7 +2935,7 @@ describe('MeeshySocketIOManager', () => {
       };
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: translated, eventType: 'translation', dedupKey: 'msg-txt:fr' },
+          { payload: translated, conversationId: convId('1'), messageId: 'msg-txt', eventType: 'translation', dedupKey: 'msg-txt:fr' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2899,35 +2953,90 @@ describe('MeeshySocketIOManager', () => {
     it('replays link-message entries under BOTH events, each in its own shape', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { message: { id: 'msg-link', conversationId: 'conv-link' } }, eventType: 'link-message' },
+          { payload: { message: { id: 'msg-link', conversationId: convId('link') } }, conversationId: convId('link'), messageId: 'msg-link', eventType: 'link-message' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain-link', false);
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-        message: { id: 'msg-link', conversationId: 'conv-link' },
+        message: { id: 'msg-link', conversationId: convId('link') },
       });
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
         id: 'msg-link',
-        conversationId: 'conv-link',
+        conversationId: convId('link'),
       });
     });
 
-    // The envelope is what every writer of this eventType produces, but a drain
-    // must never blast `message:new` with `undefined` if one ever drifts: the
-    // recipient would take a message it cannot route for a real one.
-    it('replays a shapeless link-message entry under LINK_MESSAGE_NEW alone', async () => {
+    /**
+     * `'link-message'` est le SEUL `eventType` dont la charge se DÉPLIE, donc le
+     * seul dont l'échec puisse venir d'autre chose que de son nom — et il était
+     * le seul que le verdict d'indélivrabilité du drain ne pouvait pas atteindre.
+     *
+     * Le drain lit la longueur de la liste rendue par `_drainedEmissions` comme
+     * « sais-je diffuser ceci ? » (« une liste VIDE dit *je ne sais pas diffuser
+     * ceci* »). `linkMessageEmissions` gardait l'enveloppe même privée de son
+     * message : la liste faisait donc toujours au moins 1, et le verdict ne
+     * pouvait JAMAIS être négatif pour cette famille.
+     *
+     * Ce que l'enveloppe seule livre : rien. Son unique auditeur est le web, qui
+     * lit `data.message` ; iOS et Android n'écoutent que le `message:new`
+     * dérivé, celui-là même qu'on vient de refuser. Le témoin que ce test
+     * remplace gelait exactement ça — il assertait l'enveloppe émise seule.
+     */
+    it('ne diffuse RIEN d’une enveloppe de lien privée de son message', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { messageId: 'msg-shapeless' }, eventType: 'link-message' },
+          { payload: { messageId: 'msg-shapeless' }, conversationId: convId('link'), messageId: 'msg-shapeless', eventType: 'link-message' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       await (manager as any)._drainPendingMessages('user-drain-shapeless', false);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, {
-        messageId: 'msg-shapeless',
-      });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.LINK_MESSAGE_NEW, expect.anything());
       expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, expect.anything());
+    });
+
+    /**
+     * Le coût RÉEL de la garde ci-dessus, et il ne se mesure pas sur les
+     * émissions : sur les trois signaux que le cycle 109 bis a rendus
+     * solidaires du LIVRÉ.
+     *
+     * `announcesMessageArrival('link-message')` est VRAI — un message envoyé par
+     * lien est une arrivée pleine et entière. Une enveloppe dégradée comptée
+     * comme livrée emportait donc l'accusé de remise avec elle : le curseur
+     * `lastDeliveredAt` de l'auteur avançait, et il est MONOTONE
+     * (`_advanceCursor` ne recule jamais). La coche de l'auteur passait à
+     * « remis » pour un message qu'aucun destinataire n'a reçu — sur le SEUL
+     * transport d'envoi dont dispose un participant anonyme.
+     *
+     * Et le troisième signal était retiré au moment où il servait le plus : la
+     * conversation n'était pas nommée dans `conversationIds`, donc rien
+     * n'envoyait le client rechercher le message, qui est pourtant toujours en
+     * base.
+     */
+    it('n’accuse pas la remise d’une enveloppe de lien vide, mais nomme sa conversation', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { message: { id: 'msg-ok', conversationId: convId('link-ok') } }, conversationId: convId('link-ok'), messageId: 'msg-ok', eventType: 'link-message' },
+          { payload: {}, conversationId: convId('link-empty'), messageId: 'msg-empty', eventType: 'link-message' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-link-receipt', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('link-ok'), convId('link-empty')])
+      );
+      // Le point du témoin : l'entrée vide n'est pas transmise à l'accusé, donc
+      // la coche de son auteur reste à « envoyé ».
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
     });
 
     /**
@@ -2947,7 +3056,7 @@ describe('MeeshySocketIOManager', () => {
     it('emits delivery receipts for an anonymous identity (participant-id key)', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-anon' }, conversationId: 'conv-1', messageId: 'msg-anon' },
+          { payload: { id: 'msg-anon' }, conversationId: convId('1'), messageId: 'msg-anon' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
@@ -2966,13 +3075,274 @@ describe('MeeshySocketIOManager', () => {
     it('still emits delivery receipts for a registered identity', async () => {
       const fakeQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-reg' }, conversationId: 'conv-1', messageId: 'msg-reg' },
+          { payload: { id: 'msg-reg' }, conversationId: convId('1'), messageId: 'msg-reg' },
         ]),
       };
       manager.setDeliveryQueue(fakeQueue as any);
       const receiptsSpy = jest.spyOn(manager as any, '_emitDeliveryForDrainedMessages').mockResolvedValue(undefined);
       await (manager as any)._drainPendingMessages('user-reg', false);
       expect(receiptsSpy).toHaveBeenCalledWith('user-reg', expect.any(Array), false);
+    });
+
+    /**
+     * Le drain est DESTRUCTIF : `drain()` retire les entrées de Redis ET de la
+     * file mémoire avant que la moindre émission n'ait lieu. Tout ce qui n'est
+     * pas émis pendant cette fenêtre est perdu SANS RECOURS — il n'y a pas de
+     * seconde chance, pas de relecture, pas de trace.
+     *
+     * Les trois témoins ci-dessous gardent la frontière de DÉSÉRIALISATION,
+     * celle que `_drainedEmissions` documente comme une AFFIRMATION : « que
+     * l'octet relu de Redis soit bien ce qu'on y a écrit ». Le typage borne ce
+     * qu'on ÉCRIT, jamais ce qu'on RELIT, et la fenêtre de relecture est de
+     * 48 h (`DELIVERY_QUEUE_TTL_SECONDS`) — largement de quoi enjamber un
+     * déploiement progressif où deux versions se partagent la même file Redis.
+     */
+    it('ne diffuse RIEN sous un nom d’événement que la table ne résout pas', async () => {
+      // `DRAINED_EVENT['reaction-add']` (une faute de frappe, ou un `eventType`
+      // d'une version voisine) rend `undefined` — et `emit(undefined, payload)`
+      // ne LÈVE PAS sur socket.io 4.8 : il diffuse un événement anonyme que nul
+      // ne peut écouter. Mesuré. C'est la forme exacte du défaut du cycle 104,
+      // où `broadcastCommentUnliked` émettait sous le nom `undefined`.
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-known', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-known' },
+          { payload: { id: 'msg-unnameable', conversationId: convId('1') }, conversationId: convId('1'), messageId: 'msg-unnameable', eventType: 'reaction-add' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-unnameable', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-known',
+        conversationId: convId('1'),
+      });
+      // Le point du témoin : aucune émission ne porte un nom absent.
+      for (const call of ioState.toEmit.mock.calls) {
+        expect(typeof call[0]).toBe('string');
+      }
+    });
+
+    /**
+     * Le NOM est vérifié depuis le cycle 109 bis ; la CHARGE ne l'était pas.
+     * Les douze événements de `DRAINED_EVENT` portent tous un OBJET — c'est ce
+     * dont dépend le routage chez les trois clients, exactement comme
+     * `linkMessageEmissions` l'exige déjà du message qu'il DÉPLIE : « un payload
+     * sans `conversationId` au premier niveau — donc non routable, donc jeté ».
+     *
+     * L'asymétrie était là : la valeur DÉRIVÉE était inspectée
+     * (`typeof message === 'object' && !Array.isArray(message)`), la valeur dont
+     * elle est dérivée partait sans contrôle. Une chaîne, un tableau ou un `null`
+     * relu de Redis — `JSON.parse(…) as QueuedMessagePayload` ne vérifie RIEN —
+     * s'émettait donc sous un nom d'événement PARFAITEMENT valide, que chaque
+     * décodeur client jette en silence. Le drain étant destructif, le message est
+     * alors perdu sans recours et sans trace : la forme exacte du défaut que le
+     * cycle 109 bis a fermé pour le nom.
+     */
+    it('ne diffuse RIEN dont la charge ne soit pas un objet routable', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-object' }, conversationId: convId('1'), messageId: 'msg-object' },
+          { payload: 'not-an-object', conversationId: convId('1'), messageId: 'msg-string' },
+          { payload: [{ id: 'msg-array' }], conversationId: convId('1'), messageId: 'msg-array' },
+          { payload: null, conversationId: convId('1'), messageId: 'msg-null' },
+          {
+            payload: 'not-an-envelope',
+            conversationId: convId('1'),
+            messageId: 'msg-link',
+            eventType: 'link-message',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-shapeless', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, {
+        id: 'msg-object',
+      });
+      // Le point du témoin : aucune charge diffusée n'est autre chose qu'un objet.
+      const wireEmissions = ioState.toEmit.mock.calls.filter(
+        (c: any[]) => c[0] !== SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      for (const [, payload] of wireEmissions) {
+        expect(payload).toEqual(expect.any(Object));
+        expect(Array.isArray(payload)).toBe(false);
+      }
+      expect(wireEmissions).toHaveLength(1);
+    });
+
+    /**
+     * Le pendant du témoin précédent, sur les deux signaux que le cycle 109 bis
+     * a rendus solidaires du LIVRÉ : une entrée dont la charge est indélivrable
+     * ne compte pas dans `count`, et sa conversation est NOMMÉE quand même —
+     * c'est ce qui rend la perte récupérable plutôt que définitive.
+     */
+    it('n’accuse pas la remise d’une charge informe, mais nomme sa conversation', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('delivered'), messageId: 'msg-ok' },
+          { payload: 'informe', conversationId: convId('shapeless'), messageId: 'msg-shapeless' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-shapeless-receipt', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('delivered'), convId('shapeless')])
+      );
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * Un accusé de remise AFFIRME « ce message est arrivé chez son
+     * destinataire ». La règle est déjà écrite dans `_drainPendingMessages`,
+     * pour la garde d'appartenance : « l'affirmer d'un message qu'on vient de
+     * refuser de livrer mentirait à son auteur ». Elle ne couvrait pas
+     * l'entrée qu'on ne sait PAS NOMMER — qui n'est pas refusée, seulement
+     * indélivrable, et dont l'auteur voyait pourtant sa coche passer au double
+     * tic.
+     */
+    it('n’accuse pas la remise d’une entrée qu’il n’a pas su diffuser', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('1'), messageId: 'msg-ok' },
+          {
+            payload: { id: 'msg-lost' },
+            conversationId: convId('1'),
+            messageId: 'msg-lost',
+            eventType: 'reaction-add',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-halflost', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PENDING_MESSAGES_DELIVERED,
+        expect.objectContaining({ count: 1 })
+      );
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * Le pendant du témoin précédent, et il tire dans l'autre sens : `count` se
+     * RESSERRE sur ce qui est parti, `conversationIds` NE SE RESSERRE PAS.
+     *
+     * C'est l'écart entre les deux qui rend une perte récupérable. Le message
+     * d'une entrée indélivrable est toujours en base — seul son rejeu a
+     * échoué — et le seul consommateur de cet événement invalide les messages
+     * des conversations nommées. Resserrer `conversationIds` sur les entrées
+     * livrées (le geste « symétrique » qu'une relecture pressée appelle) ferait
+     * d'un incident de transport un trou permanent dans le fil.
+     */
+    it('nomme la conversation d’une entrée PERDUE, pour que le client aille la relire', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('delivered'), messageId: 'msg-ok' },
+          {
+            payload: { id: 'msg-lost' },
+            conversationId: convId('lost'),
+            eventType: 'reaction-add',
+          },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      await (manager as any)._drainPendingMessages('user-recoverable', false);
+
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual(
+        expect.arrayContaining([convId('delivered'), convId('lost')])
+      );
+    });
+
+    /**
+     * L'exception à la règle du témoin précédent, et elle est de nature, pas de
+     * degré. `conversationIds` NOMME ce que le client doit aller relire ; une
+     * entrée refusée pour son `conversationId` n'a précisément rien à nommer.
+     * Publier son id enverrait le client invalider une conversation qui
+     * n'existe pas — un signal de récupération qui ne désigne rien vaut moins
+     * que le silence, et le journal par entrée reste la trace de la perte.
+     *
+     * Le reste du contrat est celui des deux témoins ci-dessus : `count` ne
+     * compte que ce qui est parti, et aucun accusé de remise n'est affirmé d'une
+     * entrée qu'on n'a pas livrée.
+     */
+    it('ne NOMME pas la conversation d’une entrée dont l’id n’en désigne aucune', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-ok' }, conversationId: convId('delivered'), messageId: 'msg-ok' },
+          { payload: { id: 'msg-broken' }, conversationId: 'conv-broken', messageId: 'msg-broken' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      const receiptsSpy = jest
+        .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
+        .mockResolvedValue(undefined);
+      await (manager as any)._drainPendingMessages('user-unaddressable', false);
+
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-broken' });
+      const call = ioState.toEmit.mock.calls.find(
+        (c: any[]) => c[0] === SERVER_EVENTS.PENDING_MESSAGES_DELIVERED
+      );
+      expect(call?.[1].count).toBe(1);
+      expect(call?.[1].conversationIds).toEqual([convId('delivered')]);
+      const [, forwarded] = receiptsSpy.mock.calls[0] as [string, any[], boolean];
+      expect(forwarded.map((e: any) => e.messageId)).toEqual(['msg-ok']);
+    });
+
+    /**
+     * `parseRawEntries` (`RedisDeliveryQueue`) isole DÉJÀ chaque entrée à la
+     * couche du dessous, et sa raison est écrite : « so one corrupt entry can
+     * never poison a whole drain/peek ». La couche qui la CONSOMME laissait
+     * tomber cette garantie — une seule émission qui lève emportait tout le
+     * reste d'un lot déjà retiré de la file, plus le signal
+     * `pending-messages:delivered` et TOUS les accusés de réception.
+     *
+     * `io.to(…).emit` lève réellement : la passerelle l'écrit elle-même
+     * (`NotificationService`, canal isolé par `emitBestEffort` pour cette
+     * raison exacte) et l'encodeur socket.io lève sur une charge non
+     * sérialisable — mesuré.
+     */
+    it('une émission qui lève n’emporte pas le reste du lot déjà drainé', async () => {
+      const fakeQueue = {
+        drain: jest.fn().mockResolvedValue([
+          { payload: { id: 'msg-a' }, conversationId: convId('1'), messageId: 'msg-a' },
+          { payload: { id: 'msg-boom' }, conversationId: convId('1'), messageId: 'msg-boom' },
+          { payload: { id: 'msg-c' }, conversationId: convId('1'), messageId: 'msg-c' },
+        ]),
+      };
+      manager.setDeliveryQueue(fakeQueue as any);
+      ioState.toEmit.mockImplementation((_event: string, payload: any) => {
+        if (payload?.id === 'msg-boom') throw new Error('adapter down');
+      });
+
+      await (manager as any)._drainPendingMessages('user-boom', false);
+
+      const emitted = ioState.toEmit.mock.calls
+        .filter((c: any[]) => c[0] === SERVER_EVENTS.MESSAGE_NEW)
+        .map((c: any[]) => c[1]?.id);
+      // `msg-c` suit l'entrée fautive : sans isolation il n'est jamais émis, et
+      // il est déjà sorti de Redis.
+      expect(emitted).toContain('msg-a');
+      expect(emitted).toContain('msg-c');
+      expect(ioState.toEmit).toHaveBeenCalledWith(
+        SERVER_EVENTS.PENDING_MESSAGES_DELIVERED,
+        expect.objectContaining({ count: 2 })
+      );
     });
   });
 
@@ -3007,11 +3377,106 @@ describe('MeeshySocketIOManager', () => {
       });
     }
 
-    it('replays the conversations still joined and drops the one left behind', async () => {
-      membership([{ conversationId: 'conv-kept' }]);
+    /**
+     * Le même double, mais qui REFUSE ce que le vrai client refuse.
+     *
+     * `Participant.conversationId` est une colonne ObjectId. Mesuré contre le
+     * client généré du dépôt, sans base : `undefined`/`null`/un nombre/un objet
+     * dans le `in` lèvent côté CLIENT (`PrismaClientValidationError`), et une
+     * chaîne qui n'est pas un ObjectId atteint le moteur et lève
+     * `Malformed ObjectID`. Les deux atterrissent dans le même `catch`.
+     *
+     * Le double permissif au-dessus ne pouvait donc pas voir le défaut que les
+     * témoins qui suivent gardent : il répondait poliment à une question que la
+     * production n'aurait jamais pu poser. Il reste en place pour les témoins
+     * qui portent sur l'appartenance elle-même ; celui-ci sert quand c'est
+     * l'ARGUMENT qui est en cause.
+     *
+     * `asked` enregistre tout ce que les DEUX lectures du drain demandent —
+     * celle de l'appartenance (`select.bannedAt`) et celle des accusés de remise
+     * (`select.id`) — parce qu'elles agrègent le lot exactement de la même
+     * façon, et sont donc empoisonnables de la même façon.
+     */
+    function strictMembership(rows: Array<{ conversationId: string; bannedAt?: Date | null }>) {
+      const asked: unknown[] = [];
+      prisma.participant.findMany.mockImplementation(async (args: any) => {
+        const ids: unknown[] = args?.where?.conversationId?.in ?? [];
+        asked.push(...ids);
+        for (const id of ids) {
+          if (typeof id !== 'string' || !/^[0-9a-fA-F]{24}$/.test(id)) {
+            throw new Error(`Invalid \`prisma.participant.findMany()\` invocation: Malformed ObjectID: ${String(id)}`);
+          }
+        }
+        if (!args?.select?.bannedAt) return [];
+        return rows
+          .filter((r) => ids.includes(r.conversationId))
+          .map((r) => ({ conversationId: r.conversationId, bannedAt: r.bannedAt ?? null }));
+      });
+      return asked;
+    }
+
+    /**
+     * LE témoin du lot. Une entrée dont le `conversationId` n'est pas
+     * interrogeable ne se perd pas seule : le gate d'autorisation AGRÈGE les ids
+     * du lot en un unique `conversationId: { in: [...] }`, donc elle fait lever
+     * la requête pour TOUT le monde — et l'échec tombe dans un `catch` qui, par
+     * décision documentée, rejoue l'arriéré SANS FILTRE.
+     *
+     * Le fail-open est juste pour ce qu'il vise (une base qui ne répond pas). Il
+     * ne peut simplement pas distinguer « la base n'a pas répondu » de « nous ne
+     * lui avons jamais posé de question valide » — et sur ce second cas il
+     * transforme une entrée corrompue en DÉSACTIVATION du gate : l'arriéré d'une
+     * conversation quittée, ou dont le lecteur a été banni, repart en entier.
+     *
+     * Rouge avant correction : `msg-gone` — la conversation que le lecteur a
+     * quittée — était diffusé.
+     */
+    it('une entrée dont la conversation n’est pas interrogeable ne désarme pas le gate des AUTRES', async () => {
+      strictMembership([{ conversationId: convId('kept') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
+        { payload: { id: 'msg-broken' }, conversationId: 'conv-broken', messageId: 'msg-broken' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-poisoned', false);
+
+      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-kept' });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-gone' });
+      expect(ioState.toEmit).not.toHaveBeenCalledWith(SERVER_EVENTS.MESSAGE_NEW, { id: 'msg-broken' });
+    });
+
+    /**
+     * Le même défaut vu depuis la requête plutôt que depuis son effet, et il
+     * couvre la SECONDE victime : la lecture des participants qui porte les
+     * accusés de remise agrège les ids du lot exactement comme le gate, donc une
+     * entrée illisible y coûtait tous les accusés du lot.
+     *
+     * L'invariant est plus fort que « le gate a bien filtré » : aucune des deux
+     * lectures ne doit jamais recevoir un id que la colonne ne peut pas porter.
+     */
+    it('n’expose AUCUNE des deux lectures du drain à un id que la colonne ne peut pas porter', async () => {
+      const asked = strictMembership([{ conversationId: convId('kept') }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-undated' }, conversationId: undefined, messageId: 'msg-undated' },
+        { payload: { id: 'msg-empty' }, conversationId: '', messageId: 'msg-empty' },
+      ]) as any);
+
+      await (manager as any)._drainPendingMessages('user-args', false);
+
+      expect(asked.length).toBeGreaterThan(0);
+      for (const id of asked) {
+        expect(typeof id).toBe('string');
+        expect(id).toMatch(/^[0-9a-fA-F]{24}$/);
+      }
+    });
+
+    it('replays the conversations still joined and drops the one left behind', async () => {
+      membership([{ conversationId: convId('kept') }]);
+      manager.setDeliveryQueue(queueOf([
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-left', false);
@@ -3025,9 +3490,9 @@ describe('MeeshySocketIOManager', () => {
     // — ligne historique restée active, désynchronisation — parce que c'est la
     // seule lecture qui ne dépend pas d'un invariant d'écriture voisin.
     it('drops a conversation the reader is banned from even if the row stayed active', async () => {
-      membership([{ conversationId: 'conv-banned', bannedAt: new Date('2026-08-01T00:00:00Z') }]);
+      membership([{ conversationId: convId('banned'), bannedAt: new Date('2026-08-01T00:00:00Z') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-banned' }, conversationId: 'conv-banned', messageId: 'msg-banned' },
+        { payload: { id: 'msg-banned' }, conversationId: convId('banned'), messageId: 'msg-banned' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-banned', false);
@@ -3041,9 +3506,9 @@ describe('MeeshySocketIOManager', () => {
     it('drops mutations and translations of a conversation left behind, not just new messages', async () => {
       membership([]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-e' }, conversationId: 'conv-left', messageId: 'msg-e', eventType: 'edited' },
-        { payload: { messageId: 'msg-r' }, conversationId: 'conv-left', messageId: 'msg-r', eventType: 'reaction-added' },
-        { payload: { messageId: 'msg-t' }, conversationId: 'conv-left', messageId: 'msg-t', eventType: 'translation' },
+        { payload: { id: 'msg-e' }, conversationId: convId('left'), messageId: 'msg-e', eventType: 'edited' },
+        { payload: { messageId: 'msg-r' }, conversationId: convId('left'), messageId: 'msg-r', eventType: 'reaction-added' },
+        { payload: { messageId: 'msg-t' }, conversationId: convId('left'), messageId: 'msg-t', eventType: 'translation' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-left-all', false);
@@ -3057,7 +3522,7 @@ describe('MeeshySocketIOManager', () => {
     it('emits nothing at all — not even PENDING_MESSAGES_DELIVERED — when every entry is dropped', async () => {
       membership([]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-all-gone', false);
@@ -3066,17 +3531,17 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('counts only the replayed entries in PENDING_MESSAGES_DELIVERED', async () => {
-      membership([{ conversationId: 'conv-kept' }]);
+      membership([{ conversationId: convId('kept') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-count', false);
 
       expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.PENDING_MESSAGES_DELIVERED, {
         count: 1,
-        conversationIds: ['conv-kept'],
+        conversationIds: [convId('kept')],
       });
     });
 
@@ -3084,10 +3549,10 @@ describe('MeeshySocketIOManager', () => {
     // destinataire ». Il ne doit jamais être affirmé d'un message qu'on vient
     // justement de refuser de livrer.
     it('never claims a delivery receipt for a dropped entry', async () => {
-      membership([{ conversationId: 'conv-kept' }]);
+      membership([{ conversationId: convId('kept') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-kept' }, conversationId: 'conv-kept', messageId: 'msg-kept' },
-        { payload: { id: 'msg-gone' }, conversationId: 'conv-left', messageId: 'msg-gone' },
+        { payload: { id: 'msg-kept' }, conversationId: convId('kept'), messageId: 'msg-kept' },
+        { payload: { id: 'msg-gone' }, conversationId: convId('left'), messageId: 'msg-gone' },
       ]) as any);
       const receiptsSpy = jest
         .spyOn(manager as any, '_emitDeliveryForDrainedMessages')
@@ -3096,14 +3561,14 @@ describe('MeeshySocketIOManager', () => {
       await (manager as any)._drainPendingMessages('user-receipts', false);
 
       expect(receiptsSpy).toHaveBeenCalledWith('user-receipts', [
-        expect.objectContaining({ conversationId: 'conv-kept' }),
+        expect.objectContaining({ conversationId: convId('kept') }),
       ], false);
     });
 
     it('reads the membership of an anonymous identity by participant id', async () => {
-      membership([{ conversationId: 'conv-anon' }]);
+      membership([{ conversationId: convId('anon') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-anon' }, conversationId: 'conv-anon', messageId: 'msg-anon' },
+        { payload: { id: 'msg-anon' }, conversationId: convId('anon'), messageId: 'msg-anon' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('anon-part-9', true);
@@ -3117,11 +3582,11 @@ describe('MeeshySocketIOManager', () => {
     });
 
     it('scopes the membership read to the drained conversations only', async () => {
-      membership([{ conversationId: 'conv-a' }, { conversationId: 'conv-b' }]);
+      membership([{ conversationId: convId('a') }, { conversationId: convId('b') }]);
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'm1' }, conversationId: 'conv-a', messageId: 'm1' },
-        { payload: { id: 'm2' }, conversationId: 'conv-a', messageId: 'm2' },
-        { payload: { id: 'm3' }, conversationId: 'conv-b', messageId: 'm3' },
+        { payload: { id: 'm1' }, conversationId: convId('a'), messageId: 'm1' },
+        { payload: { id: 'm2' }, conversationId: convId('a'), messageId: 'm2' },
+        { payload: { id: 'm3' }, conversationId: convId('b'), messageId: 'm3' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-scope', false);
@@ -3131,7 +3596,7 @@ describe('MeeshySocketIOManager', () => {
           where: expect.objectContaining({
             userId: 'user-scope',
             isActive: true,
-            conversationId: { in: ['conv-a', 'conv-b'] },
+            conversationId: { in: [convId('a'), convId('b')] },
           }),
           select: { conversationId: true, bannedAt: true },
         })
@@ -3149,8 +3614,8 @@ describe('MeeshySocketIOManager', () => {
     it('replays everything when the membership read fails, rather than destroying the backlog', async () => {
       prisma.participant.findMany.mockRejectedValue(new Error('mongo unreachable'));
       manager.setDeliveryQueue(queueOf([
-        { payload: { id: 'msg-1' }, conversationId: 'conv-x', messageId: 'msg-1' },
-        { payload: { id: 'msg-2' }, conversationId: 'conv-y', messageId: 'msg-2' },
+        { payload: { id: 'msg-1' }, conversationId: convId('x'), messageId: 'msg-1' },
+        { payload: { id: 'msg-2' }, conversationId: convId('y'), messageId: 'msg-2' },
       ]) as any);
 
       await (manager as any)._drainPendingMessages('user-db-down', false);
@@ -3217,6 +3682,46 @@ describe('MeeshySocketIOManager', () => {
         .mockResolvedValue(new Map(Object.entries(counts)));
       return (manager as any).readStatusService.getUnreadCountsForUser;
     }
+
+    /** Comme le vrai service : ne répond QUE pour les conversations demandées. */
+    function unreadCountsForRequestedIds(counts: Record<string, number>) {
+      (manager as any).readStatusService.getUnreadCountsForUser = jest.fn(
+        async (_reader: string, ids: string[]) =>
+          new Map(ids.filter((id) => id in counts).map((id) => [id, counts[id]]))
+      );
+      return (manager as any).readStatusService.getUnreadCountsForUser;
+    }
+
+    /**
+     * Une ligne `Participant` dont la conversation a été supprimée (orpheline)
+     * faisait échouer TOUT l'instantané : la relation `conversation` est
+     * requise par le schéma, et Prisma lève « Inconsistent query result »
+     * dès qu'une seule ligne pointe dans le vide. Mesuré en prod le
+     * 2026-08-26 : un lecteur avec 118 conversations vivantes ne recevait
+     * aucun compteur à chaque reconnexion, à cause d'une adhésion de 2025.
+     */
+    it('skips a participation whose conversation no longer exists instead of failing the whole snapshot', async () => {
+      prisma.participant.findMany.mockResolvedValue([
+        { conversationId: 'conv-live' },
+        { conversationId: 'conv-gone' },
+      ]);
+      prisma.conversation.findMany.mockResolvedValue([{ id: 'conv-live', lastMessageAt: null }]);
+      const getUnreadCounts = unreadCountsForRequestedIds({ 'conv-live': 2, 'conv-gone': 1 });
+      const socket = socketDouble();
+
+      await (manager as any)._emitUnreadCountsSnapshot(socket, 'user-orphan', false);
+
+      expect(getUnreadCounts).toHaveBeenCalledWith('user-orphan', ['conv-live']);
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
+        conversationId: 'conv-live',
+        unreadCount: 2,
+        bridge: null,
+      });
+      expect(socket.emit).not.toHaveBeenCalledWith(
+        SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED,
+        expect.objectContaining({ conversationId: 'conv-gone' })
+      );
+    });
 
     it('emits a per-conversation count to a registered reader', async () => {
       prisma.participant.findMany.mockResolvedValue([
@@ -3366,8 +3871,8 @@ describe('MeeshySocketIOManager', () => {
      *
      * La forme tolérante charge les participants SANS la relation, résout les
      * conversations en SECONDE requête, ignore les lignes orphelines, et les
-     * publie UNE fois par snapshot en warn structuré (participantIds +
-     * conversationIds) pour alimenter le GC
+     * publie UNE fois par snapshot en warn structuré (orphanConversationIds)
+     * pour alimenter le GC
      * (`scripts/maintenance/fix-orphan-participants.ts`).
      *
      * Le double Prisma d'ici reproduit le CONTRAT de la base, pas le corps de
@@ -3381,7 +3886,7 @@ describe('MeeshySocketIOManager', () => {
 
       const orphanWarns = () =>
         managerLogger.warn.mock.calls.filter(
-          ([, ctx]: any[]) => ctx && Array.isArray(ctx.participantIds)
+          ([, ctx]: any[]) => ctx && Array.isArray(ctx.orphanConversationIds)
         );
 
       function prismaWithOrphans(
@@ -3443,8 +3948,7 @@ describe('MeeshySocketIOManager', () => {
 
         expect(orphanWarns()).toHaveLength(1);
         expect(orphanWarns()[0][1]).toMatchObject({
-          participantIds: ['part-orphan-1', 'part-orphan-2'],
-          conversationIds: ['conv-gone-1', 'conv-gone-2'],
+          orphanConversationIds: ['conv-gone-1', 'conv-gone-2'],
         });
       });
 
@@ -3498,8 +4002,7 @@ describe('MeeshySocketIOManager', () => {
         expect(socket.emit).not.toHaveBeenCalled();
         expect(orphanWarns()).toHaveLength(1);
         expect(orphanWarns()[0][1]).toMatchObject({
-          participantIds: ['part-orphan'],
-          conversationIds: ['conv-gone'],
+          orphanConversationIds: ['conv-gone'],
         });
       });
     });
@@ -3542,6 +4045,20 @@ describe('MeeshySocketIOManager', () => {
      * la même que `GET /conversations` paie déjà.
      */
     describe('le pont ✦ voyage aussi sur la forme de reconnexion', () => {
+      /**
+       * N adhésions dont la conversation i a reçu son dernier message le
+       * 1+i janvier 2026 — la récence vient de la TABLE `Conversation`, lue à
+       * part (jamais par la relation requise `participant.conversation`).
+       */
+      function participationsWithRecency(count: number) {
+        const rows = Array.from({ length: count }, (_, i) => ({ conversationId: `conv-${i}` }));
+        prisma.participant.findMany.mockResolvedValue(rows);
+        prisma.conversation.findMany.mockResolvedValue(
+          rows.map((row, i) => ({ id: row.conversationId, lastMessageAt: new Date(2026, 0, 1 + i) }))
+        );
+        return rows;
+      }
+
       const bridgeOf = (conversationId: string) =>
         ({
           conversationId,
@@ -3717,14 +4234,7 @@ describe('MeeshySocketIOManager', () => {
       // pont aurait échangé un défaut d'affichage contre un défaut de charge,
       // et précisément à l'instant où le réseau est le plus fragile.
       it('caps the bridge pass at one list page, keeping the MOST RECENT conversations', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({ conversationId: `conv-${i}` }));
-        prisma.participant.findMany.mockResolvedValue(many);
-        prisma.conversation.findMany.mockResolvedValue(
-          Array.from({ length: 42 }, (_, i) => ({
-            id: `conv-${i}`,
-            lastMessageAt: new Date(2026, 0, 1 + i),
-          }))
-        );
+        const many = participationsWithRecency(42);
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         const pass = bridgePass({});
         const socket = socketDouble();
@@ -3743,14 +4253,7 @@ describe('MeeshySocketIOManager', () => {
       // menteuse, et une pastille menteuse sur la 200e conversation ment
       // autant que sur la première.
       it('never caps the COUNTS — only the bridges', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({ conversationId: `conv-${i}` }));
-        prisma.participant.findMany.mockResolvedValue(many);
-        prisma.conversation.findMany.mockResolvedValue(
-          Array.from({ length: 42 }, (_, i) => ({
-            id: `conv-${i}`,
-            lastMessageAt: new Date(2026, 0, 1 + i),
-          }))
-        );
+        const many = participationsWithRecency(42);
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         bridgePass({});
         const socket = socketDouble();
@@ -3776,14 +4279,7 @@ describe('MeeshySocketIOManager', () => {
        * rougi.
        */
       it('DIFFÈRE le pont des conversations hors borne au lieu de l’effacer', async () => {
-        const many = Array.from({ length: 42 }, (_, i) => ({ conversationId: `conv-${i}` }));
-        prisma.participant.findMany.mockResolvedValue(many);
-        prisma.conversation.findMany.mockResolvedValue(
-          Array.from({ length: 42 }, (_, i) => ({
-            id: `conv-${i}`,
-            lastMessageAt: new Date(2026, 0, 1 + i),
-          }))
-        );
+        const many = participationsWithRecency(42);
         unreadCounts(Object.fromEntries(many.map(row => [row.conversationId, 1])));
         bridgePass({});
         const socket = socketDouble();
@@ -4009,6 +4505,14 @@ describe('MeeshySocketIOManager', () => {
       jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
       // The viewer blocked 'user-blocked' (bidirectional block model on User.blockedUserIds).
       prisma.user.findUnique.mockResolvedValue({ blockedUserIds: ['user-blocked'] });
+      // Depuis le 2026-08-25 le contact « normal » doit être un AMI ACCEPTÉ pour
+      // rester visible : partager une conversation n'autorise plus rien. Les
+      // DEUX sont amis ici — c'est ce qui isole le BLOCAGE comme seule cause du
+      // masquage, au lieu de le confondre avec l'absence de relation.
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-blocked', receiverId: 'user-viewer' },
+        { senderId: 'user-normal', receiverId: 'user-viewer' },
+      ]);
 
       await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
 
@@ -4016,6 +4520,61 @@ describe('MeeshySocketIOManager', () => {
         users: [
           { userId: 'user-blocked', username: 'blocked-contact', isOnline: false, lastActiveAt: null },
           { userId: 'user-normal', username: 'normal-contact', isOnline: false, lastActiveAt: seenAt },
+        ],
+      });
+    });
+
+    // Témoin de CONFIRMATION (revue F6, 2026-08-26) : l'instantané passe par
+    // `resolveForTargets`, qui lit `deactivatedAt` et rend HIDDEN avant tout
+    // privilège. Le lecteur ADMIN est la variante qui porte la preuve — il
+    // reçoit FULL pour tout le reste, donc seule la désactivation peut masquer.
+    it.each([
+      ['un ADMIN', { role: 'ADMIN', blockedUserIds: [] }],
+      ['un AMI', { role: 'USER', blockedUserIds: [] }],
+    ])('masque un contact DÉSACTIVÉ même à %s — encore connecté, il ressort hors ligne sans dernière connexion', async (_viewer, viewerRow) => {
+      const socket = makeSocket('sock-ps-deactivated');
+      const seenAt = new Date('2026-08-20T00:00:00.000Z');
+      (manager as any).presenceSnapshotCache.set('user-viewer', {
+        users: [
+          { userId: 'user-deactivated', username: 'gone', isOnline: false, lastActiveAt: seenAt },
+          { userId: 'user-live', username: 'live', isOnline: false, lastActiveAt: seenAt },
+        ],
+        cachedAt: Date.now(),
+      });
+      // Les deux sont CONNECTÉS : la désactivation ne révoque pas les sockets.
+      for (const id of ['user-deactivated', 'user-live']) {
+        (manager as any).connectedUsers.set(id, {
+          id, socketId: `sock-${id}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
+        });
+      }
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+      prisma.user.findUnique.mockResolvedValue(viewerRow);
+      // `user.findMany` sert DEUX questions au résolveur : « lesquels sont
+      // désactivés ? » (`where.id.in`) et « lesquels ont bloqué le lecteur ? »
+      // (`where.blockedUserIds`) — d'où l'aiguillage sur la forme du `where`.
+      prisma.user.findMany.mockImplementation(async (args: any) => {
+        if (args?.where?.blockedUserIds) return [];
+        if (args?.where?.id?.in) {
+          return [
+            { id: 'user-deactivated', deactivatedAt: seenAt },
+            { id: 'user-live', deactivatedAt: null },
+          ];
+        }
+        return [];
+      });
+      // Les deux sont AMIS du lecteur : seule la désactivation distingue les deux lignes.
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-deactivated', receiverId: 'user-viewer' },
+        { senderId: 'user-live', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      expect(socket.emit).toHaveBeenCalledWith(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+        users: [
+          { userId: 'user-deactivated', username: 'gone', isOnline: false, lastActiveAt: null },
+          { userId: 'user-live', username: 'live', isOnline: true, lastActiveAt: seenAt },
         ],
       });
     });
@@ -4513,6 +5072,20 @@ describe('MeeshySocketIOManager', () => {
       await cb('user-maint', true, false);
     });
 
+    it('setSessionRevoker callback disconnects the user sockets with the deletion reason', async () => {
+      const { disconnectRevokedSessions } = jest.requireMock('../disconnectRevokedSessions') as { disconnectRevokedSessions: jest.Mock };
+      disconnectRevokedSessions.mockClear();
+      const revoke = mockMaintenanceServiceInstance.setSessionRevoker.mock.calls[0][0];
+      await revoke('user-expired');
+      expect(disconnectRevokedSessions).toHaveBeenCalledTimes(1);
+      expect(disconnectRevokedSessions).toHaveBeenCalledWith(expect.objectContaining({
+        io: (manager as any).io,
+        userId: 'user-expired',
+        reason: 'logout_all_devices',
+        onError: expect.any(Function),
+      }));
+    });
+
     it('setIsCurrentlyConnected callback returns true for connected user', () => {
       const cb = mockMaintenanceServiceInstance.setIsCurrentlyConnected.mock.calls[0][0];
       (manager as any).connectedUsers.set('user-live', { id: 'user-live', socketId: 's1', isAnonymous: false, language: 'fr', resolvedLanguages: [] });
@@ -4729,6 +5302,138 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
+  // 34 bis. _emitPresenceSnapshot — la RELATION, pas la conversation
+  //
+  // Directive produit (2026-08-25) : « personne ne doit savoir ma dernière
+  // connexion sur l'application si on n'est pas ami. Les utilisateurs avec le
+  // rôle ADMIN et supérieur peuvent constamment avoir l'état de présence. »
+  //
+  // La liste des contacts reste dérivée des conversations — c'est la façon la
+  // moins chère de nommer les gens que le client va afficher. Ce n'est plus une
+  // AUTORISATION : chaque entrée traverse `PresenceVisibilityService`. Ces
+  // témoins gardent la différence entre « être dans la liste » et « y être
+  // renseigné ».
+  // -------------------------------------------------------------------------
+
+  describe('_emitPresenceSnapshot - visibilité par relation', () => {
+    const SEEN_AT = new Date('2026-08-20T12:00:00.000Z');
+
+    function warmSnapshot(viewerKey: string) {
+      (manager as any).presenceSnapshotCache.set(viewerKey, {
+        users: [
+          { userId: 'user-friend', username: 'friend', isOnline: false, lastActiveAt: SEEN_AT },
+          { userId: 'user-stranger', username: 'stranger', isOnline: false, lastActiveAt: SEEN_AT },
+          { userId: 'part-guest', username: 'Guest', isOnline: false, lastActiveAt: SEEN_AT },
+        ],
+        cachedAt: Date.now(),
+      });
+      // Les trois sont RÉELLEMENT en ligne : le masquage doit SUPPRIMER une
+      // information vraie, pas se contenter de ne pas en inventer une.
+      for (const id of ['user-friend', 'user-stranger', 'part-guest']) {
+        (manager as any).connectedUsers.set(id, {
+          id, socketId: `sock-${id}`, isAnonymous: false, language: 'fr', resolvedLanguages: [],
+        });
+      }
+      jest.spyOn(manager as any, '_emitUnreadCountsSnapshot').mockResolvedValue(undefined);
+      jest.spyOn(manager as any, '_drainPendingMessages').mockResolvedValue(undefined);
+    }
+
+    function emittedUsers(socket: ReturnType<typeof makeSocket>) {
+      const call = socket.emit.mock.calls.find((c: any) => c[0] === SERVER_EVENTS.PRESENCE_SNAPSHOT);
+      return call?.[1]?.users as Array<{ userId: string; isOnline: boolean; lastActiveAt: Date | null }>;
+    }
+
+    it("rend HORS LIGNE, sans dernière connexion, un co-participant qui n'est pas ami", async () => {
+      const socket = makeSocket('sock-vis-stranger');
+      warmSnapshot('user-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-friend', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      const users = emittedUsers(socket);
+      expect(users).toContainEqual(
+        expect.objectContaining({ userId: 'user-stranger', isOnline: false, lastActiveAt: null }),
+      );
+      // Un invité de lien n'a pas de compte, donc aucune amitié possible.
+      expect(users).toContainEqual(
+        expect.objectContaining({ userId: 'part-guest', isOnline: false, lastActiveAt: null }),
+      );
+    });
+
+    it('rend en ligne, avec sa dernière connexion, un AMI accepté', async () => {
+      const socket = makeSocket('sock-vis-friend');
+      warmSnapshot('user-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'USER', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-friend', receiverId: 'user-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-viewer', false);
+
+      expect(emittedUsers(socket)).toContainEqual(
+        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: SEEN_AT }),
+      );
+    });
+
+    it('montre TOUT à un lecteur ADMIN, y compris un inconnu et un invité de lien', async () => {
+      const socket = makeSocket('sock-vis-admin');
+      warmSnapshot('user-admin-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-admin-viewer', false);
+
+      const users = emittedUsers(socket);
+      for (const id of ['user-friend', 'user-stranger', 'part-guest']) {
+        expect(users).toContainEqual(
+          expect.objectContaining({ userId: id, isOnline: true, lastActiveAt: SEEN_AT }),
+        );
+      }
+      // Le privilège se lit sur le RÔLE, pas sur une relation : aucune amitié
+      // n'a eu à être interrogée.
+      expect(prisma.friendRequest.findMany).not.toHaveBeenCalled();
+    });
+
+    it("traite un lecteur MODERATOR comme un utilisateur ordinaire : ses amis, pas les inconnus", async () => {
+      const socket = makeSocket('sock-vis-mod');
+      warmSnapshot('user-mod-viewer');
+      prisma.user.findUnique.mockResolvedValue({ role: 'MODERATOR', blockedUserIds: [] });
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: 'user-friend', receiverId: 'user-mod-viewer' },
+      ]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'user-mod-viewer', false);
+
+      const users = emittedUsers(socket);
+      expect(users).toContainEqual(
+        expect.objectContaining({ userId: 'user-friend', isOnline: true, lastActiveAt: SEEN_AT }),
+      );
+      for (const id of ['user-stranger', 'part-guest']) {
+        expect(users).toContainEqual(
+          expect.objectContaining({ userId: id, isOnline: false, lastActiveAt: null }),
+        );
+      }
+    });
+
+    it("ne renseigne RIEN à un lecteur anonyme — il n'a aucune relation", async () => {
+      const socket = makeSocket('sock-vis-anon');
+      warmSnapshot('part-anon-viewer');
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await (manager as any)._emitPresenceSnapshot(socket, 'part-anon-viewer', true);
+
+      for (const user of emittedUsers(socket)) {
+        expect(user).toEqual(expect.objectContaining({ isOnline: false, lastActiveAt: null }));
+      }
+      // Un lecteur sans compte n'a pas de rôle à relire.
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
   // 35. _broadcastNewMessage - normalizeConversationId path with DB lookup
   // -------------------------------------------------------------------------
 
@@ -4863,27 +5568,14 @@ describe('MeeshySocketIOManager', () => {
   });
 
   // -------------------------------------------------------------------------
-  // 41. _broadcastUserStatus - registered user showLastSeen=false
+  // 41. `showLastSeen=false` — voir `_broadcastUserStatus` § « efface
+  // lastActiveAt pour les AMIS […] et le garde pour les privilégiés ».
+  //
+  // Le témoin qui vivait ici n'exigeait qu'« une » charge à `lastActiveAt: null`
+  // et serait resté vert alors même que la charge des ADMIN+, qui doit garder
+  // l'horodatage, aurait été effacée avec elle. Son successeur nomme les DEUX
+  // sous-ensembles, donc il tombe dans les deux sens.
   // -------------------------------------------------------------------------
-
-  describe('_broadcastUserStatus - registered user showLastSeen=false', () => {
-    it('sends null lastActiveAt when showLastSeen=false', async () => {
-      mockPrivacyPrefsServiceInstance.getPreferences.mockResolvedValue({ showOnlineStatus: true, showLastSeen: false });
-      prisma.user.findUnique.mockResolvedValue({
-        id: 'user-hidden',
-        username: 'hidden',
-        displayName: 'Hidden User',
-        firstName: 'Hidden',
-        lastName: 'User',
-        lastActiveAt: new Date(),
-      });
-      prisma.participant.findMany.mockResolvedValue([{ conversationId: 'conv-h1' }]);
-      await (manager as any)._broadcastUserStatus('user-hidden', true, false);
-      expect(ioState.toEmit).toHaveBeenCalledWith(SERVER_EVENTS.USER_STATUS, expect.objectContaining({
-        lastActiveAt: null,
-      }));
-    });
-  });
 
   // -------------------------------------------------------------------------
   // 42. sendToUser - returns false when socket missing from sockets map
@@ -5006,31 +5698,6 @@ describe('MeeshySocketIOManager', () => {
       const socket = makeSocket('sock-cl1');
       triggerConnection(socket);
       await socket._handlers[CLIENT_EVENTS.CONVERSATION_LEAVE]({ conversationId: 'conv-1' });
-    });
-  });
-
-  // -------------------------------------------------------------------------
-  // 48. _findUsersForLanguage
-  // -------------------------------------------------------------------------
-
-  describe('_findUsersForLanguage', () => {
-    it('returns users matching by resolvedLanguages', () => {
-      (manager as any).connectedUsers.set('u-fr', { id: 'u-fr', socketId: 's-fr', isAnonymous: false, language: 'en', resolvedLanguages: ['fr', 'en'] });
-      (manager as any).connectedUsers.set('u-en', { id: 'u-en', socketId: 's-en', isAnonymous: false, language: 'en', resolvedLanguages: ['en'] });
-      const result = (manager as any)._findUsersForLanguage('fr');
-      expect(result.some((u: any) => u.id === 'u-fr')).toBe(true);
-      expect(result.some((u: any) => u.id === 'u-en')).toBe(false);
-    });
-
-    it('returns users matching by language field', () => {
-      (manager as any).connectedUsers.set('u-es', { id: 'u-es', socketId: 's-es', isAnonymous: false, language: 'ES', resolvedLanguages: [] });
-      const result = (manager as any)._findUsersForLanguage('es');
-      expect(result.some((u: any) => u.id === 'u-es')).toBe(true);
-    });
-
-    it('returns empty array when no users match', () => {
-      (manager as any).connectedUsers.clear();
-      expect((manager as any)._findUsersForLanguage('zh')).toHaveLength(0);
     });
   });
 
@@ -5710,6 +6377,7 @@ describe('MeeshySocketIOManager', () => {
         startMaintenanceTasks: jest.fn().mockRejectedValue(new Error('maintenance fail')),
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
+        setSessionRevoker: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
@@ -6300,6 +6968,28 @@ describe('MeeshySocketIOManager', () => {
         .toHaveBeenCalledWith(mockSock, 'conv-replay-cb');
     });
 
+    // La liste nominative `onlineUsers` de `conversation:stats` est projetée
+    // par LECTEUR à l'émission (directive produit du 2026-08-25) : le handler
+    // reçoit le lecteur RELU et la loi unique — la même paire que
+    // `_emitPresenceSnapshot` consomme. Deux fils de plus que rien d'autre ne
+    // signale s'ils manquent.
+    it('wires ConversationHandler.presenceVisibility to the shared PresenceVisibilityService', () => {
+      const { ConversationHandler } = jest.requireMock('../handlers/ConversationHandler') as any;
+      const lastCallArgs = ConversationHandler.mock.calls[ConversationHandler.mock.calls.length - 1][0];
+      expect(lastCallArgs.presenceVisibility).toBe((manager as any).presenceVisibilityService);
+    });
+
+    it('wires ConversationHandler.presenceViewer to _presenceViewer — le rôle est RELU en base', async () => {
+      const { ConversationHandler } = jest.requireMock('../handlers/ConversationHandler') as any;
+      const lastCallArgs = ConversationHandler.mock.calls[ConversationHandler.mock.calls.length - 1][0];
+      prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+
+      await expect(lastCallArgs.presenceViewer('user-stats-viewer'))
+        .resolves.toEqual({ userId: 'user-stats-viewer', role: 'ADMIN' });
+      expect(prisma.user.findUnique)
+        .toHaveBeenCalledWith({ where: { id: 'user-stats-viewer' }, select: { role: true } });
+    });
+
     it('emitPresenceSnapshot callback does not throw', () => {
       const { AuthHandler } = jest.requireMock('../handlers/AuthHandler') as any;
       const lastCallArgs = AuthHandler.mock.calls[AuthHandler.mock.calls.length - 1][0];
@@ -6331,8 +7021,8 @@ describe('MeeshySocketIOManager', () => {
     it('emits each pending message payload and delivery confirmation to the user room', async () => {
       const mockQueue = {
         drain: jest.fn().mockResolvedValue([
-          { payload: { id: 'msg-p1', conversationId: '507f1f77bcf86cd799439200' } },
-          { payload: { id: 'msg-p2', conversationId: '507f1f77bcf86cd799439200' } },
+          { payload: { id: 'msg-p1', conversationId: '507f1f77bcf86cd799439200' }, conversationId: '507f1f77bcf86cd799439200', messageId: 'msg-p1' },
+          { payload: { id: 'msg-p2', conversationId: '507f1f77bcf86cd799439200' }, conversationId: '507f1f77bcf86cd799439200', messageId: 'msg-p2' },
         ]),
       };
       (manager as any).deliveryQueue = mockQueue;
@@ -6950,6 +7640,7 @@ describe('MeeshySocketIOManager', () => {
         startMaintenanceTasks: jest.fn().mockRejectedValue('string rejection'),  // not an Error
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
+        setSessionRevoker: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);

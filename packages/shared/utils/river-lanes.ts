@@ -731,7 +731,8 @@ export function resolveRiverLivingLanes(geometry: RiverGeometry, rank: number): 
 
   return geometry.lanes
     .filter((lane) => spanCovering(lane, rank) !== undefined)
-    .map((lane) => lane.laneIndex);
+    .map((lane) => lane.laneIndex)
+    .sort((a, b) => a - b);
 }
 
 /**
@@ -744,7 +745,11 @@ export function resolveRiverLivingLanes(geometry: RiverGeometry, rank: number): 
  * un choix arbitraire parmi plusieurs, c'est le seul.
  *
  * Sérialisée, la seule colonne appartient, à chaque rang, à l'auteur du
- * message de ce rang — c'est ce qui fait défiler le nom en tête du fil.
+ * message de ce rang — c'est ce qui fait défiler le nom en tête du fil. Sauf au
+ * rang d'un avis système : il n'occupe la colonne de personne (`RiverBubble.laneId`
+ * n'a de sens que pour une prise de parole), donc `null` — même règle que
+ * `serializedOccupancies`, sans quoi nommer la colonne à ce rang ferait parler
+ * quelqu'un qui vient seulement d'entrer.
  */
 export function resolveRiverLaneAt(
   geometry: RiverGeometry,
@@ -754,7 +759,7 @@ export function resolveRiverLaneAt(
   if (geometry.layout === 'serialized') {
     const bubble = geometry.bubbles.find((candidate) => candidate.rank === rank);
     const lane =
-      laneIndex === 0 && bubble !== undefined
+      laneIndex === 0 && bubble !== undefined && !bubble.isSystem
         ? geometry.lanes.find((candidate) => candidate.laneId === bubble.laneId)
         : undefined;
     return lane ?? null;

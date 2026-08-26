@@ -76,6 +76,11 @@ jest.mock('../../../../services/notifications/NotificationService', () => ({
     createMentionNotificationsBatch: (...a: any[]) => mockCreateMentionNotificationsBatch(...a),
   })),
   protectedPreview: jest.fn().mockReturnValue(null),
+  // Cycle 125 — la JUMELLE de `protectedPreview`, pour le MÉDIA : l'éventail
+  // l'appelle pour décider si le FICHIER d'une pièce jointe a le droit de
+  // voyager sur le canal push. Absente de cette fabrique, elle rend la fonction
+  // `undefined` et l'éventail entier meurt dans son `catch`.
+  maskedAttachment: jest.fn().mockReturnValue(false),
 }));
 
 jest.mock('../../../../services/message-translation/MessageTranslationService', () => ({
@@ -730,7 +735,7 @@ describe('MessageProcessor.saveMessage', () => {
       channels: null, fps: null, videoCodec: null, pageCount: null, lineCount: null,
       transcription: null, translations: null, metadata: null,
     };
-    attFindMany.mockResolvedValueOnce([imageAtt]).mockResolvedValue([]);
+    attFindMany.mockResolvedValue([imageAtt]);
     attCreate.mockResolvedValue(imageAtt);
     await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'image' } }));
@@ -742,7 +747,7 @@ describe('MessageProcessor.saveMessage', () => {
       width: null, height: null, thumbnailPath: null, thumbnailUrl: null, duration: 5,
       bitrate: null, sampleRate: null, codec: null, channels: null, fps: null, videoCodec: null,
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
-    attFindMany.mockResolvedValueOnce([audioAtt]).mockResolvedValue([]);
+    attFindMany.mockResolvedValue([audioAtt]);
     attCreate.mockResolvedValue(audioAtt);
     await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'audio' } }));
@@ -754,7 +759,7 @@ describe('MessageProcessor.saveMessage', () => {
       width: 1920, height: 1080, thumbnailPath: null, thumbnailUrl: null, duration: 30,
       bitrate: null, sampleRate: null, codec: null, channels: null, fps: 30, videoCodec: null,
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
-    attFindMany.mockResolvedValueOnce([videoAtt]).mockResolvedValue([]);
+    attFindMany.mockResolvedValue([videoAtt]);
     attCreate.mockResolvedValue(videoAtt);
     await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'video' } }));
@@ -766,22 +771,35 @@ describe('MessageProcessor.saveMessage', () => {
       width: null, height: null, thumbnailPath: null, thumbnailUrl: null, duration: null,
       bitrate: null, sampleRate: null, codec: null, channels: null, fps: null, videoCodec: null,
       pageCount: 5, lineCount: null, transcription: null, translations: null, metadata: null };
-    attFindMany.mockResolvedValueOnce([fileAtt]).mockResolvedValue([]);
+    attFindMany.mockResolvedValue([fileAtt]);
     attCreate.mockResolvedValue(fileAtt);
     await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
     expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
-  it('does not update message type for text/plain forward', async () => {
+  /**
+   * Ce témoin demandait l'INVERSE — « does not update message type for
+   * text/plain forward », `expect(msgUpdate).not.toHaveBeenCalled()`. Il
+   * n'attestait pas une règle : il gelait le trou de l'exemplaire manuscrit,
+   * qui ne connaissait que le préfixe `application/`. La règle canonique dit
+   * `'file'` pour tout MIME non image/audio/video — « la catégorie générique
+   * des pièces jointes, jamais 'text' » — et son propre témoin le demandait
+   * déjà, un fichier plus loin, pour `''`, `null` et `undefined`.
+   *
+   * Deux témoins verts exigeaient donc des réponses OPPOSÉES à la même
+   * question, chacun gardant son exemplaire de la règle. C'est ce désaccord
+   * que ce lot tranche, en faveur de l'exemplaire qui n'a pas de trou.
+   */
+  it('classe un transfert text/plain en "file" (jamais "text")', async () => {
     const textAtt = { id: 'txt', fileName: 'note.txt', originalName: 'note.txt', mimeType: 'text/plain',
       fileSize: 100, filePath: '/up/note.txt', fileUrl: 'https://cdn/note.txt', title: null, alt: null, caption: null,
       width: null, height: null, thumbnailPath: null, thumbnailUrl: null, duration: null,
       bitrate: null, sampleRate: null, codec: null, channels: null, fps: null, videoCodec: null,
       pageCount: null, lineCount: null, transcription: null, translations: null, metadata: null };
-    attFindMany.mockResolvedValueOnce([textAtt]).mockResolvedValue([]);
+    attFindMany.mockResolvedValue([textAtt]);
     attCreate.mockResolvedValue(textAtt);
     await processor.saveMessage({ ...baseData, forwardedFromId: 'orig-msg-id' });
-    expect(msgUpdate).not.toHaveBeenCalled();
+    expect(msgUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: { messageType: 'file' } }));
   });
 
   it('handles empty original attachments on forward gracefully', async () => {
@@ -901,6 +919,118 @@ describe('MessageProcessor.saveMessage', () => {
       await expect(
         processor.saveMessage({ ...baseData, copyAttachmentsFromMessageId: SOURCE_MSG_ID })
       ).rejects.toThrow(/not-owner/);
+    });
+  });
+
+  // ── `messageType` dérivé des pièces jointes, pour les TROIS chemins ───────
+  //
+  // `Message.messageType` dit ce QU'EST un message. Il était renseigné par un
+  // champ de requête que le client fournit — et iOS ne le fournit PAS :
+  // `SendMessageRequest` (packages/MeeshySDK/…/MessageModels.swift) n'a aucun
+  // champ `messageType`. Or le chemin REST est précisément celui de TOUT envoi
+  // iOS non éligible au socket-first : pièce jointe, DM chiffré, vue unique,
+  // éphémère (cf. l'en-tête de `socketio/messageNewPayload.ts`). Toute photo,
+  // vidéo et note vocale envoyée depuis iOS se persistait donc `'text'`.
+  //
+  // La règle MIME → type existe pourtant, canonique et testée
+  // (`messageTypeFromMimeTypes`) — elle n'était câblée qu'à UN des quatre
+  // chemins d'écriture. Les trois autres l'ignoraient, la réécrivaient à la
+  // main, ou ne dérivaient rien du tout. Ces témoins la demandent aux trois.
+  describe('messageType dérivé des pièces jointes réellement portées', () => {
+    const imageAtt = { id: 'att-img', mimeType: 'image/jpeg', fileName: 'p.jpg',
+      originalName: 'p.jpg', fileSize: 1000, filePath: '/up/p.jpg', fileUrl: 'https://cdn/p.jpg' };
+    const videoAtt = { id: 'att-vid', mimeType: 'video/mp4', fileName: 'v.mp4',
+      originalName: 'v.mp4', fileSize: 9000, filePath: '/up/v.mp4', fileUrl: 'https://cdn/v.mp4' };
+    const cardAtt = { id: 'att-vcf', mimeType: 'text/vcard', fileName: 'c.vcf',
+      originalName: 'c.vcf', fileSize: 300, filePath: '/up/c.vcf', fileUrl: 'https://cdn/c.vcf' };
+
+    const persistedMessageType = () => {
+      const call = msgUpdate.mock.calls.find(
+        (c) => (c[0] as { data?: Record<string, unknown> })?.data?.messageType !== undefined
+      );
+      return (call?.[0] as { data: { messageType: string } } | undefined)?.data.messageType;
+    };
+
+    /**
+     * Le chemin REST d'iOS : la photo est téléversée d'abord, puis LIÉE par son
+     * id. Le client ne dit rien du type — il ne peut pas — donc le serveur, qui
+     * est le seul à connaître le MIME final, doit le dire à sa place.
+     */
+    it('lie une photo par attachmentIds : persiste "image", pas "text"', async () => {
+      attFindMany.mockResolvedValue([imageAtt]);
+      await processor.saveMessage({ ...baseData, content: '', attachmentIds: ['att-img'] });
+      expect(persistedMessageType()).toBe('image');
+    });
+
+    /**
+     * Le message RENDU porte le type dérivé — c'est cet objet-là que lit la
+     * notification (`protectedPreview` → `contentTypeIcon`) et que
+     * `buildMessageNewPayload` met sur le fil. Sans la reprise en mémoire, la
+     * colonne serait juste et le push resterait au ballon texte.
+     */
+    it('le message rendu porte le type dérivé (notification + message:new)', async () => {
+      attFindMany.mockResolvedValue([videoAtt]);
+      const msg = await processor.saveMessage({ ...baseData, content: '', attachmentIds: ['att-vid'] });
+      expect((msg as { messageType?: string }).messageType).toBe('video');
+    });
+
+    /**
+     * Le fan-out de partage iOS : la cible 1 téléverse, les cibles 2..N passent
+     * par `copyAttachmentsFromMessageId`. Ce chemin ne dérivait RIEN — la même
+     * photo partagée à deux conversations y arrivait avec deux types
+     * différents.
+     */
+    it('diffusion (copyAttachmentsFromMessageId) : persiste "image", pas "text"', async () => {
+      msgFindUnique.mockResolvedValue({ sender: { id: SENDER_ID, userId: 'user-1' } });
+      partFindUnique.mockResolvedValue({ id: SENDER_ID, userId: 'user-1' });
+      attFindMany.mockResolvedValue([imageAtt]);
+      attCreate.mockResolvedValue({ ...imageAtt });
+      await processor.saveMessage({ ...baseData, content: '', copyAttachmentsFromMessageId: 'orig-msg-id' });
+      expect(persistedMessageType()).toBe('image');
+    });
+
+    /**
+     * La règle manuscrite du transfert ne connaissait que `application/` : une
+     * carte de visite, un `.txt`, un MIME vide y retombaient sur `'text'`. La
+     * règle canonique dit `'file'` — « jamais 'text' » — et un ancien témoin
+     * demandait EXPLICITEMENT le contraire. C'est ce désaccord-là qu'on tranche.
+     */
+    it('transfert d’une carte de visite (text/vcard) : "file", jamais "text"', async () => {
+      attFindMany.mockResolvedValue([cardAtt]);
+      attCreate.mockResolvedValue({ ...cardAtt });
+      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id' });
+      expect(persistedMessageType()).toBe('file');
+    });
+
+    /**
+     * La règle manuscrite ne regardait que `createdAttachments[0]`. Un lot
+     * hétérogène s'annonçait donc du type de sa première pièce — la canonique
+     * le dit `'file'`, la catégorie générique du bundle.
+     */
+    it('lot hétérogène : "file", pas le type de la PREMIÈRE pièce jointe', async () => {
+      attFindMany.mockResolvedValue([imageAtt, videoAtt]);
+      attCreate.mockResolvedValue({ ...imageAtt });
+      await processor.saveMessage({ ...baseData, content: '', forwardedFromId: 'orig-msg-id' });
+      expect(persistedMessageType()).toBe('file');
+    });
+
+    /**
+     * ADDITIVITÉ — passe AVANT comme APRÈS, et c'est ce qui rend la mesure
+     * vérifiable. Un type déjà EXPLICITE est un fait que le client seul
+     * connaît (`'location'` ne se lit dans aucun MIME) : la dérivation ne
+     * comble qu'un défaut, elle n'écrase jamais une déclaration.
+     */
+    it('n’écrase JAMAIS un messageType déjà explicite', async () => {
+      msgCreate.mockResolvedValue(makeMessage({ messageType: 'location' } as Partial<Message>));
+      attFindMany.mockResolvedValue([imageAtt]);
+      await processor.saveMessage({ ...baseData, content: '', messageType: 'location', attachmentIds: ['att-img'] });
+      expect(persistedMessageType()).toBeUndefined();
+    });
+
+    /** ADDITIVITÉ — un message sans pièce jointe n'ouvre aucune écriture. */
+    it('un message purement textuel n’écrit aucun messageType', async () => {
+      await processor.saveMessage({ ...baseData });
+      expect(persistedMessageType()).toBeUndefined();
     });
   });
 });

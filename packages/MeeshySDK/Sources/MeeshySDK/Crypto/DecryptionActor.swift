@@ -37,13 +37,36 @@ public struct DecryptionResult: Sendable {
 public actor DecryptionActor {
     private let provider: any DecryptionSessionProviding
 
+    /// Mémo `messageId → (ciphertext, plaintext)` : chaque `messagesDidChange`
+    /// re-déchiffrait TOUTE la fenêtre (200+ messages) en DM. Même clé
+    /// symétrique par pair ⇒ même ciphertext = même plaintext ; un edit
+    /// re-chiffré change le ciphertext et invalide donc l'entrée d'office.
+    /// Les échecs ne sont JAMAIS mémoïsés — une session E2EE transitoirement
+    /// indisponible doit pouvoir réessayer au refresh suivant.
+    private var plaintextMemo: [String: (ciphertext: Data, plaintext: String?)] = [:]
+    private var memoInsertionOrder: [String] = []
+    private static let memoLimit = 1000
+
     public init(provider: any DecryptionSessionProviding) {
         self.provider = provider
     }
 
     public func decrypt(_ payloads: [DecryptionPayload]) async -> [DecryptionResult] {
-        await withTaskGroup(of: DecryptionResult.self, returning: [DecryptionResult].self) { group in
-            for payload in payloads {
+        var memoized: [DecryptionResult] = []
+        var toDecrypt: [DecryptionPayload] = []
+        for payload in payloads {
+            if let entry = plaintextMemo[payload.messageId], entry.ciphertext == payload.ciphertext {
+                memoized.append(DecryptionResult(
+                    messageId: payload.messageId, plaintext: entry.plaintext, error: nil
+                ))
+            } else {
+                toDecrypt.append(payload)
+            }
+        }
+        guard !toDecrypt.isEmpty else { return memoized }
+
+        let fresh = await withTaskGroup(of: DecryptionResult.self, returning: [DecryptionResult].self) { group in
+            for payload in toDecrypt {
                 group.addTask { [provider] in
                     CryptoSignposts.beginDecrypt(messageId: payload.messageId)
                     do {
@@ -63,6 +86,25 @@ public actor DecryptionActor {
             var results: [DecryptionResult] = []
             for await r in group { results.append(r) }
             return results
+        }
+
+        let ciphertextById = Dictionary(toDecrypt.map { ($0.messageId, $0.ciphertext) },
+                                        uniquingKeysWith: { _, last in last })
+        for result in fresh where result.error == nil {
+            guard let ciphertext = ciphertextById[result.messageId] else { continue }
+            memoize(messageId: result.messageId, ciphertext: ciphertext, plaintext: result.plaintext)
+        }
+        return memoized + fresh
+    }
+
+    private func memoize(messageId: String, ciphertext: Data, plaintext: String?) {
+        if plaintextMemo[messageId] == nil {
+            memoInsertionOrder.append(messageId)
+        }
+        plaintextMemo[messageId] = (ciphertext, plaintext)
+        while plaintextMemo.count > Self.memoLimit, !memoInsertionOrder.isEmpty {
+            let oldest = memoInsertionOrder.removeFirst()
+            plaintextMemo.removeValue(forKey: oldest)
         }
     }
 }

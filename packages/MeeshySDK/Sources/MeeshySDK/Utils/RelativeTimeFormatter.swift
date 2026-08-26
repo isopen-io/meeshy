@@ -7,11 +7,11 @@ import Foundation
 ///
 /// Two registered styles (product decision 2026-06-13):
 /// - `.short` — dense lists (feed, comments, stories, notifications):
-///   `maintenant` / `45s` / `5 min` / `2h` / `3j` / `2sem` / `2mois`, then the
+///   `maintenant` / `45s` / `5 min` / `2h` / `3j` / `2sem` / `2 mois`, then the
 ///   localized absolute date past three months.
 /// - `.long` — detail surfaces (contacts, participants, friend requests,
 ///   message detail): `maintenant` / `il y a 45s` / `il y a 5 min` / `hier` /
-///   `il y a 3j` / `il y a 2sem` / `il y a 2mois`, then the localized absolute
+///   `il y a 3j` / `il y a 2sem` / `il y a 2 mois`, then the localized absolute
 ///   date past three months.
 ///
 /// Fully localized: every label resolves through the app catalog
@@ -27,9 +27,9 @@ import Foundation
 /// distinct by design.
 public enum RelativeTimeFormatter {
     public enum Style: Sendable {
-        /// Dense lists: `5 min` / `2h` / `3j` / `2sem` / `2mois` / date.
+        /// Dense lists: `5 min` / `2h` / `3j` / `2sem` / `2 mois` / date.
         case short
-        /// Detail surfaces: `il y a 5 min` / `hier` / `il y a 2mois` / date.
+        /// Detail surfaces: `il y a 5 min` / `hier` / `il y a 2 mois` / date.
         case long
     }
 
@@ -133,7 +133,7 @@ public enum RelativeTimeFormatter {
     private static func hoursLabel(_ h: Int) -> String { unit("time.short.hours", "%lldh", h) }
     private static func daysLabel(_ d: Int) -> String { unit("time.short.days", "%lldj", d) }
     private static func weeksLabel(_ w: Int) -> String { unit("time.short.weeks", "%lldsem", w) }
-    private static func monthsLabel(_ mo: Int) -> String { unit("time.short.months", "%lldmois", mo) }
+    private static func monthsLabel(_ mo: Int) -> String { unit("time.short.months", "%lld mois", mo) }
 
     private static func unit(_ key: StaticString, _ def: String.LocalizationValue, _ value: Int) -> String {
         String(format: String(localized: key, defaultValue: def, bundle: .main), value)

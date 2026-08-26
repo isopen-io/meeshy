@@ -48,6 +48,25 @@ struct MimeTypeResolverTests {
         #expect(MimeTypeResolver.mimeType(forExtension: "wma") == "audio/x-ms-wma")
     }
 
+    /// **Les conteneurs audio des plateformes Apple ne tombaient PAS sur
+    /// `audio/*`, et cela coûtait la voix.**
+    ///
+    /// Une extension absente de la table retombe sur
+    /// `application/octet-stream`. Or le gateway ne reconnaît le média audio
+    /// d'une publication qu'à `mimeType.startsWith('audio/')`
+    /// (`PostService.createPost`) : un vocal importé depuis Fichiers en `.caf`,
+    /// `.aiff` ou `.opus` arrivait donc SANS sa transcription embarquée, SANS
+    /// re-transcription Whisper, et `AttachmentKind` le classait `.other` —
+    /// c'est-à-dire une carte d'image à la place d'un lecteur.
+    @Test("les conteneurs audio Apple résolvent en audio/*, jamais en octets opaques")
+    func apple_audio_containers_resolve_to_audio() {
+        for ext in ["caf", "aiff", "aif", "opus", "amr"] {
+            let mime = MimeTypeResolver.mimeType(forExtension: ext)
+            #expect(mime.hasPrefix("audio/"), "ext=\(ext) rend \(mime) : le gateway ne reconnaîtra pas un média audio, et la transcription faite sur l'appareil sera jetée en silence.")
+            #expect(AttachmentKind(mimeType: mime) == .audio, "ext=\(ext) mime=\(mime) : classé autrement qu'audio, le client rend une carte d'image à la place d'un lecteur.")
+        }
+    }
+
     // MARK: - Document extensions
 
     @Test("Office documents resolve to their canonical mime types")

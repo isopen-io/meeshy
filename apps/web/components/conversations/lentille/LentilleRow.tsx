@@ -744,25 +744,10 @@ export const LentilleRow = memo(function LentilleRow({
               </span>
             )}
 
-            {conversation.lastMessage && (
-              <>
-                <span
-                  aria-hidden="true"
-                  data-testid="lentille-row-time-separator"
-                  className="text-muted-foreground shrink-0"
-                  style={{ fontSize: 'var(--lentille-list-time-size)' }}
-                >
-                  ·
-                </span>
-                <span
-                  data-testid="lentille-row-time"
-                  className="text-muted-foreground shrink-0"
-                  style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
-                >
-                  {time}
-                </span>
-              </>
-            )}
+            {/* La date a QUITTÉ cette ligne le 2026-08-22 (parité iOS) : elle
+                vit seule, en bas à droite — « juste l'auteur : message, et
+                puis en bas sur une nouvelle ligne à droite la date ». Le nom
+                possède donc toute la ligne. */}
           </div>
 
           {/* Ligne 2 — la maquette la veut TERTIAIRE au repos
@@ -811,6 +796,22 @@ export const LentilleRow = memo(function LentilleRow({
               previewNode
             )}
           </div>
+
+          {/* Ligne 3 — la date SEULE, poussée à droite (2026-08-22, parité
+              iOS `LentilleConversationRow.dateLine`). La hauteur de rangée du
+              jeton partagé (`list.row.height`) est passée de 64 à 78 pour
+              elle : trois lignes ne tiennent pas dans deux. */}
+          {conversation.lastMessage && (
+            <div className="flex justify-end" data-testid="lentille-row-date-line">
+              <span
+                data-testid="lentille-row-time"
+                className="text-muted-foreground shrink-0"
+                style={{ fontSize: 'var(--lentille-list-time-size)', fontWeight: 'var(--lentille-list-time-weight)' }}
+              >
+                {time}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Point de non-lu accent, 8px — remplace le badge chiffré supprimé (L06). */}

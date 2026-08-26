@@ -123,9 +123,26 @@ jobs:
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
-      - name: Type-check
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check
-        continue-on-error: true
+      # Type-check, en DEUX étapes plutôt qu'une amnistie.
+      #
+      # L'étape unique qui précédait portait `continue-on-error: true`, et ce
+      # drapeau n'était pas un avis sur le typage : c'était la seule façon pour
+      # elle d'être verte, `apps/web` portant une dette de types que les trois
+      # autres packages TypeScript n'ont pas. Une amnistie, quatre packages —
+      # les 1241 erreurs du quatrième achetaient le silence sur le zéro des
+      # trois premiers.
+      #
+      # Le prix n'était pas théorique : les cycles 99–104 ont bâti pour la
+      # passerelle un contrat d'émission Socket.IO dont une violation produit
+      # `TS2345` ou `TS2322` — les deux codes que le `ts-jest` de la passerelle
+      # a dans son `diagnostics.ignoreCodes`. Ni le job de test ni celui-ci ne
+      # pouvaient donc rougir sur une charge fausse. Mesuré en retirant un champ
+      # requis d'une émission de `preferences-broadcast.ts`.
+      - name: Type-check (contract packages — blocking)
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent
+
+      - name: Type-check (apps/web — debt ratchet)
+        run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
 
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
@@ -964,7 +981,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.37.7
+        uses: github/codeql-action/upload-sarif@v4.37.8
         if: always()
         continue-on-error: true
         with:

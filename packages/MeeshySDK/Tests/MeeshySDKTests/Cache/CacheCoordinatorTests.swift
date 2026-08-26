@@ -178,7 +178,7 @@ final class CacheCoordinatorTests: XCTestCase {
         try await sut.participants.save([participant], for: "conv-1")
 
         let participantInfo = ParticipantRoleUpdatedParticipantInfo(
-            id: "p1", role: "ADMIN", displayName: "Test", userId: nil
+            id: "p1", role: "USER", conversationRole: "admin", displayName: "Test", userId: nil
         )
         let event = ParticipantRoleUpdatedEvent(
             conversationId: "conv-1", userId: "u1",
@@ -397,6 +397,10 @@ final class CacheCoordinatorTests: XCTestCase {
         }
         let (sut, _, _) = try makeSUT(db: db)
         await sut.start()
+        // La réhydratation (et son GC) court hors du chemin critique du boot
+        // depuis 2026-08-22 — on l'attend explicitement : le contrat reste
+        // « le GC a lieu au boot », pas « le GC bloque start() ».
+        await sut.awaitTranslationCacheHydration()
 
         let count = try await db.read { db in try TranslationCacheRecord.fetchCount(db) }
         XCTAssertEqual(count, 0,
@@ -413,6 +417,55 @@ final class CacheCoordinatorTests: XCTestCase {
 
         let rows = try await db.read { db in try TranslationCacheRecord.fetchAll(db) }
         XCTAssertEqual(Set(rows.map(\.messageId)), ["msg-1", "msg-2"])
+    }
+
+    // MARK: - Éviction ciblée sur édition de contenu
+
+    /// Le message a été édité : sa traduction décrit un texte qui n'existe
+    /// plus. La purge doit emporter la RAM *et* la ligne GRDB — sans la
+    /// seconde, `loadTranslationCaches()` la réinjecte au prochain démarrage.
+    func test_invalidateTranslationsForMessage_dropsMemoryAndPersistedRow() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let translation = TranslationData(
+            id: "tr-1", messageId: "msg-edited", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: 0.95
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-edited", translations: [translation]))
+
+        await sut.invalidateTranslations(for: "msg-edited")
+
+        let cached = await sut.cachedTranslations(for: "msg-edited")
+        XCTAssertNil(cached, "la traduction du texte d'avant l'édition ne doit plus être servie")
+        let rows = try await db.read { db in try TranslationCacheRecord.fetchAll(db) }
+        XCTAssertTrue(rows.isEmpty, "sans la ligne GRDB, le texte périmé survivrait au redémarrage")
+    }
+
+    /// Contre-épreuve : l'éviction est CIBLÉE. Emporter les voisins ferait
+    /// retomber tout le fil sur l'original.
+    func test_invalidateTranslationsForMessage_leavesOtherMessagesCached() async throws {
+        let db = try makeDB()
+        let (sut, _, _) = try makeSUT(db: db)
+        let kept = TranslationData(
+            id: "tr-keep", messageId: "msg-keep", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Salut",
+            translationModel: "nllb-200", confidenceScore: nil
+        )
+        let dropped = TranslationData(
+            id: "tr-drop", messageId: "msg-drop", sourceLanguage: "en",
+            targetLanguage: "fr", translatedContent: "Bonjour",
+            translationModel: "nllb-200", confidenceScore: nil
+        )
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-keep", translations: [kept]))
+        await sut.cacheTranslation(TranslationEvent(messageId: "msg-drop", translations: [dropped]))
+
+        await sut.invalidateTranslations(for: "msg-drop")
+
+        let survivor = await sut.cachedTranslations(for: "msg-keep")
+        XCTAssertEqual(survivor?.count, 1)
+        let rows = try await db.read { db in try TranslationCacheRecord.fetchAll(db) }
+        XCTAssertEqual(rows.map(\.messageId), ["msg-keep"])
     }
 
     // MARK: - Transcription caching (point 42)
@@ -590,12 +643,12 @@ private final class BareConversationService: ConversationServiceProviding, @unch
     func deleteForMe(conversationId: String) async throws {}
     func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] { [] }
     func findDirectWith(userId: String) async throws -> APIConversation? { nil }
-    func removeParticipant(conversationId: String, participantId: String) async throws {}
-    func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {}
+    func removeParticipant(conversationId: String, key: String) async throws {}
+    func updateParticipantRole(conversationId: String, userId: String, role: String) async throws {}
     func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation { throw MeeshyError.network(.timeout) }
     func leave(conversationId: String) async throws {}
-    func banParticipant(conversationId: String, userId: String) async throws {}
-    func unbanParticipant(conversationId: String, userId: String) async throws {}
+    func banParticipant(conversationId: String, key: String) async throws {}
+    func unbanParticipant(conversationId: String, key: String) async throws {}
 }
 
 private final class BareMessageService: MessageServiceProviding, @unchecked Sendable {

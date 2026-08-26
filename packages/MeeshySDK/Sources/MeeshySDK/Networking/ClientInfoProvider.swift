@@ -61,7 +61,35 @@ public actor ClientInfoProvider {
             "X-Meeshy-Build": appBuild(),
             "X-Meeshy-Platform": "ios",
             "X-Meeshy-Device": deviceModel(),
-            "X-Meeshy-OS": osVersion()
+            "X-Meeshy-OS": osVersion(),
+            // Niveau de canvas que ce binaire sait LIRE (O17). Sans lui, le
+            // gateway nous prend pour un client du passé et sert la SENTINELLE
+            // — un fond `1E1B4B` uni à la place du canevas
+            // (`storyEffectsV3.ts:467`). Or les deux composers écrivent déjà du
+            // v3 natif, le web (`StoryComposer.tsx:288`) comme iOS
+            // (`StoryEffects.encode(to:)` → `CanvasV3(migrating:)`) : le parc
+            // natif ne voyait plus aucun canevas de story, pas même les siens,
+            // alors que son décodeur (`StoryModels.swift:1769`) sait les peindre.
+            //
+            // Un NIVEAU, pas un booléen : le gateway compare `caps >= 3`. C'est
+            // une constante du binaire, d'où sa place ici plutôt que dans
+            // `buildHeaders()` — rien dans l'environnement ne la fait varier.
+            "X-Canvas-Caps": "3",
+            // Porte de version cliente (C4a/C4b, spec §C3). Le gateway lit
+            // `x-app-version` pour juger le binaire face à `MIN_APP_VERSION`
+            // (`services/gateway/src/utils/appVersion.ts`) et `x-app-platform`
+            // pour résoudre le `storeUrl` du 426 (`android` ⇒ Play Store, tout
+            // le reste ⇒ App Store). Leur place est ICI et pas dans le funnel
+            // d'`APIClient` : c'est le point unique par lequel passent les DEUX
+            // funnels (requête et siège de test), donc le seul endroit d'où un
+            // en-tête ne peut pas manquer sur un chemin oublié.
+            //
+            // Redondants en apparence avec `X-Meeshy-Version`/`-Platform`, ils
+            // ne le sont pas : ce sont deux CONTRATS distincts. La paire
+            // `X-Meeshy-*` est de la télémétrie, la paire `X-App-*` est une
+            // porte — renommer l'une ne doit pas déplacer l'autre.
+            AppVersionHeader.versionHeaderName: AppVersionHeader.value(),
+            AppVersionHeader.platformHeaderName: AppVersionHeader.platformValue
         ]
         cachedStaticHeaders = headers
         return headers
@@ -69,8 +97,11 @@ public actor ClientInfoProvider {
 
     // MARK: - Private helpers
 
+    /// Un SEUL lecteur de `CFBundleShortVersionString` dans le SDK : la porte
+    /// de version et la télémétrie doivent parler de la même version, sans quoi
+    /// un jour l'une dirait « 1.2.0 » quand l'autre dit « 1.2 ».
     private func appVersion() -> String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        AppVersionHeader.value()
     }
 
     private func appBuild() -> String {

@@ -869,12 +869,13 @@ struct StoryViewerView: View {
                 authorHandle: wrapper.authorHandle,
                 onPublishRepost: { content, sourceStory, visibility in
                     do {
-                        _ = try await PostService.shared.repost(
-                            postId: sourceStory.id,
-                            targetType: .post,
-                            content: content.isEmpty ? nil : content,
-                            isQuote: !content.isEmpty,
-                            visibility: visibility
+                        try await RepostPublisher.shared.publish(
+                            .quoted(
+                                postId: sourceStory.id,
+                                targetType: .post,
+                                comment: content,
+                                visibility: visibility
+                            )
                         )
                         editAndRepostAsPostSource = nil
                         FeedbackToastManager.shared.show(String(localized: "story.publish.success", defaultValue: "Publié", bundle: .main))
@@ -893,6 +894,8 @@ struct StoryViewerView: View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
+            .storyStickerLibraryProvided()
         }
         // Republication en STORY — le composeur s'ouvre prérempli avec la
         // slide source et un badge d'attribution VERROUILLÉ (le republieur ne
@@ -915,8 +918,9 @@ struct StoryViewerView: View {
                 initialVisibility: wrapper.story.visibility ?? PostVisibility.private.rawValue,
                 initialVisibilityUserIds: wrapper.story.visibilityUserIds ?? [],
                 allowedVisibilities: StoryRepostAudience.allowed(fromRawValue: wrapper.story.visibility),
-                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references in
+                onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility, visibilityUserIds, draftId, references, accessibility, targetType in
                     viewModel.publishStoryInBackground(
+                        targetType: targetType,
                         slides: slides,
                         slideImages: slideImages,
                         loadedImages: loadedImages,
@@ -927,7 +931,9 @@ struct StoryViewerView: View {
                         visibilityUserIds: visibilityUserIds,
                         draftId: draftId,
                         repostOfId: wrapper.story.id,
-                        references: references
+                        references: references,
+                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     republishStorySource = nil
                     // La création accepte TOUJOURS : hors-ligne, la story part
@@ -940,6 +946,8 @@ struct StoryViewerView: View {
             .storyLocationPickerProvided()
             .storyCameraCaptureProvided()
             .storyRecentCameraRollProvided()
+            .storyPasteProvided()
+            .storyStickerLibraryProvided()
         }
     }
 
@@ -1261,36 +1269,46 @@ struct StoryViewerView: View {
         }
     }
 
-    /// `isQuote: false`. Surfaces user-facing toasts on success / known error
-    /// codes (404 = source story gone, 403 = repost forbidden) and a generic
-    /// failure otherwise. Errors are mapped against `APIError.serverError`'s
-    /// status-code payload since that's the shape `APIClient` throws.
+    /// Republication SÈCHE d'une story dans le fil (`isQuote: false`), avec ses
+    /// deux refus NOMMÉS : 404 = la source a disparu, 403 = l'audience demandée
+    /// élargit celle de l'original.
+    ///
+    /// **Ces deux refus étaient INATTEIGNABLES avant le lot 7.5, et le
+    /// doc-comment affirmait le contraire** : il disait « errors are mapped
+    /// against `APIError.serverError` ... since that's the shape `APIClient`
+    /// throws ». C'est faux — mesuré : les vingt-cinq `throw` d'`APIClient`
+    /// lancent tous `MeeshyError`, et pas un seul `APIError`. Les deux `catch`
+    /// typés ne s'exécutaient donc jamais, et TOUT refus tombait dans le
+    /// fourre-tout « Échec de la republication ». Un utilisateur dont la story
+    /// avait simplement expiré n'apprenait rien.
+    ///
+    /// La classification vit désormais dans `RepostFailure`, avec les mêmes
+    /// verdicts que la file durable applique de son côté
+    /// (`OutboxFlusher.isPermanentServerRejection`) : un seul endroit à
+    /// corriger le jour où le gateway changera de forme.
     private func repostAsPostDirect() {
         guard let story = currentStory else { return }
         HapticFeedback.light()
         Task {
             do {
-                _ = try await PostService.shared.repost(
-                    postId: story.id,
-                    targetType: .post,
-                    content: nil,
-                    isQuote: false
+                try await RepostPublisher.shared.publish(
+                    .simple(postId: story.id, targetType: .post, visibility: nil)
                 )
                 await MainActor.run {
                     HapticFeedback.success()
                     FeedbackToastManager.shared.show(String(localized: "story.repost.success", defaultValue: "Republié dans ton feed", bundle: .main))
                 }
-            } catch APIError.serverError(404, _) {
-                await MainActor.run {
-                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
-                }
-            } catch APIError.serverError(403, _) {
-                await MainActor.run {
-                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
-                }
             } catch {
+                let verdict = RepostFailure.classify(error)
                 await MainActor.run {
-                    FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
+                    switch verdict {
+                    case .sourceGone:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
+                    case .audienceWidening:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
+                    case .other:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
+                    }
                 }
             }
         }
@@ -1760,10 +1778,9 @@ struct StoryViewerView: View {
     /// exigeait `volume > 0`, une notion que les deux autres surfaces
     /// n'avaient pas ; alignement E1). `.original`/`.credit` selon la
     /// provenance (B3.4). `story.backgroundAudio`
-    /// (`StoryBackgroundAudioEntry`) n'est retenu nulle part ici : il n'est
-    /// JAMAIS peuplé par le pipeline de production actuel (voir la doc de
-    /// `StoryAudioAvailability.hasBackgroundAudioTrack`) — retiré avec la
-    /// même justification que sa dépréciation là-bas.
+    /// (`StoryBackgroundAudioEntry`) n'est retenu nulle part ici : le chemin
+    /// de décodage de production (`toStoryGroups`, StoryModels.swift) ne le
+    /// peuple pas — `APIPost` n'a pas de champ `backgroundAudio`.
     var backgroundSoundAnnouncement: BackgroundAudioAnnouncement { // internal for cross-file extension access
         BackgroundSoundBadge.announcement(for: currentStory?.storyEffects)
     }

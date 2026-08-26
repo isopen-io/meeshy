@@ -320,7 +320,7 @@ export async function broadcastReadStatus(
     participants: activeParticipants,
     event: SERVER_EVENTS.READ_STATUS_UPDATED,
     payload: peerPayload,
-    exceptRoom: actorReadSync ? ROOMS.user(personalRoomKey) : null,
+    exceptRooms: actorReadSync ? [ROOMS.user(personalRoomKey)] : null,
   });
 
   // La version de l'acteur, dans sa seule room personnelle — celle que toutes

@@ -2,7 +2,8 @@
  * Helpers utilitaires pour les conversations
  * Logique métier réutilisable entre Gateway et Frontend
  */
-import { normalizeLanguageCode } from './language-normalize.js';
+import { normalizeLanguageCode, normalizeLanguageForDedup } from './language-normalize.js';
+import { OBJECT_ID_REGEX } from './object-id.js';
 
 /**
  * Options de résolution de langue. La locale appareil intervient en 4e priorité
@@ -176,10 +177,23 @@ export function resolveUserLanguagesOrdered(
  * le contenu est déjà dans cette langue, ou qu'aucune traduction n'a été
  * produite — servir une troisième langue serait pire que l'original.
  *
- * Les clés de la carte comme les langues du lecteur sont comparées en
- * minuscules : iOS minuscule ses clés au décodage, le web consomme la charge
- * telle quelle, et la normalisation doit donc vivre ici pour que les deux
- * plateformes restent d'accord.
+ * Les trois sources de codes comparées — langues du lecteur, langue d'origine,
+ * clés de la carte — sont CANONICALISÉES par la même SSOT
+ * ({@link normalizeLanguageForDedup} : casse repliée ET région strippée,
+ * `'en-US'`/`'EN'` → `'en'`), jamais un simple `.toLowerCase()`. La raison est un
+ * défaut mesuré : `resolveUserLanguagesOrdered` strippe déjà la région des
+ * langues du lecteur, mais `originalLanguage` arrive brut du fil, et les messages
+ * écrits AVANT la canonicalisation au write-boundary (`MessagingService`,
+ * `normalizeLanguageCode(claimedLanguage)`) portent encore un
+ * `Message.originalLanguage` région-tagué (`'en-US'`, `'pt-BR'`). Comparée en
+ * minuscules seule, une origine `'en-us'` ne matchait jamais le rang normalisé
+ * `'en'` du prisme, et une traduction de rang INFÉRIEUR gagnait — rétrogradant la
+ * langue PRIMAIRE du lecteur, la violation exacte du Prisme (#3) que ce résolveur
+ * combat. Canonicaliser les trois sources au point de comparaison rend le
+ * résolveur robuste quelle que soit la normalisation de l'appelant, et idempotent
+ * sur les codes déjà canoniques (zéro régression). iOS minuscule ses clés au
+ * décodage et le web consomme la charge telle quelle : la normalisation doit
+ * vivre ici pour que les deux plateformes restent d'accord.
  *
  * `preferredLanguages` doit être ordonnée — c'est la sortie de
  * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
@@ -194,32 +208,84 @@ export function resolveLastMessagePreview(params: {
 
   if (!translations || typeof translations !== 'object') return preview;
 
+  const resolved = resolvePrismTranslation({
+    translations,
+    originalLanguage,
+    preferredLanguages,
+  });
+
+  return resolved ? resolved.text : preview;
+}
+
+/**
+ * La DESCENTE du Prisme elle-même, rendue avec la langue qui a gagné.
+ *
+ * `resolveLastMessagePreview` n'en est qu'une projection : il rend un texte, ce
+ * qui suffit à une ligne de liste. Les consommateurs qui doivent DIRE dans
+ * quelle langue ils servent — la bannière de notification, qui pousse
+ * `translatedContent` et `translatedLanguage` côte à côte sur le fil APNs — ont
+ * besoin de la paire. Sans cette unité ils réécriraient la boucle chez eux :
+ * c'est exactement ce qu'ont produit les cycles 118 à 120, où chaque famille de
+ * contenu portait sa propre descente et où trois d'entre elles ne descendaient
+ * pas.
+ *
+ * `null` ⇒ **servir l'original**, jamais « pas de résultat » : soit la langue
+ * d'origine a gagné à son rang, soit aucune langue du lecteur n'est servie —
+ * et dans les deux cas la règle #1 du Prisme dit que le contenu original est
+ * ce qu'il faut montrer. Ne JAMAIS y substituer une traduction quelconque.
+ *
+ * La clé rendue est celle **STOCKÉE dans la carte**, pas sa forme canonique :
+ * la comparaison se normalise, la valeur rendue non (cycle 119). Elle repart
+ * sur le fil et sert de clé à des lecteurs qui rapprochent par égalité stricte.
+ *
+ * `preferredLanguages` doit être ordonnée — c'est la sortie de
+ * {@link resolveUserLanguagesOrdered}, jamais une liste reconstruite à la main.
+ */
+export function resolvePrismTranslation(params: {
+  translations?: Readonly<Record<string, string>> | null;
+  originalLanguage?: string | null;
+  preferredLanguages: readonly string[];
+}): { readonly language: string; readonly text: string } | null {
+  const { translations, originalLanguage, preferredLanguages } = params;
+
+  if (!translations || typeof translations !== 'object') return null;
+
   const preferred = preferredLanguages
     .filter((lang): lang is string => typeof lang === 'string' && lang.trim() !== '')
-    .map((lang) => lang.toLowerCase());
-  if (preferred.length === 0) return preview;
+    .map(normalizeLanguageForDedup);
+  if (preferred.length === 0) return null;
 
-  const original = originalLanguage?.toLowerCase();
+  const original = originalLanguage ? normalizeLanguageForDedup(originalLanguage) : undefined;
 
-  const byLowercasedKey = new Map<string, string>();
+  const byCanonicalKey = new Map<string, { readonly language: string; readonly text: string }>();
   for (const [lang, text] of Object.entries(translations)) {
     if (typeof text !== 'string' || text.trim() === '') continue;
-    byLowercasedKey.set(lang.toLowerCase(), text);
+    const canonical = normalizeLanguageForDedup(lang);
+    if (byCanonicalKey.has(canonical)) continue;
+    byCanonicalKey.set(canonical, { language: lang, text });
   }
 
   for (const lang of preferred) {
-    if (original && lang === original) return preview;
-    const translated = byLowercasedKey.get(lang);
+    if (original && lang === original) return null;
+    const translated = byCanonicalKey.get(lang);
     if (translated !== undefined) return translated;
   }
 
-  return preview;
+  return null;
 }
 
 /**
  * Génère un identifiant unique pour une conversation
  * Format: mshy_<titre_sanitisé>-YYYYMMDDHHMMSS ou mshy_<unique_id>-YYYYMMDDHHMMSS si pas de titre
  */
+/**
+ * Longueur maximale du slug lisible d'un identifiant de conversation.
+ *
+ * 50 (plafond impose par l'API aux identifiants clients) moins `mshy_` (5),
+ * le separateur (1) et l'horodate `YYYYMMDDHHMMSS` (14) = 30.
+ */
+const MAX_IDENTIFIER_SLUG_LENGTH = 30;
+
 export function generateConversationIdentifier(title?: string): string {
   const now = new Date();
   // Use UTC methods for consistent identifiers across timezones
@@ -253,13 +319,69 @@ export function generateConversationIdentifier(title?: string): string {
       .replace(/^-|-$/g, ''); // Enlever les tirets en début/fin
 
     if (sanitizedTitle.length > 0) {
-      return `mshy_${sanitizedTitle}-${timestamp}`;
+      // Plafond : `mshy_` (5) + slug + `-` (1) + horodate (14) = 20 + slug.
+      // L'API refuse au-dela de 50 les identifiants soumis par les clients
+      // (packages/shared/utils/validation.ts) ; le serveur doit s'y tenir
+      // aussi. Un slug de 30 laisse donc exactement 50, et un titre de 37
+      // caracteres — parfaitement ordinaire — depassait auparavant.
+      // Le tiret final eventuel est retire : sans cela, un slug tronque sur
+      // un separateur produirait `--` devant l'horodate.
+      const cappedTitle = sanitizedTitle.slice(0, MAX_IDENTIFIER_SLUG_LENGTH).replace(/-+$/, '');
+      return `mshy_${cappedTitle}-${timestamp}`;
     }
   }
 
   // Fallback: générer un identifiant unique avec préfixe mshy_
-  const uniqueId = Math.random().toString(36).slice(2, 10);
-  return `mshy_${uniqueId}-${timestamp}`;
+  return generateCompactConversationIdentifier();
+}
+
+/**
+ * Alphabet base64url — 64 symboles, donc exactement 6 bits par caractère.
+ *
+ * Le choix n'est pas cosmétique : avec un alphabet dont la taille est une
+ * puissance de deux, `octet & 63` est UNIFORME. Un alphabet de 62 (base62)
+ * imposerait `octet % 62`, qui sur-représente les 8 premiers symboles — un
+ * biais invisible en lecture et qui réduit l'entropie réelle. C'est aussi
+ * l'alphabet exact qu'accepte la validation d'identifiant de l'API
+ * (`/^[a-zA-Z0-9\-_]+$/`, packages/shared/utils/validation.ts).
+ */
+const COMPACT_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const COMPACT_ID_LENGTH = 12;
+
+/**
+ * Génère un identifiant de conversation COMPACT, opaque et URL-safe.
+ *
+ * Format : `mshy_` + 12 caractères base64url = **17 caractères**.
+ *
+ * Remplace la concaténation des ObjectId des participants, qui souffrait de
+ * deux défauts distincts :
+ *
+ * 1. **Longueur** — `mshy_<oid24>_<oid24>` fait 54 caractères et
+ *    `direct_<oid24>_<oid24>_<ms>` en fait 69, alors que l'API refuse au-delà
+ *    de 50 les identifiants que lui soumettent les clients. Le serveur
+ *    s'affranchissait d'une règle qu'il imposait aux autres.
+ * 2. **Fuite d'information** — un identifiant de conversation est PUBLIC : il
+ *    circule dans les URL et les liens de partage. Y encoder l'ObjectId des
+ *    deux participants revenait à publier qui parle à qui. Un identifiant
+ *    opaque ne dit rien de ses membres.
+ *
+ * Entropie : 12 × 6 = **72 bits**. Sur 10⁷ conversations, la probabilité de
+ * collision reste de l'ordre de 10⁻⁸ ; la contrainte `@unique` en base reste
+ * le filet de sécurité, elle n'est pas la première ligne de défense.
+ *
+ * L'aléa vient de `crypto.getRandomValues` — cryptographiquement sûr et
+ * disponible aussi bien sous Node que dans un navigateur. `Math.random()`,
+ * qu'employait l'ancien fallback, est prédictible : pour un identifiant que
+ * l'on peut tenter de deviner, c'est une faiblesse, pas un détail.
+ */
+export function generateCompactConversationIdentifier(): string {
+  const bytes = new Uint8Array(COMPACT_ID_LENGTH);
+  globalThis.crypto.getRandomValues(bytes);
+
+  let id = '';
+  for (const byte of bytes) id += COMPACT_ID_ALPHABET[byte & 63];
+
+  return `mshy_${id}`;
 }
 
 /**
@@ -318,10 +440,14 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
 }
 
 /**
- * Vérifie si un identifiant est un ObjectID MongoDB valide
+ * Vérifie si un identifiant est un ObjectID MongoDB valide.
+ *
+ * Délègue à la SSOT {@link OBJECT_ID_REGEX} (`utils/object-id.ts`) — ne PAS
+ * réinliner la regex ici. Nom conservé pour ses consommateurs (gateway
+ * `routes/users/blocking.ts`).
  */
 export function isValidMongoId(id: string): boolean {
-  return /^[0-9a-fA-F]{24}$/.test(id);
+  return OBJECT_ID_REGEX.test(id);
 }
 
 /**

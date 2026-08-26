@@ -75,7 +75,7 @@ jest.mock('@/hooks/queries/use-post-socket-cache-sync', () => ({
   usePostSocketCacheSync: jest.fn(),
 }));
 jest.mock('@/hooks/social/use-post-room', () => ({ usePostRoom: jest.fn() }));
-jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr' }));
+jest.mock('@/hooks/use-post-translation', () => ({ usePreferredLanguage: () => 'fr', usePreferredLanguages: () => ['fr'] }));
 jest.mock('@/hooks/use-comment-target', () => ({
   useCommentTarget: () => ({ targetCommentId: null, targetParentCommentId: null }),
 }));
@@ -88,8 +88,6 @@ jest.mock('@/components/v2/PostDetail', () => ({
     <div>{onReport && <button data-testid="post-detail-report" onClick={onReport}>Report post</button>}</div>
   ),
 }));
-jest.mock('@/components/v2/PostEditor', () => ({ PostEditor: () => null }));
-jest.mock('@/components/v2/RepostModal', () => ({ RepostModal: () => null }));
 jest.mock('@/components/v2/Skeleton', () => ({ Skeleton: () => null }));
 jest.mock('@/components/layout/DashboardLayout', () => ({
   DashboardLayout: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,

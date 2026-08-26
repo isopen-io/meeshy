@@ -109,6 +109,7 @@ final class LentilleMetricsTests: XCTestCase {
 
     func test_row_marginHorizontal() throws {
         XCTAssertEqual(Double(LentilleMetrics.Row.marginHorizontal), try tokenNumber("row", "marginHorizontal"))
+        XCTAssertEqual(Double(LentilleMetrics.Row.marginVertical), try tokenNumber("row", "marginVertical"))
     }
 
     func test_row_radius() throws {
@@ -178,6 +179,14 @@ final class LentilleMetricsTests: XCTestCase {
     }
 
     // MARK: - Point de non-lu
+    //
+    // Le token SURVIT au lot 2 (2026-08-22) bien qu'AUCUNE vue iOS ne le
+    // consomme plus (le point de 8 px était le doublon strict de la pastille
+    // chiffrée rétablie sur la ligne de titre — voir
+    // `LentilleRowSourceGuardTests.test_unreadDotToken_isGoneFromEveryRowFile_supersededByTheCountedBadge`).
+    // La peau WEB, elle, le consomme toujours
+    // (`LentilleRow.tsx`, `--lentille-list-unread-dot-size`) : le retirer du
+    // JSON y ferait un point de 0×0 en silence. La parité reste donc due.
 
     func test_unreadDot_size() throws {
         XCTAssertEqual(Double(LentilleMetrics.UnreadDot.size), try tokenNumber("unreadDot", "size"))
@@ -253,6 +262,7 @@ final class LentilleMetricsTests: XCTestCase {
     func test_rail() throws {
         XCTAssertEqual(Double(LentilleMetrics.Rail.size), try tokenNumber("rail", "size"))
         XCTAssertEqual(Double(LentilleMetrics.Rail.ringWidth), try tokenNumber("rail", "ring"))
+        XCTAssertEqual(Double(LentilleMetrics.Rail.paddingVertical), try tokenNumber("rail", "paddingVertical"))
         XCTAssertEqual(LentilleMetrics.Rail.maxEntries, Int(try tokenNumber("rail", "maxEntries")))
     }
 
@@ -274,5 +284,31 @@ final class LentilleMetricsTests: XCTestCase {
 
     func test_agent_avatarRingWidth() throws {
         XCTAssertEqual(Double(LentilleMetrics.Agent.avatarRingWidth), try tokenNumber("agent", "avatarRing", "size"))
+    }
+
+    /// **L'invariant qui interdit le chevauchement de D7.** La respiration
+    /// écarte les voisines de la rangée élue ; si son amplitude dépasse la
+    /// marge qui sépare une rangée du sticker suivant, la rangée poussée MANGE
+    /// cette marge et mord le header.
+    ///
+    /// C'est exactement ce qui se produisait : `breathing` valait 18 pour une
+    /// marge de 8. Chevauchement mesuré à géométrie stabilisée, deux
+    /// frontières, deux relevés indépendants — 9,6 / 8,9 puis 9,2 / 9,1 pt — et
+    /// l'arithmétique bouclait : `18 − 8 − (88 − h)/2 = 9,6` pour `h = 87,3`.
+    ///
+    /// Ce témoin est ce qui empêche qu'on remonte l'amplitude sans rapprocher
+    /// les deux chiffres, comme cela s'était produit : la marge n'était alors
+    /// même pas NOMMÉE, elle vivait en littéral dans un `LazyVStack(spacing:)`.
+    func test_breathing_neverExceedsTheMarginItHasToMoveInto() throws {
+        XCTAssertLessThanOrEqual(
+            LentilleMetrics.FocusCard.breathing,
+            LentilleMetrics.Row.marginVertical,
+            "La respiration ne peut pas dépasser la marge qui la reçoit : au-delà elle ne "
+            + "déplace plus les rangées, elle les fait se chevaucher avec le sticker suivant."
+        )
+        XCTAssertEqual(
+            Double(LentilleMetrics.FocusCard.breathing), try tokenNumber("focusCard", "breathing"),
+            "l'amplitude est miroitée dans le JSON partagé comme toute cote de loi"
+        )
     }
 }

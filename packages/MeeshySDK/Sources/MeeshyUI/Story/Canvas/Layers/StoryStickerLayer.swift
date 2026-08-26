@@ -10,6 +10,11 @@ import MeeshySDK
 /// through `CanvasGeometry.render(_:)` so stickers retain identical visual
 /// proportions across iPhone and iPad canvases.
 public final class StoryStickerLayer: CALayer {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public private(set) nonisolated(unsafe) var sticker: StorySticker?
 
     public override nonisolated init() { super.init() }

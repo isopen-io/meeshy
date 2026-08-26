@@ -1,9 +1,13 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { MessageDeletedEventData } from '@meeshy/shared/types/socketio-events';
+import type { buildMessageEditedCore } from './messageEditedPayload';
 import {
   emitConversationPreviewUpdate,
   type PreviewEmitIO,
   type PreviewPrisma,
 } from './emitConversationPreviewUpdate';
+import type { Anonymized, ServerEmitTarget } from './serverEmit';
+import type { QueuedVariantFor } from './queuedEventContract';
 
 // Ce relais ne lit rien lui-même : il transmet le prisma de l'aperçu tel quel.
 // Le dériver plutôt que le redéclarer est ce qui empêche les deux listes de
@@ -20,23 +24,44 @@ export interface MessageMutationManager {
   enqueueOfflineMessageMutation(params: {
     conversationId: string;
     actorUserId: string | null | undefined;
-    eventType: 'edited' | 'deleted';
     messageId: string;
-    payload: Record<string, unknown>;
-  }): Promise<void>;
+  } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
     senderId: string | null | undefined;
   }): Promise<void>;
 }
 
-type MessageMutationBase = {
+/**
+ * Ce que ce transport a le droit de mettre sur le fil, par événement.
+ *
+ * `broadcastMessageMutation` prenait `payload: Record<string, unknown>` : un
+ * sac de clés ne satisfait AUCUN champ du contrat, donc le cliquet de
+ * `messageEditedPayload.ts` — qui dérive de `SocketIOMessage` la liste des
+ * champs REQUIS et refuse de compiler si le noyau en perd un — n'avait aucune
+ * prise sur les TROIS entrées REST. Elles servaient le contrat par ACCIDENT,
+ * en étalant la ligne Prisma brute qu'un `include` large rendait assez
+ * fournie : les sept clés y étaient, avec la mauvaise VALEUR dans `senderId`
+ * (le `Participant.id` de la colonne, là où les clients attendent un
+ * `User.id`).
+ *
+ * Exiger le NOYAU plutôt que le contrat entier est délibéré : les extras que
+ * chaque transport sert en propre (`sender`, `translations`,
+ * `validatedMentions`, `meta`) restent libres — TypeScript n'applique pas le
+ * contrôle des propriétés excédentaires aux clés apportées par étalement — et
+ * le lot reste ADDITIF. Ce qui cesse d'être libre, c'est de composer soi-même
+ * les champs que le contrat exige.
+ */
+export type MessageEditedMutationPayload = ReturnType<typeof buildMessageEditedCore>;
+export type MessageDeletedMutationPayload = Anonymized<MessageDeletedEventData>;
+
+type MessageMutationBase<TPayload> = {
   prisma: MutationPrisma;
   manager: MessageMutationManager | null | undefined;
   conversationId: string;
   actorUserId: string;
   messageId: string;
-  payload: Record<string, unknown>;
+  payload: TPayload;
   onError?: (error: unknown) => void;
 };
 
@@ -51,13 +76,36 @@ type MessageMutationBase = {
  * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
  */
 export type MessageMutationParams =
-  | (MessageMutationBase & { eventType: 'edited' })
-  | (MessageMutationBase & { eventType: 'deleted'; authorId: string | null | undefined });
+  | (MessageMutationBase<MessageEditedMutationPayload> & { eventType: 'edited' })
+  | (MessageMutationBase<MessageDeletedMutationPayload> & {
+      eventType: 'deleted';
+      authorId: string | null | undefined;
+    });
 
-const EVENT_NAME = {
-  edited: SERVER_EVENTS.MESSAGE_EDITED,
-  deleted: SERVER_EVENTS.MESSAGE_DELETED,
-} as const;
+/**
+ * L'émission de la room, discriminée sur `eventType`.
+ *
+ * Elle ne l'était pas : une table `EVENT_NAME[eventType]` d'un côté et
+ * `payload` de l'autre sont DEUX unions indépendantes, et rien ne disait qu'on
+ * prend le même membre dans les deux. Le cycle 103 a gouverné la CHARGE
+ * (`payload` discriminé par `eventType`) et laissé cette moitié-là ouverte,
+ * derrière un `emit(event: string, payload: unknown)` qui acceptait n'importe
+ * quel couple : un `SocketIOMessage` servi sous `message:deleted` compilait.
+ *
+ * Le `switch` n'est pas une préférence de style, c'est le seul moyen de
+ * CORRÉLER les deux unions — la porte typée refuse de compiler sans lui.
+ */
+function emitToConversationRoom(
+  target: ServerEmitTarget | undefined,
+  params: MessageMutationParams,
+): void {
+  if (!target) return;
+  if (params.eventType === 'edited') {
+    target.emit(SERVER_EVENTS.MESSAGE_EDITED, params.payload);
+    return;
+  }
+  target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
+}
 
 /**
  * The single REST-side broadcaster for a message edit or delete.
@@ -90,12 +138,27 @@ const EVENT_NAME = {
  * successful edit into a 500. `onError` lets callers log against the
  * originating request.
  */
+/**
+ * Le couple `(eventType, payload)` de la FILE, narrowé une fois.
+ *
+ * `broadcastMessageMutation` reçoit une union discriminée et la destructurait :
+ * `eventType` et `payload` redevenaient alors deux unions indépendantes, et
+ * l'appel à la file ne pouvait plus être vérifié — le même défaut que le
+ * cycle 104 a corrigé sur l'ÉMISSION, une couche plus bas et pour la même
+ * raison.
+ */
+function queuedVariant(params: MessageMutationParams): QueuedVariantFor<'edited' | 'deleted'> {
+  return params.eventType === 'edited'
+    ? { eventType: 'edited', payload: params.payload }
+    : { eventType: 'deleted', payload: params.payload };
+}
+
 export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
   const { prisma, manager, conversationId, actorUserId, eventType, messageId, payload, onError } = params;
   if (!manager) return;
 
   try {
-    manager.getIO()?.to(ROOMS.conversation(conversationId)).emit(EVENT_NAME[eventType], payload);
+    emitToConversationRoom(manager.getIO()?.to(ROOMS.conversation(conversationId)), params);
   } catch (error) {
     onError?.(error);
   }
@@ -148,9 +211,11 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
       manager.enqueueOfflineMessageMutation({
         conversationId,
         actorUserId,
-        eventType,
         messageId,
-        payload,
+        // Le couple part CORRÉLÉ (cycle 106) : le destructurer le rendrait à
+        // deux unions indépendantes, et la file cesserait d'être gardée à
+        // l'étage même où elle vient de l'être.
+        ...queuedVariant(params),
       })
     ).catch((error: unknown) => onError?.(error));
   } catch (error) {

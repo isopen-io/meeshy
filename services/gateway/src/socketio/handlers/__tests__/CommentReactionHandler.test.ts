@@ -408,7 +408,7 @@ describe('CommentReactionHandler', () => {
 
       await handler.handleRemoveReaction(makeSocket(), { commentId: COMMENT_ID, postId: POST_ID, emoji: '👍' }, callback);
 
-      expect(callback).toHaveBeenCalledWith({ success: true, data: { message: 'Reaction already absent' } });
+      expect(callback).toHaveBeenCalledWith({ success: true });
     });
 
     it('broadcasts removal and calls callback with updateEvent on happy path', async () => {

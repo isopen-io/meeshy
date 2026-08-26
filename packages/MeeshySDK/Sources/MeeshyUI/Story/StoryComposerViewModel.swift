@@ -435,6 +435,24 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// détache (`detachFromAdoptedDraft`) au lieu de le détruire.
     public private(set) var isAdoptedDraftSession = false
 
+    /// Vrai quand la session a été SEMÉE par une porte (`init(seeding:)`) —
+    /// un média posé sur le canvas avant même que l'atelier ne s'ouvre.
+    ///
+    /// Elle n'est ni une session vierge, ni une session adoptée, et elle ne
+    /// peut se comporter comme aucune des deux : une session vierge n'appelle
+    /// jamais `restoreCanvas`, si bien que le fond semé ne serait jamais
+    /// recopié dans le `@State` de la vue — canvas VIDE sous une porte qui
+    /// vient d'annoncer un média posé —, et elle propose en plus une carte
+    /// « Reprendre » dont `restoreDraft()` écrase `slides` sans condition,
+    /// détruisant la graine d'un tap. `openingDraftAction` lit ce drapeau ;
+    /// `internal(set)` parce que `init(seeding:)` vit dans un autre fichier du
+    /// même module, sur le modèle exact d'`editingPostId`.
+    ///
+    /// Il ne vaut `true` que si la graine a effectivement POSÉ quelque chose :
+    /// une graine vidéo dont le fichier a disparu laisse une ardoise vierge,
+    /// donc une session vierge, qui retrouve ses droits de reprise.
+    public internal(set) var isSeededSession = false
+
     /// Rattache la session à un brouillon existant. Appelé AVANT toute
     /// restauration : l'autosave qui suit doit écrire sous le bon id.
     public func adoptDraft(id: String) {

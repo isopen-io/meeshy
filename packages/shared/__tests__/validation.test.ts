@@ -14,6 +14,11 @@ import {
   SignalProtocolLimits,
   NotificationPreferenceSchemas,
   updateUsernameSchema,
+  SignalSchemas,
+  MessageSchemas,
+  TranslatedAudioSchemas,
+  VoiceModelSchemas,
+  AnonymousParticipantSchemas,
 } from '../utils/validation.js';
 import { z } from 'zod';
 import { MeeshyError } from '../utils/errors.js';
@@ -109,6 +114,38 @@ describe('CommonSchemas', () => {
       expect(CommonSchemas.language.safeParse('fr2').success).toBe(false);
     });
   });
+
+  // Les schémas de contenu ci-dessous portaient chacun leur propre borne
+  // `.max(5)`, qui rejouait EXACTEMENT la régression que `CommonSchemas.language`
+  // documente avoir corrigée (`.max(6)` : le plafond de la regex
+  // `[a-z]{2,3}(-[A-Z]{2})?`, ex. `bas-CM`). Le Prisme s'appliquant à TOUT le
+  // contenu, la classe se ferme sur les cinq — message, audio, modèle vocal,
+  // participant anonyme.
+  describe('language-code bound parity with CommonSchemas.language', () => {
+    it('MessageSchemas.send/edit accept a region-tagged 6-char originalLanguage', () => {
+      expect(MessageSchemas.send.safeParse({ content: 'hi', originalLanguage: 'bas-CM' }).success).toBe(true);
+      expect(MessageSchemas.edit.safeParse({ content: 'hi', originalLanguage: 'ewo-CM' }).success).toBe(true);
+    });
+
+    it('TranslatedAudioSchemas.request accepts a 6-char targetLanguage', () => {
+      expect(
+        TranslatedAudioSchemas.request.safeParse({ transcriptionId: 'x', targetLanguage: 'bas-CM' }).success
+      ).toBe(true);
+    });
+
+    it('VoiceModelSchemas.create accepts a 6-char language', () => {
+      expect(VoiceModelSchemas.create.safeParse({ name: 'n', language: 'bas-CM' }).success).toBe(true);
+    });
+
+    it('AnonymousParticipantSchemas.join accepts a 6-char language', () => {
+      expect(AnonymousParticipantSchemas.join.safeParse({ language: 'bas-CM' }).success).toBe(true);
+    });
+
+    it('still rejects an over-long (7-char) language code across these schemas', () => {
+      expect(MessageSchemas.send.safeParse({ content: 'hi', originalLanguage: 'abcd-CM' }).success).toBe(false);
+      expect(VoiceModelSchemas.create.safeParse({ name: 'n', language: 'abcd-CM' }).success).toBe(false);
+    });
+  });
 });
 
 describe('containsEmoji', () => {
@@ -182,6 +219,48 @@ describe('SignalValidation', () => {
     };
     expect(SignalValidation.validateEncryptedPayload(payload).valid).toBe(true);
     expect(SignalValidation.validateEncryptedPayload({}).valid).toBe(false);
+  });
+});
+
+describe('SignalSchemas.encryptedMessage — base64 length invariants', () => {
+  // Ground truth of the wire payload (`encryption-utils.encryptContent`): a
+  // 12-byte AES-GCM IV and a 16-byte auth tag, BOTH base64-encoded
+  // (`uint8ArrayToBase64`). 12 bytes base64 = 16 chars (no padding); 16 bytes
+  // base64 = 24 chars (padded). The schema's `iv.length(24)` was a copy of the
+  // sibling `authTag.length(24)` constant that forgot the IV is 12 bytes, not
+  // 16 — it rejected every real IV the codebase produces.
+  const validIv = Buffer.alloc(12).toString('base64'); // 16 chars
+  const validAuthTag = Buffer.alloc(16).toString('base64'); // 24 chars
+
+  const base = {
+    ciphertext: 'Y2lwaGVydGV4dA==',
+    iv: validIv,
+    authTag: validAuthTag,
+    messageNumber: 0,
+  };
+
+  it('accepts a real 12-byte base64 IV (16 chars)', () => {
+    expect(validIv.length).toBe(16);
+    expect(SignalSchemas.encryptedMessage.safeParse(base).success).toBe(true);
+  });
+
+  it('accepts a real 16-byte base64 auth tag (24 chars)', () => {
+    expect(validAuthTag.length).toBe(24);
+    expect(SignalSchemas.encryptedMessage.safeParse(base).success).toBe(true);
+  });
+
+  it('rejects an IV of the wrong byte length (16 bytes → 24 chars)', () => {
+    const wrongIv = Buffer.alloc(16).toString('base64'); // 24 chars — a 16-byte IV
+    expect(
+      SignalSchemas.encryptedMessage.safeParse({ ...base, iv: wrongIv }).success
+    ).toBe(false);
+  });
+
+  it('rejects an auth tag of the wrong byte length (12 bytes → 16 chars)', () => {
+    const wrongTag = Buffer.alloc(12).toString('base64'); // 16 chars — a 12-byte tag
+    expect(
+      SignalSchemas.encryptedMessage.safeParse({ ...base, authTag: wrongTag }).success
+    ).toBe(false);
   });
 });
 
@@ -338,6 +417,49 @@ describe('language-code normalization at the write boundary', () => {
       const result = AuthSchemas.register.safeParse({ ...base, firstName });
       expect(result.success, `firstName '${firstName}' should be rejected`).toBe(false);
     }
+  });
+});
+
+describe('AuthSchemas verification codes', () => {
+  it('verifyEmail.code accepts a 6-digit numeric code', () => {
+    const result = AuthSchemas.verifyEmail.safeParse({
+      email: 'alice@example.com',
+      code: '123456',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('verifyEmail.code rejects a 6-char non-numeric code', () => {
+    const result = AuthSchemas.verifyEmail.safeParse({
+      email: 'alice@example.com',
+      code: 'abcdef',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('verifyPhone.code accepts a 6-digit numeric code', () => {
+    const result = AuthSchemas.verifyPhone.safeParse({
+      phoneNumber: '+33612345678',
+      code: '123456',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('verifyPhone.code rejects a 6-char non-numeric code (parity with verifyEmail)', () => {
+    const result = AuthSchemas.verifyPhone.safeParse({
+      phoneNumber: '+33612345678',
+      code: 'abcdef',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('verifyPhone.code rejects codes of the wrong length', () => {
+    expect(
+      AuthSchemas.verifyPhone.safeParse({ phoneNumber: '+33612345678', code: '12345' }).success,
+    ).toBe(false);
+    expect(
+      AuthSchemas.verifyPhone.safeParse({ phoneNumber: '+33612345678', code: '1234567' }).success,
+    ).toBe(false);
   });
 });
 

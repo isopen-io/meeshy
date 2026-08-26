@@ -8,6 +8,7 @@ import {
   AttachmentStatusBodySchema,
   MarkReadBodySchema,
 } from '../../../validation/messages-schemas';
+import { MAX_CONTENT_BYTES } from '../../../validation/content-limits';
 
 const VALID_OID = '507f1f77bcf86cd799439011';
 
@@ -171,6 +172,24 @@ describe('UpdateMessageBodySchema', () => {
   it('rejects non-boolean isEdited', () => {
     expect(UpdateMessageBodySchema.safeParse({ isEdited: 'yes' }).success).toBe(false);
   });
+
+  // Safety-ceiling parity with the SOCKET write transports
+  // (`SocketMessageSendSchema`, `SocketMessageEditSchema`): the REST edit
+  // transport `PUT /messages/:messageId` must reject a content payload that
+  // exceeds `MAX_CONTENT_BYTES`. Without the cap an oversized edit is persisted
+  // to Mongo and broadcast as `message:edited` to the whole conversation room —
+  // the downstream guard (`messageEditContent.ts`) only rejects EMPTY content.
+  it('rejects content beyond the shared safety ceiling', () => {
+    expect(
+      UpdateMessageBodySchema.safeParse({ content: 'x'.repeat(MAX_CONTENT_BYTES + 1) }).success
+    ).toBe(false);
+  });
+
+  it('accepts content exactly at the shared safety ceiling', () => {
+    expect(
+      UpdateMessageBodySchema.safeParse({ content: 'x'.repeat(MAX_CONTENT_BYTES) }).success
+    ).toBe(true);
+  });
 });
 
 describe('MessageStatusBodySchema', () => {
@@ -292,6 +311,32 @@ describe('AttachmentStatusBodySchema', () => {
       endedBy: 'pause',
     }));
     expect(AttachmentStatusBodySchema.safeParse({ action: 'listened', stretches }).success).toBe(false);
+  });
+
+  it('rejette une écoute dont endMs est strictement inférieur à startMs', () => {
+    // Un tuple inversé serait SILENCIEUSEMENT jeté par le filtre `isUsable` en aval
+    // (`services/gateway/src/utils/playback-trace.ts:78`, `endMs > startMs`) — le
+    // client recevrait `200 OK` sans savoir que sa trace n'a pas été persistée.
+    // Le wire miroite ce contrat pour transformer le drop muet en 400 visible.
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 500, endMs: 200, endedBy: 'pause' }],
+      }).success
+    ).toBe(false);
+  });
+
+  it('rejette une écoute de durée nulle (endMs === startMs)', () => {
+    // Différent de la décision 234/236 (`>=`) : le refine est STRICT (`>`) ici parce
+    // que la sémantique documentée est « une écoute réellement CONTINUE »
+    // (`playback-trace.ts:7`). Une durée zéro n'est pas une écoute, et la
+    // persistance la jette. Le wire aligne son verdict.
+    expect(
+      AttachmentStatusBodySchema.safeParse({
+        action: 'listened',
+        stretches: [{ startMs: 500, endMs: 500, endedBy: 'pause' }],
+      }).success
+    ).toBe(false);
   });
 
   // ── Prisme linguistique ─────────────────────────────────────────────────

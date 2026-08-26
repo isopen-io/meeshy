@@ -78,7 +78,7 @@ struct MessageReportDetailView: View {
                 // While submitting, the label is a bare `ProgressView`: the button
                 // loses its accessible name at the exact moment it is busy, on a
                 // destructive action. Pin the name to the action, as the doctrine
-                // in StatusComposerView:258 requires. Reuses the visible key.
+                // in MeeshyComposerHost.publishButton requires. Reuses the visible key.
                 .accessibilityLabel(String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main))
                 .disabled(isSubmittingReport)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))

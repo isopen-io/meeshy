@@ -32,7 +32,15 @@ public struct AddReactionRequest: Encodable {
 
 // MARK: - Mobile Transcription
 
-public struct MobileTranscriptionSegment: Encodable, Sendable {
+/// `Codable` (et non `Encodable` seul) parce qu'une transcription faite sur
+/// l'appareil doit pouvoir être PERSISTÉE : elle voyage dans
+/// `CreatePostPayload`, le format on-disk de la file durable, qui est relu au
+/// flush. Sans `Decodable`, un vocal composé hors ligne partait sans sa
+/// transcription et le serveur la refaisait — le travail de l'appareil jeté, et
+/// un texte possiblement différent de celui que l'auteur avait relu.
+/// `Equatable` pour la même raison : `CreatePostPayload` l'est, et un test de
+/// fidélité on-disk ne se prouve pas autrement.
+public struct MobileTranscriptionSegment: Codable, Sendable, Equatable {
     public let text: String
     public let start: Double?
     public let end: Double?
@@ -48,7 +56,7 @@ public struct MobileTranscriptionSegment: Encodable, Sendable {
     }
 }
 
-public struct MobileTranscriptionPayload: Encodable, Sendable {
+public struct MobileTranscriptionPayload: Codable, Sendable, Equatable {
     public let text: String
     public let language: String
     public let confidence: Double?
@@ -80,7 +88,12 @@ public struct CreatePostRequest: Encodable {
     public let audioDuration: Int?
     public let originalLanguage: String?
     public let mobileTranscription: MobileTranscriptionPayload?
-    public let viaUsername: String?
+    /// La publication que celle-ci repartage. **Seul porteur de l'attribution
+    /// d'une republication dans cette charge** : il n'y a pas de champ
+    /// `viaUsername` ici, et il n'y en a jamais eu qui soit lu —
+    /// `CreatePostSchema` ne le déclare pas, et un `z.object()` écarte
+    /// silencieusement les clés inconnues. Le « via @X » se relit de
+    /// `repostOf.author.username` (`StoryModels.toStatusEntry`).
     public let repostOfId: String?
     /// Lieu partagé (picker → `SharedPlace`) — même clé `location` top-level que
     /// pour un message ou un commentaire, hissée par le gateway depuis
@@ -98,18 +111,39 @@ public struct CreatePostRequest: Encodable {
     /// relit du `content` lui-même, et les déclarer ouvrirait un second chemin
     /// vers le même fait.
     public let mentions: [PostMentionInput]?
+    /// Texte alternatif par média (accessibilité, `PostMedia.alt`) — clé = un
+    /// id de `mediaIds` ci-dessus, ignoré côté gateway pour tout id qui n'y
+    /// figure pas (miroir de `CreatePostSchema.mediaAlt`).
+    public let mediaAlt: [String: String]?
+    /// Grain de découvrabilité géographique DEMANDÉ — le second opt-in de la
+    /// spec du 2026-08-02, INDÉPENDANT de `location` ci-dessus : afficher un
+    /// lieu sur un contenu et rendre ce contenu trouvable à proximité sont
+    /// deux choix séparés, l'un n'impliquant jamais l'autre.
+    ///
+    /// Ce champ ne transporte QUE le niveau d'arrondi souhaité. La
+    /// coordonnée part EXACTE dans `location` et le serveur seul la quantifie
+    /// avant d'écrire `Post.geoPoint` et `Post.geoPrecision`.
+    ///
+    /// `nil` OMET la clé, et son absence vaut « non découvrable » côté
+    /// gateway. Ce n'est pas un détail d'encodage : le schéma est un
+    /// `z.enum().optional()`, qui REJETTE un `null` explicite — et un défaut
+    /// non nul rendrait trouvable un contenu que personne n'a choisi de
+    /// rendre trouvable.
+    public let discoverabilityPrecision: DiscoverabilityPrecision?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, viaUsername: String? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
         self.originalLanguage = originalLanguage
-        self.mobileTranscription = mobileTranscription; self.viaUsername = viaUsername
+        self.mobileTranscription = mobileTranscription
         self.repostOfId = repostOfId
         self.location = location
         self.storyEffects = storyEffects
         self.allowSoundExtraction = allowSoundExtraction
         self.mentions = mentions
+        self.mediaAlt = mediaAlt
+        self.discoverabilityPrecision = discoverabilityPrecision
     }
 }
 
@@ -215,12 +249,21 @@ public struct UpdatePostRequest: Encodable, Sendable {
     /// INLINE n'y figure jamais — le serveur le dérive du texte à chaque
     /// écriture, et le déclarer ouvrirait un second chemin vers le même fait.
     public let mentions: [PostMentionInput]?
+    /// Opt-in extraction bande-son vidéo — `nil` = inchangé (miroir de
+    /// `UpdatePostSchema.allowSoundExtraction`).
+    public let allowSoundExtraction: Bool?
+    /// Texte alternatif par média — même contrat que
+    /// `CreatePostRequest.mediaAlt` : clé = un id de `mediaIds` ci-dessus,
+    /// ignoré côté gateway pour tout id qui n'y figure pas (un média déjà
+    /// attaché au post ne se réécrit pas par ce canal).
+    public let mediaAlt: [String: String]?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
                 removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
                 mediaIds: [String]? = nil, location: PostLocationUpdate? = nil,
-                mentions: [PostMentionInput]? = nil) {
+                mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil,
+                mediaAlt: [String: String]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
@@ -231,11 +274,14 @@ public struct UpdatePostRequest: Encodable, Sendable {
         self.mediaIds = mediaIds
         self.location = location
         self.mentions = mentions
+        self.allowSoundExtraction = allowSoundExtraction
+        self.mediaAlt = mediaAlt
     }
 
     enum CodingKeys: String, CodingKey {
         case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
         case type, removeMediaIds, storyEffects, mediaIds, location, mentions
+        case allowSoundExtraction, mediaAlt
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -253,6 +299,8 @@ public struct UpdatePostRequest: Encodable, Sendable {
         // l'émet vide. Pas besoin du `encodeNil` que le lieu réclame — là,
         // l'effacement s'écrit `null`, ici il s'écrit `[]`.
         try c.encodeIfPresent(mentions, forKey: .mentions)
+        try c.encodeIfPresent(allowSoundExtraction, forKey: .allowSoundExtraction)
+        try c.encodeIfPresent(mediaAlt, forKey: .mediaAlt)
         switch location {
         case .set(let place): try c.encode(place, forKey: .location)
         case .remove: try c.encodeNil(forKey: .location)
@@ -302,7 +350,20 @@ public struct PostMentionInput: Codable, Sendable, Equatable {
 }
 
 public struct CreateStoryRequest: Encodable {
-    public let type = "STORY"
+    /// Le type de publication que ce corps crée.
+    ///
+    /// Il fut `= "STORY"`, figé. Ce littéral COMMANDAIT l'envoi : le composer
+    /// pouvait offrir « Post », le corps disait « STORY », et le choix aurait
+    /// eu l'air de marcher. C'est désormais l'appelant qui le pose — et le
+    /// défaut reste `STORY`, si bien qu'aucun appelant historique ne publie
+    /// autre chose qu'avant.
+    ///
+    /// Le CANEVAS voyage avec, quel que soit le type, et c'est la raison pour
+    /// laquelle le format est porté ici plutôt que par un corps sans effets :
+    /// le gateway persiste `storyEffects` pour n'importe quel `type`
+    /// (`PostService.createPost`) et son `hasAnyContentCarrier` accepte une
+    /// publication portée par le seul canevas.
+    public let type: String
     public let content: String?
     public let storyEffects: StoryEffects?
     public let visibility: String
@@ -314,13 +375,28 @@ public struct CreateStoryRequest: Encodable {
     /// sur le canevas imposait d'écrire son `@handle` dans la légende : le
     /// gateway n'extrayait les mentions que du texte du post.
     public let mentions: [PostMentionInput]?
+    /// Opt-in de l'auteur pour l'extraction de la bande-son des vidéos de la
+    /// story (miroir de `CreatePostSchema.allowSoundExtraction`). `nil` =
+    /// l'auteur n'a rien tranché, le défaut serveur s'applique par SILENCE et
+    /// non par écrasement.
+    public let allowSoundExtraction: Bool?
+    /// Texte alternatif par média (miroir de `CreatePostSchema.mediaAlt`).
+    ///
+    /// La clé est un id de `mediaIds` ci-dessus, et rien d'autre :
+    /// `PostService.applyMediaAlt` filtre les clés absentes de `mediaIds`, donc
+    /// une clé locale au composer serait acceptée par la requête et jetée par
+    /// le serveur, sans erreur. Cf. `StoryMediaAltMapping.serverKeyed`.
+    public let mediaAlt: [String: String]?
 
-    public init(content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil) {
+    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil) {
+        self.type = type
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.originalLanguage = originalLanguage; self.mediaIds = mediaIds
         self.repostOfId = repostOfId
         self.mentions = mentions
+        self.allowSoundExtraction = allowSoundExtraction
+        self.mediaAlt = mediaAlt
     }
 }
 

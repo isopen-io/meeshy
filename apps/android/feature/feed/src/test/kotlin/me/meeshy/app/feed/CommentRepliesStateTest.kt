@@ -403,4 +403,36 @@ class CommentRepliesStateTest {
         assertThat(base.retranslated("zzz", mapOf("es" to ApiPostTranslationEntry(text = "Hola"))))
             .isSameInstanceAs(base)
     }
+
+    @Test
+    fun `replacedReply swaps the whole reply row in place preserving position`() {
+        val edited = ApiPostComment(id = "r1", content = "edited", parentId = "c1", likeCount = 3)
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1"), reply("r2")))
+            .replacedReply(edited)
+
+        assertThat(s.repliesFor("c1").map { it.id }).containsExactly("r1", "r2").inOrder()
+        val r1 = s.repliesFor("c1").first { it.id == "r1" }
+        assertThat(r1.content).isEqualTo("edited")
+        assertThat(r1.likeCount).isEqualTo(3)
+        assertThat(s.repliesFor("c1").first { it.id == "r2" }.content).isEqualTo("r")
+    }
+
+    @Test
+    fun `replacedReply finds the reply in whichever thread holds it`() {
+        val s = CommentRepliesState()
+            .beginLoad("c1")!!.loaded("c1", listOf(reply("r1", "c1")))
+            .beginLoad("c2")!!.loaded("c2", listOf(reply("r2", "c2")))
+            .replacedReply(ApiPostComment(id = "r2", content = "edited", parentId = "c2"))
+
+        assertThat(s.repliesFor("c2").single().content).isEqualTo("edited")
+        assertThat(s.repliesFor("c1").single().content).isEqualTo("r")
+    }
+
+    @Test
+    fun `replacedReply is inert when no loaded thread holds the reply`() {
+        val base = CommentRepliesState().beginLoad("c1")!!.loaded("c1", listOf(reply("r1")))
+        assertThat(base.replacedReply(ApiPostComment(id = "zzz", content = "edited")))
+            .isSameInstanceAs(base)
+    }
 }

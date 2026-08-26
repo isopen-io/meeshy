@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response';
 import { viewerFromAuthContext } from './presence-gate';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
@@ -100,23 +101,34 @@ export async function getUsersPresence(fastify: FastifyInstance) {
       const lastActiveMap = new Map<string, Date | null>();
       for (const u of users) lastActiveMap.set(u.id, u.lastActiveAt);
       for (const p of participants) lastActiveMap.set(p.id, p.lastActiveAt);
+      const participantIds = new Set(participants.map(p => p.id));
 
-      // Gate de présence sur les utilisateurs enregistrés (critère contextuel :
-      // contact OU co-participation). Les participants anonymes restent inchangés.
+      // Gate de présence sur les utilisateurs enregistrés (critère strict :
+      // soi / ami accepté / administrateur global — voir
+      // packages/shared/utils/presence-visibility.ts).
       const viewer = viewerFromAuthContext(
         (request as FastifyRequest & {
           authContext?: { type?: string; userId?: string; registeredUser?: { role?: string } | null };
         }).authContext,
       );
+      const viewerIsGlobalAdmin = !!viewer && isGlobalAdmin(viewer.role);
       const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
         viewer,
         users.map(u => u.id),
-        { allowConversationContext: true },
       );
 
       const responseUsers = ids.map(id => {
         const vis = visibilityMap.get(id);
         if (!vis) {
+          // Id non résolu à un utilisateur enregistré. Un participant anonyme
+          // n'a ni ami ni administrateur qui le "connaît" en dehors du fil où
+          // il écrit — sa présence reste masquée, sauf pour un administrateur
+          // global (directive produit 2026-08-25 : « personne ne doit savoir
+          // ma dernière connexion si on n'est pas ami » — un anonyme n'est
+          // jamais ami).
+          if (participantIds.has(id) && !viewerIsGlobalAdmin) {
+            return { userId: id, isOnline: false, lastActiveAt: null };
+          }
           return { userId: id, isOnline: presenceMap.get(id) ?? false, lastActiveAt: lastActiveMap.get(id) ?? null };
         }
         return {

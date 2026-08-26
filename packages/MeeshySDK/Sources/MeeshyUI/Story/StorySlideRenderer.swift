@@ -139,10 +139,12 @@ public enum StorySlideRenderer {
                 }
             }
 
-            // 5. Sticker emojis (draw as text)
+            // 5. Stickers — image intégrée si son bitmap est chargé, glyphe sinon.
+            //    Le bitmap arrive par le MÊME `loadedImages` que les autres
+            //    médias (étapes 2b et 4), sous l'id d'ÉLÉMENT.
             if let stickers = slide.effects.stickerObjects {
                 for sticker in stickers {
-                    drawSticker(sticker, in: size, ctx: cgCtx)
+                    drawSticker(sticker, image: loadedImages[sticker.id], in: size, ctx: cgCtx)
                 }
             }
 
@@ -397,21 +399,56 @@ public enum StorySlideRenderer {
         }
     }
 
-    private static func drawSticker(_ sticker: StorySticker, in size: CGSize, ctx: CGContext) {
+    /// Dessine un sticker : son IMAGE intégrée quand `image` est fournie, son
+    /// glyphe sinon — même boîte, même centre, même échelle, même rotation.
+    ///
+    /// Le discriminant est la présence du BITMAP, pas `sticker.kind` : pendant
+    /// la composition un sticker importé a encore un `postMediaId` vide (c'est
+    /// le prédicat que lit la boucle d'upload), donc `kind` le dit `.emoji`
+    /// alors que son image est déjà là. L'appelant lit ce bitmap dans le même
+    /// `loadedImages` que les autres médias — le composer l'y pose sous l'id
+    /// d'élément, le lecteur y charge le `PostMedia` publié sous ce même id.
+    ///
+    /// Sans bitmap on peint `wireEmoji` plutôt que `emoji` : un sticker image
+    /// écrit ailleurs peut n'avoir aucun emoji, et peindre la chaîne vide
+    /// laisserait un TROU là où l'auteur a posé quelque chose.
+    private static func drawSticker(_ sticker: StorySticker, image: UIImage?, in size: CGSize, ctx: CGContext) {
         // `0.15` codé en dur ET `baseSize` ignoré : la miniature ne
         // correspondait ni au canvas ni à l'export. Règle partagée désormais.
-        let fontSize = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
-                                                      scale: sticker.scale,
-                                                      canvasWidth: size.width)
-        let attrs: [NSAttributedString.Key: Any] = [
-            .font: UIFont.systemFont(ofSize: fontSize),
-        ]
-        let x = size.width * sticker.x - fontSize / 2
-        let y = size.height * sticker.y - fontSize / 2
+        let side = CanvasGeometry.stickerFontSize(baseSize: sticker.baseSize,
+                                                  scale: sticker.scale,
+                                                  canvasWidth: size.width)
+        let x = size.width * sticker.x - side / 2
+        let y = size.height * sticker.y - side / 2
         let center = CGPoint(x: size.width * sticker.x, y: size.height * sticker.y)
         drawRotated(sticker.rotation, around: center, in: ctx) {
-            (sticker.emoji as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
+            guard let image else {
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.systemFont(ofSize: side),
+                ]
+                (sticker.wireEmoji as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
+                return
+            }
+            drawAspectFit(image, in: CGRect(x: x, y: y, width: side, height: side))
         }
+    }
+
+    /// Dessine `image` **aspect-fit**, centrée dans `rect`. Un sticker est une
+    /// image détourée : la recadrer (aspect-fill, ce que font le fond et les
+    /// médias) amputerait le dessin, et l'étirer le déformerait.
+    private static func drawAspectFit(_ image: UIImage, in rect: CGRect) {
+        let imgSize = image.size
+        guard imgSize.width > 0, imgSize.height > 0 else {
+            image.draw(in: rect)
+            return
+        }
+        let scale = min(rect.width / imgSize.width, rect.height / imgSize.height)
+        let drawW = imgSize.width * scale
+        let drawH = imgSize.height * scale
+        image.draw(in: CGRect(x: rect.midX - drawW / 2,
+                              y: rect.midY - drawH / 2,
+                              width: drawW,
+                              height: drawH))
     }
 }
 

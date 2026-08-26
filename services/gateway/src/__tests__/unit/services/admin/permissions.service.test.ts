@@ -112,7 +112,7 @@ describe('PermissionsService.hasPermission', () => {
       'canCreateUsers', 'canUpdateUsers', 'canUpdateUserRoles', 'canDeleteUsers',
       'canResetPasswords', 'canViewAuditLogs', 'canManageCommunities',
       'canManageConversations', 'canViewAnalytics', 'canModerateContent',
-      'canManageNotifications', 'canManageTranslations'
+      'canManageNotifications', 'canManageTranslations', 'canViewPresence'
     ];
     for (const key of allKeys) {
       const result = svc.hasPermission(UserRoleEnum.BIGBOSS, key);
@@ -176,6 +176,28 @@ describe('PermissionsService.canViewSensitiveData', () => {
     expect(svc.canViewSensitiveData(UserRoleEnum.AUDIT)).toBe(false);
     expect(svc.canViewSensitiveData(UserRoleEnum.ANALYST)).toBe(false);
     expect(svc.canViewSensitiveData(UserRoleEnum.USER)).toBe(false);
+  });
+});
+
+// Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
+// supérieur peuvent constamment avoir l'état de présence ». Seuil distinct de
+// canViewSensitiveData — MODERATOR modère du contenu mais ne voit ni l'un ni
+// l'autre ; ce témoin s'assure que les deux seuils ne se recollent pas par
+// accident.
+describe('PermissionsService.canViewPresence', () => {
+  let svc: PermissionsService;
+  beforeEach(() => { svc = makeService(); });
+
+  it('returns true for BIGBOSS and ADMIN', () => {
+    expect(svc.canViewPresence(UserRoleEnum.BIGBOSS)).toBe(true);
+    expect(svc.canViewPresence(UserRoleEnum.ADMIN)).toBe(true);
+  });
+
+  it('returns false for MODERATOR, AUDIT, ANALYST, USER', () => {
+    expect(svc.canViewPresence(UserRoleEnum.MODERATOR)).toBe(false);
+    expect(svc.canViewPresence(UserRoleEnum.AUDIT)).toBe(false);
+    expect(svc.canViewPresence(UserRoleEnum.ANALYST)).toBe(false);
+    expect(svc.canViewPresence(UserRoleEnum.USER)).toBe(false);
   });
 });
 

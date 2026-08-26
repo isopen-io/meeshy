@@ -24,6 +24,8 @@
  * @see docs/superpowers/specs/2026-07-24-media-views-enrichment-design.md
  */
 
+import { isMsRangeStrictlyOrdered } from '@meeshy/shared/utils/time-range';
+
 export type PlaybackSegment = {
   readonly startMs: number;
   readonly endMs: number;
@@ -44,7 +46,9 @@ function isUsable(segment: PlaybackSegment): boolean {
     Number.isFinite(segment.startMs) &&
     Number.isFinite(segment.endMs) &&
     segment.startMs >= 0 &&
-    segment.endMs > segment.startMs
+    // `endMs > startMs` STRICT via la brique partagée : un segment de durée nulle
+    // n'est pas une portion parcourue (cf. `isMsRangeStrictlyOrdered`).
+    isMsRangeStrictlyOrdered(segment)
   );
 }
 

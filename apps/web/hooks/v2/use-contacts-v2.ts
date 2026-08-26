@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/users.service';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 import type { User, UserStatusEvent } from '@meeshy/shared/types';
 import type { ContactSortOption } from '@/types/contacts';
 
@@ -50,7 +51,7 @@ function transformToContact(user: User, isOnline: boolean): ContactV2 {
     name: displayName,
     username: `@${user.username}`,
     avatar: user.avatar,
-    languageCode: user.systemLanguage || user.regionalLanguage || 'fr',
+    languageCode: resolveUserLanguagesOrdered(user, { deviceLocale: user.deviceLocale })[0] ?? 'fr',
     isOnline,
     lastActiveAt: user.lastActiveAt ? String(user.lastActiveAt) : undefined,
     createdAt: 'createdAt' in user ? String((user as unknown as Record<string, unknown>).createdAt) : undefined,

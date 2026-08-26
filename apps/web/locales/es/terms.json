@@ -1,7 +1,7 @@
 {
   "terms": {
     "title": "Términos de Uso",
-    "lastUpdated": "Última actualización: 25 de octubre de 2025",
+    "lastUpdated": "Última actualización: 23 de agosto de 2026",
     "backHome": "Volver al inicio",
     "print": "Imprimir",
     "intro": "Bienvenido a Meeshy. Al usar nuestro servicio, acepta los siguientes términos:",
@@ -28,7 +28,8 @@
       "title": "Contenido del Usuario",
       "ownership": "Conserva la propiedad de su contenido",
       "license": "Otorga a Meeshy una licencia para usar su contenido con el fin de proporcionar el servicio",
-      "responsibility": "Es responsable del contenido que publica"
+      "responsibility": "Es responsable del contenido que publica",
+      "attribution": "A cambio, nos comprometemos a acreditar al autor de todo contenido publicado, incluso cuando se reenvía o se vuelve a publicar, siempre que su origen pueda rastrearse. Se trata de un compromiso de medios: la mención puede faltar o ser incompleta si nuestros sistemas no conservan ese vínculo, o si los ajustes de privacidad de las personas afectadas, incluidos los del autor, lo impiden."
     },
     "termination": {
       "title": "Terminación",

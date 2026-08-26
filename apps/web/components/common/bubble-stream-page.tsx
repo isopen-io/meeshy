@@ -23,6 +23,7 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { useNotificationActions } from '@/stores/notification-store';
 import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-messages-rq';
+import { useSocketCacheSync } from '@/hooks/queries/use-socket-cache-sync';
 import { useNotificationsManagerRQ } from '@/hooks/queries/use-notifications-manager-rq';
 import { useMessageTranslations } from '@/hooks/use-message-translations';
 import { useReplyStore } from '@/stores/reply-store';
@@ -111,6 +112,28 @@ export function BubbleStreamPage({
 
   // Hook pour le système de notifications (toasts pour les messages d'autres conversations)
   useNotificationsManagerRQ();
+
+  // Sync Socket.IO ↔ cache React Query.
+  //
+  // `ConversationLayout` en était le SEUL monteur : `/` et `/chat/:linkId`,
+  // que ce composant sert, n'appliquaient au cache aucun des événements que ce
+  // hook porte seul — réaction, épinglage, transcription, traduction audio,
+  // statut de pièce jointe, restauration « pour moi », accusés, pastilles… Les
+  // trois événements que cet écran traite déjà (`message:new`, `:edited`,
+  // `:deleted`, via `useStreamSocket` plus bas) restent traités là où ils le
+  // sont : ce hook y est idempotent (dédup par id, garde d'édition périmée), et
+  // le retrait du handler local coûterait le scroll-vers-le-récent qui y est
+  // attaché.
+  //
+  // LA CLÉ. Ce hook reçoit l'identifiant que l'ÉCRAN emploie — le SLUG
+  // `"meeshy"` sur la page d'accueil — alors que toute charge socket porte
+  // l'ObjectId résolu. La réconciliation ne se fait pas ici : elle est déjà
+  // dans `messageCacheKeysFor`, qui reconnaît une entrée alias au
+  // `conversationId` que portent ses messages CACHÉS. Son angle mort est donc
+  // le cache VIDE — la fenêtre de la lecture initiale — et c'est exactement
+  // celle que ferme `addMessage` en semant sa première page. Les deux moitiés
+  // se composent ; ni l'une ni l'autre ne suffit.
+  useSocketCacheSync({ conversationId, enabled: true });
 
   // Hook pour les messages (React Query avec pagination infinie)
   const {

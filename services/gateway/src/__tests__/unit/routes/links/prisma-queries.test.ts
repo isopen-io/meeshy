@@ -485,4 +485,16 @@ describe('shareLinkIncludeStructure — participant fields read by callers', () 
 
     expect(participants.select.userId).toBe(true);
   });
+
+  // F2 (2026-08-26) : `retrieval.ts` sert `lastActiveAt` à un viewer ADMIN/BIGBOSS
+  // pour les participants anonymes. Sans ce champ dans le `select`, le site n'a
+  // RIEN de vrai à servir et fabriquait `joinedAt` à la place — une date
+  // d'arrivée n'est pas une dernière activité. `Participant.lastActiveAt` est
+  // bien écrit (`StatusService`, `routes/anonymous.ts`, `MaintenanceService`).
+  it('selects lastActiveAt on conversation participants (served to ADMIN by retrieval.ts)', () => {
+    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
+      .participants as Record<string, any>;
+
+    expect(participants.select.lastActiveAt).toBe(true);
+  });
 });

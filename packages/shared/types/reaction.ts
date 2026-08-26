@@ -24,13 +24,37 @@ export interface ReactionData {
 }
 
 /**
- * Agrégation des réactions par emoji pour un message
- * Optimisé pour l'affichage et les performances
+ * Agrégation des réactions par emoji, dans la forme qu'elle peut prendre sur une
+ * DIFFUSION — c'est-à-dire sans aucune réponse par-lecteur.
+ *
+ * Une diffusion de room n'a pas de lecteur : le même objet part vers tous les
+ * participants. Un champ dont la valeur dépend de « qui regarde » n'y a donc
+ * aucune valeur juste, et le calculer quand même ne peut le calculer que pour
+ * l'ACTEUR. Les deux familles de réaction écrites APRÈS celle-ci l'énoncent
+ * déjà — `PostReactionAggregation` (« NO userIds, NO hasCurrentUser ») et
+ * `AttachmentReactionUpdateEventData.reactionSummary` (des comptes, l'état
+ * « ma réaction » restant maintenu côté client).
+ *
+ * Ce que le lecteur peut en dériver lui-même est ici : `count` est absolu,
+ * `participantIds` est la liste des réacteurs, et l'événement porteur nomme
+ * l'acteur (`participantId` + `userId`).
  */
-export interface ReactionAggregation {
+export interface ReactionBroadcastAggregation {
   readonly emoji: string;
   readonly count: number;
   readonly participantIds: readonly string[];
+}
+
+/**
+ * La même agrégation, résolue POUR UN LECTEUR donné.
+ *
+ * `hasCurrentUser` n'est calculable qu'à un endroit où l'on sait à qui l'on
+ * répond : la lecture REST (`getMessageReactions`, `getEmojiAggregation` avec
+ * son `currentParticipantId`) et la reconstruction locale d'un client. Jamais
+ * une diffusion — d'où la séparation en deux types plutôt qu'un champ optionnel,
+ * qui aurait laissé chaque site décider seul s'il a le droit de le remplir.
+ */
+export interface ReactionAggregation extends ReactionBroadcastAggregation {
   readonly hasCurrentUser: boolean;
 }
 
@@ -64,7 +88,13 @@ export interface ReactionUpdateEvent {
   readonly userId?: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
-  readonly aggregation: ReactionAggregation;
+  /**
+   * L'état ABSOLU de cet emoji après la mutation, sans réponse par-lecteur —
+   * cf. `ReactionBroadcastAggregation`. Un client dérive « ma réaction » de
+   * `userId` (le User.id de l'acteur) confronté au sien, jamais d'un drapeau
+   * porté par l'agrégat : celui-ci décrirait l'acteur, pas lui.
+   */
+  readonly aggregation: ReactionBroadcastAggregation;
   readonly timestamp: Date;
 }
 
@@ -116,8 +146,22 @@ export interface GetUserReactionsResponse {
  * Vérifie si le string est un emoji unicode valide
  */
 export function isValidEmoji(emoji: string): boolean {
-  // Regex pour détecter les emojis unicode
-  const emojiRegex = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)$/u;
+  // Un emoji valide est UN seul grapheme emoji RGI (Recommended for General
+  // Interchange) : la définition exacte qu'un emoji-picker moderne présente.
+  // `\p{RGI_Emoji}` (propriété de STRING, donc drapeau `v` obligatoire, ES2024)
+  // matche en un seul jeton les séquences multi-code-points — modificateur de
+  // teint (`👍🏽`), ZWJ (`👩‍💻`), drapeaux régionaux (`🇫🇷`), keycaps (`#️⃣`) —
+  // que l'ancienne regex mono-code-point rejetait toutes, bloquant au portillon
+  // de réaction les emojis les plus courants. Elle refuse aussi enfin les faux
+  // positifs de l'ancienne branche `\p{Emoji}️` : un chiffre ou `*` suivi
+  // d'un sélecteur de variante (`'1️'`, `'*️'`) n'est PAS un emoji
+  // autonome — seule la séquence keycap complète (`'1️⃣'`) l'est.
+  //
+  // Construit via `new RegExp(..., 'v')` plutôt qu'un littéral : la cible tsc du
+  // package est ES2020 (TS1501 refuse le drapeau `v` en littéral), mais les
+  // SEULS consommateurs de cette fonction sont les services gateway
+  // (Node 22 + bun CI), dont le runtime supporte `v`. Aucun appel côté client.
+  const emojiRegex = new RegExp('^\\p{RGI_Emoji}$', 'v');
   return emojiRegex.test(emoji.trim());
 }
 

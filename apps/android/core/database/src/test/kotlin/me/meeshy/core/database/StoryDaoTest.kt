@@ -78,4 +78,40 @@ class StoryDaoTest {
 
         assertThat(dao.observeAll().first()).isEmpty()
     }
+
+    @Test
+    fun `deleteById removes exactly the matched row and leaves the rest ordered`() = runTest {
+        dao.upsertAll(listOf(story("a", 100), story("b", 300), story("c", 200)))
+
+        dao.deleteById("c")
+
+        assertThat(dao.observeAll().first().map { it.id }).containsExactly("b", "a").inOrder()
+    }
+
+    @Test
+    fun `getById returns the matching row`() = runTest {
+        dao.upsertAll(listOf(story("a", 100), story("b", 300)))
+
+        val row = dao.getById("b")
+
+        assertThat(row).isNotNull()
+        assertThat(row!!.id).isEqualTo("b")
+        assertThat(row.createdAt).isEqualTo(300)
+    }
+
+    @Test
+    fun `getById returns null for an absent id`() = runTest {
+        dao.upsertAll(listOf(story("a", 100)))
+
+        assertThat(dao.getById("missing")).isNull()
+    }
+
+    @Test
+    fun `deleteById on an absent id leaves the table unchanged`() = runTest {
+        dao.upsertAll(listOf(story("a", 1), story("b", 2)))
+
+        dao.deleteById("missing")
+
+        assertThat(dao.observeAll().first().map { it.id }).containsExactly("b", "a").inOrder()
+    }
 }

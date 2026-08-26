@@ -7,6 +7,7 @@
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -56,8 +57,9 @@ function makePrisma(overrides: any = {}) {
   };
 }
 
-async function buildApp(role = 'ADMIN', prismaOverrides: any = {}): Promise<FastifyInstance> {
+async function buildApp(role = 'ADMIN', prismaOverrides: any = {}, socketIOHandler?: unknown): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  if (socketIOHandler) app.decorate('socketIOHandler', socketIOHandler as any);
 
   mockGetUserPermissions.mockReturnValue({
     canAccessAdmin: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(role),
@@ -385,5 +387,95 @@ describe('PATCH /users/:id/status — DB error', () => {
       payload: { isActive: false },
     });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── PATCH /users/:id/status — désactiver coupe les sockets du compte (F9) ──
+//
+// Second écrivain de `deactivatedAt` (le premier est
+// `UserManagementService.updateStatus`). Même loi : un compte désactivé est
+// masqué pour TOUS, donc ses sockets tombent — après l'écriture, et jamais au
+// prix de la désactivation elle-même.
+
+function makeSocketIOHandler(sockets: Array<{ emit: any; disconnect: any }>, fetchError?: Error) {
+  const rooms: string[] = [];
+  const io = {
+    in: (room: string) => {
+      rooms.push(room);
+      return {
+        fetchSockets: async () => {
+          if (fetchError) throw fetchError;
+          return sockets;
+        },
+      };
+    },
+  };
+  return { rooms, handler: { getManager: () => ({ getIO: () => io }) } };
+}
+
+function deactivatedRow() {
+  return { id: TARGET_USER_ID, username: 'bob', isActive: false, deactivatedAt: new Date(), updatedAt: new Date() };
+}
+
+function targetUserRow() {
+  return { id: TARGET_USER_ID, username: 'bob', role: 'USER' };
+}
+
+describe('PATCH /users/:id/status — désactiver coupe les sockets du compte (F9)', () => {
+  it("émet auth:session-revoked (reason admin_revoke) puis ferme chaque socket de la room du compte, APRÈS l'écriture", async () => {
+    const order: string[] = [];
+    const socket = {
+      emit: jest.fn<any>(() => { order.push('emit'); }),
+      disconnect: jest.fn<any>((close?: boolean) => { order.push(`disconnect:${close}`); }),
+    };
+    const { rooms, handler } = makeSocketIOHandler([socket]);
+    const update = jest.fn<any>(async () => { order.push('written'); return deactivatedRow(); });
+    mockCanManageUser.mockReturnValue(true);
+    const app = await buildApp('ADMIN', { user: { findUnique: jest.fn<any>().mockResolvedValue(targetUserRow()), update } }, handler);
+    try {
+      const res = await app.inject({ method: 'PATCH', url: `/users/${TARGET_USER_ID}/status`, payload: { isActive: false } });
+      expect(res.statusCode).toBe(200);
+      expect(rooms).toEqual([ROOMS.user(TARGET_USER_ID)]);
+      expect(socket.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.AUTH_SESSION_REVOKED,
+        expect.objectContaining({ code: 'session_revoked', reason: 'admin_revoke' }),
+      );
+      expect(order).toEqual(['written', 'emit', 'disconnect:true']);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('réactiver ne touche à aucun socket', async () => {
+    const socket = { emit: jest.fn<any>(), disconnect: jest.fn<any>() };
+    const { rooms, handler } = makeSocketIOHandler([socket]);
+    const update = jest.fn<any>().mockResolvedValue({ ...deactivatedRow(), isActive: true, deactivatedAt: null });
+    mockCanManageUser.mockReturnValue(true);
+    const app = await buildApp('ADMIN', { user: { findUnique: jest.fn<any>().mockResolvedValue(targetUserRow()), update } }, handler);
+    try {
+      const res = await app.inject({ method: 'PATCH', url: `/users/${TARGET_USER_ID}/status`, payload: { isActive: true } });
+      expect(res.statusCode).toBe(200);
+      expect(update).toHaveBeenCalledTimes(1);
+      expect(rooms).toEqual([]);
+      expect(socket.emit).not.toHaveBeenCalled();
+      expect(socket.disconnect).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('une coupure qui échoue ne fait pas échouer la désactivation : 200 et ligne écrite', async () => {
+    const { handler } = makeSocketIOHandler([{ emit: jest.fn<any>(), disconnect: jest.fn<any>() }], new Error('adapter down'));
+    const update = jest.fn<any>().mockResolvedValue(deactivatedRow());
+    mockCanManageUser.mockReturnValue(true);
+    const app = await buildApp('ADMIN', { user: { findUnique: jest.fn<any>().mockResolvedValue(targetUserRow()), update } }, handler);
+    try {
+      const res = await app.inject({ method: 'PATCH', url: `/users/${TARGET_USER_ID}/status`, payload: { isActive: false } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().success).toBe(true);
+      expect(update).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
   });
 });

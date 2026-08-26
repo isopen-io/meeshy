@@ -1,4 +1,5 @@
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 
 /**
  * Ce qui empêche le transfert de défaire ce que les cycles 92 et 93 ont détruit.
@@ -222,8 +223,6 @@ export async function admitMessageForward(
   return { admitted: true, expiresAt: new Date(params.at.getTime() + lifespanMs) };
 }
 
-const OBJECT_ID_RE = /^[0-9a-fA-F]{24}$/;
-
 /**
  * Les références de transfert arrivent de clients hétérogènes : le picker iOS
  * historique envoyait `forwardedFromConversationId: ""` (`conversation?.id ??
@@ -239,11 +238,11 @@ export function sanitizeForwardReferences<
   T extends { forwardedFromId?: string; forwardedFromConversationId?: string }
 >(request: T): T {
   const forwardedFromId =
-    request.forwardedFromId && OBJECT_ID_RE.test(request.forwardedFromId)
+    request.forwardedFromId && isValidMongoId(request.forwardedFromId)
       ? request.forwardedFromId
       : undefined;
   const forwardedFromConversationId =
-    request.forwardedFromConversationId && OBJECT_ID_RE.test(request.forwardedFromConversationId)
+    request.forwardedFromConversationId && isValidMongoId(request.forwardedFromConversationId)
       ? request.forwardedFromConversationId
       : undefined;
   if (

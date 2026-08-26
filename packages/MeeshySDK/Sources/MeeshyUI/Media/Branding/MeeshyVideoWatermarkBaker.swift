@@ -168,6 +168,11 @@ public enum MeeshyVideoWatermarkBaker {
 /// surface. La tuile est mémoïsée par intervalle d'animation, si bien qu'une
 /// vidéo à 30 fps ne déclenche que ~15 rendus par seconde.
 private final class WatermarkTilePainter: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     /// `@unchecked Sendable` : tout l'état mutable est gardé par `lock`, et le
     /// filigrane lui-même ne porte que des valeurs immuables.
     ///
@@ -196,6 +201,11 @@ private final class WatermarkTilePainter: @unchecked Sendable {
     private final class TileBox {
         nonisolated(unsafe) var image: CIImage?
         nonisolated init() {}
+        // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+        // défaut) → double-free (abrt) — la boîte « naît et meurt dans le sync »
+        // hors main. Jumelle de la `nonisolated deinit {}` de WatermarkTilePainter ;
+        // attrapée par MeeshyUIDeinitSourceGuardTests après l'intégration d'origin/main.
+        nonisolated deinit {}
     }
 
     nonisolated init(watermark: StoryExportWatermark) {

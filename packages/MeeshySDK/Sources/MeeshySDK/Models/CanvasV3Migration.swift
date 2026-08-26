@@ -62,6 +62,26 @@ private func remapFreeAnchor(_ anchor: ObjectAnchor, carrierAspect: Double) -> O
     return anchor
 }
 
+/// L'INVERSE exact de `remapFreeAnchor`. Les deux sens sont affines et se
+/// déduisent du seul `carrierAspect` : `y' = top + y·h` s'inverse en
+/// `y = (y' − top) / h`. C'est ce qui rend l'aller-retour v1→v3→v1 FIDÈLE dès
+/// lors que la scène a logé son porteur (révision de S8).
+private func unmapFreeAnchor(_ anchor: ObjectAnchor, carrierAspect: Double) -> ObjectAnchor {
+    guard case .free(let x, let y) = anchor else { return anchor }
+    guard carrierAspect.isFinite, carrierAspect > 0 else { return anchor }
+    if carrierAspect > sceneAspect {
+        let h = sceneAspect / carrierAspect
+        let top = (1 - h) / 2
+        return .free(x: x, y: (y - top) / h)
+    }
+    if carrierAspect < sceneAspect {
+        let w = carrierAspect / sceneAspect
+        let left = (1 - w) / 2
+        return .free(x: (x - left) / w, y: y)
+    }
+    return anchor
+}
+
 private func anchorPosition(_ anchor: ObjectAnchor) -> (x: Double, y: Double) {
     switch anchor {
     case .free(let x, let y): return (x, y)
@@ -310,7 +330,12 @@ public extension CanvasV3 {
             closing: effects.closingWire ?? effects.closing.map { ["type": .string($0.rawValue)] },
             clipTransitions: effects.clipTransitions.map { $0.compactMap(wireObject) },
             timelineDuration: effects.timelineDuration,
-            thumbHash: nonEmpty(effects.thumbHash))
+            thumbHash: nonEmpty(effects.thumbHash),
+            // Le ratio du porteur SURVIT (révision de S8). Le remap ci-dessus
+            // est affine, donc inversible — à condition de savoir ce que valait
+            // le porteur. Le jeter faisait de l'édition d'un ancien contenu une
+            // perte sèche.
+            carrierAspect: effects.canvasAspectRatio)
 
         let transcriptions = (effects.voiceTranscriptions ?? [])
             .filter { !$0.language.isEmpty }
@@ -394,7 +419,13 @@ public extension CanvasV3 {
 
     private static func stickerPayload(_ sticker: StorySticker,
                                        anchorPoint: String?) -> [String: CanvasJSONValue] {
-        var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.emoji)]
+        // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
+        // disparaît chez un lecteur qui ne rend que l'emoji.
+        var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
+        if let postMediaId = nonEmpty(sticker.postMediaId) {
+            payload["postMediaId"] = .string(postMediaId)
+        }
+        if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
         // Le pivot NOMMÉ n'est jamais fabriqué : il est réémis quand le wire
         // le portait, sinon c'est le pivot LIBRE qui parle (clé `anchor`).
@@ -510,8 +541,20 @@ public extension StoryEffects {
         var timingEnds: [String: Double] = [:]
         var anchorPoints: [String: String] = [:]
 
+        // Le porteur d'origine, si la scène l'a logé, DÉFAIT le letterboxing que
+        // l'aller avait appliqué — mêmes exclusions qu'à l'aller (le plan `bg`
+        // et le porteur média n'avaient pas été remappés, ils ne sont pas
+        // déremappés). Sans lui (`nil`), rien ne bouge : un document v3 natif
+        // n'a jamais été letterboxé.
+        canvasAspectRatio = scene.carrierAspect
+
         for object in scene.objects {
-            let position = anchorPosition(object.anchor)
+            let sourceAnchor: ObjectAnchor = {
+                guard let aspect = scene.carrierAspect,
+                      object.plane != .bg, object.kind != .media else { return object.anchor }
+                return unmapFreeAnchor(object.anchor, carrierAspect: aspect)
+            }()
+            let position = anchorPosition(sourceAnchor)
             if case .band(let edge) = object.anchor { bandEdges[object.id] = edge }
             if let end = object.timing?.end { timingEnds[object.id] = end }
             if object.kind == .sticker, let point = object.payload.string("anchorPoint") {
@@ -668,10 +711,14 @@ public extension StoryEffects {
     }
 
     private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
-        guard let emoji = object.payload.string("emoji") else { return nil }
+        let postMediaId = object.payload.string("postMediaId") ?? ""
+        guard let emoji = stickerEmoji(object.payload.string("emoji"),
+                                       hasImage: !postMediaId.isEmpty) else { return nil }
         return StorySticker(
             id: object.id,
             emoji: emoji,
+            postMediaId: postMediaId,
+            provider: object.payload.string("provider"),
             x: position.x, y: position.y,
             scale: object.transform.scale, rotation: object.transform.rotation,
             zIndex: object.z,
@@ -681,6 +728,13 @@ public extension StoryEffects {
             duration: object.payload.double("duration"),
             fadeIn: object.payload.double("fadeIn"),
             fadeOut: object.payload.double("fadeOut"))
+    }
+
+    /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
+    /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
+    private static func stickerEmoji(_ wire: String?, hasImage: Bool) -> String? {
+        guard hasImage else { return wire }
+        return nonEmpty(wire) ?? StorySticker.imageFallbackEmoji
     }
 
     private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {

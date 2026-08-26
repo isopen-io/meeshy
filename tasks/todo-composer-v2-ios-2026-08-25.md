@@ -1,0 +1,258 @@
+# Composer v2 iOS — reprise du 2026-08-25 : mesure, vagues, décisions
+
+> Remplace, pour l'exécution, `tasks/todo-composer-lot-c-et-v2-2026-08-23.md`,
+> dont la section « Chantier v2 — état réel » (V1 débranché, V2 « rien
+> absorbé », V3 « route toujours ») est FAUSSE sur HEAD et cite des lignes qui
+> n'existent plus (audit du 2026-08-25, contradiction #4). Ce fichier ne
+> re-dit pas l'histoire : il dit ce qui est mesuré, ce qui est décidé, et ce
+> qui reste.
+
+## Sources — la hiérarchie n'a pas changé
+
+| Source | Rôle |
+|---|---|
+| `docs/superpowers/specs/2026-08-20-meeshy-composer-execution-spec.md` | contrat gelé v1, « Hors v1 » opposable |
+| `docs/superpowers/specs/2026-08-23-meeshy-composer-v2-design.md` | extension v2 : lots 0→7, six lois |
+| `docs/superpowers/plans/2026-08-2*-meeshy-composer-v2-lot-*.md` | plans d'exécution ; **chaque plan prime sur le §E qu'il détaille** |
+| `docs/product/planche-meeshy-composer.html` | la planche : doctrine, inventaire, **tableau de bord P0** — rév. 24 au 2026-08-25 |
+| audit du 2026-08-25 (42 agents, lecture seule) | la mesure lot par lot qui a produit la rév. 24 — reproduite dans la planche, pas ici |
+
+**Règle héritée, inchangée** : une tâche dont le gate passe met à jour la
+planche — camembert ET matrice — dans le MÊME commit ; un P0 périmé est un
+défaut bloquant. **La rév. 24 rend cette règle mécanique** : chaque ligne de
+matrice porte `data-task` / `data-kind` / `data-state`, et un script recompte
+depuis le DOM ; si l'arc diverge, un bandeau rouge s'affiche dans la page.
+**Et la page publiée suit le fichier (26/08)** : chaque commit `docs(p0)` republie
+l'artifact « Planches MeeshyComposer » (https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce)
+depuis `docs/product/planche-meeshy-composer.html` — la page publiée le 20/08
+est restée cinq révisions derrière le dépôt ; aucune page « progress » parallèle.
+
+## Ce que la mesure du 2026-08-25 a établi (résumé — le détail est dans la planche)
+
+- **Rien n'est cassé ; tout était mal compté.** Huit commits (lots v2 4, 5, 6,
+  7.1→7.8, stickers) avaient livré du code sans toucher la planche : 34 tâches
+  de plan n'existaient nulle part, sept cellules « Sur main = — » étaient
+  fausses, trois passages affirmaient l'inverse du code (`PublishIntent`
+  « déscopé », l'éventail « non monté »).
+- **Le seul vrai front produit iOS est lot 2 → lot 3** : la rangée d'outils du
+  document ne sert que l'emoji (les cinq autres outils ont `effect: nil`,
+  `ComposerDocumentSurface.swift:400-417`), la langue est une constante `fr`,
+  `DocumentComposerDoor` n'a aucun site de montage, et le fil monte toujours
+  `FeedComposerSheet` (`RootViewComponents.swift:899/911`, `FeedView.swift:1782`)
+  plus l'overlay iPad (`FeedView.swift:1401`) qu'aucune garde ne nomme.
+- **Une seule tâche du lot 7 jamais commencée : 7.6** (deux magasins, un
+  pilote — le 501 d'`OutboxDispatcher.swift:90-103` est intact) ; deux
+  pilotes sur une même story peuvent la publier deux fois.
+- **Un défaut trouvé en passant, corrigé (`872151e55e`)** : la porte de mise à
+  jour (`UpgradeGateController`) crashait TOUTE suite de tests sur le runtime
+  iOS 26.1 — deinit isolée (SE-0466) exécutée sans tâche courante ; le gate
+  C4b avait été mesuré sur iOS 18.2. `nonisolated deinit {}`, 13/14 → 14/14.
+
+## Outillage de cette reprise (à réutiliser tel quel)
+
+- Worktree : `/Users/smpceo/Documents/v2_meeshy-composer-v2`, branche
+  `feat/composer-v2-ios-2026-08-25` (base `ae52866a8c`). Merge prévu sur
+  `main` local du worktree `v2_meeshy-composer`, puis push (réseau GitHub
+  indisponible au 2026-08-25 16:40 — à refaire).
+- Simulateur DÉDIÉ `Meeshy-Composer` (`5583E7B1-DF1C-46A6-BADF-06EA7717D3F4`,
+  iOS 26.1) — jamais le `30BFD3A6` partagé (iOS 18.2, occupé par d'autres
+  sessions). DerivedData privée `scratchpad/DD-composer` ; produits dans
+  `apps/ios/Build` du worktree (WorkspaceSettings l'impose).
+- `scratchpad/gate.sh build | test Suite… | sdk Cible/Suite…` — le seul
+  chemin de gate des agents ; `meeshy.sh` interdit (détecteur aveugle au
+  worktree + `pkill` global après ~11 min).
+- Référence rejouée avant tout diff : 13 suites `Unit/Composer/*`, 377 tests,
+  376 verts + 1 crash préexistant (corrigé ci-dessus).
+
+## Complément d'audit (reprise 19:16 → 20:22, 48 agents, 0 erreur) — ce que la rév. 24 ne savait pas
+
+Rapport : `scratchpad/audit/rapport-audit-composer-2026-08-25-complet.md` (les deux lecteurs
+tombés en 403 rejoués, réfutés, jugés). Ce qui CHANGE par rapport à la rév. 24 (95/104) :
+
+- **Deux défauts GATEWAY sur le lot 5 déjà livré** — à traiter AVANT tout nouveau front iOS :
+  - `iOS-01` (M) — `POST /posts/from-attachment` (`services/gateway/src/routes/posts/core.ts:206-284`,
+    `publishAttachment.ts`) ne refuse ni `isViewOnce` ni `isEncrypted` : la garde n'existe QUE côté
+    client. Un appel direct publie un média à vue unique. **Défaut de confidentialité.**
+  - `iOS-02` (S) — `publishAttachment.ts:135` fixe `DEFAULT_PUBLICATION_VISIBILITY = 'PUBLIC'` pour
+    tous les types ; `POST /posts` retombe sur `FRIENDS` pour une STORY.
+  - et la route publie **en silence** : ni `socialEvents.broadcast*`, ni `withMentions`/`graftReferences`
+    avant `sendSuccess`, aucun test de route HTTP → **O13 rétrogradé à partiel**.
+- **Lot H sous-déclaré** : lecture v3 (`b7da22ec38`) et `X-Canvas-Caps` (`31bf008d3b`) livrés et
+  testés AVANT la directive de suspension (`9fb4d6a65c`, 12:00:26) — seule l'ÉMISSION reste due.
+- **Lignes manquantes** : V1 (fait), V2 (partiel, 1 capacité/3), V3-iOS (partiel) / V3-web (fait,
+  `PostsFeedScreen.tsx:816`) ; 7.4 scindée en 7.4a / 7.4b (précédent C4a/C4b) ; T4 du lot 5
+  **partiel** (envoi RÉEL non consigné) et non « fait » ; C6a (appui long) et C8 (gate final du lot C)
+  n'ont AUCUNE ligne. Compte proposé par ce rapport : **96/108** ; la rév. 24 bis réconcilie.
+- **Constats nouveaux, à nommer dans la planche** : `iOS-08` `profile.allowsCapture` non honoré par
+  l'offre de capture de la scène (S, préjudice nul aujourd'hui) ; `iOS-17` aucune garde ne confronte
+  `ComposerIntent.swift` au contrat TS (V0 reste partiel) ; `iOS-18` `showsSlides`/`showsTimeline` :
+  9 écritures, 0 lecture de production ; `iOS-15` `routesToLegacy` sans lecteur, garde vacuous ;
+  `iOS-16` aucun gate 4 phases rejoué depuis `8ad9b314c0` (+26 006 lignes iOS depuis) et aucune
+  capture C8.
+- **Questions produit supplémentaires** (§7 du rapport) : §F « Hors v1 » vs sticker `{mediaId}` livré ;
+  D-6 un repost est-il « adopté » ou « semé » (« Reprendre » écrase le slide repartagé) ; l'asymétrie
+  iOS ⇄ web du lot 3 (le web a basculé sa porte du fil, iOS ne le peut pas avant le lot 2) ;
+  le mot à écrire (5.3) et la durée (5.2) écartés par périmètre, « à reprendre immédiatement après ».
+
+**⚠️ D6 — Ordre révisé** : les deux défauts gateway (`iOS-01`, `iOS-02`) et le test d'exclusion
+mutuelle de 7.6 (`iOS-03`, le test AVANT le code) passent en tête de la vague 2, devant `V2-rangée`.
+Raison : un défaut qui atteint l'utilisateur (confidentialité, audience, double publication) passe
+devant une capacité manquante. Option écartée : garder l'ordre « lot 2 d'abord » — il tenait tant
+qu'aucun défaut vivant n'était connu.
+
+## Les vagues
+
+### Vague 1 — en cours (workflow `composer-vague-1`)
+- [ ] **P0 rév. 24** — réconciliation nominative de la planche (Opus).
+- [ ] **Plan d'exécution lots 2-3** —
+      `docs/superpowers/plans/2026-08-25-meeshy-composer-v2-lots-2-3-execution.md`,
+      relu adversarialement avant d'être committé.
+- [ ] `7.4b-commentaires` (S) — deux paragraphes faux depuis `c10801bbca`.
+- [ ] `V0bis-glyphe` (S) — l'ancrage d'une story cesse de porter le glyphe de la republication.
+- [ ] `A4-garde` (S) — garde de source sur `TusUploadManager` (funnel d'en-têtes = garantie client).
+- [ ] `meeshysh-phase3` (S) — un gate vert cesse de cacher une phase 3 sautée ; `--require-connected` pour CI.
+- [ ] `E1-deadcode` (S/M) — trois signatures SDK mortes, deux gardes retournées.
+- [ ] `4.8-retrait` (M) — `StatusComposerView.swift` : parité bloc par bloc, puis retrait — ou STOP écrit.
+- [ ] Clôture : rév. 24 bis (deltas de la vague), commit du plan.
+- [ ] Revue Opus du diff complet, correctifs, re-gate (13 suites Composer + suites touchées + SDK touché).
+
+### Vague 2 — lot 2 (la clé de voûte), sur le plan relu
+- [ ] `V2-rangée` (L) — photo · caméra · document · lieu · micro : canal sur le
+      brouillon → sélecteur (pipeline `ComposerDropResolver`/`ComposerIngestRouter`
+      réutilisé) → publieur (`PublishIntent`, une fabrique document/média).
+      iPadOS dans la définition de terminé.
+- [ ] `V2-langue` (M) — capsule de langue dans le meuble ; `originalLanguage`
+      déclaré par l'auteur, jamais `fr` en dur.
+- [ ] `V2-garde-bascule` (M) — la garde du lot 3 voit les portes qui atteignent
+      le document par bascule de format.
+- [ ] Revue Opus, re-gate, planche dans le même commit que chaque gate.
+
+### Vague 3 — lot 3, puis parité d'édition
+- [ ] `V3-sheet` (L) — les trois sites `FeedComposerSheet(` → `DocumentComposerDoor` ; `AppInitWireupTests` (injections == présentations).
+- [ ] `V3-ipad` (L) — l'overlay inline iPad, nommé par `LegacyComposer` et gardé.
+- [ ] Retrait de `FeedComposerSheet` derrière la double preuve, avec STOP.
+- [ ] `7.8-parité-édition` (L) → `7.8-retrait` (S, `EditPostSheet.swift`).
+
+### Vague 4 — indépendantes (ordre libre)
+- [ ] `7.6-exclusion` (L) — le TEST d'exclusion mutuelle avant le code ; STOP si `MeeshyUI` doit bouger.
+- [ ] `7.8-consommateur` (M) — `routesToLegacy` gagne un lecteur réel, la garde cesse d'être vide.
+- [ ] `D-debt` (M) — `Plan2DProjectAdapter` projette les 7 familles.
+- [ ] `A1-envois` (M) — l'écran des envois en attente (« réessayer maintenant »).
+- [ ] `7.4a-D3` (M) — `uploadContext` typé (miroir Swift de `PostMediaUploadContext`).
+- [ ] `7.4b-D4` (M) — `createBorrowedSoundPost` rejoint la file durable.
+- [ ] `G-O14` — le PLAN d'abord (exigé par le contrat gelé), puis le partage entrant → post/story.
+
+## Décisions prises seul (directive d'appropriation du 2026-08-23) — chacune réversible, avec l'option écartée
+
+- **⚠️ D1 — Compte de la planche : les 34 tâches de plan, dénominateur 104 (+1 rattrapage crash iOS 26.1).**
+  Écarté : 4 lots comme unités (74). Raison : c'est le précédent de la planche
+  (B8a→f, F7a→f, W1, W2, V0 entrés un par un) ; compter par lot cache 7.6.
+- **⚠️ D2 — Un rattrapage hors plan entre au dénominateur** (`872151e55e`),
+  comme `carrierAspect` en son temps. Écarté : le compter « hors chantier » —
+  il est dans le lot C4b, et son gate y a été mal mesuré.
+- **⚠️ D3 — `meeshy.sh` reste VERT quand la phase 3 est sautée, mais le DIT** ;
+  `--require-connected` fait échouer, pour CI. Écarté : échouer par défaut —
+  les postes locaux n'ont pas `DEMO_USER`, CI l'a.
+- **⚠️ D4 — Lot G scindé** : O13 livré sous le lot 5 (renvoi, non recompté),
+  O14 reste « à planifier », sans plan. Écarté : recompter O13 sous G (double compte).
+- **⚠️ D5 — Ordre des vagues : lot 2 avant lot 3 avant parité d'édition**, 7.6
+  hors chemin critique. C'est la dépendance gravée au §E de la conception v2 ;
+  l'audit ne l'a pas contredite.
+
+## Livraison — directive du porteur produit (2026-08-25, 22:00)
+
+Ordre OPPOSABLE, aucune vague de développement ne le devance :
+1. Corrections closes (vague 1c : balayage « deinit isolée iOS 26.1 », rév. 24 ter,
+   intégration d'`origin/main` par `xcodegen`, revue Opus, re-gate COMPLET app + SDK sur 26.1).
+2. PR depuis `feat/composer-v2-ios-2026-08-25` ; merge avec un commit portant **`(beta)`**
+   (`chore(beta): …`) — seule voie qui n'écrase pas le WIP de l'autre session sur `main`.
+   Vérifier `ios-beta-trigger` : `gh run view <id> --log | grep "Build Xcode Cloud #"`.
+3. Attendre le build Xcode Cloud « TestFlight beta test iOS » (traité sur ASC).
+4. **Décision du porteur (⚠️ irréversible sur la file de review)** : la 1.0.5 iOS est
+   `IN_REVIEW` sur ASC → la RETIRER (`andp unlock me.meeshy.app 1.0.5 -y`), attacher le
+   nouveau build, RESOUMETTRE (`andp submit me.meeshy.app 1.0.5`). Option écartée : viser 1.0.6.
+5. **UNIQUEMENT après la soumission** : lancer la vague 2 (planche P0, ordre D6).
+
+Faits mesurés : `MARKETING_VERSION` déjà `1.0.5`, `CURRENT_PROJECT_VERSION` 1796 ; `andp verify`
+vert (clé `5542B6LVNL`, app `6760208591`) ; la CI iOS épingle iOS 18.2 (`ios.yml`), donc la famille
+deinit 26.1 lui est invisible — question produit : ajouter une matrice 26.x.
+
+## Questions qui restent au porteur produit (l'agent avance sans, il ne les tranche pas)
+
+1. `.reelTab` : point d'entrée Réels réel (iOS ET web), ou hors périmètre écrit ?
+   Les deux plateformes ont la porte au contrat, aucune n'a de site de production.
+2. `UnifiedPostComposer.swift` (739 l., `MeeshyUI`) : quel lot le possède ? Il
+   garde UN appelant (repost story→post, `StoryViewerView.swift:867`).
+3. Android (lot H) : la suspension du 2026-08-23 tient-elle ?
+4. Armement de `CANVAS_V3_READ` / `WRITE_STRICT` : la condition « post-B/C/F5b/H »
+   ne peut pas se remplir tant que H est suspendu — se réécrit-elle ?
+5. Audience sous republication : `allowedAudiences` (`a7a9507718`) rend la parité
+   « 6 niveaux » non stricte sous une republication — voulu ?
+6. Les deux boutons de repost du viewer de story web : convergence sur la porte
+   ou divergence inscrite au §G du plan lot 6 ?
+7. La fiche de forward n'offre jamais que DEUX destinations à la fois par nature
+   de média (`PublicationTarget.swift:47-50`) — la loi 6 en nomme trois : voulu ?
+
+## Revue
+
+*(à remplir au fil des gates — un P0 périmé est un défaut bloquant)*
+
+## Revue — Vague 1c (balayage deinit iOS 26.1), session 38a9181c 2026-08-26
+
+**Livré (2 commits sur `feat/composer-v2-ios-2026-08-25`)** :
+- `9fb54c40d0` fix(ios) — 71 classes `@MainActor ObservableObject` de `apps/ios/Meeshy/**`
+  sans deinit reçoivent `nonisolated deinit {}` ; garde `MainActorDeinitSourceGuardTests`.
+- `a18a428e69` fix(sdk) — 69 classes non-`nonisolated` de `Sources/MeeshyUI/**` sans deinit
+  reçoivent `nonisolated deinit {}` ; garde `MeeshyUIDeinitSourceGuardTests` (critère LARGE :
+  des crashers mesurés ne sont pas ObservableObject).
+
+**Mesuré (simulateurs dédiés iOS 26.1)** : RED 71 app + 69 sdk offenders → GREEN 0/0
+(miroir source + méta-tests). Sur 26.1, les 3 suites app crashantes balayées passent
+(ActiveSessionsViewModelTests, AudioBubbleRouterTests, ReelFeedSoundIntentTests), malloc=0.
+
+**⚠️ Découverte / SUIVI — `AudioRecorderManagerTests` crashe ENCORE 14/15 sur 26.1.**
+Cette classe ÉCRIT déjà une deinit (hors scope du sweep par directive) ; le WIP de l'agent 1c
+(`nonisolated deinit`) NE la corrige PAS (mesuré, binaire vérifié). La cause n'est donc pas
+l'isolation de sa propre deinit — même le test trivial `test_init_isRecordingIsFalse` (crée puis
+détruit `AudioRecorderManager()`) crashe, alors que d'autres classes @MainActor sans deinit dans
+la MÊME process passent. AVFoundation/AVAudioSession/AVAudioRecorder suspectés (seule spécificité).
+WIP reverté. Crasher PRÉEXISTANT (mesuré par l'agent 1c avant tout sweep), distinct de la famille
+SE-0466. **À investiguer séparément** (leçon SE-0466 mise à jour : une deinit écrite touchant un
+état isolé peut crasher aussi ; ici même ce n'est pas la deinit).
+
+**Note de méthode** : plusieurs `xcodebuild` concurrents dans le worktree ont verrouillé la build
+DB et corrompu des mesures intermédiaires ; parade appliquée = un seul xcodebuild à la fois, kill
+ciblé par PID (jamais pkill global), nettoyage `XCBuildData` avant relance.
+
+## Vague 1c — ACHÈVEMENT (2026-08-26) : périmètre RÉEL + découverte staleness
+
+**Le sweep initial (71 OO app) était incomplet.** Le re-gate COMPLET (868 suites
+app, CLEAN build, 26.1) a révélé que TOUTE classe @MainActor non-`nonisolated` sans
+deinit crashe — pas que les ObservableObject. Périmètre final (5 sites, ~246 classes) :
+- app @MainActor OO : 71 (`9fb54c40d0`)
+- app @MainActor NON-OO (critère !nonisolated) : 92 (`17daa79d41`, dont WidgetActionFlusher)
+- MeeshyUI non-nonisolated : 69 (`a18a428e69`)
+- core MeeshySDK @MainActor explicite : 13 (`c77f5b6bd3`)
+- AudioRecorderManager (restauré) + TileBox (merge, `3174eaab6a`)
+Gardes élargies : app+UI critère !nonisolated ; core @MainActor explicite. Parseur
+durci : préprocesseur iOS (`#if os(iOS)/#else` = double décl. de classe, ex. P2P).
+
+**⚠️ LEÇON MAJEURE — builds incrémentaux STALES.** Des heures perdues à « prouver »
+que `nonisolated deinit` ne corrigeait pas AudioRecorderManager/ConversationAudioCoordinator/
+AuthServiceTests. FAUX : `.o` PÉRIMÉS (verrous de build-DB, kills, sweeps/reverts →
+l'incrémental ne recompilait pas, l'app liait de vieux `.o` sans le nonisolated deinit).
+La conclusion « AudioRecorderManager = AVFoundation » est RÉTRACTÉE. **Un CLEAN build
+tranche : 868 suites app, malloc=0.** Dès qu'un verrou/kill/revert survient, tout
+résultat incrémental est suspect — refaire un CLEAN build avant de conclure.
+
+**Mesuré (CLEAN builds 26.1)** : app full target 868 suites malloc=0, 3 gardes GREEN,
+AudioRecorderManager 15/15, AuthService/BubbleContentMatrix/AudioBubble verts. SDK full
+re-gate en cours de confirmation.
+
+## Échecs de rendu iOS 26.1 corrigés (2026-08-26, « corriges les echecs restantes »)
+Le re-gate SDK complet laissait 27 échecs de RENDU 26.1 (pas des crashes ; venus du
+merge origin/main, verts sur la CI iOS 18.x). Corrigés SANS toucher la CI 18.x :
+- DynamicTypeTests (7) : check de collapse par `sizeThatFits` (subviews vide sur 26.x). `ad3531f3bf`
+- Snapshots ClipInspector + VideoClipBar (20) : baselines PAR-OS (`perOSBaseline`, `-iOS26.png`). `b56946023c`
+- Plan2DIntegrationGuardTests : hash-pin TimelineExportFlow → invariant `!contains("Plan2D")`. `b05416404b`
+CLEAN SDK full re-gate final en confirmation. Vague 1c + échecs restants = SOLDÉS.

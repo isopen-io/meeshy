@@ -1,6 +1,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 // Logger dédié pour InitService
@@ -39,8 +40,6 @@ export class InitService {
       await this.resetDatabase();
     } else {
     }
-
-    await this.ensurePostGeoIndex();
 
     try {
       // 1. Créer la conversation globale "meeshy"
@@ -277,10 +276,16 @@ export class InitService {
    * spec sur un index déjà existant réussit sans erreur (pas de code à
    * ignorer ici) — toute erreur qui remonte est donc réelle et doit stopper
    * le démarrage, jamais avalée en silence.
-   * Inconditionnel : appelé à chaque boot, que `FORCE_DB_RESET` soit actif ou
-   * non — pas dans `resetDatabase()`, qui ne s'exécute que sur reset explicite.
+   *
+   * Invariant de CHAQUE boot, pas du premier : `server.ts` l'appelle AVANT la
+   * porte `shouldInitialize()`, base vide ou non. Il vivait dans
+   * `initializeDatabase()`, que cette porte ne laisse passer que sur une base
+   * VIDE — une base déjà peuplée ne recevait donc jamais l'index, et
+   * `/posts/nearby` rendait 500 en production (`$geoNear requires a 2d or
+   * 2dsphere index`, 2026-08-25) alors que le commentaire ci-dessus disait
+   * « à chaque boot ».
    */
-  private async ensurePostGeoIndex(): Promise<void> {
+  async ensurePostGeoIndex(): Promise<void> {
     try {
       await this.prisma.$runCommandRaw({
         createIndexes: 'Post',
@@ -497,13 +502,27 @@ export class InitService {
   private async createDirectConversation(userId1: string, userId2: string): Promise<void> {
 
     try {
-      // Générer un identifiant unique pour la conversation directe
-      const identifier = `mshy_${userId1}_${userId2}`;
-      
-      // Vérifier si la conversation existe déjà
+      // Idempotence par les PARTICIPANTS, pas par l'identifiant.
+      //
+      // L'ancien code cherchait `where: { identifier }` avec un identifiant
+      // DERIVE des deux userId (`mshy_<id1>_<id2>`) : la clé d'idempotence et
+      // l'identifiant public étaient le même objet. Rendre l'identifiant
+      // opaque casse ce couplage — un identifiant aléatoire ne se retrouve
+      // pas — il faut donc porter l'idempotence là où elle appartient : sur
+      // les membres de la conversation. C'est déjà le motif retenu par
+      // `routes/conversations/core.ts` pour dédupliquer les DM.
       const existingConversation = await this.prisma.conversation.findFirst({
-        where: { identifier }
+        where: {
+          type: 'direct',
+          AND: [
+            { participants: { some: { userId: userId1, isActive: true } } },
+            { participants: { some: { userId: userId2, isActive: true } } }
+          ]
+        }
       });
+
+      // Identifiant COMPACT — voir routes/friends.ts, meme raison.
+      const identifier = generateCompactConversationIdentifier();
 
       if (existingConversation) {
         this.directConversationId = existingConversation.id;

@@ -73,6 +73,13 @@ struct ThemedMessageBubble: View {
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    /// LOI DES ZONES (2026-08-24) — les deux portes de la citation : ZONE 1
+    /// (avatar de l'auteur cite -> profil) et ZONE 2 (miniature ou icone de
+    /// lecture -> media en plein ecran). Descendues jusqu'a
+    /// `BubbleQuotedReply` ; `nil` sur les surfaces sans hote de resolution
+    /// (apercus, onboarding), qui gardent la seule zone 3.
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     /// BUG2 A' — réaction par-image (attachmentId, emoji).
     var onReactToAttachment: ((String, String) -> Void)? = nil
@@ -296,6 +303,8 @@ struct ThemedMessageBubble: View {
             onReplyTap: onReplyTap,
             onStoryReplyTap: onStoryReplyTap,
             onMediaTap: onMediaTap,
+            onQuotedAuthorTap: onQuotedAuthorTap,
+            onQuotedMediaTap: onQuotedMediaTap,
             onConsumeViewOnce: onConsumeViewOnce,
             onReactToAttachment: onReactToAttachment,
             onRequestTranslation: onRequestTranslation,
@@ -338,7 +347,15 @@ struct ThemedMessageBubble: View {
             onTapConsentNotice: onTapConsentNotice,
             standalone: standalone
         )
-        .messageEffects(message.effects)
+        // Pas de `.messageEffects` ici : monté à ce niveau, il s'appliquait au
+        // `HStack` de rangée de `BubbleStandardLayout` — avatar, bulle,
+        // réactions et tout l'espace vide jusqu'au bord de l'écran. Le liseré
+        // arc-en-ciel encadrait donc du vide. Les effets sont désormais posés
+        // sur la bulle elle-même, dans `BubbleStandardLayout`.
+        //
+        // Conséquence assumée : les chemins `.deleted` et `.burned`, qui ne
+        // passent pas par `BubbleStandardLayout`, ne portent plus d'effets. Un
+        // tombstone « message supprimé » n'a ni arc-en-ciel ni confettis.
         .opacity(isEphemeralExpired ? 0 : 1)
         .scaleEffect(isEphemeralExpired ? 0.8 : 1)
         .onAppear {

@@ -15,6 +15,37 @@ public struct NotificationToastView: View {
     private var notifType: MeeshyNotificationType { event.notificationType }
     private var accentColor: Color { Color(hex: notifType.accentHex) }
 
+    /// `ThemeManager.mode` et non `colorScheme` : le mode fait autorité sur
+    /// TOUTES les couleurs du thème, y compris le `theme.textPrimary` posé sur
+    /// ce fond quelques lignes plus bas. Un thème forcé par l'utilisateur
+    /// (clair verrouillé sous un iOS en sombre) diverge de `colorScheme` — lire
+    /// deux sources différentes pour le fond et pour le texte y donnerait du
+    /// blanc sur blanc. `colorScheme` reste déclaré au-dessus : sa seule tâche
+    /// est de faire re-rendre la vue au basculement de thème.
+    private var isDark: Bool { theme.mode.isDark }
+
+    /// Fond OPAQUE aux couleurs de l'application — blanc en clair, `#09090B` en
+    /// sombre — et non plus `.ultraThinMaterial`.
+    ///
+    /// Le matériau translucide laissait remonter ce qui passait dessous : sur
+    /// un fil de conversation, une photo, un lecteur vidéo, le texte du toast
+    /// perdait son contraste et la bannière semblait appartenir à l'écran
+    /// qu'elle recouvre au lieu de s'en détacher. Une notification est un
+    /// message du système à l'utilisateur : elle doit se lire d'un coup d'œil,
+    /// quel que soit ce qu'elle masque.
+    ///
+    /// Fonction pure `static` : XCTest ne peut pas introspecter le `ShapeStyle`
+    /// passé à un modificateur SwiftUI — seule la DÉCISION est vérifiable.
+    /// Même pattern que `ConversationScrollControlsView.isCompactShape`.
+    public static func backgroundColor(isDark: Bool) -> Color {
+        MeeshyColors.backgroundPrimary(isDark: isDark)
+    }
+
+    /// Bordure : l'accent du type de notification, franc sur fond opaque.
+    public static func borderColor(accent: Color, isDark: Bool) -> Color {
+        accent.opacity(isDark ? 0.45 : 0.30)
+    }
+
     public init(event: SocketNotificationEvent, onTap: (() -> Void)? = nil) {
         self.event = event
         self.onTap = onTap
@@ -84,12 +115,14 @@ public struct NotificationToastView: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(.ultraThinMaterial)
+                    .fill(Self.backgroundColor(isDark: isDark))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(accentColor.opacity(0.3), lineWidth: 1)
+                            .stroke(Self.borderColor(accent: accentColor, isDark: isDark), lineWidth: 1)
                     )
-                    .shadow(color: .black.opacity(0.18), radius: 16, y: 6)
+                    // Ombre portée plus dense en clair : un rectangle blanc sur
+                    // un fond clair ne se détache que par elle.
+                    .shadow(color: .black.opacity(isDark ? 0.45 : 0.18), radius: 18, y: 8)
             )
         }
         .buttonStyle(.plain)

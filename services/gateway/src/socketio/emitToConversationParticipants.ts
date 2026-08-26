@@ -1,4 +1,5 @@
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
+import { emitServerEvent, type ServerEmitArgs, type ServerEventName, type ServerEventPayload } from './serverEmit';
 
 /**
  * A conversation participant, reduced to the two identities a room name can be
@@ -19,7 +20,7 @@ export interface ParticipantRoomTarget {
 export interface ConversationRoomBroadcast {
   to(room: string): ConversationRoomBroadcast;
   except(room: string): ConversationRoomBroadcast;
-  emit(event: string, payload: unknown): void;
+  emit(...args: ServerEmitArgs): unknown;
 }
 
 export interface ConversationRoomEmitter {
@@ -128,16 +129,21 @@ export function participantUserRoomTargets<T extends ParticipantRoomTarget>(
  * `emitUnreadCountsToRecipients` (`ROOMS.user(recipient.userId ?? recipient.id)`),
  * which is what makes this an extraction rather than an invention.
  *
- * `exceptRoom` takes ONE room back out of the fan-out, and exists for the
+ * `exceptRooms` takes rooms back out of the fan-out, and exists for the
  * emitter that has two audiences for one event: a payload for the peers, and a
- * richer one for the actor. Dropping the actor's personal room from the chain
- * is not enough — the conversation room is chained too, and it holds the
- * actor's socket whenever they have the thread open, which would hand them the
+ * different one for the others. Dropping their personal rooms from the chain
+ * is not enough — the conversation room is chained too, and it holds their
+ * sockets whenever they have the thread open, which would hand them the
  * peer copy on top of their own. `.except()` removes them from the WHOLE chain,
  * so each socket still receives the event exactly once (property 1 above), and
- * the caller is free to emit the actor's version to `ROOMS.user(...)` after.
+ * the caller is free to emit the other version to their `ROOMS.user(...)` after.
  * The returned room list honors the exclusion, so a log never claims a room the
  * emit did not serve.
+ *
+ * PLURIEL parce que la seconde audience n'est pas toujours une personne : le
+ * fanout d'effectif (`emitConversationMemberCount`) sert l'entier à TOUS les
+ * lecteurs autorisés d'un fil — plusieurs admins de groupe, plusieurs
+ * modérateurs plateforme — et devait donc en exclure autant.
  *
  * Returns the rooms actually reached, in chain order, so a caller can log them
  * without rebuilding the set.
@@ -153,32 +159,38 @@ export function participantUserRoomTargets<T extends ParticipantRoomTarget>(
  * fan-out le plus fréquent de la messagerie. Un second nom se réintroduit
  * maintenant par un second appel, qui se voit en revue.
  */
-export function emitToConversationParticipants(params: {
+export function emitToConversationParticipants<E extends ServerEventName>(params: {
   io: ConversationRoomEmitter | null | undefined;
   conversationId: string;
   participants: ReadonlyArray<ParticipantRoomTarget>;
-  event: string;
-  payload: unknown;
-  exceptRoom?: string | null;
+  event: E;
+  payload: ServerEventPayload<E>;
+  /**
+   * Salons a EXCLURE de la diffusion. Pluriel depuis le lot « effectif exact » :
+   * un meme evenement peut devoir sauter PLUSIEURS salons — ceux des lecteurs qui
+   * recoivent deja une variante du payload par une autre chaine.
+   */
+  exceptRooms?: ReadonlyArray<string> | null;
 }): string[] {
-  const { io, conversationId, participants, event, payload, exceptRoom } = params;
+  const { io, conversationId, participants, event, payload, exceptRooms } = params;
   if (!io) return [];
 
   const conversationRoom = ROOMS.conversation(conversationId);
+  const excluded = new Set(exceptRooms ?? []);
   // Seeding with the conversation room makes it `rooms[0]` AND protects it from
   // being chained twice by a participant that somehow named it. It is already
   // on the emitter below, so the chain resumes at the personal rooms after it.
   // The exclusion can only ever remove a PERSONAL room — it is named after an
   // identity, never after a conversation — so `rooms[0]` survives the filter.
   const rooms = participantUserRooms(participants, [conversationRoom]).filter(
-    (room) => room !== exceptRoom
+    (room) => !excluded.has(room)
   );
 
   let emitter = io.to(conversationRoom);
   for (const room of rooms.slice(1)) emitter = emitter.to(room);
-  if (exceptRoom) emitter = emitter.except(exceptRoom);
+  for (const room of excluded) emitter = emitter.except(room);
 
-  emitter.emit(event, payload);
+  emitServerEvent(emitter, event, payload);
 
   return rooms;
 }

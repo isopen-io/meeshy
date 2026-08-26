@@ -127,7 +127,7 @@ struct ConversationDashboardView: View {
                     // localisée, valeur brute — 0 clé i18n neuve, cohérent avec StatRing).
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
-                    .accessibilityValue("\(health)")
+                    .accessibilityValue(LocalizedNumber.exact(health))
 
                     if summary.engagementLevel != nil || summary.conflictLevel != nil {
                         HStack(spacing: 10) {
@@ -1145,13 +1145,18 @@ struct ConversationDashboardView: View {
 
     // MARK: - Helpers
 
+    /// Le seuil d'abrègement est **10 000, et il est intentionnel** : ce compteur
+    /// rend un nombre de MOTS, où « 3 452 mots » informe et « 3,5 k mots » ne
+    /// dit plus rien. La bande 1 000–9 999 gardait donc déjà le nombre entier
+    /// et groupé (`formatted()`), locale comprise ; seul l'abrègement au-dessus
+    /// composait son suffixe à la main, hors CLDR.
+    ///
+    /// Le repli sous 1 000 passe lui aussi par `formatted()` : `"\(n)"` gravait
+    /// les chiffres latins, alors que la bande juste au-dessus rendait déjà les
+    /// chiffres de la locale — le même compteur changeait de système d'écriture
+    /// en arabe en passant de 999 à 1 000.
     private func formatNumber(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 10_000 { return String(format: "%.1fk", Double(n) / 1_000) }
-        if n >= 1_000 {
-            return n.formatted()
-        }
-        return "\(n)"
+        n >= 10_000 ? CompactCountLabel.text(n) : n.formatted()
     }
 }
 
@@ -1171,11 +1176,14 @@ private struct StatRing: View {
         return min(CGFloat(value) / CGFloat(maxValue), 1.0)
     }
 
+    /// Contrairement à `formatNumber`, l'anneau abrège dès le millier — il rend
+    /// son nombre AU CENTRE d'un cercle de 5 pt de trait, où « 1 234 » déborde.
+    /// Son seuil de 10 000 n'était PAS un choix : la branche suivante lui était
+    /// identique au caractère près (`>= 1_000` → même division, même format), donc
+    /// morte. Elle a pu survivre à trois relectures précisément parce qu'elle ne
+    /// changeait rien.
     private var displayValue: String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 10_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
+        CompactCountLabel.text(value)
     }
 
     var body: some View {
@@ -1214,7 +1222,7 @@ private struct StatRing: View {
         // — la valeur brute non abrégée, le libellé déjà localisé (pas de capitales).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
-        .accessibilityValue("\(value)")
+        .accessibilityValue(LocalizedNumber.exact(value))
     }
 }
 

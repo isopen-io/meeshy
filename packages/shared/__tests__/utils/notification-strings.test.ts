@@ -128,6 +128,53 @@ describe('notificationString — interpolation', () => {
   });
 });
 
+describe('notificationString — token vide n’insère pas d’espace orphelin', () => {
+  // `{emoji}` est optionnel (params.emoji ?? '') mais chaque template de réaction
+  // l’enchâsse entre deux espaces littéraux. Sans l’emoji, l’ancienne interpolation
+  // laissait un DOUBLE espace qui partait verbatim sur REST/socket/push vers tous
+  // les clients. Le collapse doit fermer la faille dans TOUTES les langues.
+  it('reaction.message sans emoji ne double pas l’espace (8 langues)', () => {
+    expect(notificationString('en', 'reaction.message')).toBe('reacted to your message');
+    expect(notificationString('fr', 'reaction.message')).toBe('a réagi à votre message');
+    expect(notificationString('es', 'reaction.message')).toBe('reaccionó a tu mensaje');
+    expect(notificationString('pt', 'reaction.message')).toBe('reagiu à sua mensagem');
+    expect(notificationString('de', 'reaction.message')).toBe('hat auf deine Nachricht reagiert');
+    expect(notificationString('it', 'reaction.message')).toBe('ha reagito al tuo messaggio');
+    expect(notificationString('ar', 'reaction.message')).toBe('تفاعل مع رسالتك');
+    expect(notificationString('zh-Hans', 'reaction.message')).toBe('用 回应了你的消息');
+    for (const lang of NOTIFICATION_LANGUAGES) {
+      expect(notificationString(lang, 'reaction.message'), lang).not.toMatch(/  /);
+    }
+  });
+  it('reaction.comment et reaction.post sans emoji ne doublent pas l’espace', () => {
+    expect(notificationString('en', 'reaction.comment')).toBe('reacted to your comment');
+    expect(notificationString('fr', 'reaction.post', { postType: 'POST' }))
+      .toBe('a réagi à votre publication');
+    expect(notificationString('en', 'reaction.post', { postType: 'STORY' }))
+      .toBe('reacted to your story');
+  });
+  it('reaction.commentVerbose sans emoji conserve le contexte à espace unique', () => {
+    expect(notificationString('en', 'reaction.commentVerbose', { actor: 'Alice' }))
+      .toBe('Alice reacted to your comment');
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', author: 'Bob' }))
+      .toBe('Alice a réagi à votre commentaire sur le post de Bob');
+  });
+  it('l’emoji présent reste inchangé (non-régression)', () => {
+    expect(notificationString('en', 'reaction.message', { emoji: '🔥' }))
+      .toBe('reacted 🔥 to your message');
+    expect(notificationString('fr', 'reaction.commentVerbose',
+      { actor: 'Alice', emoji: '❤️', author: 'Bob' }))
+      .toBe('Alice a réagi ❤️ à votre commentaire sur le post de Bob');
+    expect(notificationString('en', 'reaction.post', { emoji: '👍', postType: 'STORY' }))
+      .toBe('reacted 👍 to your story');
+  });
+  it('préserve les espaces internes d’une valeur non vide (pas de mutation du contenu)', () => {
+    expect(notificationString('en', 'reaction.commentVerbose', { actor: 'Jean  Dupont', emoji: '❤️' }))
+      .toBe('Jean  Dupont reacted ❤️ to your comment');
+  });
+});
+
 describe('buildNotificationDisplay — titre + sous-titre', () => {
   it('corrige le bug de réponse : « a répondu à votre commentaire » (pas « a commenté votre publication »)', () => {
     const fr = buildNotificationDisplay('fr', { type: 'comment_reply', actorName: 'Belva Tano', postType: 'STORY' });
@@ -175,6 +222,17 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
   it('reste robuste à un postType inconnu', () => {
     const r = buildNotificationDisplay('fr', { type: 'post_comment', actorName: 'Z', postType: 'WEIRD' });
     expect(r.title).toBe('Z a commenté votre publication');
+  });
+
+  it('une réaction sans emoji ne fabrique pas un titre à double espace (fuite REST/socket/push)', () => {
+    // NotificationService passe emoji: null quand la métadonnée n’en porte pas ;
+    // ce titre est PERSISTÉ puis renvoyé verbatim aux clients.
+    expect(buildNotificationDisplay('en', { type: 'post_like', actorName: 'Alice', postType: 'POST' }).title)
+      .toBe('Alice reacted to your post');
+    expect(buildNotificationDisplay('fr', { type: 'post_like', actorName: 'Alice', postType: 'POST' }).title)
+      .toBe('Alice a réagi à votre publication');
+    expect(buildNotificationDisplay('fr', { type: 'comment_like', actorName: 'Sam' }).title)
+      .not.toMatch(/  /);
   });
 
   it('couvre toutes les branches sociales (titre + sous-titre)', () => {

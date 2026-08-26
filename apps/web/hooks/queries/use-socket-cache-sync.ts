@@ -19,7 +19,8 @@ import { extractPreviewTranslations } from '@/services/conversations/transformer
 import type { Message, Conversation } from '@/types';
 import type { TranslationEvent } from '@meeshy/shared/types';
 import type { SocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
-import type { AudioTranslationReadyEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { AudioTranslationReadyEventData, ConversationJoinErrorEventData, MessageRestoredForMeEventData, TranscriptionReadyEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import { isMembershipDeniedJoinError } from '@meeshy/shared/utils/conversation-join-error';
 import type { OptimisticMessage } from '@/utils/optimistic-message';
 
 function isOptimisticMessage(m: Message): m is OptimisticMessage {
@@ -512,6 +513,56 @@ function messageCacheKeysFor(
   return keys;
 }
 
+/**
+ * Le pendant INVALIDANT de `messageCacheKeysFor`.
+ *
+ * Trois handlers demandaient une relecture serveur en nommant la clé
+ * ObjectId — `queryKeys.messages.infinite(<ObjectId>)` — alors que l'écran
+ * d'accueil monte la conversation globale sous son SLUG (`"meeshy"`). Sur cet
+ * écran, l'invalidation ne visait aucune requête existante : elle ne réparait
+ * rien, en silence. Écrire par `messageCacheKeysFor` et invalider par la clé
+ * ObjectId, c'est appliquer la résolution d'alias d'un côté et pas de l'autre.
+ *
+ * DEUX des trois sites y gagnent vraiment — `message:restored-for-me` et
+ * `message:pending-delivered`, qui portent sur une liste DÉJÀ peuplée, donc
+ * résoluble par le `conversationId` de ses messages. Le troisième, le filet
+ * `!landedInCache`, ne peut par construction rien résoudre : son commentaire
+ * en place le dit, et c'est la graine de `addMessage` qui ferme ce cas.
+ *
+ * La clé ObjectId est conservée dans le lot même quand aucune requête ne la
+ * porte : c'est elle que montera un écran ouvert par `/conversations/:id`, et
+ * marquer une requête encore inexistante est sans effet ni coût.
+ */
+function invalidateMessageListsFor(
+  queryClient: ReturnType<typeof useQueryClient>,
+  conversationId: string
+): void {
+  const aliasKeys = messageCacheKeysFor(queryClient, conversationId);
+  const canonicalKey: unknown[] = [...queryKeys.messages.infinite(conversationId)];
+  const canonical = JSON.stringify(canonicalKey);
+  const targets = aliasKeys.some((key) => JSON.stringify(key) === canonical)
+    ? aliasKeys
+    : [...aliasKeys, canonicalKey];
+
+  for (const queryKey of targets) {
+    queryClient.invalidateQueries({ queryKey });
+  }
+}
+
+/**
+ * Une ligne de conversation lue au réseau n'a de valeur que s'il existe une
+ * LISTE pour la recevoir : `updateInfiniteConversationCache` sort sur
+ * `if (!old) return old;`, donc sans cache de liste le `GET /conversations/:id`
+ * est intégralement jeté. Sur un écran qui ne monte aucune liste — la page
+ * d'accueil, le fil partagé — cela faisait UNE requête par message reçu, sur la
+ * conversation la plus bavarde du produit, pour rien.
+ */
+function hasConversationListCache(
+  queryClient: ReturnType<typeof useQueryClient>
+): boolean {
+  return queryClient.getQueryData(queryKeys.conversations.infinite()) !== undefined;
+}
+
 export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
   const { conversationId, enabled = true } = options;
   const queryClient = useQueryClient();
@@ -623,10 +674,23 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // No cache entry to write into: mark the query stale so the in-flight
       // fetch is re-issued (and any later mount re-reads) from the server —
       // the only source able to close the gap this message would leave.
+      //
+      // CE FILET N'ATTEINT PAS UNE ENTRÉE ALIAS, ET NE LE PEUT PAS — à dire
+      // explicitement pour que personne ne s'y fie. `landedInCache` reste faux
+      // exactement quand AUCUNE liste ne contient de message de cette
+      // conversation ; or c'est par ce contenu que `messageCacheKeysFor`
+      // reconnaît une entrée clé-ée sur un SLUG. La condition qui déclenche le
+      // filet est donc la même que celle qui rend la résolution d'alias
+      // impossible. Passer par `invalidateMessageListsFor` n'y change rien : ce
+      // n'est ici qu'un site d'invalidation unique.
+      //
+      // Ce que ce filet couvre : la lecture serveur d'une conversation dont
+      // l'écran EST clé-é sur l'ObjectId. Ce qu'il ne couvre pas — le message
+      // arrivé pendant la lecture initiale, que le serveur ne connaît pas
+      // encore, quelle que soit la clé — est fermé côté écrivain, par la graine
+      // de `addMessage` (`use-conversation-messages-rq.ts`).
       if (!landedInCache) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.messages.infinite(targetConversationId),
-        });
+        invalidateMessageListsFor(queryClient, targetConversationId);
       }
 
       // Update infinite conversations query (paginated cache used by ConversationList)
@@ -654,7 +718,17 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // by the paginated initial query). Fetch the full row from the
       // API and prepend it so the list surfaces the new chat in real
       // time instead of waiting for the next manual refresh.
-      if (!conversationFoundInCache && /^[a-f\d]{24}$/i.test(targetConversationId)) {
+      //
+      // `hasConversationListCache` : sans liste en cache, la ligne lue n'a
+      // nulle part où atterrir (voir le helper). Cette garde est ce qui rend le
+      // montage de ce hook sur la page d'accueil et le fil partagé gratuit —
+      // sinon chaque message entrant y déclenchait un `GET /conversations/:id`
+      // dont la réponse était jetée.
+      if (
+        !conversationFoundInCache &&
+        /^[a-f\d]{24}$/i.test(targetConversationId) &&
+        hasConversationListCache(queryClient)
+      ) {
         if (typeof window === 'undefined' || window.location.pathname !== '/login') {
           apiService.get<Conversation>(`/conversations/${targetConversationId}`)
             .then((response) => {
@@ -688,16 +762,23 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // Invalidating would trigger a re-fetch that could return stale data from backend cache
       // The backend may not have processed the message yet when we re-fetch
 
-      // Auto mark-as-received for messages from other users
-      // senderId is now always a User ID (resolved in message converters)
-      const currentUser = useAuthStore.getState().user;
-      if (currentUser && message.senderId !== currentUser.id && /^[a-f\d]{24}$/i.test(message.conversationId)) {
-        // Prevent background API calls if on login page to avoid infinite reload loops
-        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-          apiService.post(`/conversations/${message.conversationId}/mark-as-received`)
-            .catch(() => {}); // Non-critical, fire-and-forget
-        }
-      }
+      // L'accusé de RÉCEPTION n'est PAS posté ici, et ne l'était plus que par
+      // redondance : le `POST /conversations/:id/mark-as-received` qui se
+      // trouvait à cet endroit doublait celui de la couche TRANSPORT.
+      //
+      // La chaîne est fermée : `meeshySocketIOService.onNewMessage` →
+      // `orchestrator.onNewMessage` → `messaging.service.messageListeners`. Le
+      // MÊME `socket.on(MESSAGE_NEW)` qui sert ces auditeurs appelle
+      // `markAsReceivedDebounced(message.conversationId)` juste après les avoir
+      // servis — pour tout message d'un tiers, sur TOUTE page, débounce 500 ms
+      // par conversation. Aucun message ne peut donc atteindre ce handler sans
+      // que l'accusé soit déjà parti : un sur-ensemble strict de la condition
+      // qui vivait ici.
+      //
+      // Le doublon était sans conséquence tant que ce hook n'était monté que
+      // par `ConversationLayout`. Il en prend une dès qu'il est monté par
+      // `BubbleStreamPage` : UNE requête par message reçu, non débouncée, sur
+      // la conversation la plus bavarde du produit.
     };
 
     // Handler for edited messages
@@ -1116,6 +1197,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const fetchConversationIntoCache = (conversationId: string) => {
       if (!conversationId || !/^[a-f\d]{24}$/i.test(conversationId)) return;
       if (typeof window === 'undefined' || window.location.pathname === '/login') return;
+      if (!hasConversationListCache(queryClient)) return;
 
       let alreadyInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
@@ -1158,8 +1240,26 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // `GET /conversations` ne sert plus la laissait cliquable pour de bon :
     // `staleTime: Infinity` ne relit jamais de lui-même, et le seul rattrapage
     // était le tombstone du prochain delta.
-    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string; displayName: string; leftAt: string; memberCount?: number; memberCountCapped?: boolean }) => {
-      if (data.userId === useAuthStore.getState().user?.id) {
+    /**
+     * L'événement nomme-t-il le lecteur ?
+     *
+     * Une identité porte un `User.id` pour un compte inscrit et un
+     * `Participant.id` pour un visiteur venu par un lien partagé — qui n'a
+     * aucune ligne `User`, donc dont le `userId` vaut `null` sur le fil.
+     * `participantId` est la seule identité toujours servie.
+     */
+    const namesMe = (data: { userId?: string | null; participantId?: string }) => {
+      const me = useAuthStore.getState().user?.id;
+      if (!me) return false;
+      return me === data.userId || me === data.participantId;
+    };
+
+    const handleConversationParticipantLeft = (data: { conversationId: string; userId: string | null; participantId?: string; displayName: string; leftAt: string; memberCount?: number; memberCountCapped?: boolean }) => {
+      // `namesMe` et non `userId === me` : une identité porte un `User.id` pour
+      // un compte, un `Participant.id` pour un visiteur venu par un lien
+      // partagé, dont le `userId` vaut `null`. L'événement nomme les deux faces ;
+      // ne comparer qu'à l'une rate systématiquement l'autre.
+      if (namesMe(data)) {
         dropConversationFromCache(data.conversationId);
         return;
       }
@@ -1171,14 +1271,14 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     // ex-member is what keeps them from walking back in through a share link,
     // but it removes no membership, so the count must not move. Absent on
     // servers older than that contract, where a ban always removed one.
-    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number; memberCountCapped?: boolean }) => {
+    const handleConversationParticipantBanned = (data: { conversationId: string; userId: string | null; participantId?: string; bannedBy: { id: string }; bannedAt: string; membershipEnded?: boolean; memberCount?: number; memberCountCapped?: boolean; closedShareLinkId?: string }) => {
       // Être banni est la troisième fin d'appartenance, et elle se traite comme
       // les deux autres. Le test d'identité passe AVANT le court-circuit
       // `membershipEnded === false` : celui-ci protège un COMPTEUR, or il n'y a
       // pas de compteur à protéger sur une ligne qui s'en va. Un ban qui suit
       // un départ non synchronisé porte précisément ce drapeau, et c'est le cas
       // où la ligne fantôme est encore là.
-      if (data.userId === useAuthStore.getState().user?.id) {
+      if (namesMe(data)) {
         dropConversationFromCache(data.conversationId);
         return;
       }
@@ -1283,7 +1383,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       const affected = new Set((data?.messages ?? []).map((m) => m.conversationId).filter(Boolean));
       if (affected.size === 0) return;
       for (const convId of affected) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
+        invalidateMessageListsFor(queryClient, convId);
       }
     };
 
@@ -1350,7 +1450,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       // n'envoyaient pas `conversationIds`.
       const targets = affected.length > 0 ? affected : conversationId ? [conversationId] : [];
       for (const convId of targets) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.messages.infinite(convId) });
+        invalidateMessageListsFor(queryClient, convId);
       }
     };
 
@@ -1499,13 +1599,31 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       });
     };
 
-    // Handler for conversation:join-error — server rejected the room join; purge stale local cache
-    const handleConversationJoinError = (data: { conversationId: string; reason: string; message: string }) => {
+    // `conversation:join-error` — le serveur a refusé la jonction. Le motif
+    // DÉCIDE : sur les sept qu'émet `ConversationHandler`, trois seulement
+    // établissent la non-appartenance (`not_a_member`, `banned`,
+    // `no_longer_member`) et autorisent à purger. Les quatre autres sont
+    // transitoires — limite de débit (30 jonctions/min, qu'une tempête de
+    // reconnexion franchit en rejoignant toutes les rooms d'un coup), erreur
+    // serveur, authentification pas encore prête, requête malformée — et n'ont
+    // RIEN à dire de l'appartenance.
+    //
+    // Ce gestionnaire les traitait tous pareil : la conversation disparaissait
+    // de la liste et tout son historique en cache était jeté sur un incident
+    // passager, alors que ce cache est précisément ce qui fait tenir la lecture
+    // hors ligne. La règle est partagée (`isMembershipDeniedJoinError`) — le
+    // consommateur iOS applique la même.
+    //
+    // Le CustomEvent, lui, part dans TOUS les cas : l'UI doit pouvoir dire
+    // « réessaie » sur un transitoire. Seule la PURGE est conditionnelle.
+    const handleConversationJoinError = (data: ConversationJoinErrorEventData) => {
       const { conversationId: rejectedId, reason } = data;
       if (!rejectedId) return;
-      updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
-      queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
-      queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
+      if (isMembershipDeniedJoinError(reason)) {
+        updateInfiniteConversationCache(queryClient, (convs) => convs.filter((c) => c.id !== rejectedId));
+        queryClient.removeQueries({ queryKey: queryKeys.conversations.detail(rejectedId) });
+        queryClient.removeQueries({ queryKey: queryKeys.messages.infinite(rejectedId) });
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('meeshy:conversation-join-error', { detail: { conversationId: rejectedId, reason } }));
       }
@@ -1642,6 +1760,31 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribePreferencesReordered = meeshySocketIOService.onPreferencesReordered((data) => {
       useConversationPreferencesStore.getState().applyRemoteReorder(data?.updates ?? []);
     });
+    // `user:preferences-community-reordered` — le MÊME geste sur l'autre table.
+    //
+    // Les préférences de communauté n'ont pas de magasin Zustand : elles vivent
+    // dans React Query, donc le levier est l'invalidation — comme pour le scope
+    // communauté de `user:preferences-updated` ci-dessus. `orderInCategory`
+    // appartenant aussi à la ligne de DÉTAIL, chaque communauté nommée est
+    // invalidée en plus de la liste ; c'est ce qui rend la charge utile
+    // nécessaire, et pas seulement le fait que l'événement ait eu lieu.
+    //
+    // Rien d'écrit ⇒ rien à relire : le gateway n'émet pas sur un lot vide, et
+    // un lot vide venu d'une version voisine ne doit pas déclencher de refetch.
+    const unsubscribeCommunityPreferencesReordered =
+      meeshySocketIOService.onCommunityPreferencesReordered((data) => {
+        const updates = data?.updates ?? [];
+        if (updates.length === 0) return;
+
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.communities.preferences.list(),
+        });
+        updates.forEach(({ communityId }) => {
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.communities.preferences.detail(communityId),
+          });
+        });
+      });
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
     const unsubscribeParticipantRole = meeshySocketIOService.onParticipantRoleUpdated(handleParticipantRoleUpdated);
@@ -1674,6 +1817,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeAttachmentStatus?.();
       unsubscribePreferences?.();
       unsubscribePreferencesReordered?.();
+      unsubscribeCommunityPreferencesReordered?.();
       unsubscribeJoined?.();
       unsubscribeLeft?.();
       unsubscribeParticipantRole?.();

@@ -1,10 +1,11 @@
 /**
  * Preferences Service Module
  *
- * Trois modules, une donnée : le résolveur de lecture (`privacy-storage`), sa
- * mémoïsation et sa purge (`privacy-cache`), et sa diffusion aux autres
- * appareils (`preferences-broadcast`). Aucune classe, aucune instance — les
- * routes importent des fonctions.
+ * Quatre modules, une donnée : le résolveur de lecture (`privacy-storage`), sa
+ * mémoïsation et sa purge (`privacy-cache`), sa diffusion aux autres appareils
+ * (`preferences-broadcast`), et la confrontation des volontés que la
+ * réciprocité des sources de transfert exige (`forward-source-visibility`).
+ * Aucune classe, aucune instance — les routes importent des fonctions.
  *
  * L'ancien `PreferencesService` a été supprimé au cycle 48. Il était
  * intégralement orphelin ET restait le dernier écrivain du rangement
@@ -26,3 +27,11 @@ export {
   emitPreferenceCategoryUpdated,
 } from './preferences-broadcast';
 export type { PreferenceCategory } from './preferences-broadcast';
+export {
+  resolveForwardSourceGateForReader,
+  resolveForwardSourceForBroadcast,
+} from './forward-source-visibility';
+export type {
+  ForwardSourceGate,
+  ForwardSourceBroadcastVerdict,
+} from './forward-source-visibility';

@@ -36,8 +36,8 @@ import me.meeshy.app.R
 import android.net.Uri
 import kotlinx.coroutines.delay
 import me.meeshy.app.auth.AuthViewModel
-import me.meeshy.app.auth.GuestJoinScreen
 import me.meeshy.app.auth.GuestJoinViewModel
+import me.meeshy.app.auth.ShareLinkEntryScreen
 import me.meeshy.app.auth.ForgotPasswordScreen
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.auth.MagicLinkScreen
@@ -501,7 +501,12 @@ fun MeeshyApp(
                     navDeepLink { uriPattern = Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK },
                 ),
             ) {
-                GuestJoinScreen(
+                ShareLinkEntryScreen(
+                    onOpenConversation = { conversationId ->
+                        navController.navigate(Routes.chat(conversationId)) {
+                            popUpTo(Routes.GUEST_JOIN) { inclusive = true }
+                        }
+                    },
                     onJoined = {
                         navController.navigate(Routes.CONVERSATIONS) {
                             popUpTo(Routes.GUEST_JOIN) { inclusive = true }

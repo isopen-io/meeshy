@@ -196,15 +196,36 @@ export function capitalizeName(name: string): string {
 }
 
 /**
- * Normalise un displayName
- * Préserve la capitalisation, émojis et caractères spéciaux
- * Enlève uniquement les espaces avant/après et les retours à la ligne
- * (`\r`, `\n`) et tabulations (`\t`) — garantit un affichage sur une seule
- * ligne, y compris pour les fins de ligne Windows (`\r\n`) et Mac historiques
- * (`\r` seul).
+ * Jeu des caracteres qui BRISENT une ligne a l'affichage — SOURCE UNIQUE.
+ *
+ * La garantie « une seule ligne » d'un displayName ne se mesure pas contre
+ * `\r`/`\n` seuls : un moteur de rendu (CSS `white-space`, `UILabel`,
+ * `TextView`) casse aussi la ligne sur les separateurs Unicode LINE SEPARATOR
+ * (U+2028), PARAGRAPH SEPARATOR (U+2029), NEL (U+0085), et les blancs verticaux
+ * C0 VERTICAL TAB (U+000B) et FORM FEED (U+000C). La tabulation (`\t`) est
+ * incluse pour un affichage sur une seule cellule.
+ *
+ * Ce jeu vivait recopie dans DEUX normaliseurs de nom du gateway :
+ * `normalizeDisplayName` (ci-dessous, qui les SUPPRIME) et
+ * `contact-identifiers.normalizeDisplayName` (qui les REMPLACE par un espace).
+ * La copie du carnet d'adresses avait derive — elle ne couvrait que `\r\n\t`,
+ * laissant un nom multi-lignes s'etaler sur deux lignes. On l'extrait ici pour
+ * que les deux derivent leur regex du MEME site et ne rediverge plus.
+ */
+export const LINE_BREAKING_CHARS_SOURCE = '\\r\\n\\t\\v\\f\\u0085\\u2028\\u2029';
+
+const LINE_BREAKING_CHARS_REGEX = new RegExp(`[${LINE_BREAKING_CHARS_SOURCE}]`, 'g');
+
+/**
+ * Normalise un displayName.
+ * Preserve la capitalisation, emojis et caracteres speciaux. Enleve uniquement
+ * les espaces avant/apres et TOUT separateur de ligne
+ * ({@link LINE_BREAKING_CHARS_SOURCE}) — garantit un affichage sur une seule
+ * ligne. Les espaces ordinaires (y compris multiples) et l'espace insecable
+ * sont preserves.
  */
 export function normalizeDisplayName(displayName: string): string {
-  return displayName.trim().replace(/[\r\n\t]/g, '');
+  return displayName.trim().replace(LINE_BREAKING_CHARS_REGEX, '');
 }
 
 /**

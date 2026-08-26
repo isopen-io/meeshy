@@ -402,8 +402,32 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         guard let translations = lastMessageTranslations, !translations.isEmpty else {
             return lastMessagePreview
         }
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        let original = lastMessageOriginalLanguage?.lowercased()
+        // Canonicalise (case-fold + region-strip via the shared normalizer) every
+        // language token compared — reader languages, original language, and map
+        // keys — mirroring the TypeScript twin `resolveLastMessagePreview`
+        // (`normalizeLanguageForDedup`). `resolveUserLanguagesOrdered` already
+        // strips regions from the reader's languages, but `lastMessageOriginalLanguage`
+        // arrives raw and messages written before the write-boundary canonicalisation
+        // carry a region-tagged code (`en-US`, `pt-BR`); compared with `.lowercased()`
+        // alone, `en-us` never matched the normalized rank `en`, and a lower-ranked
+        // translation won — demoting the reader's PRIMARY language, the exact Prisme
+        // violation (#3) this resolver fights. Canonicalising at the comparison point
+        // is idempotent on already-canonical codes (zero regression).
+        let canon: (String) -> String = { MeeshyUser.normalizeLanguageCode($0) ?? $0.lowercased() }
+        let isBlank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let preferred = preferredLanguages.filter { !isBlank($0) }.map(canon)
+        let original = lastMessageOriginalLanguage.map(canon)
+        // A blank translation is NOT a translation: the TypeScript SSOT
+        // (`resolvePrismTranslation`, `text.trim() === '' → continue`) and the
+        // Android twin (`text.isBlank() → continue`) both skip it, so the
+        // descent falls through to the next rank — or to the raw preview —
+        // instead of blanking the list row. The shared vector suite
+        // (`prism-preview.vectors.json`, « ignore une traduction vide au lieu
+        // de vider la ligne ») is what caught iOS serving "   " for "Hello".
+        var translationsByCanonicalKey: [String: String] = [:]
+        for (lang, text) in translations where !isBlank(text) {
+            translationsByCanonicalKey[canon(lang)] = text
+        }
         // The prism is ORDERED, and the original language competes at its own
         // RANK — never as a global short-circuit. Walking the reader's
         // languages in order, the first one that is served wins, whether by a
@@ -423,7 +447,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             if let original, lang == original {
                 return lastMessagePreview
             }
-            if let translated = translations[lang] {
+            if let translated = translationsByCanonicalKey[lang] {
                 return translated
             }
         }
@@ -530,6 +554,21 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageLocation != nil)
         h.combine(lastMessageLocation?.name)
         h.combine(name)
+        // Effectif — AFFICHÉ des deux côtés du drapeau Lentille : badge de
+        // type du rang historique (`ThemedConversationRow.typeBadge`,
+        // « 12 »/« 199+ ») ET ligne d'effectif du rang plat
+        // (`LentilleConversationRow.memberCountLine`, « 12 membres »). Il
+        // n'était replié nulle part : le portillon gelait donc l'effectif sur
+        // sa première valeur, sans qu'aucun test ne rougisse — défaut de la
+        // même famille que B1 (traduction) et que la position hissée.
+        //
+        // Les TROIS champs comptent, et séparément : `memberCountCapped`
+        // distingue « 199 » de « 199+ » à nombre EXACTEMENT égal, et `type`
+        // décide si l'effectif est rendu du tout (aucun sur `.direct`) autant
+        // que du glyphe du badge historique.
+        h.combine(type)
+        h.combine(memberCount)
+        h.combine(memberCountCapped)
         h.combine(userState.isMuted)
         h.combine(userState.isPinned)
         h.combine(userState.isArchived)
@@ -541,6 +580,15 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(participantBanner)
         h.combine(tags)
         h.combine(userState.reaction)
+        // Catégorie — AFFICHÉE par l'encoche haut-gauche de la carte de focus
+        // magnifiée (réintroduite le 2026-08-22), qui en peint le NOM résolu
+        // depuis `userCategories`. Non repliée, elle se figeait sur sa
+        // première valeur : `LentilleFocusCard.==` ne compare la conversation
+        // QUE par ce hash, donc déplacer la conversation depuis l'encoche
+        // elle-même laissait l'ancien nom à l'écran. Repli INCONDITIONNEL,
+        // comme les autres drapeaux de `userState` juste au-dessus : c'est
+        // aussi la sortie de catégorie (`nil`) qui doit rouvrir le portillon.
+        h.combine(userState.sectionId)
         // New userState fields surfaced to the row (locked, draft, pending sync).
         h.combine(userState.isLocked)
         h.combine(userState.hasDraft)
@@ -1365,6 +1413,18 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var caption: String?
     public var forwardedFromAttachmentId: String?
     public var isForwarded: Bool = false
+    /// Le fichier sort de la caméra ou du micro DE L'APPLICATION.
+    ///
+    /// Déclaré par le client qui a capturé, à l'envoi — lui seul le sait, et
+    /// seulement à cet instant — puis rendu par la passerelle sur la pièce
+    /// jointe. La feuille de partage le lit pour décider si PUBLIER ce média
+    /// demande confirmation : une capture n'a encore été vue par personne.
+    ///
+    /// Défaut `false` : les blobs `attachmentsJson` en cache écrits avant ce
+    /// champ décodent donc en « pas une capture », ce qui est la lecture juste
+    /// — l'absence ne peut pas valoir capture.
+    /// @see `PublicationTargetRule.needsCaptureConfirmation`
+    public var capturedInApp: Bool = false
     public var isViewOnce: Bool = false
     public var maxViewOnceCount: Int?
     public var viewOnceCount: Int = 0
@@ -1473,6 +1533,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 filePath: String = "", fileUrl: String = "",
                 title: String? = nil, alt: String? = nil, caption: String? = nil,
                 forwardedFromAttachmentId: String? = nil, isForwarded: Bool = false,
+                capturedInApp: Bool = false,
                 isViewOnce: Bool = false, maxViewOnceCount: Int? = nil, viewOnceCount: Int = 0, isBlurred: Bool = false,
                 width: Int? = nil, height: Int? = nil, thumbnailPath: String? = nil, thumbnailUrl: String? = nil, thumbHash: String? = nil,
                 duration: Int? = nil, bitrate: Int? = nil, sampleRate: Int? = nil, codec: String? = nil, channels: Int? = nil,
@@ -1494,6 +1555,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
         self.forwardedFromAttachmentId = forwardedFromAttachmentId; self.isForwarded = isForwarded
+        self.capturedInApp = capturedInApp
         self.isViewOnce = isViewOnce; self.maxViewOnceCount = maxViewOnceCount
         self.viewOnceCount = viewOnceCount; self.isBlurred = isBlurred
         self.width = width; self.height = height; self.thumbnailPath = thumbnailPath; self.thumbnailUrl = thumbnailUrl; self.thumbHash = thumbHash
@@ -1556,10 +1618,53 @@ public struct ReplyReference: Codable, Sendable {
     public let messageId: String
     public let authorName: String
     public let authorColor: String
+    /// Avatar de l'auteur cite, GRAVE dans la citation — jamais re-resolu au
+    /// rendu.
+    ///
+    /// La citation est une feuille `Equatable` a `==` MANUEL : une lecture de
+    /// store faite pendant le rendu serait invisible de cette comparaison, et
+    /// l'avatar qui arrive apres coup ne redessinerait jamais la cellule. La
+    /// donnee est deja sur le fil (`APIMessageReplyTo.sender`), elle etait
+    /// simplement jetee par les constructeurs.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
+    /// Un champ requis ferait donc disparaitre du cache L2 le message ENTIER
+    /// des que son blob `replyToJson` a ete grave avant ce champ — pas
+    /// seulement sa citation. Meme discipline que
+    /// `ForwardReference.conversationType`.
+    ///
+    /// `nil` ne ferme AUCUNE porte : `authorName` et `authorColor` sont
+    /// presents a tous les sites de construction, donc l'avatar se dessine
+    /// quand meme en initiales colorees. La porte vers le profil ne depend
+    /// jamais de la presence d'une photo.
+    public let authorAvatarUrl: String?
     public let previewText: String
     public let isMe: Bool
     public let attachmentType: String?
     public let attachmentThumbnailUrl: String?
+    /// La piece jointe citee est PROTEGEE — vue unique ou floutee — donc son
+    /// contenu ne doit ni s'afficher ni s'annoncer dans la citation.
+    ///
+    /// GRAVE au moment ou la citation est composee, exactement comme
+    /// `authorAvatarUrl`, et pour la meme raison : la citation est une feuille
+    /// `Equatable` a `==` MANUEL, une lecture de store faite au rendu serait
+    /// invisible de ce comparateur. Chaque constructeur le derive de la source
+    /// qu'il tient — `APIMessageAttachment` sur les chemins reseau et cache,
+    /// `MeeshyMessageAttachment` sur la bulle optimiste.
+    ///
+    /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
+    /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
+    /// Un champ requis ferait disparaitre du cache L2 le message ENTIER des que
+    /// son blob `replyToJson` a ete grave avant ce champ. Meme discipline que
+    /// `authorAvatarUrl` et `ForwardReference.conversationType`.
+    ///
+    /// `nil` = inconnu, traite comme NON protege : la vignette d'une citation
+    /// ordinaire ne doit pas disparaitre parce qu'un blob ancien se tait. La
+    /// porte reste FERMEE la ou elle compte, `MessageListViewController
+    /// .openQuotedMedia` refusant d'ouvrir un attachement protege apres
+    /// relecture du message REEL dans le store.
+    public let attachmentIsProtected: Bool?
     public let isStoryReply: Bool
     public var storyPublishedAt: Date?
     public var storyReactionCount: Int?
@@ -1572,15 +1677,61 @@ public struct ReplyReference: Codable, Sendable {
     /// `storyPublishedAt` porte alors la date de publication du mood.
     public var moodEmoji: String?
 
-    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false,
+    /// Le PREDICAT unique des deux peaux (`BubbleQuotedReply`,
+    /// `FocalQuotedReplyView`) : un media cite protege ne montre ni vignette ni
+    /// icone de lecture, et n'arme AUCUNE zone 2 — le tap retombe alors en zone
+    /// 3 (retour au message cite), ou le media garde son propre geste de
+    /// revelation. Miroir de `BubbleGridCell.attachmentIsProtected`
+    /// (`isViewOnce || isBlurred`), cote citation.
+    ///
+    /// Sans lui, une citation affichait la vignette NON FLOUTEE d'un media a
+    /// vue unique et posait par-dessus un bouton play que le verrou de l'hote
+    /// refusait d'honorer : une exposition, doublee d'un controle qui ment.
+    public var quotedMediaIsProtected: Bool { attachmentIsProtected == true }
+
+    /// ZONE 1 de la LOI DES ZONES, cote DONNEE : cette citation designe-t-elle
+    /// une PERSONNE dont la fiche peut s'ouvrir ?
+    ///
+    /// Une story ou une humeur citee porte `authorName == "Story"` (ou vide) et
+    /// aucun avatar : il n'y a pas de personne a ouvrir, l'hote fabriquerait
+    /// une fiche a ce nom.
+    ///
+    /// Ce que la donnee OFFRE, jamais ce qu'une peau CABLE : l'armement reste
+    /// la conjonction de ce fait et de la presence d'un gestionnaire.
+    public var offersAuthorGate: Bool { !isStoryReply }
+
+    /// ZONE 2 cote DONNEE : cette citation porte-t-elle un media que l'on peut
+    /// ouvrir ou jouer EN PLEIN ECRAN ?
+    ///
+    /// La story en est exclue : son chemin (zone 3 -> viewer) EST deja le plein
+    /// ecran demande, et le dedoubler serait un second point actionnable pour
+    /// une seule capacite. Un media PROTEGE en est exclu aussi — voir
+    /// `quotedMediaIsProtected`.
+    ///
+    /// Lu par la couche d'ACCESSIBILITE des deux hotes de rangee
+    /// (`BubbleStandardLayout`, `FocalRow`), qui doivent offrir cette zone en
+    /// action nommee : leur `.accessibilityElement(children: .combine)` fusionne
+    /// la rangee en UN element et leur `.accessibilityLabel` REMPLACE le
+    /// libelle, si bien qu'aucun geste pose dans la citation n'est atteignable
+    /// autrement. Les deux peaux ecrivent la meme loi dans leur propre
+    /// armement, sous des gardes de source qui epinglent leurs expressions.
+    public var offersMediaGate: Bool {
+        !isStoryReply
+            && !quotedMediaIsProtected
+            && (attachmentType != nil || attachmentThumbnailUrl?.isEmpty == false)
+    }
+
+    public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, authorAvatarUrl: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, attachmentIsProtected: Bool? = nil, isStoryReply: Bool = false,
                 storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyShareCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
         self.isMe = isMe
         self.authorColor = authorColor ?? DynamicColorGenerator.colorForName(authorName)
+        self.authorAvatarUrl = authorAvatarUrl
         self.attachmentType = attachmentType
         self.attachmentThumbnailUrl = attachmentThumbnailUrl
+        self.attachmentIsProtected = attachmentIsProtected
         self.isStoryReply = isStoryReply
         self.storyPublishedAt = storyPublishedAt
         self.storyReactionCount = storyReactionCount

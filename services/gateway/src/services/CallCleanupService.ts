@@ -16,7 +16,7 @@
  */
 
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
-import type { Server as SocketIOServer } from 'socket.io';
+import type { ServerEmitIOWithRooms } from '../socketio/serverEmit';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { resolveCallEndedRooms } from '../utils/callEndedFanout';
@@ -50,7 +50,7 @@ export class CallCleanupService {
   // socket layer is ready. Without it the cleanup still runs but the
   // affected clients won't receive the `call:ended` broadcast and would
   // stay in `.ringing(true)` until their own client-side timeout fires.
-  private io: SocketIOServer | null = null;
+  private io: ServerEmitIOWithRooms | null = null;
 
   // P3 — set via `setPostSummaryCallback()` once the socket layer's
   // CallEventsHandler is ready. Without it, calls force-ended by GC (a
@@ -116,7 +116,7 @@ export class CallCleanupService {
     private readonly bootedAt: Date = new Date()
   ) {}
 
-  attachSocketServer(io: SocketIOServer): void {
+  attachSocketServer(io: ServerEmitIOWithRooms): void {
     this.io = io;
     logger.info('[CallCleanupService] Socket.IO server attached — force-end events will be broadcast');
   }

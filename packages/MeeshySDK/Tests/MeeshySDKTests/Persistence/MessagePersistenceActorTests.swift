@@ -103,6 +103,71 @@ final class MessagePersistenceActorTests: XCTestCase {
     /// `createdAt` to the authoritative server value — otherwise the bubble +
     /// detail sheet display the data-reactivation time as the "sent" time,
     /// contradicting the message's notification ("4h ago") and read receipts.
+    // MARK: - Régression 2026-08-24 : l'avis d'arrivée rendu comme une parole
+
+    /// **Un message déjà en cache comme « user » doit pouvoir redevenir
+    /// « system ».**
+    ///
+    /// Signalé par l'utilisateur : les avis d'arrivée s'affichaient avec
+    /// l'avatar et le nom de l'arrivant, et le texte de REPLI du gateway
+    /// (« … a rejoint la conversation — visiteur sans compte ») tenait lieu de
+    /// bulle. Le serveur, lui, envoie bien `messageSource: "system"` et son
+    /// `metadata.kind = "member-joined"` — vérifié sur l'API de production.
+    ///
+    /// Deux défauts se combinaient, chacun anodin seul :
+    ///  1. `reconcileBatchSync` réinsère en base les messages vus dans le cache
+    ///     mémoire via `IncomingMessageData`, une forme APPAUVRIE qui ne porte
+    ///     pas la source — le record naissait donc `"user"` ;
+    ///  2. `upsertMutatedFieldsEqual` comparait 25 champs mais NI
+    ///     `messageSource` NI `messageType` : la charge canonique arrivait
+    ///     ensuite avec la bonne valeur et l'upsert jugeait la ligne
+    ///     inchangée. Le mensonge devenait donc DÉFINITIF.
+    ///
+    /// C'est le second défaut que ce test verrouille : sans lui, aucune
+    /// correction venue du serveur ne peut plus jamais atteindre la ligne.
+    func test_upsertFromAPIMessages_correctsAStaleMessageSource() async throws {
+        var cachedAsUser = MessageRecordFactory.make(
+            localId: "srv_join",
+            conversationId: "conv_join",
+            senderId: "participant_1",
+            content: "ano_daily_l378 a rejoint la conversation — visiteur sans compte",
+            state: .delivered
+        )
+        cachedAsUser.serverId = "srv_join"
+        cachedAsUser.messageSource = "user"      // ce que le chemin appauvri écrivait
+        cachedAsUser.messageType = "text"
+        try await actor.insertOptimistic(cachedAsUser)
+
+        let canonical = makeAPIMessage(
+            id: "srv_join",
+            conversationId: "conv_join",
+            senderId: "participant_1",
+            content: "ano_daily_l378 a rejoint la conversation — visiteur sans compte",
+            metadata: [
+                "kind": "member-joined",
+                "participantId": "participant_1",
+                "displayName": "ano_daily_l378",
+                "isAnonymous": true,
+                "viaShareLink": true,
+            ],
+            messageSource: "system"
+        )
+        try await actor.upsertFromAPIMessages([canonical])
+
+        let row = try XCTUnwrap(
+            try actor.messages(for: "conv_join", limit: 10).first { $0.serverId == "srv_join" }
+        )
+        XCTAssertEqual(
+            row.messageSource, "system",
+            "sans messageSource dans la comparaison d'upsert, la ligne reste « user » pour toujours "
+            + "et l'avis s'affiche comme une parole ordinaire"
+        )
+        XCTAssertNotNil(
+            row.joinNoticeJson,
+            "et son metadata doit atterrir — c'est lui qui déclenche la bulle dédiée"
+        )
+    }
+
     func test_upsertFromAPIMessages_correctsPlaceholderCreatedAtFromCanonicalPayload() async throws {
         let trueSendTime = Date(timeIntervalSince1970: 1_700_000_000)         // real send
         let pushReceiptTime = trueSendTime.addingTimeInterval(4 * 3600)        // +4h (data re-enabled)
@@ -282,6 +347,65 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(fetched.count, 1, "une seule row par (message, langue)")
         XCTAssertEqual(fetched[0].translatedContent, "Hello v2")
         XCTAssertEqual(fetched[0].id, "m1-en", "l'id est remplacé par celui du dernier écrivain")
+    }
+
+    /// Éditer un message périme TOUTES ses traductions : elles décrivent un
+    /// texte qui n'existe plus. Vider le seul dictionnaire en mémoire serait
+    /// cosmétique — l'hydratation GRDB réinjecterait le texte d'avant, et le
+    /// symptôme survivrait au redémarrage.
+    func test_deleteTranslations_removesEveryLanguageOfTheMessage() async throws {
+        for (index, lang) in ["en", "es"].enumerated() {
+            try await actor.saveTranslation(TranslationRecord(
+                id: "edited-\(lang)", messageLocalId: "edited", messageServerId: nil,
+                targetLanguage: lang, translatedContent: "v\(index)",
+                translationModel: "nllb-200", confidenceScore: nil,
+                sourceLanguage: "fr", receivedAt: Date()
+            ))
+        }
+
+        try await actor.deleteTranslations(messageLocalId: "edited")
+
+        XCTAssertTrue(try actor.translations(for: "edited").isEmpty)
+    }
+
+    /// Un message « own » garde sa ligne optimiste `cid_*` en local alors que
+    /// `message:edited` porte l'id SERVEUR. Résoudre sur la seule colonne locale
+    /// ne toucherait AUCUNE ligne — l'édition de son propre message depuis un
+    /// autre appareil laisserait la traduction périmée en base.
+    func test_deleteTranslations_byServerId_alsoRemovesRowsKeyedOnTheLocalId() async throws {
+        try await actor.saveTranslation(TranslationRecord(
+            id: "cid-en", messageLocalId: "cid_own", messageServerId: "srv_own",
+            targetLanguage: "en", translatedContent: "Hello",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        try await actor.deleteTranslations(messageLocalId: "srv_own")
+
+        XCTAssertTrue(try actor.translations(for: "cid_own").isEmpty)
+    }
+
+    /// Contre-épreuve de la purge : elle est CIBLÉE. Une éviction qui emporte
+    /// les traductions des messages voisins ferait retomber tout le fil sur
+    /// l'original.
+    func test_deleteTranslations_leavesOtherMessagesUntouched() async throws {
+        try await actor.saveTranslation(TranslationRecord(
+            id: "keep-en", messageLocalId: "keep", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Kept",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+        try await actor.saveTranslation(TranslationRecord(
+            id: "drop-en", messageLocalId: "drop", messageServerId: nil,
+            targetLanguage: "en", translatedContent: "Dropped",
+            translationModel: "nllb-200", confidenceScore: nil,
+            sourceLanguage: "fr", receivedAt: Date()
+        ))
+
+        try await actor.deleteTranslations(messageLocalId: "drop")
+
+        XCTAssertEqual(try actor.translations(for: "keep").count, 1)
+        XCTAssertTrue(try actor.translations(for: "drop").isEmpty)
     }
 
     /// La collision ne doit plus faire lever le db.write entier : avant le fix,
@@ -842,6 +966,44 @@ final class MessagePersistenceActorTests: XCTestCase {
             deliveredToAllAt: Date(), readByAllAt: nil
         )
         await fulfillment(of: [exp], timeout: 1.0)
+    }
+
+    /// La variante batchée mutate N records en UNE transaction et poste UNE
+    /// notification par conversation affectée — pas une par record.
+    func test_updateDeliveryCounters_batch_mutatesAllAndPostsSingleRefresh() async throws {
+        let r1 = MessageRecordFactory.make(localId: "deliv_b1", conversationId: "conv_deliv_batch")
+        let r2 = MessageRecordFactory.make(localId: "deliv_b2", conversationId: "conv_deliv_batch")
+        try await actor.insertOptimistic(r1)
+        try await actor.insertOptimistic(r2)
+        await drainMainQueueNotifications()
+
+        let exp = expectation(description: "one refresh for the whole batch")
+        exp.expectedFulfillmentCount = 1
+        exp.assertForOverFulfill = true
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh, object: nil, queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == "conv_deliv_batch" else { return }
+            exp.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.updateDeliveryCounters([
+            .init(localId: "deliv_b1", deliveredCount: 2, readCount: 1,
+                  deliveredToAllAt: nil, readByAllAt: nil),
+            .init(localId: "deliv_b2", deliveredCount: 3, readCount: 0,
+                  deliveredToAllAt: Date(), readByAllAt: nil),
+        ])
+        await fulfillment(of: [exp], timeout: 1.0)
+
+        let fetched = try actor.messages(for: "conv_deliv_batch", limit: 10)
+        let first = fetched.first { $0.localId == "deliv_b1" }
+        let second = fetched.first { $0.localId == "deliv_b2" }
+        XCTAssertEqual(first?.deliveredCount, 2)
+        XCTAssertEqual(first?.readCount, 1)
+        XCTAssertEqual(second?.deliveredCount, 3)
+        XCTAssertNotNil(second?.deliveredToAllAt)
     }
 
     /// `deleteAll(conversationId:)` runs when the gateway revokes access to a
@@ -1548,6 +1710,35 @@ final class MessagePersistenceActorTests: XCTestCase {
         let ref = try JSONDecoder().decode(ReplyReference.self, from: replyJson)
         XCTAssertTrue(ref.isStoryReply)
         XCTAssertEqual(ref.storyReactionCount, 7)
+    }
+
+    /// Le JUMEAU CACHE de `MessageModels.uiReplyTo` doit graver le MEME avatar
+    /// d'auteur cite. C'est lui qui alimente TOUT rechargement : sans le champ
+    /// ici, la citation perdait son avatar des le premier retour de cache, et
+    /// l'ecart ne se voyait qu'apres un scroll.
+    func test_upsertFromAPIMessages_cachedReplyReference_carriesTheQuotedAuthorAvatar() async throws {
+        let json = """
+        {
+          "id": "srv_av_1", "conversationId": "conv_av", "senderId": "sender_1",
+          "content": "ma reponse", "createdAt": "2026-08-24T10:00:00Z",
+          "replyTo": {
+            "id": "m9", "content": "Salut", "senderId": "u1",
+            "sender": { "id": "u1", "displayName": "Bob",
+                        "avatar": "https://cdn.example/bob.jpg" }
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let apiMsg = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_av", limit: 10)
+        let replyJson = try XCTUnwrap(rows[0].replyToJson)
+        let ref = try JSONDecoder().decode(ReplyReference.self, from: replyJson)
+        XCTAssertEqual(ref.authorAvatarUrl, "https://cdn.example/bob.jpg",
+            "Le chemin CACHE doit porter le meme avatar que le chemin reseau.")
     }
 
     // MARK: - applyAttachmentEnrichment (write-through of async attachment metadata)

@@ -26,8 +26,21 @@ function baseObject(
   fallbackZ: number
 ): ObjectV3 {
   const timing: NonNullable<ObjectV3['timing']> = {};
-  if (typeof o.startTime === 'number') timing.start = o.startTime;
-  if (typeof o.endTime === 'number') timing.end = o.endTime;
+  // La fenêtre temporelle d'un objet ne s'émet QUE comme un intervalle valide.
+  // Un blob v1 (qui n'a jamais porté l'invariant `end >= start`) avec
+  // `startTime > endTime` sortait auparavant `timing: { start, end }` inversé —
+  // que le contrat CanvasV3 (`TimingSchema`, itération 234/236) refuse à juste
+  // titre. Comme pour l'audio `bounds`, le convertisseur reste tolérant : une
+  // fenêtre inversée dégrade en « pas de fenêtre » (l'objet reste visible tout
+  // du long), jamais en donnée corrompue servie aux clients v3. Une borne
+  // partielle (une seule des deux) reste valide et passe telle quelle.
+  const start = o.startTime;
+  const end = o.endTime;
+  const hasStart = typeof start === 'number' && Number.isFinite(start);
+  const hasEnd = typeof end === 'number' && Number.isFinite(end);
+  const invertedWindow = hasStart && hasEnd && (end as number) < (start as number);
+  if (hasStart && !invertedWindow) timing.start = start as number;
+  if (hasEnd && !invertedWindow) timing.end = end as number;
   if (Array.isArray(o.keyframes)) {
     timing.keyframes = o.keyframes as NonNullable<ObjectV3['timing']>['keyframes'];
   }
@@ -127,8 +140,18 @@ export function convertV1ToV3(
 
   for (const st of asArray(blob.stickerObjects)) {
     const o = baseObject(st, 'sticker', 'fg', z++);
+    // `postMediaId`/`provider` : un sticker peut porter une IMAGE INTÉGRÉE au
+    // post, pas seulement un glyphe. Ce convertisseur RECONSTRUIT le payload au
+    // lieu de le transporter — omettre ces deux clés faisait donc perdre son
+    // image à un sticker qui traverse le serveur, en silence.
+    //
+    // La spec O8 les attendait déjà ici : `unclaimedCanvasMediaIds` compte
+    // `sticker` parmi les CLAIM_BEARING_KINDS et lit `payload.postMediaId`
+    // (ci-dessous). Le convertisseur était simplement en retard sur elle.
     o.payload = {
       emoji: st.emoji,
+      ...(str(st.postMediaId) ? { postMediaId: st.postMediaId } : {}),
+      ...(str(st.provider) ? { provider: st.provider } : {}),
       ...(typeof st.baseSize === 'number' ? { baseSize: st.baseSize } : {}),
       ...(str(st.anchorPoint) ? { anchorPoint: st.anchorPoint } : {}),
       ...(typeof st.fadeIn === 'number' ? { fadeIn: st.fadeIn } : {}),
@@ -202,6 +225,17 @@ export function convertV1ToV3(
     : objects;
 
   const scene: SceneV3 = { id: 's1', objects: remapped };
+  // Le ratio du porteur SURVIT à la conversion (révision de S8). `remapFreeAnchor`
+  // ci-dessus est affine, donc inversible — à condition de savoir ce que valait
+  // le porteur. Le jeter rendait le recadrage définitif et faisait de l'édition
+  // d'un ancien contenu une perte sèche. La clé v1 `canvasAspectRatio`, elle,
+  // disparaît toujours : c'est la LETTRE de S8, tenue.
+  //
+  // Il ne compte PAS dans `sceneCarriesSomething` : un ratio sans objet ne fait
+  // pas un contenu, et O3 interdit le cadre vide.
+  if (typeof carrierAspect === 'number' && Number.isFinite(carrierAspect) && carrierAspect > 0) {
+    scene.carrierAspect = carrierAspect;
+  }
   if (typeof blob.timelineDuration === 'number') scene.timelineDuration = blob.timelineDuration;
   if (blob.opening && typeof blob.opening === 'object') scene.opening = blob.opening as Record<string, unknown>;
   if (blob.closing && typeof blob.closing === 'object') scene.closing = blob.closing as Record<string, unknown>;

@@ -111,31 +111,36 @@ afterEach(() => {
   useConversationPreferencesStore.setState({ preferencesMap: new Map() });
 });
 
-describe('LentilleRow — grammaire « Nom · heure » (maquette §3)', () => {
-  it('rend un point médian ENTRE le nom et l’heure, dans cet ordre', () => {
+describe('LentilleRow — la date a quitté la ligne 1 (retour produit 2026-08-22)', () => {
+  // « Juste mettre l'auteur : message, et puis en bas sur une nouvelle ligne à
+  // droite mettre la date. » La grammaire « Nom · heure » de la maquette §3 est
+  // SUPERSÉDÉE : le point médian disparaît avec elle, et l'heure descend d'une
+  // ligne. Parité iOS : `LentilleConversationRow.dateLine`.
+  it('ne rend plus de point médian sur la ligne du nom', () => {
     renderRow();
 
-    const name = screen.getByTestId('lentille-row-name');
-    const separator = screen.getByTestId('lentille-row-time-separator');
+    expect(screen.queryByTestId('lentille-row-time-separator')).not.toBeInTheDocument();
+  });
+
+  it('rend l’heure SOUS la ligne 2, poussée au bord droit', () => {
+    renderRow();
+
+    const line1 = screen.getByTestId('lentille-row-line1');
+    const line2 = screen.getByTestId('lentille-row-line2');
+    const dateLine = screen.getByTestId('lentille-row-date-line');
     const time = screen.getByTestId('lentille-row-time');
 
-    expect(separator).toHaveTextContent('·');
-    expect(precedes(name, separator)).toBe(true);
-    expect(precedes(separator, time)).toBe(true);
+    expect(precedes(line1, dateLine)).toBe(true);
+    expect(precedes(line2, dateLine)).toBe(true);
+    expect(dateLine).toContainElement(time);
+    expect(dateLine.className).toContain('justify-end');
   });
 
-  it('l’heure est ACCOLÉE au nom, jamais poussée au bord droit du rang', () => {
-    renderRow();
-    // `justify-between` (le rang historique) sépare le nom de l'heure aux
-    // deux bords : c'est l'autre grammaire, celle que la Lentille remplace.
-    expect(screen.getByTestId('lentille-row-line1').className).not.toContain('justify-between');
-  });
-
-  it('sans dernier message : ni heure ni point médian (jamais un séparateur orphelin)', () => {
+  it('sans dernier message : ni heure ni ligne de date (jamais une ligne vide)', () => {
     renderRow(makeConversation({ lastMessage: undefined }));
 
     expect(screen.queryByTestId('lentille-row-time')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('lentille-row-time-separator')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lentille-row-date-line')).not.toBeInTheDocument();
   });
 });
 

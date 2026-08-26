@@ -596,9 +596,48 @@ final class QualityThresholdsVideoTests: XCTestCase {
                        "Packet-loss threshold separating 'poor' from 'critical' quality tier")
     }
 
-    func test_maxReconnectAttempts_is3() {
-        XCTAssertEqual(QualityThresholds.maxReconnectAttempts, 3,
+    func test_maxReconnectAttempts_is6() {
+        XCTAssertEqual(QualityThresholds.maxReconnectAttempts, 6,
                        "ICE restart limit before declaring the call unrecoverable")
+    }
+
+    /// L6-4 (2026-08-25) — arithmetic witness binding the CLIENT's total
+    /// reconnection window to the gateway's SOCKET disconnect grace, so the two
+    /// can no longer drift apart in silence (they did: at 3 attempts the client
+    /// hung up after ~30 s while the server still held the call for 90 s).
+    ///
+    /// The server value cannot be read from XCTest — it is a TypeScript
+    /// constant — so it is written here by hand with its source named:
+    /// `services/gateway/src/socketio/CallEventsHandler.ts:217` opens a 30 s
+    /// grace on socket disconnect, extended 4 × 15 s at :224/:225 → 90 s.
+    ///
+    /// SCOPE, stated rather than implied: this symmetry covers a SOCKET cut
+    /// only. On a media-only failure (dead TURN path, ICE down while signaling
+    /// stays alive) the server arms no timer at all, and the extra window is a
+    /// pure UX cost on the "Reconnexion…" screen — an accepted product
+    /// trade-off, not a neutral correction.
+    func test_reconnect_totalWindow_staysUnderGatewayGrace() {
+        let gatewaySocketDisconnectGraceSeconds: TimeInterval = 30 + 4 * 15
+        let attemptWindowSeconds =
+            TimeInterval(QualityThresholds.maxReconnectAttempts) * QualityThresholds.reconnectAttemptBudgetSeconds
+        // The attempts are separated by a capped, jittered backoff; `unitRandom: 1.0`
+        // is its worst case (attempt 1 contributes 0). Counted in, or the "60 s"
+        // figure quietly under-states the wall-clock window the user actually
+        // spends on "Reconnexion…".
+        let worstCaseBackoffSeconds = (1...QualityThresholds.maxReconnectAttempts).reduce(0.0) { total, attempt in
+            total + CallReliabilityPolicy.reconnectBackoffSeconds(attempt: attempt, unitRandom: 1.0)
+        }
+
+        XCTAssertEqual(gatewaySocketDisconnectGraceSeconds, 90, accuracy: 0.001,
+                       "Documented gateway grace — CallEventsHandler.ts:217 (30s) + :224/:225 (4 × 15s)")
+        XCTAssertEqual(attemptWindowSeconds, 60, accuracy: 0.001,
+                       "6 attempts × 10s budget — the time spent inside the attempts themselves")
+        XCTAssertLessThan(
+            attemptWindowSeconds + worstCaseBackoffSeconds, gatewaySocketDisconnectGraceSeconds,
+            "Attempts PLUS their worst-case backoff must still fit inside the gateway's socket " +
+            "disconnect grace — the client must not hang up while the server is still holding the " +
+            "call open, nor keep the user on 'Reconnexion…' for a call the server has already reaped."
+        )
     }
 
     func test_disconnectDebounceSeconds_is3point5() {

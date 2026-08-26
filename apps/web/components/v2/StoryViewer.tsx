@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { ReferenceAccess } from '@meeshy/shared/types/post-reference';
 import { formatTimeRemaining } from '@meeshy/shared/utils/time-remaining';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
-import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
+import { resolveKeyframeState, resolveClipTransitionOpacity, safeBackgroundImageUrl, backgroundSoundCredit, canvasV3SceneDurationsMs, type StoryKeyframeData, type StoryClipTransitionData } from '@/lib/story-transforms';
 import { config } from '@/lib/config';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
@@ -20,6 +20,7 @@ import { getUserLanguagePreferences } from '@/utils/user-language-preferences';
 import { CanvasV3Scene, type CanvasV3MediaResolution } from './CanvasV3Scene';
 import { BackgroundSoundBadge } from './BackgroundSoundBadge';
 import type { CanvasV3 } from '@meeshy/shared/types/canvas-v3';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 
 /// Voile de lisibilité — identique aux DEUX chemins (legacy et v3, constat
 /// 19). `CanvasV3Scene` reste un composant PUR : StoryViewer choisit tout
@@ -168,6 +169,13 @@ interface StoryViewerProps {
   onReport?: (storyId: string) => void;
   onShare?: (storyId: string) => void;
   onRepost?: (storyId: string) => void;
+  /**
+   * L'ANCRAGE — « garder ça pour de bon ». Action DISTINCTE de `onRepost`,
+   * pas une variante : le miroir laisse la story éphémère (20 h), l'ancrage
+   * la rend permanente en la republiant comme post. Deux effets différents,
+   * donc deux contrôles (loi 4 : un contrôle existe s'il a un effet).
+   */
+  onRepostAsPost?: (storyId: string) => void;
   /** Whether to show the comments panel (default: true) */
   enableComments?: boolean;
   /** Commentaire ciblé par une navigation notification (`#comment-<id>`) :
@@ -217,24 +225,28 @@ function isPastExpiry(expiresAt: string | undefined, now: number): boolean {
   return Boolean(expiresAt) && new Date(expiresAt as string).getTime() <= now;
 }
 
-/// Resolve a Prisme-chain pick for a per-text translation map. The web side
-/// receives a single `userLanguage` for now (audit B11B will plumb the full
-/// chain). Returns the original `content` when no translation matches — never
-/// falls back implicitly to "en", per CLAUDE.md "Prisme Linguistique".
-function resolvePrismeText(obj: StoryTextObjectData, preferredLanguage?: string): string {
-  if (preferredLanguage && obj.translations) {
-    const exact = obj.translations[preferredLanguage];
-    if (exact) return exact;
-    // Fallback to a 2-letter prefix match (en-US → en) so users with locales
-    // like "en-GB" still see English translations.
-    const prefix = preferredLanguage.split('-')[0]?.toLowerCase();
-    if (prefix && prefix !== preferredLanguage) {
-      for (const [lang, text] of Object.entries(obj.translations)) {
-        if (lang.toLowerCase() === prefix) return text;
-      }
-    }
-  }
-  return obj.content;
+/// Descente du Prisme sur la carte de traductions d'UN overlay de texte.
+///
+/// Cycle 123 — cette fonction ne voyait que le RANG 1 (`preferredLanguage`,
+/// une seule langue) et rattrapait à la main le décalage de région par un
+/// `startsWith` de préfixe. Deux défauts en un : elle ratait toute traduction
+/// d'un rang inférieur — cas NOMINAL dès que la locale appareil (rang 4)
+/// diffère de la langue applicative — et son préfixe sur-matchait (`fry`
+/// Frisian pour une préférence `fr`). La descente est déléguée à la SSOT
+/// unique du Prisme (`resolvePrismTranslation`), qui parcourt la chaîne
+/// ORDONNÉE et canonicalise les trois sources de codes par
+/// `normalizeLanguageForDedup`.
+///
+/// `null` de la SSOT ⇒ servir l'ORIGINAL (règle #1 du Prisme) : soit la langue
+/// d'origine a gagné à son rang, soit aucune langue du lecteur n'est servie.
+/// Jamais un repli implicite sur une traduction quelconque.
+function resolvePrismeText(obj: StoryTextObjectData, preferredLanguages: readonly string[]): string {
+  const resolved = resolvePrismTranslation({
+    translations: obj.translations,
+    originalLanguage: obj.sourceLanguage,
+    preferredLanguages,
+  });
+  return resolved ? resolved.text : obj.content;
 }
 
 function textObjectClass(style?: StoryTextObjectData['textStyle']): string {
@@ -435,6 +447,19 @@ function ShareIcon() {
   );
 }
 
+/**
+ * L'ancrage — « garder sur mon fil ». Glyphe DISTINCT du repost : les deux
+ * actions publient, mais l'une laisse l'éphémère éphémère et l'autre le rend
+ * permanent. Un même glyphe pour deux permanences différentes tromperait.
+ */
+function KeepOnFeedIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+    </svg>
+  );
+}
+
 function RepostIcon() {
   return (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -464,6 +489,7 @@ function StoryViewer({
   onReport,
   onShare,
   onRepost,
+  onRepostAsPost,
   enableComments = true,
   targetCommentId,
   targetParentCommentId,
@@ -499,6 +525,46 @@ function StoryViewer({
   const reactToStoryMutation = useReactToStoryMutation();
 
   const story = stories[currentIndex];
+
+  /// Constat 15 — la chaîne ORDONNÉE du Prisme (`getUserLanguagePreferences`,
+  /// source de vérité unique côté web, déjà consommée par PinnedMessageBanner
+  /// / useConversationFiltering), jamais une seule langue tronquée à son rang 1.
+  /// Correction rattrapage (revue) — `/story/:id` est une route PUBLIQUE
+  /// (`middleware.ts` ne garde que `/admin`) : `authUser` vaut `null` pour un
+  /// visiteur SANS compte, alors que `userLanguage` (prop, `usePreferredLanguage()`
+  /// → language-store persistant) reste DISPONIBLE sans compte. Vider la chaîne
+  /// dans ce cas ferait retomber `resolvePrismeText()` sur l'original —
+  /// régression du Prisme pour tout visiteur anonyme. Le repli n'est engagé QUE
+  /// sans compte ; avec compte, la chaîne complète prime toujours sur la langue
+  /// unique.
+  ///
+  /// Mémoïsée, et déclarée AVANT les retours anticipés (`!story`,
+  /// `referenceAccessBlocked`) : la chaîne alimente maintenant l'auto-résolution
+  /// de `TranslationToggle`, donc son identité compte.
+  const preferredLanguages = useMemo(
+    () => (authUser ? getUserLanguagePreferences(authUser) : userLanguage ? [userLanguage] : []),
+    [authUser, userLanguage],
+  );
+
+  /// Cycle 123 — le CORPS effectivement servi, tenu par la puce de langue.
+  ///
+  /// Le bloc de texte rendait `story.content` — l'ORIGINAL — pendant que
+  /// `TranslationToggle` (monté `showContent={false}`, car l'hôte le positionne
+  /// lui-même) annonçait la langue résolue : la puce disait « Français »
+  /// au-dessus d'un paragraphe anglais. Le Prisme était ANNONCÉ sans être
+  /// APPLIQUÉ. Même relais que `PostDetail`, à une différence près : le viewer
+  /// fait DÉFILER les stories, donc la version annoncée est estampillée de
+  /// l'`id` de la story qui l'a produite. Sans cette estampille, la story
+  /// suivante afficherait le corps de la précédente le temps d'une frame —
+  /// le signal ne partant qu'APRÈS le rendu.
+  const [displayedBody, setDisplayedBody] = useState<{ storyId: string; content: string } | null>(null);
+  const handleBodyDisplayedChange = useCallback(
+    (version: { content: string }) => {
+      if (!currentStoryId) return;
+      setDisplayedBody({ storyId: currentStoryId, content: version.content });
+    },
+    [currentStoryId],
+  );
 
   // Le rendu ne consomme jamais le droit de référence ; seule la vue
   // AFFICHÉE le fait (StoryPage.onView → POST /posts/:id/view). Calculé ici,
@@ -545,6 +611,42 @@ function StoryViewer({
   // videos / TTS narrations) instead of a global 5s constant.
   const storyDurationMs = stories[currentIndex]?.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
 
+  // ---- W2 (parité iOS ⇄ Web, 2026-08-23) — l'enchaînement multi-scènes ----
+  // Homonyme SANS rapport avec le « W2 — unified-timeline gate » ci-dessous,
+  // qui vient d'un autre lot : celui-ci enchaîne les SCÈNES d'un document v3.
+  // Le contrat autorise 10 scènes par document ; l'hôte n'en jouait qu'une, et
+  // la story passait à la suivante à la fin de la scène 1. Le découpage est
+  // celui d'iOS : une scène projetée en familles v1 EST une slide, sa durée est
+  // celle d'une slide (`canvasV3SceneDurationsMs`), et l'HÔTE décide quand
+  // l'index change — exactement le partage de `MeeshyScenePlayer`, qui reçoit
+  // `sceneIndex` en Binding et ne l'avance jamais lui-même.
+  const [sceneIndex, setSceneIndex] = useState(0);
+  const sceneDurationsMs = useMemo(
+    () => canvasV3SceneDurationsMs(stories[currentIndex]?.storyEffects),
+    [stories, currentIndex],
+  );
+  // Le rang SERVI, borné au document courant : un changement de story pose son
+  // `setSceneIndex(0)` au rendu SUIVANT, si bien qu'un document plus court
+  // serait sinon peint à un rang qu'il n'a pas (écran noir d'une image).
+  const activeSceneIndex = Math.min(sceneIndex, Math.max(0, sceneDurationsMs.length - 1));
+  // Le SEGMENT que le timer court : la scène courante, ou la story entière pour
+  // un blob legacy (aucune scène à enchaîner).
+  const segmentDurationMs = sceneDurationsMs[activeSceneIndex] ?? storyDurationMs;
+
+  useEffect(() => {
+    setSceneIndex(0);
+  }, [currentIndex]);
+
+  // Fin de segment : la scène suivante s'il en reste une, sinon la story cède
+  // la place. `goNext` reste le SEUL point de sortie d'une story.
+  const advance = useCallback(() => {
+    if (activeSceneIndex + 1 < sceneDurationsMs.length) {
+      setSceneIndex(activeSceneIndex + 1);
+      return;
+    }
+    goNext();
+  }, [activeSceneIndex, sceneDurationsMs.length, goNext]);
+
   // W2 — unified-timeline gate (portage du pattern iOS R1/R2) : le timer NE
   // court plus sur une vidéo de fond qui bufferise. `isBuffering` est piloté
   // par les événements natifs du <video> principal (waiting/stalled → gel,
@@ -552,14 +654,14 @@ function StoryViewer({
   // flux mort ne gèle jamais la story pour toujours (parité iOS
   // playbackStallWatchdogSeconds).
   const [isBuffering, setIsBuffering] = useState(false);
-  const remainingMsRef = useRef<number>(storyDurationMs);
+  const remainingMsRef = useRef<number>(segmentDurationMs);
   const startedAtRef = useRef<number | null>(null);
 
   useEffect(() => {
-    remainingMsRef.current = storyDurationMs;
+    remainingMsRef.current = segmentDurationMs;
     startedAtRef.current = null;
     setIsBuffering(false);
-  }, [currentIndex, storyDurationMs]);
+  }, [currentIndex, activeSceneIndex, segmentDurationMs]);
 
   const isTimerFrozen = isPaused || isBuffering;
   useEffect(() => {
@@ -570,7 +672,7 @@ function StoryViewer({
     // elle, conservait déjà sa position (défaut préexistant corrigé).
     startedAtRef.current = Date.now();
     timerRef.current = setTimeout(() => {
-      goNext();
+      advance();
     }, remainingMsRef.current);
 
     return () => {
@@ -586,7 +688,7 @@ function StoryViewer({
         startedAtRef.current = null;
       }
     };
-  }, [currentIndex, isTimerFrozen, goNext, storyDurationMs]);
+  }, [currentIndex, activeSceneIndex, isTimerFrozen, advance, segmentDurationMs]);
 
   // Watchdog anti-deadlock : un buffering qui dure > 5 s retombe sur
   // l'horloge murale (le timer reprend) plutôt que de geler la story.
@@ -605,7 +707,9 @@ function StoryViewer({
   // second regard, le rAF ci-dessous ne s'armait JAMAIS pour une story v3 et
   // `playheadSec` restait figé à 0 — l'animation câblée en F7a mourait quand
   // même à l'exécution.
-  const v3Scene = stories[currentIndex]?.storyEffects?.scenes?.[0];
+  // W2 (multi-scènes) — la scène REGARDÉE est celle qui joue, plus la seule première : sans
+  // quoi une scène 2 animée ne verrait jamais son rAF s'armer.
+  const v3Scene = stories[currentIndex]?.storyEffects?.scenes?.[activeSceneIndex];
   const slideHasKeyframes = Boolean(
     stories[currentIndex]?.storyEffects?.textObjects?.some((t) => t.keyframes?.length)
     || stories[currentIndex]?.storyEffects?.mediaObjects?.some(
@@ -624,14 +728,20 @@ function StoryViewer({
     if (!slideNeedsPlayhead) return;
     let raf = 0;
     const tick = () => {
-      const consumedMs = storyDurationMs - remainingMsRef.current;
+      // W2 (multi-scènes) — tête de lecture RELATIVE à la scène qui joue : `timing.start` et
+      // les `keyframes` d'un objet sont écrits dans le repère de SA scène (une
+      // scène projetée par `StoryEffects(rendering:sceneIndex:)` démarre à 0).
+      // Servir le temps cumulé de la story ferait jouer toute scène suivante
+      // hors de sa fenêtre d'animation. Le segment étant déjà celui de la scène,
+      // la relativité tombe de la soustraction existante.
+      const consumedMs = segmentDurationMs - remainingMsRef.current;
       const liveMs = startedAtRef.current != null ? Date.now() - startedAtRef.current : 0;
       setPlayheadSec(Math.max(0, (consumedMs + liveMs) / 1000));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [slideNeedsPlayhead, currentIndex, storyDurationMs]);
+  }, [slideNeedsPlayhead, currentIndex, activeSceneIndex, segmentDurationMs]);
 
   const primaryVideoGateHandlers = {
     onWaiting: () => setIsBuffering(true),
@@ -868,21 +978,6 @@ function StoryViewer({
   /// Constat 3 — le crédit de bibliothèque voyage sur l'objet `kind:audio` de
   /// FOND de la scène, jamais dégradé en `♫ —` alors que la métadonnée existe.
   const backgroundSoundMeta = isCanvasV3 ? backgroundSoundCredit(effects?.scenes) : undefined;
-  /// Constat 15 — la chaîne ORDONNÉE du Prisme (`getUserLanguagePreferences`,
-  /// source de vérité unique côté web, déjà consommée par PinnedMessageBanner
-  /// / useConversationFiltering), jamais une seule langue tronquée à son rang 1.
-  /// Correction rattrapage (revue) — `/story/:id` est une route PUBLIQUE
-  /// (`middleware.ts` ne garde que `/admin`) : `authUser` vaut `null` pour un
-  /// visiteur SANS compte, alors que `userLanguage` (prop, `usePreferredLanguage()`
-  /// → language-store persistant) reste DISPONIBLE sans compte. Vider la chaîne
-  /// dans ce cas ferait retomber `resolveText()` sur l'original — régression du
-  /// Prisme pour tout visiteur anonyme. Le repli n'est engagé QUE sans compte ;
-  /// avec compte, la chaîne complète prime toujours sur la langue unique.
-  const preferredLanguages = authUser
-    ? getUserLanguagePreferences(authUser)
-    : userLanguage
-      ? [userLanguage]
-      : [];
   const bgStyles = parseBackground(effects?.background);
   const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
   const textColor = effects?.textColor || '#ffffff';
@@ -925,12 +1020,20 @@ function StoryViewer({
         {isCanvasV3 ? (
           <CanvasV3Scene
             doc={effects as CanvasV3}
+            /* W2 (multi-scènes) — le rang que l'hôte fait avancer au fil de sa tête de lecture.
+               La scène reste PURE : elle peint le rang demandé, elle ne décide
+               jamais d'en changer (miroir du Binding `sceneIndex` d'iOS). */
+            sceneIndex={activeSceneIndex}
             mediaById={story.mediaById}
             preferredLanguages={preferredLanguages}
             className="absolute inset-0"
             muted={isBackgroundSoundMuted}
             playheadSec={playheadSec}
             videoGateHandlers={primaryVideoGateHandlers}
+            /* W1 — le repli du libellé d'un lieu sans nom ni adresse. La scène
+               est PURE et ne traduit pas ; l'hôte lui passe le mot de la locale
+               active, miroir du `story.location.here` d'iOS. */
+            hereLabel={t('storyLocationHere', 'Ici')}
             /* Constat 19 (corrigé rattrapage) — le voile doit peindre SOUS
                les objets posés/le texte, comme sur le chemin legacy
                ci-dessous (le média de fond principal SEUL est sous le voile,
@@ -1047,16 +1150,15 @@ function StoryViewer({
 
         {/* Per-text overlays produced by the iOS composer. Position is
             normalized 0-1; iOS sends actual normalized values so we multiply
-            by 100 for CSS percentages. Each text picks its own translation
-            via the Prisme chain (passed via `userLanguage` for now; full
-            chain support ships in B11B). */}
+            by 100 for CSS percentages. Each text descends the ORDERED Prisme
+            chain (`preferredLanguages`, cycle 123) — jamais le seul rang 1. */}
         {/* `containerType: inline-size` scopes `cqw` units to the canvas width
             so iOS design-pixel font sizes (1080 reference) scale to the live
             canvas. Isolated to this full-bleed wrapper so it never becomes the
             containing block for the fixed-position overlays elsewhere. */}
         <div className="absolute inset-0 pointer-events-none" style={{ containerType: 'inline-size' }}>
         {effects?.textObjects?.map((t) => {
-          const resolvedText = resolvePrismeText(t, userLanguage);
+          const resolvedText = resolvePrismeText(t, preferredLanguages);
           if (!resolvedText) return null;
           // Canonical iOS size is design px on the 1080-wide canvas → express it
           // as a fraction of the live canvas width (`cqw`). Legacy `textSize` is
@@ -1198,6 +1300,19 @@ function StoryViewer({
                 <RepostIcon />
               </button>
             )}
+            {onRepostAsPost && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onRepostAsPost(story.id);
+                }}
+                className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
+                aria-label={t('repostAsPost', 'Keep on my feed')}
+                title={t('repostAsPost', 'Keep on my feed')}
+              >
+                <KeepOnFeedIcon />
+              </button>
+            )}
             {onReport && currentUserId && story.authorId && story.authorId !== currentUserId && (
               <button
                 onClick={(e) => {
@@ -1237,8 +1352,12 @@ function StoryViewer({
                   textShadow,
                 }}
               >
+                {/* Le corps servi est celui que la puce ANNONCE : sans ce
+                    relais (`onDisplayedChange`), la puce afficherait
+                    « Français » au-dessus d'un paragraphe resté en version
+                    originale — le Prisme annoncé sans être appliqué. */}
                 <p className={cn(textStyleClass, 'text-center leading-relaxed')}>
-                  {story.content}
+                  {displayedBody?.storyId === story.id ? displayedBody.content : story.content}
                 </p>
 
                 {/* Translation toggle */}
@@ -1246,13 +1365,19 @@ function StoryViewer({
                   story.translations &&
                   story.translations.length > 0 && (
                     <div className="mt-2 flex justify-center">
+                      {/* `key` par story : l'exploration manuelle du lecteur est
+                          une propriété de LA story qu'il lit, jamais un état qui
+                          survit au défilement vers la suivante. */}
                       <TranslationToggle
+                        key={story.id}
                         originalContent={story.content}
                         originalLanguage={story.originalLanguage}
                         translations={story.translations}
                         userLanguage={userLanguage}
+                        preferredLanguages={preferredLanguages}
                         variant="inline"
                         showContent={false}
+                        onDisplayedChange={handleBodyDisplayedChange}
                       />
                     </div>
                   )}
@@ -1337,6 +1462,7 @@ function StoryViewer({
                   currentUserId={authUser?.id ?? null}
                   currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
                   userLanguage={userLanguage}
+                  preferredLanguages={preferredLanguages}
                   isLoading={commentsQuery.isLoading}
                   hasMore={commentsQuery.hasNextPage}
                   onLoadMore={() => commentsQuery.fetchNextPage()}

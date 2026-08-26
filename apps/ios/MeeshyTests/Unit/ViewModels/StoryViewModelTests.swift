@@ -2235,6 +2235,59 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(plan?.requiredObjectIds, [])
     }
 
+    func test_receiverCoverPlan_imageSticker_loadsItsPostMediaUnderTheElementId() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🖼️", postMediaId: "pm-sticker")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(
+                media: [FeedMedia(id: "pm-sticker", type: .image, url: "https://cdn/sticker.png")],
+                effects: fx))
+
+        XCTAssertEqual(plan?.imageURLsByObjectId["st-1"], "https://cdn/sticker.png",
+                       "l'image d'un sticker entre par le MÊME slot que les autres médias, keyée par id d'élément")
+        XCTAssertEqual(plan?.requiredObjectIds, [],
+                       "jamais indispensable : sans elle le renderer peint l'emoji de repli, ce qui vaut mieux que pas de cover")
+    }
+
+    func test_receiverCoverPlan_emojiSticker_loadsNothing() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🔥")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(
+                media: [FeedMedia(id: "pm-other", type: .image, url: "https://cdn/other.png")],
+                effects: fx))
+
+        XCTAssertEqual(plan?.imageURLsByObjectId, [:],
+                       "un sticker emoji n'a aucune image à charger")
+    }
+
+    func test_receiverCoverPlan_stickerMedia_isNeverMistakenForTheLegacyBackground() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🖼️", postMediaId: "pm-sticker")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(
+            for: makeReceiverStory(
+                media: [FeedMedia(id: "pm-sticker", type: .image, url: "https://cdn/sticker.png")],
+                effects: fx))
+
+        XCTAssertNil(plan?.legacyBackgroundURL,
+                     "l'image d'un sticker est attachée au post comme les autres : la prendre pour le fond la peindrait PLEIN CADRE derrière la composition")
+        XCTAssertEqual(plan?.imageURLsByObjectId["st-1"], "https://cdn/sticker.png",
+                       "elle reste chargée — à sa place, celle du sticker")
+    }
+
+    func test_receiverCoverPlan_stickerWhosePostMediaIsMissing_stillYieldsACover() {
+        var fx = StoryEffects()
+        fx.background = "101010"
+        fx.stickerObjects = [StorySticker(id: "st-1", emoji: "🖼️", postMediaId: "pm-vanished")]
+        let plan = StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: fx))
+
+        XCTAssertNotNil(plan, "un média de sticker introuvable ne doit pas priver la story de sa cover")
+        XCTAssertEqual(plan?.imageURLsByObjectId, [:])
+    }
+
     func test_receiverCoverPlan_withoutEffects_isNil() {
         XCTAssertNil(StoryCoverThumbnail.receiverCoverPlan(for: makeReceiverStory(effects: nil)))
     }
@@ -2555,4 +2608,81 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(sut.storyGroups.first?.stories.first?.isViewed, true,
                        "L'état « vu » de ses PROPRES stories est client-only (recordView exclut l'auteur) — jamais dévissé")
     }
+
+    // MARK: - BW-IOS-02 : politique d'auto-téléchargement du préchargement de stories
+
+    /// Le préchargement du tray tirait le corps MP4 ENTIER sans consulter
+    /// `MediaDownloadPolicyEngine` : « Vidéo : Wi-Fi uniquement » — le RÉGLAGE
+    /// PAR DÉFAUT — n'avait aucun effet en cellulaire.
+    func test_shouldPrefetchStoryMedia_videoOnCellularWithWifiOnlyPolicy_returnsFalse() {
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .video, condition: .goodCellular, prefs: .defaults
+        )
+
+        XCTAssertFalse(StoryViewModel.shouldPrefetchStoryMedia(
+            kind: .video, allowImage: true, allowVideo: allowVideo, allowAudio: true
+        ), "prefs.video vaut .wifiOnly par défaut : aucun octet vidéo en cellulaire")
+    }
+
+    func test_shouldPrefetchStoryMedia_videoOnWifi_returnsTrue() {
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .video, condition: .wifi, prefs: .defaults
+        )
+
+        XCTAssertTrue(StoryViewModel.shouldPrefetchStoryMedia(
+            kind: .video, allowImage: false, allowVideo: allowVideo, allowAudio: false
+        ), "en Wi-Fi, rien ne change : l'ouverture d'une story vidéo reste instantanée")
+    }
+
+    func test_shouldPrefetchStoryMedia_imageOnGoodCellularWithDefaults_returnsTrue() {
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .image, condition: .goodCellular, prefs: .defaults
+        )
+
+        XCTAssertTrue(StoryViewModel.shouldPrefetchStoryMedia(
+            kind: .image, allowImage: allowImage, allowVideo: false, allowAudio: false
+        ), "prefs.image vaut .wifiAndGoodCellular par défaut : la vignette passe")
+    }
+
+    /// Axe propre à la story (la jumelle du carousel de bulle n'a que
+    /// image/vidéo) : un vocal de story suit `prefs.audio`, jamais `prefs.image`.
+    func test_shouldPrefetchStoryMedia_audio_gatedOnAllowAudio() {
+        XCTAssertTrue(StoryViewModel.shouldPrefetchStoryMedia(
+            kind: .audio, allowImage: false, allowVideo: false, allowAudio: true
+        ))
+        XCTAssertFalse(StoryViewModel.shouldPrefetchStoryMedia(
+            kind: .audio, allowImage: true, allowVideo: true, allowAudio: false
+        ))
+    }
+
+    // MARK: - Source guard — le prefetch consulte bien la politique (câblage, pas seulement la table de vérité)
+
+    /// Les tests `test_shouldPrefetchStoryMedia_*` ci-dessus couvrent la table
+    /// de vérité du prédicat PUR, jamais son câblage : supprimer le
+    /// `guard Self.shouldPrefetchStoryMedia(…) else { … }` dans
+    /// `prefetchStoryMediaURLs` les laisserait tous verts alors que le défaut
+    /// BW-IOS-02 serait entièrement rétabli. Garde de SOURCE visant le BLOC de
+    /// la fonction (jamais le fichier entier), équilibrée par accolades via
+    /// `DeclarationBodyScanner` — insensible aux commentaires ajoutés au-dessus.
+    func test_prefetchStoryMediaURLs_blockConsultsTheDownloadPolicy() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StoryViewModel.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        guard let body = DeclarationBodyScanner.body(containing: "private static func prefetchStoryMediaURLs(", in: source) else {
+            XCTFail("prefetchStoryMediaURLs body not found — StoryViewModel.swift changed shape, update this guard's anchor.")
+            return
+        }
+
+        XCTAssertTrue(
+            body.contains("shouldPrefetchStoryMedia("),
+            "prefetchStoryMediaURLs must consult StoryViewModel.shouldPrefetchStoryMedia(...) before touching a URL — " +
+            "otherwise the truth-table tests above stay green while the download policy is silently bypassed."
+        )
+    }
+
 }

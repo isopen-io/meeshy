@@ -25,9 +25,12 @@ final class StoryVisibilityPreferenceStoreTests: XCTestCase {
         super.tearDown()
     }
 
-    func test_lastVisibility_nothingStored_returnsFriends() {
+    /// Loi produit 2026-08-23 : une story naît PUBLIQUE, comme un post et
+    /// comme un réel. Le fallback n'est que le point de départ — le dernier
+    /// mode retenu par l'auteur le remplace dès qu'il en choisit un.
+    func test_lastVisibility_nothingStored_returnsPublic() {
         let store = StoryVisibilityPreferenceStore(defaults: defaults)
-        XCTAssertEqual(store.lastVisibility(), PostVisibility.friends.rawValue)
+        XCTAssertEqual(store.lastVisibility(), PostVisibility.public.rawValue)
     }
 
     func test_remember_thenLastVisibility_returnsStoredMode() {
@@ -39,16 +42,16 @@ final class StoryVisibilityPreferenceStoreTests: XCTestCase {
     func test_remember_modeRequiringUserSelection_isIgnored() {
         let store = StoryVisibilityPreferenceStore(defaults: defaults)
         store.remember(PostVisibility.only.rawValue)
-        XCTAssertEqual(store.lastVisibility(), PostVisibility.friends.rawValue)
+        XCTAssertEqual(store.lastVisibility(), PostVisibility.public.rawValue)
 
         store.remember(PostVisibility.except.rawValue)
-        XCTAssertEqual(store.lastVisibility(), PostVisibility.friends.rawValue)
+        XCTAssertEqual(store.lastVisibility(), PostVisibility.public.rawValue)
     }
 
-    func test_lastVisibility_corruptedStoredValue_returnsFriends() {
+    func test_lastVisibility_corruptedStoredValue_returnsPublic() {
         defaults.set("NOT_A_VISIBILITY", forKey: StoryVisibilityPreferenceStore.key)
         let store = StoryVisibilityPreferenceStore(defaults: defaults)
-        XCTAssertEqual(store.lastVisibility(), PostVisibility.friends.rawValue)
+        XCTAssertEqual(store.lastVisibility(), PostVisibility.public.rawValue)
     }
 
     func test_isRememberable_publicCommunityPrivate_returnsTrue() {

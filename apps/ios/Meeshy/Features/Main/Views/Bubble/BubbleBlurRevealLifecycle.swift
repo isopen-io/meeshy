@@ -35,6 +35,11 @@ enum BubbleBlurRevealLifecycle {
 /// Encapsule la sequence d'animations (visible -> fog-in -> re-blur -> fog-out).
 @MainActor
 final class BubbleBlurRevealController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published private(set) var isRevealed: Bool = false
     @Published private(set) var fogOpacity: CGFloat = 0
 

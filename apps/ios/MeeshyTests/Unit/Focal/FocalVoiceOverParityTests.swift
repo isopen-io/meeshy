@@ -212,9 +212,13 @@ final class FocalVoiceOverParityTests: XCTestCase {
     /// ce qui satisfait la fenêtre ; la fenêtre est donc RÉTRÉCIE d'autant :
     /// elle s'arrête net au prochain `Image(systemName:`, si bien qu'une icône
     /// ne peut plus emprunter la mitigation de sa VOISINE. `FocalQuotedReplyView`
-    /// en porte deux à treize lignes d'écart — sous l'ancienne fenêtre de 1100
-    /// caractères, le `.accessibilityHidden(true)` de la seconde couvrait la
-    /// première. Vérifié sur les icônes réelles de `Focal/Row/**` : toutes
+    /// en portait deux à treize lignes d'écart — sous l'ancienne fenêtre de
+    /// 1100 caractères, le `.accessibilityHidden(true)` de la seconde couvrait
+    /// la première. Elle en porte QUATRE depuis la LOI DES ZONES
+    /// (2026-08-24) : le bouton play de la miniature vidéo, les deux branches
+    /// du glyphe d'aperçu (tactile → nommée, décorative → effacée) et le
+    /// glyphe de story. Chacune répond d'elle-même, fenêtre coupée.
+    /// Vérifié sur les icônes réelles du dossier Focal, sous-dossier Row : toutes
     /// restent conformes fenêtre coupée (les deux icônes qui dépendaient de
     /// la troisième forme vivaient dans `FocalFocusControlBar`, retirée).
     func test_decorativeIcons_inFocalRow_areHiddenOrAbsorbedByACombinedLabel() throws {

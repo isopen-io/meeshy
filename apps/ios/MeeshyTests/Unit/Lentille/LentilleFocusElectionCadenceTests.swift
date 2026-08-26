@@ -408,10 +408,27 @@ final class LentilleFocusElectionCadenceTests: XCTestCase {
             "le test « à la cadence de l'affichage » qui l'accompagne ne prouve rien. " +
             "Réparer la mesure, jamais assouplir ce seuil."
         )
-        XCTAssertLessThan(
-            Set(debounced).count, Set(perFrame).count / 2,
+        // Le seuil est DÉRIVÉ, jamais posé : pendant la fenêtre, le contenu
+        // défile de `vitesse × fenêtre` points, soit `… / Row.height` rangs
+        // que la carte ne peut pas visiter. Le meilleur cas atteignable est
+        // donc `sweptRowCount / rowsPerWindow` rangs distincts — une fraction
+        // magique (`count / 2`) aurait basculé au premier changement de cote,
+        // ce qu'elle a fait le 2026-08-22 quand la rangée est passée à trois
+        // lignes : 3,1 rangs par fenêtre à 64 pt, 2,17 à 92, donc 12 sur 24 au
+        // lieu de 8 — la dégradation est intacte, c'était le seuil qui mentait.
+        let rowsPerWindow = Double(Self.briskFlickSpeed * Self.hypotheticalDebounce)
+            / Double(LentilleMetrics.Row.height)
+        let bestReachable = Int((Double(Self.sweptRowCount) / rowsPerWindow).rounded(.up))
+        XCTAssertLessThanOrEqual(
+            Set(debounced).count, bestReachable,
+            "Une fenêtre de \(Int(Self.hypotheticalDebounce * 1000)) ms laisse passer PLUS de rangs " +
+            "que la géométrie ne l'autorise (\(Set(debounced).count) visités pour \(bestReachable) " +
+            "atteignables au mieux) — la mesure ne mesure donc pas la cadence."
+        )
+        XCTAssertLessThanOrEqual(
+            Set(debounced).count * 2, Set(perFrame).count,
             "Une fenêtre de \(Int(Self.hypotheticalDebounce * 1000)) ms devrait priver la " +
-            "carte de plus de la moitié des rangs (observé : \(Set(debounced).count) sur " +
+            "carte d'au moins la moitié des rangs (observé : \(Set(debounced).count) sur " +
             "\(Set(perFrame).count) à la cadence de l'affichage). C'est le chiffre qui " +
             "justifie les gardes de source de cette suite : « juste un petit debounce sur " +
             "le relais » n'est jamais petit du côté de la focus card."

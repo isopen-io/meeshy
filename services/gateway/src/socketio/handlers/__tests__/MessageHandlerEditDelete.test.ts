@@ -251,6 +251,30 @@ function makeSocketUser(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// `createdAt` et `messageType` appartiennent au socle, pas aux surcharges.
+//
+// Le socle décrivait un enregistrement SANS `createdAt`. La charge utile
+// diffusée n'en souffrait pas — `buildMessageEditedCore` replie les deux champs
+// (`message.createdAt || new Date()`, `message.messageType || 'text'`), et c'est
+// mesuré, pas supposé. Le dommage était en amont, sur la porte d'ADMISSION :
+//
+//   - `admitMessageEdit` lit `createdAt` pour la fenêtre de 24h. Absent, il
+//     donne `NaN`, et la comparaison est écrite exprès de sorte que `!(NaN > w)`
+//     ADMETTE. Presque tous les témoins de ce fichier franchissaient donc la
+//     fenêtre par ABSENCE de date, jamais par fraîcheur — la porte était
+//     traversée sans être exercée ;
+//   - le seul témoin qui vérifie les sept champs requis par `SocketIOMessage`
+//     avait donc besoin d'un vrai `createdAt`, et il l'a écrit en DATE ABSOLUE
+//     (`2026-08-22T10:00:00Z`). Vingt-quatre heures plus tard la fenêtre l'a
+//     refusé : plus aucune diffusion, et le gardien du CONTRAT tombait pour un
+//     motif étranger au contrat qu'il garde. Un correctif pressé (repousser le
+//     littéral) réarmerait la même bombe pour le lendemain.
+//
+// Le socle porte donc un message FRAIS et complet, et l'admission redevient un
+// verdict sur la fraîcheur. Les témoins de fenêtre gardent leurs surcharges
+// RELATIVES (`twentyFiveHoursAgo`, `tenMinutesAgo`) — l'idiome déjà employé
+// partout ailleurs ici : une date d'entrée comparée à `Date.now()` ne s'écrit
+// jamais en littéral absolu.
 function makeMessageRecord(overrides: Record<string, unknown> = {}) {
   return {
     id: VALID_MSG_ID,
@@ -258,6 +282,11 @@ function makeMessageRecord(overrides: Record<string, unknown> = {}) {
     senderId: PARTICIPANT_ID,
     content: 'Original content',
     originalLanguage: 'fr',
+    messageType: 'text',
+    // RELATIF, jamais figé : `admitMessageEdit` compare `createdAt` à l'horloge
+    // RÉELLE. Une date en dur passe le jour où elle est écrite puis expire
+    // seule le lendemain — deux cas de cette suite sont partis au rouge ainsi.
+    createdAt: new Date(),
     sender: { id: PARTICIPANT_ID, userId: USER_ID, displayName: 'User', avatar: null },
     attachments: [],
     conversation: {
@@ -573,6 +602,57 @@ describe('MessageHandler — handleMessageEdit', () => {
     ]);
   });
 
+  // `message:edited` est déclaré `(message: SocketIOMessage) => void` — le MÊME
+  // contrat que `message:new` — et `SocketIOMessage` rend sept champs
+  // OBLIGATOIRES. Ce producteur-ci en servait quatre : il avait perdu
+  // `senderId`, `messageType` et `createdAt`.
+  //
+  // Le coût n'était pas cosmétique. `APIMessage`, le décodeur iOS de
+  // `message:edited`, lit `senderId` et `createdAt` par `try c.decode(...)`
+  // SANS repli : une clé absente fait échouer le décodage du message ENTIER, et
+  // `MessageSocketManager.decode(_:from:)` journalise `decode DROP` puis rend la
+  // main. Une édition faite depuis le web n'atteignait donc AUCUN client iOS de
+  // la conversation. Le web, qui fusionne `{ ...cached, ...payload }`, ne
+  // montrait rien — le défaut était invisible du côté d'où venait l'édition.
+  //
+  // Les affirmations sont SÉPARÉES parce que la séparation est le diagnostic :
+  // « le noyau requis manque » et « le noyau est là mais `senderId` porte la
+  // mauvaise identité » sont deux pannes différentes, et la seconde serait le
+  // résultat exact d'un correctif naïf (`senderId: message.senderId`).
+  it('sert le noyau que `SocketIOMessage` EXIGE — sans quoi le décodeur iOS jette la charge utile entière', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    const edited = emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)
+      .find(([event]) => event === 'message:edited')?.[1] as Record<string, unknown>;
+
+    expect(edited).toBeDefined();
+    for (const required of ['id', 'conversationId', 'senderId', 'content', 'originalLanguage', 'messageType', 'createdAt']) {
+      expect(Object.keys(edited)).toContain(required);
+      expect(edited[required]).toBeDefined();
+    }
+  });
+
+  // `Message.senderId` est un `Participant.id` ; les clients comparent le
+  // `senderId` du fil à leur propre `User.id`. Servir la colonne brute
+  // réparerait le décodage en installant une divergence de SENS, celle-là
+  // muette — et les deux autres producteurs de `message:edited` servent bien
+  // l'identité utilisateur.
+  it('sert le `User.id` de l\'expéditeur, jamais le `Participant.id` de la colonne', async () => {
+    (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
+    (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
+
+    await handler.handleMessageEdit(socket, { messageId: VALID_MSG_ID, content: 'Edited content' }, callback);
+
+    expect(emitsTo(deps.io, `conversation:${VALID_CONV_ID}`)).toContainEqual([
+      'message:edited',
+      expect.objectContaining({ senderId: USER_ID }),
+    ]);
+    expect(PARTICIPANT_ID).not.toBe(USER_ID);
+  });
+
   it('fans conversation:updated to participant user rooms so list-screen viewers refresh the preview on edit', async () => {
     (deps.prisma.message.findFirst as jest.Mock<any>).mockResolvedValue(makeMessageRecord());
     (deps.prisma.message.updateMany as jest.Mock<any>).mockResolvedValue({ count: 1 });
@@ -768,6 +848,15 @@ describe('MessageHandler — handleMessageEdit et les mentions', () => {
     });
     (deps.prisma.conversation.findUnique as jest.Mock<any>).mockResolvedValue({
       participants: [{ userId: USER_ID }, { userId: 'u-bob' }, { userId: 'u-alice' }],
+    });
+    // Cycle 123 bis — la notification d'un ENTRANT relit les drapeaux de
+    // PROTECTION du message édité, et cette relecture est fail-CLOSED : un
+    // double muet ferait passer tout message pour protégé et servirait un
+    // placeholder. Ce bloc décrit un message ORDINAIRE.
+    (deps.prisma.message.findUnique as jest.Mock<any>).mockResolvedValue({
+      messageType: 'text', isEncrypted: false, isViewOnce: false,
+      isBlurred: false, effectFlags: 0, expiresAt: null,
+      createdAt: new Date('2026-08-24T10:00:00Z'),
     });
   });
 

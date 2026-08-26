@@ -78,7 +78,12 @@ public enum KeyframeInterpolator {
     ) -> T? {
         guard !keyframes.isEmpty else { return nil }
 
-        let sorted = keyframes.sorted { $0.time < $1.time }
+        // Appelé par tick de display-link (jusqu'à 4×/item/frame) : les
+        // keyframes arrivent déjà triés dans l'écrasante majorité des cas —
+        // un contrôle O(n) sans allocation évite le tri O(n log n) + copie.
+        // `sorted(by:)` est stable, donc le repli produit exactement l'ordre
+        // qu'un tableau déjà trié aurait.
+        let sorted = isSortedByTime(keyframes) ? keyframes : keyframes.sorted { $0.time < $1.time }
 
         if sorted.count == 1 {
             return sorted[0].value
@@ -102,5 +107,16 @@ public enum KeyframeInterpolator {
         }
 
         return sorted.last?.value
+    }
+
+    private nonisolated static func isSortedByTime<T: Lerpable>(
+        _ keyframes: [(time: Float, value: T, easing: StoryEasing)]
+    ) -> Bool {
+        var previous = -Float.infinity
+        for keyframe in keyframes {
+            if keyframe.time < previous { return false }
+            previous = keyframe.time
+        }
+        return true
     }
 }

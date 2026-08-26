@@ -13,13 +13,12 @@ import { ConflictError } from '../../../errors/custom-errors';
  * sixième réaction, sinon l'un contourne silencieusement le plafond posé par
  * l'autre.
  *
- * `likeComment` purge toutes les AUTRES réactions de la personne avant
- * d'upserter l'émoji demandé (invariant REST « max 1 réaction par user »,
- * voir les tests `PostCommentService.likeComment` existants) — reposer
- * l'émoji déjà présent n'ajoute donc jamais de ligne neuve, mais un émoji
- * *nouveau* alors que la personne est déjà au plafond DOIT être refusé avant
- * la purge, pour ne pas silencieusement remplacer ses cinq réactions par une
- * seule sous prétexte que la sixième était refusée par l'autre chemin.
+ * `likeComment` EMPILE, comme son jumeau socket : il upserte l'émoji demandé
+ * sans jamais toucher aux autres. Il a longtemps purgé (`emoji: { not }`) au
+ * nom d'un « invariant max 1 réaction par user » qui n'existait sur aucun autre
+ * chemin — retiré le 2026-08-25. Ce qui reste ici est le SEUL plafond réel :
+ * cinq réactions par personne et par objet, refusées avant création. Reposer un
+ * émoji déjà présent ne consomme aucune place et ne détruit plus rien.
  */
 
 const COMMENT_ID = 'comment-001';
@@ -41,6 +40,9 @@ function makePrisma(existingReactionCount: number) {
     commentReaction: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       count: jest.fn<any>().mockResolvedValue(existingReactionCount),
+      // `unlikeComment` lit la pile TRIÉE avant de retirer : sans ce double, le
+      // retrait ne trouve aucune cible et ne supprime rien.
+      findMany: jest.fn<any>().mockResolvedValue([{ emoji: '👍' }]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
       upsert: jest.fn<any>().mockResolvedValue({}),
       groupBy: jest.fn<any>().mockResolvedValue([]),
@@ -55,7 +57,7 @@ describe('PostCommentService.likeComment — plafond de 5 réactions par personn
 
     await service.likeComment(COMMENT_ID, USER_ID, '🎉');
 
-    expect(prisma.commentReaction.deleteMany).toHaveBeenCalledTimes(1);
+    expect(prisma.commentReaction.deleteMany).not.toHaveBeenCalled();
     expect(prisma.commentReaction.upsert).toHaveBeenCalledTimes(1);
   });
 
@@ -67,8 +69,8 @@ describe('PostCommentService.likeComment — plafond de 5 réactions par personn
       REACTION_LIMIT_REACHED_MESSAGE
     );
 
-    // Refusé AVANT toute purge : les cinq réactions existantes de la personne
-    // survivent intactes, elles ne sont pas silencieusement remplacées par une seule.
+    // Refusé avant création : la sixième n'entre pas, et les cinq existantes
+    // survivent — plus aucune purge ne peut les emporter.
     expect(prisma.commentReaction.deleteMany).not.toHaveBeenCalled();
     expect(prisma.commentReaction.upsert).not.toHaveBeenCalled();
   });
@@ -89,9 +91,7 @@ describe('PostCommentService.likeComment — plafond de 5 réactions par personn
 
     await service.likeComment(COMMENT_ID, USER_ID, '👍');
 
-    expect(prisma.commentReaction.deleteMany).toHaveBeenCalledWith({
-      where: { commentId: COMMENT_ID, userId: USER_ID, emoji: { not: '👍' } },
-    });
+    expect(prisma.commentReaction.deleteMany).not.toHaveBeenCalled();
     expect(prisma.commentReaction.upsert).toHaveBeenCalledTimes(1);
     // La décision de plafond ne s'applique qu'à une création réelle.
     expect(prisma.commentReaction.count).not.toHaveBeenCalled();

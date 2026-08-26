@@ -6,6 +6,8 @@ import { validatePagination } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
+import { permissionsService } from '../../services/admin/permissions.service';
+import type { UserRoleEnum } from '@meeshy/shared/types';
 
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -31,6 +33,12 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(AnonymousUsersQuerySchema)]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Directive produit 2026-08-25 : `requireAdmin` laisse passer
+      // MODERATOR/AUDIT, qui n'ont plus le droit de voir la présence — seuil
+      // `canViewPresence` (ADMIN/BIGBOSS uniquement).
+      const viewerRole = (request as UnifiedAuthRequest).authContext!.registeredUser!.role as UserRoleEnum;
+      const canSeePresence = permissionsService.canViewPresence(viewerRole);
+
       /* istanbul ignore next -- Zod AnonymousUsersQuerySchema always provides offset and limit with defaults */
       const { offset = '0', limit = '20', search, status } = request.query as AnonymousUserListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
@@ -86,8 +94,12 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.participant.count({ where })
       ]);
 
+      const data = canSeePresence
+        ? anonymousUsers
+        : anonymousUsers.map((p) => ({ ...p, isOnline: false, lastActiveAt: null }));
+
       return sendSuccess(reply, {
-          anonymousUsers,
+          anonymousUsers: data,
           pagination: {
             total: totalCount,
             limit: limitNum,

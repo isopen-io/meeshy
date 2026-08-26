@@ -11,8 +11,10 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { AuthenticatedRequest, UserIdParams, SearchQuery } from './types';
 import { validatePagination } from '../../utils/pagination';
-import { viewerFromRequest } from './presence-gate';
+import { mayOrderByRawPresence, servedOnlineFirst, viewerFromRequest } from './presence-gate';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 
 
@@ -54,6 +56,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
                       id: { type: 'string' },
                       title: { type: 'string' },
                       type: { type: 'string', enum: ['direct', 'group'] },
+                      avatar: { type: 'string', nullable: true },
                       isActive: { type: 'boolean' },
                       lastMessage: {
                         type: 'object',
@@ -298,7 +301,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
           id: conv.id,
           title: displayTitle,
           type: conv.type,
-          avatar: conv.avatar ?? otherUser?.avatar ?? null,
+          avatar: resolveParticipantAvatar({ avatar: conv.avatar, user: otherUser }),
           isActive: activeConversations > 0,
           lastMessage: conv.messages && conv.messages.length > 0 ? {
             content: conv.messages[0].content,
@@ -381,7 +384,7 @@ export async function getUserStats(fastify: FastifyInstance) {
 
       const { userId: userIdOrUsername } = request.params;
 
-      const isMongoId = /^[a-f\d]{24}$/i.test(userIdOrUsername);
+      const isMongoId = isValidObjectId(userIdOrUsername);
 
       const user = await fastify.prisma.user.findFirst({
         where: isMongoId
@@ -625,6 +628,14 @@ export async function searchUsers(fastify: FastifyInstance) {
         ]
       };
 
+      // L'ORDRE obéit à la loi du CHAMP : trier « en ligne d'abord » en base,
+      // puis masquer `isOnline` à la sortie, laissait lire la présence dans la
+      // POSITION. Seul un viewer que la loi sert FULL peut classer par la
+      // présence brute (`mayOrderByRawPresence`) ; les autres lisent une page
+      // classée par le nom — l'offset reste cohérent d'une page à l'autre —
+      // puis stabilisée, APRÈS la porte, sur la présence SERVIE.
+      const presenceViewer = viewerFromRequest(request);
+
       const [users, totalCount] = await Promise.all([
         fastify.prisma.user.findMany({
           where: whereClause,
@@ -640,9 +651,9 @@ export async function searchUsers(fastify: FastifyInstance) {
             systemLanguage: true
           },
           orderBy: [
-            { isOnline: 'desc' },
-            { firstName: 'asc' },
-            { lastName: 'asc' }
+            ...(mayOrderByRawPresence(presenceViewer) ? [{ isOnline: 'desc' as const }] : []),
+            { firstName: 'asc' as const },
+            { lastName: 'asc' as const }
           ],
           skip: offsetNum,
           take: limitNum
@@ -650,13 +661,17 @@ export async function searchUsers(fastify: FastifyInstance) {
         fastify.prisma.user.count({ where: whereClause })
       ]);
 
-      // Gate de présence : un résultat de recherche n'expose lastActiveAt/isOnline
-      // que pour les contacts (ami/affilié) ou modérateur+ (critère strict).
+      // Gate de présence (régime strict) : un résultat de recherche n'expose
+      // lastActiveAt/isOnline que pour soi, un ami accepté ou ADMIN/BIGBOSS.
+      // Puis la page se classe sur ce qu'elle SERT : un ami en ligne remonte
+      // pour qui a le droit de le voir, un inconnu masqué garde sa place de nom.
       const visibilityMap = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
-        viewerFromRequest(request),
+        presenceViewer,
         users.map(u => u.id),
       );
-      const gatedUsers = users.map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)));
+      const gatedUsers = users
+        .map(u => applyPresenceVisibilityAsOffline(u, visibilityMap.get(u.id)))
+        .sort(servedOnlineFirst);
 
       return sendPaginatedSuccess(reply, gatedUsers, buildPaginationMeta(totalCount, offsetNum, limitNum, gatedUsers.length));
     } catch (error) {

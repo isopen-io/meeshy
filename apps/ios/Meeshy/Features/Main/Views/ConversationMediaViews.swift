@@ -73,7 +73,10 @@ struct DownloadBadgeView: View {
     private var isImageAlreadyResident: Bool {
         guard attachment.type == .image else { return false }
         let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-        return DiskCacheStore.cachedImage(for: resolved) != nil
+        // Toutes variantes confondues : la bulle décode sous une clé
+        // dimensionnée (targetSize → bucket), le slot nu peut donc être vide
+        // alors que l'image est bel et bien affichée.
+        return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
     }
 
     private var totalSizeText: String {
@@ -212,6 +215,11 @@ struct DownloadBadgeView: View {
 // MARK: - Attachment Downloader (real byte-level progress via URLSession.bytes)
 @MainActor
 final class AttachmentDownloader: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     @Published var isCached = false
     @Published var isDownloading = false
     @Published var downloadedBytes: Int64 = 0
@@ -499,35 +507,11 @@ final class AttachmentDownloader: ObservableObject {
     }
 }
 
-// MARK: - Cached Play Icon (active when media is locally cached, polls until available)
-struct CachedPlayIcon: View {
-    let fileUrl: String
-    @State private var isCached = false
-
-    var body: some View {
-        Group {
-            if isCached {
-                Image(systemName: "play.circle.fill")
-                    .font(MeeshyFont.relative(36))
-                    .foregroundStyle(.white, Color.black.opacity(0.4))
-                    .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.15), value: isCached)
-        .task {
-            let resolved = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-            while !Task.isCancelled && !isCached {
-                let cached = await CacheCoordinator.shared.video.isCached(resolved)
-                if cached {
-                    isCached = true
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-            }
-        }
-    }
-}
+// `CachedPlayIcon` a vécu ici jusqu'au 2026-08-26 : ZÉRO site d'appel, et sa
+// `.task` bouclait `FileManager.fileExists` toutes les 1,5 s SANS TERMINAISON
+// pour un média jamais mis en cache (auto-DL refusé par la policy) — une mine
+// d'E/S disque périodique qu'un futur montage aurait réarmée sans bruit.
+// Supprimé plutôt que laissé en piège (audit chauffe 2026-08-26).
 
 // MARK: - Audio Media View (shows placeholder until cached, then full player)
 struct AudioMediaView: View, Equatable {
@@ -574,6 +558,15 @@ struct AudioMediaView: View, Equatable {
     var parentIsMe: Bool = false
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
+    /// LOI DES ZONES (2026-08-24) — ZONES 1 et 2 de la citation hebergee par
+    /// le widget audio : l'avatar de l'auteur cite ouvre son profil, la
+    /// miniature ou l'icone de lecture ouvre le media cite. Transmis tels
+    /// quels a `BubbleQuotedReply`, qui decide seul de les armer.
+    /// **Exclus d'Equatable** pour la meme raison que les autres rappels :
+    /// une fermeture change d'identite a chaque rendu sans jamais changer le
+    /// rendu.
+    var onQuotedAuthorTap: ((ReplyReference) -> Void)? = nil
+    var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
     /// Phase 5: a tap on the play button of this bubble routes here.
     /// Wired by `BubbleStandardLayout` -> `ThemedMessageBubble` ->
     /// `MessageListViewController.onPlayAudio` ->
@@ -637,6 +630,11 @@ struct AudioMediaView: View, Equatable {
             && lhs.replyReference?.messageId == rhs.replyReference?.messageId
             && lhs.replyReference?.previewText == rhs.replyReference?.previewText
             && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
+            // L'avatar de l'auteur cité arrive APRÈS coup (refresh serveur,
+            // hydratation du cache). Ce `==` est le seul filtre d'invalidation
+            // de la cellule : sans cette ligne, la citation hébergée par le
+            // widget audio resterait figée sur son rendu initial.
+            && lhs.replyReference?.authorAvatarUrl == rhs.replyReference?.authorAvatarUrl
             && lhs.replyIsStory == rhs.replyIsStory
             && lhs.parentIsMe == rhs.parentIsMe
             && lhs.embedsCaptionInWidget == rhs.embedsCaptionInWidget
@@ -944,7 +942,9 @@ struct AudioMediaView: View, Equatable {
                 parentIsMe: false,
                 accentHex: accentColor,
                 isDark: isDark,
-                mentionDisplayNames: mentionDisplayNames
+                mentionDisplayNames: mentionDisplayNames,
+                onQuotedAuthorTap: onQuotedAuthorTap,
+                onQuotedMediaTap: onQuotedMediaTap
             )
             .contentShape(Rectangle())
             .onTapGesture {

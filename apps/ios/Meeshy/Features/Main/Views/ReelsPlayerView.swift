@@ -11,6 +11,11 @@ import MeeshyUI
 /// `@EnvironmentObject` through every host.
 @MainActor
 final class ReelsPresenter: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = ReelsPresenter()
 
     struct Launch: Identifiable, Equatable {
@@ -205,9 +210,11 @@ struct ReelsPlayerView: View {
                 originalType: reel.type,
                 media: reel.media.map { EditablePostMedia($0) },
                 originalLocation: reel.location,
+                originalVisibility: reel.visibility,
+                originalVisibilityUserIds: reel.visibilityUserIds ?? [],
                 isRepost: reel.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                 },
                 onDismiss: { editingReel = nil }
             )
@@ -968,14 +975,13 @@ struct ReelPageView: View {
     }
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
-        HStack(spacing: 3) {
-            Image(systemName: icon).font(MeeshyFont.relative(10, weight: .semibold))
-            Text(ReelActionButton.compact(count)).font(.caption2.weight(.medium))
-        }
-        .foregroundColor(.white.opacity(0.85))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(a11yLabel)
-        .accessibilityValue("\(count)")
+        ReachMetricLabel(
+            icon: icon,
+            count: count,
+            label: a11yLabel,
+            tint: .white.opacity(0.85),
+            iconFont: MeeshyFont.relative(10, weight: .semibold)
+        )
     }
 
     /// Légende du reel rendue par `MessageTextRenderer` pour teinter `@mention`
@@ -1297,7 +1303,7 @@ private struct ReelActionButton: View {
                 }
                 .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
                 if let count, count > 0 {
-                    Text(Self.compact(count))
+                    Text(CompactCountLabel.text(count))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.35), radius: 2)
@@ -1317,12 +1323,6 @@ private struct ReelActionButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-
-    fileprivate static func compact(_ value: Int) -> String {
-        if value >= 1_000_000 { return String(format: "%.1fM", Double(value) / 1_000_000) }
-        if value >= 1_000 { return String(format: "%.1fk", Double(value) / 1_000) }
-        return "\(value)"
     }
 }
 
@@ -1422,7 +1422,7 @@ private struct ReelScrubBar: View {
             .accessibilityLabel(String(localized: "reels.scrub", defaultValue: "Avancer ou reculer", bundle: .main))
             // No on-screen time numbers (Instagram-reels style), but VoiceOver
             // still announces playback position as a percentage.
-            .accessibilityValue("\(Int((progress * 100).rounded()))%")
+            .accessibilityValue(LocalizedNumber.percent(Int((progress * 100).rounded())))
     }
 
     private var track: some View {
@@ -1683,6 +1683,11 @@ struct ReelVideoSurface: UIViewRepresentable {
 /// `internal` (not `private`) because the now-`internal` `ReelVideoSurface`
 /// exposes it through its representable methods (shared with `ReelFeedVideoSurface`).
 final class ReelPlayerLayerView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     override static var layerClass: AnyClass { AVPlayerLayer.self }
     var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
 }
@@ -1797,7 +1802,13 @@ private struct ReelImageView: View {
         // announcing each anonymous circle.
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "reels.carousel.image", defaultValue: "Image", bundle: .main))
-        .accessibilityValue("\((images.firstIndex { $0.id == currentImageId } ?? 0) + 1) / \(images.count)")
+        // Le séparateur « / » reste : sa forme EST la donnée (« 3 / 10 » se lit
+        // comme une seule position), et 239i l'a explicitement distingué de la
+        // puce de mise en page qu'elle bannissait. Seuls les CHIFFRES changent.
+        .accessibilityValue(
+            LocalizedNumber.exact((images.firstIndex { $0.id == currentImageId } ?? 0) + 1)
+            + " / " + LocalizedNumber.exact(images.count)
+        )
     }
 }
 

@@ -5,7 +5,8 @@ import MeeshyUI
 ///
 /// Consolidates the hand-rolled `"\(text.count)/LIMIT"` labels that were
 /// duplicated — with divergent styling, ad-hoc warning thresholds and zero
-/// accessibility — in `ReportUserView` and `StatusComposerView`.
+/// accessibility — in `ReportUserView` and the mood composer, dont la surface
+/// actuelle est `ComposerMoodSurface.characterCount`.
 ///
 /// - Numbers are rendered with `Int.formatted()` so they respect the user's
 ///   locale (grouping separators, Eastern-Arabic digits, …) instead of raw
@@ -23,6 +24,18 @@ struct CharacterCountLabel: View {
     var warningThreshold: Int? = nil
     var font: Font = MeeshyFont.relative(11, weight: .medium)
 
+    /// Premier plan de l'état NORMAL, quand le site de montage connaît son fond
+    /// mieux que le thème de l'app. `nil` ⇒ `theme.textMuted`, le comportement
+    /// de tous les appelants existants.
+    ///
+    /// **Pourquoi ce paramètre existe, mesuré le 2026-08-24** : le compteur est
+    /// monté par le composer sur le PLATEAU, sombre par construction quel que
+    /// soit le thème. `theme.textMuted` y mesure **1,68:1** en thème clair
+    /// (`indigo700@0.8` sur `violet950`) et **4,41:1** même en thème sombre —
+    /// sous AA texte normal dans les DEUX cas. Un jeton de thème posé sur un
+    /// fond qui n'est pas celui du thème n'est pas un jeton, c'est un pari.
+    var mutedColor: Color? = nil
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -31,7 +44,7 @@ struct CharacterCountLabel: View {
             .foregroundColor(
                 Self.isNearLimit(count: count, limit: limit, warningThreshold: warningThreshold)
                     ? MeeshyColors.error
-                    : theme.textMuted
+                    : Self.normalForeground(mutedColor: mutedColor, themeMuted: theme.textMuted)
             )
             .accessibilityLabel(Self.accessibilityLabel(count: count, limit: limit))
     }
@@ -47,6 +60,14 @@ struct CharacterCountLabel: View {
 
     static func isNearLimit(count: Int, limit: Int, warningThreshold: Int?) -> Bool {
         count >= resolvedThreshold(limit: limit, warningThreshold: warningThreshold)
+    }
+
+    /// Le premier plan de l'état NORMAL — celui d'avant le seuil d'alerte.
+    /// L'état d'ALERTE n'est pas surchargeable : `MeeshyColors.error` est
+    /// sémantique, et le laisser choisir au site de montage rendrait « proche
+    /// de la limite » invisible sur l'un d'eux sans que rien ne le dise.
+    static func normalForeground(mutedColor: Color?, themeMuted: Color) -> Color {
+        mutedColor ?? themeMuted
     }
 
     /// "158 of 500 characters" — a full VoiceOver sentence. Positional format

@@ -1,195 +1,214 @@
 import XCTest
 
-/// Garde de source : l'alerte de sortie du composer (« Quitter sans
-/// publier ? ») doit être présentée via `.confirmationDialog`, jamais via
-/// `.alert` — B5 (arbitrage S2, rapport_benchmark.md §1.3.9) : les leaders
-/// SOTA (Snapchat/Instagram/TikTok) présentent un choix de sortie via une
-/// feuille d'action ancrée bas au moment du geste, jamais une alerte système
-/// centrée à 3 boutons.
+/// Garde de source **RETOURNÉE** (M10, 2026-08-23).
+///
+/// Elle exigeait la PRÉSENCE d'une feuille d'action de sortie (« Quitter sans
+/// publier ? » → Sauvegarder / Quitter / Annuler) et interdisait de la
+/// dégrader en `.alert` système — arbitrage B5/S2 : les leaders SOTA
+/// présentent un choix de sortie par une feuille ancrée bas, jamais par une
+/// alerte centrée à trois boutons.
+///
+/// La règle produit M10 tranche au-dessus de cet arbitrage : **zéro question à
+/// la sortie**. Fermer le composer ENREGISTRE le brouillon, en silence. La
+/// meilleure présentation d'une question qu'on ne doit plus poser reste son
+/// absence — la garde change donc de sens, pas de sujet : elle interdit
+/// désormais le RETOUR du dialogue, au lieu d'en policer la forme.
+///
+/// Ce qu'elle protégeait par ailleurs SURVIT, ici et dans
+/// `StoryComposerExitAutoDraftTests` :
+/// - la sortie ne doit jamais être DESTRUCTIVE (l'ancien « Quitter » l'était,
+///   et c'était le seul bouton de l'app à jeter du travail sans corbeille) ;
+/// - une session d'ÉDITION a droit au même traitement qu'une création
+///   (directive user 2026-08-02, point c : une story mise en édition revient
+///   en brouillon, son brouillon porte `editingPostId`). L'ancienne garde
+///   l'exprimait en interdisant `!isEditingExistingStory` devant le bouton
+///   « Sauvegarder » ; le bouton a disparu, l'interdit suit le code et porte
+///   maintenant sur le chemin de fermeture lui-même.
 ///
 /// `StoryComposerView` n'est pas « hostable » en XCTest (précédent :
 /// `StoryComposerView_ShouldShowEmptyStateLargePickerTests.swift`) — la garde
-/// s'ancre donc sur le COMPORTEMENT via analyse de source, comme
-/// `StoryBackgroundLayerVolumeSourceGuardTests`. Le fichier contient TROIS
-/// blocs `.alert(`/`.confirmationDialog(` (sortie, médias perdus, chargement
-/// impossible) : un grep global de `.alert(` donnerait un résultat faussé (2
-/// occurrences légitimes hors périmètre). L'ancrage se fait donc sur le
-/// littéral UNIQUE `"story.composer.quitWithoutPublishing"`, jamais sur le nom
-/// de propriété partagé `showDiscardAlert` (qui n'apparaît qu'une fois de
-/// toute façon, mais l'ancrage textuel doit rester robuste à un futur
-/// deuxième binding sur la même clé). Les commentaires sont retirés avant
-/// analyse : la prose qui décrit le fix déclencherait sinon l'alerte
-/// elle-même.
+/// s'ancre donc sur la SOURCE, comme `StoryBackgroundLayerVolumeSourceGuardTests`.
+/// Les commentaires sont retirés avant analyse par `ComposerSourceGuard` : la
+/// prose qui explique le retrait CITE les jetons bannis (elle le doit, sinon
+/// la prochaine itération les réinvente), et une garde naïve échouerait sur sa
+/// propre justification.
+///
+/// Le balayage porte sur TOUT `Sources/MeeshyUI/Story/` et non sur le seul
+/// `StoryComposerView.swift` : un dialogue de sortie réintroduit dans une
+/// extension voisine (`+TopBar`, `+Canvas`) échapperait à une garde nommant
+/// son fichier — c'est la leçon du 4ᵉ jeu de glyphes.
 final class StoryComposerExitDialogSourceGuardTests: XCTestCase {
 
-    // MARK: - Tests réels (fichier du repo)
+    // MARK: - L'interdit
 
-    func test_discardAlert_usesConfirmationDialogNotAlert() throws {
-        let code = try Self.strippedSource()
-        let lines = code.components(separatedBy: "\n")
-
-        guard let modifierLine = Self.precedingModifierLine(lines: lines, anchor: Self.anchor) else {
-            XCTFail("Aucun modificateur `.alert(`/`.confirmationDialog(` trouvé avant l'ancre")
-            return
-        }
+    /// Le cœur de la garde retournée. Trois jetons, trois façons dont la
+    /// question de sortie est déjà revenue ailleurs dans ce dépôt : son titre
+    /// localisé, son binding de présentation, et l'action destructive qu'elle
+    /// était seule à offrir.
+    func test_noExitDialogSurvivesAnywhereInTheComposer() throws {
+        let offences = Self.exitDialogOffences(in: try ComposerSourceGuard.allStorySources())
 
         XCTAssertTrue(
-            modifierLine.contains(".confirmationDialog("),
-            "L'alerte de sortie doit être présentée via `.confirmationDialog(`, trouvé : \(modifierLine)"
-        )
-        XCTAssertFalse(
-            modifierLine.contains(".alert("),
-            "L'alerte de sortie ne doit plus utiliser `.alert(` : \(modifierLine)"
+            offences.isEmpty,
+            """
+            M10 — fermer le composer n'a plus rien à demander : le brouillon \
+            s'écrit tout seul. Une feuille de sortie est revenue ici :
+            \(offences.joined(separator: "\n"))
+            """
         )
     }
 
-    func test_exitDialog_preservesAllThreeActions() throws {
-        let code = try Self.strippedSource()
-        let lines = code.components(separatedBy: "\n")
-        let block = Self.dialogBlock(lines: lines, anchor: Self.anchor)
+    /// L'invariant anti-destruction, dit positivement : il n'existe qu'UN
+    /// « enregistrer puis fermer » dans tout le composer, et c'est la
+    /// fermeture elle-même. Un second appelant signerait le retour d'un bouton
+    /// « Sauvegarder » quelque part — donc d'un choix offert à la sortie.
+    func test_theOnlySaveAndDismissIsTheClosingItself() throws {
+        let sources = try ComposerSourceGuard.allStorySources()
+        let total = sources.reduce(0) {
+            $0 + ComposerSourceGuard.occurrences(of: "saveDraftAndDismiss()", in: $1.code)
+        }
 
-        for key in ["story.composer.save", "story.composer.quit", "story.composer.cancelAction"] {
-            XCTAssertTrue(
-                block.contains { $0.contains(key) },
-                "La clé localisée \(key) a disparu du bloc de la feuille d'action de sortie"
+        XCTAssertEqual(
+            total, 2,
+            """
+            Attendu : la déclaration + son unique appelant (`handleDismiss`). \
+            Une occurrence de plus = un bouton « Sauvegarder » est réapparu ; \
+            une de moins = la fermeture a cessé d'enregistrer.
+            """
+        )
+
+        let publication = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "func handleDismiss()", in: publication))
+
+        XCTAssertEqual(
+            ComposerSourceGuard.occurrences(of: "saveDraftAndDismiss()", in: body), 1,
+            "La fermeture ENREGISTRE — c'est la promesse M10, et elle vit dans `handleDismiss`."
+        )
+    }
+
+    /// La sortie n'emporte que les fantômes, jamais du travail. `.clear()` et
+    /// `clearCurrentDraft()` appartiennent au seul discard explicite qui
+    /// subsiste (« Recommencer », dans le bandeau de reprise).
+    func test_theClosingPathIsNeverDestructive() throws {
+        let publication = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
+        let body = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "func handleDismiss()", in: publication))
+
+        for destructive in [".clear()", "clearCurrentDraft()", "clearAllDrafts()"] {
+            XCTAssertEqual(
+                ComposerSourceGuard.occurrences(of: destructive, in: body), 0,
+                "Fermer n'est pas jeter : « \(destructive) » n'a rien à faire sur le chemin de sortie."
+            )
+        }
+        XCTAssertEqual(
+            ComposerSourceGuard.occurrences(of: "clearPhantomDraftsOnly()", in: body), 1,
+            "Seuls les fantômes tombent, par la règle partagée, une seule fois."
+        )
+    }
+
+    /// INVARIANT REPRIS de la garde d'origine (directive user 2026-08-02,
+    /// point c). Elle vérifiait que le bouton « Sauvegarder » n'était pas
+    /// masqué en édition ; le bouton n'existe plus, mais l'exclusion peut
+    /// revenir un cran plus haut — sur la fermeture, ou sur la règle qu'elle
+    /// lit. Une story mise en édition REVIENT en brouillon : son brouillon
+    /// porte `editingPostId` et rouvre le mode édition à la reprise.
+    func test_editSessionsAreSavedOnExitToo() throws {
+        let publication = try ComposerSourceGuard.source("StoryComposerView+Publication.swift")
+
+        for scope in ["func handleDismiss()", "static func exitAction(", "static func exitPrompt("] {
+            let body = try XCTUnwrap(
+                ComposerSourceGuard.functionBody(named: scope, in: publication),
+                "`\(scope)` introuvable — la garde ne protège plus rien.")
+
+            XCTAssertEqual(
+                ComposerSourceGuard.occurrences(of: "isEditingExistingStory", in: body), 0,
+                """
+                L'édition sort comme toute session : son brouillon porte \
+                `editingPostId`. Terme retrouvé dans `\(scope)`.
+                """
             )
         }
     }
 
-    /// INVERSION CONSCIENTE (directive user 2026-08-02, point c) : une story
-    /// mise en ÉDITION revient en brouillon — « Sauvegarder » s'offre donc
-    /// AUSSI en édition (le brouillon porte `editingPostId` et rouvre le mode
-    /// édition à la reprise). L'ancienne garde exigeait
-    /// `if !isEditingExistingStory` devant le bouton ; elle interdit désormais
-    /// sa réintroduction, et vérifie que la SEULE condition restante est la
-    /// règle de sortie partagée (`exitPrompt.offersSave`).
-    func test_saveButton_offeredInEditModeToo() throws {
-        let code = try Self.strippedSource()
-        let lines = code.components(separatedBy: "\n")
-        let block = Self.dialogBlock(lines: lines, anchor: Self.anchor)
-
-        guard let saveIndex = block.firstIndex(where: { $0.contains("story.composer.save") }) else {
-            XCTFail("Bouton Sauvegarder introuvable dans le bloc")
-            return
-        }
-        XCTAssertFalse(
-            block[..<saveIndex].contains { $0.contains("!isEditingExistingStory") },
-            "L'édition a droit à « Sauvegarder » : le brouillon d'édition porte editingPostId et rouvre le mode édition"
-        )
-        XCTAssertTrue(
-            block[..<saveIndex].contains { $0.contains("exitPrompt.offersSave") },
-            "La seule condition du bouton reste la règle de sortie partagée"
-        )
-    }
-
     // MARK: - Méta-tests de la garde elle-même
 
-    /// Contrôle positif : sans ce test, une garde cassée (mauvais fichier,
-    /// filtre trop large) resterait verte pour toujours et ne protégerait
-    /// rien — elle doit réellement détecter le motif banni.
-    func test_guardDetectsTheBannedPattern() {
-        let sample = """
-        struct Fake: View {
-            var body: some View {
-                Text("x")
-                .alert(
-                    String(localized: "story.composer.quitWithoutPublishing", defaultValue: "x"),
-                    isPresented: $showDiscardAlert
-                ) { EmptyView() }
+    /// Contrôle POSITIF, et la seule chose qui distingue une garde d'un test
+    /// vacuously vert : réintroduire l'interdit doit la faire rougir. Le
+    /// fragment ci-dessous est le code RÉELLEMENT retiré le 2026-08-23.
+    func test_guardDetectsAReintroducedExitDialog() {
+        let reintroduced = """
+        .confirmationDialog(
+            String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
+            isPresented: $showDiscardAlert,
+            titleVisibility: .visible
+        ) {
+            if exitPrompt.offersSave {
+                Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
             }
+            Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
         }
         """
-        let lines = sample.components(separatedBy: "\n")
-        let modifierLine = Self.precedingModifierLine(lines: lines, anchor: Self.anchor)
+        let offences = Self.exitDialogOffences(in: [(path: "Fake.swift", code: reintroduced)])
 
-        XCTAssertEqual(modifierLine?.contains(".alert("), true)
-        XCTAssertEqual(modifierLine?.contains(".confirmationDialog("), false)
+        XCTAssertEqual(offences.count, Self.bannedTokens.count)
+        XCTAssertTrue(offences.allSatisfy { $0.hasPrefix("Fake.swift") })
     }
 
-    /// Contrôle négatif : la forme correcte ne doit pas déclencher l'alerte.
-    func test_guardAcceptsTheCorrectForm() {
-        let sample = """
-        struct Fake: View {
-            var body: some View {
-                Text("x")
-                .confirmationDialog(
-                    String(localized: "story.composer.quitWithoutPublishing", defaultValue: "x"),
-                    isPresented: $showDiscardAlert,
-                    titleVisibility: .visible
-                ) { EmptyView() }
+    /// La forme retenue par une seule des trois marques doit rougir aussi : un
+    /// dialogue réécrit de zéro n'emprunterait pas forcément les trois.
+    func test_guardDetectsEachBannedTokenOnItsOwn() {
+        for token in Self.bannedTokens {
+            let offences = Self.exitDialogOffences(
+                in: [(path: "Fake.swift", code: "let x = \(token)")])
+            XCTAssertEqual(offences.count, 1, "Le jeton « \(token) » doit suffire à faire rougir la garde.")
+        }
+    }
+
+    /// Contrôle NÉGATIF : la forme actuelle ne déclenche rien. Les alertes qui
+    /// subsistent dans le composer RAPPORTENT un échec média — elles ne
+    /// demandent rien à la sortie, et la garde ne doit pas les confondre.
+    func test_guardAcceptsTheCurrentForm() {
+        let current = """
+        .alert(
+            String(localized: "story.composer.mediaLostTitle", defaultValue: "Médias indisponibles", bundle: .module),
+            isPresented: Binding(get: { lostMediaCount > 0 }, set: { if !$0 { lostMediaCount = 0 } })
+        ) {
+            Button(String(localized: "story.composer.ok", defaultValue: "OK", bundle: .module)) { lostMediaCount = 0 }
+        }
+
+        func handleDismiss() {
+            switch Self.exitAction(exitPrompt) {
+            case .saveDraft:
+                saveDraftAndDismiss()
+            case .purgePhantoms:
+                clearPhantomDraftsOnly()
+                onDismiss()
             }
         }
         """
-        let lines = sample.components(separatedBy: "\n")
-        let modifierLine = Self.precedingModifierLine(lines: lines, anchor: Self.anchor)
-
-        XCTAssertEqual(modifierLine?.contains(".confirmationDialog("), true)
-        XCTAssertEqual(modifierLine?.contains(".alert("), false)
+        XCTAssertTrue(Self.exitDialogOffences(in: [(path: "Fake.swift", code: current)]).isEmpty)
     }
 
     // MARK: - Helpers
 
-    private static let anchor = "story.composer.quitWithoutPublishing"
+    /// Les trois marques de la question de sortie. Chacune est un jeton
+    /// UNIQUE au dépôt (ni `story.composer.quitWithoutPublishing` ni
+    /// `showDiscardAlert` n'ont jamais eu de second porteur), et
+    /// `cancelAndDismiss` nomme l'action que seule cette feuille offrait —
+    /// l'homonyme d'`AudioPostComposerView` vit hors de `Sources/MeeshyUI/Story/`,
+    /// hors du périmètre balayé.
+    static let bannedTokens = [
+        "story.composer.quitWithoutPublishing",
+        "showDiscardAlert",
+        "cancelAndDismiss",
+    ]
 
-    /// Racine du package : le fichier vit dans `Tests/MeeshyUITests/Story/`,
-    /// il faut donc remonter QUATRE niveaux avant de redescendre dans `Sources`.
-    private static var composerSourceURL: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Story
-            .deletingLastPathComponent()   // MeeshyUITests
-            .deletingLastPathComponent()   // Tests
-            .deletingLastPathComponent()   // MeeshySDK (racine du package)
-            .appendingPathComponent("Sources/MeeshyUI/Story/StoryComposerView.swift")
-    }
-
-    private static func strippedSource() throws -> String {
-        let source = try String(contentsOf: composerSourceURL, encoding: .utf8)
-        return strippingLineComments(source)
-    }
-
-    private static func strippingLineComments(_ source: String) -> String {
-        source
-            .components(separatedBy: "\n")
-            .map { line -> String in
-                guard let range = line.range(of: "//") else { return line }
-                return String(line[line.startIndex..<range.lowerBound])
-            }
-            .joined(separator: "\n")
-    }
-
-    /// Remonte depuis la ligne portant `anchor` jusqu'au premier modificateur
-    /// `.alert(`/`.confirmationDialog(` de chaîne SwiftUI rencontré — la
-    /// forme réelle du fichier place toujours ce modificateur à quelques
-    /// lignes au-dessus de l'argument titre littéral.
-    private static func precedingModifierLine(lines: [String], anchor: String) -> String? {
-        guard let anchorIndex = lines.firstIndex(where: { $0.contains(anchor) }) else { return nil }
-        var i = anchorIndex
-        while i >= 0 {
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix(".confirmationDialog(") || trimmed.hasPrefix(".alert(") {
-                return lines[i]
-            }
-            i -= 1
+    static func exitDialogOffences(in sources: [(path: String, code: String)]) -> [String] {
+        sources.flatMap { source in
+            bannedTokens
+                .filter { source.code.contains($0) }
+                .map { "\(source.path) : \($0)" }
         }
-        return nil
-    }
-
-    /// Bloc de lignes couvrant l'ANCRE jusqu'au modificateur top-level
-    /// suivant (`.alert(` du bloc « médias perdus »), utilisé pour vérifier
-    /// le contenu du corps du dialogue sans dépendre d'un compte de lignes
-    /// fixe (fragile si le fichier bouge).
-    private static func dialogBlock(lines: [String], anchor: String) -> [String] {
-        guard let anchorIndex = lines.firstIndex(where: { $0.contains(anchor) }) else { return [] }
-        guard let modifierStart = (0...anchorIndex).reversed().first(where: { i in
-            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
-            return trimmed.hasPrefix(".confirmationDialog(") || trimmed.hasPrefix(".alert(")
-        }) else { return [] }
-
-        let nextModifierIndex = lines[(anchorIndex + 1)...].firstIndex { line in
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            return trimmed.hasPrefix(".alert(") || trimmed.hasPrefix(".confirmationDialog(")
-        }
-        let end = nextModifierIndex ?? lines.count
-        return Array(lines[modifierStart..<end])
     }
 }

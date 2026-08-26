@@ -4,11 +4,13 @@
  * vers les rooms feed:{userId} des amis
  */
 
-import type { Server as SocketIOServer, Socket } from 'socket.io';
+import type { MeeshyIOServer as SocketIOServer, MeeshySocket as Socket } from '../typed-socket';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ServerToClientEvents } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
+import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '../serverEmit';
 import type {
   Post,
   PostComment,
@@ -36,6 +38,55 @@ import type {
 // Sans ce logger dédié, le fanout social était totalement invisible côté
 // production et empêchait tout diagnostic en cas de "ma story n'arrive pas".
 const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
+
+/**
+ * Cycle 100 — les quatre seams de diffusion sociale, CONTRAINTS par le contrat.
+ *
+ * Le cycle 99 a typé le `Socket` d'un handler et rendu impossibles, à la
+ * compilation, deux fautes : émettre un nom absent de `ServerToClientEvents`, et
+ * émettre un payload d'une autre forme que celle déclarée pour ce nom.
+ *
+ * Ce handler échappait ENTIÈREMENT à cette garde, et pas par oubli d'import :
+ * ses vingt-et-un sites d'émission ne touchent jamais `io.emit` directement.
+ * Ils passent par quatre helpers privés déclarés `(event: string, data: unknown)`
+ * — une signature qui BLANCHIT le couple. Typer `this.io` ne changeait rien :
+ * à l'intérieur du helper, `event` est un `string` quelconque et `data` un
+ * `unknown`, donc le contrat ne peut rien exiger, et au site d'appel il n'y a
+ * plus rien à vérifier.
+ *
+ * > Un seam qui prend `(string, unknown)` annule le contrat de tout ce qui passe
+ * > par lui. La garde ne vaut que jusqu'au premier paramètre non typé.
+ *
+ * C'est le chemin le PLUS exposé du dépôt : une diffusion Socket.IO n'a aucun
+ * sérialiseur — pas de `fast-json-stringify` pour retirer un champ de trop, pas
+ * de schéma de réponse pour signaler un champ manquant. Le typage de l'émission
+ * est ici la SEULE garde qui existe entre le producteur et les décodeurs
+ * iOS/Android/web, qui sont tous les trois écrits contre `ServerToClientEvents`.
+ */
+// Alias locaux des deux dérivations du contrat. Elles ont été ÉCRITES ici au
+// cycle 100, puis retrouvées mot pour mot au cycle 104 dans les huit portes
+// d'émission de la passerelle — c'est ce qui a décidé de leur donner un
+// domicile unique (`socketio/serverEmit.ts`). Les noms locaux survivent parce
+// que vingt-et-un sites d'appel les lisent dans les signatures publiques.
+type SocialEventName = ServerEventName;
+type SocialEventPayload<E extends SocialEventName> = ServerEventPayload<E>;
+
+/**
+ * L'erasure de corrélation vit désormais dans `emitServerEvent`
+ * (`socketio/serverEmit.ts`), partagée avec les huit autres portes d'émission
+ * de la passerelle. Elle ne blanchit toujours rien, et pour la même raison
+ * qu'ici : `socket.io` enveloppe sa map d'événements dans
+ * `DecorateAcknowledgementsWithMultipleResponses<…>` avant d'en dériver la
+ * signature d'`emit`, et sur un `E` GÉNÉRIQUE TypeScript ne peut pas prouver
+ * que cette enveloppe laisse le paramètre inchangé — alors qu'elle le fait pour
+ * tout `E` concret, aucun de nos événements serveur→client ne portant d'accusé
+ * de réception. Une limite d'inférence sur type mappé, pas un désaccord de
+ * forme.
+ *
+ * Ce que l'erasure ne touche PAS : le couple `(event, data)` a déjà été vérifié
+ * contre `ServerToClientEvents` à la frontière des quatre helpers publics, donc
+ * à chacun des vingt-et-un sites d'appel.
+ */
 
 export interface SocialEventsHandlerDependencies {
   io: SocketIOServer;
@@ -101,11 +152,16 @@ export class SocialEventsHandler {
   /**
    * Broadcast vers les feed rooms des amis + l'auteur lui-même
    */
-  private emitToFriends(friendIds: string[], authorId: string, event: string, data: unknown): void {
+  private emitToFriends<E extends SocialEventName>(
+    friendIds: string[],
+    authorId: string,
+    event: E,
+    data: SocialEventPayload<E>,
+  ): void {
     // Inclure l'auteur pour feedback immédiat
     const targetIds = [...friendIds, authorId];
     for (const id of targetIds) {
-      this.io.to(ROOMS.feed(id)).emit(event, data);
+      emitServerEvent(this.io.to(ROOMS.feed(id)), event, data);
     }
   }
 
@@ -116,23 +172,27 @@ export class SocialEventsHandler {
    * la double-livraison du modèle « boucle feed + emit post room séparé » (un
    * ami-viewer était dans sa feed room ET la post room). Cf. `commentBroadcastRooms`.
    */
-  private emitToFeedsAndPostRoom(
+  private emitToFeedsAndPostRoom<E extends SocialEventName>(
     recipientIds: string[],
     authorId: string,
     postId: string,
-    event: string,
-    data: unknown,
+    event: E,
+    data: SocialEventPayload<E>,
   ): void {
     const rooms = [...recipientIds, authorId].map((id) => ROOMS.feed(id));
     rooms.push(ROOMS.post(postId));
-    this.io.to(rooms).emit(event, data);
+    emitServerEvent(this.io.to(rooms), event, data);
   }
 
   /**
    * Broadcast uniquement vers l'auteur du post (notifs personnelles)
    */
-  private emitToUser(userId: string, event: string, data: unknown): void {
-    this.io.to(ROOMS.feed(userId)).emit(event, data);
+  private emitToUser<E extends SocialEventName>(
+    userId: string,
+    event: E,
+    data: SocialEventPayload<E>,
+  ): void {
+    emitServerEvent(this.io.to(ROOMS.feed(userId)), event, data);
   }
 
   /**
@@ -147,8 +207,13 @@ export class SocialEventsHandler {
    * `story:reacted` DEUX fois → le delta `+1` côté iOS s'appliquait deux fois →
    * compteur de réactions affiché en `+2`. Miroir de `emitToFeedsAndPostRoom`.
    */
-  private emitToUserFeedAndPostRoom(userId: string, postId: string, event: string, data: unknown): void {
-    this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]).emit(event, data);
+  private emitToUserFeedAndPostRoom<E extends SocialEventName>(
+    userId: string,
+    postId: string,
+    event: E,
+    data: SocialEventPayload<E>,
+  ): void {
+    emitServerEvent(this.io.to([ROOMS.feed(userId), ROOMS.post(postId)]), event, data);
   }
 
   // ==============================================
@@ -300,7 +365,7 @@ export class SocialEventsHandler {
   // STORY BROADCASTS
   // ==============================================
 
-  async broadcastStoryCreated(story: Post, authorId: string): Promise<void> {
+  async broadcastStoryCreated(story: Post, authorId: string, clientMutationId?: string): Promise<void> {
     // Honor `visibility` / `visibilityUserIds` like `broadcastStatusCreated` —
     // previously this always fanned out to ALL friends, leaking ONLY/EXCEPT
     // stories via the realtime event payload even though the REST list was
@@ -311,7 +376,9 @@ export class SocialEventsHandler {
     logger.info(
       `📣 story:created fanout author=${authorId} storyId=${story.id} visibility=${visibility} recipients=${recipients.length}`
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story });
+    // U1 parity — echo the cmid so an offline author's optimistic story
+    // (keyed by cmid) reconciles to the server story instead of duplicating.
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story, clientMutationId });
   }
 
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
@@ -361,14 +428,16 @@ export class SocialEventsHandler {
   // STATUS/MOOD BROADCASTS
   // ==============================================
 
-  async broadcastStatusCreated(status: Post, authorId: string): Promise<void> {
+  async broadcastStatusCreated(status: Post, authorId: string, clientMutationId?: string): Promise<void> {
     const visibility = status.visibility;
     const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     logger.info(
       `📣 status:created fanout author=${authorId} statusId=${status.id} visibility=${visibility} recipients=${recipients.length}`
     );
-    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status });
+    // U1 parity — echo the cmid so an offline author's optimistic status
+    // (keyed by cmid) reconciles to the server status instead of duplicating.
+    this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status, clientMutationId });
   }
 
   async broadcastStatusUpdated(status: Post, authorId: string): Promise<void> {

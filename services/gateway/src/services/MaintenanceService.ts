@@ -8,7 +8,16 @@ import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
+import { MediaService } from './MediaService';
+import { sweepPendingPostMedia } from './posts/sweepPendingPostMedia';
+import type { PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 import { conversationMessageStatsService } from './ConversationMessageStatsService';
+import type { SessionRevoker } from './admin/user-management.service';
+import {
+  RECIPIENT_LANG_SELECT,
+  recipientDateLocale,
+  recipientLanguage,
+} from '../utils/recipient-language';
 
 export class MaintenanceService {
   private prisma: PrismaClient;
@@ -28,14 +37,32 @@ export class MaintenanceService {
    * depuis 30min) se voit marqué offline par le cleanup périodique.
    */
   private isCurrentlyConnected: ((userId: string, isAnonymous: boolean) => boolean) | null = null;
+  /**
+   * Coupe les sockets d'un compte que le balayage vient de mettre hors service
+   * (fin de période de grâce). Même contrat que `UserManagementService` (F9) :
+   * injecté par le manager, résolu à l'appel, best-effort.
+   */
+  private sessionRevoker: SessionRevoker | null = null;
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
+  /**
+   * Le stockage qui rend les octets d'un `PostMedia` balayé. Distinct
+   * d'`attachmentService` : celui-ci ne connaît que `MessageAttachment`, et
+   * les deux tables ne partagent aucun chemin de suppression.
+   */
+  private readonly mediaService: PostMediaByteRemover;
 
-  constructor(prisma: PrismaClient, attachmentService: AttachmentService, emailService?: EmailService) {
+  constructor(
+    prisma: PrismaClient,
+    attachmentService: AttachmentService,
+    emailService?: EmailService,
+    mediaService: PostMediaByteRemover = new MediaService(),
+  ) {
     this.prisma = prisma;
     this.attachmentService = attachmentService;
     this.emailService = emailService;
+    this.mediaService = mediaService;
   }
 
   /**
@@ -52,6 +79,16 @@ export class MaintenanceService {
    */
   setIsCurrentlyConnected(predicate: (userId: string, isAnonymous: boolean) => boolean): void {
     this.isCurrentlyConnected = predicate;
+  }
+
+  /**
+   * Injecter la coupure des sockets d'un compte mis hors service par le
+   * balayage. Comme les deux capacités ci-dessus, elle vient du manager
+   * Socket.IO — qui naît APRÈS ce service — et ce service ne l'atteint jamais
+   * lui-même.
+   */
+  setSessionRevoker(revoker: SessionRevoker): void {
+    this.sessionRevoker = revoker;
   }
 
   /**
@@ -360,6 +397,11 @@ export class MaintenanceService {
         // Nettoyer les attachments orphelins
         await this.cleanupOrphanedAttachments();
 
+        // ... et son JUMEAU côté publication. Les deux tables portent la même
+        // forme d'abandon (un média téléversé que rien n'a réclamé) ; une
+        // seule des deux était moissonnée.
+        await this.cleanupOrphanedPostMedia();
+
         // Nettoyer les messages vides sans contenu ni attachement
         await this.cleanupEmptyMessages();
 
@@ -445,6 +487,36 @@ export class MaintenanceService {
 
     } catch (error) {
       logger.error('❌ [CLEANUP] Erreur lors du nettoyage des attachments orphelins:', error);
+    }
+  }
+
+  /**
+   * Ramasser les `PostMedia` restés EN ATTENTE au-delà du même seuil que les
+   * pièces jointes de message orphelines.
+   *
+   * Le geste qui les produit est le plus banal du produit : ouvrir un
+   * composer de publication, joindre des médias, fermer sans publier. Aucun
+   * client ne rappelle après un onglet refermé — c'est pourquoi la garde vit
+   * ici et pas dans le composer. Voir `posts/sweepPendingPostMedia.ts` pour
+   * l'ordre (octets avant ligne) et le prédicat PARTAGÉ avec la réclamation.
+   *
+   * Les échecs sont ABSORBÉS, comme ceux de son jumeau : une passe qui
+   * rejetterait emporterait le reste du nettoyage journalier avec elle.
+   */
+  private async cleanupOrphanedPostMedia(): Promise<void> {
+    try {
+      const olderThan = new Date();
+      olderThan.setHours(olderThan.getHours() - this.ORPHANED_ATTACHMENT_THRESHOLD_HOURS);
+
+      const { swept, reclaimed } = await sweepPendingPostMedia(this.prisma, this.mediaService, { olderThan });
+
+      if (swept === 0) {
+        logger.info('✅ [CLEANUP] Aucun média de publication abandonné');
+        return;
+      }
+      logger.info(`✅ [CLEANUP] ${swept} média(s) de publication abandonné(s) supprimé(s), ${reclaimed} fichier(s) récupéré(s)`);
+    } catch (error) {
+      logger.error('❌ [CLEANUP] Erreur lors du nettoyage des médias de publication abandonnés:', error);
     }
   }
 
@@ -617,6 +689,24 @@ export class MaintenanceService {
   }
 
   /**
+   * Un compte dont la période de grâce est échue est hors service dès la
+   * transaction ci-dessus ; un socket qui lui resterait ouvert continuerait de
+   * recevoir ses fils temps réel et d'émettre des `typing:start` lus « en
+   * ligne ». Après l'écriture, jamais avant ; ne lève jamais — la ligne est
+   * déjà posée, et un échec ici ne doit pas être compté comme une expiration
+   * ratée par l'appelant.
+   */
+  private async revokeSessionsOfDeletedAccount(userId: string): Promise<void> {
+    const revoke = this.sessionRevoker;
+    if (!revoke) return;
+    try {
+      await revoke(userId);
+    } catch (error) {
+      logger.warn(`⚠️ [DELETION] Session revocation failed for deleted account user=${userId}:`, error);
+    }
+  }
+
+  /**
    * Traiter les demandes de suppression de compte :
    * 1. Expirer les grace periods terminées (CONFIRMED -> GRACE_PERIOD_EXPIRED)
    * 2. Envoyer les rappels hebdomadaires pour les requests GRACE_PERIOD_EXPIRED
@@ -648,6 +738,7 @@ export class MaintenanceService {
               })
             ]);
             expiredCount++;
+            await this.revokeSessionsOfDeletedAccount(req.userId);
           } catch (error) {
             logger.error(`❌ [DELETION] Failed to expire request=${req.id} for user=${req.userId}:`, error);
           }
@@ -668,7 +759,7 @@ export class MaintenanceService {
         },
         include: {
           user: {
-            select: { email: true, displayName: true, firstName: true, systemLanguage: true }
+            select: { email: true, displayName: true, firstName: true, ...RECIPIENT_LANG_SELECT }
           }
         }
       });
@@ -705,8 +796,15 @@ export class MaintenanceService {
 
             const deleteNowLink = `${baseUrl}/api/v1/me/delete-account/delete-now?token=${newConfirmToken}`;
             const cancelLink = `${baseUrl}/api/v1/me/delete-account/cancel?token=${newCancelToken}`;
+            // La date se lit DANS l'e-mail, donc dans la langue de l'e-mail :
+            // un `'fr-FR'` en dur datait « à la française » un courrier
+            // allemand ou espagnol.
+            const lang = recipientLanguage(user, 'en');
             const gracePeriodEndDate = req.gracePeriodEndsAt
-              ? req.gracePeriodEndsAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+              ? req.gracePeriodEndsAt.toLocaleDateString(
+                  recipientDateLocale(user, 'en'),
+                  { day: 'numeric', month: 'long', year: 'numeric' },
+                )
               : 'N/A';
 
             await this.emailService.sendAccountDeletionReminderEmail({
@@ -715,7 +813,7 @@ export class MaintenanceService {
               deleteNowLink,
               cancelLink,
               gracePeriodEndDate,
-              language: user.systemLanguage || 'en',
+              language: lang,
             });
 
             logger.info(`📧 [DELETION] Reminder sent to user=${req.userId} (reminder #${req.reminderCount + 1})`);

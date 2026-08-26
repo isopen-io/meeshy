@@ -23,6 +23,14 @@ struct ForwardPickerSheet: View {
     let sourceConversationId: String
     let accentColor: String
     var onOpenConversation: ((Conversation) -> Void)? = nil
+    /// **Le second déclencheur de « Composer »** (loi 6). La feuille ne monte
+    /// PAS le meuble : elle se referme et rend la main à son hôte, qui pose le
+    /// même état de présentation que l'appui long. Y monter le composer en
+    /// ferait une seconde porte — donc un second contrat d'envoi, une seconde
+    /// sortie et une seconde reprise hors-ligne à tenir d'accord.
+    ///
+    /// `nil` = l'hôte n'a rien branché, et l'entrée est ABSENTE (loi 4).
+    var onCompose: (() -> Void)? = nil
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -42,8 +50,21 @@ struct ForwardPickerSheet: View {
     /// même pour un contact dont la conversation vient d'être créée.
     @State private var firstServedConversation: Conversation?
     @State private var successToastFired = false
+    /// La destination retenue dont la CONFIRMATION de capture est en attente.
+    /// `nil` = aucune question posée. Retient la destination, jamais un booléen :
+    /// la confirmation doit republier vers ce que l'utilisateur a touché.
+    @State private var pendingCapture: PublicationTarget?
+    @State private var isPublishing = false
+    /// La destination effectivement PUBLIÉE, retenue pour que le toast posé à la
+    /// fermeture sache quoi annoncer. `nil` tant que rien n'a abouti.
+    @State private var publishedTarget: PublicationTarget?
+    /// La raison du dernier échec de publication, affichée SOUS les boutons.
+    /// `nil` = rien à signaler. Un échec laisse la feuille montée pour qu'on
+    /// puisse réessayer sans la rouvrir.
+    @State private var publishFailure: String?
 
     private var forwardService: MessageForwardServiceProviding { MessageForwardService.shared }
+    private var postService: PostServiceProviding { PostService.shared }
 
     /// La conversation SOURCE du message ne doit jamais apparaître comme
     /// cible — transférer un message dans sa propre conversation n'a pas de
@@ -109,7 +130,16 @@ struct ForwardPickerSheet: View {
                 }
             }
             .background(theme.backgroundPrimary)
-            .safeAreaInset(edge: .bottom) { batchSendBar }
+            .safeAreaInset(edge: .bottom) {
+                // Transférer à quelqu'un et PUBLIER sont deux gestes voisins et
+                // un seul point de départ : la feuille offre donc les deux, la
+                // publication sous la liste des conversations.
+                VStack(spacing: 0) {
+                    publicationSection
+                    batchSendBar
+                }
+                .background(.ultraThinMaterial)
+            }
             .navigationTitle(String(localized: "forward.title", defaultValue: "Forward", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -259,6 +289,276 @@ struct ForwardPickerSheet: View {
         .equatable()
     }
 
+    // MARK: - Publication
+
+    /// **La pièce que cette rangée DÉSIGNE — une seule, pour ses deux
+    /// contrôles.**
+    ///
+    /// Le fil rend un média par publication, et une feuille qui proposerait
+    /// « publier » sur un lot hétérogène mentirait sur ce qui partirait
+    /// réellement : il faut donc élire. Ce qui compte est qu'on élise UNE fois.
+    /// Les pilules élisaient `attachments.first` pendant que « Composer »
+    /// composait l'unique pièce composable, où qu'elle soit — et sur
+    /// `[document.pdf, photo.jpg]` (un envoi nominal : `MultiAttachmentSendPlanner`
+    /// range `.file` et `.image` dans le MÊME lot) cela donnait un en-tête
+    /// « Publier » sans une seule pilule, au-dessus d'un « Composer » qui visait
+    /// une AUTRE pièce que celle que les pilules annonçaient.
+    ///
+    /// La règle d'offre décide donc pour les deux, et le repli reste la première
+    /// pièce — sans quoi un message sans pièce composable (une note vocale)
+    /// perdrait ses pilules.
+    private var primaryAttachment: MessageAttachment? {
+        ComposableAttachment.target(in: message) ?? message.attachments.first
+    }
+
+    /// Les destinations publiques offertes pour ce média, vides quand il n'en a
+    /// aucune (document, PDF, code) — la section n'est alors pas montée du tout,
+    /// plutôt que montée vide.
+    private var publicationTargets: [PublicationTarget] {
+        PublicationTargetRule.targets(forMimeType: primaryAttachment?.mimeType)
+    }
+
+    /// **La COMPOSABILITÉ, qui n'est pas la publiabilité.** `publicationTargets`
+    /// dit où le PONT peut envoyer ces octets tels quels — note vocale
+    /// comprise ; `ComposableAttachment.offers` dit si la GRAINE sait poser le
+    /// média sur un canvas, ET si elle a le DROIT de l'emporter (vue unique,
+    /// flou, chiffrement, lot hétérogène).
+    ///
+    /// La règle est LUE, jamais réécrite : ce déclencheur et l'appui long
+    /// mènent au même plein écran, et la conjonction vivait ici en double — dans
+    /// une `private var` de `View` qu'aucun test ne peut voir passer de `&&` à
+    /// `||`. Ne reste ici que ce qui est PROPRE à la feuille : `onCompose != nil`,
+    /// parce qu'un contrôle dont l'hôte n'a branché aucun effet est de l'UI
+    /// morte (loi 4).
+    private var offersCompose: Bool {
+        guard onCompose != nil else { return false }
+        return ComposableAttachment.offers(message: message)
+    }
+
+    @ViewBuilder
+    private var publicationSection: some View {
+        if !publicationTargets.isEmpty || offersCompose {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .main))
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+
+                // Défilement horizontal plutôt qu'un `HStack` nu : aux tailles
+                // Dynamic Type accessibles, deux pilules et un indicateur
+                // dépassent la largeur d'un iPhone, et un `HStack` les
+                // COMPRIMERAIT jusqu'à tronquer les libellés.
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(publicationTargets, id: \.self) { target in
+                            Button {
+                                handlePublishTap(target)
+                            } label: {
+                                Text(publicationLabel(for: target))
+                                    .font(MeeshyFont.relative(13, weight: .medium))
+                                    .foregroundColor(Color(hex: accentColor))
+                                    .padding(.horizontal, 14)
+                                    // 44pt : plancher de cible tactile (HIG). Il
+                                    // se pose ici, et non par du padding
+                                    // vertical, pour que la pilule garde sa
+                                    // hauteur quand le corps GRANDIT sous
+                                    // Dynamic Type.
+                                    .frame(minHeight: 44)
+                                    .background(
+                                        Capsule().stroke(Color(hex: accentColor).opacity(0.4), lineWidth: 1)
+                                    )
+                                    .contentShape(Capsule())
+                            }
+                            .disabled(isPublishing)
+                        }
+
+                        if offersCompose {
+                            composeEntry
+                        }
+
+                        if isPublishing {
+                            ProgressView().tint(Color(hex: accentColor))
+                        }
+                    }
+                    .padding(.vertical, 1)
+                }
+
+                if let pending = pendingCapture {
+                    captureConfirmation(for: pending)
+                }
+
+                if let publishFailure {
+                    Text(publishFailure)
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(MeeshyColors.error)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+    }
+
+    /// **« Composer »** — le second point d'entrée de `.conversationMedia`.
+    ///
+    /// Elle se distingue des pilules voisines par ce qu'elle FAIT : les pilules
+    /// PUBLIENT (le pont duplique les octets, la publication existe au relâché
+    /// du doigt) ; celle-ci ouvre un ATELIER, où rien ne part tant que l'auteur
+    /// n'a pas pressé la flèche. Le libellé le dit — « Composer », jamais
+    /// « Publier ».
+    ///
+    /// Elle se REFERME avant d'appeler sa fermeture : présenter un plein écran
+    /// pendant qu'une feuille se démonte est la course « already presenting »
+    /// que ce dépôt a déjà payée.
+    ///
+    /// **Et elle ne passe PAS par `handlePublishTap`, donc pas par la
+    /// confirmation de capture — décision assumée, écrite ici et dans le
+    /// doc-comment de `PublicationTargetRule.needsCaptureConfirmation`.** Cette
+    /// confirmation garde le geste où UN TAP publie ; l'atelier, lui, demande à
+    /// l'auteur son format, son audience et un appui sur la flèche avant que
+    /// quoi que ce soit ne parte. Une alerte posée avant d'OUVRIR l'atelier
+    /// serait une fausse alarme — et une fausse alarme s'apprend à écarter avant
+    /// d'atteindre le tap qui compte.
+    private var composeEntry: some View {
+        Button {
+            dismiss()
+            onCompose?()
+        } label: {
+            Label(
+                String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
+                systemImage: "wand.and.stars"
+            )
+            .font(MeeshyFont.relative(13, weight: .semibold))
+            .foregroundColor(Color(hex: accentColor))
+            .padding(.horizontal, 14)
+            .frame(minHeight: 44)
+            .background(
+                Capsule().fill(Color(hex: accentColor).opacity(0.12))
+            )
+            .contentShape(Capsule())
+        }
+        .disabled(isPublishing)
+    }
+
+    /// La confirmation posée avant d'ouvrir une CAPTURE au-delà de la
+    /// conversation. Elle n'apparaît que pour un média que cette application a
+    /// elle-même pris (`capturedInApp`, déclaré à l'envoi par le client qui a
+    /// ouvert la caméra ou le micro) : lui seul n'a encore été vu par personne.
+    @ViewBuilder
+    private func captureConfirmation(for target: PublicationTarget) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String(
+                localized: "forward.publish-capture-warning",
+                defaultValue: "Ce média vient d'être capturé par l'application. Le publier le rendra visible au-delà de cette conversation.",
+                bundle: .main
+            ))
+            .font(MeeshyFont.relative(12))
+            .foregroundColor(theme.textPrimary)
+            .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 8) {
+                Button {
+                    pendingCapture = nil
+                    publish(target)
+                } label: {
+                    Text(String(localized: "forward.publish-confirm", defaultValue: "Publier", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 44)
+                        .background(Capsule().fill(Color(hex: accentColor)))
+                        .contentShape(Capsule())
+                }
+
+                Button {
+                    pendingCapture = nil
+                } label: {
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+                        .font(MeeshyFont.relative(13))
+                        .foregroundColor(theme.textMuted)
+                        .padding(.horizontal, 12)
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+        )
+    }
+
+    private func publicationLabel(for target: PublicationTarget) -> String {
+        switch target {
+        case .story:
+            return String(localized: "forward.publish-story", defaultValue: "Ma story", bundle: .main)
+        case .reel:
+            return String(localized: "forward.publish-reel", defaultValue: "Nouveau réel", bundle: .main)
+        case .post:
+            return String(localized: "forward.publish-post", defaultValue: "Nouveau post", bundle: .main)
+        }
+    }
+
+    /// Publier une capture est irréversible du point de vue de qui l'a prise :
+    /// une photo sortie de la caméra n'a encore été vue par personne. On demande
+    /// donc, une fois, avant d'ouvrir le média à un fil entier.
+    private func handlePublishTap(_ target: PublicationTarget) {
+        guard let attachment = primaryAttachment else { return }
+        if PublicationTargetRule.needsCaptureConfirmation(
+            capturedInApp: attachment.capturedInApp,
+            target: target
+        ) {
+            pendingCapture = target
+            return
+        }
+        publish(target)
+    }
+
+    private func publish(_ target: PublicationTarget) {
+        guard !isPublishing else { return }
+        publishFailure = nil
+        isPublishing = true
+        Task { await performPublish(target) }
+    }
+
+    /// Même forme que `perform(_:)` pour un transfert : une méthode `async` qui
+    /// mute l'état directement, jamais un `MainActor.run` imbriqué — la vue est
+    /// déjà isolée sur le main actor.
+    private func performPublish(_ target: PublicationTarget) async {
+        guard let attachment = primaryAttachment else {
+            isPublishing = false
+            return
+        }
+        do {
+            _ = try await postService.publishAttachment(
+                attachmentId: attachment.id,
+                target: target,
+                content: nil,
+                capturedInApp: attachment.capturedInApp
+            )
+            isPublishing = false
+            HapticFeedback.success()
+            // Le toast part à la FERMETURE, pas ici : présenté sous la feuille
+            // encore montée il serait invisible. Même raison — et même
+            // mécanisme — que le toast de transfert.
+            publishedTarget = target
+            dismiss()
+            onDismiss()
+        } catch {
+            isPublishing = false
+            HapticFeedback.error()
+            // L'échec s'affiche IN-SHEET, comme les échecs de transfert ligne par
+            // ligne : la feuille reste montée, et le toast racine qu'elle
+            // RECOUVRE serait invisible — c'est la raison déjà écrite sur
+            // `fireDeferredSuccessToast`.
+            publishFailure = String(
+                localized: "forward.publish-failed",
+                defaultValue: "La publication a échoué",
+                bundle: .main
+            )
+        }
+    }
+
     // MARK: - Batch Send Bar
 
     @ViewBuilder
@@ -351,6 +651,16 @@ struct ForwardPickerSheet: View {
     /// fois la feuille partie. Un seul toast par ouverture, sur la PREMIÈRE
     /// cible servie.
     private func fireDeferredSuccessToast() {
+        // Une publication et un transfert ne peuvent pas aboutir dans la même
+        // ouverture — publier ferme la feuille — mais l'ordre reste explicite :
+        // la publication d'abord, puisqu'elle est ce qui vient de fermer.
+        if publishedTarget != nil {
+            publishedTarget = nil
+            FeedbackToastManager.shared.showSuccess(
+                String(localized: "forward.published", defaultValue: "Publié", bundle: .main)
+            )
+            return
+        }
         guard !successToastFired, let conv = firstServedConversation else { return }
         successToastFired = true
         let title = String(localized: "forward.success", defaultValue: "Message transféré", bundle: .main)

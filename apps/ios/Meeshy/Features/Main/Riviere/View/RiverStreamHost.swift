@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// L'écran Rivière — compose la loi (`RiverLaneResolver`), les tokens
@@ -75,6 +76,15 @@ struct RiverStreamHost: View {
     /// pas une marge du pane — la dernière bulle peut remonter AU-DESSUS du
     /// composeur, et aucune ne reste sous une zone qu'aucun doigt n'atteint.
     var bottomInset: CGFloat = 0
+    /// L2b/2b-7 — le roster de frappe, DIT par l'appelant
+    /// (`ConversationView` → `RiverConversationHost`, qui lit
+    /// `ConversationViewModel.typingUsernames`).
+    ///
+    /// **Décoration de PEAU, jamais une entrée de la LOI.** Il n'entre ni
+    /// dans `RiverLaneResolver` ni dans `lanesInput` : une voix qui n'a encore
+    /// rien DIT ne doit pas faire naître un couloir — et ce couloir
+    /// survivrait au `typing:stop` (`RiverTypingIndicatorTests`).
+    var typingParticipants: [TypingParticipant] = []
     /// Demande de RE-CADRAGE venue de l'appelant (première géométrie
     /// peuplée, rangs préfixés) — chaque incrément recadre le curseur.
     var landingToken: Int = 0
@@ -130,6 +140,20 @@ struct RiverStreamHost: View {
 
     private var bubbleByRank: [Int: RiverLaneResolver.RiverBubble] {
         Dictionary(uniqueKeysWithValues: geometry.bubbles.map { ($0.rank, $0) })
+    }
+
+    /// La frappe porte la couleur de SA VOIX — la MÊME loi que la bande des
+    /// couloirs (`RiverLaneHeaderStrip` : `DynamicColorGenerator.colorForName`
+    /// sur le `colorSeed`). `RiverConversationMapping.contents(...)` est le
+    /// SEUL producteur de `RiverBubbleContent` et y pose `colorSeed:
+    /// displayName(of: message)` — EXACTEMENT `senderDisplayName`
+    /// (`RiverConversationMapping.swift:229`/`:235`) : la graine EST le nom
+    /// affiché, par construction, sans qu'il y ait de correspondance à
+    /// chercher parmi les voix déjà dites (F4, revue adversariale
+    /// 2026-08-25). Aucune couleur en dur : une peau ne redéclare jamais une
+    /// loi de couleur.
+    private var typingAccentHex: String {
+        DynamicColorGenerator.colorForName(typingParticipants.first?.displayName ?? "")
     }
 
     /// **Hauteur de lecture, en RANG** — ce que `resolveRiverLaneHeaders`
@@ -400,6 +424,51 @@ struct RiverStreamHost: View {
                 .padding(.bottom, bottomInset)
             }
         }
+        // L2b/2b-7 — la frappe atteint le lecteur QUEL QUE SOIT son mode.
+        //
+        // En Script/Focal/Bulles elle est une CELLULE du flux ; ici, le pane
+        // est OPAQUE (`RiverConversationHost.background`) et la couvrait
+        // entièrement : le seul signe qu'une voix parle disparaissait avec le
+        // changement de mode, et le repli de la pastille de connexion exclut
+        // délibérément la conversation OUVERTE.
+        //
+        // **Overlay, jamais enfant du `safeAreaInset`** — la même raison que
+        // la bande des couloirs plus haut : un enfant d'inset impose sa
+        // largeur au `ScrollView` entier, un overlay reçoit la taille de son
+        // hôte et ne la fait JAMAIS grandir. `bottomInset` le remonte
+        // au-dessus du composeur, comme la dernière bulle (R-7).
+        //
+        // La MÊME vue que le Fil (`TypingIndicatorBubble`, tenue plate),
+        // jamais une seconde : deux vues divergeraient sur les timings, le
+        // libellé et l'accessibilité — seul l'accent diverge ASSUMÉMENT
+        // (couleur de VOIX ici, de conversation au Fil : voir `typingAccentHex`).
+        //
+        // F3 (revue adversariale 2026-08-25) : la tenue plate n'a NI capsule
+        // ni fond — c'est le rendu voulu en cellule de flux (Fil), où elle
+        // pousse le contenu. Ici elle est un CALQUE posé en `.overlay`, pile
+        // sur la bande où le curseur ancré en bas (`landingAnchor`) fait
+        // reposer la bulle la plus récente : sans surface propre, la pastille
+        // d'avatar et les trois points se peignaient à nu par-dessus le texte
+        // de cette bulle. `.background(.ultraThinMaterial, in: Capsule())`
+        // donne au bandeau la même lisibilité que la tenue capsule, sans
+        // changer sa tenue mandatée (`isFlat: true`).
+        .overlay(alignment: .bottom) {
+            if !typingParticipants.isEmpty {
+                TypingIndicatorBubble(
+                    participants: typingParticipants,
+                    accentHex: typingAccentHex,
+                    isDark: colorScheme == .dark,
+                    isFlat: true
+                )
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.bottom, bottomInset)
+                // Décoration : elle ne prend jamais un doigt destiné à la
+                // bulle qui passe dessous.
+                .allowsHitTesting(false)
+            }
+        }
         // Les cadres publiés bougent à chaque défilement : c'est le signal
         // qui montre la poignée, sans second lecteur d'offset.
         .adaptiveOnChange(of: frames) { _, _ in noteScrollActivity() }
@@ -536,6 +605,11 @@ private struct RiverHorizontalOffsetWriter: UIViewRepresentable {
     let request: Request?
 
     final class Coordinator {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         var appliedToken = 0
     }
 

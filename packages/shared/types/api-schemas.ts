@@ -290,6 +290,10 @@ export const messageAttachmentSchema = {
     forwardedFromAttachmentId: { type: 'string', nullable: true, description: 'Original attachment ID if forwarded' },
     isForwarded: { type: 'boolean', description: 'Whether this is a forwarded attachment' },
 
+    // Provenance — declared by the capturing client, read back by the share
+    // sheet to decide whether publishing this media needs confirmation.
+    capturedInApp: { type: 'boolean', description: "Media came from the app's own camera or microphone" },
+
     // View-once / Secret
     isViewOnce: { type: 'boolean', description: 'View-once attachment' },
     maxViewOnceCount: { type: 'number', nullable: true, description: 'Max unique viewers' },
@@ -375,7 +379,15 @@ export const messageAttachmentSchema = {
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
-    metadata: { type: 'object', nullable: true, description: 'Additional metadata JSON' },
+    // `additionalProperties: true` — c'est une CARTE à clés ouvertes
+    // (`AttachmentMetadata` : dimensions, codecs, et surtout
+    // `audioEffectsTimeline`), donc la seule déclaration qui la laisse passer.
+    // Sans lui, fast-json-stringify appliquait `additionalProperties: false` et
+    // servait `{}` — sur TOUTE route employant ce schéma, la liste de messages
+    // comprise. `apps/web/…/message-formatting.tsx` lit
+    // `attachment.metadata?.audioEffectsTimeline` et ne l'a donc jamais reçu :
+    // la timeline d'effets d'une note vocale n'a jamais atteint un client.
+    metadata: { type: 'object', nullable: true, additionalProperties: true, description: 'Additional metadata JSON (audioEffectsTimeline, dimensions, codecs…) — carte à clés ouvertes' },
 
     // ===== TRANSCRIPTION & TRANSLATION V2 (JSON intégré - Générique) =====
     // V2: Champs JSON intégrés dans MessageAttachment
@@ -461,14 +473,19 @@ export const messageAttachmentSchema = {
           }
         },
         durationMs: { type: 'number', nullable: true, description: 'Durée en millisecondes (audio/video)' },
+        // Carte à clés ouvertes : `VoiceAnalysisService` la produit en
+        // `Record<string, unknown>`. Sans `additionalProperties`, elle sortait
+        // `{}` — le champ était LISTÉ, donc l'omettre l'aurait mieux servi.
         voiceQualityAnalysis: {
           type: 'object',
           nullable: true,
-          description: 'Analyse qualité vocale (audio)'
+          additionalProperties: true,
+          description: 'Analyse qualité vocale (audio) — carte à clés ouvertes'
         },
         // Spécifique document
         pageCount: { type: 'number', nullable: true, description: 'Nombre de pages (document)' },
-        documentLayout: { type: 'object', nullable: true, description: 'Structure document (document)' },
+        // Même famille, même correctif : structure libre produite par l'OCR.
+        documentLayout: { type: 'object', nullable: true, additionalProperties: true, description: 'Structure document (document) — carte à clés ouvertes' },
         // Spécifique image
         imageDescription: { type: 'string', nullable: true, description: 'Description image (image)' },
         detectedObjects: { type: 'array', nullable: true, description: 'Objets détectés (image)' },
@@ -744,7 +761,19 @@ export const messageSchema = {
               thumbnailUrl: { type: 'string', nullable: true },
               width: { type: 'number', nullable: true },
               height: { type: 'number', nullable: true },
-              duration: { type: 'number', nullable: true }
+              duration: { type: 'number', nullable: true },
+              // La protection du média cité, DÉCLARÉE ici sous peine d'être
+              // retirée. `attachmentFullSelect` la rend depuis toujours, mais
+              // cette copie inline est plus pauvre que `messageAttachmentSchema`
+              // (qui, lui, les déclare) : fast-json-stringify les strippait du
+              // seul chemin REST. Côté client l'absence n'est pas un champ
+              // manquant mais une INVERSION — `declaredProtection` rend `nil`
+              // quand les deux sont absents, un silence que la citation lit
+              // comme « rien à protéger », et la vignette d'un média à vue
+              // unique s'affichait entière après un rechargement pendant que
+              // le même message reçu par socket restait masqué.
+              isViewOnce: { type: 'boolean' },
+              isBlurred: { type: 'boolean' }
             }
           }
         },
@@ -873,8 +902,29 @@ export const messageSchema = {
       description: 'Array of validated user IDs mentioned in message'
     },
 
-    // Encryption (encryptionMode is only on Conversation)
+    // Encryption
+    //
+    // `encryptionMode` était annoté ici « only on Conversation ». C'est FAUX :
+    // `schema.prisma` le porte sur `Message` aussi (« Encryption mode: e2ee,
+    // server, hybrid »), deux routes le CHARGENT (`conversations/messages.ts`
+    // pour la liste, `messages.ts` pour le détail) et le SDK iOS le DÉCLARE sur
+    // son message (`APIMessage.encryptionMode`, décodé). Il manquait ici, et
+    // seulement ici — mesuré au sérialiseur sur la charge utile de la liste :
+    //
+    //   in  : { …, isEncrypted: true, encryptionMode: 'e2ee', encryptedContent }
+    //   out : { …, isEncrypted: true,                         encryptedContent }
+    //
+    // Un client E2EE recevait donc `isEncrypted: true` et le chiffré, sans
+    // jamais savoir SOUS QUEL RÉGIME déchiffrer. C'est le même défaut que le
+    // R5 des pièces jointes, une couche plus haut : `messageAttachmentSchema`
+    // a gagné son enveloppe E2EE et un cliquet
+    // (`attachmentIncludes.test.ts`), le MESSAGE porteur ne l'avait pas.
     isEncrypted: { type: 'boolean', description: 'Message is encrypted' },
+    encryptionMode: {
+      type: 'string',
+      nullable: true,
+      description: 'Encryption mode of this message: e2ee, server, hybrid (null = not encrypted)'
+    },
     encryptedContent: {
       type: 'string',
       nullable: true,
@@ -961,7 +1011,11 @@ export const messageMinimalSchema = {
           sampleRate: { type: 'number', nullable: true, description: 'Sample rate (audio)' },
           pageCount: { type: 'number', nullable: true, description: 'Page count (PDFs)' },
           lineCount: { type: 'number', nullable: true, description: 'Line count (code/text)' },
-          metadata: { type: 'object', nullable: true, description: 'Additional metadata (audioEffectsTimeline, etc.)' }
+          // La JUMELLE de `messageAttachmentSchema.metadata` — celle de
+          // l'APERÇU de conversation, pas celle du fil — et elle portait le
+          // même objet NU, avec une description qui NOMMAIT
+          // `audioEffectsTimeline` pendant qu'elle le supprimait.
+          metadata: { type: 'object', nullable: true, additionalProperties: true, description: 'Additional metadata (audioEffectsTimeline, etc.)' }
         }
       },
       nullable: true,
@@ -1009,11 +1063,17 @@ export const conversationParticipantSchema = {
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
       description: 'Participant global role (aligned with Prisma enum UserRole)'
     },
+    // Minuscules — c'est ainsi que `Participant.role` est stocké, comparé
+    // (`role: { in: ['creator','admin','moderator'] }`) et écrit
+    // (`role.toLowerCase()`). L'enum annonçait des MAJUSCULES : rien ne cassait,
+    // `fast-json-stringify` ne validant pas les enums, mais l'inventaire OpenAPI
+    // décrivait un format que le serveur n'émet jamais — et un client qui s'y
+    // fierait comparerait sur la mauvaise casse.
     conversationRole: {
       type: 'string',
-      enum: ['CREATOR', 'ADMIN', 'MODERATOR', 'MEMBER'],
+      enum: ['creator', 'admin', 'moderator', 'member'],
       nullable: true,
-      description: 'Role in this specific conversation'
+      description: 'Role in this specific conversation (lowercase, as stored)'
     },
     isOnline: { type: 'boolean', description: 'User is currently online' },
     lastActiveAt: { type: 'string', format: 'date-time', nullable: true, description: 'Last activity timestamp' },
@@ -1295,7 +1355,24 @@ export const conversationSchema = {
 
     // Creator
     createdBy: { type: 'string', nullable: true, description: 'Creator user ID' },
-    createdByUser: { ...userMinimalSchema, nullable: true, description: 'Creator user info' }
+    createdByUser: { ...userMinimalSchema, nullable: true, description: 'Creator user info' },
+
+    // Appartenance de l'APPELANT — jumeau des mêmes clés dans
+    // `conversationMinimalSchema`, où le commentaire complet explique pourquoi
+    // leur absence rendait les conversations non modifiables. `GET
+    // /conversations/:id` résolvait déjà le rang (`callerConversationRole`) pour
+    // décider du plafond d'effectif, et le jetait faute d'être déclaré ici.
+    currentUserRole: {
+      type: 'string',
+      nullable: true,
+      description: "Rang de l'appelant DANS cette conversation (creator/admin/moderator/member), null s'il n'en est pas membre"
+    },
+    currentUserJoinedAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: "Date d'adhésion de l'appelant à cette conversation"
+    }
   }
 } as const;
 
@@ -1377,6 +1454,7 @@ export const conversationMinimalSchema = {
     id: { type: 'string', description: 'Conversation ID' },
     identifier: { type: 'string', nullable: true, description: 'Human-readable identifier' },
     title: { type: 'string', nullable: true, description: 'Conversation title' },
+    description: { type: 'string', nullable: true, description: 'Conversation description' },
     type: { type: 'string', description: 'Conversation type' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Banner URL' },
@@ -1475,6 +1553,58 @@ export const conversationMinimalSchema = {
       type: 'boolean',
       description: "L'appelant est un participant actif de cette conversation (ABSENT sur les routes qui ne le calculent pas)"
     },
+    // Le RANG de l'appelant dans cette conversation, calculé serveur
+    // (`currentUserRoleMap`, routes/conversations/core.ts). Troisième victime du
+    // même piège que `cursorPagination` et `isMember` ci-dessus, et la plus
+    // coûteuse : non déclaré ici, `fast-json-stringify` le retirait du fil, si
+    // bien qu'AUCUN client n'a jamais connu son rang. Tout ce qui en dépend
+    // retombait sur `member` — l'entrée « Réglages » iOS
+    // (`ConversationInfoSheet.canManageMembers`), la section de permissions, le
+    // bouton d'ajout de membre, les actions de rang — et le créateur d'un groupe
+    // ne pouvait donc rien y modifier. Garde : `conversation-wire-fields.test.ts`,
+    // qui sérialise au lieu de lire le schéma.
+    //
+    // Minuscules, comme la colonne `Participant.role` en base ('creator',
+    // 'admin', 'moderator', 'member') — pas d'`enum` ici : le rang voyage tel
+    // que la base le stocke, et un enum ne servirait que la documentation.
+    currentUserRole: {
+      type: 'string',
+      nullable: true,
+      description: "Rang de l'appelant DANS cette conversation (creator/admin/moderator/member), null s'il n'en est pas membre"
+    },
+    // Borne l'historique visible d'un membre arrivé en cours de route — iOS le
+    // passe en `memberJoinedAt` au ConversationViewModel.
+    currentUserJoinedAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: "Date d'adhésion de l'appelant à cette conversation"
+    },
+    // Réglages du conteneur. L'écran de réglages iOS construit ses valeurs
+    // « originales » depuis la conversation de la LISTE : absents du fil, ils y
+    // arrivaient à leur valeur par défaut, et l'écran affichait « tout le monde
+    // peut écrire » sur un canal d'annonces.
+    defaultWriteRole: {
+      type: 'string',
+      enum: ['everyone', 'member', 'moderator', 'admin', 'creator'],
+      nullable: true,
+      description: 'Minimum role required to send messages'
+    },
+    isAnnouncementChannel: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Announcement-only mode (only creator/admins can write)'
+    },
+    slowModeSeconds: {
+      type: 'number',
+      nullable: true,
+      description: 'Minimum seconds between messages per user (0 = disabled)'
+    },
+    autoTranslateEnabled: {
+      type: 'boolean',
+      nullable: true,
+      description: 'Auto-translation enabled (disabled for E2EE conversations)'
+    },
     userPreferences: {
       type: 'array',
       items: {
@@ -1572,21 +1702,47 @@ export const updateConversationRequestSchema = {
       maxLength: 500,
       description: 'New description'
     },
-    type: {
-      type: 'string',
-      enum: ['direct', 'group', 'public', 'global'],
-      description: 'New conversation type'
-    },
     avatar: {
       type: 'string',
       nullable: true,
-      description: 'Conversation avatar URL'
+      description: 'Conversation avatar URL (null clears it)'
     },
     banner: {
       type: 'string',
       nullable: true,
-      description: 'Conversation banner URL'
+      description: 'Conversation banner URL (null clears it)'
+    },
+    // Les quatre réglages du conteneur. Le handler les lisait depuis toujours ;
+    // le contrat, lui, n'en déclarait aucun — ils ne passaient que parce que
+    // rien ne ferme cet objet, c'est-à-dire par accident. Un contrat incomplet
+    // qui fonctionne est un contrat dont personne ne saura qu'il a cessé de
+    // fonctionner.
+    //
+    // Aucun `default` ici, délibérément : dans un schéma de REQUÊTE un `default`
+    // ÉCRIT dans `request.body` avant le handler, et celui-ci distingue
+    // précisément l'absence (« ne touche pas à ce réglage ») de la valeur.
+    defaultWriteRole: {
+      type: 'string',
+      enum: ['everyone', 'member', 'moderator', 'admin', 'creator'],
+      description: 'Minimum role required to send messages (creator/admin only)'
+    },
+    isAnnouncementChannel: {
+      type: 'boolean',
+      description: 'Announcement-only mode (creator/admin only)'
+    },
+    slowModeSeconds: {
+      type: 'number',
+      minimum: 0,
+      description: 'Minimum seconds between messages per user, 0 disables (creator/admin only)'
+    },
+    autoTranslateEnabled: {
+      type: 'boolean',
+      description: 'Auto-translation for this conversation (creator/admin only)'
     }
+    // `type` a été RETIRÉ : il n'était accepté que par la route jumelle
+    // supprimée de `sharing.ts`, aucun client ne l'envoie, et muter le type
+    // d'une conversation déplace ses invariants d'admission d'écriture sans que
+    // rien ne les recalcule.
   }
 } as const;
 
@@ -2467,7 +2623,11 @@ export const callSessionMinimalSchema = {
   description: 'Minimal call session data',
   properties: {
     id: { type: 'string', description: 'Call session ID' },
-    mode: { type: 'string', enum: ['voice', 'video'], description: 'Call mode' },
+    mode: {
+      type: 'string',
+      enum: ['p2p', 'sfu'],
+      description: 'WebRTC architecture (p2p or sfu) — NOT the call type; see metadata.type'
+    },
     status: { type: 'string', description: 'Call status' },
     startedAt: { type: 'string', format: 'date-time', nullable: true, description: 'Start time' },
     duration: { type: 'number', nullable: true, description: 'Duration in seconds' },
@@ -3036,14 +3196,44 @@ export const updateUserPreferenceRequestSchema = {
 // =============================================================================
 
 /**
- * Standard error response schema
+ * Standard error response schema.
+ *
+ * Déclare EXACTEMENT ce que `utils/response.ts:sendError` produit — le
+ * producteur unique de toutes les erreurs de la passerelle :
+ *
+ *   { ...details, success: false, error, message, code, violations? }
+ *
+ * `message` a manqué à cette liste jusqu'au cycle 92, alors que l'enveloppe le
+ * pose TOUJOURS (`message: options?.message || error`). Trois cent cinquante-quatre déclarations
+ * étalent cette constante : tous servaient une erreur amputée de sa phrase
+ * lisible — celle que le client web lit EN PREMIER
+ * (`api.service.ts:239`, `data.message || data.error`). Cent trente-huit appels
+ * d'erreur passent aujourd'hui un `message` distinct de l'`error` ; c'est ce
+ * texte-là qui se perdait.
+ *
+ * `details` n'est pas déclaré, et ne peut pas l'être : ce n'est pas une clé
+ * mais un ÉTALEMENT à la racine, dont les clés sont propres à chaque route.
+ * Une route qui en pose (`retryAfter`, `suggestedNickname`) les déclare EN PLUS
+ * de ce superset, sans quoi le sérialiseur les supprime.
  */
 export const errorResponseSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: false },
     error: { type: 'string', description: 'Error message' },
-    code: { type: 'string', description: 'Error code (optional)' }
+    message: { type: 'string', description: 'Human-readable error message' },
+    code: { type: 'string', description: 'Error code (optional)' },
+    violations: {
+      type: 'array',
+      description: 'Per-field violations, when the route supplies them',
+      items: {
+        type: 'object',
+        properties: {
+          path: { type: 'string', description: 'Field path that failed' },
+          message: { type: 'string', description: 'Violation message' }
+        }
+      }
+    }
   }
 } as const;
 

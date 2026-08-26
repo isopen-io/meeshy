@@ -255,6 +255,183 @@ final class StatusViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - L'ANCRAGE (loi 5) — republier un mood en POST permanent
+
+    /// **Un ancrage est un POST, jamais un mood.**
+    ///
+    /// Le MIROIR (`setStatus`) republie en `STATUS` — éphémère, détruit une
+    /// heure plus tard par le balayage d'expiration. L'ANCRAGE part par
+    /// `POST /posts/:id/repost` avec `targetType: .post`, le seul chemin qui
+    /// instantanie les octets d'une source éphémère.
+    ///
+    /// `targetType` est mesuré ICI plutôt que laissé au serveur : le gateway a
+    /// un filet (`?? POST`) qui rendrait un `nil` client invisible en
+    /// production. Ce test nomme l'INTENTION, pas le résultat.
+    func test_lAncrage_republieLaSourceEnPOST_etNonEnStatus() async {
+        let accepte = await sut.anchorStatusAsPost(
+            sourceStatusId: "mood-7", content: nil, visibility: "FRIENDS"
+        )
+
+        XCTAssertTrue(accepte, "Un serveur qui accepte doit rendre une acceptation — le meuble n'en referme pas d'autre.")
+        XCTAssertEqual(mockPostService.repostCallCount, 1)
+        XCTAssertEqual(mockPostService.lastRepostPostId, "mood-7")
+        XCTAssertEqual(
+            mockPostService.lastRepostTargetType, .post,
+            "Sans `targetType: .post`, seule la valeur par défaut du gateway sauverait l'ancrage — un défaut "
+                + "client invisible depuis l'app."
+        )
+        XCTAssertEqual(mockPostService.lastRepostVisibility, "FRIENDS")
+        XCTAssertEqual(
+            mockStatusService.createCallCount, 0,
+            "L'ancrage n'emprunte JAMAIS le chemin du mood : `POST /statuses` produirait un contenu qui expire."
+        )
+    }
+
+    /// **Republier sans un mot est un repost SIMPLE, jamais une citation.**
+    ///
+    /// **Ce que `isQuote` coûte ICI n'est PAS l'enracinement des réactions**, et
+    /// la rédaction précédente l'invoquait à tort. C'est l'argument des deux
+    /// publieurs jumeaux (`FeedViewModel.repostPost`, `StoryViewerView`), dont
+    /// les sources sont des POSTS. Le gateway ajoute un troisième terme —
+    /// `!post.isQuote && post.repostOfId && !repostRootIsEphemeral` — et une
+    /// source `STATUS` EST éphémère : `reactionRootId` est le repost lui-même,
+    /// quel que soit `isQuote`. Vérifier au bon étage compte : croire l'argument
+    /// sans le descendre ferait « corriger » cette garde dans le mauvais sens.
+    ///
+    /// Ce qu'une fausse citation coûte réellement sur cette porte est double, et
+    /// se lit dans `PostService.repostPost` : sans `content`, un reshare de
+    /// `STATUS` hérite du corps de sa source ET de son `originalLanguage`
+    /// DÉCLARÉ (`inheritStatusBody`) ; avec un `content`, le post affiche deux
+    /// fois la même phrase — une en commentaire, une dans la carte citée — et sa
+    /// langue est re-DÉTECTÉE sur ces trois mots, ce qui mal-étiquette le Prisme
+    /// au rang 0.
+    ///
+    /// **Ce que ce test NE couvre pas, et qui vit ailleurs** : le composer
+    /// PRÉREMPLIT sa saisie avec la phrase de la source, si bien que le cas
+    /// nominal n'arrive jamais ici avec `content: nil`. C'est
+    /// `ComposerAnchorComment.authored` qui le ramène à `nil`, et
+    /// `ComposerMoodSurfaceTests` l'éprouve. Le modèle, lui, garde la règle du
+    /// BLANC — deux questions distinctes, deux étages.
+    func test_lAncrage_sansUnMot_estUnRepostSIMPLE_jamaisUneCitation() async {
+        _ = await sut.anchorStatusAsPost(sourceStatusId: "mood-7", content: nil, visibility: "PUBLIC")
+
+        XCTAssertNil(mockPostService.lastRepostContent)
+        XCTAssertEqual(mockPostService.lastRepostIsQuote, false)
+
+        _ = await sut.anchorStatusAsPost(sourceStatusId: "mood-7", content: "   \n ", visibility: "PUBLIC")
+
+        XCTAssertNil(
+            mockPostService.lastRepostContent,
+            "Trois espaces et un retour à la ligne ne sont pas un commentaire."
+        )
+        XCTAssertEqual(
+            mockPostService.lastRepostIsQuote, false,
+            "Un blanc déclaré « citation » ferait enraciner les réactions sur le repost au lieu de l'original."
+        )
+    }
+
+    /// … et republier AVEC un mot est une citation, sans quoi la garde
+    /// ci-dessus serait verte sur un publieur qui ne cite jamais.
+    func test_lAncrage_avecUnMot_estUneCITATION() async {
+        _ = await sut.anchorStatusAsPost(sourceStatusId: "mood-7", content: "je garde", visibility: "PUBLIC")
+
+        XCTAssertEqual(mockPostService.lastRepostContent, "je garde")
+        XCTAssertEqual(mockPostService.lastRepostIsQuote, true)
+    }
+
+    /// **Un refus se DIT, et il se REMONTE.**
+    ///
+    /// C'est ce que la branche MIROIR ne sait pas faire : `setStatus` avale son
+    /// erreur réseau dans un `catch` qui se contente d'un toast, et le meuble
+    /// referme donc sur une perte. L'ancrage rend `false`, le meuble reste
+    /// ouvert, et l'auteur garde sa saisie.
+    func test_lAncrage_renduFalse_quandLeServeurRefuse() async {
+        mockPostService.repostResult = .failure(APIError.networkError(URLError(.timedOut)))
+
+        let accepte = await sut.anchorStatusAsPost(
+            sourceStatusId: "mood-7", content: "je garde", visibility: "PUBLIC"
+        )
+
+        XCTAssertFalse(
+            accepte,
+            "Un `true` inconditionnel referait le défaut du miroir : le composer se referme sur un envoi perdu, "
+                + "et cette fermeture-là reste PLAUSIBLE — elle ressemble à un succès."
+        )
+    }
+
+    /// **L'ancrage n'écrit RIEN dans la barre de moods** — et c'est la mutation
+    /// la plus tentante du lot.
+    ///
+    /// `setStatus` insère son entrée (`myStatus = entry ; statuses.insert(entry,
+    /// at: 0)`) parce qu'un mood publié EST une humeur. Un ancrage produit un
+    /// POST : recopier ces deux lignes ferait apparaître dans la barre une
+    /// entrée que le prochain `loadStatuses` effacerait sans un mot.
+    func test_lAncrage_nInsereRienDansLesMoods_carUnAncrageEstUnPOST() async {
+        let entry = makeStatusEntry(id: "deja-la", userId: "me")
+        sut.statuses = [entry]
+
+        let accepte = await sut.anchorStatusAsPost(
+            sourceStatusId: "deja-la", content: "je garde", visibility: "PUBLIC"
+        )
+
+        XCTAssertTrue(accepte)
+        XCTAssertEqual(sut.statuses.map(\.id), ["deja-la"], "La barre de moods ne gagne pas une entrée pour un POST.")
+        XCTAssertNil(sut.myStatus, "Un ancrage n'est pas l'humeur courante de son auteur.")
+    }
+
+    /// **Hors ligne, le refus se dit TOUT DE SUITE.**
+    ///
+    /// L'ancrage n'a pas de file durable — il n'enfile rien, il appelle le
+    /// réseau. Le doc-comment promettait déjà « hors ligne, le refus est DIT et
+    /// la saisie gardée » ; sans ce garde, il ne l'était qu'après le délai
+    /// d'expiration d'`URLSession`, la flèche restant grise
+    /// (`isPublishingDocument`) tout ce temps pour finir sur le même toast.
+    ///
+    /// Le prédicat est celui que le modèle possède DÉJÀ, injecté et doublé —
+    /// celui sur lequel `setStatus` bascule vers sa file. La différence entre
+    /// les deux branches n'est pas la lecture du réseau : c'est que le MIROIR a
+    /// un endroit où retomber.
+    func test_lAncrage_horsLigne_refuseSansToucherLeReseau() async {
+        let horsLigne = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            postService: mockPostService,
+            isOffline: { true }
+        )
+
+        let accepte = await horsLigne.anchorStatusAsPost(
+            sourceStatusId: "mood-7", content: "je garde", visibility: "PUBLIC"
+        )
+
+        XCTAssertFalse(accepte, "Le meuble doit garder la saisie : un ancrage perdu hors ligne ne se rejoue pas.")
+        XCTAssertEqual(
+            mockPostService.repostCallCount, 0,
+            "Hors ligne, l'ancrage ne doit pas partir sur le réseau pour y attendre son délai d'expiration."
+        )
+    }
+
+    /// … et EN LIGNE il part, sans quoi la garde ci-dessus resterait verte sur
+    /// un publieur qui aurait cessé de publier.
+    func test_lAncrage_enLigne_partBienSurLeReseau() async {
+        let enLigne = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            postService: mockPostService,
+            isOffline: { false }
+        )
+
+        let accepte = await enLigne.anchorStatusAsPost(
+            sourceStatusId: "mood-7", content: "je garde", visibility: "PUBLIC"
+        )
+
+        XCTAssertTrue(accepte)
+        XCTAssertEqual(mockPostService.repostCallCount, 1)
+    }
+
     // MARK: - clearStatus() Tests
 
     func test_clearStatus_clearsMyStatusAndRemovesFromList() async {
@@ -665,6 +842,102 @@ final class StatusViewModelTests: XCTestCase {
         XCTAssertEqual(
             payload?.originalLanguage, "fr",
             "La ligne outbox porte la langue française par défaut pour que le rejeu la transmette au gateway"
+        )
+    }
+
+    /// **Republier un mood sans réseau cesse d'en couper la source — et un mood
+    /// vocal cesse de partir muet.**
+    ///
+    /// La branche EN LIGNE passait `audioUrl` et `repostOfId` à
+    /// `StatusService.create` ; la branche HORS LIGNE composait sa charge sans
+    /// ni l'un ni l'autre. Un même geste produisait donc deux publications
+    /// différentes selon l'état du réseau : avec réseau une republication
+    /// vocale attribuée, sans réseau un mood ORIGINAL et MUET — un contenu
+    /// attribué à quelqu'un d'autre par omission.
+    ///
+    /// **Ce que ce témoin n'assère PAS, et pourquoi.** Pas `audioDuration` :
+    /// il n'existe nulle part sur ce chemin — ni sur `setStatus`, ni sur
+    /// `StatusServiceProviding.create`, ni chez ses deux appelants
+    /// (`ComposerMoodSurface.publishMood`, `StatusComposerView`). La branche en
+    /// ligne ne le passe pas davantage. L'exiger ici obligerait à inventer un
+    /// paramètre sans aucun producteur — un champ sans écrivain, testé vert.
+    /// La durée d'un mood vocal REPARTAGÉ vit sur sa source, que le serveur
+    /// relit par `repostOfId`.
+    func test_setStatus_horsLigne_porteLaSourceDuRepost_etSaVoix() async {
+        let queue = MockOfflineQueue()
+        let offlineSUT = StatusViewModel(
+            mode: .friends,
+            statusService: mockStatusService,
+            socialSocket: mockSocket,
+            authManager: mockAuthManager,
+            offlineQueue: queue,
+            isOffline: { true }
+        )
+
+        await offlineSUT.setStatus(
+            emoji: "🎤",
+            content: nil,
+            visibility: "PUBLIC",
+            audioUrl: "https://cdn.meeshy.me/a.m4a",
+            repostOfId: "p1"
+        )
+
+        XCTAssertEqual(mockStatusService.createCallCount, 0)
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertEqual(
+            payload?.repostOfId, "p1",
+            "La ligne durable perd la SOURCE de la republication : le mood repart comme un original, "
+                + "attribué à celui qui republie. `repostOfId` est le seul porteur de l'attribution — il "
+                + "n'y a pas de `viaUsername` sur le fil, le gateway ne l'a jamais lu."
+        )
+        XCTAssertEqual(
+            payload?.audioUrl, "https://cdn.meeshy.me/a.m4a",
+            "La ligne durable perd la VOIX : le mood vocal republié hors ligne arrive muet."
+        )
+    }
+
+    /// **Le commentaire qui affirmait le contraire de ce que fait le serveur.**
+    ///
+    /// La branche hors ligne portait, pour justifier son absence d'insertion
+    /// optimiste, la phrase « the gateway does not echo the clientMutationId on
+    /// `status:created` ». Elle était vraie quand elle a été écrite ; elle a
+    /// cessé de l'être quand `broadcastStatusCreated` a gagné
+    /// `clientMutationId` (`SocialEventsHandler.ts`,
+    /// `StatusCreatedEventData.clientMutationId`).
+    ///
+    /// Un commentaire faux n'est pas un détail de forme : c'est la LOI que lira
+    /// la prochaine session, et celle-ci renoncerait à l'insertion optimiste
+    /// d'un mood hors ligne en croyant citer le serveur.
+    ///
+    /// **Cette garde lit la source BRUTE, commentaires compris** — la seule du
+    /// dépôt à le faire, et c'est exigé par ce qu'elle mesure : passer par
+    /// `AppSourceGuard.stripComments` effacerait précisément la phrase qu'on
+    /// cherche, et la garde serait verte pour la mauvaise raison, à jamais.
+    func test_leModeleDeStatut_neCitePlusUnServeurQuiAChange() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/ViewModels
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/StatusViewModel.swift")
+        let brut = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            brut.contains("func setStatus("),
+            "Le fichier lu n'est pas celui du modèle de statut — la garde ne mesurerait RIEN."
+        )
+        XCTAssertFalse(
+            brut.contains("does not echo the clientMutationId"),
+            "Le modèle cite encore un serveur qui a changé : `broadcastStatusCreated` échoue désormais le "
+                + "`clientMutationId`. Corriger la phrase, pas la garde."
+        )
+        XCTAssertFalse(
+            brut.contains("est donc RÉCONCILIABLE"),
+            "Le modèle affirme maintenant l'INVERSE, et c'est faux du côté qui compte : `SocketStatusCreatedData` "
+                + "(SDK) ne déclare pas `clientMutationId` et `statusCreated` n'émet qu'un `APIPost` — le champ "
+                + "échoué par le serveur est jeté par le décodeur avant d'arriver ici. Corriger un commentaire "
+                + "faux en en installant un autre laisse la même LOI fausse à lire pour la session suivante. "
+                + "Cette assertion se lève le jour où le décodeur porte le champ, pas avant."
         )
     }
 

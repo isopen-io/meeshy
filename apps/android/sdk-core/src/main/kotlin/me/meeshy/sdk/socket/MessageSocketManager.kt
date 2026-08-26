@@ -28,6 +28,7 @@ import me.meeshy.sdk.model.ConversationDeletedSocketEvent
 import me.meeshy.sdk.model.LiveLocationStartedEvent
 import me.meeshy.sdk.model.LiveLocationUpdatedEvent
 import me.meeshy.sdk.model.LiveLocationStoppedEvent
+import me.meeshy.sdk.sync.SyncSeqTracker
 import org.json.JSONObject
 import timber.log.Timber
 import javax.inject.Inject
@@ -44,6 +45,7 @@ import javax.inject.Singleton
 class MessageSocketManager @Inject constructor(
     private val socketManager: SocketManager,
     private val json: Json,
+    private val syncSeqTracker: SyncSeqTracker,
 ) {
     private val _messageReceived = buf<ApiMessage>()
     private val _messageEdited = buf<ApiMessage>()
@@ -110,10 +112,13 @@ class MessageSocketManager @Inject constructor(
 
     /**
      * Real-time notifications (ARCHITECTURE.md §18) — the gateway's socket payload is the
-     * durable [ApiNotification] shape plus a few toast-only fields (`title`/`subtitle`/`_seq`)
+     * durable [ApiNotification] shape plus a couple of toast-only fields (`title`/`subtitle`)
      * that [Json.ignoreUnknownKeys] silently drops, so decoding straight into [ApiNotification]
      * is safe and needs no separate wire type. Mirrors iOS
      * `MessageSocketManager.notificationReceived`.
+     *
+     * `_seq` is dropped by the decoder too, but it is NOT ignored: it is read off the RAW
+     * payload first and handed to [SyncSeqTracker] — see [attach].
      */
     val notificationReceived: SharedFlow<ApiNotification> = _notificationReceived.asSharedFlow()
 
@@ -144,7 +149,14 @@ class MessageSocketManager @Inject constructor(
         listen("location:live-started", _liveLocationStarted)
         listen("location:live-updated", _liveLocationUpdated)
         listen("location:live-stopped", _liveLocationStopped)
-        listen("notification:new", _notificationReceived)
+        // SyncEngine — observer le `_seq` AVANT de livrer l'event, comme le web
+        // (`notification-socketio.singleton.ts`) : un trou prouve que des
+        // notifications ont été manquées. Le curseur suit le flux SERVEUR, donc il
+        // avance même si le décodage échoue ensuite (un décodage raté est notre
+        // bug, pas un trou d'émission) et même si aucun écran n'écoute.
+        listen("notification:new", _notificationReceived) { raw ->
+            syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
+        }
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */
@@ -156,15 +168,31 @@ class MessageSocketManager @Inject constructor(
         socketManager.emit("typing:stop", JSONObject().put("conversationId", conversationId))
     }
 
-    private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
+    /**
+     * [onRaw] sees the untouched payload before it is decoded — the seam for transport-level
+     * fields the durable model deliberately does not carry (`_seq`). It runs inside the same
+     * `runCatching`, so a throw there is logged and drops the event exactly like a decode
+     * failure rather than escaping into the Socket.IO callback thread.
+     */
+    private inline fun <reified T> listen(
+        event: String,
+        flow: MutableSharedFlow<T>,
+        crossinline onRaw: (JSONObject) -> Unit = {},
+    ) {
         socketManager.on(event) { args ->
             runCatching {
-                val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
-                flow.tryEmit(json.decodeFromString<T>(raw))
+                val raw = (args.firstOrNull() as? JSONObject) ?: return@on
+                onRaw(raw)
+                flow.tryEmit(json.decodeFromString<T>(raw.toString()))
             }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
         }
     }
 
     private fun <T> buf(): MutableSharedFlow<T> =
         MutableSharedFlow(replay = 0, extraBufferCapacity = 64)
+
+    private companion object {
+        /** Transport-level per-user cursor stamped by the gateway's `emitWithSeq`. */
+        const val SEQ_KEY = "_seq"
+    }
 }

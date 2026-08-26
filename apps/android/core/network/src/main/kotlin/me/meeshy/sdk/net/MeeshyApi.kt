@@ -93,6 +93,10 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
 
             val client = OkHttpClient.Builder()
                 .addInterceptor(AuthInterceptor(tokenStore))
+                // Annonce ce que ce binaire sait LIRE. Ne se pose qu'apres que
+                // la lecture v3 existe : l'inverse echangerait une sentinelle
+                // lisible contre un ecran vide.
+                .addInterceptor(ClientCapabilitiesInterceptor())
                 // Apres l'authenticator: si le rafraichissement a pu sauver la
                 // session, la reponse finale n'est plus un 401 et rien ne se
                 // declenche. On ne signale donc que les expirations REELLES.

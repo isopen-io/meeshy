@@ -1,8 +1,11 @@
 import { z } from 'zod';
+import { isMsRangeStrictlyOrdered } from '@meeshy/shared/utils/time-range';
+import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { MAX_CONTENT_BYTES } from './content-limits.js';
 
 const mongoId = z
   .string()
-  .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+  .regex(OBJECT_ID_REGEX, 'Invalid MongoDB ObjectId format');
 
 /**
  * Code de langue tel qu'il arrive du fil, AVANT normalisation serveur.
@@ -34,6 +37,23 @@ const playbackStretch = z.object({
   startMs: z.number().int().nonnegative(),
   endMs: z.number().int().nonnegative(),
   endedBy: z.enum(['pause', 'seek', 'muted', 'completed', 'dismissed', 'superseded'])
+}).refine(isMsRangeStrictlyOrdered, {
+  /**
+   * `endMs > startMs` STRICT (pas `>=`), via la brique partagée
+   * {@link isMsRangeStrictlyOrdered} (`@meeshy/shared/utils/time-range`) : le
+   * MÊME prédicat que les filtres `isUsable` de `utils/playback-trace.ts` et
+   * `utils/playback-segments.ts`, qui jettent silencieusement une entrée de
+   * durée nulle ou inversée à la persistance et à la fusion. Rejeter au wire
+   * transforme une perte silencieuse en `400 Validation Error` — le client peut
+   * loguer et retenter au lieu de croire son rapport persisté.
+   *
+   * Régime STRICT distinct des refines 234/236 (`>=`, segment ponctuel admis,
+   * `isMsRangeOrdered`) : ici la sémantique documentée est « une écoute
+   * réellement CONTINUE » (`playback-trace.ts:7`) — une durée nulle n'est pas
+   * une écoute.
+   */
+  path: ['endMs'],
+  message: 'STRETCH_END_MUST_EXCEED_START'
 });
 
 // ============================================
@@ -97,9 +117,17 @@ export const AttachmentStatusDetailsQuerySchema = z.object({
 // ============================================
 
 export const UpdateMessageBodySchema = z.object({
+  // `.max(MAX_CONTENT_BYTES)` — même plafond de sécurité que les transports
+  // SOCKET d'écriture (`content-limits.ts`). Ce transport REST d'édition
+  // (`PUT /messages/:messageId`) était le SEUL chemin d'écriture de contenu de
+  // message sans borne haute : un corps démesuré traversait le gate, était
+  // PERSISTÉ puis diffusé en `message:edited` à toute la conversation. Le garde
+  // aval (`messageEditContent.ts`) ne rejette que le contenu VIDE, jamais le
+  // démesuré.
   content: z
     .string()
     .trim()
+    .max(MAX_CONTENT_BYTES)
     .optional(),
 
   isEdited: z

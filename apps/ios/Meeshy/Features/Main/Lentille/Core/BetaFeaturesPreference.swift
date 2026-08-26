@@ -1,73 +1,44 @@
 import Foundation
+import os
 
-/// I-075 — préférence utilisateur « Activer les bêta » (amendement produit
-/// 2026-08-16, remplace le drapeau caché `LentilleFeatureFlag.focalDevPreview`
-/// qu'une itération précédente de ce lot avait introduit). Gate la visibilité
-/// de fonctionnalités bêta PUBLIQUES — aujourd'hui : l'item « Focal (bêta) »
-/// du menu d'appui long de la liste de conversations (`ConversationListView`,
-/// groupe « Plus d'options »).
+/// Préférence utilisateur « Activer les bêta » (Réglages, section « Bêta »).
 ///
-/// **Type SÉPARÉ de `LentilleFeatureFlag`, pas un troisième `case`** :
-/// `LentilleFeatureFlag.isEnabled(defaults:environment:)` retombe sur
-/// `defaults.bool(forKey:)` quand l'environnement ne tranche pas — Foundation
-/// rend `false` pour une clé absente, ce qui donne à CE type le défaut OFF
-/// qu'il documente explicitement (« défaut OFF dans les deux cas »). Cette
-/// préférence a la polarité INVERSE (défaut ON) ; la coder comme un troisième
-/// `case` de `LentilleFeatureFlag` aurait exigé une branche spéciale dans
-/// `isEnabled(defaults:environment:)` — une méthode PARTAGÉE par tous les cas
-/// — pour une seule des trois polarités. Un type dédié, même discipline
-/// injectable, est la forme la plus honnête.
+/// **Défaut OFF (décision produit du 2026-08-22).** Le programme bêta naît
+/// éteint : une installation qui n'a rien demandé n'a AUCUNE fonctionnalité
+/// bêta, et le toggle des Réglages affiche exactement ce qu'il applique.
+/// L'ancien défaut ON (I-075, 2026-08-16) produisait un toggle affiché ON qui
+/// n'allumait rien : la cascade des drapeaux n'honorait qu'une bêta
+/// EXPRIMÉE (retrait du 2026-08-18), et une clé jamais écrite ne l'est pas.
+/// Avec un défaut OFF, « absence » et « éteint » sont la même chose — le
+/// prédicat `isExplicitlySet` n'a plus de question à poser et a disparu.
 ///
-/// **Défaut ON — la distinction qui compte** : `object(forKey:) == nil`
-/// (jamais écrite) ⇒ `true`. `UserDefaults.bool(forKey:)` SEUL renverrait
-/// `false` pour une clé absente (défaut Foundation), ce qui ferait naître
-/// CETTE préférence à OFF pour tout utilisateur n'ayant jamais touché le
-/// réglage — l'inverse de ce que « défaut ON » veut dire. D'où
-/// `object(forKey:)` d'abord : seule une écriture EXPLICITE (le toggle des
-/// réglages, ou un test) peut faire passer la préférence à `false`.
+/// **Ce que la préférence gouverne** : les drapeaux couverts par le programme
+/// (`LentilleFeatureFlag.isCoveredByBetaProgramme` — modes de lecture, liste
+/// Lentille, Rivière) lorsqu'ils n'ont pas de clé propre. Aujourd'hui c'est
+/// tout-ou-rien ; demain la section « Bêta » des Réglages proposera les
+/// fonctionnalités une par une, et leur clé propre (étage 2 de la cascade)
+/// est déjà honorée par `enabledFeatures`. La section ne montre ses
+/// fonctionnalités QUE si l'option est validée.
 ///
-/// Résolution : `ProcessInfo.processInfo.environment[environmentKey]` PRIME
-/// (`"1"` force ON, `"0"` force OFF, absente ⇒ repli `UserDefaults`) —
-/// MÊME discipline injectable que `LentilleFeatureFlag` (les tests passent
-/// leur propre `UserDefaults`/dictionnaire d'environnement, jamais
-/// `.standard`/le vrai `ProcessInfo`, cf. `StoryVisibilityPreferenceStore`).
+/// **Type SÉPARÉ de `LentilleFeatureFlag`** : il gouverne plusieurs drapeaux,
+/// il n'en est pas un.
 ///
-/// **I-075 RETIRÉ le 2026-08-18 (décision produit) — portée du retrait** :
-/// le retrait concerne le CLIENT `reading_modes`, PAS cette préférence-ci.
-/// Le second amendement I-075 (2026-08-16) avait fait de
-/// `LentilleFeatureFlag.readingModes` un client de ce type, si bien que
-/// l'ABSENCE de la clé ci-dessous (défaut ON) valait opt-in aux modes de
-/// lecture : toute installation neuve ouvrait ses conversations via
-/// l'orchestrateur (Focal/Résumé) au tap normal. C'est CE repli-là qui est
-/// retiré — désormais « absence ⇒ OFF » pour `reading_modes`, l'opt-in
-/// explicite restant préservé dans les deux sens.
+/// Résolution : `environment[environmentKey]` PRIME (`"1"` force ON, `"0"`
+/// force OFF, absente ⇒ repli `UserDefaults`) — MÊME discipline injectable
+/// que `LentilleFeatureFlag` (les tests passent leur propre `UserDefaults` et
+/// leur propre dictionnaire d'environnement, jamais `.standard`).
 ///
-/// Ce type, LUI, garde son défaut ON, et c'est délibéré : son AUTRE client —
-/// la visibilité de l'item « Focal (bêta) » du menu d'appui long
-/// (`ConversationListView+Overlays.swift`, `ConversationContextMenuView`) —
-/// n'est PAS visé par la décision du 2026-08-18. Basculer le défaut de CE
-/// type à OFF aurait fait disparaître cet item de toute installation neuve :
-/// un second changement produit que personne n'a demandé. Le retrait vit
-/// donc dans la cascade de `LentilleFeatureFlag.isEnabled(defaults:
-/// environment:)`, qui ne consulte plus ce type que s'il est EXPLICITEMENT
-/// exprimé — voir `isExplicitlySet(defaults:environment:)` ci-dessous.
-///
-/// Écriture : `setEnabled(_:defaults:)`, appelée par l'écran de réglages
-/// (`SettingsView`, section « Bêta ») à chaque bascule du toggle — CETTE
-/// préférence-ci est écrite en plein droit (contrairement au forçage éphémère
-/// `Router.pendingForcedReadingMode`, jamais persisté). Ce que la préférence
-/// gate reste ÉPHÉMÈRE à l'ouverture : activer les bêta rend l'item « Focal
-/// (bêta) » visible, l'item lui-même force Focal pour UNE SEULE ouverture
-/// sans jamais toucher `reading_modes` ni la préférence collante de mode
-/// (design imposé, inchangé par cet amendement — voir
-/// `ReadingModeController.forcedMode`).
+/// Écriture : `setEnabled(_:defaults:)`, appelée par `SettingsView` à chaque
+/// bascule du toggle — préférence de plein droit, contrairement au forçage
+/// éphémère `Router.pendingForcedReadingMode`, jamais persisté.
 nonisolated enum BetaFeaturesPreference {
 
     static let userDefaultsKey = "meeshy.pref.beta_features_enabled"
     static let environmentKey = "MEESHY_FLAG_BETA_FEATURES"
 
     /// Injectable — voir la discipline de test de `LentilleFeatureFlag
-    /// .isEnabled(defaults:environment:)`.
+    /// .isEnabled(defaults:environment:)`. Clé absente ⇒ `false` (défaut
+    /// Foundation de `bool(forKey:)`, qui EST le défaut OFF voulu).
     static func isEnabled(
         defaults: UserDefaults = .standard,
         environment: [String: String] = ProcessEnvironmentSnapshot.current
@@ -75,42 +46,45 @@ nonisolated enum BetaFeaturesPreference {
         switch environment[environmentKey] {
         case "1": return true
         case "0": return false
-        default:
-            // Clé jamais écrite ⇒ TRUE (défaut ON). `bool(forKey:)` seul
-            // rendrait `false` ici — voir la docstring du type.
-            guard defaults.object(forKey: userDefaultsKey) != nil else { return true }
-            return defaults.bool(forKey: userDefaultsKey)
+        default: return defaults.bool(forKey: userDefaultsKey)
         }
     }
 
-    /// La préférence a-t-elle été EXPRIMÉE, dans un sens ou dans l'autre ?
+    /// Les fonctionnalités bêta effectivement actives — la lecture faite au
+    /// lancement de l'application (`resolveAtLaunch`) et par la section
+    /// « Bêta » des Réglages.
     ///
-    /// Introduit par le retrait I-075 du 2026-08-18. `isEnabled` seul ne peut
-    /// PAS répondre à cette question : son défaut ON confond « l'utilisateur a
-    /// activé les bêta » et « personne n'a jamais touché au réglage » — les
-    /// deux rendent `true`. Or c'est EXACTEMENT la distinction que la décision
-    /// produit exige pour `reading_modes` (l'absence ne vaut plus opt-in,
-    /// l'opt-in explicite survit). D'où un prédicat séparé, porté par le type
-    /// qui possède les deux clés plutôt que reconstitué chez l'appelant.
-    ///
-    /// « Exprimée » = surcharge process RECONNUE (`"1"`/`"0"` — une valeur
-    /// parasite comme `"yes"` n'exprime rien, cohérent avec le repli
-    /// `UserDefaults` de `isEnabled`), OU clé `UserDefaults` réellement écrite
-    /// (`object(forKey:) != nil` — le toggle des réglages, ou un test).
-    ///
-    /// Ne dit RIEN de la valeur : `isExplicitlySet == true` avec la
-    /// préférence à `false` est le cas « l'utilisateur a coupé les bêta ».
-    /// Les appelants enchaînent donc les deux (`isExplicitlySet` puis
-    /// `isEnabled`), jamais l'un pour l'autre.
-    static func isExplicitlySet(
+    /// Programme OFF ⇒ vide, quelles que soient les clés propres : l'option est
+    /// LA condition. Programme ON ⇒ les drapeaux couverts, dans l'ordre de
+    /// déclaration, chacun résolu par sa cascade (env > clé propre > programme)
+    /// — un drapeau coupé par sa clé propre reste hors de la liste.
+    static func enabledFeatures(
         defaults: UserDefaults = .standard,
         environment: [String: String] = ProcessEnvironmentSnapshot.current
-    ) -> Bool {
-        switch environment[environmentKey] {
-        case "1", "0": return true
-        default: return defaults.object(forKey: userDefaultsKey) != nil
-        }
+    ) -> [LentilleFeatureFlag] {
+        guard isEnabled(defaults: defaults, environment: environment) else { return [] }
+        return LentilleFeatureFlag.allCases
+            .filter(\.isCoveredByBetaProgramme)
+            .filter { $0.isEnabled(defaults: defaults, environment: environment) }
     }
+
+    /// Lecture au lancement (`MeeshyApp.init`) : si le programme est activé,
+    /// lit `UserDefaults` pour savoir quelles fonctionnalités bêta le sont, et
+    /// l'inscrit au journal (`me.meeshy.app:beta`). Les consommateurs lisent
+    /// ensuite leur drapeau à la demande — même source, même cascade.
+    @discardableResult
+    static func resolveAtLaunch(
+        defaults: UserDefaults = .standard,
+        environment: [String: String] = ProcessEnvironmentSnapshot.current
+    ) -> [LentilleFeatureFlag] {
+        let enabled = isEnabled(defaults: defaults, environment: environment)
+        let features = enabledFeatures(defaults: defaults, environment: environment)
+        let names = features.map(\.userDefaultsKey).joined(separator: ",")
+        launchLogger.info("beta programme enabled=\(enabled, privacy: .public) features=[\(names, privacy: .public)]")
+        return features
+    }
+
+    private static let launchLogger = Logger(subsystem: "me.meeshy.app", category: "beta")
 
     /// Lecture au vrai domaine (`UserDefaults.standard` + `ProcessInfo
     /// .processInfo`) — réservée au code de production, jamais aux tests

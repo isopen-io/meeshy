@@ -14,16 +14,76 @@ import type { User } from '@/types';
 
 export interface UserStatusUpdate {
   isOnline?: boolean;
-  lastActiveAt?: Date;
+  /**
+   * Cle PRESENTE ⇒ le champ est pose tel quel : un `null` (ou un `undefined`
+   * explicite — forme que useUserStatusRealtime donne au `null` servi par la
+   * passerelle) EFFACE le dernier instant d'activite. Une presence retiree par
+   * le serveur ne survit pas cote client. Cle ABSENTE ⇒ le champ n'est pas touche.
+   */
+  lastActiveAt?: Date | null;
   username?: string;
 }
+
+const presenceTime = (user: Pick<User, 'lastActiveAt'>): number | null => {
+  if (user.lastActiveAt === null || user.lastActiveAt === undefined) return null;
+  const time = new Date(user.lastActiveAt).getTime();
+  return Number.isNaN(time) ? null : time;
+};
+
+/**
+ * Une charge SANS horodatage n'est jamais « plus ancienne » : c'est la forme
+ * d'une presence masquee par la passerelle (`isOnline:false`, `lastActiveAt:null`,
+ * cf. applyPresenceVisibilityAsOffline), et elle doit remplacer l'ancienne.
+ * La comparaison ne departage que deux charges DATEES — elle protege une
+ * presence fraiche (socket) d'une relecture perimee (liste REST en cache).
+ */
+const isStalerThan = (incoming: User, existing: User): boolean => {
+  const incomingTime = presenceTime(incoming);
+  const existingTime = presenceTime(existing);
+  return incomingTime !== null && existingTime !== null && incomingTime < existingTime;
+};
+
+// Le type partage `User.lastActiveAt: Date` ne modelise pas la presence masquee
+// (`null` sur le fil) ; le store garde la forme absente (`undefined`), comme
+// toMinimalUser et la branche « utilisateur inconnu » ci-dessous.
+export type MergeParticipantsOptions = {
+  /**
+   * `'keep-existing'` — la charge vient d'un CACHE (liste de conversations
+   * React Query, persistee) et n'a pas autorite sur la presence : elle met a
+   * jour l'identite d'un utilisateur deja connu (nom, avatar…) en conservant
+   * ses isOnline / lastActiveAt tels quels, masque compris ; un utilisateur
+   * inconnu recoit la charge entiere. Par defaut (`'incoming'`), la presence
+   * entrante s'applique selon isStalerThan — forme des ecrivains VIVANTS
+   * (presence:snapshot, REST frais).
+   */
+  presence?: 'incoming' | 'keep-existing';
+};
+
+const withExistingPresence = (existing: User, incoming: User): User => ({
+  ...existing,
+  ...incoming,
+  isOnline: existing.isOnline,
+  lastActiveAt: existing.lastActiveAt,
+});
+
+const mergeKnownUser = (existing: User, incoming: User, options: MergeParticipantsOptions): User => {
+  if (options.presence === 'keep-existing') return withExistingPresence(existing, incoming);
+  return isStalerThan(incoming, existing) ? existing : { ...existing, ...incoming };
+};
+
+const applyStatusUpdate = (user: User, updates: UserStatusUpdate): User =>
+  ({
+    ...user,
+    ...(updates.isOnline !== undefined && { isOnline: updates.isOnline }),
+    ...('lastActiveAt' in updates && { lastActiveAt: updates.lastActiveAt ?? undefined }),
+  }) as User;
 
 interface UserStoreState {
   usersMap: Map<string, User>;
   participants: User[];
   _lastStatusUpdate: number;
 
-  mergeParticipants: (participants: User[]) => void;
+  mergeParticipants: (participants: User[], options?: MergeParticipantsOptions) => void;
   /** @deprecated Use mergeParticipants instead */
   setParticipants: (participants: User[]) => void;
   updateUserStatus: (userId: string, updates: UserStatusUpdate) => void;
@@ -39,22 +99,23 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
 
   /**
    * Merge des participants dans le store existant (additif).
-   * Les donnees plus recentes ecrasent les anciennes pour un meme userId.
+   * Entre deux charges DATEES, la plus recente gagne ; une charge sans
+   * horodatage (presence masquee) est toujours appliquee — voir isStalerThan.
+   * Un re-semis depuis un cache passe `presence: 'keep-existing'` — voir
+   * MergeParticipantsOptions.
    */
-  mergeParticipants: (participants: User[]) => {
+  mergeParticipants: (participants: User[], options: MergeParticipantsOptions = {}) => {
     const state = get();
     const newMap = new Map(state.usersMap);
 
     for (const user of participants) {
       if (!user.id) continue;
       const existing = newMap.get(user.id);
-      if (existing) {
-        const existingTime = existing.lastActiveAt ? new Date(existing.lastActiveAt).getTime() : 0;
-        const incomingTime = user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
-        newMap.set(user.id, incomingTime >= existingTime ? { ...existing, ...user } : existing);
-      } else {
+      if (!existing) {
         newMap.set(user.id, user);
+        continue;
       }
+      newMap.set(user.id, mergeKnownUser(existing, user, options));
     }
 
     set({
@@ -81,11 +142,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
     const existing = state.usersMap.get(userId);
 
     const updatedUser: User = existing
-      ? {
-          ...existing,
-          ...(updates.isOnline !== undefined && { isOnline: updates.isOnline }),
-          ...(updates.lastActiveAt && { lastActiveAt: updates.lastActiveAt })
-        }
+      ? applyStatusUpdate(existing, updates)
       : {
           id: userId,
           username: updates.username || '',
@@ -102,7 +159,7 @@ export const useUserStore = create<UserStoreState>((set, get) => ({
           // A missing lastActiveAt must stay absent — never fabricate now(),
           // which would make getUserStatus decay to 'online' for an offline
           // contact whose "last seen" is hidden by privacy prefs.
-          lastActiveAt: updates.lastActiveAt,
+          lastActiveAt: updates.lastActiveAt ?? undefined,
           isActive: true,
           createdAt: new Date(),
           updatedAt: new Date(),

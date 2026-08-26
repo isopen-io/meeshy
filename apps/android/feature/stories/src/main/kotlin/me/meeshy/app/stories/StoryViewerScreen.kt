@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.automirrored.outlined.Comment
@@ -58,11 +59,13 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -77,6 +80,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -87,6 +91,8 @@ import coil.request.ImageRequest
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import me.meeshy.feature.stories.R
+import me.meeshy.sdk.model.StoryBackgroundValue
+import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
@@ -98,12 +104,14 @@ import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.hexColor
 
-private const val SLIDE_DURATION_MS = 5000
 private val SWIPE_HORIZONTAL_THRESHOLD = 64.dp
 private val SWIPE_VERTICAL_THRESHOLD = 120.dp
 
 /** Foreground media renders at this fraction of the canvas width, scaled by the object's own [StoryForegroundMediaView.scale]. */
 private const val FOREGROUND_WIDTH_FRACTION = 0.45f
+
+/** Wire `StoryTextObject.fontSize` is authored in this 1080-referential design space (iOS parity); the on-screen size scales it by the canvas width. */
+private const val TEXT_DESIGN_CANVAS_WIDTH = 1080f
 
 /**
  * Minimal but real story viewer: segmented progress, tap-to-advance/dismiss,
@@ -118,6 +126,10 @@ fun StoryViewerScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val slide = state.current
+    // Per-slide auto-advance timing (author-pinned → content-derived → 6s), resolved
+    // by the shared StorySlideDuration rule at projection time. Drives both the
+    // countdown tween and the keyframe playhead so animations stay aligned.
+    val slideDurationMs = slide?.autoAdvanceMillis ?: StorySlideDuration.DEFAULT_STATIC_MS
     val accent = remember(slide?.accentHex) { slide?.accentHex ?: "1A1A2E" }
 
     var showViewers by remember { mutableStateOf(false) }
@@ -304,6 +316,7 @@ fun StoryViewerScreen(
         state.index,
         state.slides.size,
         state.canAutoAdvance,
+        slideDurationMs,
         showViewers,
         showComments,
         railOverlayActive,
@@ -315,7 +328,7 @@ fun StoryViewerScreen(
         // painted (text-only slides are ready at once). When the gate flips the
         // effect re-runs and the timer starts.
         if (!state.canAutoAdvance) return@LaunchedEffect
-        progress.animateTo(1f, tween(durationMillis = SLIDE_DURATION_MS, easing = LinearEasing))
+        progress.animateTo(1f, tween(durationMillis = slideDurationMs, easing = LinearEasing))
         viewModel.advance()
     }
 
@@ -367,15 +380,29 @@ fun StoryViewerScreen(
     ) {
         when {
             slide?.backgroundVideoUrl != null -> {
+                val bg = slide.backgroundTransform
                 ReelVideoSurface(
                     mediaUrl = slide.backgroundVideoUrl,
                     isActive = true,
                     muted = false,
-                    modifier = Modifier.fillMaxSize(),
+                    // Aspect-fill base, then the author's pan/zoom framing on top — the
+                    // offset fractions scale to the measured canvas so it is resolution-
+                    // independent (mirrors the image branch and iOS's "zoom inside the
+                    // background", clipped by the 9:16 frame).
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = bg.scale
+                            scaleY = bg.scale
+                            rotationZ = bg.rotationDegrees
+                            translationX = bg.offsetXFraction * size.width
+                            translationY = bg.offsetYFraction * size.height
+                        },
                 )
             }
             slide?.imageUrl != null -> {
                 val imageUrl = slide.imageUrl
+                val bg = slide.backgroundTransform
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = null,
@@ -383,25 +410,50 @@ fun StoryViewerScreen(
                     // Resolved (loaded or failed) → the countdown gate may open.
                     onSuccess = { viewModel.onImageResolved(imageUrl) },
                     onError = { viewModel.onImageResolved(imageUrl) },
-                    modifier = Modifier.fillMaxSize(),
+                    // Aspect-fill base, then the author's pan/zoom framing on top — the
+                    // offset fractions scale to the measured canvas so it is resolution-
+                    // independent (mirrors iOS's "zoom inside the background", clipped).
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = bg.scale
+                            scaleY = bg.scale
+                            rotationZ = bg.rotationDegrees
+                            translationX = bg.offsetXFraction * size.width
+                            translationY = bg.offsetYFraction * size.height
+                        },
                 )
             }
             slide != null -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(hexColor(slide.accentHex), Color.Black),
-                            ),
-                        ),
+                        .background(slideBackgroundBrush(slide.background, slide.accentHex)),
                 )
             }
         }
 
+        val playheadSeconds = progress.value * slideDurationMs / 1000f
+
         slide?.foregroundMedia?.forEach { foreground ->
-            key(foreground.url) {
-                StoryForegroundLayer(media = foreground)
+            if (foreground.isVisible(playheadSeconds)) {
+                key(foreground.url) {
+                    StoryForegroundLayer(
+                        media = foreground,
+                        playheadSeconds = playheadSeconds,
+                    )
+                }
+            }
+        }
+
+        slide?.textObjects?.forEach { textObject ->
+            if (textObject.isVisible(playheadSeconds)) {
+                key(textObject.id) {
+                    StoryTextObjectLayer(
+                        textObject = textObject,
+                        playheadSeconds = playheadSeconds,
+                    )
+                }
             }
         }
 
@@ -642,6 +694,33 @@ fun StoryViewerScreen(
     }
 }
 
+/**
+ * The base-layer brush for a media-less slide. When the author pinned a
+ * [StoryBackgroundValue] we paint it — a solid colour, or the two-colour linear
+ * gradient (top-leading → bottom-trailing, iOS `storyBackgroundStyle` convention) —
+ * falling back to the accent→black gradient when there is no background or a
+ * degraded value cannot resolve to a real colour (so the slide is never blank).
+ */
+private fun slideBackgroundBrush(background: StoryBackgroundValue?, accentHex: String): Brush {
+    val fallback = Brush.verticalGradient(listOf(hexColor(accentHex), Color.Black))
+    return when (background) {
+        null -> fallback
+        is StoryBackgroundValue.Hex -> {
+            val color = hexColor(background.hex)
+            if (color == Color.Unspecified) fallback else SolidColor(color)
+        }
+        is StoryBackgroundValue.Gradient -> {
+            val start = hexColor(background.start)
+            val end = hexColor(background.end)
+            if (start == Color.Unspecified || end == Color.Unspecified) {
+                fallback
+            } else {
+                Brush.linearGradient(listOf(start, end))
+            }
+        }
+    }
+}
+
 @Composable
 private fun SegmentedProgress(count: Int, index: Int, currentProgress: Float) {
     Row(
@@ -775,22 +854,30 @@ private fun ReactionFlightOverlay(
 /**
  * A foreground video/image layer positioned at [StoryForegroundMediaView.x]/[y]
  * (canvas-normalised, 0..1) as its center anchor, sized to a fraction of the
- * canvas width scaled by the object's own `scale`. Keyframe animation,
- * rotation and inter-slide transitions are not applied in this projection —
- * see [StoryForegroundMediaView].
+ * canvas width scaled by the object's own `scale`. The [playheadSeconds] clock
+ * drives keyframe animation via the pure [StoryForegroundMediaView.animated]:
+ * position/scale/opacity follow the clip's keyframes for the current instant, or
+ * hold their static base when the clip has none. Rotation and inter-slide
+ * transitions are still not applied in this projection.
  */
 @Composable
-private fun StoryForegroundLayer(media: StoryForegroundMediaView, modifier: Modifier = Modifier) {
+private fun StoryForegroundLayer(
+    media: StoryForegroundMediaView,
+    playheadSeconds: Float,
+    modifier: Modifier = Modifier,
+) {
+    val animated = media.animated(playheadSeconds)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val aspectRatio = media.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
-        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * media.scale.toFloat().coerceIn(0.2f, 3f)
+        val aspectRatio = animated.aspectRatio.toFloat().takeIf { it > 0f } ?: 1f
+        val targetWidth = maxWidth * FOREGROUND_WIDTH_FRACTION * animated.scale.toFloat().coerceIn(0.2f, 3f)
         val targetHeight = targetWidth / aspectRatio
-        val offsetX = maxWidth * media.x.toFloat() - targetWidth / 2
-        val offsetY = maxHeight * media.y.toFloat() - targetHeight / 2
+        val offsetX = maxWidth * animated.x.toFloat() - targetWidth / 2
+        val offsetY = maxHeight * animated.y.toFloat() - targetHeight / 2
         val layerModifier = Modifier
             .offset(x = offsetX, y = offsetY)
             .width(targetWidth)
             .aspectRatio(aspectRatio)
+            .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
         if (media.isVideo) {
             ReelVideoSurface(mediaUrl = media.url, isActive = true, muted = false, modifier = layerModifier)
         } else {
@@ -803,3 +890,94 @@ private fun StoryForegroundLayer(media: StoryForegroundMediaView, modifier: Modi
         }
     }
 }
+
+/**
+ * A text overlay positioned at [StoryTextObjectView.x]/[y] (canvas-normalised, 0..1)
+ * as its center anchor. The [playheadSeconds] clock drives the pure
+ * [StoryTextObjectView.animated]: position follows the object's keyframes and opacity
+ * ramps through its fadeIn/fadeOut envelope for the current instant, or holds its
+ * static base when the object authored neither. The Prisme-resolved [text] renders in
+ * the authored [colorHex]/[align]; wire `fontSize` is a 1080-referential design unit
+ * (× the object's `scale`) mapped onto the real canvas width, and [rotation] tilts the
+ * glyphs about their own center — iOS `fontSize × scale` parity.
+ */
+@Composable
+private fun StoryTextObjectLayer(
+    textObject: StoryTextObjectView,
+    playheadSeconds: Float,
+    modifier: Modifier = Modifier,
+) {
+    val animated = textObject.animated(playheadSeconds)
+    var textSize by remember { mutableStateOf(IntSize.Zero) }
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val density = LocalDensity.current
+        val centerXpx = with(density) { (maxWidth * animated.x.toFloat()).toPx() }
+        val centerYpx = with(density) { (maxHeight * animated.y.toFloat()).toPx() }
+        val canvasWidthPx = with(density) { maxWidth.toPx() }
+        val color = animated.colorHex
+            ?.let { runCatching { hexColor(it) }.getOrNull() }
+            ?: MeeshyPalette.White
+        val textAlign = when (animated.align) {
+            "left" -> TextAlign.Start
+            "right" -> TextAlign.End
+            else -> TextAlign.Center
+        }
+        val fontSizePx = (animated.fontSize * animated.scale)
+            .toFloat()
+            .times(canvasWidthPx / TEXT_DESIGN_CANVAS_WIDTH)
+            .coerceAtLeast(1f)
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .onSizeChanged { textSize = it }
+                .offset {
+                    IntOffset(
+                        (centerXpx - textSize.width / 2f).roundToInt(),
+                        (centerYpx - textSize.height / 2f).roundToInt(),
+                    )
+                }
+                .graphicsLayer { rotationZ = animated.rotation.toFloat() }
+                .alpha(animated.opacity.toFloat().coerceIn(0f, 1f))
+                .storyTextBacking(animated.background)
+                .padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
+            Text(
+                text = animated.text,
+                color = color,
+                textAlign = textAlign,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = with(density) { fontSizePx.toSp() },
+            )
+        }
+    }
+}
+
+/**
+ * Paints an iOS/web-authored text backing behind the reader's glyphs (glue): a rounded
+ * solid fill for [StoryTextBackground.Solid], a translucent frosted scrim approximating the
+ * iOS glass blur for [StoryTextBackground.Glass], and nothing for [StoryTextBackground.None].
+ * The *choice* of backing is the unit-tested [StoryTextBackground.resolve]; this only renders
+ * it, mirroring the composer's own backing so author and reader agree on the look.
+ */
+private fun Modifier.storyTextBacking(background: StoryTextBackground): Modifier = when (background) {
+    StoryTextBackground.None -> this
+    is StoryTextBackground.Solid ->
+        this.background(readerBackingColor(background.hex), RoundedCornerShape(10.dp))
+    is StoryTextBackground.Glass ->
+        this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
+}
+
+/**
+ * Parses a `RRGGBB` or `RRGGBBAA` backing hex (gateway parity, no `#`) into a [Color],
+ * honouring the alpha byte so a translucent solid renders as authored. Decays to
+ * [Color.Transparent] on anything unexpected so a malformed backing never crashes the canvas.
+ */
+private fun readerBackingColor(hex: String): Color = runCatching {
+    val h = hex.removePrefix("#")
+    val argb = when (h.length) {
+        8 -> h.substring(6, 8) + h.substring(0, 6)
+        6 -> "ff$h"
+        else -> return Color.Transparent
+    }
+    Color(argb.toLong(16))
+}.getOrDefault(Color.Transparent)

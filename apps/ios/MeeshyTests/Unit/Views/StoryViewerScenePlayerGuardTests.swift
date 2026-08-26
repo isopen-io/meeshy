@@ -90,30 +90,84 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
         return windows
     }
 
-    /// Les DEUX montages de la couche contenu, classés par ce qu'ils sont :
-    /// le canvas sortant du cross-fade (`isOutgoing: true`) et celui de la
-    /// story courante.
-    private func contentHostMounts(in text: String) throws -> (current: String, outgoing: String) {
+    /// La VALEUR passée sous `label` dans une fenêtre de montage : du deux-points
+    /// jusqu'à la virgule de même profondeur (un sous-appel `f(a, b)` ne coupe
+    /// donc pas l'argument en deux). `nil` quand l'étiquette est absente.
+    private func argument(_ label: String, in window: String) -> String? {
+        guard let start = window.range(of: label) else { return nil }
+        var depth = 0
+        var cursor = start.upperBound
+
+        while cursor < window.endIndex {
+            let character = window[cursor]
+            if character == "(" || character == "[" || character == "{" { depth += 1 }
+            if character == ")" || character == "]" || character == "}" {
+                if depth == 0 { break }
+                depth -= 1
+            }
+            if character == "," && depth == 0 { break }
+            cursor = window.index(after: cursor)
+        }
+        return String(window[start.upperBound..<cursor])
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Les QUATRE montages de la couche contenu, classés par ce qu'ils peignent :
+    /// le canvas sortant du cross-fade (`isOutgoing: true`) et celui de la story
+    /// courante — DEUX montages chacun.
+    ///
+    /// **Amendement du 2026-08-22 (rejet DoD C0c, constat 1).** Le swap E4 n'a
+    /// pas REMPLACÉ l'hôte direct : il l'a mis derrière une porte. `MeeshyScenePlayer`
+    /// ne prend la main que pour une story qui porte un document v3 NATIF ;
+    /// l'archive v1 garde son hôte direct. À l'origine la raison était
+    /// mécanique, pas prudentielle : avant `cf05538d9` (2026-08-22), iOS ne
+    /// posait AUCUN `X-Canvas-Caps`, donc `resolveWireForm` servait du v1 tel
+    /// quel, `StoryEffects.canvasV3` valait `nil` pour CENT POUR CENT des
+    /// stories, et un montage inconditionnel aurait peint toute l'archive à
+    /// travers `CanvasV3(migrating:)` → `StoryEffects(rendering:)`. Cet
+    /// aller-retour était alors LOSSY : la migration letterboxait les ancres
+    /// libres dans l'espace de scène fixe 9:16 (`remapFreeAnchor`), pendant
+    /// que le cadre du viewer (`readerCanvasRatio`) gardait, lui, le ratio
+    /// RÉEL. Un texte écrit à y = 0,90 sur un fond 16:9 se peignait à y ≈ 0,63.
+    ///
+    /// Les DEUX raisons sont tombées depuis. L'en-tête `X-Canvas-Caps: 3` est
+    /// posé depuis `cf05538d9` (`ClientInfoProvider.swift:77`, appelé par
+    /// `APIClient.swift:603` et `:903`) — `StoryEffects.canvasV3` n'est donc
+    /// plus systématiquement `nil`. Et la perte de ratio est RÉPARÉE depuis
+    /// `b82ebbc17` — la scène loge son `carrierAspect` et le retour applique
+    /// le remap inverse (`CanvasV3MigrationTests`
+    /// `.v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect`).
+    /// La porte reste en place aujourd'hui par PRUDENCE, pas par nécessité
+    /// mécanique : la retirer change ce que le lecteur PEINT pour toute
+    /// l'archive v1 restante — ce changement de rendu se mesure et se livre à
+    /// part (reste ouvert dans C4 : le 426 et la porte de mise à jour).
+    ///
+    /// Chaque canvas a donc DEUX montages, et les deux doivent porter TOUS les
+    /// fils du viewer : une porte qui coupe un fil d'un seul côté est exactement
+    /// la dérive qu'une garde ancrée sur un seul montage ne verrait pas.
+    private func contentHostMounts(in text: String) throws -> (current: [String], outgoing: [String]) {
         let windows = Self.contentHostConstructors.flatMap { callWindows(of: $0, in: text) }
         XCTAssertEqual(
-            windows.count, 2,
-            "La couche contenu du viewer se monte EXACTEMENT deux fois (canvas sortant du " +
-            "cross-fade + story courante). En trouver un autre nombre veut dire que le swap " +
-            "E4 a dupliqué ou perdu un montage — les gardes de fil ci-dessous ne sauraient " +
-            "plus lequel interroger."
+            windows.count, 4,
+            "La couche contenu du viewer se monte EXACTEMENT quatre fois : les deux canvas " +
+            "(sortant du cross-fade + story courante) × les deux hôtes derrière la porte v3 " +
+            "(le lecteur pour un document natif, l'hôte direct pour l'archive v1). En trouver " +
+            "un autre nombre veut dire qu'un montage a été dupliqué, perdu, ou qu'une branche " +
+            "de la porte a disparu — les gardes de fil ci-dessous ne sauraient plus lequel " +
+            "interroger."
         )
         let outgoing = windows.filter { $0.contains("isOutgoing: true") }
         let current = windows.filter { !$0.contains("isOutgoing: true") }
-        guard let outgoingMount = outgoing.first, let currentMount = current.first,
-              outgoing.count == 1, current.count == 1 else {
+        guard outgoing.count == 2, current.count == 2 else {
             throw XCTSkip("Montages de la couche contenu non identifiables — voir l'assertion ci-dessus.")
         }
-        return (currentMount, outgoingMount)
+        return (current, outgoing)
     }
 
     func test_contentHostMountIsAnchoredOnABalancedCall() throws {
         let mounts = try contentHostMounts(in: try source())
-        for (name, mount) in [("courant", mounts.current), ("sortant", mounts.outgoing)] {
+        let named = mounts.current.map { ("courant", $0) } + mounts.outgoing.map { ("sortant", $0) }
+        for (name, mount) in named {
             XCTAssertTrue(
                 mount.hasSuffix(")"),
                 "La fenêtre du montage \(name) doit se refermer sur sa parenthèse équilibrée — " +
@@ -180,40 +234,69 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
     ]
 
     func test_currentStoryMountKeepsEveryThreadTheViewerOwns() throws {
-        let mount = try contentHostMounts(in: try source()).current
-        for thread in Self.currentMountThreads {
-            XCTAssertTrue(
-                mount.contains(thread.needle),
-                "Fil coupé au montage de la story courante — \(thread.needle) absent. \(thread.law)"
-            )
+        for mount in try contentHostMounts(in: try source()).current {
+            for thread in Self.currentMountThreads {
+                XCTAssertTrue(
+                    mount.contains(thread.needle),
+                    "Fil coupé à UN des deux montages de la story courante — \(thread.needle) " +
+                    "absent. \(thread.law) Les DEUX hôtes derrière la porte v3 le portent, sans " +
+                    "quoi le fil se coupe pour la moitié du parc sans qu'aucune garde ne le voie."
+                )
+            }
         }
     }
 
     func test_outgoingMountStaysBornInEditMode_andKeepsItsCacheAndPrisme() throws {
-        let mount = try contentHostMounts(in: try source()).outgoing
-        XCTAssertTrue(
-            mount.contains("isOutgoing: true"),
-            "Le canvas SORTANT du cross-fade doit naître en .edit : ses AVPlayer bg/FG et son " +
-            "mixer audio ne démarrent jamais. Sans ce fil, les deux canvas jouent en double " +
-            "350-400 ms à chaque avance (bug user 2026-05-28)."
-        )
-        for thread in ["preloadedImages", "preloadedVideoURLs", "preloadedAudioURLs",
-                       "resolvedViewerLanguageChain"] {
+        for mount in try contentHostMounts(in: try source()).outgoing {
             XCTAssertTrue(
-                mount.contains(thread),
-                "Le canvas sortant rend le MÊME slide que celui qu'on quitte : sans \(thread) " +
-                "au montage, il repart du réseau et dans la langue de l'auteur le temps du fondu."
+                mount.contains("isOutgoing: true"),
+                "Le canvas SORTANT du cross-fade doit naître en .edit : ses AVPlayer bg/FG et son " +
+                "mixer audio ne démarrent jamais. Sans ce fil, les deux canvas jouent en double " +
+                "350-400 ms à chaque avance (bug user 2026-05-28)."
             )
+            for thread in ["preloadedImages", "preloadedVideoURLs", "preloadedAudioURLs",
+                           "resolvedViewerLanguageChain"] {
+                XCTAssertTrue(
+                    mount.contains(thread),
+                    "Le canvas sortant rend le MÊME slide que celui qu'on quitte : sans \(thread) " +
+                    "au montage, il repart du réseau et dans la langue de l'auteur le temps du fondu."
+                )
+            }
         }
     }
 
+    /// Les deux étiquettes sous lesquelles le muet voyage : l'hôte direct l'appelle
+    /// `mute:`, le lecteur `isMuted:`. La garde vise la VALEUR sous l'une ou
+    /// l'autre — jamais l'étiquette.
+    private static let muteLabels = ["isMuted:", "mute:"]
+
+    /// **Amendement du 2026-08-22 (rejet DoD C0c, constat 2).** La version
+    /// précédente cherchait la sous-chaîne `"mute: false"` dans la fenêtre. Après
+    /// le swap, le lecteur nomme ce paramètre `isMuted:` — et `"isMuted: false"`
+    /// ne CONTIENT pas `"mute: false"` (la casse du M). La garde est donc restée
+    /// VERTE sous la mutation exacte qu'elle prétendait interdire (constaté :
+    /// `isMuted: isGlobalMuted` → `isMuted: false` ⇒ 7 tests, 1 échec, et l'échec
+    /// était celui du VOISIN `test_currentStoryMountKeepsEveryThreadTheViewerOwns`).
+    /// Elle interroge désormais la VALEUR, sous l'une ou l'autre étiquette : un
+    /// littéral booléen est refusé, quel que soit le nom du paramètre.
     func test_theMuteThreadIsTheViewerPreference_notALiteral() throws {
-        let mount = try contentHostMounts(in: try source()).current
-        XCTAssertFalse(
-            mount.contains("mute: false") || mount.contains("mute: true"),
-            "Le muet du viewer ne peut pas être un littéral au montage : il porte l'état " +
-            "persistant isGlobalMuted, seul rescapé de la recréation du canvas à chaque story."
-        )
+        for mount in try contentHostMounts(in: try source()).current {
+            let values = Self.muteLabels.compactMap { argument($0, in: mount) }
+            XCTAssertFalse(
+                values.isEmpty,
+                "Aucun fil de muet à ce montage de la story courante : ni mute:, ni isMuted:. " +
+                "Le viewer PORTE un muet persistant — un montage qui ne le reçoit pas repart " +
+                "non-muet à chaque avance."
+            )
+            for value in values {
+                XCTAssertFalse(
+                    value == "true" || value == "false",
+                    "Le muet du viewer ne peut pas être un littéral au montage — reçu " +
+                    "« \(value) ». Il porte l'état persistant isGlobalMuted, seul rescapé de la " +
+                    "recréation du canvas à chaque story."
+                )
+            }
+        }
     }
 
     // MARK: - Le chrome est INCHANGÉ autour de la couche contenu
@@ -256,15 +339,26 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
             text.contains("storyEffects?.canvasV3"),
             "Le document servi au player vient du storyEffects de la story courante."
         )
-        XCTAssertTrue(
-            text.contains("?? CanvasV3(migrating:"),
-            "UN SEUL chemin de sortie : v3 ?? migration (B2). Deux branches séparées " +
-            "dupliqueraient le montage et laisseraient l'une des deux dériver en silence."
-        )
         XCTAssertFalse(
+            text.contains("CanvasV3(migrating:"),
+            "Le viewer ne peint JAMAIS l'archive à travers une migration. La version d'origine " +
+            "de cette garde exigeait ici « v3 ?? migration », au motif qu'un seul chemin de " +
+            "sortie vaut mieux que deux branches. Le motif était juste, la prémisse fausse : " +
+            "à l'époque iOS ne posait aucun X-Canvas-Caps, donc canvasV3 valait nil pour " +
+            "CENT POUR CENT des stories — la branche ?? était la SEULE jamais prise, et " +
+            "l'aller-retour v1→v3→v1 qu'elle impose letterboxait les ancres libres dans " +
+            "l'espace 9:16 (perte depuis RÉPARÉE : CanvasV3MigrationTests." +
+            "v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect). L'unicité " +
+            "du chemin de sortie est désormais tenue par la porte elle-même, écrite UNE fois " +
+            "et partagée par les deux canvas (StoryViewerScenePlayerDocumentGuardTests." +
+            "test_theDocumentIsDerivedInExactlyOnePlace)."
+        )
+        XCTAssertTrue(
             text.contains("StoryReaderRepresentable("),
-            "L'hôte canvas direct ne doit plus être construit DANS ce fichier : il vit " +
-            "désormais SOUS MeeshyScenePlayer, côté SDK (MeeshyScenePlayer.host)."
+            "L'hôte canvas direct RESTE le chemin de l'archive v1 — la porte v3 ne le remplace " +
+            "pas, elle le précède. Le retirer ferait passer toute l'archive par la migration : " +
+            "cf. l'assertion ci-dessus. Il vit AUSSI sous MeeshyScenePlayer côté SDK, pour la " +
+            "story qui porte un document v3 natif."
         )
     }
 }

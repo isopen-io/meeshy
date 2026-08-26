@@ -201,6 +201,195 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertFalse(decoded.isStoryReply)
     }
 
+    // MARK: - ReplyReference : la PROTECTION du media cite
+
+    /// La vignette d'une piece jointe voyage SANS CONDITION depuis la
+    /// passerelle ; la protection est ce qui decide de la rendre. Sans elle sur
+    /// la citation, la reponse a une video a VUE UNIQUE affichait sa vignette
+    /// non floutee a tout le fil, sous un bouton play que le verrou de l'hote
+    /// refusait d'honorer.
+    func test_replyReference_carriesTheProtectionOfTheQuotedAttachment() {
+        let unprotected = ReplyReference(
+            messageId: "m1", authorName: "Alice", previewText: "",
+            attachmentType: "video/mp4", attachmentThumbnailUrl: "https://x/t.jpg",
+            attachmentIsProtected: false
+        )
+        let protected = ReplyReference(
+            messageId: "m1", authorName: "Alice", previewText: "",
+            attachmentType: "video/mp4", attachmentThumbnailUrl: "https://x/t.jpg",
+            attachmentIsProtected: true
+        )
+        XCTAssertFalse(unprotected.quotedMediaIsProtected)
+        XCTAssertTrue(protected.quotedMediaIsProtected)
+        XCTAssertTrue(unprotected.offersMediaGate)
+        XCTAssertFalse(protected.offersMediaGate,
+            "un media protege n'offre AUCUNE zone 2 : ni vignette, ni icone de lecture, ni geste")
+    }
+
+    /// `nil` = le fil n'a RIEN dit, ce qui n'est pas « il dit que ce n'est pas
+    /// protege ». Traite comme NON protege pour le rendu — sinon la vignette
+    /// d'une citation ordinaire disparaitrait des qu'un blob de cache ancien se
+    /// tait — mais la valeur reste distinguable, donc corrigible.
+    func test_replyReference_silenceIsNotAnAssertionOfSafety() throws {
+        let legacy = """
+        {"messageId":"m9","authorName":"Bob","authorColor":"#31B6BA",
+         "previewText":"Salut","isMe":false,"isStoryReply":false,
+         "attachmentType":"video/mp4","attachmentThumbnailUrl":"https://x/t.jpg"}
+        """
+        let decoded = try JSONDecoder().decode(ReplyReference.self, from: Data(legacy.utf8))
+        XCTAssertNil(decoded.attachmentIsProtected,
+            "Un blob anterieur au champ doit decoder en nil, jamais echouer ni fabriquer un false.")
+        XCTAssertFalse(decoded.quotedMediaIsProtected)
+    }
+
+    func test_replyReference_roundtripsTheProtection() throws {
+        let original = ReplyReference(
+            messageId: "m2", authorName: "Bob", previewText: "",
+            attachmentType: "image/png", attachmentThumbnailUrl: "https://x/t.png",
+            attachmentIsProtected: true
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ReplyReference.self, from: data)
+        XCTAssertEqual(decoded.attachmentIsProtected, true)
+        XCTAssertTrue(decoded.quotedMediaIsProtected)
+    }
+
+    // MARK: - Les deux zones, cote DONNEE
+
+    /// Ce que la citation OFFRE, independamment de toute peau — la source que
+    /// la couche d'accessibilite des deux hotes de rangee interroge pour savoir
+    /// quelle action nommee proposer.
+    func test_replyReference_offersTheTwoZones_onlyWhenTheyExist() {
+        let story = ReplyReference(messageId: "s1", authorName: "Story", previewText: "", isStoryReply: true)
+        XCTAssertFalse(story.offersAuthorGate,
+            "une story citee ne designe aucune personne — l'hote fabriquerait une fiche au nom de « Story »")
+        XCTAssertFalse(story.offersMediaGate,
+            "la zone 3 d'une story ouvre DEJA le viewer plein ecran : la dedoubler serait un second point actionnable")
+
+        let textOnly = ReplyReference(messageId: "m1", authorName: "Alice", previewText: "coucou")
+        XCTAssertTrue(textOnly.offersAuthorGate)
+        XCTAssertFalse(textOnly.offersMediaGate, "aucune piece jointe, aucun media a ouvrir")
+
+        let thumbOnly = ReplyReference(
+            messageId: "m2", authorName: "Alice", previewText: "",
+            attachmentThumbnailUrl: "https://x/t.jpg"
+        )
+        XCTAssertTrue(thumbOnly.offersMediaGate, "une vignette sans type reste ouvrable en plein ecran")
+
+        let emptyThumb = ReplyReference(
+            messageId: "m3", authorName: "Alice", previewText: "",
+            attachmentThumbnailUrl: ""
+        )
+        XCTAssertFalse(emptyThumb.offersMediaGate, "une URL VIDE n'est pas une vignette")
+    }
+
+    // MARK: - APIMessageAttachment : la protection DECLAREE par le fil
+
+    /// Site UNIQUE de la derivation, partage par le chemin reseau
+    /// (`uiReplyTo`) et le chemin cache (`MessagePersistenceActor`). Un `false`
+    /// fabrique a partir d'un silence serait une AFFIRMATION, que le blob
+    /// graverait ensuite pour toujours.
+    func test_apiMessageAttachment_declaredProtection_distinguishesSilenceFromSafety() throws {
+        func attachment(_ json: String) throws -> APIMessageAttachment {
+            try JSONDecoder().decode(APIMessageAttachment.self, from: Data(json.utf8))
+        }
+        XCTAssertNil(try attachment(#"{"id":"a1"}"#).declaredProtection,
+            "le fil ne dit RIEN de la protection : ni protege, ni sur")
+        XCTAssertEqual(try attachment(#"{"id":"a1","isViewOnce":false,"isBlurred":false}"#).declaredProtection, false)
+        XCTAssertEqual(try attachment(#"{"id":"a1","isViewOnce":true,"isBlurred":false}"#).declaredProtection, true)
+        XCTAssertEqual(try attachment(#"{"id":"a1","isBlurred":true}"#).declaredProtection, true)
+    }
+
+    // MARK: - ReplyReference : l'avatar de l'auteur cite
+
+    /// Le champ avatar est OPTIONNEL, et il doit le rester : un blob
+    /// `replyToJson` grave AVANT lui doit decoder tel quel.
+    func test_replyReference_decodesABlobWrittenBeforeTheAvatarField_asNil() throws {
+        let legacy = """
+        {"messageId":"m9","authorName":"Bob","authorColor":"#31B6BA",
+         "previewText":"Salut","isMe":false,"isStoryReply":false}
+        """
+        let decoded = try JSONDecoder().decode(ReplyReference.self, from: Data(legacy.utf8))
+        XCTAssertNil(decoded.authorAvatarUrl,
+            "Un blob anterieur au champ doit decoder en nil, jamais echouer.")
+        XCTAssertEqual(decoded.authorName, "Bob")
+    }
+
+    /// Et surtout : sans emporter le message ENTIER. `MeeshyMessage.init(from:)`
+    /// decode `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un
+    /// sous-decodage — un champ requis ferait disparaitre du cache L2 tout
+    /// message dont la citation a ete gravee avant le champ, pas seulement sa
+    /// citation.
+    func test_meeshyMessage_survivesAReplyBlobWrittenBeforeTheAvatarField() throws {
+        let legacy = """
+        {"id":"m10","conversationId":"c1","createdAt":"2026-08-24T10:00:00Z",
+         "content":"ma reponse",
+         "replyTo":{"messageId":"m9","authorName":"Bob","authorColor":"#31B6BA",
+                    "previewText":"Salut","isMe":false,"isStoryReply":false}}
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(MeeshyMessage.self, from: Data(legacy.utf8))
+        XCTAssertEqual(message.id, "m10")
+        XCTAssertEqual(message.replyTo?.authorName, "Bob")
+        XCTAssertNil(message.replyTo?.authorAvatarUrl)
+    }
+
+    func test_replyReference_roundtripsTheAuthorAvatar() throws {
+        let original = ReplyReference(
+            messageId: "m2", authorName: "Bob", previewText: "Sure!",
+            isMe: true, authorAvatarUrl: "https://cdn.example/bob.jpg"
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ReplyReference.self, from: data)
+        XCTAssertEqual(decoded.authorAvatarUrl, "https://cdn.example/bob.jpg")
+    }
+
+    /// Chemin RESEAU : la citation porte l'avatar de l'auteur cite, deja present
+    /// sur le fil (`replyTo.sender`). Sans lui, l'avatar de la citation devrait
+    /// etre re-resolu au rendu — invisible d'un `==` manuel, donc jamais
+    /// redessine.
+    func test_uiReplyTo_carriesTheQuotedAuthorAvatar_fromTheSenderEnvelope() throws {
+        let json = """
+        {
+          "id":"srv1","conversationId":"c1","senderId":"u2",
+          "content":"ma reponse","createdAt":"2026-08-24T10:00:00Z",
+          "replyTo":{"id":"m9","content":"Salut","senderId":"u1",
+                     "sender":{"id":"u1","displayName":"Bob",
+                               "avatar":"https://cdn.example/bob.jpg"}}
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let api = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+
+        let message = api.toMessage(currentUserId: "u2")
+
+        XCTAssertEqual(message.replyTo?.authorAvatarUrl, "https://cdn.example/bob.jpg")
+    }
+
+    /// Meme cascade que `APIMessageSender.resolvedAvatar` : l'avatar imbrique
+    /// sous `sender.user` sert de repli. C'est la forme que le gateway renvoie
+    /// pour un participant inscrit.
+    func test_uiReplyTo_fallsBackToTheNestedUserAvatar() throws {
+        let json = """
+        {
+          "id":"srv2","conversationId":"c1","senderId":"u2",
+          "content":"ma reponse","createdAt":"2026-08-24T10:00:00Z",
+          "replyTo":{"id":"m9","content":"Salut","senderId":"u1",
+                     "sender":{"id":"u1","displayName":"Bob",
+                               "user":{"avatar":"https://cdn.example/nested.jpg"}}}
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let api = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+
+        let message = api.toMessage(currentUserId: "u2")
+
+        XCTAssertEqual(message.replyTo?.authorAvatarUrl, "https://cdn.example/nested.jpg")
+    }
+
     // MARK: - ForwardReference
 
     func testForwardReferenceInit() {

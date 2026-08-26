@@ -84,6 +84,9 @@ struct OutboxDispatcher: OutboxDispatching {
         case .toggleLikeComment:
             try await dispatchToggleLikeComment(record)
 
+        case .repostPost:
+            try await dispatchRepostPost(record)
+
         case .publishStory, .repostStory:
             // Story publish/repost remains routed through `StoryOfflineQueue`
             // until Tier C merges the two persistence stores. A row landing
@@ -448,19 +451,40 @@ struct OutboxDispatcher: OutboxDispatching {
             }
             let uploader = TusUploadManager(baseURL: baseURL)
             var uploadedIds: [String] = []
-            for stored in pendingMediaPaths {
+            for (index, stored) in pendingMediaPaths.enumerated() {
                 let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
                 guard FileManager.default.fileExists(atPath: absolutePath) else {
                     logger.error("Post media file missing on dispatch, path=\(stored, privacy: .public)")
                     continue
                 }
                 do {
-                    let mime = MimeTypeResolver.mimeType(
-                        forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
+                    // Le MIME **DÉCLARÉ** par le site d'envoi l'emporte ; la
+                    // dérivation depuis l'extension n'est que le REPLI des
+                    // lignes qui n'en portent pas. L'extension ne suffit pas :
+                    // un vocal importé en `.caf` / `.aiff` / `.opus` s'y
+                    // re-dérivait en `application/octet-stream`, et le gateway
+                    // ne reconnaît un média audio qu'à
+                    // `mimeType.startsWith('audio/')` — la transcription
+                    // embarquée était alors ignorée ET Whisper jamais
+                    // déclenché, pour un fichier que l'expéditeur savait
+                    // pourtant être une voix.
+                    let mime = payload.declaredMimeType(at: index)
+                        ?? MimeTypeResolver.mimeType(
+                            forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
                     let tusResult = try await uploader.uploadFile(
                         fileURL: URL(fileURLWithPath: absolutePath),
                         mimeType: mime,
-                        credential: .bearer(token)
+                        credential: .bearer(token),
+                        // POUR QUI ce fichier est téléversé — et sans lui, le
+                        // gateway crée un `MessageAttachment` puis répond 201
+                        // avec un id parfaitement valide. `PostService.createPost`
+                        // ne réclame ensuite que des `PostMedia` : il n'en
+                        // réclame AUCUN, ne journalise qu'un `logger.warn`, et le
+                        // post arrive publié et VIDE. Les trois chemins EN LIGNE
+                        // le passaient déjà ; seule la file durable ne le passait
+                        // pas, si bien que le média perdu ne l'était QUE hors
+                        // ligne — la condition la moins observée de toutes.
+                        uploadContext: "post"
                     )
                     uploadedIds.append(tusResult.id)
                     uploadedLocalPaths.append(absolutePath)
@@ -489,7 +513,10 @@ struct OutboxDispatcher: OutboxDispatching {
             audioDuration: payload.audioDuration,
             visibilityUserIds: payload.visibilityUserIds,
             location: payload.location,
-            mentions: payload.mentions
+            mentions: payload.mentions,
+            discoverabilityPrecision: payload.discoverabilityPrecision,
+            repostOfId: payload.repostOfId,
+            mobileTranscription: payload.mobileTranscription
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -512,11 +539,12 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchToggleLikePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: ToggleLikePostPayload.self)
         let method = payload.liked ? "POST" : "DELETE"
+        let body = try ToggleLikePostBody.encoded(for: payload)
         do {
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
                 endpoint: "/posts/\(payload.postId)/like",
                 method: method,
-                body: nil,
+                body: body,
                 queryItems: nil,
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
             )
@@ -524,6 +552,47 @@ struct OutboxDispatcher: OutboxDispatching {
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
             logger.warning("toggleLikePost 404 for \(payload.postId, privacy: .public) — post gone, accepting as success")
         }
+    }
+
+    /// `POST /posts/:id/repost` — gateway wraps through `withMutationLog`
+    /// (fil rouge du repost, lot 7 tâche 7.1) : le cmid dédoublonne un rejeu
+    /// réseau, `repostPost` n'étant PAS naturellement idempotent (chaque
+    /// appel fabrique un `Post` neuf).
+    ///
+    /// `targetType` voyage TOUJOURS depuis `RepostPostPayload` (jamais
+    /// optionnel) — Loi 5 (« le repost miroite », spec 2026-08-23) :
+    /// laisser le serveur retomber sur son défaut `?? PostType.POST`
+    /// transformerait silencieusement une source éphémère en post permanent.
+    ///
+    /// Contrairement à `dispatchToggleLikePost`, un 404 n'est PAS avalé : la
+    /// source a disparu, le geste demandé (publier CE contenu) n'a pas eu
+    /// lieu — ce n'est pas un no-op idempotent comme un like sur un post
+    /// déjà parti. L'erreur remonte telle quelle ;
+    /// `OutboxFlusher.isPermanentServerRejection` (400/403/404/413/422) la
+    /// fait terminer en `.exhausted` dès la première tentative plutôt que de
+    /// consommer tout le budget de retry.
+    private func dispatchRepostPost(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: RepostPostPayload.self)
+        struct RepostBody: Encodable {
+            let targetType: String
+            let content: String?
+            let isQuote: Bool
+            let visibility: String?
+        }
+        let body = RepostBody(
+            targetType: payload.targetType,
+            content: payload.content,
+            isQuote: payload.isQuote,
+            visibility: payload.visibility
+        )
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/posts/\(payload.postId)/repost",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("repostPost dispatched for \(payload.postId, privacy: .public) targetType=\(payload.targetType, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
     /// `POST /posts/:id/comments` — gateway wraps through
@@ -1118,6 +1187,25 @@ struct OutboxDispatcher: OutboxDispatching {
     }
 }
 
+// MARK: - toggleLikePost wire body
+
+/// Corps de `POST /posts/:id/like` quand la ligne porte une RÉACTION (story) :
+/// `{ emoji }`, la forme que `LikeSchema` lit côté gateway et que le chemin
+/// direct émet déjà (`ReactionRequest`, `StoryInteractionService.react`). Un
+/// like simple n'a pas d'emoji et garde son corps vide — le gateway retombe
+/// alors sur son défaut, exactement comme avant ce champ.
+/// `nonisolated` et `internal`, comme `MarkAsReadBody` : le dispatch hérite de
+/// l'isolation de son appelant, et le contrat d'encodage se lit depuis
+/// `MeeshyTests`.
+nonisolated struct ToggleLikePostBody: Encodable {
+    let emoji: String
+
+    /// `nil` sans emoji : un like simple ne change pas de forme sur le fil.
+    static func encoded(for payload: ToggleLikePostPayload) throws -> Data? {
+        try payload.emoji.map { try JSONEncoder().encode(ToggleLikePostBody(emoji: $0)) }
+    }
+}
+
 // MARK: - updateProfile wire bodies
 
 /// Wire body for `PATCH /users/me/avatar` — mirrors the online path's
@@ -1230,6 +1318,11 @@ enum OutboxFlushTrigger {
 /// précédent, il n'y a donc jamais plus d'un timer en vol.
 @MainActor
 final class OutboxRetryScheduler {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = OutboxRetryScheduler()
     private var timer: Task<Void, Never>?
     private var networkCancellable: AnyCancellable?
@@ -1325,6 +1418,25 @@ nonisolated struct CreatePostBody: Encodable {
     /// courant de l'app, ne produirait rien : ces posts-là n'empruntent que
     /// ce chemin.
     let mentions: [PostMentionInput]?
+    /// Le SECOND opt-in de position — même clé top-level `discoverabilityPrecision`
+    /// que le chemin direct (`CreatePostRequest`). Sans elle ICI, le
+    /// consentement survivrait jusqu'au décodage de `CreatePostPayload` puis
+    /// serait jeté en silence à l'ultime saut réseau : exactement le défaut
+    /// que `location` a payé avant lui, et sur le chemin que prend le cas
+    /// nominal (post TEXTE + lieu).
+    let discoverabilityPrecision: DiscoverabilityPrecision?
+    /// La publication REPARTAGÉE — même clé top-level `repostOfId` que le
+    /// chemin direct (`CreatePostRequest`). Sans elle ICI, l'attribution
+    /// survivrait jusqu'au décodage de `CreatePostPayload` puis serait jetée en
+    /// silence à l'ultime saut réseau : le défaut que `location` a payé avant
+    /// elle. **Seul porteur de l'attribution** — pas de `viaUsername`, que le
+    /// gateway n'a jamais lu.
+    let repostOfId: String?
+    /// La transcription faite SUR L'APPAREIL. Le gateway la persiste sur le
+    /// premier `PostMedia` audio et évite alors la re-transcription Whisper.
+    /// Sa graphie (`duration_ms`, `speaker_id`) est portée par les
+    /// `CodingKeys` du type lui-même — ne pas la réécrire ici.
+    let mobileTranscription: MobileTranscriptionPayload?
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
@@ -1341,10 +1453,24 @@ nonisolated struct CreatePostBody: Encodable {
         // Vide vaut absent à la CRÉATION : il n'existe encore aucune ligne à
         // effacer, et le `[]` du tri-état n'a de sens qu'à l'édition.
         if let mentions, !mentions.isEmpty { try container.encode(mentions, forKey: .mentions) }
+        // Encodé seulement quand il existe : le schéma gateway est un
+        // `z.enum().optional()`, qui REJETTE un `null` explicite — et
+        // l'ABSENCE de la clé vaut « non découvrable ».
+        if let discoverabilityPrecision {
+            try container.encode(discoverabilityPrecision, forKey: .discoverabilityPrecision)
+        }
+        // Encodés seulement quand ils existent : un post d'origine n'a pas de
+        // source, un post visuel n'a pas de voix — et un `null` explicite est
+        // une affirmation là où il n'y en a aucune.
+        if let repostOfId, !repostOfId.isEmpty { try container.encode(repostOfId, forKey: .repostOfId) }
+        if let mobileTranscription {
+            try container.encode(mobileTranscription, forKey: .mobileTranscription)
+        }
     }
 
     enum CodingKeys: String, CodingKey {
         case content, mediaIds, visibility, originalLanguage, type
         case moodEmoji, audioUrl, audioDuration, visibilityUserIds, location, mentions
+        case discoverabilityPrecision, repostOfId, mobileTranscription
     }
 }

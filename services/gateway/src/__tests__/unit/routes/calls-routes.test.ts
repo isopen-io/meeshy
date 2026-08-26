@@ -204,8 +204,9 @@ function makeRequest(overrides: Record<string, any> = {}) {
     authContext: {
       userId: USER_ID,
       participantId: PART_ID,
-      type: 'registered',
+      type: 'user',
       hasFullAccess: true,
+      registeredUser: { id: USER_ID, role: 'USER' },
     },
     ...overrides,
   };
@@ -1090,6 +1091,54 @@ describe('callRoutes', () => {
       );
     });
 
+    // Root cause: the route passed the URL's `:participantId` (the KICKED
+    // target's identifier) as `userId` to `leaveCall()` and as the actor to
+    // `broadcastCallEndedIfTerminal()` — everywhere else in the codebase
+    // (the socket `call:leave`/`call:end`/`call:force-leave` handlers, this
+    // same route's self-leave path) `endedBy`/`userId` names the AUTHENTICATED
+    // CALLER performing the action, never the party being removed. For a
+    // self-leave the two coincide, which is why this went unnoticed; a
+    // moderator kick makes them diverge. Downstream, `CallSession.metadata
+    // .endedBy` feeds `wasCancelledByInitiator()` (packages/shared/utils/
+    // call-summary.ts) — a pre-answer call ended this way could mislabel who
+    // "cancelled" it — and `CallEndedEvent.endedBy` is broadcast to every
+    // client (`call:ended`) as the party who ended the call.
+    it('attributes the call end to the MODERATOR who kicked, not the kicked target', async () => {
+      const modMembership = makeMembership({ role: 'moderator' });
+      const resolvedTargetParticipant = { id: 'resolved-target-part-id' };
+
+      const participantFindFirst = jest
+        .fn<any>()
+        .mockResolvedValueOnce(modMembership) // moderator role check (caller)
+        .mockResolvedValueOnce(resolvedTargetParticipant); // target resolution
+
+      const { routes, reply } = setup({
+        participant: { findFirst: participantFindFirst },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+      const session = makeCallSession();
+
+      mockGetCallSession.mockResolvedValueOnce(session);
+      mockLeaveCall.mockResolvedValueOnce(session);
+
+      const req = makeRequest({
+        params: { callId: CALL_ID, participantId: TARGET_PART_ID },
+      });
+
+      await getRoute(routes, 'DELETE', '/calls/:callId/participants/:participantId')(
+        req,
+        reply
+      );
+
+      expect(mockLeaveCall).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: USER_ID })
+      );
+      expect(mockLeaveCall).not.toHaveBeenCalledWith(
+        expect.objectContaining({ userId: TARGET_PART_ID })
+      );
+      expect(mockBroadcastCallEndedIfTerminal).toHaveBeenCalledWith(session, USER_ID);
+    });
+
     it('allows a moderator to remove an anonymous participant, falling back to resolving the target by Participant.id when the userId lookup misses', async () => {
       // Anonymous (shared-link) participants have `Participant.userId: null`
       // (schema.prisma) — the roster key the client sends for them is their
@@ -1866,6 +1915,46 @@ describe('callRoutes', () => {
       expect(mockListHistory).toHaveBeenCalledWith(
         USER_ID,
         expect.objectContaining({ limit: 5, filter: 'all' })
+      );
+    });
+
+    // Directive produit 2026-08-25 — TROU #3. `listHistory` gates
+    // `peer.isOnline` on `options.viewer`, resolved once here from the
+    // request's REAL authContext (`viewerFromRequest`) — never from `userId`
+    // alone, which would carry no role and no way to grant the ADMIN/BIGBOSS
+    // entitlement the directive requires.
+    it('forwards the resolved viewer (userId + role) alongside the parsed query', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({ query: {} });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ viewer: { userId: USER_ID, role: 'USER' } })
+      );
+    });
+
+    it('forwards an ADMIN viewer when the caller is an admin', async () => {
+      const { routes, reply } = setup();
+      mockListHistory.mockResolvedValueOnce({ items: [], hasMore: false });
+
+      const req = makeRequest({
+        query: {},
+        authContext: {
+          userId: USER_ID,
+          participantId: PART_ID,
+          type: 'user',
+          hasFullAccess: true,
+          registeredUser: { id: USER_ID, role: 'ADMIN' },
+        },
+      });
+      await getRoute(routes, 'GET', '/calls/history')(req, reply);
+
+      expect(mockListHistory).toHaveBeenCalledWith(
+        USER_ID,
+        expect.objectContaining({ viewer: { userId: USER_ID, role: 'ADMIN' } })
       );
     });
 

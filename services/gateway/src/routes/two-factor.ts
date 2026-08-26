@@ -17,6 +17,7 @@ import { validateBody } from '../validation/helpers.js';
 import { EnableBodySchema, DisableBodySchema, VerifyBodySchema, BackupCodesBodySchema } from '../validation/two-factor-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 const logger = enhancedLogger.child({ module: 'TwoFactorRoutes' });
 
@@ -64,13 +65,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        401: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
+        401: errorResponseSchema
       },
       security: [{ bearerAuth: [] }]
     },
@@ -109,20 +104,8 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        },
-        401: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
+        400: errorResponseSchema,
+        401: errorResponseSchema
       },
       security: [{ bearerAuth: [] }]
     },
@@ -172,13 +155,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
+        400: errorResponseSchema
       },
       security: [{ bearerAuth: [] }]
     },
@@ -234,13 +211,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
+        400: errorResponseSchema
       },
       security: [{ bearerAuth: [] }]
     },
@@ -296,13 +267,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
+        400: errorResponseSchema
       },
       security: [{ bearerAuth: [] }]
     },
@@ -354,13 +319,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        400: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            error: { type: 'string' }
-          }
-        }
+        400: errorResponseSchema
       },
       security: [{ bearerAuth: [] }]
     },

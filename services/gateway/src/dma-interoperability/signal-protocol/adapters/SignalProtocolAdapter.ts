@@ -7,9 +7,10 @@
 
 import { ISignalProtocolAdapter } from '../../adapters/LibraryAdapters';
 import { SignalKeyManager } from '../SignalKeyManager';
-import { X3DHKeyAgreement } from '../X3DHKeyAgreement';
+import { X3DHKeyAgreement, type PreKeyBundle } from '../X3DHKeyAgreement';
 import { DoubleRatchet } from '../DoubleRatchet';
-import { PrismaClient } from '../../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SignalProtocolLimits } from '@meeshy/shared/utils/validation';
 import * as crypto from 'crypto';
 
 export class SignalProtocolAdapter implements ISignalProtocolAdapter {
@@ -26,7 +27,10 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
   constructor(prisma: PrismaClient, masterKey?: Buffer) {
     this.prisma = prisma;
     this.keyManager = new SignalKeyManager(prisma, masterKey);
-    this.x3dh = new X3DHKeyAgreement();
+    // X3DHKeyAgreement REQUIERT son gestionnaire de clés et son client Prisma :
+    // sans eux, `initiatorKeyAgreement` lit `this.keyManager.getIdentityPublicKey()`
+    // sur `undefined` et tout accord de clés passant par cet adaptateur lève.
+    this.x3dh = new X3DHKeyAgreement(this.keyManager, prisma);
     this.doubleRatchet = new DoubleRatchet();
   }
 
@@ -38,17 +42,15 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
   }
 
   async generateIdentityKeyPair(): Promise<{ publicKey: Buffer; privateKey: Buffer }> {
-    // Use custom implementation
-    const keyPair = this.keyManager['generateIdentityKeyPair']();
-    return keyPair;
+    return this.keyManager.generateIdentityKeyPair();
   }
 
   async generatePreKeyBatch(count: number): Promise<Array<{ id: number; publicKey: Buffer }>> {
-    const preKeys = await this.keyManager.generatePreKeyBatch(count);
-    return preKeys.map((pk: any) => ({
-      id: pk.id,
-      publicKey: pk.publicKey
-    }));
+    // `generateAndStorePreKeys` est le seul chemin qui ATTRIBUE un id de pré-clé
+    // (`getNextPreKeyId`) et le persiste. L'ancien appel visait le générateur brut,
+    // qui rend des `KeyPair` sans id : le contrat `{ id, publicKey }` de cet
+    // adaptateur sortait avec `id: undefined` sur chaque entrée.
+    return this.keyManager.generateAndStorePreKeys(count);
   }
 
   async generateSignedPreKey(id: number): Promise<{ id: number; publicKey: Buffer; signature: Buffer }> {
@@ -60,26 +62,50 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     };
   }
 
-  async performX3DH(
-    ourIdentityPrivate: Buffer,
-    ourEphemeralPrivate: Buffer,
-    theirIdentityPublic: Buffer,
-    theirSignedPreKeyPublic: Buffer,
-    theirPreKeyPublic?: Buffer
-  ): Promise<Buffer> {
-    // Create mock recipient bundle for X3DH
-    const recipientBundle = {
-      identityKey: theirIdentityPublic,
+  async performX3DH(params: {
+    ourIdentityPrivate: Buffer;
+    theirIdentityPublic: Buffer;
+    theirSignedPreKeyPublic: Buffer;
+    theirSignedPreKeySignature: Buffer;
+    theirPreKeyPublic?: Buffer;
+  }): Promise<{ rootKey: Buffer; ourEphemeralPublic: Buffer; ourRegistrationId: number }> {
+    // Le paquet porte désormais la SIGNATURE de la pré-clé signée, donc il a la
+    // forme complète que `PreKeyBundle` déclare — le `as any` d'avant existait
+    // parce que ce contrat-ci n'en transportait pas, et il masquait exactement
+    // l'absence du seul champ qui authentifie l'accord. C'est
+    // `initiatorKeyAgreement` qui la vérifie : une seule implémentation de la
+    // règle, chez celui qui accorde les clés.
+    const recipientBundle: PreKeyBundle = {
+      identityKey: params.theirIdentityPublic,
       signedPreKey: {
         id: 0,
-        publicKey: theirSignedPreKeyPublic
+        publicKey: params.theirSignedPreKeyPublic,
+        signature: params.theirSignedPreKeySignature
       },
-      preKey: theirPreKeyPublic ? { id: 0, publicKey: theirPreKeyPublic } : undefined,
+      preKey: params.theirPreKeyPublic ? { id: 0, publicKey: params.theirPreKeyPublic } : undefined,
+      // Étiquette de session, PAS une entrée de dérivation : l'identifiant lié au
+      // HKDF est celui de l'initiateur, que `initiatorKeyAgreement` lit sur son
+      // propre gestionnaire de clés. Ce `0` était un mensonge de dérivation tant
+      // que le paquet décidait des clés ; il n'en est plus un. Ne pas le
+      // « réparer » en y injectant l'identifiant du pair : ce champ arrive par un
+      // canal hostile et la signature ne le couvre pas.
       registrationId: 0
     };
 
-    const result = await this.x3dh.initiatorKeyAgreement(recipientBundle as any, ourIdentityPrivate);
-    return result.rootKey;
+    const result = await this.x3dh.initiatorKeyAgreement(
+      recipientBundle,
+      params.ourIdentityPrivate
+    );
+
+    // La clé éphémère PUBLIQUE fait partie du résultat : le répondeur en a besoin
+    // pour calculer DH2/DH3/DH4. La rendre au seul `rootKey`, comme avant, donnait
+    // à l'appelant un secret que son pair ne pouvait par construction jamais
+    // retrouver.
+    return {
+      rootKey: result.rootKey,
+      ourEphemeralPublic: result.ephemeralKeyPair.publicKey,
+      ourRegistrationId: this.keyManager.getRegistrationId()
+    };
   }
 
   async encryptMessage(
@@ -91,7 +117,12 @@ export class SignalProtocolAdapter implements ISignalProtocolAdapter {
     iv: Buffer;
     authTag: Buffer;
   }> {
-    const iv = crypto.randomBytes(16);
+    // Nonce de 96 bits : la largeur STANDARD de GCM, celle que déclarent
+    // `SignalValidation.validateEncryptedPayload` et `SignalSchemas.encryptedMessage`,
+    // et celle qu'emploie tout le reste du dépôt (pièces jointes web et passerelle,
+    // `encryption-utils`, `node-crypto-adapter`). Le littéral `16` d'avant produisait
+    // un IV que les DEUX gardes partagées rejetaient.
+    const iv = crypto.randomBytes(SignalProtocolLimits.AES_GCM_IV_SIZE);
     const cipher = crypto.createCipheriv('aes-256-gcm', sessionKey, iv);
     let ciphertext = cipher.update(plaintext);
     ciphertext = Buffer.concat([ciphertext, cipher.final()]);

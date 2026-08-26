@@ -58,3 +58,35 @@ describe('convertV1ToV3 — bounds audio ne sortent jamais un intervalle corromp
     expect(CanvasV3Schema.safeParse(doc).success).toBe(true);
   });
 });
+
+describe('convertV1ToV3 — le timing d\'un objet ne sort jamais un intervalle corrompu', () => {
+  const textObject = (startTime: unknown, endTime: unknown) =>
+    convertV1ToV3({ textObjects: [{ id: 'txt', text: 'salut', startTime, endTime }] })
+      .scenes[0].objects.find(o => o.kind === 'text');
+
+  it('preserves a complete, ordered object timing (start <= end)', () => {
+    const doc = convertV1ToV3({ textObjects: [{ id: 'txt', text: 'salut', startTime: 1, endTime: 4 }] });
+    expect(doc.scenes[0].objects.find(o => o.kind === 'text')?.timing).toEqual({ start: 1, end: 4 });
+    expect(CanvasV3Schema.safeParse(doc).success).toBe(true);
+  });
+
+  it('accepts a zero-duration object timing (end === start)', () => {
+    const doc = convertV1ToV3({ textObjects: [{ id: 'txt', text: 'salut', startTime: 2, endTime: 2 }] });
+    expect(doc.scenes[0].objects.find(o => o.kind === 'text')?.timing).toEqual({ start: 2, end: 2 });
+    expect(CanvasV3Schema.safeParse(doc).success).toBe(true);
+  });
+
+  it('keeps a partial object timing when only ONE edge is present', () => {
+    expect(textObject(5, undefined)?.timing).toEqual({ start: 5 });
+    expect(textObject(undefined, 3)?.timing).toEqual({ end: 3 });
+    expect(CanvasV3Schema.safeParse(
+      convertV1ToV3({ textObjects: [{ id: 'txt', text: 'salut', startTime: 5 }] })
+    ).success).toBe(true);
+  });
+
+  it('drops an INVERTED object timing (end < start) instead of emitting corruption', () => {
+    const doc = convertV1ToV3({ textObjects: [{ id: 'txt', text: 'salut', startTime: 4, endTime: 1 }] });
+    expect(doc.scenes[0].objects.find(o => o.kind === 'text')?.timing).toBeUndefined();
+    expect(CanvasV3Schema.safeParse(doc).success).toBe(true);
+  });
+});

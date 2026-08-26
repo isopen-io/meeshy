@@ -75,6 +75,11 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
         // `@Published` (non-Sendable). Même pattern que
         // `StoryVideoExportService.prepareExport`.
         final class ProgressSinkBox: @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
             let sink: (Double) -> Void
             init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
         }
@@ -143,6 +148,11 @@ struct SystemTimelineStoryExporter: TimelineStoryExporting {
 /// résout les URLs locales, lance `StoryExporter` et publie la progression.
 @MainActor
 final class TimelineExportController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     enum Phase: Equatable {
         case idle

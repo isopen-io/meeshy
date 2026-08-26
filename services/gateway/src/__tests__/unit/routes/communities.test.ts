@@ -29,6 +29,21 @@ jest.mock('../../../utils/pagination', () => ({
 // participant : `{ ...undefined }` le réduisait à une déclaration vide, et
 // toute assertion sur ce `user` passait pour la mauvaise raison.
 
+// La présence, elle, EST mockée : ce fichier couvre le ROUTAGE CRUD des 16
+// endpoints, pas la politique de présence (gardée par
+// `communities-presence-gate.test.ts`). Le critère STRICT (directive produit
+// 2026-08-25) interroge en vrai `user.findMany`/`friendRequest.findMany`/les
+// préférences — les doubler ici serait de la profondeur hors sujet ; ce
+// fichier vérifie seulement que la route répond, pas qui elle sert.
+const mockResolveForTargets = jest.fn<any>().mockResolvedValue(new Map());
+const mockResolveForTarget = jest.fn<any>().mockResolvedValue({ showOnline: false, showLastSeenTimestamp: false });
+jest.mock('../../../services/PresenceVisibilityService', () => ({
+  getPresenceVisibilityService: () => ({
+    resolveForTargets: (...args: any[]) => mockResolveForTargets(...args),
+    resolveForTarget: (...args: any[]) => mockResolveForTarget(...args),
+  }),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { communityRoutes } from '../../../routes/communities';

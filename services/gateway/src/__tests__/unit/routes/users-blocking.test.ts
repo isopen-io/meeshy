@@ -21,6 +21,12 @@ jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
 const mockWithMutationLog = jest.fn<any>(async ({ op }: any) => op());
 
 jest.mock('../../../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../../../utils/withMutationLog') as object),
   withMutationLog: (...a: any[]) => mockWithMutationLog(...a),
 }));
 

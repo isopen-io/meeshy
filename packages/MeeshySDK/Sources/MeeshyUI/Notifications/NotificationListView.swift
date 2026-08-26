@@ -139,7 +139,7 @@ public struct NotificationListView: View {
     public var onNotificationTap: ((APINotification) -> Void)?
     public var onDismiss: (() -> Void)?
 
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
 
     private let brandColor = Color(hex: "6366F1")
 
@@ -165,28 +165,32 @@ public struct NotificationListView: View {
 
     private var header: some View {
         VStack(spacing: 0) {
-            CollapsibleHeader(
-                title: String(localized: "notifications.title", defaultValue: "Notifications", bundle: .module),
-                scrollOffset: scrollOffset,
-                onBack: { onDismiss?() },
-                titleColor: theme.textPrimary,
-                backArrowColor: brandColor,
-                backgroundColor: theme.backgroundPrimary,
-                trailing: {
-                    if viewModel.unreadCount > 0 {
-                        Button {
-                            HapticFeedback.light()
-                            Task { await viewModel.markAllRead() }
-                        } label: {
-                            Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(brandColor)
+            // Seul ce reader se re-rend au fil du scroll — la racine écrit
+            // `scrollRelay.offset` sans s'y abonner (P1-1).
+            ScrollOffsetReader(relay: scrollRelay) { offset in
+                CollapsibleHeader(
+                    title: String(localized: "notifications.title", defaultValue: "Notifications", bundle: .module),
+                    scrollOffset: offset,
+                    onBack: { onDismiss?() },
+                    titleColor: theme.textPrimary,
+                    backArrowColor: brandColor,
+                    backgroundColor: theme.backgroundPrimary,
+                    trailing: {
+                        if viewModel.unreadCount > 0 {
+                            Button {
+                                HapticFeedback.light()
+                                Task { await viewModel.markAllRead() }
+                            } label: {
+                                Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(brandColor)
+                            }
+                        } else {
+                            EmptyView()
                         }
-                    } else {
-                        EmptyView()
                     }
-                }
-            )
+                )
+            }
 
             if viewModel.unreadCount > 0 {
                 Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
@@ -275,6 +279,7 @@ public struct NotificationListView: View {
                                     Task { await viewModel.deleteNotification(notification) }
                                 }
                             )
+                            .equatable()
                         }
 
                         if viewModel.hasMore && viewModel.selectedCategory == .all {
@@ -288,8 +293,8 @@ public struct NotificationListView: View {
                     }
                 }
                 .coordinateSpace(name: "scroll")
-                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }   // iOS 16–17
-                .trackScrollContentOffset { scrollOffset = -$0 }                            // iOS 18+ (preference path is dead there)
+                .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
+                .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
                 .refreshable {
                     await viewModel.loadInitial()
                 }

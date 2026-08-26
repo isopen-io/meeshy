@@ -391,4 +391,97 @@ struct CanvasV3MigrationTests {
         let document = CanvasV3(migrating: StoryEffects())
         #expect(document.scenes.isEmpty)
     }
+
+    // MARK: - L'aller-retour v1 → v3 → v1, désormais FIDÈLE
+
+    /// **La perte, réparée.** L'espace de scène v3 est FIXE en 9:16, et
+    /// `CanvasV3(migrating:)` y letterboxe les ancres libres au passage
+    /// (`remapFreeAnchor`, piloté par `effects.canvasAspectRatio`) : pour un
+    /// porteur 16:9, `h = 0,5625 / 1,7778 = 0,3164` et `top = 0,3418`, si bien
+    /// qu'une ancre écrite à `y = 0,90` sort à `0,6266` SUR LE FIL.
+    ///
+    /// Ça, c'est le contrat de LECTURE de S8, et il est inchangé : un lecteur
+    /// peint une scène 9:16. Ce qui a changé, c'est que la scène LOGE désormais
+    /// le ratio de son porteur (`SceneV3.carrierAspect`, miroir du champ
+    /// homonyme de `canvas-v3.ts`), ce qui rend le remap INVERSIBLE — il est
+    /// affine. Le retour `StoryEffects(rendering:)` l'applique à l'envers et
+    /// rend à l'auteur la position qu'il avait écrite.
+    ///
+    /// **Pourquoi ça comptait.** Sans le ratio, rouvrir un ancien contenu pour
+    /// l'éditer recadrait ses objets SANS RETOUR possible — ce que la décision
+    /// « un v1 rouvert migre en v3 à l'enregistrement » aurait transformé en
+    /// perte de masse. `StoryDraftStore` avait déjà dû contourner exactement
+    /// cette perte hors-bande pour les brouillons (table `story_draft_meta`,
+    /// clés `canvasAspectRatio:<slideId>`) ; ce contournement n'a plus de raison
+    /// d'être et peut être retiré.
+    ///
+    /// **Conséquence encore OUVERTE, à traiter à part.** La rédaction
+    /// précédente de ce test annonçait : « le jour où la perte est réparée, la
+    /// porte du viewer peut tomber » — cette porte étant le fait que le viewer
+    /// story ne monte `MeeshyScenePlayer(.reader)` que sur un document v3 NATIF
+    /// et laisse l'archive v1 à son hôte direct
+    /// (`StoryViewerScenePlayerDocumentGuardTests`). La condition est
+    /// maintenant remplie, mais faire tomber la porte change ce que le lecteur
+    /// PEINT : ça se mesure et se livre séparément, pas en effet de bord de ce
+    /// lot.
+
+    @Test func v1RoundTripThroughV3_isFAITHFUL_nowThatTheSceneCarriesItsAspect() throws {
+        var effects = StoryEffects()
+        effects.canvasAspectRatio = 16.0 / 9.0
+        effects.textObjects = [StoryTextObject(id: "t1", text: "Bas de cadre", x: 0.5, y: 0.90)]
+
+        let document = CanvasV3(migrating: effects)
+        // Le fil PORTE désormais le cadre d'origine…
+        #expect(document.scenes.first?.carrierAspect == 16.0 / 9.0)
+        // …et sur le fil, l'ancre reste letterboxée : c'est le contrat de
+        // LECTURE de S8, inchangé — un lecteur peint une scène 9:16.
+        if case .free(_, let wireY) = document.scenes[0].objects[0].anchor {
+            #expect(abs(wireY - 0.6265625) < 1e-9)
+        } else { Issue.record("ancre libre attendue sur le fil") }
+
+        // Le RETOUR, lui, défait le letterboxing — c'est ce qui rend l'édition
+        // d'un ancien contenu non destructrice.
+        let back = StoryEffects(rendering: document, sceneIndex: 0)
+        #expect(back.canvasAspectRatio == 16.0 / 9.0)
+        #expect(abs((back.textObjects.first?.y ?? -1) - 0.90) < 1e-9)
+    }
+
+    /// La même perte, lue sur le golden PARTAGÉ avec le convertisseur gateway —
+    /// donc cross-plateforme, et non une particularité du pont Swift.
+    ///
+    /// `v1-legacy-full.json` porte `canvasAspectRatio = 1,7777` et un texte à
+    /// `y = 0,2` ; `v1-legacy-full.v3.json`, que les deux implémentations gravent,
+    /// ancre ce même texte à `y = 0,40507` (= `0,3418 + 0,2 × 0,3164`). Le retour
+    /// ne rend ni le ratio ni la position d'origine.
+    @Test func theSharedGoldenCarriesLetterboxedAnchors_andTheAspectThatUNDOESThem() throws {
+        let legacy = try JSONDecoder().decode(StoryEffects.self, from: fixture("v1-legacy-full"))
+        #expect(legacy.canvasAspectRatio == 1.7777)
+        #expect(legacy.textObjects.first?.y == 0.2)
+
+        // Sur le FIL (le golden que les deux implémentations gravent), l'ancre
+        // est letterboxée — inchangé.
+        let golden = try JSONDecoder().decode(CanvasV3.self, from: fixture("v1-legacy-full.v3"))
+        #expect(golden.scenes.first?.carrierAspect == 1.7777)
+        if case .free(_, let wireY) = golden.scenes[0].objects.first(where: { $0.kind == .text })?.anchor {
+            #expect(abs(wireY - 0.40507397198627443) < 1e-9)
+        } else { Issue.record("ancre libre attendue sur le fil") }
+
+        // Au RETOUR, le ratio logé rend au texte sa position d'auteur : 0,2.
+        let back = StoryEffects(rendering: golden, sceneIndex: 0)
+        #expect(back.canvasAspectRatio == 1.7777)
+        #expect(abs((back.textObjects.first?.y ?? -1) - 0.2) < 1e-9)
+    }
+
+    /// Le corollaire qui borne la perte : SANS ratio de porteur — une story
+    /// purement textuelle, aucun fond importé — la migration ne remappe rien et
+    /// l'aller-retour rend l'ancre intacte. La porte du viewer ne protège donc
+    /// pas d'un pont cassé, mais d'un pont qui ne sait pas rendre un CADRE.
+    @Test func v1RoundTripThroughV3_keepsFreeAnchors_whenTheCarrierHasNoAspect() throws {
+        var effects = StoryEffects()
+        effects.textObjects = [StoryTextObject(id: "t1", text: "Bas de cadre", x: 0.5, y: 0.90)]
+
+        let back = StoryEffects(rendering: CanvasV3(migrating: effects), sceneIndex: 0)
+
+        #expect(back.textObjects.first?.y == 0.90)
+    }
 }

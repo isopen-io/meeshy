@@ -53,12 +53,16 @@ public nonisolated enum StoryVolumeResolver {
     public static func effectiveVolume(base: Float,
                                        keyframes: [StoryKeyframe]?,
                                        at time: Float) -> Float {
-        let points = (keyframes ?? [])
+        // Appelé par clip par tick de display-link : ne trie que si l'ordre
+        // d'auteur n'est pas déjà chronologique (contrôle lazy sans allocation).
+        let raw = (keyframes ?? [])
             .compactMap { kf -> (time: Float, value: Float, easing: StoryEasing)? in
                 guard let v = kf.volume else { return nil }
                 return (kf.time, v, kf.easing ?? .linear)
             }
-            .sorted { $0.time < $1.time }
+        let points = zip(raw, raw.dropFirst()).allSatisfy({ $0.time <= $1.time })
+            ? raw
+            : raw.sorted { $0.time < $1.time }
 
         guard let first = points.first else { return clamp(base) }
         guard time >= first.time else { return clamp(base) }

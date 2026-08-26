@@ -73,6 +73,24 @@ export interface EncryptedUploadResult extends UploadResult {
 }
 
 /**
+ * La provenance que le client DÉCLARE : ce fichier sort-il de la caméra ou du
+ * micro de l'application ?
+ *
+ * Rien dans un fichier ne permet de la déduire — le serveur ne peut donc que
+ * croire le client, et il ne le croit que sur un booléen VRAI. `providedMetadata`
+ * arrive d'un corps multipart par un canal non typé, où la chaîne `'false'` est
+ * véridique : une lecture laxiste (`!!m?.capturedInApp`) déclarerait capture ce
+ * qui n'en est pas une, et se tromperait donc dans le sens qui fait apparaître
+ * une confirmation là où elle n'a pas lieu d'être.
+ *
+ * L'omission vaut « pas une capture » : c'est le cas de tous les clients qui ne
+ * connaissent pas encore ce champ, et de tout fichier choisi dans une galerie.
+ * @see packages/shared/utils/forward-to-publication.ts
+ */
+const declaredCaptureInApp = (providedMetadata?: any): boolean =>
+  providedMetadata?.capturedInApp === true;
+
+/**
  * Processeur d'upload des attachments
  */
 export class UploadProcessor {
@@ -489,6 +507,7 @@ export class UploadProcessor {
         metadata: metadataJson,
         uploadedBy: userId,
         isAnonymous: isAnonymous,
+        capturedInApp: declaredCaptureInApp(providedMetadata),
       },
     });
 
@@ -628,6 +647,7 @@ export class UploadProcessor {
         metadata: metadataJson,
         uploadedBy: userId,
         isAnonymous: isAnonymous,
+        capturedInApp: declaredCaptureInApp(providedMetadata),
         isEncrypted: true,
         encryptionMode: encryptionMode,
         encryptionIv: encryptionResult.metadata.iv,

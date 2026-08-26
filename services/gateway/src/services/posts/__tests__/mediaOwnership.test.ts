@@ -6,6 +6,7 @@ import {
   isPostMediaUploadContext,
   postMediaUploaderOrNull,
 } from '../mediaOwnership';
+import { isPostMediaUploadContext as isPostMediaUploadContextShared } from '@meeshy/shared/types/attachment';
 
 const OWNER = '507f1f77bcf86cd799439011';
 const OTHER = '507f1f77bcf86cd799439012';
@@ -25,6 +26,23 @@ describe('isPostMediaUploadContext', () => {
     expect(isPostMediaUploadContext(null)).toBe(false);
     expect(isPostMediaUploadContext('')).toBe(false);
     expect(isPostMediaUploadContext('POST')).toBe(false);
+  });
+});
+
+describe('isPostMediaUploadContext — délégation au vocabulaire partagé (cycle composer W7bis)', () => {
+  // Le web (attachmentTransport) a besoin de la MÊME définition que le
+  // handler TUS pour taguer ses uploads — deux copies auraient pu diverger
+  // silencieusement (aucun gate ne les aurait comparées). Le module partagé
+  // est donc la source, et celui-ci délègue au lieu de réimplémenter.
+  it('est_le_MEME_export_reexporte_jamais_une_copie_locale', () => {
+    expect(isPostMediaUploadContext).toBe(isPostMediaUploadContextShared);
+  });
+
+  it('rend_le_meme_verdict_que_le_module_partage_sur_les_neuf_cas', () => {
+    const cases: unknown[] = ['post', 'story', 'status', 'comment', 'message', undefined, null, '', 'POST'];
+    for (const c of cases) {
+      expect(isPostMediaUploadContext(c)).toBe(isPostMediaUploadContextShared(c));
+    }
   });
 });
 

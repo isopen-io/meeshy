@@ -159,4 +159,53 @@ final class StoryOfflineMediaWriterTests: XCTestCase {
         XCTAssertTrue(outcome.isComplete)
         XCTAssertTrue(outcome.references.isEmpty)
     }
+
+    // MARK: - S3 — l'image d'un sticker traverse la file SANS perdre sa transparence
+
+    /// Un sticker est presque toujours une image détourée. Le JPEG n'a pas de
+    /// canal alpha : réencoder un sticker ainsi APLATIT sa transparence, et
+    /// c'est ce fichier-là que le drain téléverse ensuite en `PostMedia` — le
+    /// lecteur voit alors un rectangle opaque à la place du découpage.
+    /// L'appelant nomme donc explicitement les ids à préserver ; aucune
+    /// heuristique sur les pixels ne décide à sa place.
+    private func transparentImage() -> UIImage {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format)
+            .image { ctx in
+                UIColor.red.setFill()
+                ctx.fill(CGRect(x: 4, y: 0, width: 4, height: 8))
+            }
+    }
+
+    private func hasAlphaChannel(atPath path: String) throws -> Bool {
+        let reloaded = try XCTUnwrap(UIImage(contentsOfFile: path)?.cgImage)
+        switch reloaded.alphaInfo {
+        case .none, .noneSkipFirst, .noneSkipLast: return false
+        default: return true
+        }
+    }
+
+    func test_persist_keepsAlphaForTheIdsTheCallerDeclared() throws {
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: ["sticker-1": transparentImage()], videos: [:], audios: [:],
+            into: directory, alphaPreservingIds: ["sticker-1"])
+
+        let path = try XCTUnwrap(outcome.references.first?.localFilePath)
+        XCTAssertTrue(path.hasSuffix("sticker-1.png"), path)
+        XCTAssertTrue(try hasAlphaChannel(atPath: path),
+                      "Le sticker remis en file a perdu sa transparence — il sera téléversé aplati.")
+    }
+
+    /// Le pendant POSITIF de la garde ci-dessus : tout ce que l'appelant n'a
+    /// pas nommé reste en JPEG. Un PNG systématique ferait enfler le dossier de
+    /// file d'un fond de slide plein écran sans rien gagner.
+    func test_persist_keepsJpegForEverythingElse() throws {
+        let outcome = StoryOfflineMediaWriter.persist(
+            images: ["slide-bg-1": image()], videos: [:], audios: [:],
+            into: directory, alphaPreservingIds: ["sticker-1"])
+
+        let path = try XCTUnwrap(outcome.references.first?.localFilePath)
+        XCTAssertTrue(path.hasSuffix("slide-bg-1.jpg"), path)
+    }
 }

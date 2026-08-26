@@ -92,6 +92,15 @@ struct ConversationRowItem: View {
     /// portillon `.equatable()` — et son type reste `AnyView` (aucun
     /// paramètre générique : les deux raisons ci-dessus tiennent toujours).
     let nativeContextMenu: () -> AnyView
+    /// MAGNIFICATION EN PLACE (2026-08-23) — les deux magasins d'élection et
+    /// de scène, PAR RÉFÉRENCE, plus les données/actions dont la rangée élue a
+    /// besoin. Ils ne sont jamais LUS ici : c'est `LentilleMagnifiableRow`,
+    /// dans son propre fichier, qui s'y abonne (§H15 — ce body ne doit pas se
+    /// ré-évaluer à chaque élection). Ils ne participent donc pas au `==`
+    /// ci-dessous : ce sont des références stables pour la vie de la liste.
+    let focusElection: LentilleFocusElection
+    let sceneActivity: LentilleSceneActivity
+    let magnification: LentilleMagnification
 
     var body: some View {
         SwipeableRow(
@@ -247,26 +256,38 @@ struct ConversationRowItem: View {
     @ViewBuilder
     private var rowCore: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
-            LentilleConversationRow(
-                conversation: conversation,
-                community: community,
-                availableWidth: rowWidth,
-                isDragging: isDragging,
-                presenceState: presenceState,
-                onViewStory: onViewStory,
-                onViewProfile: onViewProfile,
-                onViewConversationInfo: onViewConversationInfo,
-                onMoodBadgeTap: onMoodBadgeTap,
-                onCreateShareLink: onCreateShareLink,
-                isDark: isDark,
-                storyRingState: storyRingState,
-                moodStatus: moodStatus,
-                typingUsername: typingUsername,
-                isSelected: isSelected,
-                draftSummary: draftSummary,
-                preferredContentLanguages: preferredContentLanguages
-            )
-            .equatable()
+            // La rangée élue se rend elle-même MAGNIFIÉE (2026-08-23) : plus
+            // aucune carte au-dessus d'elle, donc swipe, glisser-déposer et
+            // appui long restent les siens, et elle hérite de toutes ses
+            // features sans qu'aucune soit recopiée ailleurs. Le portillon
+            // d'élection est une enveloppe minuscule — voir son fichier.
+            LentilleMagnifiableRow(
+                election: focusElection,
+                scene: sceneActivity,
+                conversationId: conversation.id,
+                magnification: magnification
+            ) { context in
+                LentilleConversationRow(
+                    conversation: conversation,
+                    community: community,
+                    availableWidth: rowWidth,
+                    isDragging: isDragging,
+                    presenceState: presenceState,
+                    onViewStory: onViewStory,
+                    onViewProfile: onViewProfile,
+                    onViewConversationInfo: onViewConversationInfo,
+                    onMoodBadgeTap: onMoodBadgeTap,
+                    onCreateShareLink: onCreateShareLink,
+                    isDark: isDark,
+                    storyRingState: storyRingState,
+                    moodStatus: moodStatus,
+                    typingUsername: typingUsername,
+                    isSelected: isSelected,
+                    draftSummary: draftSummary,
+                    preferredContentLanguages: preferredContentLanguages,
+                    magnification: context
+                )
+            }
         } else {
             ThemedConversationRow(
                 conversation: conversation,
@@ -455,6 +476,11 @@ private struct RowPressBounceModifier: ViewModifier {
 /// Boîte mutable inerte pour la frame globale de la ligne — voir le
 /// commentaire du `background` dans `RowPressBounceModifier`.
 private final class RowFrameBox {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     var rect: CGRect = .zero
 }
 

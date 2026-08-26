@@ -108,6 +108,13 @@
     <string name="guest_join_preview_error">This link could not be opened</string>
     <string name="guest_join_requires_account">This link requires an account.</string>
     <string name="guest_join_sign_in">Sign in</string>
+    <string name="share_link_entry_resolving">Opening link…</string>
+    <string name="share_link_choose_title">How do you want to join?</string>
+    <string name="share_link_choose_subtitle">Join %1$s with your account, or as a guest.</string>
+    <string name="share_link_choose_subtitle_generic">Join with your account, or as a guest.</string>
+    <string name="share_link_continue_with_account">Continue with my account</string>
+    <string name="share_link_join_anonymously">Join anonymously</string>
+    <string name="share_link_resume_anonymously">Resume anonymously</string>
 
     <!-- Account recovery -->
     <string name="login_forgot_password">Forgot password?</string>

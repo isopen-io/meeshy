@@ -90,6 +90,7 @@ jest.mock('@/services/socketio/messaging.service', () => ({
     getListenerCounts: mockGetListenerCounts,
     cleanup: mockCleanupMessaging,
     setGetMessageByIdCallback: mockSetGetMessageByIdCallback,
+    setTypingRetractor: jest.fn(),
     onNewMessage: jest.fn().mockReturnValue(() => {}),
     onMessageEdited: jest.fn().mockReturnValue(() => {}),
     onMessageDeleted: jest.fn().mockReturnValue(() => {}),
@@ -110,6 +111,7 @@ jest.mock('@/services/socketio/typing.service', () => ({
     onTypingStart: jest.fn().mockReturnValue(() => {}),
     onTypingStop: jest.fn().mockReturnValue(() => {}),
     getListenerCount: jest.fn().mockReturnValue(0),
+    clearTypingForUser: jest.fn(),
   })),
 }));
 

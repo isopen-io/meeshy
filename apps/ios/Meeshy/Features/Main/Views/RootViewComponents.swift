@@ -14,6 +14,14 @@ struct ThemedActionButton: View {
     let hint: String
     var badge: Int = 0
     var size: CGFloat = 46
+    /// `false` = glow ET pulse ÉTEINTS. L'échelle de menu (`menuLadder`) reste
+    /// MONTÉE menu fermé (opacité 0 via `menuAnimation`, zIndex −1) pour que le
+    /// ressort d'ouverture anime depuis un état existant — mais un `onAppear`
+    /// inconditionnel y démarrait le glow `repeatForever` (ombre re-rasterisée
+    /// à CHAQUE frame) sur six boutons INVISIBLES, en permanence, derrière la
+    /// liste de conversations (audit chauffe 2026-08-26). Le décor ne respire
+    /// que quand il est visible.
+    var isGlowEnabled: Bool = true
     let action: () -> Void
 
     @State private var isPressed = false
@@ -64,24 +72,37 @@ struct ThemedActionButton: View {
                         .frame(minWidth: 16, minHeight: 16)
                         .background(Capsule().fill(Color.white))
                         .offset(x: size * 0.33, y: -size * 0.33)
-                        .pulse(intensity: 0.08)
+                        // Même règle que le glow : pas de respiration infinie
+                        // sur une pastille que personne ne voit (menu fermé).
+                        .ifTrue(isGlowEnabled) { $0.pulse(intensity: 0.08) }
                 }
             }
             .scaleEffect(isPressed ? 0.82 : 1)
         }
         .accessibilityLabel(label)
         .accessibilityHint(hint)
-        .onAppear {
-            // Reduce Motion: keep the static base shadow, no breathing glow.
-            guard !reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-                isGlowing = true
-            }
+        .onAppear { syncGlow() }
+        // Le menu s'ouvre/se ferme SANS remonter les boutons (l'échelle reste
+        // dans la hiérarchie) : c'est ce changement-ci, pas `onAppear`, qui
+        // démarre et arrête réellement la respiration.
+        .adaptiveOnChange(of: isGlowEnabled) { _, _ in syncGlow() }
+        .onDisappear { stopGlow() }
+    }
+
+    /// Reduce Motion: keep the static base shadow, no breathing glow.
+    private func syncGlow() {
+        guard isGlowEnabled, !reduceMotion else {
+            stopGlow()
+            return
         }
-        .onDisappear {
-            withTransaction(Transaction(animation: nil)) {
-                isGlowing = false
-            }
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            isGlowing = true
+        }
+    }
+
+    private func stopGlow() {
+        withTransaction(Transaction(animation: nil)) {
+            isGlowing = false
         }
     }
 }
@@ -114,9 +135,6 @@ struct ThemedFeedOverlay: View {
         router.pendingOpenFeedComposer = false
         showFullComposer = true
     }
-    /// Carte des posts géolocalisés — entrée permanente du header, à droite du
-    /// bouton Réels (directive user 2026-08-13). Parité avec `FeedView`.
-    @State private var showPostsMap = false
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
     /// Negative scroll offset of the feed (0 at rest, more negative scrolling
@@ -321,14 +339,25 @@ struct ThemedFeedOverlay: View {
         postRepostedIds.insert(postId)
         postRepostDelta[postId, default: 0] += 1
         postRepostInFlightIds.insert(postId)
+        // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
+        // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
+        // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
+        // laissait au socket un tour de boucle pour la retirer de
+        // `viewModel.posts` ; `cardType` rendait alors `nil`, le gateway
+        // repliait sur `POST` (`?? PostType.POST`) et une story repartagée
+        // devenait un post permanent. Le `Task` reçoit une cible déjà
+        // résolue : il n'a plus de lecture à faire.
+        let carte = viewModel.posts.first(where: { $0.id == postId })
+        let cible = RepostTargeting.target(
+            cardId: postId, cardType: carte?.type,
+            repostOfId: carte?.repost?.id,
+            originalRepostOfId: carte?.repost?.originalRepostOfId
+        )
         Task {
             defer { Task { @MainActor in postRepostInFlightIds.remove(postId) } }
             do {
-                _ = try await PostService.shared.repost(
-                    postId: postId,
-                    targetType: nil,
-                    content: nil,
-                    isQuote: false
+                try await RepostPublisher.shared.publish(
+                    .simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
                 )
                 FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
@@ -402,14 +431,16 @@ struct ThemedFeedOverlay: View {
         .scrollMotionActive(offset: headerScrollOffset)
     }
 
-    /// Actions du header, dans l'ordre de lecture : les Réels, puis la carte
-    /// des posts immédiatement à sa droite (directive user 2026-08-13). Les
-    /// deux ouvrent une autre LECTURE du même feed — elles vont ensemble ; le
-    /// chemin iPad (`FeedView.feedHeaderActions`) porte la même paire.
+    /// Actions du header, dans l'ordre de lecture : les Réels, puis « À
+    /// proximité ». Les deux ouvrent une autre LECTURE du même feed — elles
+    /// vont ensemble ; le chemin iPad (`FeedView.feedHeaderActions`) porte la
+    /// même paire. La carte des posts du feed (bouton `map`, 2026-08-13) a
+    /// fusionné dans « À proximité » le 2026-08-26 — mode Discover, réservé au
+    /// staff de la plateforme.
     private var feedHeaderActions: some View {
         HStack(spacing: 8) {
             reelsButton
-            postsMapButton
+            nearbyButton
         }
         // Loi commune `ScrollMotion` : une vue en mouvement ne montre pas ses
         // boutons d'action. Même traitement que le chemin iPad (`FeedView`).
@@ -431,28 +462,28 @@ struct ThemedFeedOverlay: View {
         .accessibilityIdentifier("feed.header.reels")
     }
 
-    private var postsMapButton: some View {
+    /// Troisième entrée du header, jumelle de celle du chemin iPad
+    /// (`FeedView.nearbyButton`) : la découverte par PROXIMITÉ. Elle
+    /// n'interroge pas le feed mais le serveur — tout ce qui est découvrable
+    /// autour, publié ou non dans le fil de cet utilisateur.
+    private var nearbyButton: some View {
         Button {
             HapticFeedback.light()
-            showPostsMap = true
+            router.push(.nearbyDiscovery())
         } label: {
-            Image(systemName: "map")
+            Image(systemName: "dot.radiowaves.left.and.right")
                 .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo500)
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle(), interactive: true)
         }
-        .accessibilityLabel(String(localized: "feed.map.open", defaultValue: "Posts sur la carte", bundle: .main))
-        .accessibilityHint(String(localized: "feed.map.open.hint", defaultValue: "Affiche les posts géolocalisés sur un plan", bundle: .main))
-        .accessibilityIdentifier("feed.header.map")
+        .accessibilityLabel(String(localized: "feed.nearby.open", defaultValue: "Publications à proximité", bundle: .main))
+        .accessibilityHint(String(localized: "feed.nearby.open.hint", defaultValue: "Ouvre la carte des publications trouvables autour de vous", bundle: .main))
+        .accessibilityIdentifier("feed.header.nearby")
     }
 
     /// Posts du feed porteurs d'une position — même source unique que le chemin
     /// iPad : le bouton et les pins de la carte lisent la même liste.
-    private var locatedPosts: [FeedPost] {
-        viewModel.posts.filter { $0.location != nil }
-    }
-
     // MARK: - Reel card (full-frame)
 
     /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
@@ -536,6 +567,12 @@ struct ThemedFeedOverlay: View {
     private func standardFeedPostCardView(for post: FeedPost) -> FeedPostCard {
         FeedPostCard(
             post: post,
+            onSeeNearby: { place in
+                HapticFeedback.light()
+                router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate(
+                    latitude: place.latitude, longitude: place.longitude
+                )))
+            },
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
             isHeartInFlight: postHeartInFlightIds.contains(post.id),
@@ -828,9 +865,11 @@ struct ThemedFeedOverlay: View {
                 originalType: post.type,
                 media: post.media.map { EditablePostMedia($0) },
                 originalLocation: post.location,
+                originalVisibility: post.visibility,
+                originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -838,8 +877,16 @@ struct ThemedFeedOverlay: View {
         // Story viewer : présentation unifiée via StoryViewerCoordinator au root
         // (`.fullScreenCover(item:)`). L'ancien cover local `(isPresented:)` +
         // `selectedStoryUserId` séparé est supprimé (capture périmée d'uid → écran noir).
+        // Lot 4.6 — la création d'un mood passe par le MEUBLE. `seed: nil` est
+        // ce qui autorise la reprise hors-ligne : la porte n'a rien à semer,
+        // donc `MoodComposerDoor` interroge la file durable, exactement à la
+        // condition que l'écran historique posait.
         .sheet(isPresented: $showStatusComposer) {
-            StatusComposerView(viewModel: statusViewModel)
+            MoodComposerDoor(
+                intent: ComposerIntent(origin: .moodChip),
+                seed: nil,
+                viewModel: statusViewModel
+            )
                 // `.large` is not decoration: the composer's labels scale with
                 // Dynamic Type while its emoji grid does not, so at accessibility
                 // sizes the content outgrows `.medium`. Offering the larger detent
@@ -869,12 +916,6 @@ struct ThemedFeedOverlay: View {
                     quoteOriginalPost = nil
                 }
             )
-        }
-        .fullScreenCover(isPresented: $showPostsMap) {
-            FeedPostsMapView(posts: locatedPosts) { post in
-                showPostsMap = false
-                router.push(.postDetail(post.id, post))
-            }
         }
     }
 }

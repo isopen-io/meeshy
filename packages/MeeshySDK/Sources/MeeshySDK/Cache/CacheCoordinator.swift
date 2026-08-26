@@ -221,6 +221,38 @@ public actor CacheCoordinator {
         return translationCache[messageId]
     }
 
+    /// Éviction CIBLÉE des traductions d'UN message, RAM et table GRDB.
+    ///
+    /// Appelée quand le contenu du message a changé (édition) : ses traductions
+    /// décrivent alors un texte qui n'existe plus. Sans la ligne disque, la
+    /// purge en mémoire serait cosmétique — `loadTranslationCaches()` la
+    /// réinjecterait au prochain démarrage. Jumelle par MESSAGE de
+    /// `invalidateTranslationCaches()`, qui vide les trois caches de
+    /// traduction/transcription en entier ; `clearTranslationCacheDB()` en est
+    /// le pendant disque global. Les caches de transcription et d'audio
+    /// traduit ne sont PAS touchés : éditer le texte d'un message ne périme
+    /// pas la piste enregistrée.
+    public func invalidateTranslations(for messageId: String) {
+        translationCache.removeValue(forKey: messageId)
+        translationTimestamps.removeValue(forKey: messageId)
+        if let idx = translationInsertionOrder.firstIndex(of: messageId) {
+            translationInsertionOrder.remove(at: idx)
+        }
+        deleteTranslationCacheRows(messageId: messageId)
+    }
+
+    private nonisolated func deleteTranslationCacheRows(messageId: String) {
+        do {
+            try db.write { db in
+                _ = try TranslationCacheRecord
+                    .filter(Column("messageId") == messageId)
+                    .deleteAll(db)
+            }
+        } catch {
+            logger.error("Failed to delete cached translations for \(messageId): \(error.localizedDescription)")
+        }
+    }
+
     public func cachedTranslations(for messageIds: [String]) -> [String: [TranslationData]] {
         var result: [String: [TranslationData]] = [:]
         for msgId in messageIds {
@@ -293,8 +325,12 @@ public actor CacheCoordinator {
         self.conversationPreferences = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-conv", encrypted: true)
 
         self.images = DiskCacheStore(policy: .mediaImages)
-        self.audio = DiskCacheStore(policy: .mediaAudio)
-        self.video = DiskCacheStore(policy: .mediaVideo)
+        // Audio/vidéo : la lecture passe par des file URLs (AVPlayer), pas par
+        // des Data résidents — 8 MB suffisent aux petits payloads (vocaux)
+        // rejoués, et les 2 × 80 MB de plafonds théoriques disparaissent du
+        // budget mémoire (cible app : < 150 MB).
+        self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024)
+        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
     }
 
@@ -302,10 +338,29 @@ public actor CacheCoordinator {
         guard !isStarted else { return }
         isStarted = true
         resolveCurrentUserId()
-        loadTranslationCaches()
+        // Hors du chemin critique du boot : la réhydratation (read all rows +
+        // GC + decode par row) bloquait `start()`, donc le
+        // `conversations.load("list")` du splash qui le suit dans la même
+        // task. Le corps est sans await : une fois planifié sur l'actor il
+        // s'exécute d'un bloc, et un lecteur arrivé avant retombe sur les
+        // traductions du payload REST puis la demande à la volée.
+        translationHydrationTask = Task { self.hydrateTranslationCachesFromDisk() }
         subscribeToLifecycle()
         subscribeToPostEngagement()
         Task { await self.backfillSearchIndexIfNeeded() }
+    }
+
+    /// Réhydratation disque des caches de traduction lancée par `start()` —
+    /// attendable par les tests (le GC du boot reste un contrat, seul son
+    /// moment a changé).
+    private(set) var translationHydrationTask: Task<Void, Never>?
+
+    func awaitTranslationCacheHydration() async {
+        await translationHydrationTask?.value
+    }
+
+    private func hydrateTranslationCachesFromDisk() {
+        loadTranslationCaches()
     }
 
     // MARK: - Search Index Backfill

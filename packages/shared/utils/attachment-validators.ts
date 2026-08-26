@@ -49,6 +49,7 @@
  */
 
 import { z } from 'zod';
+import { isMsRangeOrdered, MS_RANGE_REFINEMENT } from './time-range.js';
 
 // ============================================================================
 // Atoms
@@ -109,10 +110,9 @@ export const transcriptionSegmentSchema = z
   })
   // A time segment cannot end before it begins. Equal bounds (a zero-duration
   // segment) stay valid — same numeric-sanity class as the `nonnegative` bounds.
-  .refine((segment) => segment.endMs >= segment.startMs, {
-    message: 'endMs must be greater than or equal to startMs',
-    path: ['endMs'],
-  });
+  // Invariant partagé par tous les couples `startMs/endMs` (cf.
+  // `utils/time-range.ts`, itération 238) : déclaré une seule fois, appliqué ici.
+  .refine(isMsRangeOrdered, MS_RANGE_REFINEMENT);
 
 // ============================================================================
 // AttachmentTranscription — single flat schema with optional discriminator

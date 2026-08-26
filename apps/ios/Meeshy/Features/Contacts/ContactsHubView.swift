@@ -17,7 +17,7 @@ struct ContactsHubView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var router: Router
-    @State private var scrollOffset: CGFloat = 0
+    @State private var scrollRelay = ScrollOffsetRelay()
     @State private var selectedTab: PeopleTab
 
     @StateObject private var keypadVM = KeypadViewModel()
@@ -34,14 +34,18 @@ struct ContactsHubView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CollapsibleHeader(
-                title: selectedTab.title,
-                scrollOffset: scrollOffset,
-                onBack: { router.pop() },
-                titleColor: theme.textPrimary,
-                backArrowColor: MeeshyColors.indigo500,
-                backgroundColor: theme.backgroundPrimary
-            )
+            // Seul ce reader se re-rend au fil du scroll — la racine écrit
+            // `scrollRelay.offset` sans s'y abonner (P1-1).
+            ScrollOffsetReader(relay: scrollRelay) { offset in
+                CollapsibleHeader(
+                    title: selectedTab.title,
+                    scrollOffset: offset,
+                    onBack: { router.pop() },
+                    titleColor: theme.textPrimary,
+                    backArrowColor: MeeshyColors.indigo500,
+                    backgroundColor: theme.backgroundPrimary
+                )
+            }
 
             tabBar
             tabContent
@@ -51,7 +55,7 @@ struct ContactsHubView: View {
         .adaptiveOnChange(of: selectedTab) { _, _ in
             // Re-expand the header when switching tabs (the freshly shown tab's
             // offset only re-fires once the user scrolls it).
-            scrollOffset = 0
+            scrollRelay.offset = 0
             HapticFeedback.light()
         }
     }
@@ -123,14 +127,14 @@ struct ContactsHubView: View {
             CallsTab(
                 viewModel: callsVM,
                 isActive: selectedTab == .calls,
-                onScrollOffsetChange: { scrollOffset = $0 }
+                onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
             .tag(PeopleTab.calls)
 
             KeypadTab(
                 viewModel: keypadVM,
                 isActive: selectedTab == .keypad,
-                onScrollOffsetChange: { scrollOffset = $0 }
+                onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
             .tag(PeopleTab.keypad)
 
@@ -139,7 +143,7 @@ struct ContactsHubView: View {
                 phonebookViewModel: phonebookVM,
                 affiliatesViewModel: affiliatesVM,
                 isActive: selectedTab == .contacts,
-                onScrollOffsetChange: { scrollOffset = $0 }
+                onScrollOffsetChange: { scrollRelay.offset = $0 }
             )
             .tag(PeopleTab.contacts)
         }

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendError } from '../../utils/response';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -89,32 +90,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               },
             },
           },
-          401: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: {
-                type: 'object',
-                properties: {
-                  code: { type: 'string' },
-                  message: { type: 'string' },
-                },
-              },
-            },
-          },
-          500: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: {
-                type: 'object',
-                properties: {
-                  code: { type: 'string' },
-                  message: { type: 'string' },
-                },
-              },
-            },
-          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
         },
       },
     },

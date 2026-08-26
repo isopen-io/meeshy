@@ -812,6 +812,96 @@ describe('ReactionService', () => {
       expect(result.totalCount).toBe(0);
       expect(result.userReactions).toEqual([]);
     });
+
+    it('should fall back to the linked account name/avatar when the local participant fields are null', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ emoji: '👍', participantId: 'reg1' })
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'reg1',
+          displayName: null,
+          avatar: null,
+          userId: 'account-1',
+          user: { displayName: 'Ada Lovelace', avatar: 'https://cdn/ada.png' }
+        }
+      ]);
+
+      const result = await service.getMessageReactions({ messageId: testMessageId });
+
+      const reactor = result.reactions[0]?.users[0];
+      expect(reactor?.username).toBe('Ada Lovelace');
+      expect(reactor?.avatar).toBe('https://cdn/ada.png');
+    });
+
+    it('should prefer the local participant name/avatar over the linked account', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ emoji: '👍', participantId: 'reg1' })
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'reg1',
+          displayName: 'Nickname',
+          avatar: 'https://cdn/local.png',
+          userId: 'account-1',
+          user: { displayName: 'Ada Lovelace', avatar: 'https://cdn/ada.png' }
+        }
+      ]);
+
+      const result = await service.getMessageReactions({ messageId: testMessageId });
+
+      const reactor = result.reactions[0]?.users[0];
+      expect(reactor?.username).toBe('Nickname');
+      expect(reactor?.avatar).toBe('https://cdn/local.png');
+    });
+
+    it('should treat blank local fields as absent and never leak an empty avatar string', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ emoji: '👍', participantId: 'reg1' })
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        {
+          id: 'reg1',
+          displayName: '   ',
+          avatar: '',
+          userId: 'account-1',
+          user: { displayName: 'Ada Lovelace', avatar: 'https://cdn/ada.png' }
+        }
+      ]);
+
+      const result = await service.getMessageReactions({ messageId: testMessageId });
+
+      const reactor = result.reactions[0]?.users[0];
+      expect(reactor?.username).toBe('Ada Lovelace');
+      expect(reactor?.avatar).toBe('https://cdn/ada.png');
+    });
+
+    it('should return Anonymous / null avatar when neither participant nor account carry the field', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ emoji: '👍', participantId: 'anon1' })
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([
+        { id: 'anon1', displayName: null, avatar: null, userId: null, user: null }
+      ]);
+
+      const result = await service.getMessageReactions({ messageId: testMessageId });
+
+      const reactor = result.reactions[0]?.users[0];
+      expect(reactor?.username).toBe('Anonymous');
+      expect(reactor?.avatar).toBeNull();
+    });
+
+    it('should join the linked user so the account fallback data is actually loaded', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([
+        createMockReaction({ emoji: '👍', participantId: 'reg1' })
+      ]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      await service.getMessageReactions({ messageId: testMessageId });
+
+      const selectArg = mockPrisma.participant.findMany.mock.calls[0][0].select;
+      expect(selectArg.user).toEqual({ select: { displayName: true, avatar: true } });
+    });
   });
 
   // ==============================================
@@ -1169,6 +1259,52 @@ describe('ReactionService', () => {
       );
 
       expect(result.participantId).toBe(testParticipantId2);
+    });
+
+    // `hasCurrentUser` est une réponse PAR LECTEUR. Une diffusion de room n'a pas
+    // de lecteur : le même objet part vers tous les participants. Le calculer ici
+    // ne peut donc le calculer que pour l'ACTEUR — et tout client qui recopie
+    // l'agrégat dans son cache s'attribue la réaction de quelqu'un d'autre.
+    // C'est le défaut mesuré sur la jumelle COMMENTAIRE, où iOS a dû le
+    // contourner dans deux ViewModels (« allumait le cœur de tous les
+    // destinataires du broadcast »).
+    it("n'emporte aucune réponse par-lecteur dans l'agrégat DIFFUSÉ", async () => {
+      const result = await service.createUpdateEvent(
+        testMessageId,
+        '👍',
+        'add',
+        testParticipantId,
+        'conv123',
+        reactorUserId
+      );
+
+      expect(result.aggregation).not.toHaveProperty('hasCurrentUser');
+    });
+
+    // Et la mesure qui dit pourquoi le champ ne manquera à personne : sur une
+    // diffusion il ne portait AUCUNE information. L'agrégat est relu APRÈS la
+    // mutation, avec l'id de l'acteur — donc `true` sur tout `add`, `false` sur
+    // tout `remove`. C'était `action`, réécrit une couche plus bas.
+    it('ne perd rien : les DEUX diffusions portent le même agrégat absolu', async () => {
+      const added = await service.createUpdateEvent(
+        testMessageId, '👍', 'add', testParticipantId, 'conv123', reactorUserId
+      );
+
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
+      const removed = await service.createUpdateEvent(
+        testMessageId, '👍', 'remove', testParticipantId, 'conv123', reactorUserId
+      );
+
+      expect(added.aggregation).toEqual({
+        emoji: '👍',
+        count: 1,
+        participantIds: [testParticipantId]
+      });
+      expect(removed.aggregation).toEqual({
+        emoji: '👍',
+        count: 0,
+        participantIds: []
+      });
     });
   });
 

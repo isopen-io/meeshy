@@ -199,6 +199,23 @@ describe('useStreamSocket', () => {
     expect((onActiveUsersUpdate.mock.calls[0][0] as User[]).map(u => u.id)).toEqual([]);
   });
 
+  // Confidentialité de la présence : la passerelle sert une présence MASQUÉE
+  // comme `isOnline:false` + `lastActiveAt:null` sur `user:status`. La liste
+  // des présents ne lit que `isOnline` — le `null` transporté à côté ne doit
+  // ni retenir l'entrée ni la re-dater : la pastille disparaît.
+  it('retire un utilisateur dont la présence arrive MASQUÉE (isOnline:false, lastActiveAt:null)', () => {
+    const onActiveUsersUpdate = jest.fn();
+    const known = { id: 'user-456', username: 'otheruser', isOnline: true, lastActiveAt: new Date() } as User;
+    renderWithActiveUsers([known], onActiveUsersUpdate);
+
+    act(() => {
+      (global as any).__mockOnUserStatus('user-456', 'otheruser', false, null);
+    });
+
+    expect(onActiveUsersUpdate).toHaveBeenCalledTimes(1);
+    expect((onActiveUsersUpdate.mock.calls[0][0] as User[]).map(u => u.id)).toEqual([]);
+  });
+
   // Deux arrivées dans le MÊME tick. `activeUsersRef` ne se resynchronise que
   // par l'effet monté sur la prop `activeUsers` — donc sans réécriture immédiate
   // de la ref, les deux trames liraient la même liste d'avant et la seconde

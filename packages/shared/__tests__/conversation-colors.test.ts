@@ -12,7 +12,7 @@
  * l'exactitude sur ≥ 5 cas dérivés à la main, ce qu'elle fait (7 palettes +
  * les cas de repli).
  */
-import { conversationAccentPalette, colorForName, ISO_TO_CONVERSATION_LANGUAGE } from '../utils/conversation-colors.js';
+import { conversationAccentPalette, colorForName, authorAccentColor, ISO_TO_CONVERSATION_LANGUAGE } from '../utils/conversation-colors.js';
 
 const HEX_RE = /^#[0-9A-F]{6}$/;
 
@@ -178,6 +178,32 @@ describe('conversationAccentPalette', () => {
       const viaUnknownName = conversationAccentPalette({ name: 'x', type: 'direct', language: 'klingon', theme: 'general' });
       expect(viaUnknownIso).toEqual(viaUnknownName);
     });
+  });
+});
+
+describe("authorAccentColor — l'accent d'un contenu, miroir d'iOS", () => {
+  // iOS dérive l'accent d'un post ainsi (FeedModels.swift:255) :
+  //   authorColor = colorForName(authorId.isEmpty ? author : authorId)
+  //
+  // La règle vit ici pour que le web ne la RECOPIE pas : recopiée, elle
+  // divergerait — et deux clients peindraient le même post de deux couleurs,
+  // ce qui rend le renforcement « c'est moi » illisible d'un appareil à l'autre.
+
+  it("dérive de l'identifiant quand il est présent", () => {
+    expect(authorAccentColor('user-42', 'Alice')).toBe(colorForName('user-42'));
+  });
+
+  it('retombe sur le nom quand l identifiant manque', () => {
+    expect(authorAccentColor(undefined, 'Alice')).toBe(colorForName('Alice'));
+    expect(authorAccentColor('', 'Alice')).toBe(colorForName('Alice'));
+  });
+
+  it("ne confond pas les deux : un identifiant ne donne pas la couleur du nom", () => {
+    expect(authorAccentColor('user-42', 'Alice')).not.toBe(colorForName('Alice'));
+  });
+
+  it('est déterministe — le même auteur garde sa couleur', () => {
+    expect(authorAccentColor('user-42', 'Alice')).toBe(authorAccentColor('user-42', 'Bob'));
   });
 });
 

@@ -2,11 +2,22 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-public struct NotificationRowView: View {
+public struct NotificationRowView: View, Equatable {
     public let notification: APINotification
     public var onTap: (() -> Void)?
     public var onMarkRead: (() -> Void)?
     public var onDelete: (() -> Void)?
+
+    /// Les closures capturent la notification par valeur : à contenu égal
+    /// (`APINotification` Equatable synthétisé), leur comportement est
+    /// identique — la comparaison porte donc sur la donnée + la présence
+    /// des callbacks, jamais sur leur identité.
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.notification == rhs.notification &&
+        (lhs.onTap == nil) == (rhs.onTap == nil) &&
+        (lhs.onMarkRead == nil) == (rhs.onMarkRead == nil) &&
+        (lhs.onDelete == nil) == (rhs.onDelete == nil)
+    }
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -42,21 +53,11 @@ public struct NotificationRowView: View {
             .background(notification.isRead ? Color.clear : accentColor.opacity(0.05))
         }
         .buttonStyle(.plain)
-        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
-                    Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module), systemImage: "trash")
-                }
-            }
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-            if !notification.isRead, let onMarkRead {
-                Button { onMarkRead() } label: {
-                    Label(String(localized: "notifications.mark_read", defaultValue: "Lu", bundle: .module), systemImage: "envelope.open")
-                }
-                .tint(Color(hex: "4338CA"))
-            }
-        }
+        // Pas de `.swipeActions` ici : ce modifier n'a d'effet que dans une
+        // `List`, or la rangée vit dans la `LazyVStack` de
+        // `NotificationListView` — les actions étaient du code mort évalué à
+        // chaque render. `onMarkRead`/`onDelete` restent dans l'API pour un
+        // futur hôte `List`.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
     }

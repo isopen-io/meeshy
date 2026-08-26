@@ -55,8 +55,14 @@ export interface WebRTCServiceConfig {
  * sustained loss/RTT we drop bitrate/resolution (compression that preserves
  * perceived quality by shedding resolution before framerate — see
  * degradationPreference 'maintain-framerate').
+ *
+ * 'frozen' is the network-survival floor (L6-3): a near-still encoder tier
+ * (2 fps) applied per-peer via `applyVideoEncoding` — same `setParameters()`
+ * path as every other tier, no track mutation, no renegotiation — so the
+ * struggling peer keeps receiving a live (if near-static) frame instead of
+ * losing outbound video outright, unlike `disableVideoSend()`/`'audio-only'`.
  */
-export type VideoQualityTier = 'high' | 'medium' | 'low' | 'audio-only';
+export type VideoQualityTier = 'high' | 'medium' | 'low' | 'audio-only' | 'frozen';
 
 const VIDEO_ENCODING_LADDER: Record<
   Exclude<VideoQualityTier, 'audio-only'>,
@@ -65,6 +71,7 @@ const VIDEO_ENCODING_LADDER: Record<
   high: { maxBitrate: 1_500_000, maxFramerate: 30, scaleResolutionDownBy: 1 },
   medium: { maxBitrate: 600_000, maxFramerate: 25, scaleResolutionDownBy: 2 },
   low: { maxBitrate: 250_000, maxFramerate: 15, scaleResolutionDownBy: 4 },
+  frozen: { maxBitrate: 100_000, maxFramerate: 2, scaleResolutionDownBy: 4 },
 };
 
 // Grace window before an ICE 'disconnected' escalates to a restart.
@@ -500,7 +507,9 @@ export class WebRTCService {
         // afterwards a direction change (A/V switch) lands here and must
         // produce a fresh offer through the perfect-negotiation path.
         if (this.autoNegotiate) {
-          void this.negotiate();
+          void this.negotiate().catch((error) => {
+            logger.error('[WebRTCService] Auto-renegotiation (onnegotiationneeded) failed', { error });
+          });
         }
       };
 
@@ -1050,7 +1059,16 @@ export class WebRTCService {
     if (this.autoNegotiate) {
       await this.negotiate();
     }
-    await this.applyVideoEncoding(this.currentVideoTier === 'audio-only' ? 'high' : this.currentVideoTier);
+    // A passive re-enable (manual camera toggle, camera switch) must not
+    // reinstate a stale survival freeze: 'audio-only' and 'frozen' are both
+    // states this instance can only have entered from a track that is now
+    // being replaced, so neither is a tier to restore — fall back to 'high'
+    // the same way 'audio-only' already did.
+    const tierToRestore =
+      this.currentVideoTier === 'audio-only' || this.currentVideoTier === 'frozen'
+        ? 'high'
+        : this.currentVideoTier;
+    await this.applyVideoEncoding(tierToRestore);
   }
 
   /**
@@ -1115,8 +1133,13 @@ export class WebRTCService {
   /**
    * Adaptive bitrate / compression. Maps a quality tier to encoder parameters
    * via setParameters (no renegotiation) and pins degradationPreference to
-   * 'maintain-framerate' so motion stays smooth (resolution is shed first).
+   * 'maintain-framerate' so motion stays smooth (resolution is shed first) —
+   * except at the 'frozen' floor, which keeps resolution and sheds cadence
+   * instead ('maintain-resolution'): parity with iOS
+   * `applyVideoEncoding(degradationPreference:)`.
    * 'audio-only' stops outbound video entirely as a last-resort survival mode.
+   * 'frozen' is just another ladder entry (near-still bitrate/framerate) —
+   * unlike 'audio-only' it never touches the track or the transceiver.
    */
   async applyVideoEncoding(tier: VideoQualityTier): Promise<void> {
     this.currentVideoTier = tier;
@@ -1140,7 +1163,7 @@ export class WebRTCService {
     params.encodings[0].scaleResolutionDownBy = ladder.scaleResolutionDownBy;
     // Cast: degradationPreference is valid per spec but missing from some lib.dom versions.
     (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference =
-      'maintain-framerate';
+      tier === 'frozen' ? 'maintain-resolution' : 'maintain-framerate';
     try {
       await sender.setParameters(params);
       logger.debug('[WebRTCService] Applied video encoding tier', {

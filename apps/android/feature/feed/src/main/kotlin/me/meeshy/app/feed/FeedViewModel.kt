@@ -53,6 +53,24 @@ data class FeedUiState(
      * flow so a background re-emit never tears the open viewer down.
      */
     val imageViewer: FeedGallery? = null,
+    /**
+     * The quote-repost composer currently open (the user chose "Quote" on a post),
+     * or `null` when dismissed. Ephemeral view state kept in the flow so a background
+     * re-emit never tears the half-typed commentary down. Mirrors iOS's `quotePost`
+     * on the shared composer sheet.
+     */
+    val quoteComposer: QuoteComposerState? = null,
+)
+
+/**
+ * State of the open quote-repost composer: the source post being quoted (author +
+ * a content preview so the sheet renders the embed) and the commentary draft.
+ */
+data class QuoteComposerState(
+    val postId: String,
+    val sourceAuthorName: String?,
+    val sourceContentPreview: String,
+    val text: String = "",
 )
 
 @HiltViewModel
@@ -173,6 +191,18 @@ class FeedViewModel @Inject constructor(
             }
         }
         viewModelScope.launch {
+            // post:reposted — someone reposted a post; the gateway broadcast the repost as a
+            // COMPLETE new post to every visibility-filtered feed room. A repost is itself a
+            // new feed post, so route it through the SAME head-accept path as post:created
+            // (dedup against the cache-projected feed and the buffered head, prepend
+            // newest-first, bump the banner). Mirror of iOS FeedSocketHandler routing
+            // post:reposted through handlePostUpsert.
+            socialSocket.postReposted.collect { payload ->
+                val cacheIds = latestCachePosts.mapTo(HashSet()) { it.id }
+                realtimeHead.update { FeedRealtimeReducer.accept(it, payload.repost, cacheIds) }
+            }
+        }
+        viewModelScope.launch {
             socialSocket.postDeleted.collect { payload ->
                 realtimeHead.update { FeedRealtimeReducer.remove(it, payload.postId) }
             }
@@ -204,6 +234,27 @@ class FeedViewModel @Inject constructor(
         viewModelScope.launch {
             socialSocket.commentDeleted.collect { payload ->
                 realtimeHead.update { FeedRealtimeReducer.comment(it, payload.postId, payload.commentCount) }
+            }
+        }
+        viewModelScope.launch {
+            // Prisme, push side: the gateway translated a post server-side and broadcast
+            // the finished entry. Fold it into the feed cache so the open card re-renders
+            // in the reader's preferred language the instant it lands — the reader's own
+            // resolution chain (preferences + active override) decides whether to surface
+            // it, so no override is forced here (parity with iOS applyPostTranslation and
+            // the story-viewer realtime merge).
+            socialSocket.postTranslationUpdated.collect { payload ->
+                postRepository.applyTranslationUpdate(payload.postId, payload.language, payload.translation)
+            }
+        }
+        viewModelScope.launch {
+            // post:updated — the author edited the post (caption, media, mood, ...) and the
+            // gateway broadcast the whole new post. Fold it onto the cached card so the edit
+            // shows in place, preserving the viewer's own like/bookmark/view/reaction state
+            // (the broadcast is unpersonalized). Mirror of iOS FeedViewModel's post:updated
+            // sink, and the content-edit sibling of post:translation-updated above.
+            socialSocket.postUpdated.collect { payload ->
+                postRepository.applyPostUpdate(payload.post)
             }
         }
     }
@@ -352,10 +403,72 @@ class FeedViewModel @Inject constructor(
     /**
      * Repost simple (pas de quote) puis refresh : le repost cree un POST nouveau
      * cote serveur, que seul un re-fetch peut faire apparaitre en tete de flux.
+     *
+     * Le [RepostCommand] resout la cible : reposter un repost vise sa RACINE, jamais
+     * le partage intermediaire (sinon la nouvelle card embarque une share vide — le
+     * gateway n'hydrate `repostOf` que sur un niveau). Port d'iOS `resolveRepostTargetId`.
      */
     fun repost(postId: String) {
+        val command = RepostCommand.of(postId, repostOfFor(postId), quote = false, commentary = null)
+        sendRepost(command)
+    }
+
+    /**
+     * Ouvre le compositeur de citation pour [postId] (le repost accompagne d'un
+     * commentaire). Inerte si le post n'est pas charge — rien a citer. Mirror d'iOS
+     * qui presente sa feuille de composition avec `quotePost` renseigne.
+     */
+    fun beginQuote(postId: String) {
+        val source = latestPosts.firstOrNull { it.id == postId } ?: return
+        _state.update {
+            it.copy(
+                quoteComposer = QuoteComposerState(
+                    postId = postId,
+                    sourceAuthorName = (source.author?.displayName ?: source.author?.username)
+                        ?.takeIf { name -> name.isNotBlank() },
+                    sourceContentPreview = source.content.orEmpty().trim(),
+                ),
+            )
+        }
+    }
+
+    fun onQuoteTextChange(text: String) {
+        _state.update { s -> s.quoteComposer?.let { s.copy(quoteComposer = it.copy(text = text)) } ?: s }
+    }
+
+    fun cancelQuote() {
+        _state.update { it.copy(quoteComposer = null) }
+    }
+
+    /**
+     * Publie la citation : reposte la RACINE de la source avec le commentaire. Un
+     * commentaire vide/blanc degrade en repost simple (surpasse iOS qui enverrait
+     * `content = ""`). La feuille se ferme aussitot (parite iOS : dismiss + toast
+     * d'erreur eventuel), le refresh fait remonter le nouveau post.
+     */
+    fun submitQuote() {
+        val composer = _state.value.quoteComposer ?: return
+        val command = RepostCommand.of(
+            composer.postId,
+            repostOfFor(composer.postId),
+            quote = true,
+            commentary = composer.text,
+        )
+        _state.update { it.copy(quoteComposer = null) }
+        sendRepost(command)
+    }
+
+    private fun repostOfFor(postId: String) =
+        latestPosts.firstOrNull { it.id == postId }?.repostOf
+
+    private fun sendRepost(command: RepostCommand) {
         viewModelScope.launch {
-            when (val result = postRepository.repost(postId)) {
+            val result = postRepository.repost(
+                command.targetId,
+                content = command.content,
+                isQuote = command.isQuote,
+            )
+            when (result) {
                 is NetworkResult.Success -> postRepository.refresh()
                 is NetworkResult.Failure -> _state.update { it.copy(errorMessage = result.error.message) }
             }

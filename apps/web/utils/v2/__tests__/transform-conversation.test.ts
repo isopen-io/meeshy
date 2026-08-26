@@ -68,6 +68,46 @@ describe('transformToConversationItem — direct conversation name resolution (S
   });
 });
 
+describe('transformToConversationItem — direct conversation languageCode (Prisme SSOT)', () => {
+  it('resolves the other user via the full prism order — customDestinationLanguage counts (not just system/regional)', () => {
+    const item = transformToConversationItem(
+      directConversationWithOtherUser({ username: 'u', customDestinationLanguage: 'de' }),
+      baseOptions
+    );
+    expect(item.languageCode).toBe('de');
+  });
+
+  it('normalizes a region/case-tagged system language to its canonical code (EN -> en, pt-BR -> pt)', () => {
+    const upper = transformToConversationItem(
+      directConversationWithOtherUser({ username: 'u', systemLanguage: 'EN' }),
+      baseOptions
+    );
+    expect(upper.languageCode).toBe('en');
+
+    const regional = transformToConversationItem(
+      directConversationWithOtherUser({ username: 'u', systemLanguage: 'pt-BR' }),
+      baseOptions
+    );
+    expect(regional.languageCode).toBe('pt');
+  });
+
+  it('keeps systemLanguage ahead of regionalLanguage', () => {
+    const item = transformToConversationItem(
+      directConversationWithOtherUser({ username: 'u', systemLanguage: 'ja', regionalLanguage: 'en' }),
+      baseOptions
+    );
+    expect(item.languageCode).toBe('ja');
+  });
+
+  it('falls back to fr when the other user declares no language preference', () => {
+    const item = transformToConversationItem(
+      directConversationWithOtherUser({ username: 'u' }),
+      baseOptions
+    );
+    expect(item.languageCode).toBe('fr');
+  });
+});
+
 describe('transformToConversationItem — group last-message senderName (SSOT)', () => {
   function groupConversationWithLastMessageSender(sender: Record<string, unknown>): Conversation {
     return {

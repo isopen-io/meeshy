@@ -19,7 +19,7 @@ import type {
   MessageAckResponse,
   UnsubscribeFn
 } from './types';
-import type { LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+import type { ConversationJoinErrorEventData, LinkMessageNewEventData, MessageRestoredForMeEventData, ConversationUnreadUpdatedEventData } from '@meeshy/shared/types/socketio-events';
 
 import { ConnectionService } from './connection.service';
 import { MessagingService } from './messaging.service';
@@ -103,6 +103,14 @@ export class SocketIOOrchestrator {
     this.presenceService = new PresenceService();
     this.translationService = new TranslationService();
     this.preferencesSyncService = new PreferencesSyncService();
+
+    // Un message rétracte la frappe qui l'annonçait. Les deux services
+    // s'ignorent ; l'orchestrateur, qui les possède, porte le lien. Câblé ici
+    // et non dans `setupEventListeners` : la règle ne dépend d'aucun socket et
+    // ne doit pas se re-poser à chaque reconnexion.
+    this.messagingService.setTypingRetractor((conversationId, userId) => {
+      this.typingService.clearTypingForUser(conversationId, userId);
+    });
 
     // A boot whose stored JWT had already expired gets NO socket at all:
     // ConnectionService.initializeConnection() bails out and leaves the REST
@@ -796,6 +804,14 @@ export class SocketIOOrchestrator {
     return this.preferencesSyncService.onPreferencesReordered(listener);
   }
 
+  onCommunityPreferencesReordered(
+    listener: (
+      data: import('@meeshy/shared/types/socketio-events').UserPreferencesCommunityReorderedEventData,
+    ) => void,
+  ): UnsubscribeFn {
+    return this.preferencesSyncService.onCommunityPreferencesReordered(listener);
+  }
+
   onCategoryChanged(listener: () => void): UnsubscribeFn {
     return this.preferencesSyncService.onCategoryChanged(listener);
   }
@@ -856,7 +872,7 @@ export class SocketIOOrchestrator {
     return this.presenceService.onConversationClosed(listener);
   }
 
-  onConversationJoinError(listener: (data: { conversationId: string; reason: string; message: string }) => void): UnsubscribeFn {
+  onConversationJoinError(listener: (data: ConversationJoinErrorEventData) => void): UnsubscribeFn {
     return this.presenceService.onConversationJoinError(listener);
   }
 

@@ -5,8 +5,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
-import { presentMemberCount } from '@meeshy/shared/utils/member-visibility';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import { ConversationSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import {
   generateDefaultConversationTitle,
@@ -31,17 +30,39 @@ import { loadConversationTombstones } from './utils/delta-tombstones';
 import { isBlockedBetween } from '../../utils/blocking';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import {
   generateConversationIdentifier,
+  generateCompactConversationIdentifier,
   ensureUniqueConversationIdentifier
 } from './utils/identifier-generator';
 import type {
   ConversationParams,
   CreateConversationBody
 } from './types';
-import { buildCursorPaginationMeta } from '../../utils/pagination';
+import { validatePagination, buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events';
+
+/**
+ * Les huit réglages que `PUT /conversations/:id` peut annoncer sur
+ * `conversation:updated`, DÉRIVÉS du contrat plutôt que redéclarés.
+ *
+ * Ce que la dérivation garde, et qu'un `Record<string, unknown>` ne gardait
+ * pas : un neuvième réglage ajouté ici ne compile pas tant qu'il n'est pas
+ * déclaré sur `ConversationUpdatedEventData`. C'est par cette carte ouverte que
+ * les huit voyageaient sans contrat, alors que les trois clients les lisent.
+ *
+ * Une clé ABSENTE veut dire « ce réglage n'a pas bougé », jamais « remets-le à
+ * zéro » — d'où la composition par spreads conditionnels, qui n'en pose aucune
+ * quand la requête ne l'a pas changée.
+ */
+type ConversationMetadataChanges = Partial<Pick<
+  ConversationUpdatedEventData,
+  'title' | 'description' | 'avatar' | 'banner' | 'defaultWriteRole'
+  | 'isAnnouncementChannel' | 'slowModeSeconds' | 'autoTranslateEnabled'
+>>;
 import { emitToConversationParticipants } from '../../socketio/emitToConversationParticipants';
 import { announceConversationClosed } from '../../socketio/announceConversationClosed';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
@@ -369,8 +390,12 @@ export function registerCoreRoutes(
       // list in fewer pages — previously capped at 50, which forced 88+
       // conversation accounts through 2 pages and exposed pagination bugs
       // (offset stagnation, hasMore mis-reads) for any partial sync.
-      const limit = Math.min(parseInt(request.query.limit || '30', 10), 100); // Max 100
-      const offset = parseInt(request.query.offset || '0', 10);
+      // SSOT `validatePagination` clamps NaN/negative/zero: a malformed
+      // querystring (`?limit=abc`, `?limit=-1`) would otherwise reach Prisma as
+      // `take: NaN`/negative and throw a `PrismaClientValidationError` → HTTP 500
+      // on caller-controlled input. The schema declares `limit`/`offset` as plain
+      // strings (no AJV coercion), so the guard has to live here.
+      const { limit, offset } = validatePagination(request.query.offset, request.query.limit, { defaultLimit: 30, maxLimit: 100 });
       const includeCount = request.query.includeCount === 'true';
 
       // OPTIMIZED: Filtres optionnels pour éviter de charger toutes les conversations
@@ -644,9 +669,23 @@ export function registerCoreRoutes(
       const currentUserParticipantIdMap = new Map<string, string>();
       const convsMissingCurrentUser: string[] = [];
 
+      // `authContext.userId` porte un `User.id` pour un compte mais un
+      // `Participant.id` pour un invité de lien partagé (branche anonyme
+      // d'`UnifiedAuthService`, documentée dans `utils/access-control.ts`) : la
+      // COLONNE se branche sur la NATURE de la clé, exactement comme
+      // `GET /conversations/search`. Comparer un `Participant.id` à la colonne
+      // `userId` ne matche RIEN — pas une erreur, une map vide : le rôle du
+      // lecteur disparaissait, et avec lui son droit à l'effectif ENTIER. Un
+      // admin de groupe anonyme (que `canViewExactMemberCount` autorise
+      // explicitement) était donc plafonné à « 199+ » ici et servi entier par
+      // la recherche : deux réponses pour un même lecteur.
+      const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
+
       if (userId) {
         for (const conv of conversations) {
-          const found = (conv as any).participants.find((p: any) => p.userId === userId);
+          const found = (conv as any).participants.find((p: any) =>
+            isAnonymousViewer ? p.id === userId : p.userId === userId
+          );
           if (found) {
             currentUserRoleMap.set(conv.id, found.role);
             currentUserJoinedAtMap.set(conv.id, found.joinedAt);
@@ -657,7 +696,11 @@ export function registerCoreRoutes(
         }
         if (convsMissingCurrentUser.length > 0) {
           const remaining = await prisma.participant.findMany({
-            where: { conversationId: { in: convsMissingCurrentUser }, userId, isActive: true },
+            where: {
+              conversationId: { in: convsMissingCurrentUser },
+              isActive: true,
+              ...(isAnonymousViewer ? { id: userId } : { userId })
+            },
             select: { id: true, conversationId: true, role: true, joinedAt: true }
           });
           for (const p of remaining) {
@@ -695,11 +738,12 @@ export function registerCoreRoutes(
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
       const presenceChecker = fastify.presenceChecker;
 
-      // Présence des co-participants : montrable (co-participation = contexte
-      // d'accès déjà garanti), mais soumise aux préférences showOnlineStatus/
-      // showLastSeen de chacun — même règle que le broadcast user:status et le
-      // presence:snapshot. Anonymes inchangés.
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Présence des co-participants : régime STRICT (2026-08-25) — la
+      // co-participation n'ouvre plus rien, seul le viewer (soi/ADMIN+/ami)
+      // voit isOnline/lastActiveAt d'un co-participant qui ne l'est pas.
+      const presenceViewer = viewerFromRequest(request);
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        presenceViewer,
         conversations.flatMap((conversation) => [
           ...conversation.participants.slice(0, 5).map((m: any) => m.userId),
           conversation.messages[0]?.sender?.userId,
@@ -820,7 +864,6 @@ export function registerCoreRoutes(
           }
 
           const now = new Date();
-          const isAnonymousViewer = authRequest.authContext.type === 'anonymous';
           const orchestratorInputs = new Map<string, BridgeOrchestratorInput>();
 
           for (const conversation of conversations) {
@@ -895,9 +938,11 @@ export function registerCoreRoutes(
           .slice(0, 5)
           .map((m: any) => {
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
-            const vis = m.userId ? presenceVis.get(m.userId) : undefined;
-            const hideOnline = vis?.showOnline === false;
-            const hideLastSeen = vis?.showLastSeenTimestamp === false;
+            // Entrée absente (sans compte, ou inscrit non résolu) : UN site,
+            // `presenceFor` — masqué, sauf ADMIN+. Jamais `undefined` ici.
+            const vis = presenceFor(presenceViewer, presenceVis, m.userId);
+            const hideOnline = !vis.showOnline;
+            const hideLastSeen = !vis.showLastSeenTimestamp;
             return {
               ...m,
               // Bannière de profil top-level : le schéma participant (minimal) est
@@ -949,9 +994,17 @@ export function registerCoreRoutes(
 
         return {
           ...conversationData,
-          // Cap 199+ : l'effectif exact est réservé aux admins plateforme.
+          // Cap 199+ : l'effectif ENTIER est réservé aux lecteurs autorisés —
+          // ADMIN/BIGBOSS/MODERATOR plateforme, OU creator/admin de CETTE
+          // conversation. Le second titre est ce que ce site ignorait : un
+          // admin de groupe administrait 250 personnes sans jamais pouvoir en
+          // lire l'effectif. `currentUserRoleMap` porte déjà son rôle, résolu
+          // plus haut par le top-5 et son repli batché — aucune requête de plus.
           ...presentMemberCount(activeMembers.participants, {
-            viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+            viewerSeesExactCount: canViewExactMemberCount({
+              platformRole: authRequest.authContext.registeredUser?.role ?? null,
+              conversationRole: currentUserRoleMap.get(conversation.id) ?? null
+            })
           }),
           participants: membersWithUser,
           title: displayTitle,
@@ -981,7 +1034,7 @@ export function registerCoreRoutes(
             const senderLiveOnline = sender
               ? presenceChecker?.isOnline(sender.userId ?? sender.id)
               : undefined;
-            const senderVis = sender?.userId ? presenceVis.get(sender.userId) : undefined;
+            const senderVis = sender ? presenceFor(presenceViewer, presenceVis, sender.userId) : undefined;
             // Lot 3 : hisser metadata.location en `location` top-level. Un
             // message géolocalisé SANS légende a un `content` vide — hisser
             // la position ne fabrique aucun texte de repli ; c'est au client
@@ -992,19 +1045,19 @@ export function registerCoreRoutes(
               ...msgRest,
               content: truncateMessagePreview(msg.content),
               ...(place ? { location: place } : {}),
-              sender: sender ? {
+              sender: sender && senderVis ? {
                 ...sender,
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
                 displayName: resolveParticipantDisplayName(sender),
                 avatar: resolveParticipantAvatar(sender),
-                isOnline: senderVis?.showOnline === false
-                  ? false
-                  : (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null),
-                lastActiveAt: senderVis?.showLastSeenTimestamp === false
-                  ? null
-                  : (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null),
+                isOnline: senderVis.showOnline
+                  ? (senderLiveOnline ?? sender.user?.isOnline ?? sender.isOnline ?? null)
+                  : false,
+                lastActiveAt: senderVis.showLastSeenTimestamp
+                  ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
+                  : null,
               } : null
             };
           })(),
@@ -1165,9 +1218,16 @@ export function registerCoreRoutes(
       // matchait rien. Le compteur retombait silencieusement a 0 — et ce 0
       // ecrasait ensuite le badge que le socket venait de pousser juste.
       let unreadCount = 0;
+      // Le rôle du lecteur DANS cette conversation, pour l'effectif servi plus
+      // bas. Il ne peut pas se lire dans `conversation.participants` : cette
+      // liste est bornée à `CONVERSATION_DETAIL_PARTICIPANTS_CAP` (100), donc
+      // aveugle dans le seul cas où le plafond joue. Le participant appelant est
+      // déjà résolu ici pour le compteur de non-lus — il porte le rôle avec lui.
+      let callerConversationRole: string | null = null;
       try {
         const participant = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
         if (participant) {
+          callerConversationRole = participant.role;
           const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(prisma);
           unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
@@ -1193,20 +1253,21 @@ export function registerCoreRoutes(
       // (message.groupBy plein scan à froid, TTL 1h) pour un résultat jeté.
       // Les clients consomment les stats via l'event Socket.IO
       // `conversation:stats`, qui se recompute seul (updateOnNewMessage).
-      // Même politique de présence que la liste : override runtime + gate
-      // showOnlineStatus/showLastSeen (cf. GET /conversations).
-      const presenceVis = await getPresenceVisibilityService(prisma).resolvePrefsOnly(
+      // Même régime strict que la liste : self/ADMIN+/ami (cf. GET /conversations).
+      const detailPresenceViewer = viewerFromRequest(request);
+      const presenceVis = await getPresenceVisibilityService(prisma).resolveForTargets(
+        detailPresenceViewer,
         conversation.participants
           .map((m: any) => m.userId)
           .filter((uid: string | null): uid is string => !!uid)
       );
       const gatedParticipants = conversation.participants.map((m: any) => {
         const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
-        const vis = m.userId ? presenceVis.get(m.userId) : undefined;
+        const vis = presenceFor(detailPresenceViewer, presenceVis, m.userId);
         return {
           ...m,
-          isOnline: vis?.showOnline === false ? false : (liveOnline === undefined ? m.isOnline : liveOnline),
-          lastActiveAt: vis?.showLastSeenTimestamp === false ? null : m.lastActiveAt
+          isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,
+          lastActiveAt: vis.showLastSeenTimestamp ? m.lastActiveAt : null
         };
       });
 
@@ -1215,10 +1276,20 @@ export function registerCoreRoutes(
         ...conversationData,
         participants: gatedParticipants,
         title: displayTitle,
-        // Même cap 199+ que la liste : deux surfaces, une seule présentation.
+        // Même cap 199+ que la liste : deux surfaces, une seule présentation,
+        // et le même droit de voir l'effectif ENTIER (`canViewExactMemberCount`).
         ...presentMemberCount(_count.participants, {
-          viewerSeesExactCount: isGlobalAdmin(authRequest.authContext.registeredUser?.role ?? '')
+          viewerSeesExactCount: canViewExactMemberCount({
+            platformRole: authRequest.authContext.registeredUser?.role ?? null,
+            conversationRole: callerConversationRole
+          })
         }),
+        // Le rang était résolu ici depuis toujours — pour décider du plafond
+        // d'effectif juste au-dessus — et n'était pas servi. Les clients
+        // ouvrant une conversation par sa fiche (notification, lien) n'avaient
+        // donc AUCUN moyen de savoir qu'ils l'administrent. Même clé que la
+        // ligne de liste : une seule notion, un seul nom.
+        currentUserRole: callerConversationRole,
         unreadCount
       });
 
@@ -1306,9 +1377,15 @@ export function registerCoreRoutes(
         // Ensure uniqueness
         finalIdentifier = await ensureUniqueConversationIdentifier(prisma, finalIdentifier);
       } else {
-        // Generate automatic identifier
-        const identifierTitle = type === 'direct' ? `direct-${userId}-${participantIds[0] || 'unknown'}` : title;
-        const baseIdentifier = generateConversationIdentifier(identifierTitle);
+        // Une DM n'a pas de titre a rendre lisible : son ancien identifiant
+        // derivait des deux userId (`mshy_direct-<id1>-<id2>-<horodate>`,
+        // ~72 car.) et publiait donc ses deux membres. On emet un identifiant
+        // COMPACT et opaque. Les conversations TITREES gardent leur forme
+        // lisible — c'est ce que promet le schema Prisma, et un groupe nomme
+        // n'expose l'identite de personne.
+        const baseIdentifier = type === 'direct'
+          ? generateCompactConversationIdentifier()
+          : generateConversationIdentifier(title);
         finalIdentifier = await ensureUniqueConversationIdentifier(prisma, baseIdentifier);
       }
 
@@ -1623,12 +1700,28 @@ export function registerCoreRoutes(
   });
 
   // Route pour mettre à jour une conversation
-  fastify.put<{
+  // `PUT` ET `PATCH` sur un SEUL handler. Ce sont deux verbes pour un seul
+  // geste — « modifie ces champs-là » — et les avoir écrits deux fois, dans
+  // deux fichiers, a produit exactement ce qu'une duplication produit : deux
+  // contrats qui divergent. Le jumeau vivait dans `sharing.ts` et n'acceptait
+  // que `title`/`description`/`type` ; le web lui postait `avatar` et `banner`,
+  // qu'il ignorait en silence tout en répondant 200 — bannière et avatar
+  // restaient vides pendant que l'interface annonçait le succès (mesuré en
+  // production le 2026-08-24). Il ne diffusait par ailleurs AUCUN
+  // `conversation:updated`, et laissait n'importe quel membre renommer le
+  // groupe. Il a été supprimé : ici est le seul point d'écriture des
+  // métadonnées d'une conversation.
+  //
+  // Garde : `conversation-update-route.test.ts` rejoue chaque cas SUR LES DEUX
+  // VERBES — un handler qui se remettrait à diverger y rougirait.
+  fastify.route<{
     Params: ConversationParams;
     Body: Partial<CreateConversationBody>;
-  }>('/conversations/:id', {
+  }>({
+    method: ['PUT', 'PATCH'],
+    url: '/conversations/:id',
     schema: {
-      description: 'Update conversation details (title, description) - requires admin/moderator role',
+      description: 'Update conversation metadata (title, description, avatar, banner) and container settings - requires creator/admin/moderator role. PUT and PATCH are equivalent: both apply only the fields present in the body.',
       tags: ['conversations'],
       summary: 'Update conversation',
       params: {
@@ -1647,8 +1740,8 @@ export function registerCoreRoutes(
         500: errorResponseSchema
       }
     },
-    preValidation: [requiredAuth]
-  }, async (request, reply) => {
+    preValidation: [requiredAuth],
+    handler: async (request, reply) => {
     try {
       const { id } = request.params;
       const { title: rawTitle, description: rawDescription, avatar, banner, defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled } = request.body as {
@@ -1666,13 +1759,23 @@ export function registerCoreRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
+      // « ID or identifier », dit le schéma — et seul le jumeau supprimé le
+      // tenait. Ici, `where: { conversationId: id }` recevait le `mshy_…` tel
+      // quel, ne trouvait aucune appartenance, et répondait 403 à un créateur
+      // parfaitement légitime qui avait ouvert sa conversation par son
+      // identifiant lisible. Toutes les routes voisines résolvent d'abord.
+      const conversationId = id === 'meeshy' ? id : await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
       // Vérifier les permissions d'administration
       // Le `select` ramène le TYPE du conteneur par la relation que cette
       // requête d'appartenance charge déjà — la garde du tête-à-tête ci-dessous
       // en dépend, et aucune requête de plus n'est émise pour l'obtenir.
       const membership = await prisma.participant.findFirst({
         where: {
-          conversationId: id,
+          conversationId: conversationId,
           userId: userId,
           role: { in: ['creator', 'admin', 'moderator'] },
           isActive: true
@@ -1722,44 +1825,103 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'Un tête-à-tête n\'a pas de hiérarchie d\'écriture : ces réglages ne s\'y appliquent pas');
       }
 
-      const updatedConversation = await prisma.conversation.update({
-        where: { id },
-        data: {
-          title,
-          description,
-          ...(avatar !== undefined && { avatar }),
-          ...(banner !== undefined && { banner }),
-          ...(defaultWriteRole !== undefined && { defaultWriteRole }),
-          ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
-          ...(slowModeSeconds !== undefined && { slowModeSeconds }),
-          ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
-        },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  banner: true
-                }
+      const conversationInclude = {
+        participants: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                displayName: true,
+                avatar: true,
+                banner: true
               }
             }
           }
         }
+      } as const;
+
+      const updateData = {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(avatar !== undefined && { avatar }),
+        ...(banner !== undefined && { banner }),
+        ...(defaultWriteRole !== undefined && { defaultWriteRole }),
+        ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
+        ...(slowModeSeconds !== undefined && { slowModeSeconds }),
+        ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
+      };
+
+      // Un corps qui ne nomme aucun champ connu n'est pas une erreur du client :
+      // c'est une écriture vide. Prisma, lui, refuse un `data` vide et levait —
+      // la route répondait 500 à un `{}`. On rend l'état courant, sans écrire et
+      // sans annoncer un changement qui n'a pas eu lieu.
+      // Gate de présence des co-participants. `conversationParticipantSchema`
+      // DÉCLARE `isOnline`/`lastActiveAt`, et l'`include` ci-dessus ramène tous
+      // les scalaires de `Participant` : ces deux champs atteignaient le fil
+      // BRUTS. Régime STRICT (2026-08-25) : self/ADMIN+/ami seuls voient la
+      // présence d'un co-participant ; un id ABSENT de la carte (participant
+      // sans compte) est masqué, sauf pour un viewer ADMIN+.
+      //
+      // Défini ici, appliqué aux DEUX sorties : la branche « rien à écrire »
+      // rend les mêmes lignes que la branche nominale, donc la même donnée à
+      // garder. Une porte posée sur une seule des deux n'est pas une porte.
+      const updatePresenceViewer = viewerFromRequest(request);
+      const gatePresence = async <P extends { userId: string | null; isOnline: boolean | null; lastActiveAt: Date | null }>(
+        participants: P[]
+      ) => {
+        const vis = await getPresenceVisibilityService(prisma).resolveForTargets(
+          updatePresenceViewer,
+          participants
+            .map((p) => p.userId)
+            .filter((uid): uid is string => !!uid)
+        );
+        return participants.map((p) => {
+          const prefs = presenceFor(updatePresenceViewer, vis, p.userId);
+          return {
+            ...p,
+            isOnline: prefs.showOnline ? p.isOnline : false,
+            lastActiveAt: prefs.showLastSeenTimestamp ? p.lastActiveAt : null,
+          };
+        });
+      };
+
+      if (Object.keys(updateData).length === 0) {
+        const unchanged = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          include: conversationInclude
+        });
+        if (!unchanged) {
+          return sendNotFound(reply, 'Conversation not found');
+        }
+        return sendSuccess(reply, {
+          ...unchanged,
+          participants: await gatePresence(unchanged.participants),
+        });
+      }
+
+      const updatedConversation = await prisma.conversation.update({
+        where: { id: conversationId },
+        data: updateData,
+        include: conversationInclude
       });
 
-      const changedFields: Record<string, unknown> = {}
-      if (title !== undefined) changedFields.title = title
-      if (description !== undefined) changedFields.description = description
-      if (avatar !== undefined) changedFields.avatar = avatar
-      if (banner !== undefined) changedFields.banner = banner
-      if (defaultWriteRole !== undefined) changedFields.defaultWriteRole = defaultWriteRole
-      if (isAnnouncementChannel !== undefined) changedFields.isAnnouncementChannel = isAnnouncementChannel
-      if (slowModeSeconds !== undefined) changedFields.slowModeSeconds = slowModeSeconds
-      if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
+      // Typé sur le contrat, pas `Record<string, unknown>` : une carte ouverte
+      // est une absence de déclaration qui a l'air d'en être une, et c'est par
+      // celle-ci que les huit réglages voyageaient sans contrat. La forme
+      // `Pick` est ce qui garde la liste D'ICI et celle du contrat ensemble —
+      // un neuvième réglage ajouté ici ne compile pas tant qu'il n'est pas
+      // déclaré là-bas.
+      const changedFields: ConversationMetadataChanges = {
+        ...(title !== undefined && { title }),
+        ...(description !== undefined && { description }),
+        ...(avatar !== undefined && { avatar }),
+        ...(banner !== undefined && { banner }),
+        ...(defaultWriteRole !== undefined && { defaultWriteRole }),
+        ...(isAnnouncementChannel !== undefined && { isAnnouncementChannel }),
+        ...(slowModeSeconds !== undefined && { slowModeSeconds }),
+        ...(autoTranslateEnabled !== undefined && { autoTranslateEnabled }),
+      }
 
       const socketIOHandler = fastify.socketIOHandler
       const io = socketIOHandler?.getManager()?.getIO()
@@ -1787,11 +1949,11 @@ export function registerCoreRoutes(
         // traduction parfaitement valide sur toutes les lignes de liste.
         emitToConversationParticipants({
           io,
-          conversationId: id,
+          conversationId,
           participants: updatedConversation.participants.filter(p => p.isActive),
           event: SERVER_EVENTS.CONVERSATION_UPDATED,
           payload: {
-            conversationId: id,
+            conversationId,
             ...changedFields,
             updatedBy: { id: userId },
             updatedAt: new Date().toISOString(),
@@ -1799,11 +1961,19 @@ export function registerCoreRoutes(
         })
       }
 
-      return sendSuccess(reply, updatedConversation);
+      // La route jumelle supprimée gardait la présence ; le `PUT`, jamais.
+      // Porter ce qu'un exemplaire avait de PLUS fait partie de la
+      // consolidation — sans quoi unifier revient à choisir la moins bonne des
+      // deux moitiés.
+      return sendSuccess(reply, {
+        ...updatedConversation,
+        participants: await gatePresence(updatedConversation.participants),
+      });
 
     } catch (error) {
       logger.error('error updating conversation', { error });
       return sendInternalError(reply, 'Error updating conversation');
+    }
     }
   });
 

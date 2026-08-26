@@ -5,13 +5,14 @@ import { useParams, useRouter } from 'next/navigation';
 import { StoryViewer, useToast } from '@/components/v2';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
-import { useRepostMutation } from '@/hooks/queries/use-post-mutations';
+import { useComposerRepost } from '@/hooks/composer/useComposerRepost';
 import { usePostRoom } from '@/hooks/social/use-post-room';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { postToStoryData } from '@/lib/story-transforms';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { useCommentTarget } from '@/hooks/use-comment-target';
 import { useAuthStore } from '@/stores/auth-store';
+import type { PostType } from '@meeshy/shared/types/post';
 import { useI18n } from '@/hooks/useI18n';
 import { reportService } from '@/services/report.service';
 import { postsService } from '@/services/posts.service';
@@ -41,7 +42,8 @@ export default function StoryPage() {
   const { data: post, isLoading, isError } = usePostQuery(postId);
   const { recordView } = useRecordStoryViewMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
-  const repostMutation = useRepostMutation();
+  // W8 — le site UNIQUE de la charge repost, voir `useComposerRepost.ts`.
+  const { repost: submitRepost } = useComposerRepost();
 
   // Join the story room + consume its real-time events (reactions, comments)
   // broadcast to `ROOMS.post(postId)`. Mirrors the post detail page so a viewer
@@ -113,17 +115,49 @@ export default function StoryPage() {
     [stories, toastCtx, t]
   );
 
-  const handleRepost = useCallback(
-    (storyId: string) => {
-      repostMutation.mutate(
-        { postId: storyId, data: { isQuote: false } },
+  /**
+   * Loi du miroir (directive produit 2026-08-23) : le format d'un repost suit
+   * celui de sa source. Ce site n'envoyait aucun `targetType`, donc le gateway
+   * retombait sur `?? POST` et republier une story fabriquait un post
+   * PERMANENT — l'utilisateur croyait repartager, il ancrait.
+   *
+   * Les deux gestes partent ensemble, délibérément : livrer le miroir seul
+   * aurait donné 20 h d'éphémère là où l'on obtenait du permanent, sans aucun
+   * recours. La capacité d'ancrer doit exister avant que le défaut ne bascule.
+   */
+  const repostStory = useCallback(
+    (storyId: string, targetType: PostType) => {
+      // La scène VUE, jamais la racine de sa chaîne — et c'est délibéré, ici
+      // comme sur le jumeau iOS (`StoryViewerView.repostAsPostDirect` envoie
+      // `story.id`, quand les surfaces de CARTE passent par `RepostTargeting`).
+      // Deux raisons, chacune suffisante :
+      //   - `repostPost` recopie le contenu et les médias d'une source
+      //     ÉPHÉMÈRE dans le repost, donc la story vue est autonome : viser la
+      //     racine n'éviterait aucune carte vide ;
+      //   - `repostPost` refuse un original dont l'échéance est passée. Une
+      //     story repartagée vit plus longtemps que sa racine, donc grimper
+      //     ferait échouer un geste qui réussit aujourd'hui.
+      submitRepost(
+        { targetId: storyId, targetType, isQuote: false },
         {
           onSuccess: () => toastCtx.addToast(t('reposted', 'Reposted!'), 'success'),
           onError: () => toastCtx.addToast(t('repostError', "Couldn't repost"), 'error'),
         },
       );
     },
-    [repostMutation, toastCtx, t]
+    [submitRepost, toastCtx, t]
+  );
+
+  /** Le miroir — une story repartagée reste une story, éphémère. */
+  const handleRepost = useCallback(
+    (storyId: string) => repostStory(storyId, 'STORY'),
+    [repostStory]
+  );
+
+  /** L'ANCRAGE — « garder ça pour de bon » : la story devient un post permanent. */
+  const handleRepostAsPost = useCallback(
+    (storyId: string) => repostStory(storyId, 'POST'),
+    [repostStory]
   );
 
   if (stories.length > 0) {
@@ -140,6 +174,7 @@ export default function StoryPage() {
         onReport={handleReport}
         onShare={handleShare}
         onRepost={post?.visibility === 'PUBLIC' ? handleRepost : undefined}
+        onRepostAsPost={post?.visibility === 'PUBLIC' ? handleRepostAsPost : undefined}
         targetCommentId={targetCommentId}
         targetParentCommentId={targetParentCommentId}
       />

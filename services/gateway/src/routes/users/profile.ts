@@ -11,6 +11,7 @@ import {
   updatePasswordSchema,
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
+import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import {
   userSchema,
   userMinimalSchema,
@@ -193,6 +194,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify,
         userId: userId!,
         kind: 'updateProfile',
+        // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
+        replayCost: 'converges',
         op: () => fastify.prisma.user.update({
           where: { id: userId },
           data: updateData,
@@ -354,27 +357,6 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: { avatar: body.avatar },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phoneNumber: true,
-          displayName: true,
-          avatar: true,
-          banner: true,
-          bio: true,
-          isOnline: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          lastActiveAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
@@ -384,8 +366,21 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
+      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
+      const permissions = {
+        canAccessAdmin: isAdmin,
+        canManageUsers: isAdmin,
+        canManageGroups: isAdmin,
+        canManageConversations: isAdmin,
+        canViewAnalytics: isAdmin,
+        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
+        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
+        canManageNotifications: isAdmin,
+        canManageTranslations: isAdmin,
+      };
+
       return sendSuccess(reply, {
-        user: updatedUser,
+        user: formatUserResponse(updatedUser, permissions),
         message: 'Avatar updated successfully'
       });
 
@@ -453,27 +448,6 @@ export async function updateUserBanner(fastify: FastifyInstance) {
       const updatedUser = await fastify.prisma.user.update({
         where: { id: userId },
         data: { banner: body.banner },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phoneNumber: true,
-          displayName: true,
-          avatar: true,
-          banner: true,
-          bio: true,
-          isOnline: true,
-          systemLanguage: true,
-          regionalLanguage: true,
-          customDestinationLanguage: true,
-          role: true,
-          isActive: true,
-          lastActiveAt: true,
-          createdAt: true,
-          updatedAt: true
-        }
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
@@ -483,8 +457,21 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
+      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
+      const permissions = {
+        canAccessAdmin: isAdmin,
+        canManageUsers: isAdmin,
+        canManageGroups: isAdmin,
+        canManageConversations: isAdmin,
+        canViewAnalytics: isAdmin,
+        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
+        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
+        canManageNotifications: isAdmin,
+        canManageTranslations: isAdmin,
+      };
+
       return sendSuccess(reply, {
-        user: updatedUser,
+        user: formatUserResponse(updatedUser, permissions),
         message: 'Banner updated successfully'
       });
 
@@ -641,11 +628,11 @@ export async function updateUsername(fastify: FastifyInstance) {
         401: errorResponseSchema,
         404: errorResponseSchema,
         429: {
-          type: 'object',
+          ...errorResponseSchema,
           properties: {
-            success: { type: 'boolean', example: false },
+            ...errorResponseSchema.properties,
             error: { type: 'string', example: 'Username change limited to once every 30 days' },
-            nextChangeAllowedAt: { type: 'string', format: 'date-time' }
+            nextChangeAllowedAt: { type: 'string', format: 'date-time' },
           }
         },
         500: errorResponseSchema
@@ -957,7 +944,7 @@ export async function getUserById(fastify: FastifyInstance) {
     try {
       const { id } = request.params;
 
-      const isMongoId = /^[a-f\d]{24}$/i.test(id);
+      const isMongoId = isValidObjectId(id);
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile for: ${id} (isMongoId: ${isMongoId})`);
 
@@ -1187,7 +1174,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
       const { id } = request.params;
 
       /* istanbul ignore next — Fastify params schema (pattern:^[a-fA-F\d]{24}$) rejects invalid ids before handler */
-      if (!/^[a-f\d]{24}$/i.test(id)) {
+      if (!isValidObjectId(id)) {
         return sendBadRequest(reply, 'Invalid ObjectId format');
       }
 

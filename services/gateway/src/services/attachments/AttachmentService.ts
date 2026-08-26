@@ -192,6 +192,7 @@ export class AttachmentService {
     isAnonymous: boolean;
     createdAt: Date;
     isForwarded: boolean | null;
+    capturedInApp?: boolean | null;
     isViewOnce: boolean | null;
     viewOnceCount: number | null;
     isBlurred: boolean | null;
@@ -220,6 +221,7 @@ export class AttachmentService {
       isAnonymous: attachment.isAnonymous,
       createdAt: attachment.createdAt.toISOString(),
       isForwarded: attachment.isForwarded ?? false,
+      capturedInApp: attachment.capturedInApp ?? false,
       isViewOnce: attachment.isViewOnce ?? false,
       viewOnceCount: attachment.viewOnceCount ?? 0,
       isBlurred: attachment.isBlurred ?? false,
@@ -445,6 +447,7 @@ export class AttachmentService {
         isAnonymous: true,
         createdAt: true,
         isForwarded: true,
+        capturedInApp: true,
         isViewOnce: true,
         viewOnceCount: true,
         isBlurred: true,
@@ -477,6 +480,7 @@ export class AttachmentService {
       isAnonymous: att.isAnonymous,
       createdAt: att.createdAt.toISOString(),
       isForwarded: att.isForwarded ?? false,
+      capturedInApp: att.capturedInApp ?? false,
       isViewOnce: att.isViewOnce ?? false,
       viewOnceCount: att.viewOnceCount ?? 0,
       isBlurred: att.isBlurred ?? false,

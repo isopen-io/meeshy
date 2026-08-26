@@ -40,13 +40,13 @@ struct SettingsView: View {
     @State private var showVoiceProfileWizard = false
     @State private var showVoiceProfileManage = false
     @State private var showMediaDownload = false
-    @State private var scrollOffset: CGFloat = 0
-    /// I-075 — préférence « Activer les bêta » (`BetaFeaturesPreference`,
-    /// défaut ON, amendement produit 2026-08-16). Lu UNE fois au montage (le
-    /// même patron que `interfaceLanguageChoice` ci-dessus) ; le toggle
-    /// écrit `BetaFeaturesPreference.setEnabled` ET ce `@State` en même
-    /// temps — pas de source de vérité seconde, juste un miroir local pour
-    /// que la vue se re-rende sans relire `UserDefaults` à chaque frame.
+    @State private var scrollRelay = ScrollOffsetRelay()
+    /// Préférence « Activer les bêta » (`BetaFeaturesPreference`, défaut OFF
+    /// depuis le 2026-08-22). Lu UNE fois au montage (le même patron que
+    /// `interfaceLanguageChoice` ci-dessus) ; le toggle écrit
+    /// `BetaFeaturesPreference.setEnabled` ET ce `@State` en même temps — pas
+    /// de source de vérité seconde, juste un miroir local pour que la vue se
+    /// re-rende sans relire `UserDefaults` à chaque frame.
     @State private var betaFeaturesEnabled: Bool = BetaFeaturesPreference.isEnabled
 
     private let accentColor = MeeshyColors.brandPrimaryHex
@@ -149,14 +149,18 @@ struct SettingsView: View {
     // MARK: - Header
 
     private var header: some View {
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
         CollapsibleHeader(
             title: String(localized: "settings.title", bundle: .main),
-            scrollOffset: scrollOffset,
+            scrollOffset: offset,
             onBack: { router.pop() },
             titleColor: theme.textPrimary,
             backArrowColor: Color(hex: accentColor),
             backgroundColor: theme.backgroundPrimary
         )
+        }
     }
 
     // MARK: - Scroll Content
@@ -193,8 +197,8 @@ struct SettingsView: View {
             .padding(.top, MeeshySpacing.sm)
         }
         .coordinateSpace(name: "scroll")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollOffset = $0 }      // iOS 16–17
-        .trackScrollContentOffset { scrollOffset = -$0 }                               // iOS 18+ (preference path is dead there)
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
     }
 
     // MARK: - Account Section
@@ -638,26 +642,20 @@ struct SettingsView: View {
 
     // MARK: - Beta Section
 
-    /// I-075 — « Activer les bêta » (amendement produit 2026-08-16). Toggle
-    /// de PLEIN DROIT : il écrit `BetaFeaturesPreference.setEnabled`, jamais
-    /// `LentilleFeatureFlag.setForDebug`.
+    /// « Activer les bêta » — toggle de PLEIN DROIT : il écrit
+    /// `BetaFeaturesPreference.setEnabled`, jamais `LentilleFeatureFlag
+    /// .setForDebug`. Défaut OFF (2026-08-22) : ce qu'il affiche est ce qu'il
+    /// applique.
     ///
-    /// **Portée réelle depuis le 2026-08-19** — c'est le SEUL interrupteur
-    /// bêta offert à l'utilisateur, et il gouverne désormais les deux
-    /// drapeaux qui n'ont pas d'interrupteur propre
-    /// (`LentilleFeatureFlag.isCoveredByBetaProgramme`) :
-    /// - `reading_modes` — les modes de lecture décident de la vue à
-    ///   l'ouverture d'une conversation (Script, Résumé…) ;
-    /// - `lentille_list` — le classement Lentille de la liste
-    ///   (`lentilleGroupConversations`, carte de focus Lentille).
+    /// C'est le SEUL interrupteur bêta offert à l'utilisateur ; il gouverne
+    /// les drapeaux couverts par le programme (`LentilleFeatureFlag
+    /// .isCoveredByBetaProgramme`) : modes de lecture, liste Lentille, Rivière.
+    /// Une clé de drapeau posée explicitement prime sur ce réglage — c'est la
+    /// porte « une par une » de demain.
     ///
-    /// `riviere_mode` reste EN DEHORS (R-133) : un choix séparé.
-    /// Dans les deux cas, une clé de drapeau posée explicitement prime sur ce
-    /// réglage — c'est le seul moyen d'en couper un sans couper le programme.
-    ///
-    /// L'ancienne rédaction décrivait l'item « Focal (bêta) » du menu d'appui
-    /// long comme la chose gardée par ce toggle : cet item a été RETIRÉ avec
-    /// le mode Focal le 2026-08-18 (`docs/focal-retrait-ios-2026-08-18.md`).
+    /// La liste des fonctionnalités du programme n'apparaît QUE si l'option
+    /// est validée (condition produit) ; chaque ligne reflète l'état résolu
+    /// par `BetaFeaturesPreference.enabledFeatures`.
     private var betaSection: some View {
         settingsSection(title: String(localized: "settings.section.beta", bundle: .main), icon: "flask.fill", color: MeeshyColors.trackingAccentHex) {
             VStack(alignment: .leading, spacing: 0) {
@@ -680,6 +678,35 @@ struct SettingsView: View {
                     .foregroundColor(theme.textSecondary)
                     .padding(.horizontal, MeeshySpacing.md + 2)
                     .padding(.bottom, MeeshySpacing.sm + 2)
+
+                if betaFeaturesEnabled {
+                    betaFeaturesList
+                }
+            }
+        }
+    }
+
+    /// Les fonctionnalités du programme, visibles seulement quand l'option est
+    /// validée. Tout-ou-rien aujourd'hui : chaque ligne porte l'état résolu
+    /// (coche = active) ; demain, une bascule par ligne.
+    private var betaFeaturesList: some View {
+        let enabled = Set(BetaFeaturesPreference.enabledFeatures())
+        return VStack(alignment: .leading, spacing: 0) {
+            Divider().padding(.horizontal, MeeshySpacing.md + 2)
+            Text(String(localized: "settings.beta.features.title", bundle: .main))
+                .font(MeeshyFont.relative(11, weight: .semibold))
+                .foregroundColor(theme.textMuted)
+                .padding(.horizontal, MeeshySpacing.md + 2)
+                .padding(.top, MeeshySpacing.sm + 2)
+            ForEach(LentilleFeatureFlag.allCases.filter(\.isCoveredByBetaProgramme), id: \.self) { flag in
+                let isOn = enabled.contains(flag)
+                settingsRow(icon: flag.settingsIcon, title: flag.settingsTitle, color: MeeshyColors.trackingAccentHex) {
+                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .foregroundColor(isOn ? Color(hex: MeeshyColors.successHex) : theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+                .accessibilityValue(isOn ? String(localized: "settings.value.active", bundle: .main) : String(localized: "settings.value.disabled", bundle: .main))
             }
         }
     }
@@ -874,5 +901,25 @@ struct SettingsView: View {
         .padding(.vertical, MeeshySpacing.sm + 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
+    }
+}
+
+// MARK: - Présentation des fonctionnalités bêta (section « Bêta »)
+
+extension LentilleFeatureFlag {
+    var settingsTitle: String {
+        switch self {
+        case .readingModes: return String(localized: "settings.beta.feature.reading_modes", bundle: .main)
+        case .lentilleList: return String(localized: "settings.beta.feature.lentille_list", bundle: .main)
+        case .riviereMode: return String(localized: "settings.beta.feature.riviere_mode", bundle: .main)
+        }
+    }
+
+    var settingsIcon: String {
+        switch self {
+        case .readingModes: return "text.book.closed.fill"
+        case .lentilleList: return "list.bullet.rectangle.fill"
+        case .riviereMode: return "water.waves"
+        }
     }
 }

@@ -1,13 +1,12 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { ServerEmitIO } from './serverEmit';
 
 /**
  * La surface Socket.IO minimale de cet éventail, structurale comme celle de
  * `emitConversationPreviewUpdate` : la fonction accepte aussi bien le `Server`
  * de production que le `socketIOManager.getIO()` que tient une route REST.
  */
-export interface MentionEmitIO {
-  to(room: string): { emit(event: string, payload: unknown): unknown };
-}
+export type MentionEmitIO = ServerEmitIO;
 
 export interface MentionCreatedParams {
   io: MentionEmitIO | null | undefined;

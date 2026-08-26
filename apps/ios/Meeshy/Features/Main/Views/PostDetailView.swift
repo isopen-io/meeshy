@@ -90,7 +90,7 @@ struct PostDetailView: View {
     @State private var pendingPlace: SharedPlace? = nil
     @StateObject private var audioRecorder = AudioRecorderManager()
     @State private var isTextExpanded = false
-    @State private var headerScrollOffset: CGFloat = 0
+    @State private var headerScrollRelay = ScrollOffsetRelay()
     // Inline story canvas playback gating (audio active → pause when off-screen / in call).
     @State private var storyCanvasVisible: Bool = true
     @State private var isCallActive: Bool = false
@@ -293,15 +293,31 @@ struct PostDetailView: View {
         guard !isRepostInFlight else { return }
         isPostReposted = true
         isRepostInFlight = true
+        // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
+        // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
+        // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
+        // laissait au socket un tour de boucle pour la retirer du modèle ;
+        // `cardType` rendait alors `nil`, le gateway repliait sur `POST`
+        // (`?? PostType.POST`) et une story repartagée devenait un post
+        // permanent. Le `Task` reçoit une cible déjà résolue : il n'a plus de
+        // lecture à faire.
+        let carte = displayPost
+        let cible = RepostTargeting.target(
+            cardId: postId, cardType: carte?.type,
+            repostOfId: carte?.repost?.id,
+            originalRepostOfId: carte?.repost?.originalRepostOfId
+        )
+        // « Citer » ouvre une alerte SANS champ de saisie : ce site DÉCLARE la
+        // citation sans recueillir de commentaire. `declaredQuote` porte ce
+        // geste tel qu'il est plutôt que de le normaliser en repartage sec —
+        // `isQuote` change côté serveur où s'enracinent les réactions.
+        let intention: RepostIntent = quote
+            ? RepostIntent.declaredQuote(postId: cible.postId, targetType: cible.targetType, visibility: nil)
+            : RepostIntent.simple(postId: cible.postId, targetType: cible.targetType, visibility: nil)
         Task {
             defer { Task { @MainActor in isRepostInFlight = false } }
             do {
-                _ = try await PostService.shared.repost(
-                    postId: postId,
-                    targetType: nil,
-                    content: nil,
-                    isQuote: quote
-                )
+                try await RepostPublisher.shared.publish(intention)
                 FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 isPostReposted = false
@@ -314,6 +330,15 @@ struct PostDetailView: View {
 
     private var accentColor: String {
         displayPost?.authorColor ?? "6366F1"
+    }
+
+    /// Second arrêt du dégradé servi au composer de commentaire. Dérivé de
+    /// l'accent du post par la formule de palette du SDK
+    /// (`secondary = shiftHue(primary, +30°)`) : sans lui, le composer
+    /// retombe sur son défaut de marque et le bouton d'envoi rend un dégradé
+    /// hybride accent → indigo.
+    private var composerSecondaryColor: String {
+        DynamicColorGenerator.hueShiftedHex(accentColor, degrees: 30)
     }
 
     /// True when the signed-in user authored this post — gates the private reach
@@ -717,8 +742,8 @@ struct PostDetailView: View {
                         // iOS 16–17 and overlay the native iOS 18+ scroll reader, which
                         // reports `contentOffset.y` (0 at top, positive scrolling down),
                         // negated to match the `minY` sign the preference path produced.
-                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollOffset = $0 }
-                        .trackScrollContentOffset { headerScrollOffset = -$0 }
+                        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { headerScrollRelay.offset = $0 }
+                        .trackScrollContentOffset { headerScrollRelay.offset = -$0 }
                         .background(
                             GeometryReader { geo in
                                 Color.clear.preference(key: ScrollViewportHeightKey.self, value: geo.size.height)
@@ -956,9 +981,11 @@ struct PostDetailView: View {
                     originalType: post.type,
                     media: post.media.map { EditablePostMedia($0) },
                     originalLocation: post.location,
+                    originalVisibility: post.visibility,
+                    originalVisibilityUserIds: post.visibilityUserIds ?? [],
                     isRepost: post.repost != nil,
                     onSave: { draft in
-                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location)
+                        await viewModel.updatePost(content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
                     },
                     onDismiss: { isEditing = false }
                 )
@@ -1029,11 +1056,9 @@ struct PostDetailView: View {
                             .lineLimit(1)
                         let reach = PostReachFormatter.components(
                             username: post.authorUsername,
-                            isAuthor: isPostAuthor,
-                            viewCount: post.viewCount,
-                            impressionCount: post.impressionCount
+                            isAuthor: isPostAuthor
                         )
-                        if reach.pseudo != nil || reach.views != nil {
+                        if reach.pseudo != nil || reach.showsStats {
                             HStack(spacing: 4) {
                                 if let pseudo = reach.pseudo {
                                     Text(pseudo)
@@ -1043,18 +1068,27 @@ struct PostDetailView: View {
                                         .truncationMode(.tail)
                                         .layoutPriority(0)
                                 }
-                                if let views = reach.views, let impressions = reach.impressions {
+                                if reach.showsStats {
                                     if reach.pseudo != nil {
                                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                            .accessibilityHidden(true)
                                     }
                                     HStack(spacing: 3) {
-                                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                                        Text(views).font(.caption2.weight(.medium))
-                                        Text("·").font(.caption2)
-                                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                                        Text(impressions).font(.caption2.weight(.medium))
+                                        ReachMetricLabel(
+                                            icon: "eye.fill",
+                                            count: post.viewCount,
+                                            label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                                            tint: theme.textMuted
+                                        )
+                                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                                            .accessibilityHidden(true)
+                                        ReachMetricLabel(
+                                            icon: "chart.bar.fill",
+                                            count: post.impressionCount,
+                                            label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                                            tint: theme.textMuted
+                                        )
                                     }
-                                    .foregroundColor(theme.textMuted)
                                     // Stats must always print in full (up to "2.3M") —
                                     // they're the values the user cross-checks against the
                                     // inline reach line. Pin their size + priority so the
@@ -1064,9 +1098,6 @@ struct PostDetailView: View {
                                     .layoutPriority(1)
                                 }
                             }
-                            .accessibilityElement(children: .ignore)
-                            .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
-                            .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
                         }
                     }
                 }
@@ -1153,17 +1184,21 @@ struct PostDetailView: View {
     }
 
     private func postDetailHeader(_ post: FeedPost) -> some View {
-        CollapsibleHeader(
-            title: "",
-            scrollOffset: headerScrollOffset,
-            showBackButton: true,
-            onBack: { HapticFeedback.light(); router.pop() },
-            titleColor: theme.textPrimary,
-            backArrowColor: theme.textPrimary,
-            backgroundColor: theme.backgroundPrimary,
-            centerReveal: { authorRevealView(post) },
-            trailing: { postMenu }
-        )
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `headerScrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: headerScrollRelay) { offset in
+            CollapsibleHeader(
+                title: "",
+                scrollOffset: offset,
+                showBackButton: true,
+                onBack: { HapticFeedback.light(); router.pop() },
+                titleColor: theme.textPrimary,
+                backArrowColor: theme.textPrimary,
+                backgroundColor: theme.backgroundPrimary,
+                centerReveal: { authorRevealView(post) },
+                trailing: { postMenu }
+            )
+        }
     }
 
     // MARK: - Author Reach Line
@@ -1188,16 +1223,21 @@ struct PostDetailView: View {
                         Text("·").font(.caption2).foregroundColor(theme.textMuted)
                     }
                     HStack(spacing: 3) {
-                        Image(systemName: "eye.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.viewCount)).font(.caption2.weight(.medium))
-                        Text("·").font(.caption2)
-                        Image(systemName: "chart.bar.fill").font(.caption2.weight(.semibold))
-                        Text(PostReachFormatter.compact(post.impressionCount)).font(.caption2.weight(.medium))
+                        ReachMetricLabel(
+                            icon: "eye.fill",
+                            count: post.viewCount,
+                            label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
+                            tint: theme.textMuted
+                        )
+                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                            .accessibilityHidden(true)
+                        ReachMetricLabel(
+                            icon: "chart.bar.fill",
+                            count: post.impressionCount,
+                            label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
+                            tint: theme.textMuted
+                        )
                     }
-                    .foregroundColor(theme.textMuted)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel(String(localized: "feed.post.reach", defaultValue: "Vues et impressions", bundle: .main))
-                    .accessibilityValue("\(post.viewCount) · \(post.impressionCount)")
                 }
             }
         }
@@ -1618,7 +1658,7 @@ struct PostDetailView: View {
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-                    .accessibilityValue("\(repost.likes)")
+                    .accessibilityValue(LocalizedNumber.exact(repost.likes))
                 }
                 Spacer()
             }
@@ -1731,10 +1771,19 @@ struct PostDetailView: View {
             } label: {
                 HStack(spacing: 5) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                    Image(systemName: detailIsLiked || detailLikeCount > 0 ? "heart.fill" : "heart")
-                        .font(.headline)
-                        .foregroundColor(heartColor)
-                        .scaleEffect(likeScale)
+EngagementGlyph(
+                        outline: "heart",
+                        filled: "heart.fill",
+                        participated: detailIsLiked,
+                        accentHex: accentColor,
+                        activeTint: MeeshyColors.error,
+                        // Cœur PLEIN dès qu'il existe des likes, contour accent
+                        // seulement quand ils sont les miens.
+                        inactiveTint: heartColor,
+                        filledWhenInactive: detailLikeCount > 0,
+                        size: 18
+                    )
+                    .scaleEffect(likeScale)
                         .opacity(postHeartInFlightIds.contains(postId) ? 0.5 : 1.0)
                     Text("\(detailLikeCount)")
                         .font(.caption.weight(.medium))
@@ -1748,7 +1797,7 @@ struct PostDetailView: View {
             .accessibilityLabel(detailIsLiked
                 ? String(localized: "a11y.post.unlike", defaultValue: "Je n'aime plus", bundle: .main)
                 : String(localized: "a11y.post.like", defaultValue: "J'aime", bundle: .main))
-            .accessibilityValue("\(detailLikeCount)")
+            .accessibilityValue(LocalizedNumber.exact(detailLikeCount))
             .accessibilityHint(String(localized: "a11y.post.like.hint", defaultValue: "Aimer cette publication", bundle: .main))
 
             Spacer()
@@ -1758,10 +1807,26 @@ struct PostDetailView: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isPostReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                    .font(.body)
-                    .foregroundColor(isPostReposted ? MeeshyColors.success : theme.textSecondary)
-                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                EngagementGlyph(
+                    // Le repost est le seul des trois à changer de FAMILLE selon
+                    // son état : flèches nues au repos, disque plein une fois
+                    // reposté. Son contour est donc `.circle` — et c'est juste :
+                    // il retrace le bord du glyphe AFFICHÉ. La règle proscrit
+                    // l'anneau ajouté autour d'un glyphe qui n'en a pas, pas la
+                    // famille `.circle` quand le glyphe EST un disque.
+                    outline: "arrow.2.squarepath.circle",
+                    filled: "arrow.2.squarepath.circle.fill",
+                    // Au REPOS, les flèches nues — l'apparence d'origine. Sans
+                    // ce paramètre, le repos aurait hérité du contour `.circle`
+                    // et gagné un cercle qu'il n'avait pas.
+                    inactiveSymbol: "arrow.2.squarepath",
+                    participated: isPostReposted,
+                    accentHex: accentColor,
+                    activeTint: MeeshyColors.success,
+                    inactiveTint: theme.textSecondary,
+                    size: 18
+                )
+                .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
@@ -1786,10 +1851,16 @@ struct PostDetailView: View {
                 toggleDetailBookmark()
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isPostBookmarked ? "bookmark.fill" : "bookmark")
-                    .font(.body)
-                    .foregroundColor(isPostBookmarked ? MeeshyColors.warning : theme.textSecondary)
-                    .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                EngagementGlyph(
+                    outline: "bookmark",
+                    filled: "bookmark.fill",
+                    participated: isPostBookmarked,
+                    accentHex: accentColor,
+                    activeTint: MeeshyColors.warning,
+                    inactiveTint: theme.textSecondary,
+                    size: 18
+                )
+                .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
@@ -2240,7 +2311,7 @@ struct PostDetailView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityAddTraits(.isHeader)
         .accessibilityLabel(String(localized: "a11y.comment.section_header", defaultValue: "Commentaires", bundle: .main))
-        .accessibilityValue("\(displayPost?.commentCount ?? 0)")
+        .accessibilityValue(LocalizedNumber.exact(displayPost?.commentCount ?? 0))
     }
 
     // MARK: - Composer
@@ -2345,6 +2416,7 @@ struct PostDetailView: View {
             mode: .comment,
             onIngest: { ingests in handleComposerIngest(ingests) },
             accentColor: accentColor,
+            secondaryColor: composerSecondaryColor,
             forceShowAttachment: true,
             forceShowVoice: true,
             selectedLanguage: composerLanguage,

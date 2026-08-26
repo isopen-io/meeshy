@@ -20,6 +20,11 @@ import MeeshySDK
 ///   (e.g. inside a `DispatchQueue.main.sync` block) — that would deadlock when
 ///   the worker thread tries to bridge back to main. Always call from a `Task`.
 public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     private nonisolated let contextQueue = DispatchQueue(label: "me.meeshy.story.compositor.context")
     private nonisolated(unsafe) var _renderContext: AVVideoCompositionRenderContext?
@@ -285,10 +290,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             // animation engine — it renders the model layer as-is. So we
             // apply the static state of the opening at the current playhead
             // directly on the model layer.
-            if let opening = slide.effects.opening,
-               time.seconds < StoryRenderer.slideTransitionDuration {
-                applyStaticOpening(opening, rootLayer: tree, elapsed: time.seconds)
-            }
+            applyStaticOpening(slide.effects.opening, rootLayer: tree, elapsed: time.seconds)
             layer = tree
         }
 
@@ -485,15 +487,19 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     }
 
     /// Applies the static state of an opening transition to `rootLayer` at
-    /// playback position `elapsed`. Mirrors `StoryRenderer.applyOpening` but
-    /// without CABasicAnimation — `layer.render(in:)` doesn't run the
-    /// animation engine, so we compute the model-layer state by hand each
-    /// frame. Progress is `elapsed / StoryRenderer.slideTransitionDuration`
-    /// clamped to `[0, 1]`.
+    /// playback position `elapsed` — the frame-by-frame twin of
+    /// `StoryRenderer.applyOpening` (same signature, same window, no-op past
+    /// it or without effect). `layer.render(in:)` doesn't run the animation
+    /// engine, so the value a `CABasicAnimation` would be interpolating is
+    /// written by hand on the model layer: `.zoom` / `.slide` sample
+    /// `StoryRenderer.openingSublayerTransform`, the very curve the live
+    /// animation runs between its two ends. Progress is
+    /// `elapsed / StoryRenderer.slideTransitionDuration` clamped to `[0, 1]`.
     @MainActor
-    private static func applyStaticOpening(_ effect: StoryTransitionEffect,
-                                           rootLayer: CALayer,
-                                           elapsed: Double) {
+    static func applyStaticOpening(_ effect: StoryTransitionEffect?,
+                                   rootLayer: CALayer,
+                                   elapsed: Double) {
+        guard let effect, elapsed < StoryRenderer.slideTransitionDuration else { return }
         let progress = max(0.0, min(1.0, elapsed / StoryRenderer.slideTransitionDuration))
         switch effect {
         case .fade:
@@ -511,7 +517,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      clockwise: true).cgPath
             rootLayer.mask = mask
         case .zoom, .slide:
-            break
+            rootLayer.sublayerTransform = StoryRenderer.openingSublayerTransform(
+                effect, progress: progress, canvasWidth: rootLayer.bounds.width)
         }
     }
 
@@ -694,6 +701,11 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
 public final class StoryCompositionInstruction: NSObject,
                                                  AVVideoCompositionInstructionProtocol,
                                                  @unchecked Sendable {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public let slide: StorySlide
     public let languages: [String]
     public let timeRange: CMTimeRange

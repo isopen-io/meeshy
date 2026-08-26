@@ -46,6 +46,30 @@ type UploadCallerIdentity = {
   readonly anonymousShareLinkId: string | null;
 };
 
+
+/**
+ * La seule mesure que le CLIENT possède et que le serveur ne peut pas refaire.
+ *
+ * `MetadataManager.extractMetadata` porte une branche de repli explicite —
+ * « Backend extraction failed, using frontend as fallback » — qui n'existe QUE
+ * si un `providedMetadata` lui est passé. Ce handler passait `undefined` : la
+ * branche était inatteignable par le chemin résumable, alors que c'est
+ * précisément son cas nominal. Un WebM produit par `MediaRecorder` ne porte
+ * pas de durée dans son en-tête ; sans repli, `duration` reste nul et la bulle
+ * vocale affiche 0:00.
+ *
+ * Les métadonnées TUS sont des CHAÎNES (en-tête `Upload-Metadata`), là où
+ * `UploadProcessor` reçoit du JSON. La conversion est donc STRICTE : `NaN`
+ * traverserait `>= 0` sans rougir et s'écrirait tel quel en base, et une durée
+ * nulle ou négative ne remplace rien par rien.
+ */
+function clientMeasuredMetadata(rawDuration: string | undefined): { duration: number } | undefined {
+  if (!rawDuration) return undefined;
+  const duration = Number(rawDuration);
+  if (!Number.isFinite(duration) || duration <= 0) return undefined;
+  return { duration };
+}
+
 export async function registerTusRoutes(fastify: FastifyInstance): Promise<void> {
   const prisma = fastify.prisma;
   if (!prisma) {
@@ -271,7 +295,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
           relPath,
           attachmentType,
           mimeType,
-          undefined,
+          clientMeasuredMetadata(upload.metadata?.duration),
           fileSize
         );
       } catch (err) {
@@ -425,6 +449,19 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
             lineCount: metadata.lineCount || null,
             uploadedBy: userId,
             isAnonymous,
+            // La provenance déclarée par le client : ce fichier sort-il de la
+            // caméra ou du micro de l'application ? Rien dans un fichier ne
+            // permet de la déduire, et elle n'est connaissable qu'AU MOMENT de
+            // la capture — non écrite ici, elle est perdue pour toujours.
+            //
+            // Les métadonnées TUS sont des CHAÎNES (en-tête `Upload-Metadata`),
+            // là où `UploadProcessor` reçoit du JSON : la comparaison porte donc
+            // sur `'true'` et non sur `true`. Elle reste STRICTE pour la même
+            // raison — toute autre valeur, `'false'` comprise, vaut « pas une
+            // capture », et une garde de confidentialité qu'une coercition
+            // ouvre ne garde rien.
+            // @see packages/shared/utils/forward-to-publication.ts
+            capturedInApp: upload.metadata?.capturedinapp === 'true',
           },
         });
         recordId = attachment.id;
@@ -453,6 +490,21 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
               sampleRate: metadata.sampleRate,
               codec: metadata.codec,
               channels: metadata.channels,
+              // `UploadedAttachmentResponse` déclare ces trois champs REQUIS,
+              // et ce corps ne les portait pas : le chemin résumable ne
+              // servait que les fichiers > 50 Mo, jusqu'à ce que le transport
+              // de publication en fasse le chemin UNIQUE de tout média de
+              // post/story. Un client qui fait confiance au type lisait
+              // `undefined`.
+              uploadedBy: userId,
+              isAnonymous,
+              createdAt: now.toISOString(),
+              // `messageId` reste ABSENT, et le type continue donc de mentir
+              // d'un champ sur ce chemin : un `PostMedia` n'appartient à aucun
+              // message. Dette de TYPE (scinder un `UploadedMediaResponse`
+              // — le noyau que les deux chemins rendent vraiment — dont
+              // `UploadedAttachmentResponse` hériterait les champs de
+              // message), pas de handler : aucune valeur ne conviendrait ici.
             },
           },
         }),

@@ -26,6 +26,7 @@ import { GeoIPService } from './GeoIPService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -119,7 +120,7 @@ export class PasswordResetService {
           lastPasswordResetAttempt: true,
           firstName: true,
           lastName: true,
-          systemLanguage: true
+          ...RECIPIENT_LANG_SELECT
         }
       });
 
@@ -215,7 +216,7 @@ export class PasswordResetService {
           name: `${user.firstName} ${user.lastName}`,
           resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
           expiryMinutes: TOKEN_EXPIRY_MINUTES,
-          language: user.systemLanguage || 'en'
+          language: recipientLanguage(user, 'en')
         });
 
       } finally {
@@ -287,7 +288,7 @@ export class PasswordResetService {
               password: true,
               twoFactorSecret: true,
               twoFactorEnabledAt: true,
-              systemLanguage: true
+              ...RECIPIENT_LANG_SELECT
             }
           }
         }
@@ -381,7 +382,7 @@ export class PasswordResetService {
           name: `${user.firstName} ${user.lastName}`,
           alertType: 'Suspicious password reset detected',
           details: anomaly.reason || 'Anomaly detected',
-          language: user.systemLanguage || 'en'
+          language: recipientLanguage(user, 'en')
         });
       }
 
@@ -447,7 +448,7 @@ export class PasswordResetService {
         timestamp: new Date().toISOString(),
         ipAddress,
         location: geoData?.location || 'Unknown',
-        language: user.systemLanguage || 'en'
+        language: recipientLanguage(user, 'en')
       });
 
       return {

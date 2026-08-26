@@ -6,6 +6,9 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../validation/helpers.js';
 import { DeleteAccountBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendConflict, sendInternalError } from '../../utils/response.js';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -51,34 +54,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          400: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          },
-          401: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          },
-          409: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          },
-          500: {
-            type: 'object',
-            properties: {
-              success: { type: 'boolean' },
-              error: { type: 'object', properties: { code: { type: 'string' }, message: { type: 'string' } } }
-            }
-          }
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          409: errorResponseSchema,
+          500: errorResponseSchema
         }
       }
     },
@@ -141,7 +120,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
 
         const user = await fastify.prisma.user.findUnique({
           where: { id: userId },
-          select: { email: true, displayName: true, firstName: true, systemLanguage: true }
+          select: { email: true, displayName: true, firstName: true, ...RECIPIENT_LANG_SELECT }
         });
 
         if (user?.email) {
@@ -155,7 +134,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             name,
             confirmLink,
             cancelLink,
-            language: user.systemLanguage || 'en',
+            language: recipientLanguage(user, 'en'),
           });
 
           logger.info(`[DeleteAccount] Confirmation email sent to user=${userId}`);
@@ -321,6 +300,20 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
         await fastify.prisma.accountDeletionRequest.update({
           where: { id: deletionRequest.id },
           data: { status: 'COMPLETED' }
+        });
+
+        // Le compte n'existe plus : ses sockets tombent, APRÈS l'écriture —
+        // un socket resté ouvert recevrait encore les fils temps réel d'un
+        // compte supprimé. Best-effort par construction (`disconnectRevokedSessions`
+        // ne lève jamais). L'énumération partagée n'a pas d'`account_deleted` ;
+        // `logout_all_devices` est le seul terme vrai — chaque appareil est
+        // signé dehors — et le message porte la cause.
+        await disconnectRevokedSessions({
+          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+          userId: deletionRequest.userId,
+          reason: 'logout_all_devices',
+          message: 'Your account was deleted — every session was signed out.',
+          onError: (err) => logger.warn(`[DeleteAccount] socket fanout failed on account deletion user=${deletionRequest.userId}`, err),
         });
 
         logger.info(`[DeleteAccount] Account deleted immediately for user=${deletionRequest.userId}`);

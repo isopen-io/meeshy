@@ -6,6 +6,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -19,8 +20,10 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.media.MediaUploadItem
+import me.meeshy.sdk.model.ApiAuthor
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
+import me.meeshy.sdk.model.ApiRepostOf
 import me.meeshy.sdk.model.ApiPostMedia
 import me.meeshy.sdk.model.ApiPostTranslationEntry
 import me.meeshy.sdk.model.MeeshyUser
@@ -31,7 +34,10 @@ import me.meeshy.sdk.model.SocketPostBookmarkedData
 import me.meeshy.sdk.model.SocketPostCreatedData
 import me.meeshy.sdk.model.SocketPostDeletedData
 import me.meeshy.sdk.model.SocketPostLikedData
+import me.meeshy.sdk.model.SocketPostRepostedData
+import me.meeshy.sdk.model.SocketPostTranslationUpdatedData
 import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.model.SocketPostUpdatedData
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.MeeshyConfig
@@ -70,6 +76,10 @@ class FeedViewModelTest {
     private val postBookmarked = MutableSharedFlow<SocketPostBookmarkedData>(extraBufferCapacity = 64)
     private val commentAdded = MutableSharedFlow<SocketCommentAddedData>(extraBufferCapacity = 64)
     private val commentDeleted = MutableSharedFlow<SocketCommentDeletedData>(extraBufferCapacity = 64)
+    private val postTranslationUpdated =
+        MutableSharedFlow<SocketPostTranslationUpdatedData>(extraBufferCapacity = 64)
+    private val postUpdated = MutableSharedFlow<SocketPostUpdatedData>(extraBufferCapacity = 64)
+    private val postReposted = MutableSharedFlow<SocketPostRepostedData>(extraBufferCapacity = 64)
     private val config = MeeshyConfig()
 
     private fun post(id: String) = ApiPost(id = id, content = "Post $id")
@@ -84,6 +94,9 @@ class FeedViewModelTest {
         every { socialSocket.postBookmarked } returns postBookmarked
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
+        every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.postUpdated } returns postUpdated
+        every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -180,6 +193,161 @@ class FeedViewModelTest {
         coVerify(exactly = 0) { repository.refresh() }
     }
 
+    // --- repost / quote-repost (feed-quote-repost) ---
+
+    @Test
+    fun `repost of an original post reposts its own id and refreshes`() = runTest {
+        every { repository.feedStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(listOf(post("p1")), 0L))
+        coEvery { repository.repost(any(), any(), any(), any()) } returns
+            NetworkResult.Success(post("new"))
+
+        val vm = viewModel()
+        vm.repost("p1")
+
+        coVerify(exactly = 1) { repository.repost("p1", any(), null, false) }
+        coVerify(exactly = 1) { repository.refresh() }
+    }
+
+    @Test
+    fun `reposting a repost targets its root, never the intermediate share`() = runTest {
+        val share = post("p1").copy(repostOf = ApiRepostOf(id = "share1", originalRepostOfId = "root99"))
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(listOf(share), 0L))
+        coEvery { repository.repost(any(), any(), any(), any()) } returns
+            NetworkResult.Success(post("new"))
+
+        val vm = viewModel()
+        vm.repost("p1")
+
+        coVerify(exactly = 1) { repository.repost("root99", any(), null, false) }
+    }
+
+    @Test
+    fun `repost surfaces the error and does not refresh on failure`() = runTest {
+        every { repository.feedStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(listOf(post("p1")), 0L))
+        coEvery { repository.repost(any(), any(), any(), any()) } returns
+            NetworkResult.Failure(ApiError("offline"))
+
+        val vm = viewModel()
+        vm.repost("p1")
+
+        assertThat(vm.state.value.errorMessage).isEqualTo("offline")
+        coVerify(exactly = 0) { repository.refresh() }
+    }
+
+    @Test
+    fun `beginQuote opens the composer with the source author and content preview`() = runTest {
+        val source = post("p1").copy(
+            content = "  hello world  ",
+            author = ApiAuthor(id = "u1", username = "alice", displayName = "Alice"),
+        )
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(listOf(source), 0L))
+
+        val vm = viewModel()
+        vm.beginQuote("p1")
+
+        val composer = vm.state.value.quoteComposer
+        assertThat(composer).isNotNull()
+        assertThat(composer!!.postId).isEqualTo("p1")
+        assertThat(composer.sourceAuthorName).isEqualTo("Alice")
+        assertThat(composer.sourceContentPreview).isEqualTo("hello world")
+        assertThat(composer.text).isEmpty()
+    }
+
+    @Test
+    fun `beginQuote on a post that is not loaded is inert`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+
+        val vm = viewModel()
+        vm.beginQuote("ghost")
+
+        assertThat(vm.state.value.quoteComposer).isNull()
+    }
+
+    @Test
+    fun `onQuoteTextChange updates the draft`() = runTest {
+        every { repository.feedStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(listOf(post("p1")), 0L))
+
+        val vm = viewModel()
+        vm.beginQuote("p1")
+        vm.onQuoteTextChange("nice thread")
+
+        assertThat(vm.state.value.quoteComposer?.text).isEqualTo("nice thread")
+    }
+
+    @Test
+    fun `submitQuote reposts with the commentary, closes the composer and refreshes`() = runTest {
+        every { repository.feedStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(listOf(post("p1")), 0L))
+        coEvery { repository.repost(any(), any(), any(), any()) } returns
+            NetworkResult.Success(post("new"))
+
+        val vm = viewModel()
+        vm.beginQuote("p1")
+        vm.onQuoteTextChange("  worth reading  ")
+        vm.submitQuote()
+
+        coVerify(exactly = 1) { repository.repost("p1", any(), "worth reading", true) }
+        coVerify(exactly = 1) { repository.refresh() }
+        assertThat(vm.state.value.quoteComposer).isNull()
+    }
+
+    @Test
+    fun `submitQuote of a repost targets the root and still carries the commentary`() = runTest {
+        val share = post("p1").copy(repostOf = ApiRepostOf(id = "share1", originalRepostOfId = "root99"))
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(listOf(share), 0L))
+        coEvery { repository.repost(any(), any(), any(), any()) } returns
+            NetworkResult.Success(post("new"))
+
+        val vm = viewModel()
+        vm.beginQuote("p1")
+        vm.onQuoteTextChange("adding my take")
+        vm.submitQuote()
+
+        coVerify(exactly = 1) { repository.repost("root99", any(), "adding my take", true) }
+    }
+
+    @Test
+    fun `submitQuote with blank commentary degrades to a simple repost`() = runTest {
+        every { repository.feedStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(listOf(post("p1")), 0L))
+        coEvery { repository.repost(any(), any(), any(), any()) } returns
+            NetworkResult.Success(post("new"))
+
+        val vm = viewModel()
+        vm.beginQuote("p1")
+        vm.onQuoteTextChange("   ")
+        vm.submitQuote()
+
+        coVerify(exactly = 1) { repository.repost("p1", any(), null, false) }
+        assertThat(vm.state.value.quoteComposer).isNull()
+    }
+
+    @Test
+    fun `cancelQuote closes the composer without reposting`() = runTest {
+        every { repository.feedStream(any(), any()) } returns
+            flowOf(CacheResult.Fresh(listOf(post("p1")), 0L))
+
+        val vm = viewModel()
+        vm.beginQuote("p1")
+        vm.cancelQuote()
+
+        assertThat(vm.state.value.quoteComposer).isNull()
+        coVerify(exactly = 0) { repository.repost(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `submitQuote is inert when no composer is open`() = runTest {
+        every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Empty)
+
+        val vm = viewModel()
+        vm.submitQuote()
+
+        coVerify(exactly = 0) { repository.repost(any(), any(), any(), any()) }
+    }
+
     @Test
     fun `hasMore is reflected from repository`() = runTest {
         every { repository.feedStream(any(), any()) } returns flowOf(CacheResult.Fresh(listOf(post("1")), 0L))
@@ -255,6 +423,9 @@ class FeedViewModelTest {
         every { socialSocket.postBookmarked } returns postBookmarked
         every { socialSocket.commentAdded } returns commentAdded
         every { socialSocket.commentDeleted } returns commentDeleted
+        every { socialSocket.postTranslationUpdated } returns postTranslationUpdated
+        every { socialSocket.postUpdated } returns postUpdated
+        every { socialSocket.postReposted } returns postReposted
         return FeedViewModel(repository, session, socialSocket, config, feedMediaUploader, reportRepository)
     }
 
@@ -393,6 +564,30 @@ class FeedViewModelTest {
         val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
 
         postCreated.emit(SocketPostCreatedData(post("2")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(0)
+    }
+
+    // --- Realtime repost arrival (post:reposted) ---
+
+    @Test
+    fun `a realtime repost arrives at the head and raises the new-posts banner`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postReposted.emit(SocketPostRepostedData(originalPostId = "1", repost = post("r1")))
+
+        val s = vm.state.value
+        assertThat(s.posts.map { it.id }).containsExactly("r1", "1", "2").inOrder()
+        assertThat(s.newPostsCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a repost already visible in the cache feed is ignored`() = runTest {
+        val vm = viewModel(null, flowOf(CacheResult.Fresh(listOf(post("1"), post("2")), 0L)))
+
+        postReposted.emit(SocketPostRepostedData(originalPostId = "9", repost = post("2")))
 
         val s = vm.state.value
         assertThat(s.posts.map { it.id }).containsExactly("1", "2").inOrder()
@@ -547,6 +742,28 @@ class FeedViewModelTest {
         val card = vm.state.value.posts.single()
         assertThat(card.likeCount).isEqualTo(7)
         assertThat(card.isLiked).isFalse()
+    }
+
+    @Test
+    fun `a realtime post-translation-updated folds the pushed entry into the feed cache`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val entry = ApiPostTranslationEntry(text = "Hola", translationModel = "nllb", confidenceScore = 0.97)
+
+        postTranslationUpdated.emit(
+            SocketPostTranslationUpdatedData(postId = "1", language = "es", translation = entry),
+        )
+
+        verify { repository.applyTranslationUpdate("1", "es", entry) }
+    }
+
+    @Test
+    fun `a realtime post-updated folds the edited post onto the feed cache`() = runTest {
+        val vm = viewModel(me, flowOf(CacheResult.Fresh(listOf(post("1")), 0L)))
+        val edited = ApiPost(id = "1", content = "Post 1 (edited)", likeCount = 9)
+
+        postUpdated.emit(SocketPostUpdatedData(post = edited))
+
+        verify { repository.applyPostUpdate(edited) }
     }
 
     @Test

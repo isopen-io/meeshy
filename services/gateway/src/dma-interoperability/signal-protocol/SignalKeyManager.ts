@@ -13,7 +13,7 @@
  */
 
 import * as crypto from 'crypto';
-import { PrismaClient } from '../../../shared/prisma/client';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 // Create a child logger for Signal Key Manager operations
@@ -154,7 +154,7 @@ export class SignalKeyManager {
    * Identity key is the long-term key that identifies this device/account.
    * Generated once and never changes for the lifetime of the account.
    */
-  private generateIdentityKeyPair(): KeyPair {
+  generateIdentityKeyPair(): KeyPair {
     // Generate EC-P256 key pair for identity
     const { publicKey, privateKey } = crypto.generateKeyPairSync('ec', {
       namedCurve: 'prime256v1', // P-256
@@ -217,8 +217,13 @@ export class SignalKeyManager {
    * When used, they're marked as consumed and shouldn't be reused.
    *
    * Storage: Uses SignalPreKeyBundle with embedded pre-key pool (JSON)
+   *
+   * Rend les pré-clés PUBLIQUES qui viennent d'être attribuées et persistées —
+   * c'est ici, et nulle part ailleurs, que `getNextPreKeyId()` attribue un id.
+   * `SignalProtocolAdapter.generatePreKeyBatch` en dépend pour honorer son
+   * contrat `{ id, publicKey }`.
    */
-  private async generateAndStorePreKeys(count: number): Promise<void> {
+  async generateAndStorePreKeys(count: number): Promise<Array<{ id: number; publicKey: Buffer }>> {
     if (!this.userId) {
       throw new Error('User ID not set - cannot store pre-keys');
     }
@@ -281,6 +286,11 @@ export class SignalKeyManager {
         newKeys: count,
         totalPool: mergedPool.length
       });
+
+      return preKeysToStore.map(({ id, publicKey }) => ({
+        id,
+        publicKey: Buffer.from(publicKey, 'base64'),
+      }));
     } catch (error) {
       logger.error('Failed to store pre-keys', error);
       throw error;
@@ -294,7 +304,7 @@ export class SignalKeyManager {
    * It's signed by the identity key to prevent tampering.
    * Provides some properties of PFS even if the identity key is compromised.
    */
-  private async generateAndStoreSignedPreKey(): Promise<SignedPreKey> {
+  async generateAndStoreSignedPreKey(): Promise<SignedPreKey> {
     if (!this.userId) {
       throw new Error('User ID not set - cannot store signed pre-key');
     }

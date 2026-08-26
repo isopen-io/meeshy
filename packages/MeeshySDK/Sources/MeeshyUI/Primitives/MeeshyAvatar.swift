@@ -6,7 +6,7 @@ import MeeshySDK
 public enum AvatarContext: Sendable {
     // Stories
     case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
-    case storyTrayCompact       // 44pt (pinned mini-trail revealed in the collapsed header)
+    case storyTrayCompact       // 36pt (pinned mini-trail revealed in the collapsed header)
     case storyViewer            // 44pt
     case storyViewerRow         // 44pt — a user row in the "who viewed" list (mood + presence, no redundant story ring)
 
@@ -44,7 +44,14 @@ public enum AvatarContext: Sendable {
     public var size: CGFloat {
         switch self {
         case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
-        case .storyTrayCompact, .storyViewer, .storyViewerRow, .conversationHeaderCollapsed,
+        // 44 → 36 le 2026-08-22 : dans la barre repliée (60 pt), un anneau de
+        // 44 plus son halo faisait 50 pt de contenu — le sticker de section,
+        // opaque et épinglé juste sous la barre, en rognait le bas. Retour
+        // produit : « le trail a des cercles coupés, il faut réduire la taille
+        // des cercles ». 36 + anneau = 42, la barre respire.
+        case .storyTrayCompact:
+            return 36
+        case .storyViewer, .storyViewerRow, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
@@ -267,7 +274,6 @@ public struct MeeshyAvatar: View {
     }
 
     @State private var tapScale: CGFloat = 1.0
-    @State private var moodScale: CGFloat = 1.0
     private let isDark: Bool
     private let resolvedAccent: String
     private let resolvedSecondary: String
@@ -300,13 +306,33 @@ public struct MeeshyAvatar: View {
         context.isTappable && (onTap != nil || onViewProfile != nil || onViewStory != nil)
     }
 
+    /// La déduplication ci-dessous compare des LIBELLÉS RENDUS. Un même geste
+    /// logique doit donc porter UNE seule clé, dans UN seul bundle : deux clés
+    /// (ou deux bundles) pour « Voir le profil » rendent deux chaînes qui ne
+    /// coïncident plus dans les six autres langues, et le menu affiche l'entrée
+    /// en double. Les hôtes qui passent un item « profil » custom réutilisent
+    /// donc `avatar.menu.view_profile` de `Bundle.module`.
+    ///
+    /// Hôtes concernés (passent à la fois `onViewProfile` ET un `contextMenuItems`
+    /// custom « profil ») — la dédup n'a d'effet que si les DEUX clés rendent la
+    /// même chaîne dans les sept langues : `PostDetailView.swift` (~1259/1261),
+    /// `FeedPostCard.swift` (~731/734 et ~1345/1347), `FeedCommentsSheet.swift`
+    /// (~1389/1391 et ~2261/2262), `StoryViewerView+Sidebar.swift` (~972/975).
     private var effectiveContextMenuItems: [AvatarContextMenuItem] {
         var items: [AvatarContextMenuItem] = []
         if let onViewProfile {
-            items.append(.init(label: "Voir le profil", icon: "person.fill", action: onViewProfile))
+            items.append(.init(
+                label: String(localized: "avatar.menu.view_profile", defaultValue: "Voir le profil", bundle: .module),
+                icon: "person.fill",
+                action: onViewProfile
+            ))
         }
         if let onViewStory, kind == .user, storyState != .none {
-            items.append(.init(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            items.append(.init(
+                label: String(localized: "avatar.menu.view_story", defaultValue: "Voir la story", bundle: .module),
+                icon: "play.circle.fill",
+                action: onViewStory
+            ))
         }
         if let custom = contextMenuItems {
             for item in custom {
@@ -445,49 +471,17 @@ public struct MeeshyAvatar: View {
         return CGSize(width: delta, height: delta)
     }
 
+    /// Délégué à l'atome partagé `MeeshyMoodBadge` : le glyphe, le ressort
+    /// `repeatForever` et sa garde anti-double-animation y vivent une seule
+    /// fois — et, depuis l'extraction, derrière le portillon Reduce Motion
+    /// que cette écriture-ci n'a jamais consulté.
     private func moodBadge(emoji: String) -> some View {
-        // Frame explicite = `context.badgeSize` pour éviter le collapse du
-        // GeometryReader en overlay context (sans frame, le reader peut
-        // s'effondrer à 0×0 selon le contexte parent → emoji invisible).
-        // Le glyphe Text est rendu à `badgeSize × 0.65` ; le frame de la
-        // bounding box vaut badgeSize pour donner au glyph la place
-        // visuelle complète + la hit area du tap mood.
-        GeometryReader { geo in
-            Text(emoji)
-                .font(.system(size: context.badgeSize * 0.65))
-                .frame(width: context.badgeSize, height: context.badgeSize)
-                .scaleEffect(moodScale)
-                .contentShape(Circle())
-                .onTapGesture {
-                    HapticFeedback.light()
-                    let f = geo.frame(in: .global)
-                    onMoodTap?(CGPoint(x: f.midX, y: f.midY))
-                }
-                .onAppear {
-                    // `moodScale == 1.0` = pas de pulse en vol pour cette
-                    // identité de vue. Un `.onAppear` peut re-fire sans
-                    // `.onDisappear` intermédiaire (ScrollView, re-parenting) ;
-                    // relancer un `repeatForever` par-dessus un autre les fait
-                    // COMBINER par le moteur (aucun des deux ne se termine
-                    // jamais) et chaque frame les évalue tous, pour toujours
-                    // (hog device 2026-07-03 : `DefaultCombiningAnimation` à
-                    // ~90 % du thread ViewGraphDisplayLink).
-                    guard context.animatesMoodBadge, moodScale == 1.0 else { return }
-                    withAnimation(
-                        .spring(response: 0.5, dampingFraction: 0.4)
-                        .repeatForever(autoreverses: true)
-                        .delay(Double.random(in: 0...1.5))
-                    ) {
-                        moodScale = 1.18
-                    }
-                }
-                .onDisappear {
-                    withTransaction(Transaction(animation: nil)) {
-                        moodScale = 1.0
-                    }
-                }
-        }
-        .frame(width: context.badgeSize, height: context.badgeSize)
+        MeeshyMoodBadge(
+            emoji: emoji,
+            diameter: context.badgeSize,
+            animates: context.animatesMoodBadge,
+            onTap: onMoodTap
+        )
         .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
     }
 

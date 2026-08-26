@@ -39,7 +39,7 @@ jest.mock('../../../../services/MessageReadStatusService', () => ({
 }));
 
 jest.mock('../../../../services/PresenceVisibilityService', () => ({
-  getPresenceVisibilityService: () => ({ resolvePrefsOnly: jest.fn<any>().mockResolvedValue(new Map()) }),
+  getPresenceVisibilityService: () => ({ resolveForTargets: jest.fn<any>().mockResolvedValue(new Map()) }),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -75,6 +75,10 @@ const captureListHandler = (prisma: unknown): Function => {
     put: jest.fn(),
     patch: jest.fn(),
     delete: jest.fn(),
+    // Multi-verbes (`fastify.route`). Absent, il faisait tomber la suite entière
+    // sur `fastify.route is not a function` dès qu'une route l'employait —
+    // cette suite ne s'intéresse qu'au GET, mais elle enregistre TOUT le module.
+    route: jest.fn(),
     socketIOHandler: { getManager: () => ({ getIO: () => ({ to: () => ({ emit: jest.fn() }) }) }) },
   };
   registerCoreRoutes(fastify, prisma as never, jest.fn() as never, jest.fn() as never);

@@ -12,6 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -21,6 +22,7 @@ import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.notification.NotificationRepository
 import me.meeshy.sdk.socket.MessageSocketManager
+import me.meeshy.sdk.sync.SyncSeqTracker
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -78,7 +80,7 @@ class NotificationsViewModelTest {
     fun `projects a fresh cache result into state`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         notifications.emit(CacheResult.Fresh(listOf(notification("1"), notification("2")), ageMillis = 0))
 
@@ -91,7 +93,7 @@ class NotificationsViewModelTest {
     fun `an empty cache result shows the loading skeleton`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         notifications.emit(CacheResult.Empty)
 
@@ -103,7 +105,7 @@ class NotificationsViewModelTest {
     fun `a stale cache result paints immediately while syncing continues`() = runTest {
         val notifications = MutableSharedFlow<CacheResult<List<ApiNotification>>>(replay = 1)
         val repo = repository(notifications)
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         notifications.emit(CacheResult.Stale(listOf(notification("1")), ageMillis = 999_999))
 
@@ -115,7 +117,7 @@ class NotificationsViewModelTest {
     @Test
     fun `a sync error surfaces the error message`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         capturedOnSyncError?.invoke(RuntimeException("Server error"))
 
@@ -127,7 +129,7 @@ class NotificationsViewModelTest {
     fun `unread count reflects the repository stream`() = runTest {
         val unreadCount = MutableStateFlow(0)
         val repo = repository(unreadCount = unreadCount)
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         unreadCount.value = 3
 
@@ -137,7 +139,7 @@ class NotificationsViewModelTest {
     @Test
     fun `load forces a repository refresh`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.load()
 
@@ -147,7 +149,7 @@ class NotificationsViewModelTest {
     @Test
     fun `markAsRead delegates to the repository`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.markAsRead("n1")
 
@@ -157,7 +159,7 @@ class NotificationsViewModelTest {
     @Test
     fun `markAllRead delegates to the repository`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.markAllRead()
 
@@ -167,7 +169,7 @@ class NotificationsViewModelTest {
     @Test
     fun `deleteNotification delegates to the repository`() = runTest {
         val repo = repository()
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.deleteNotification("n1")
 
@@ -178,12 +180,51 @@ class NotificationsViewModelTest {
     fun `a real-time notification is forwarded to the repository's shared cache`() = runTest {
         val events = MutableSharedFlow<ApiNotification>()
         val repo = repository()
-        NotificationsViewModel(repo, socketManager(events))
+        NotificationsViewModel(repo, socketManager(events), SyncSeqTracker())
 
         val incoming = notification("fresh")
         events.emit(incoming)
 
         verify(exactly = 1) { repo.prependLive(incoming) }
+    }
+
+    /**
+     * SyncEngine — un trou dans le `_seq` prouve que des `notification:new` n'ont
+     * jamais été livrés. Rien d'autre ne les rattraperait tant que le cache reste
+     * frais : le trou DOIT déclencher une revalidation.
+     */
+    @Test
+    fun `a sync seq gap triggers a notification refresh`() = runTest {
+        val repo = repository()
+        val tracker = SyncSeqTracker()
+        NotificationsViewModel(repo, socketManager(), tracker)
+
+        tracker.observe(5L)   // premier event — pas de trou
+        tracker.observe(6L)   // contigu — pas de trou
+        advanceUntilIdle()
+        coVerify(exactly = 0) { repo.refresh() }
+
+        tracker.observe(9L)   // 7, 8 manqués
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.refresh() }
+    }
+
+    /** Un refresh qui échoue ne doit pas tuer le collecteur : le trou suivant resync encore. */
+    @Test
+    fun `a failing gap refresh does not stop later resyncs`() = runTest {
+        val repo = repository()
+        coEvery { repo.refresh() } throws IllegalStateException("offline")
+        val tracker = SyncSeqTracker()
+        NotificationsViewModel(repo, socketManager(), tracker)
+
+        tracker.observe(5L)
+        tracker.observe(9L)   // trou n°1 — refresh échoue
+        advanceUntilIdle()
+        tracker.observe(20L)  // trou n°2
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) { repo.refresh() }
     }
 
     // --- Pagination (feature-parity §M "still open") ---
@@ -193,7 +234,7 @@ class NotificationsViewModelTest {
         val hasMore = MutableStateFlow(true)
         val repo = repository(hasMore = hasMore)
         coEvery { repo.loadMore() } returns NetworkResult.Success(Unit)
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.loadMore()
 
@@ -204,7 +245,7 @@ class NotificationsViewModelTest {
     fun `loadMore is inert when the repository reports no further page`() = runTest {
         val hasMore = MutableStateFlow(false)
         val repo = repository(hasMore = hasMore)
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.loadMore()
 
@@ -217,7 +258,7 @@ class NotificationsViewModelTest {
         val repo = repository(hasMore = hasMore)
         val pending = CompletableDeferred<NetworkResult<Unit>>()
         coEvery { repo.loadMore() } coAnswers { pending.await() }
-        val vm = NotificationsViewModel(repo, socketManager())
+        val vm = NotificationsViewModel(repo, socketManager(), SyncSeqTracker())
 
         vm.loadMore()
         vm.loadMore()

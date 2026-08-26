@@ -25,16 +25,23 @@ jest.mock('@/stores/auth-store', () => ({
 
 let mockUploadedAttachments: UploadedAttachmentResponse[] = [];
 let mockSelectedFiles: File[] = [];
+let mockAttachmentUploadOptions: { uploadContext?: string; maxAttachments?: number } | undefined;
+let mockUploadProgress: Record<number, number> = {};
+let mockIsUploading = false;
 
 jest.mock('@/hooks/composer/useAttachmentUpload', () => ({
-  useAttachmentUpload: () => ({
-    selectedFiles: mockSelectedFiles,
-    uploadedAttachments: mockUploadedAttachments,
-    isUploading: false,
-    handleFilesSelected: jest.fn(),
-    handleRemoveFile: jest.fn(),
-    clearAttachments: jest.fn(),
-  }),
+  useAttachmentUpload: (options: { uploadContext?: string; maxAttachments?: number }) => {
+    mockAttachmentUploadOptions = options;
+    return {
+      selectedFiles: mockSelectedFiles,
+      uploadedAttachments: mockUploadedAttachments,
+      uploadProgress: mockUploadProgress,
+      isUploading: mockIsUploading,
+      handleFilesSelected: jest.fn(),
+      handleRemoveFile: jest.fn(),
+      clearAttachments: jest.fn(),
+    };
+  },
 }));
 
 type PublishPayload = Parameters<StoryComposerProps['onPublish']>[0];
@@ -98,6 +105,8 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
   beforeEach(() => {
     mockSelectedFiles = [new File(['x'], 'placeholder.jpg', { type: 'image/jpeg' })];
     mockUploadedAttachments = [];
+    mockUploadProgress = {};
+    mockIsUploading = false;
   });
 
   it('adds a background carrier object for the first uploaded image', () => {
@@ -223,5 +232,46 @@ describe('StoryComposer media storyEffects (P0 iOS parity)', () => {
     const payload = published();
     expect(payload.mediaIds).toContain(carriers(payload.storyEffects)[0].payload.postMediaId);
     expect(payload.mediaIds).toContain(audios(payload.storyEffects)[0].payload.postMediaId);
+  });
+});
+
+describe("StoryComposer — contexte d'upload", () => {
+  it("déclare le contexte 'story' — ses médias voyagent en PostMedia via TUS, jamais en MessageAttachment", () => {
+    renderComposer();
+    expect(mockAttachmentUploadOptions?.uploadContext).toBe('story');
+  });
+});
+
+describe('StoryComposer — la jauge de téléversement', () => {
+  beforeEach(() => {
+    mockUploadedAttachments = [];
+    mockUploadProgress = {};
+    mockIsUploading = false;
+  });
+
+  it('affiche la jauge PROPRE À CHAQUE vignette pendant le téléversement', () => {
+    // Cette surface ne lisait PAS `uploadProgress` du tout : ses médias — les
+    // plus lourds du produit, vidéo et audio — montaient sans aucun signal.
+    mockSelectedFiles = [
+      new File(['x'], 'a.jpg', { type: 'image/jpeg' }),
+      new File(['x'], 'b.mp4', { type: 'video/mp4' }),
+    ];
+    mockUploadProgress = { 0: 100, 1: 15 };
+    mockIsUploading = true;
+
+    renderComposer();
+
+    expect(screen.getByText('100%')).toBeInTheDocument();
+    expect(screen.getByText('15%')).toBeInTheDocument();
+  });
+
+  it("n'affiche aucune jauge hors téléversement", () => {
+    mockSelectedFiles = [new File(['x'], 'a.jpg', { type: 'image/jpeg' })];
+    mockUploadProgress = { 0: 100 };
+    mockIsUploading = false;
+
+    renderComposer();
+
+    expect(screen.queryByText('100%')).not.toBeInTheDocument();
   });
 });

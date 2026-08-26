@@ -314,10 +314,20 @@ nonisolated final class MockWebRTCClient: WebRTCClientProviding {
         return disableLocalVideoResult
     }
     private(set) var applyVideoEncodingCallCount = 0
-    private(set) var lastVideoEncoding: (maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)?
-    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {
+    private(set) var lastVideoEncoding: (
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    )?
+    func applyVideoEncoding(
+        maxBitrateBps: Int,
+        maxFramerate: Int,
+        scaleResolutionDownBy: Double,
+        degradationPreference: VideoDegradationPreference
+    ) {
         applyVideoEncodingCallCount += 1
-        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
+        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy, degradationPreference)
     }
     func switchCamera() async throws {}
     var availableCamerasResult: [CameraDeviceOption] = []
@@ -1312,6 +1322,69 @@ final class VideoSurvivalControllerIntegrationTests: XCTestCase {
             "isVideoSuspended must be driven by videoSurvivalController.$isVideoSuspended binding, " +
             "not set directly, to keep single-source-of-truth"
         )
+    }
+
+    /// Bounds the `$isVideoSuspended` subscription body, from the publisher to
+    /// the `store(in:)` that terminates it.
+    private func survivalSuspensionBindingBody() throws -> String {
+        let source = try callManagerSource()
+        guard let start = source.range(of: "videoSurvivalController.$isVideoSuspended") else {
+            XCTFail("The $isVideoSuspended binding was not found in CallManager.swift"); return ""
+        }
+        let after = String(source[start.upperBound...])
+        guard let end = after.range(of: ".store(in: &cancellables)")?.upperBound else {
+            XCTFail("Could not bound the $isVideoSuspended subscription"); return ""
+        }
+        return String(after[..<end])
+    }
+
+    /// The survival freeze has TWO owners: the controller (policy, published as
+    /// `isVideoSuspended`) and `WebRTCService.survivalFloorActive` (encoder).
+    /// `videoSurvivalController.reset()` — called from nine sites (toggleVideo
+    /// and its three failure branches, both unhold branches, critical thermal,
+    /// forced `.ended`, endCallInternal) — clears the FIRST only, and the
+    /// controller never emits `.resume` afterwards. Without a thaw wired to the
+    /// FALLING EDGE of the published flag, a reset during a freeze pins the
+    /// encoder at 100 kbps · 2 fps for the rest of the call, with no affordance
+    /// and no recovery path. The edge is the single site that covers all nine.
+    func test_survivalSuspensionBinding_thawsTheEncoderOnTheFallingEdge() throws {
+        let body = try survivalSuspensionBindingBody()
+        guard !body.isEmpty else { return }
+        XCTAssertTrue(
+            body.contains("removeDuplicates()"),
+            "The binding must de-duplicate, so the thaw fires on real transitions only"
+        )
+        XCTAssertTrue(
+            body.contains("if !suspended { self.webRTCService.unfreezeVideoAfterSurvival() }"),
+            "The falling edge of isVideoSuspended must thaw the encoder — a controller reset " +
+            "clears the policy flag but never the encoder floor"
+        )
+    }
+
+    /// Counter-proof of the guard above: the thaw must stay CONDITIONAL. An
+    /// unconditional call in the same body would also satisfy a naive
+    /// `contains("unfreezeVideoAfterSurvival")` while thawing on the RISING
+    /// edge too — i.e. cancelling every freeze the controller asks for.
+    func test_survivalSuspensionBinding_doesNotThawUnconditionally() throws {
+        let body = try survivalSuspensionBindingBody()
+        guard !body.isEmpty else { return }
+        let occurrences = body.components(separatedBy: "unfreezeVideoAfterSurvival").count - 1
+        XCTAssertEqual(
+            occurrences, 1,
+            "Exactly one thaw call belongs in the binding — the one guarded by `if !suspended`"
+        )
+        let thawLines = body
+            .components(separatedBy: "\n")
+            .filter { $0.contains("unfreezeVideoAfterSurvival") }
+        XCTAssertFalse(thawLines.isEmpty, "The thaw call must be present in the binding")
+        for line in thawLines {
+            XCTAssertTrue(
+                line.contains("if !suspended"),
+                "Negative guard: the thaw must never sit outside the `!suspended` condition — on the " +
+                "RISING edge it would undo the very freeze the controller just asked for. Offending " +
+                "line: \(line.trimmingCharacters(in: .whitespaces))"
+            )
+        }
     }
 
     /// The quality monitor must feed each quality level sample to the controller
@@ -3666,75 +3739,84 @@ final class CallForcedLeaveDataTests: XCTestCase {
 @MainActor
 final class CallManagerFormatDurationTests: XCTestCase {
 
+    /// Les graphies épinglées ci-dessous (« 00:00 », « 1:05:03 ») sont celles
+    /// d'une locale à chiffres latins. Depuis que le formateur passe par la
+    /// locale — c'était le défaut : « 02:05 » s'écrivait en chiffres latins
+    /// jusque dans une interface arabe — la juger sur `.current` reviendrait à
+    /// juger celle du simulateur (leçon 234i). Ce qui est épinglé ici est la
+    /// FORME de l'horloge d'appel ; la variance de locale l'est chez
+    /// `LocalizedNumberTests`.
+    private let latin = Locale(identifier: "en_US")
+
     func test_formatDuration_zero_showsDoubleZero() {
-        XCTAssertEqual(CallManager.formatDuration(0), "00:00")
+        XCTAssertEqual(CallManager.formatDuration(0, locale: latin), "00:00")
     }
 
     func test_formatDuration_oneSecond_showsZeroZeroZeroOne() {
-        XCTAssertEqual(CallManager.formatDuration(1), "00:01")
+        XCTAssertEqual(CallManager.formatDuration(1, locale: latin), "00:01")
     }
 
     func test_formatDuration_59seconds_noLeadingMinute() {
-        XCTAssertEqual(CallManager.formatDuration(59), "00:59")
+        XCTAssertEqual(CallManager.formatDuration(59, locale: latin), "00:59")
     }
 
     func test_formatDuration_oneMinute_showsZeroOneZeroZero() {
-        XCTAssertEqual(CallManager.formatDuration(60), "01:00")
+        XCTAssertEqual(CallManager.formatDuration(60, locale: latin), "01:00")
     }
 
     func test_formatDuration_90seconds_showsOneMinute30Seconds() {
-        XCTAssertEqual(CallManager.formatDuration(90), "01:30")
+        XCTAssertEqual(CallManager.formatDuration(90, locale: latin), "01:30")
     }
 
     func test_formatDuration_59Minutes59Seconds_maxSubHour() {
-        XCTAssertEqual(CallManager.formatDuration(3599), "59:59")
+        XCTAssertEqual(CallManager.formatDuration(3599, locale: latin), "59:59")
     }
 
     func test_formatDuration_exactlyOneHour_showsHHMMSS() {
         // Pre-fix: was "60:00"; post-fix: "1:00:00"
-        XCTAssertEqual(CallManager.formatDuration(3600), "1:00:00")
+        XCTAssertEqual(CallManager.formatDuration(3600, locale: latin), "1:00:00")
     }
 
     func test_formatDuration_oneHourFiveMinutes_showsHHMMSS() {
         // Pre-fix: was "65:00"; post-fix: "1:05:00"
-        XCTAssertEqual(CallManager.formatDuration(3900), "1:05:00")
+        XCTAssertEqual(CallManager.formatDuration(3900, locale: latin), "1:05:00")
     }
 
     func test_formatDuration_twoHours_showsHHMMSS() {
-        XCTAssertEqual(CallManager.formatDuration(7200), "2:00:00")
+        XCTAssertEqual(CallManager.formatDuration(7200, locale: latin), "2:00:00")
     }
 
     func test_formatDuration_twoHours30MinutesAndSomeSeconds() {
         // 2h 30m 45s = 9045s
-        XCTAssertEqual(CallManager.formatDuration(9045), "2:30:45")
+        XCTAssertEqual(CallManager.formatDuration(9045, locale: latin), "2:30:45")
     }
 
     func test_formatDuration_oneHour59Minutes59Seconds() {
         // 7199 = 1*3600 + 59*60 + 59
-        XCTAssertEqual(CallManager.formatDuration(7199), "1:59:59")
+        XCTAssertEqual(CallManager.formatDuration(7199, locale: latin), "1:59:59")
     }
 
     func test_formatDuration_fractionalSecondsAreTruncated() {
         // 90.9 seconds → 01:30 (truncate, not round)
-        XCTAssertEqual(CallManager.formatDuration(90.9), "01:30")
+        XCTAssertEqual(CallManager.formatDuration(90.9, locale: latin), "01:30")
     }
 
     func test_formatDuration_subHour_doesNotShowHours() {
         // Ensure < 1 h keeps the compact MM:SS format
-        let result = CallManager.formatDuration(3599)
+        let result = CallManager.formatDuration(3599, locale: latin)
         XCTAssertFalse(result.contains(":") && result.split(separator: ":").count == 3,
                        "sub-hour duration must use MM:SS not HH:MM:SS; got \(result)")
     }
 
     func test_formatDuration_oneHour_usesThreeComponents() {
-        let result = CallManager.formatDuration(3600)
+        let result = CallManager.formatDuration(3600, locale: latin)
         XCTAssertEqual(result.split(separator: ":").count, 3,
                        "≥1 h duration must use H:MM:SS format; got \(result)")
     }
 
     func test_formatDuration_minutesAndSecondsArePaddedToTwoDigits() {
         // 1h 5m 3s → "1:05:03" (not "1:5:3")
-        XCTAssertEqual(CallManager.formatDuration(3600 + 5 * 60 + 3), "1:05:03")
+        XCTAssertEqual(CallManager.formatDuration(3600 + 5 * 60 + 3, locale: latin), "1:05:03")
     }
 }
 
@@ -5064,8 +5146,21 @@ final class CallManagerSocketReconnectMediaResyncTests: XCTestCase {
         guard let body = reconnectHandlerBody(source) else {
             XCTFail("socket.didReconnect handler not found in CallManager.swift"); return
         }
+        // Le motif vise l'APPEL, pas un nom exact. La garde cherchait
+        // `emitCallJoinWithAck(callId:` et rougissait depuis que la Vague 162
+        // (`60f94f99e`) a renommé l'émetteur en `emitCallJoinWithAckDetailed`
+        // pour distinguer « la salle a été rejointe » de « l'appel était déjà
+        // terminé côté serveur ». La RÈGLE n'a jamais changé — le handler
+        // réémet toujours `call:join` avec ACK avant tout événement de salle —
+        // seul son encodage dans ce test était périmé.
+        //
+        // Le préfixe est ancré sur `await MessageSocketManager.shared.` et non
+        // sur le nom nu : `callManagerSource()` rend la source BRUTE, sans
+        // retirer les commentaires, et `emitCallJoinWithAck` apparaît dans
+        // plusieurs doc-comments du fichier. Un préfixe nu se serait donc laissé
+        // satisfaire par un commentaire, c'est-à-dire par rien.
         XCTAssertTrue(
-            body.contains("emitCallJoinWithAck(callId:"),
+            body.contains("await MessageSocketManager.shared.emitCallJoinWithAck"),
             "Socket reconnect handler must re-emit call:join so the gateway re-admits us " +
             "to the call room — without this, ICE candidates and call:ended are silently dropped."
         )
@@ -7439,6 +7534,300 @@ final class FailCallActiveGuardTests: XCTestCase {
         XCTAssertLessThan(
             guardRange.lowerBound, emitRange.lowerBound,
             "the isActive guard must precede the call:end re-emit"
+        )
+    }
+}
+
+// MARK: - Vague 158: toggleVideo must not re-acquire the camera while CallKit
+// is holding the call or the OS has suspended capture.
+
+/// Audit finding: `applyCameraSuspension`, `handleHold`, and
+/// `applySurvivalVideoSend` all treat `isVideoSuspendedByHold` /
+/// `isVideoSuspendedByCaptureInterruption` as "no camera access right now" —
+/// `applySurvivalVideoSend` explicitly refuses to resume video while either
+/// flag is set. `toggleVideo()`, the user-facing manual video button, had no
+/// such guard: a hold→toggle-off→toggle-on sequence (an ordinary double-tap
+/// while the CallKit hold banner is up) called `upgradeToVideo()`
+/// unconditionally — acquiring the camera, notifying CallKit `hasVideo: true`,
+/// and telling the peer "camera active" while the call was still on hold.
+final class CallManagerToggleVideoHoldSuspensionGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func toggleVideoBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func toggleVideo()") else {
+            XCTFail("toggleVideo() not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "func switchCamera()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    func test_toggleVideo_guardsHoldAndCaptureSuspensionBeforeUpgrading() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "toggleVideo must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — mirrors the guard applySurvivalVideoSend already applies for the " +
+            "automatic survival-recovery path."
+        )
+    }
+
+    func test_toggleVideo_holdGuardOnlyBlocksTurningVideoOn() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("expected `if target, ...` guard — turning video OFF while on hold must " +
+                     "remain a normal downgrade, only re-enabling is unsafe mid-hold")
+            return
+        }
+        XCTAssertFalse(guardRange.isEmpty)
+    }
+
+    func test_toggleVideo_holdGuardPrecedesUpgradeToVideo() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
+        }
+        guard let upgradeRange = body.range(of: "self.webRTCService.upgradeToVideo()") else {
+            XCTFail("upgradeToVideo() call not found in toggleVideo"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, upgradeRange.lowerBound,
+            "the hold/capture-interruption guard must run before upgradeToVideo() acquires the " +
+            "camera — otherwise a re-enable tap during a CallKit hold starts capture and " +
+            "renegotiates with the peer while the call is still on hold."
+        )
+    }
+
+    func test_toggleVideo_holdGuardReturnsWithoutFallingThroughToPermissionCheck() throws {
+        let body = try toggleVideoBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if target, self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in toggleVideo"); return
+        }
+        let searchStart = guardRange.upperBound
+        guard let closeRange = body.range(of: "\n            }", range: searchStart..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "MediaPermissionCoordinator.ensureCamera / upgradeToVideo."
+        )
+    }
+}
+
+//
+// Vague 159 — audit finding: `switchCamera()`/`selectCamera(id:)` are the two
+// sibling camera-actuation entry points that serialize on the exact same task
+// chain as `toggleVideo()`/`handleHold()` (doc-comments in the source say so
+// explicitly), but Vague 158 only added the hold/capture-interruption guard to
+// `toggleVideo()`. A camera-flip tap queued during a CallKit hold ran after the
+// hold's downgrade completed and unconditionally reacquired the physical
+// camera (`capturer.startCapture`) even though the transceiver stayed
+// recvOnly — the same false "camera active" signal Vague 158 closed for the
+// manual video toggle, on a sibling actuator it didn't cover. Not exercised
+// behaviorally (RTCCameraVideoCapturer needs real hardware): source-level
+// guard, same pattern as CallManagerToggleVideoHoldSuspensionGuardTests above.
+//
+@MainActor
+final class CallManagerCameraActuationHoldSuspensionGuardTests: XCTestCase {
+
+    private func callManagerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func switchCameraBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func switchCamera() {") else {
+            XCTFail("switchCamera() not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "func refreshAvailableCameras()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    private func selectCameraBody(in source: String) throws -> String {
+        guard let funcRange = source.range(of: "func selectCamera(id: String) {") else {
+            XCTFail("selectCamera(id:) not found in CallManager.swift")
+            return ""
+        }
+        let bodyEnd = source.range(
+            of: "private func publishListeningIntentIfChanged()",
+            range: funcRange.upperBound..<source.endIndex
+        )?.lowerBound ?? source.endIndex
+        return String(source[funcRange.lowerBound..<bodyEnd])
+    }
+
+    // MARK: - switchCamera()
+
+    func test_switchCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "switchCamera must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — mirrors the guard toggleVideo() applies (Vague 158) for the same " +
+            "camera-actuation task chain."
+        )
+    }
+
+    func test_switchCamera_holdGuardPrecedesUnderlyingSwitch() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in switchCamera"); return
+        }
+        guard let actuationRange = body.range(of: "self.webRTCService.switchCamera {") else {
+            XCTFail("webRTCService.switchCamera call not found in switchCamera"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, actuationRange.lowerBound,
+            "the hold/capture-interruption guard must run before webRTCService.switchCamera " +
+            "reacquires the camera — otherwise a flip tap queued during a CallKit hold runs after " +
+            "the hold's downgrade completes and silently turns the camera back on."
+        )
+    }
+
+    func test_switchCamera_holdGuardRevertsOptimisticMirrorAndReturns() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+        ) else {
+            XCTFail("hold/capture-interruption guard block not found in switchCamera"); return
+        }
+        guard let closeRange = body.range(of: "\n            }", range: guardRange.upperBound..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            "the guard must revert the optimistic mirror flag — otherwise a blocked flip leaves " +
+            "isUsingFrontCamera desynced from the camera actually in use."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "webRTCService.switchCamera."
+        )
+    }
+
+    // MARK: - L6-1 (2026-08-25) — REVERSAL of the Vague 160 extension.
+    //
+    // Vague 160 added `isVideoSuspended` to these two guards on the premise that
+    // the survival layer shared the hold/capture-interruption contract ("camera
+    // stopped, isVideoEnabled left true"). That premise DIED with L6-1: survival
+    // no longer stops the capture, it pins the ENCODER to a 2 fps floor. The
+    // camera keeps running for the whole degraded episode, so keeping the flag
+    // in this guard made flipping front/back INERT — the optimistic mirror flag
+    // was silently reverted and `webRTCService.switchCamera` never ran, for a
+    // camera that was live the entire time.
+    //
+    // NEGATIVE guard: it must fail again if `isVideoSuspended` is folded back
+    // into either camera-actuation guard. Anchored on the literal `if self.
+    // isVideoSuspended ||` head of the reintroduced condition so the L6-1
+    // EXPLANATORY comment in the source (which names the flag on purpose) does
+    // not satisfy it.
+
+    func test_switchCamera_doesNotGuardOnSurvivalFreeze() throws {
+        let body = try switchCameraBody(in: try callManagerSource())
+        XCTAssertFalse(
+            body.contains("if self.isVideoSuspended ||"),
+            "switchCamera must NOT gate on isVideoSuspended: since L6-1 the network-survival layer " +
+            "freezes the encoder without releasing the camera, so gating here makes a camera flip " +
+            "inert (silent revert of isUsingFrontCamera) for the whole degraded episode. Only " +
+            "isVideoSuspendedByHold / isVideoSuspendedByCaptureInterruption mean 'no camera'."
+        )
+    }
+
+    // MARK: - selectCamera(id:)
+
+    func test_selectCamera_guardsHoldAndCaptureSuspensionBeforeActuating() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        XCTAssertTrue(
+            body.contains("self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"),
+            "selectCamera(id:) must check isVideoSuspendedByHold/isVideoSuspendedByCaptureInterruption " +
+            "before actuating — same capturer, same task chain as switchCamera()."
+        )
+    }
+
+    func test_selectCamera_holdGuardPrecedesUnderlyingSwitch() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption"
+        ) else {
+            XCTFail("hold/capture-interruption guard not found in selectCamera"); return
+        }
+        guard let actuationRange = body.range(of: "self.webRTCService.switchToCamera(uniqueID: id)") else {
+            XCTFail("webRTCService.switchToCamera call not found in selectCamera"); return
+        }
+        XCTAssertLessThan(
+            guardRange.lowerBound, actuationRange.lowerBound,
+            "the hold/capture-interruption guard must run before webRTCService.switchToCamera " +
+            "reacquires the camera."
+        )
+    }
+
+    func test_selectCamera_holdGuardRevertsOptimisticStateAndReturns() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        guard let guardRange = body.range(
+            of: "if self.isVideoSuspendedByHold || self.isVideoSuspendedByCaptureInterruption {"
+        ) else {
+            XCTFail("hold/capture-interruption guard block not found in selectCamera"); return
+        }
+        guard let closeRange = body.range(of: "\n            }", range: guardRange.upperBound..<body.endIndex) else {
+            XCTFail("guard block close brace not found"); return
+        }
+        let guardBlock = String(body[guardRange.lowerBound..<closeRange.upperBound])
+        XCTAssertTrue(
+            guardBlock.contains("self.selectedCameraId = previousSelectedCameraId"),
+            "the guard must revert the optimistic picker selection."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("self.isUsingFrontCamera = previousFrontCamera"),
+            "the guard must revert the optimistic mirror flag."
+        )
+        XCTAssertTrue(
+            guardBlock.contains("return"),
+            "the hold/capture-interruption guard must return early, never falling through to " +
+            "webRTCService.switchToCamera."
+        )
+    }
+
+    // MARK: - L6-1: same reversal as switchCamera() above, same reason.
+
+    func test_selectCamera_doesNotGuardOnSurvivalFreeze() throws {
+        let body = try selectCameraBody(in: try callManagerSource())
+        XCTAssertFalse(
+            body.contains("if self.isVideoSuspended ||"),
+            "selectCamera(id:) must NOT gate on isVideoSuspended either — same capturer, same task " +
+            "chain, same L6-1 reason: a frozen encoder still owns a running camera, so gating here " +
+            "reverts the picker selection without ever actuating."
         )
     }
 }

@@ -6,6 +6,30 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Story reaction recovery
+
+/// Ce qu'on fait d'une réaction de story que le POST direct n'a pas posée.
+///
+/// Le tri lit `MeeshyError.from(_:)`, la normalisation `APIClient` de tout
+/// `URLError` de transport en `.network` — la même forme que
+/// `NearbyDiscoveryViewModel` lit pour dire « hors ligne », et celle sur
+/// laquelle la file elle-même exempte une ligne de son budget de tentatives
+/// (`OutboxFlusher.isNetworkTransportError`). Tout le reste est un REFUS ou une
+/// erreur locale : le 409 `REACTION_LIMIT_REACHED` du gateway, un 403, un 404,
+/// un décodage — rejouer ne changerait rien, l'optimisme est rembobiné.
+nonisolated enum StoryReactionRecovery: Equatable, Sendable {
+    /// Panne de transport : la file durable rejouera la réaction au retour du
+    /// réseau, et l'emoji affiché reste vrai.
+    case queueForReplay
+    /// Refus du serveur ou erreur locale : restaurer l'état d'avant le tap.
+    case rollback
+
+    static func decide(for error: Error) -> StoryReactionRecovery {
+        if case .network = MeeshyError.from(error) { return .queueForReplay }
+        return .rollback
+    }
+}
+
 // MARK: - Reveal Circle Shape
 
 /// Shape animable pour l'effet de révélation circulaire.
@@ -99,137 +123,24 @@ nonisolated struct StoryOpeningEntrance: Equatable {
 
 extension StoryViewerView {
 
-    // MARK: - Text Content
-
-    func storyTextContent(_ content: String, storyEffects: StoryEffects? = nil) -> some View {
-        let effects = storyEffects ?? currentStory?.storyEffects
-        let position = effects?.textPosition ?? "center"
-        let color = effects?.textColor.map { Color(hex: $0) } ?? .white
-        let fontStyle = effects?.textStyle ?? "normal"
-        let align = effects?.textAlign ?? "center"
-        let sizeOverride = effects?.textSize
-        let textBg = effects?.textBg
-        let offsetY = effects?.textOffsetY ?? 0
-
-        return Text(content)
-            .font(fontForStyle(fontStyle, sizeOverride: sizeOverride))
-            .foregroundColor(color)
-            .multilineTextAlignment(textAlignmentFor(align))
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(
-                Group {
-                    if let bg = textBg {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color(hex: bg).opacity(0.6))
-                    }
-                }
-            )
-            .shadow(color: .black.opacity(0.4), radius: 6, y: 2)
-            // Neon glow effect for neon text style
-            .shadow(
-                color: fontStyle == "neon" ? color.opacity(0.7) : .clear,
-                radius: fontStyle == "neon" ? 12 : 0
-            )
-            .shadow(
-                color: fontStyle == "neon" ? color.opacity(0.4) : .clear,
-                radius: fontStyle == "neon" ? 24 : 0
-            )
-            .padding(.horizontal, 24)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
-            .offset(y: offsetY)
-            .accessibilityLabel(String(localized: "story.viewer.a11y.storyText", defaultValue: "Texte de la story: \(content)", bundle: .main))
-    }
-
-    private func fontForStyle(_ style: String, sizeOverride: CGFloat? = nil) -> Font {
-        switch style {
-        case "bold":
-            return .system(size: sizeOverride ?? 28, weight: .bold, design: .default)
-        case "italic":
-            return .system(size: sizeOverride ?? 24, weight: .medium, design: .serif).italic()
-        case "handwriting":
-            return .system(size: sizeOverride ?? 26, weight: .medium, design: .serif)
-        case "typewriter":
-            return .system(size: sizeOverride ?? 20, weight: .regular, design: .monospaced)
-        case "neon":
-            return .system(size: sizeOverride ?? 32, weight: .black, design: .rounded)
-        case "retro":
-            return .system(size: sizeOverride ?? 26, weight: .bold, design: .rounded)
-        default:
-            return .system(size: sizeOverride ?? 22, weight: .medium)
-        }
-    }
-
-    private func textAlignmentFor(_ align: String) -> TextAlignment {
-        switch align {
-        case "left": return .leading
-        case "right": return .trailing
-        default: return .center
-        }
-    }
-
-    private func compositeAlignment(position: String, align: String) -> Alignment {
-        let v: VerticalAlignment = {
-            switch position {
-            case "top": return .top
-            case "bottom": return .bottom
-            default: return .center
-            }
-        }()
-        let h: HorizontalAlignment = {
-            switch align {
-            case "left": return .leading
-            case "right": return .trailing
-            default: return .center
-            }
-        }()
-        return Alignment(horizontal: h, vertical: v)
-    }
-
-    // MARK: - Media Overlay
-
-    func mediaOverlay(media: FeedMedia, geometry: GeometryProxy) -> some View {
-        Group {
-            if media.url != nil {
-                ProgressiveCachedImage(
-                    thumbHash: media.thumbHash,
-                    thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url,
-                    autoLoad: true
-                ) {
-                    coloredMediaFallback(media: media)
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(width: geometry.size.width, height: geometry.size.height)
-                .clipped()
-            } else {
-                coloredMediaFallback(media: media)
-            }
-        }
-        .overlay(alignment: .center) {
-            if media.type == .video {
-                Image(systemName: "play.circle.fill")
-                    // Doctrine 84i/86i : indicateur de lecture décoratif surdimensionné
-                    // (≥40pt) centré sur la vidéo → taille figée (le Dynamic Type
-                    // déformerait le repère visuel). Déjà `accessibilityHidden`.
-                    .font(.system(size: 56))
-                    .foregroundColor(.white.opacity(0.8))
-                    .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
-                    .accessibilityHidden(true)
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityLabel(media.type == .video ? "Video de la story" : "Image de la story")
-    }
-
-    private func coloredMediaFallback(media: FeedMedia) -> some View {
-        LinearGradient(
-            colors: [Color(hex: media.thumbnailColor).opacity(0.6), Color(hex: media.thumbnailColor).opacity(0.3)],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-    }
+    // MARK: - Text Content · Media Overlay — RETIRÉS (244i)
+    //
+    // Six fonctions vivaient ici sans qu'aucun commit du dépôt ne les appelle :
+    // `storyTextContent(_:storyEffects:)` et `mediaOverlay(media:geometry:)`, plus
+    // les quatre privées qu'elles SEULES appelaient — `fontForStyle`,
+    // `textAlignmentFor`, `compositeAlignment`, `coloredMediaFallback`.
+    //
+    // C'était le lecteur de story d'AVANT le canvas : du texte SwiftUI positionné
+    // par `StoryEffects.textPosition/textAlign`, et une image posée en overlay. Le
+    // rendu vivant est le canvas — `StoryViewerView+Canvas.swift` côté app,
+    // `StorySlideRenderer` côté SDK, qui honore `fontFamily`/`textStyle` (c'est
+    // l'extension à 18 familles du 2026-08-20 : `italic` et `retro` y sont entrés
+    // précisément parce que des stories publiées portaient le vocabulaire
+    // historique de `fontForStyle`).
+    //
+    // Elles emportaient `story.viewer.a11y.storyText` — une clé traduite en sept
+    // locales pour un `accessibilityLabel` qu'aucun lecteur d'écran n'a jamais
+    // annoncé.
 
     // MARK: - Filter Overlay
 
@@ -1127,31 +1038,68 @@ extension StoryViewerView {
     /// including the swipe-away guard below — against a `MockAPIClientForApp`
     /// instead of re-implementing the snapshot/rollback logic as local
     /// variables in a test that never calls production code.
+    ///
+    /// Une PANNE DE TRANSPORT ne rembobine plus : la réaction part dans la file
+    /// durable, comme le commentaire de story juste au-dessus, et l'optimisme
+    /// affiché reste vrai jusqu'au rejeu. Pas de `kind` dédié — le gateway sert
+    /// la réaction de story sur `POST /posts/:id/like`, journalisée
+    /// `toggleLikePost` comme un like de post, à l'emoji près. Le tri
+    /// transport / refus est `StoryReactionRecovery.decide(for:)` ; le rollback
+    /// reste réservé au refus du serveur et à une file qui refuse la ligne.
+    ///
+    /// `offlineQueue` est injectable pour la même raison que le service ; la
+    /// tâche est rendue pour qu'un témoin l'attende au lieu de dormir.
+    @discardableResult
     func sendReaction(
         emoji: String,
         priorReactions: [String],
         priorCount: Int,
-        interactionService: StoryInteractionService = StoryInteractionService()
-    ) {
-        guard let story = currentStory else { return }
+        interactionService: StoryInteractionService = StoryInteractionService(),
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
+    ) -> Task<Void, Never> {
+        guard let story = currentStory else { return Task {} }
         EngagementTracker.shared.recordAction(.reacted, surface: .storyViewer)
 
-        Task {
+        return Task {
             do {
                 try await interactionService.react(storyId: story.id, emoji: emoji)
             } catch {
-                if let target = Self.reactionRollbackTarget(
-                    currentStoryId: currentStory?.id,
-                    originatingStoryId: story.id,
-                    priorReactions: priorReactions,
-                    priorCount: priorCount
-                ) {
-                    storyCurrentUserReactions = target.reactions
-                    storyReactionCount = target.count
-                    HapticFeedback.error()
+                guard StoryReactionRecovery.decide(for: error) == .queueForReplay else {
+                    rollBackReaction(originatingStoryId: story.id,
+                                     priorReactions: priorReactions,
+                                     priorCount: priorCount)
+                    return
+                }
+                do {
+                    try await offlineQueue.enqueue(
+                        .toggleLikePost,
+                        payload: ToggleLikePostPayload(
+                            clientMutationId: ClientMutationId.generate(),
+                            postId: story.id,
+                            liked: true,
+                            emoji: emoji
+                        ),
+                        conversationId: story.id
+                    )
+                } catch {
+                    rollBackReaction(originatingStoryId: story.id,
+                                     priorReactions: priorReactions,
+                                     priorCount: priorCount)
                 }
             }
         }
+    }
+
+    private func rollBackReaction(originatingStoryId: String, priorReactions: [String], priorCount: Int) {
+        guard let target = Self.reactionRollbackTarget(
+            currentStoryId: currentStory?.id,
+            originatingStoryId: originatingStoryId,
+            priorReactions: priorReactions,
+            priorCount: priorCount
+        ) else { return }
+        storyCurrentUserReactions = target.reactions
+        storyReactionCount = target.count
+        HapticFeedback.error()
     }
 
     /// Pure rollback decision for a rejected reaction — extracted so the
@@ -2483,6 +2431,36 @@ extension StoryViewerView {
         isLoadingComments = false
     }
 
+    /// Ligne de l'overlay bâtie depuis la PREMIÈRE charge réseau — le chemin
+    /// principal, celui de chaque ouverture sur cache froid. Sa langue passe par
+    /// le résolveur canonique du Prisme, comme les trois autres chemins de ce
+    /// fichier (réponses, temps réel, pagination) : la fermeture locale qui
+    /// vivait ici ignorait `originalLanguage`, si bien qu'un commentaire déjà
+    /// écrit dans la langue n°1 du lecteur s'affichait traduit dans sa langue
+    /// n°2 dès que le serveur avait produit cette traduction pour d'autres.
+    /// Extrait en `static` pour que le témoin de RANG lise ce chemin-ci, pas
+    /// seulement le résolveur.
+    static func storyComment(from c: APIPostComment, preferredLanguages langs: [String]) -> FeedComment {
+        FeedComment(
+            id: c.id, author: c.author.name, authorId: c.author.id,
+            authorUsername: c.author.username,
+            authorAvatarURL: c.author.avatar,
+            content: c.content, timestamp: c.createdAt,
+            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+            parentId: c.parentId,
+            effectFlags: c.effectFlags ?? 0,
+            originalLanguage: c.originalLanguage,
+            translatedContent: PostDetailViewModel.resolveCommentTranslation(
+                translations: c.translations,
+                originalLanguage: c.originalLanguage,
+                preferredLanguages: langs
+            ),
+            currentUserReactions: c.currentUserReactions,
+            media: (c.media ?? []).map { $0.toFeedMedia() },
+            location: c.location
+        )
+    }
+
     private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         do {
@@ -2490,28 +2468,7 @@ extension StoryViewerView {
             // Stale-write guard: drop ONLY if user has clearly swiped to a
             // different known story (tolerate transient nil reads).
             if let now = currentStory?.id, now != story.id { return }
-            let comments = response.data.map { c -> FeedComment in
-                let translated: String? = {
-                    guard let dict = c.translations else { return nil }
-                    for lang in langs {
-                        if let entry = dict[lang] { return entry.text }
-                    }
-                    return nil
-                }()
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId,
-                    effectFlags: c.effectFlags ?? 0,
-                    originalLanguage: c.originalLanguage, translatedContent: translated,
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() },
-                    location: c.location
-                )
-            }
+            let comments = response.data.map { Self.storyComment(from: $0, preferredLanguages: langs) }
             storyComments = comments
             storyCommentsNextCursor = response.pagination?.nextCursor
             storyCommentsHasMore = response.pagination?.hasMore ?? false
@@ -2913,10 +2870,23 @@ struct StoryCommentRowView: View, Equatable {
                 }
             } label: {
                 HStack(spacing: 3) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.92))
-                        .scaleEffect(isLiked ? 1.15 : 1.0)
+                    // Le contour à l'accent de l'auteur — « c'est MOI qui ai
+                    // aimé ce commentaire ». Sans lui, un commentaire de story
+                    // que j'avais aimé ne se distinguait que par sa teinte, la
+                    // même qu'un commentaire aimé par d'autres. Le `scaleEffect`
+                    // d'origine est conservé.
+                    EngagementGlyph(
+                        outline: "heart",
+                        filled: "heart.fill",
+                        participated: isLiked,
+                        accentHex: comment.authorColor,
+                        activeTint: MeeshyColors.error,
+                        inactiveTint: overlayColor.opacity(0.92),
+                        size: 13,
+                        // Posé sur un média : l'ombre porte la lisibilité.
+                        shadowed: true
+                    )
+                    .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
                             .font(MeeshyFont.relative(11, weight: .semibold))

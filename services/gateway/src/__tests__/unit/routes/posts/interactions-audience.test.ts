@@ -56,6 +56,12 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -343,7 +349,11 @@ describe('DELETE /posts/:postId/like — repost simple redirige vers la racine',
     const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
 
     expect(res.statusCode).toBe(200);
-    expect(mockUnlikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID);
+    // Le 3e argument est l'emoji DÉSIGNÉ (2026-08-25) : `undefined` ici parce
+    // que la requête n'en nomme aucun — le service retire alors la plus
+    // récente. Il est nommé plutôt qu'élidé pour que la garde reste une garde :
+    // un défaut fabriqué par la route ('❤️') la ferait rougir.
+    expect(mockUnlikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID, undefined);
     await app.close();
   });
 
@@ -358,7 +368,7 @@ describe('DELETE /posts/:postId/like — repost simple redirige vers la racine',
     // Liked via POST_ID's repost, unliked via a DIFFERENT repost of the same root.
     await app.inject({ method: 'DELETE', url: `/posts/${OTHER_REPOST_ID}/like` });
 
-    expect(mockUnlikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID);
+    expect(mockUnlikePost).toHaveBeenCalledWith(ROOT_ID, USER_ID, undefined);
     await app.close();
   });
 });

@@ -81,6 +81,26 @@ struct CanvasV3DecodingTests {
         }
     }
 
+    /// Le kind `place` transporte son `SharedPlace` ENVELOPPÉ sous la clé
+    /// `place`, jamais à plat. Les deux lecteurs l'exigent indépendamment :
+    /// `CanvasV3Migration` lit `payload.object("place")` et le web lit
+    /// `o.payload.place` (`CanvasV3Scene.tsx:622`). Un payload posé à plat
+    /// décode SANS BRONCHER en `CanvasV3` — `payload` y est un dictionnaire
+    /// opaque — et ne rend aucun lieu à l'écran : c'est pourquoi ce test
+    /// descend jusqu'à `SharedPlace` au lieu de s'arrêter à `scenes` non vide.
+    @Test func placeObject_carriesItsSharedPlaceUnderThePlaceKey() throws {
+        struct PlaceEnvelope: Decodable { let place: SharedPlace }
+
+        let doc = try JSONDecoder().decode(CanvasV3.self, from: fixture("story-3-slides"))
+        let places = doc.scenes.flatMap(\.objects).filter { $0.kind == .place }
+        #expect(places.count == 1)
+
+        let payload = try #require(places.first?.payload)
+        let envelope = try JSONDecoder().decode(PlaceEnvelope.self,
+                                                from: JSONEncoder().encode(payload))
+        #expect(envelope.place.name == "Douala")
+    }
+
     @Test func goldenFixture_preservesSoundTranscriptionsAndSceneTransitions() throws {
         let doc = try JSONDecoder().decode(CanvasV3.self, from: fixture("v1-legacy-full.v3"))
         #expect(doc.sound?.transcriptions?.map(\.language) == ["fr", "en"])

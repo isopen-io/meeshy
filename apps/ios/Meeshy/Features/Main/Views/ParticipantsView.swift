@@ -117,7 +117,12 @@ struct ParticipantsView: View {
                     .filter { $0.conversationId == conversationId }
                     .receive(on: DispatchQueue.main)
             ) { event in
-                if let idx = participants.firstIndex(where: { $0.id == event.participant.id || $0.userId == event.userId }) {
+                // `event.userId` suffit à retrouver la ligne ; l'id de
+                // participant n'est qu'un chemin d'appoint, et il est optionnel.
+                let participantId = event.participant?.id
+                if let idx = participants.firstIndex(where: { row in
+                    row.userId == event.userId || (participantId != nil && row.id == participantId)
+                }) {
                     participants[idx].conversationRole = event.newRole.lowercased()
                 }
                 Task {
@@ -641,7 +646,7 @@ struct ParticipantsView: View {
         do {
             try await ConversationService.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: userId
+                key: userId
             )
             HapticFeedback.success()
             participants.removeAll { $0.id == userId || $0.userId == userId }
@@ -660,7 +665,7 @@ struct ParticipantsView: View {
         do {
             try await ConversationService.shared.updateParticipantRole(
                 conversationId: conversationId,
-                participantId: userId,
+                userId: userId,
                 role: newRole
             )
             HapticFeedback.success()
@@ -682,7 +687,7 @@ struct ParticipantsView: View {
         do {
             try await ConversationService.shared.removeParticipant(
                 conversationId: conversationId,
-                participantId: currentUserId
+                key: currentUserId
             )
             HapticFeedback.success()
             dismiss()

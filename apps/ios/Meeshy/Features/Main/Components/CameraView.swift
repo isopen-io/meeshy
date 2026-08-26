@@ -282,13 +282,12 @@ struct CameraView: View {
         .background(Capsule().fill(.black.opacity(0.5)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))
-        .accessibilityValue(formatDuration(camera.recordingDuration))
+        .accessibilityValue(LocalizedNumber.spokenDuration(seconds: camera.recordingDuration))
+        .accessibilityAddTraits(.updatesFrequently)
     }
 
     private func formatDuration(_ t: TimeInterval) -> String {
-        let m = Int(t) / 60
-        let s = Int(t) % 60
-        return String(format: "%d:%02d", m, s)
+        LocalizedNumber.duration(seconds: t)
     }
 }
 
@@ -296,6 +295,11 @@ struct CameraView: View {
 
 @MainActor
 final class CameraModel: NSObject, ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
     var capturedVideoURL: URL?
@@ -703,6 +707,11 @@ struct CameraPreviewLayer: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     class Coordinator {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         var previewLayer: AVCaptureVideoPreviewLayer?
     }
 }

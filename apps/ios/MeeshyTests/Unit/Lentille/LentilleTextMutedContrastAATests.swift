@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -10,6 +11,18 @@ import MeeshyUI
 /// … le rang plat ne bascule plus JAMAIS sur le rouge ») sont peints par
 /// `MeeshyColors.textMuted(isDark:)`. Aucun témoin de RATIO n'existait avant
 /// ce fichier (seulement des gardes de source, cf. `LentilleRowSourceGuardTests`).
+///
+/// **AMENDEMENT ANNULÉ le 2026-08-23.** Le lot 2 (2026-08-22) avait déplacé
+/// l'heure DANS une bulle d'aperçu teintée à l'accent, et cette suite mesurait
+/// alors le contraste sur cette surface neuve
+/// (`test_previewBubble_keepsTheTimestampAboveAA_onEveryGeneratedAccent`, qui
+/// avait DICTÉ les opacités de remplissage). La directive produit du
+/// 2026-08-23 (« les derniers messages ne doivent pas être dans des bulles »)
+/// retire la bulle : ces deux témoins et leur lecteur de token partent AVEC
+/// la surface qu'ils mesuraient — les laisser aurait été un vert par omission,
+/// une mesure de fond que plus rien ne peint. La mesure JUSTE redevient
+/// `test_lentilleRow_middotAndTimestamp_meetAA_onTheRealRowBackground`
+/// ci-dessous : l'heure se relit directement sur le fond ambiant.
 ///
 /// **Fonds réels re-prouvés (pas déduits).**
 /// `LentilleConversationRow` ne porte AUCUNE carte (« AUCUNE carte (ni
@@ -186,4 +199,5 @@ final class LentilleTextMutedContrastAATests: XCTestCase {
             "indigo400.opacity(0.5)) — régression du défaut de contraste corrigé par D-18"
         )
     }
+
 }

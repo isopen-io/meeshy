@@ -88,6 +88,7 @@ export default async function TermsPage() {
               <div className="text-gray-700 dark:text-gray-300 leading-relaxed space-y-4">
                 <p>{t('content.ownership')}</p>
                 <p>{t('content.license')}</p>
+                <p>{t('content.attribution')}</p>
                 <p>{t('content.responsibility')}</p>
               </div>
             </section>

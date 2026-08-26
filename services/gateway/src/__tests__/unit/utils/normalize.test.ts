@@ -408,6 +408,30 @@ describe('normalizeDisplayName', () => {
     it('should remove a lone carriage return (legacy Mac line ending)', () => {
       expect(normalizeDisplayName('Test\rUser')).toBe('TestUser');
     });
+
+    it('should remove a Unicode LINE SEPARATOR (U+2028)', () => {
+      expect(normalizeDisplayName('Test\u2028User')).toBe('TestUser');
+    });
+
+    it('should remove a Unicode PARAGRAPH SEPARATOR (U+2029)', () => {
+      expect(normalizeDisplayName('Test\u2029User')).toBe('TestUser');
+    });
+
+    it('should remove a NEL / Next Line (U+0085)', () => {
+      expect(normalizeDisplayName('Test\u0085User')).toBe('TestUser');
+    });
+
+    it('should remove a vertical tab (U+000B)', () => {
+      expect(normalizeDisplayName('Test\u000bUser')).toBe('TestUser');
+    });
+
+    it('should remove a form feed (U+000C)', () => {
+      expect(normalizeDisplayName('Test\u000cUser')).toBe('TestUser');
+    });
+
+    it('should remove a mix of Unicode line terminators', () => {
+      expect(normalizeDisplayName('A\u2028B\u0085C\u2029D')).toBe('ABCD');
+    });
   });
 
   describe('preserving special content', () => {

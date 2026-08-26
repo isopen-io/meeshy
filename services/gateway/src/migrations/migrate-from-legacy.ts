@@ -278,18 +278,29 @@ interface LegacyConversationMember {
   isActive?: boolean;
 }
 
-function transformConversationMember(doc: LegacyConversationMember) {
-  return {
-    id: objectIdToString(doc._id)!,
-    conversationId: objectIdToString(doc.conversationId)!,
-    userId: objectIdToString(doc.userId)!,
-    role: doc.role || 'member',
-    nickname: doc.nickname || null,
-    joinedAt: doc.joinedAt || new Date(),
-    leftAt: doc.leftAt || null,
-    isActive: doc.isActive !== false,
-  };
-}
+/**
+ * PAS de `transformConversationMember` : la cible n'existe pas.
+ *
+ * Ce script appelait `migrateCollection('ConversationMember', …,
+ * prisma.conversationMember)`, et `prisma.conversationMember` est `undefined` —
+ * le modèle du schéma courant s'appelle `Participant`, et il ne se contente pas
+ * d'un autre nom : il exige `type`, `displayName` et `permissions`, qu'un
+ * document `ConversationMember` hérité ne porte pas. La transformation qui
+ * vivait ici produisait donc une forme qu'aucun modèle n'accepte.
+ *
+ * Ce que l'opérateur voyait, et c'est le vrai défaut : `prismaMo.create` est
+ * appelé sous `if (!DRY_RUN)`. En `--dry-run` — le mode que
+ * `infrastructure/scripts/migrate-to-staging.sh` lance en PREMIER pour décider
+ * s'il continue — la ligne fautive n'est jamais atteinte, et le rapport annonce
+ * la collection intégralement migrée. La course réelle, elle, comptait chaque
+ * batch en erreur. Un galop d'essai qui ment exactement là où on l'interroge.
+ *
+ * Voir `reportUnmigratableCollection` : la collection est désormais COMPTÉE et
+ * déclarée non migrable, identiquement dans les deux modes.
+ *
+ * `LegacyConversationMember` ci-dessus RESTE : elle décrit la forme SOURCE, que
+ * le transform dédié devra lire. C'est la forme CIBLE qui était fausse.
+ */
 
 // =============================================================================
 // TRANSFORMATION MESSAGE
@@ -374,16 +385,19 @@ interface LegacyMessageTranslation {
   createdAt?: Date;
 }
 
-function transformMessageTranslation(doc: LegacyMessageTranslation) {
-  return {
-    id: objectIdToString(doc._id)!,
-    messageId: objectIdToString(doc.messageId)!,
-    sourceLanguage: doc.sourceLanguage,
-    targetLanguage: doc.targetLanguage,
-    translatedContent: doc.translatedContent,
-    createdAt: doc.createdAt || new Date(),
-  };
-}
+/**
+ * PAS de `transformMessageTranslation` : la cible n'est pas une COLLECTION.
+ *
+ * `prisma.messageTranslation` est `undefined` pour une raison de fond, pas de
+ * nommage : les traductions sont EMBARQUÉES dans le message
+ * (`Message.translations`), conformément au Prisme Linguistique. Les migrer
+ * suppose donc de regrouper les documents hérités par `messageId` puis de
+ * mettre à jour chaque `Message` déjà écrit à l'étape 6 — un transform à part
+ * entière, pas une ligne de `migrateCollection`.
+ *
+ * Même défaut de galop d'essai que `ConversationMember` ci-dessus, et même
+ * raison de garder `LegacyMessageTranslation` : la forme source est juste.
+ */
 
 // =============================================================================
 // TRANSFORMATION REACTION
@@ -454,6 +468,38 @@ function transformFriendRequest(doc: LegacyFriendRequest) {
 // =============================================================================
 // FONCTIONS DE MIGRATION
 // =============================================================================
+
+/**
+ * Compte une collection héritée SANS cible dans le schéma courant, et la
+ * déclare non migrée — identiquement en `--dry-run` et en course réelle.
+ *
+ * C'est la moitié qui manquait. `migrateCollection` écrit sous `if (!DRY_RUN)`,
+ * si bien qu'une cible `undefined` n'était touchée que par la course réelle :
+ * le galop d'essai comptait `stat.migrated += batch.length` sur une collection
+ * que rien n'aurait jamais écrite. Ici il n'y a pas de branche : les documents
+ * hérités sont comptés en `expected` et en `errors` dans les deux modes, donc
+ * le rapport final ne peut pas être vert, et le total d'erreurs non plus.
+ */
+async function reportUnmigratableCollection(
+  collectionName: string,
+  reason: string
+): Promise<MigrationStats> {
+  const startTime = Date.now();
+  const total = await legacyDb.collection(collectionName).countDocuments();
+
+  log(`🔄 Migration de ${collectionName}...`);
+  log(`   Total: ${total} documents`);
+  log(`   ❌ NON MIGRÉE — ${reason}`, 'error');
+
+  return {
+    collection: collectionName,
+    expected: total,
+    migrated: 0,
+    skipped: 0,
+    errors: total,
+    duration: Date.now() - startTime,
+  };
+}
 
 /**
  * Migre une collection en batches
@@ -634,12 +680,12 @@ async function migrate() {
       )
     );
 
-    // 5. ConversationMember (dépend de User, Conversation)
+    // 5. ConversationMember — sans cible : le modèle courant est `Participant`,
+    //    et il exige `type`, `displayName` et `permissions`.
     stats.push(
-      await migrateCollection(
+      await reportUnmigratableCollection(
         'ConversationMember',
-        transformConversationMember,
-        prisma.conversationMember
+        'le modèle courant est `Participant` et exige `type`, `displayName` et `permissions` — transform dédié requis'
       )
     );
 
@@ -657,12 +703,12 @@ async function migrate() {
       )
     );
 
-    // 8. MessageTranslation (dépend de Message)
+    // 8. MessageTranslation — sans cible : les traductions sont EMBARQUÉES
+    //    dans `Message.translations`, ce n'est pas une collection.
     stats.push(
-      await migrateCollection(
+      await reportUnmigratableCollection(
         'MessageTranslation',
-        transformMessageTranslation,
-        prisma.messageTranslation
+        'les traductions sont embarquées dans `Message.translations` — regroupement par `messageId` puis update des messages requis'
       )
     );
 

@@ -89,6 +89,34 @@ class SocialSocketManagerTest {
     }
 
     @Test
+    fun `story deleted payload carries the story and author ids`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyDeleted.test {
+            handlers.getValue("story:deleted").invoke(
+                arrayOf(JSONObject("""{"storyId":"s7","authorId":"u4"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.storyId).isEqualTo("s7")
+            assertThat(event.authorId).isEqualTo("u4")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story deleted payload decodes with a defaulted author id when absent`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyDeleted.test {
+            handlers.getValue("story:deleted").invoke(
+                arrayOf(JSONObject("""{"storyId":"s8"}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.storyId).isEqualTo("s8")
+            assertThat(event.authorId).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `post bookmarked payload is decoded and emitted`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.postBookmarked.test {
@@ -133,6 +161,101 @@ class SocialSocketManagerTest {
             assertThat(event.postId).isEqualTo("p1")
             assertThat(event.comment.id).isEqualTo("c7")
             assertThat(event.commentCount).isEqualTo(12)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `comment updated payload carries the complete edited comment`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentUpdated.test {
+            handlers.getValue("comment:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","comment":{"id":"c7","content":"Salut (edited)","likeCount":3}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.comment.id).isEqualTo("c7")
+            assertThat(event.comment.content).isEqualTo("Salut (edited)")
+            assertThat(event.comment.likeCount).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `post updated payload nests the complete edited post under post`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postUpdated.test {
+            handlers.getValue("post:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"post":{"id":"p1","content":"Bonjour (edited)","likeCount":9,"isEdited":true}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.post.id).isEqualTo("p1")
+            assertThat(event.post.content).isEqualTo("Bonjour (edited)")
+            assertThat(event.post.likeCount).isEqualTo(9)
+            assertThat(event.post.isEdited).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story updated payload carries the complete story and the engagement-reset flag`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyUpdated.test {
+            handlers.getValue("story:updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"story":{"id":"s5","content":"Édité","author":{"id":"u2","username":"amy"}},""" +
+                            """"engagementReset":true}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.story.id).isEqualTo("s5")
+            assertThat(event.story.content).isEqualTo("Édité")
+            assertThat(event.engagementReset).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story updated payload decodes with a null engagement-reset when absent`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyUpdated.test {
+            handlers.getValue("story:updated").invoke(
+                arrayOf(JSONObject("""{"story":{"id":"s6","content":"Visibilité"}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.story.id).isEqualTo("s6")
+            assertThat(event.engagementReset).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `post reposted payload nests the complete repost under repost`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postReposted.test {
+            handlers.getValue("post:reposted").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"originalPostId":"p0","repost":{"id":"r1","content":"Repartagé",""" +
+                            """"repostOf":{"id":"p0"},"author":{"id":"u9","username":"bob"}}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.originalPostId).isEqualTo("p0")
+            assertThat(event.repost.id).isEqualTo("r1")
+            assertThat(event.repost.content).isEqualTo("Repartagé")
+            assertThat(event.repost.author?.id).isEqualTo("u9")
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -249,6 +372,116 @@ class SocialSocketManagerTest {
             assertThat(event.statusId).isEqualTo("st9")
             assertThat(event.userId).isEqualTo("u7")
             assertThat(event.emoji).isEqualTo("😂")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `story translation-updated payload is decoded and emitted`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyTranslationUpdated.test {
+            handlers.getValue("story:translation-updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","textObjectIndex":2,"translations":{"fr":"Bonjour","es":"Hola"}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.textObjectIndex).isEqualTo(2)
+            assertThat(event.translations["fr"]).isEqualTo("Bonjour")
+            assertThat(event.translations["es"]).isEqualTo("Hola")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a story translation-updated payload without translations decodes to an empty map`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.storyTranslationUpdated.test {
+            handlers.getValue("story:translation-updated").invoke(
+                arrayOf(JSONObject("""{"postId":"p1","textObjectIndex":0,"translations":{}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.translations).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `post translation-updated payload is decoded and emitted with its full entry`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postTranslationUpdated.test {
+            handlers.getValue("post:translation-updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","language":"es","translation":{"text":"Hola","translationModel":"nllb","confidenceScore":0.97}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.language).isEqualTo("es")
+            assertThat(event.translation.text).isEqualTo("Hola")
+            assertThat(event.translation.translationModel).isEqualTo("nllb")
+            assertThat(event.translation.confidenceScore).isEqualTo(0.97)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a post translation-updated payload with only text decodes with null metadata`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.postTranslationUpdated.test {
+            handlers.getValue("post:translation-updated").invoke(
+                arrayOf(JSONObject("""{"postId":"p2","language":"de","translation":{"text":"Hallo"}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p2")
+            assertThat(event.translation.text).isEqualTo("Hallo")
+            assertThat(event.translation.translationModel).isNull()
+            assertThat(event.translation.confidenceScore).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `comment translation-updated payload is decoded and emitted with its full entry`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentTranslationUpdated.test {
+            handlers.getValue("comment:translation-updated").invoke(
+                arrayOf(
+                    JSONObject(
+                        """{"postId":"p1","commentId":"c7","language":"es",""" +
+                            """"translation":{"text":"Hola","translationModel":"nllb","confidenceScore":0.97}}""",
+                    ),
+                ),
+            )
+            val event = awaitItem()
+            assertThat(event.postId).isEqualTo("p1")
+            assertThat(event.commentId).isEqualTo("c7")
+            assertThat(event.language).isEqualTo("es")
+            assertThat(event.translation.text).isEqualTo("Hola")
+            assertThat(event.translation.translationModel).isEqualTo("nllb")
+            assertThat(event.translation.confidenceScore).isEqualTo(0.97)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a comment translation-updated payload with only text decodes with null metadata`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.commentTranslationUpdated.test {
+            handlers.getValue("comment:translation-updated").invoke(
+                arrayOf(JSONObject("""{"postId":"p2","commentId":"c9","language":"de","translation":{"text":"Hallo"}}""")),
+            )
+            val event = awaitItem()
+            assertThat(event.commentId).isEqualTo("c9")
+            assertThat(event.translation.text).isEqualTo("Hallo")
+            assertThat(event.translation.translationModel).isNull()
+            assertThat(event.translation.confidenceScore).isNull()
             cancelAndIgnoreRemainingEvents()
         }
     }

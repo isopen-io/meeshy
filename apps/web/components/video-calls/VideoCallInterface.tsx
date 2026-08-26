@@ -39,6 +39,7 @@ import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
 import { computeParticipantOverlayPosition } from '@/lib/calls/overlay-grid-layout';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type { CallParticipantLeftEvent } from '@meeshy/shared/types/video-call';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
@@ -220,38 +221,28 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
 
-  // Emit a media-toggle to the peer (drives the remote avatar placeholder),
-  // mirroring the manual camera button. Used by the survival controller when it
-  // auto-suspends/resumes outbound video.
-  const emitVideoToggle = useCallback((enabled: boolean) => {
-    const socket = meeshySocketIOService.getSocket();
-    if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
-    }
-  }, [callId]);
-
-  // Re-entrancy guard for every video on/off path — the manual button
-  // (handleToggleVideo below) AND the adaptive-degradation controller's own
-  // suspend()/resume() (right below) both end up calling
-  // enableVideo()/disableVideo() (use-webrtc-p2p.ts) on the same
-  // WebRTCService instances. Vague 76 guarded the manual double-click but
-  // left this cross-path race open ("reste ouvert": no MUTUAL synchronization
-  // between a manual toggle and an automatic suspend/resume) — either
-  // ordering acquires two independent camera tracks via getUserMedia, exactly
-  // like the double-click bug: the LOSING track is never referenced by
-  // anything that could stop it, an orphaned camera capture surviving
-  // silently for the rest of the call.
+  // Re-entrancy guard for the manual video on/off path (handleToggleVideo
+  // below), which calls enableVideo()/disableVideo() (use-webrtc-p2p.ts) —
+  // Vague 76 guarded the manual double-click. The adaptive-degradation
+  // controller's own suspend()/resume() (right below) used to call those
+  // same track-mutating methods and shared this guard for that reason
+  // (Vague 82); since L6-3 they only flip a local `frozen` flag — no track
+  // mutation, so they can no longer race handleToggleVideo/handleSwitchCamera
+  // — but they still run through `runGuardedVideoToggle` below, which is
+  // harmless and avoids re-opening that synchronization question for a
+  // narrow, one-line change.
   const videoToggleInFlightRef = useRef(false);
 
   // Vague 92: same class of race, one hop over. `handleSwitchCamera` (below)
   // mutates the SAME localStream video track and the SAME peer-connection
-  // senders as this guard's operations, via its own, entirely disconnected
+  // senders as `handleToggleVideo`, via its own, entirely disconnected
   // `cameraSwitchInFlightRef` — Vague 82 unified manual-toggle-vs-auto-
-  // suspend/resume but left camera-switch-vs-either unguarded. A camera flip
-  // racing a manual toggle or an auto suspend/resume (e.g. the link degrades
-  // mid-flip) lets one path replaceTrack/stop a track the other is still
-  // mid-acquisition on, orphaning a camera capture or reviving video the
-  // user/controller just turned off. `runGuardedVideoToggle` and
+  // suspend/resume (back when auto suspend/resume also mutated the track;
+  // since L6-3 it no longer does) but left camera-switch-vs-manual-toggle
+  // unguarded. A camera flip racing a manual toggle (e.g. a rapid
+  // flip-then-turn-off) lets one path replaceTrack/stop a track the other
+  // is still mid-acquisition on, orphaning a camera capture or reviving
+  // video the user just turned off. `runGuardedVideoToggle` and
   // `handleSwitchCamera` now check EACH OTHER's ref in addition to their own.
   const cameraSwitchInFlightRef = useRef(false);
 
@@ -273,14 +264,33 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   }, []);
 
-  // Call-wide audio-only survival. Feeds the worst-of-the-call aggregate
-  // quality into a hysteresis state machine that DROPS outbound video to
-  // audio-only after sustained 'poor' quality (so the call survives a link
-  // that can't carry even minimal video for whoever is struggling) and
-  // brings it back once the link has clearly recovered. The user's camera
-  // intent (controls.videoEnabled) is authoritative — the controller never
-  // re-enables video the user turned off.
-  //
+  // Call-wide network-survival freeze (L6-3). Feeds the worst-of-the-call
+  // aggregate quality into a hysteresis state machine that, after sustained
+  // 'poor' quality, FREEZES outbound video (pins every peer's encoder to the
+  // near-still 'frozen' floor via usePerPeerVideoTier below — no track
+  // mutation, no renegotiation, no `call:toggle-video` to the peer) so the
+  // call survives a link that can't carry even minimal motion, and thaws it
+  // once the link has clearly recovered. The user's camera intent
+  // (controls.videoEnabled) is authoritative — the controller never
+  // re-enables video the user turned off. This is a LOCAL freeze flag; it
+  // never disables the track or tells the peer, so the peer keeps rendering
+  // our last (near-still) frame instead of an avatar placeholder.
+  const [videoFrozen, setVideoFrozen] = useState(false);
+
+  // Mirrors useAdaptiveDegradation's own "user turned the camera off: forget
+  // survival state" reset (use-adaptive-degradation.ts) — that reset puts
+  // its internal state machine back in `sending: true`, from which `resume()`
+  // is unreachable until a FRESH poor→good cycle occurs. Without this,
+  // freezing, then manually cycling the camera off/on, would leave
+  // `videoFrozen` stuck true — silently pinning every peer's fresh track to
+  // the 2 fps floor for the rest of the call even on a since-recovered link,
+  // with no automatic path left to ever clear it.
+  useEffect(() => {
+    if (!controls.videoEnabled) {
+      setVideoFrozen(false);
+    }
+  }, [controls.videoEnabled]);
+
   // applyTier is intentionally a no-op here: per-peer bitrate/tier shedding
   // is now owned by usePerPeerVideoTier below (Vague 143) — applying the
   // SAME tier call-wide, from the worst-of-the-call aggregate, would
@@ -292,16 +302,14 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const degradationActions = useMemo<AdaptiveDegradationActions>(() => ({
     applyTier: () => { /* per-peer tier controller owns bitrate shedding now */ },
     suspend: () => runGuardedVideoToggle(async () => {
-      await disableVideo();
-      emitVideoToggle(false);
+      setVideoFrozen(true);
       toast.warning(t('toasts.videoSuspendedPoorConnection'));
     }),
     resume: () => runGuardedVideoToggle(async () => {
-      await enableVideo();
-      emitVideoToggle(true);
+      setVideoFrozen(false);
       toast.success(t('toasts.videoResumed'));
     }),
-  }), [disableVideo, enableVideo, emitVideoToggle, runGuardedVideoToggle, t]);
+  }), [runGuardedVideoToggle, t]);
 
   const { videoSuspended } = useAdaptiveDegradation({
     qualityStats,
@@ -309,16 +317,18 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     actions: degradationActions,
   });
 
-  // Per-peer bitrate/tier shedding (Vague 143): each peer's OWN link quality
-  // drives its OWN outbound encoder tier, independent of every other peer —
-  // a single struggling peer in a group call no longer drags everyone else's
-  // video down to the same tier. Orthogonal to (and unsynchronized with) the
-  // call-wide suspend/resume survival above: applyQualityTierToPeer is a
-  // pure setParameters() call with no track mutation, so it cannot race the
-  // manual-toggle/camera-switch guards that suspend()/resume() go through.
+  // Per-peer bitrate/tier shedding (Vague 143), and the sole actuator of the
+  // call-wide network-survival freeze above (L6-3, via the `frozen` flag):
+  // each peer's OWN link quality drives its OWN outbound encoder tier,
+  // independent of every other peer, EXCEPT while `videoFrozen` is true, in
+  // which case every peer is pinned to the 'frozen' floor regardless of its
+  // own reading. applyQualityTierToPeer is a pure setParameters() call with
+  // no track mutation, so it cannot race the manual-toggle/camera-switch
+  // guards that only handleToggleVideo/handleSwitchCamera go through.
   usePerPeerVideoTier({
     perPeerStats,
     userWantsVideo: controls.videoEnabled,
+    frozen: videoFrozen,
     applyTierToPeer: (peerId, tier) => {
       applyQualityTierToPeer(peerId, tier).catch(() => { /* best effort */ });
     },
@@ -485,7 +495,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         logger.info('[VideoCallInterface]', 'Cleaning up call on unmount/unload - callId: ' + currentCall.id);
         const socket = meeshySocketIOService.getSocket();
         if (socket && socket.connected) {
-          (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
+          socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId: currentCall.id });
         }
       }
     };
@@ -519,7 +529,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
+      socket.emit(CLIENT_EVENTS.CALL_TOGGLE_AUDIO, { callId, enabled: newEnabled });
     }
   };
 
@@ -546,7 +556,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
       const socket = meeshySocketIOService.getSocket();
       if (socket) {
-        (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
+        socket.emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled: newEnabled });
       }
     } finally {
       videoToggleInFlightRef.current = false;
@@ -635,7 +645,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
+      socket.emit(CLIENT_EVENTS.CALL_LEAVE, { callId });
     }
 
     // Reset immediately for instant UI feedback
@@ -658,7 +668,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     const socket = meeshySocketIOService.getSocket();
     if (!socket) return;
 
-    const handleParticipantLeft = (event: unknown) => {
+    const handleParticipantLeft = (event: CallParticipantLeftEvent) => {
       if (event.callId !== callId) return;
 
       // Vague 133 — `CallParticipantLeftEvent` has no `anonymousId` field

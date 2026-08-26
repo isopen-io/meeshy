@@ -215,6 +215,18 @@ export interface Attachment {
   readonly forwardedFromAttachmentId?: string;
   readonly isForwarded: boolean;
 
+  // ===== PROVENANCE =====
+  /**
+   * Le fichier sort de la caméra ou du micro DE L'APPLICATION.
+   *
+   * Déclaré par le client à l'envoi — lui seul le sait, et seulement à cet
+   * instant — puis relu tel quel par les feuilles qui proposent de PUBLIER le
+   * média : une capture n'a encore été vue par personne, l'ouvrir à un fil
+   * entier se confirme.
+   * @see packages/shared/utils/forward-to-publication.ts
+   */
+  readonly capturedInApp: boolean;
+
   // ===== VIEW-ONCE & BLUR =====
   readonly isViewOnce: boolean;
   readonly maxViewOnceCount?: number;
@@ -334,6 +346,21 @@ export interface AttachmentMetadata {
  */
 export interface UploadedAttachmentResponse {
   readonly id: string;
+  /**
+   * DETTE DE TYPE, mesurée au lot W7bis : le chemin résumable (TUS) rend le
+   * MÊME corps pour un `MessageAttachment` et pour un `PostMedia`, et un
+   * `PostMedia` n'appartient à AUCUN message — ce champ est donc absent sur
+   * tout média de publication, là où le type le déclare requis. Inoffensif
+   * aujourd'hui (aucun consommateur d'un média de publication ne le lit :
+   * `MediaAccessibilityFields`, `qualifiesAsReel`, `optimisticMedia`,
+   * `mediaIds` et `StoryComposer` ne lisent qu'id/mimeType/fileUrl/duration),
+   * mais le type ne protège plus rien sur ce chemin. Le retrait de la dette
+   * est un SPLIT : `UploadedMediaResponse` (le noyau réellement rendu par les
+   * deux chemins) dont cette interface hériterait en y ajoutant les champs de
+   * message. Non fait ici : les visionneuses de message
+   * (`AudioAttachment`, `DocumentAttachment`, `AttachmentGallery`,
+   * `MessageAttachments`) lisent ce champ et sont hors du périmètre du lot.
+   */
   readonly messageId: string;
   readonly fileName: string;
   readonly originalName: string;
@@ -414,6 +441,33 @@ export const UPLOAD_LIMITS = {
  * la duplique et le test `attachment.test.ts` fige la valeur des deux côtés.
  */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 199;
+
+/**
+ * Contextes d'upload TUS qui produisent un `PostMedia` (par opposition à un
+ * `MessageAttachment`). Vocabulaire PARTAGÉ entre le handler d'upload du
+ * gateway (`onUploadCreate`/`onUploadFinish`, rejet avant le premier octet
+ * puis choix de la table) et le transport web des composers de publication
+ * (`resolveAttachmentTransport`) — les deux délèguent ici plutôt que de
+ * recopier la liste, pour qu'elles ne puissent plus diverger.
+ */
+export type PostMediaUploadContext = 'post' | 'story' | 'status' | 'comment';
+
+const POST_MEDIA_UPLOAD_CONTEXTS: readonly PostMediaUploadContext[] = ['post', 'story', 'status', 'comment'];
+
+export function isPostMediaUploadContext(context: unknown): context is PostMediaUploadContext {
+  return typeof context === 'string'
+    && (POST_MEDIA_UPLOAD_CONTEXTS as readonly string[]).includes(context);
+}
+
+/**
+ * Plafond du nombre de médias d'UNE publication (post/reel/story/status) —
+ * source de vérité unique pour `CreatePostSchema`/`UpdatePostSchema`
+ * (gateway) et pour le transport web des composers de publication.
+ * Historiquement recopié en dur : `.max(10)` × 2 côté gateway (création,
+ * édition), `MEDIA_LIMIT = 10` × 2 côté web (`ComposerDocumentSurface`,
+ * `PostComposer`) — cinq copies qu'aucun site ne tenait ensemble.
+ */
+export const MAX_POST_MEDIA = 10;
 
 export const MAX_CONCURRENT_UPLOADS = 3;
 
@@ -507,49 +561,60 @@ export const ACCEPTED_MIME_TYPES = {
 export type AcceptedMimeTypes = typeof ACCEPTED_MIME_TYPES;
 
 /**
+ * Retire les paramètres d'un type MIME avant comparaison — `audio/webm;codecs=opus`
+ * → `audio/webm`, `text/plain; charset=utf-8` → `text/plain`. Site UNIQUE
+ * partagé par les six type-guards : le nettoyage doit être identique sur toutes
+ * les familles média, sans quoi une même entrée paramétrée est classée
+ * différemment selon sa seule famille (défaut It. 267 — seuls audio/vidéo
+ * nettoyaient, image/text/document/code non).
+ *
+ * Repli sur l'original quand `split(';')[0]` est vide (entrée commençant par
+ * `;`) : la chaîne intacte ne matchera aucune liste, jamais un faux positif.
+ */
+function stripMimeParameters(mimeType: string): string {
+  return (mimeType.split(';')[0] || mimeType).trim();
+}
+
+/**
  * Type guard pour vérifier si un MIME type est une image
  */
 export function isImageMimeType(mimeType: string): mimeType is ImageMimeType {
-  return (ACCEPTED_MIME_TYPES.IMAGE as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.IMAGE as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est audio
  */
 export function isAudioMimeType(mimeType: string): mimeType is AudioMimeType {
-  // Nettoyer le MIME type en enlevant les paramètres (ex: audio/webm;codecs=opus -> audio/webm)
-  const cleanMimeType = (mimeType.split(';')[0] || mimeType).trim();
-  return (ACCEPTED_MIME_TYPES.AUDIO as unknown as string[]).includes(cleanMimeType);
+  return (ACCEPTED_MIME_TYPES.AUDIO as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est vidéo
  */
 export function isVideoMimeType(mimeType: string): mimeType is VideoMimeType {
-  // Nettoyer le MIME type en enlevant les paramètres (ex: video/webm;codecs=vp8 -> video/webm)
-  const cleanMimeType = (mimeType.split(';')[0] || mimeType).trim();
-  return (ACCEPTED_MIME_TYPES.VIDEO as unknown as string[]).includes(cleanMimeType);
+  return (ACCEPTED_MIME_TYPES.VIDEO as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est texte
  */
 export function isTextMimeType(mimeType: string): mimeType is TextMimeType {
-  return (ACCEPTED_MIME_TYPES.TEXT as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.TEXT as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est document
  */
 export function isDocumentMimeType(mimeType: string): mimeType is DocumentMimeType {
-  return (ACCEPTED_MIME_TYPES.DOCUMENT as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.DOCUMENT as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
  * Type guard pour vérifier si un MIME type est code
  */
 export function isCodeMimeType(mimeType: string): mimeType is CodeMimeType {
-  return (ACCEPTED_MIME_TYPES.CODE as unknown as string[]).includes(mimeType);
+  return (ACCEPTED_MIME_TYPES.CODE as unknown as string[]).includes(stripMimeParameters(mimeType));
 }
 
 /**
@@ -792,11 +857,18 @@ export type FormatFileSizeOptions = {
  * dans tout le monorepo. `decimals` permet d'ajuster la précision sans réimplémenter.
  */
 export function formatFileSize(bytes: number, options?: FormatFileSizeOptions): string {
-  if (bytes === 0) return '0 B';
+  // Non-finite (NaN/Infinity) et non-positif (0 ou négatif) ne sont pas des
+  // tailles exprimables : ramenés à zéro, comme le formatteur jumeau
+  // `formatClock` (duration-format.ts) le fait pour ses entrées invalides.
+  // Sans ce garde, `Math.log(bytes)` vaut NaN et l'index d'unité sortait de la
+  // plage → `FILE_SIZE_UNITS[-1]`/`[NaN]` = `undefined` (« NaN undefined »).
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
   const decimals = options?.decimals ?? 2;
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  const sizeIndex = Math.min(i, FILE_SIZE_UNITS.length - 1);
+  // Borne BASSE autant que haute : pour `0 < bytes < 1`, `i` est négatif — sans
+  // le `Math.max(_, 0)`, l'index restait négatif et `0.5` rendait « 512 undefined ».
+  const sizeIndex = Math.min(Math.max(i, 0), FILE_SIZE_UNITS.length - 1);
   return `${parseFloat((bytes / Math.pow(k, sizeIndex)).toFixed(decimals))} ${FILE_SIZE_UNITS[sizeIndex]}`;
 }
 

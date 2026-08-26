@@ -162,4 +162,73 @@ final class FrenchDefaultValueRatchetTests: XCTestCase {
             settled.joined(separator: "\n")
         )
     }
+
+    // MARK: - Présente au catalogue ≠ traduite en français
+
+    /// **Le trou que ce cliquet laissait ouvert.**
+    ///
+    /// Il ne compare qu'une chose : « clé employée en code avec un
+    /// `defaultValue` français » contre « clé PRÉSENTE au catalogue ». Une clé
+    /// inscrite au catalogue avec six traductions et AUCUNE entrée `fr`
+    /// passait donc au vert — alors qu'à l'écran, en français, iOS affiche
+    /// l'identifiant brut.
+    ///
+    /// Constaté le 2026-08-24 sur signalement utilisateur : la fiche d'un
+    /// participant s'ouvrait pleine de `participantProfile.language`,
+    /// `participantProfile.country`… 67 clés symboliques étaient dans ce cas,
+    /// dont 39 pour cette seule feuille. Le `defaultValue` du code ne sauve
+    /// rien ici : il ne sert qu'à l'extraction et à la clé ABSENTE.
+    ///
+    /// La langue source du catalogue étant `fr`, une clé qui EST déjà une
+    /// phrase française (« Cette action est irréversible ») se passe
+    /// légitimement d'entrée `fr` — sa clé fait la valeur. Le test ne vise
+    /// donc que les clés SYMBOLIQUES : un identifiant à segments, sans espace.
+    func test_noSymbolicKey_isCataloguedWithoutItsFrench() throws {
+        let catalogURL = iosRoot.appendingPathComponent("Meeshy/Localizable.xcstrings")
+        let data = try Data(contentsOf: catalogURL)
+        let strings = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"]
+            as? [String: [String: Any]] ?? [:]
+
+        let offenders = strings.compactMap { key, entry -> String? in
+            guard Self.isSymbolicKey(key) else { return nil }
+            guard !Self.notAnInterfaceString.contains(key) else { return nil }
+            guard let localizations = entry["localizations"] as? [String: Any],
+                  !localizations.isEmpty else { return nil }
+            return localizations["fr"] == nil ? key : nil
+        }.sorted()
+
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces clés sont au catalogue mais sans français : en français, l'app affiche "
+            + "leur identifiant à l'écran.\n" + offenders.joined(separator: "\n")
+        )
+    }
+
+    /// Contre-épreuve : la reconnaissance des clés symboliques doit bien
+    /// séparer un identifiant d'une phrase française employée comme clé.
+    func test_symbolicKeyRecognition_separatesIdentifiersFromFrenchSentences() {
+        XCTAssertTrue(Self.isSymbolicKey("participantProfile.language"))
+        XCTAssertTrue(Self.isSymbolicKey("a11y.delivery.sent"))
+        XCTAssertTrue(Self.isSymbolicKey("common.clear-search"))
+        XCTAssertFalse(Self.isSymbolicKey("Cette action est irréversible."))
+        XCTAssertFalse(Self.isSymbolicKey("%@ caractères"))
+        XCTAssertFalse(Self.isSymbolicKey("Annuler"))
+    }
+
+    /// Un identifiant : au moins deux segments alphanumériques séparés par
+    /// `.`, `_` ou `-`, et jamais d'espace.
+    private static func isSymbolicKey(_ key: String) -> Bool {
+        guard !key.contains(" "), key.contains(".") || key.contains("_") || key.contains("-") else { return false }
+        guard let first = key.first, first.isLetter else { return false }
+        let segments = key.split(whereSeparator: { $0 == "." || $0 == "_" || $0 == "-" })
+        guard segments.count >= 2 else { return false }
+        return segments.allSatisfy { segment in
+            segment.allSatisfy { $0.isLetter || $0.isNumber || "%@{}".contains($0) }
+        }
+    }
+
+    /// Clés qui ressemblent à un identifiant sans en être un. `Jean-Pierre`
+    /// est un NOM employé comme clé d'exemple : la clé fait la valeur, en
+    /// français comme ailleurs.
+    private static let notAnInterfaceString: Set<String> = ["Jean-Pierre"]
 }

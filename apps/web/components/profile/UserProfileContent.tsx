@@ -86,6 +86,25 @@ export interface UserProfileContentProps {
   readonly onBeforeNavigate?: () => void;
 }
 
+type ReceivedUserStatus = {
+  readonly isOnline: boolean;
+  readonly lastActiveAt?: Date | null;
+};
+
+/**
+ * `user:status` — la valeur REÇUE gouverne (chantier « Confidentialité de la
+ * présence », F12 ; jumeau hors store de `applyStatusUpdate`, user-store). Un
+ * statut MASQUÉ arrive `isOnline:false, lastActiveAt:null` : un `null` EFFACE
+ * l'ancien instant, sinon la règle 1/3/5 en dériverait encore away/idle
+ * pendant 5 min. Rien n'est fabriqué non plus sur `isOnline:true` sans
+ * horodatage — `getUserPresenceStatus` rend déjà `online` dans ce cas, et un
+ * `new Date()` inventé deviendrait un « Vu il y a N min » faux dès que le
+ * drapeau retombe. Le type partagé `User.lastActiveAt: Date` ne modélise pas
+ * la présence masquée : forme absente (`undefined`), comme le store.
+ */
+const withReceivedStatus = (prevUser: User, received: ReceivedUserStatus): User =>
+  ({ ...prevUser, isOnline: received.isOnline, lastActiveAt: received.lastActiveAt ?? undefined }) as User;
+
 export function UserProfileContent({
   userId,
   layout = 'page',
@@ -113,13 +132,7 @@ export function UserProfileContent({
   const { } = useSocketIOMessaging({
     onUserStatus: (statusUserId: string, username: string, isOnline: boolean, lastActiveAt?: Date | null) => {
       if (statusUserId === userId || statusUserId === user?.id) {
-        setUser(prevUser => prevUser
-          ? {
-              ...prevUser,
-              isOnline,
-              lastActiveAt: lastActiveAt ?? (isOnline ? new Date() : prevUser.lastActiveAt),
-            }
-          : null);
+        setUser(prevUser => (prevUser ? withReceivedStatus(prevUser, { isOnline, lastActiveAt }) : null));
       }
     }
   });

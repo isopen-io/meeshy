@@ -11,6 +11,11 @@ import MeeshyUI
 
 @MainActor
 final class OrientationManager: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     static let shared = OrientationManager()
 
     @Published var orientationLock: UIInterfaceOrientationMask = .portrait
@@ -62,6 +67,11 @@ struct FullscreenAVPlayerLayerView: UIViewRepresentable {
     }
 
     final class FullscreenPlayerUIView: UIView {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
         let playerLayer = AVPlayerLayer()
 
         override init(frame: CGRect) {

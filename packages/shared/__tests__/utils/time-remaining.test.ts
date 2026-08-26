@@ -39,4 +39,15 @@ describe('formatTimeRemaining', () => {
     expect(formatTimeRemaining(NOW + 60 * MIN - 1, NOW)).toBe('59m');
     expect(formatTimeRemaining(NOW + 60 * MIN, NOW)).toBe('1h');
   });
+
+  it('returns null for a non-finite target rather than "NaNm"/"Infinityh"', () => {
+    // A missing or malformed `expiresAt` reaches this law as `new Date(x).getTime()`
+    // → NaN (e.g. `new Date(undefined)`), which must degrade to the already-null
+    // "no countdown" branch (StatusBar renders "Expire", StoryViewer renders nothing),
+    // never a user-visible "NaNm". Mirrors `formatClock`/`isExpired` non-finite guards.
+    expect(formatTimeRemaining(Number.NaN, NOW)).toBeNull();
+    expect(formatTimeRemaining(new Date(undefined as unknown as string).getTime(), NOW)).toBeNull();
+    expect(formatTimeRemaining(Number.POSITIVE_INFINITY, NOW)).toBeNull();
+    expect(formatTimeRemaining(NOW + 5 * MIN, Number.NaN)).toBeNull();
+  });
 });

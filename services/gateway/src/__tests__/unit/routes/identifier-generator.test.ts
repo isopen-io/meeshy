@@ -17,13 +17,14 @@ jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
 }));
 
 import {
-  generateInitialLinkId,
-  generateFinalLinkId,
+  generateShareLinkId,
+  generateUniqueShareLinkId,
   generateConversationIdentifier,
   ensureUniqueConversationIdentifier,
   ensureUniqueShareLinkIdentifier,
   getPredictedModelType,
 } from '../../../routes/conversations/utils/identifier-generator';
+import * as linkHelpers from '../../../routes/links/utils/link-helpers';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,39 +45,25 @@ beforeEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// generateInitialLinkId
+// Identifiants de LIEN DE PARTAGE — ré-exportés, jamais recopiés
+//
+// SUPERSÈDE `generateInitialLinkId` / `generateFinalLinkId`, dont ce fichier
+// portait une COPIE mot pour mot de l'implémentation de `link-helpers.ts` —
+// deux exemplaires d'une même loi, dont l'un pouvait dériver sans que rien ne
+// rougisse. `sharing.ts` importait la copie, `creation.ts` l'original : le
+// raccourcissement du linkId (2026-08-23) n'aurait touché qu'un des deux
+// chemins de création.
+//
+// La loi elle-même est testée UNE fois, dans `links/link-helpers.test.ts`.
+// Ici on n'atteste que l'IDENTITÉ — c'est ce qui interdit qu'une copie
+// revienne.
 // ---------------------------------------------------------------------------
 
-describe('generateInitialLinkId', () => {
-  it('test_generateInitialLinkId_always_returnsTimestampUnderscoreRandom', () => {
-    const id = generateInitialLinkId();
-    // Format: yymmddhhm_<random>
-    expect(id).toMatch(/^\d{10}_[a-z0-9]+$/);
-  });
-
-  it('test_generateInitialLinkId_calledTwice_producesDistinctIds', () => {
-    const id1 = generateInitialLinkId();
-    const id2 = generateInitialLinkId();
-    // Randomness makes them almost certainly different
-    // We can at least assert both have the right shape
-    expect(id1).toMatch(/^\d{10}_/);
-    expect(id2).toMatch(/^\d{10}_/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// generateFinalLinkId
-// ---------------------------------------------------------------------------
-
-describe('generateFinalLinkId', () => {
-  it('test_generateFinalLinkId_withBothArgs_returnsMshyPrefixedFormat', () => {
-    const result = generateFinalLinkId('abc123', '2606171200_xyz');
-    expect(result).toBe('mshy_abc123.2606171200_xyz');
-  });
-
-  it('test_generateFinalLinkId_preservesDotsInInitialId', () => {
-    const result = generateFinalLinkId('shareId', 'initial.with.dots');
-    expect(result).toBe('mshy_shareId.initial.with.dots');
+describe('share link identifiers are re-exported, never re-implemented', () => {
+  it('test_shareLinkGenerators_areTheSameFunctionObjects_asLinkHelpers', () => {
+    expect(generateShareLinkId).toBe(linkHelpers.generateShareLinkId);
+    expect(generateUniqueShareLinkId).toBe(linkHelpers.generateUniqueShareLinkId);
+    expect(ensureUniqueShareLinkIdentifier).toBe(linkHelpers.ensureUniqueShareLinkIdentifier);
   });
 });
 
@@ -176,61 +163,6 @@ describe('ensureUniqueShareLinkIdentifier', () => {
     expect(result).toBe('my-link');
   });
 
-  it('test_ensureUniqueShareLink_emptyString_generatesDefault', async () => {
-    mockShareLinkFindFirst.mockResolvedValue(null);
-    const prisma = makePrisma();
-
-    const result = await ensureUniqueShareLinkIdentifier(prisma, '');
-
-    expect(result).toMatch(/^mshy_link-\d+-[a-z0-9]+$/);
-  });
-
-  it('test_ensureUniqueShareLink_whitespaceOnly_generatesDefault', async () => {
-    mockShareLinkFindFirst.mockResolvedValue(null);
-    const prisma = makePrisma();
-
-    const result = await ensureUniqueShareLinkIdentifier(prisma, '   ');
-
-    expect(result).toMatch(/^mshy_link-\d+-[a-z0-9]+$/);
-  });
-
-  it('test_ensureUniqueShareLink_baseExists_addsTimestampSuffix', async () => {
-    mockShareLinkFindFirst
-      .mockResolvedValueOnce({ id: 'existing' }) // base exists
-      .mockResolvedValueOnce(null);               // timestamp variant free
-    const prisma = makePrisma();
-
-    const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
-
-    // base-YYYYmmddHHMMSS format
-    expect(result).toMatch(/^my-link-\d{14}$/);
-  });
-
-  it('test_ensureUniqueShareLink_baseAndTimestampExist_addsCounter', async () => {
-    mockShareLinkFindFirst
-      .mockResolvedValueOnce({ id: 'existing' })         // base exists
-      .mockResolvedValueOnce({ id: 'existing-ts' })      // timestamp variant exists
-      .mockResolvedValueOnce(null);                       // counter-1 variant is free
-    const prisma = makePrisma();
-
-    const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
-
-    expect(result).toMatch(/^my-link-\d{14}-1$/);
-  });
-
-  it('test_ensureUniqueShareLink_firstTwoCountersBusy_returnsCounter2', async () => {
-    mockShareLinkFindFirst
-      .mockResolvedValueOnce({ id: '1' })   // base exists
-      .mockResolvedValueOnce({ id: '2' })   // timestamp exists
-      .mockResolvedValueOnce({ id: '3' })   // counter-1 exists
-      .mockResolvedValueOnce(null);          // counter-2 free
-    const prisma = makePrisma();
-
-    const result = await ensureUniqueShareLinkIdentifier(prisma, 'my-link');
-
-    expect(result).toMatch(/^my-link-\d{14}-2$/);
-  });
-
   it('test_ensureUniqueShareLink_trimsTrailingSpaces', async () => {
     mockShareLinkFindFirst.mockResolvedValue(null);
     const prisma = makePrisma();
@@ -239,6 +171,11 @@ describe('ensureUniqueShareLinkIdentifier', () => {
 
     expect(result).toBe('my-link');
   });
+
+  // Les autres branches — repli compact sur chaîne vide, suffixe ALÉATOIRE au
+  // lieu d'un horodatage, escalade bornée au lieu d'un `while (true)` — sont
+  // attestées UNE fois, dans `links/link-helpers.test.ts`, sur la fonction que
+  // ce module ré-exporte (identité vérifiée plus haut).
 });
 
 // ---------------------------------------------------------------------------

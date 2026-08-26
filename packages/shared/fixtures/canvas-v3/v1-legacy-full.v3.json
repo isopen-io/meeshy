@@ -156,6 +156,7 @@
           }
         }
       ],
+      "carrierAspect": 1.7777,
       "timelineDuration": 9.5,
       "opening": {
         "type": "fade"

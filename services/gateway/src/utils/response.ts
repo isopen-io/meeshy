@@ -148,6 +148,25 @@ export function sendConflict(
 }
 
 /**
+ * Send a 410 Gone error — la ressource a EXISTÉ et n'existe plus, et cette
+ * disparition est définitive.
+ *
+ * Distinct d'un 404 : un 404 dit « je ne trouve pas », ce qui laisse un
+ * client réessayer légitimement. Un 410 dit « ton geste a bien eu lieu, son
+ * résultat n'est plus là » — c'est le verdict qu'attend une file durable dont
+ * la ligne rejoue une mutation dont l'auteur a entre-temps supprimé le
+ * résultat : réessayer ne le ferait pas revenir, il ne resterait qu'à le
+ * recréer, ce qui n'est PAS ce que la ligne demandait.
+ */
+export function sendGone(
+  reply: FastifyReply,
+  error: string,
+  options?: { message?: string; code?: string }
+): void {
+  sendError(reply, 410, error, options);
+}
+
+/**
  * Send a 426 Upgrade Required error — le client parle un format du passé.
  * Les détails (`minVersion`, `storeUrl`) sont étalés À LA RACINE par sendError.
  */

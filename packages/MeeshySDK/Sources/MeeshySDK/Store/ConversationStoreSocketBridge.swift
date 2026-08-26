@@ -41,6 +41,11 @@ import Combine
 /// hops to the target actor via `Task { await … }`.
 @MainActor
 public final class ConversationStoreSocketBridge {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
     public static let shared = ConversationStoreSocketBridge()
 
     private var cancellables = Set<AnyCancellable>()
@@ -139,7 +144,11 @@ public final class ConversationStoreSocketBridge {
         // vide retirerait une ligne au hasard.
         participantLeft.sink { event in
             Task {
-                guard let me = await currentUserId(), !me.isEmpty, event.userId == me else { return }
+                // `names(_:)` et non `userId == me` : une identité iOS est un
+                // `User.id` pour un compte et un `Participant.id` pour un
+                // visiteur de lien partagé. L'événement porte les deux faces —
+                // ne comparer qu'à l'une rate systématiquement l'autre.
+                guard let me = await currentUserId(), event.names(me) else { return }
                 await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
             }
         }.store(in: &cancellables)
@@ -152,7 +161,7 @@ public final class ConversationStoreSocketBridge {
         // conversation inconnue.
         participantBanned.sink { event in
             Task {
-                guard let me = await currentUserId(), !me.isEmpty, event.userId == me else { return }
+                guard let me = await currentUserId(), event.names(me) else { return }
                 await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: event.conversationId))
             }
         }.store(in: &cancellables)

@@ -11,6 +11,11 @@ import Foundation
 /// `LivingSummaryViewModel` (Focal/Summary), la vue observe `@Published`.
 @MainActor
 public final class RiverNavigationController: ObservableObject {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
+    // défaut) → double-free `pointer being freed was not allocated` (abrt)
+    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
+    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
+    nonisolated deinit {}
 
     /// Position courante — colonne + rang.
     @Published public private(set) var cursor: RiverLaneResolver.RiverCursor

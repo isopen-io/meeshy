@@ -5,8 +5,22 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
-import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
-import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired } from '../../utils/response';
+import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams, PublishAttachmentSchema } from './types';
+import { MediaService } from '../../services/MediaService';
+import {
+  planAttachmentPublication,
+  postMediaFieldsFromAttachment,
+  defaultVisibilityForPostType,
+} from '../../services/posts/publishAttachment';
+// Les prédicats PARTAGÉS de protection — les mêmes qui gouvernent la bannière de
+// notification (cycle 125). La protection se lit aux DEUX niveaux : le message
+// parent (`protectedPreview`, où vit une vraie vue unique / flou / éphémère /
+// chiffré) et la pièce jointe (`maskedAttachment`). Les réutiliser, plutôt que
+// de réécrire la règle, garantit qu'un post publié ne fuit pas ce qu'un push
+// masque.
+import { protectedPreview, maskedAttachment } from '../../services/notifications/NotificationService';
+import { canAccessConversation } from '../conversations/utils/access-control';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
 import { MentionService } from '../../services/MentionService';
@@ -21,7 +35,7 @@ import {
 } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
-import { withMutationLog } from '../../utils/withMutationLog';
+import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
 import { WIRE_BROADCAST, wireReaderFromRequest, isCanvasV3, unclaimedCanvasMediaIds } from '../../services/posts/storyEffectsV3';
@@ -182,6 +196,231 @@ export function registerCoreRoutes(
   // Le bodyLimit global serveur (50MB) reste actif pour les routes d'upload
   // audio/TUS qui en ont besoin ; ici on durcit avant que Zod parse, évite
   // le DoS où un attaquant force 50MB de JSON à parser (CPU/RAM).
+  /**
+   * Publier une pièce jointe reçue en conversation — sans la retélécharger.
+   *
+   * La feuille de partage offre les conversations ET les destinations publiques.
+   * Le fichier existe déjà sur le stockage : le faire redescendre chez le client
+   * pour le remonter paierait deux fois la bande passante d'un octet immobile.
+   *
+   * Le fichier est DUPLIQUÉ, jamais partagé : un `PostMedia` pointant sur le
+   * fichier d'un `MessageAttachment` ferait de la suppression du post une
+   * suppression DANS la conversation — `reclaimMediaRowBytes` n'interroge que
+   * la table `Sound` avant d'effacer des octets, et les pièces jointes n'y
+   * figurent pas.
+   */
+  fastify.post('/posts/from-attachment', {
+    preValidation: [requiredAuth],
+    config: { rateLimit: createPostRouteRateLimitConfig('create') },
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      if (!authContext?.isAuthenticated || !authContext.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const parsed = PublishAttachmentSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
+      }
+
+      const attachment = await prisma.messageAttachment.findUnique({
+        where: { id: parsed.data.attachmentId },
+        select: {
+          id: true, messageId: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
+          originalName: true, width: true, height: true, duration: true, codec: true, thumbHash: true,
+          // Protection au niveau PIÈCE JOINTE (lue par `maskedAttachment`).
+          isViewOnce: true, isBlurred: true, effectFlags: true,
+          // Protection au niveau MESSAGE PARENT (lue par `protectedPreview`) —
+          // c'est LÀ que vit une vraie vue unique / flou / éphémère / chiffré.
+          // Une garde qui ne lisait que la pièce jointe laissait tout cela
+          // sortir EN CLAIR vers un post.
+          message: { select: {
+            conversationId: true,
+            conversation: { select: { identifier: true } },
+            messageType: true, isViewOnce: true, isBlurred: true, isEncrypted: true,
+            effectFlags: true, expiresAt: true, createdAt: true,
+          } },
+        },
+      });
+
+      // Le VERDICT de protection, composé par les prédicats partagés aux DEUX
+      // niveaux. `protectedPreview` couvre aussi l'éphémère (refusé, cohérent
+      // avec la bannière) ; `maskedAttachment` couvre la pièce jointe masquée.
+      const mediaProtected =
+        protectedPreview({
+          messageType: attachment?.message?.messageType ?? null,
+          isViewOnce: attachment?.message?.isViewOnce,
+          isBlurred: attachment?.message?.isBlurred,
+          isEncrypted: attachment?.message?.isEncrypted,
+          effectFlags: attachment?.message?.effectFlags,
+          expiresAt: attachment?.message?.expiresAt,
+          createdAt: attachment?.message?.createdAt,
+        }) !== null
+        || maskedAttachment({
+          isViewOnce: attachment?.isViewOnce,
+          isBlurred: attachment?.isBlurred,
+          effectFlags: attachment?.effectFlags,
+        });
+
+      // L'appartenance est établie AVANT de planifier : le plan lui-même refuse
+      // sans elle, mais lui donner un verdict d'accès faux le rendrait complice.
+      const conversationId = attachment?.message?.conversationId ?? null;
+      const isMember = conversationId
+        ? await canAccessConversation(
+            prisma,
+            authContext,
+            conversationId,
+            attachment?.message?.conversation?.identifier ?? conversationId,
+          )
+        : false;
+
+      const plan = planAttachmentPublication({
+        attachment: attachment
+          ? { ...attachment, messageId: attachment.messageId ?? null }
+          : null,
+        callerIsMemberOfConversation: isMember,
+        mediaIsProtected: mediaProtected,
+        target: parsed.data.target,
+      });
+
+      if (plan.ok === false) {
+        const { reason } = plan;
+        if (reason === 'forbidden') {
+          return sendForbidden(reply, 'Not a member of this conversation', { code: 'FORBIDDEN' });
+        }
+        if (reason === 'protected-media') {
+          return sendBadRequest(reply, 'This media is protected and cannot be published', { code: 'PROTECTED_MEDIA' });
+        }
+        if (reason === 'unpublishable-media') {
+          return sendBadRequest(reply, 'This media cannot be published', { code: 'UNPUBLISHABLE_MEDIA' });
+        }
+        return sendNotFound(reply, 'Attachment not found', { code: 'ATTACHMENT_NOT_FOUND' });
+      }
+
+      const media = new MediaService();
+      const duplicated = await media.duplicate(plan.plan.attachment.fileUrl);
+      const duplicatedThumbnail = plan.plan.attachment.thumbnailUrl
+        ? (await media.duplicate(plan.plan.attachment.thumbnailUrl)).fileUrl
+        : null;
+
+      const postMedia = await prisma.postMedia.create({
+        data: postMediaFieldsFromAttachment({
+          attachment: { ...plan.plan.attachment, messageId: plan.plan.attachment.messageId },
+          duplicated,
+          duplicatedThumbnailUrl: duplicatedThumbnail,
+          uploaderId: authContext.registeredUser.id,
+        }),
+      });
+
+      const postType = plan.plan.postType;
+      const post = await postService.createPost(
+        {
+          type: postType,
+          // La visibilité par défaut SUIT le type : une STORY tombe sur FRIENDS
+          // (parité avec `POST /posts`), tout le reste sur PUBLIC. Une constante
+          // unique rendait toute story publiée depuis un partage PUBLIQUE.
+          visibility: parsed.data.visibility ?? defaultVisibilityForPostType(postType),
+          content: parsed.data.content
+            ? SecuritySanitizer.sanitizeText(parsed.data.content)
+            : undefined,
+          mediaIds: [postMedia.id],
+        },
+        authContext.registeredUser.id,
+      );
+
+      const postId = (post as any).id as string;
+      const postContent = (post as any).content as string | undefined;
+
+      // Le Prisme couvre AUSSI la légende d'un média publié — sans ce
+      // déclenchement, le texte d'un REEL/POST from-attachment n'était jamais
+      // traduit. Parité stricte avec `POST /posts` : STORY exclue (son `content`
+      // est déjà traduit par le pipeline audience-driven du service), langue
+      // source = celle persistée par `createPost` (SSOT), fire-and-forget.
+      const shouldTranslateContent = Boolean(parsed.data.content) && postType !== 'STORY';
+      if (shouldTranslateContent) {
+        try {
+          PostTranslationService.shared.translatePost(
+            postId,
+            parsed.data.content,
+            (post as any).originalLanguage,
+            authContext.registeredUser.id,
+          ).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: translate post failed'));
+        } catch {
+          // PostTranslationService not initialized — skip silently
+        }
+      }
+
+      // La publication n'est plus SILENCIEUSE : elle résout les mentions du
+      // contenu et diffuse en temps réel, exactement comme `POST /posts`. La
+      // charge de from-attachment n'a pas de canal `mentions` déclaré — seul le
+      // TEXTE de la légende nomme, d'où `declared: undefined`.
+      const createdMentions = await resolvePostMentions({
+        prisma,
+        mentionService,
+        notificationService: fastify.notificationService,
+        post: {
+          id: postId,
+          authorId: authContext.registeredUser.id,
+          type: postType as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
+          visibility: (post as any).visibility as string | undefined,
+          visibilityUserIds: (post as any).visibilityUserIds as string[] | undefined,
+        },
+        content: postContent,
+        declared: undefined,
+        onError: (err: unknown) => {
+          fastify.log.error(`[POST /posts/from-attachment] post mention reconcile failed: ${err}`);
+        },
+      });
+
+      // Le jeu FINAL, relu APRÈS l'écriture des lignes — même raison qu'à
+      // `POST /posts` : `createPost` a chargé sa relation avant que ces lignes
+      // n'existent, la servir telle quelle rendrait `mentions: []` par
+      // construction.
+      const references = await finalReferences(postId, createdMentions, (err: unknown) => {
+        fastify.log.error(`[POST /posts/from-attachment] post reference reload failed: ${err}`);
+      });
+
+      const socialEvents = fastify.socialEvents;
+      if (socialEvents) {
+        // Charge utile d'AUDIENCE : neutre, sans les silencieuses — même règle
+        // que `POST /posts`.
+        const broadcastReferences = references && projectReferencesForViewer({
+          references,
+          authorId: authContext.registeredUser.id,
+          viewerId: undefined,
+        });
+        const broadcastPost = withMentions(
+          graftReferences(
+            hoistLocation(hoistTrackingLinks(post)) as unknown as Record<string, unknown>,
+            broadcastReferences
+          ),
+          WIRE_BROADCAST
+        ) as unknown as Post;
+        if (postType === 'STORY') {
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast story created failed'));
+        } else if (postType === 'STATUS') {
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast status created failed'));
+        } else {
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts/from-attachment]: broadcast post created failed'));
+        }
+      }
+
+      // La réponse va à l'AUTEUR, et lui voit tout — y compris les silencieuses
+      // qu'il vient de poser (parité avec `POST /posts`).
+      return sendSuccess(
+        reply,
+        withMentions(
+          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), references),
+          wireReaderFromRequest(request as UnifiedAuthRequest)
+        ),
+        { message: 'Published' }
+      );
+    } catch (error) {
+      return sendInternalError(reply, 'Failed to publish attachment', { code: 'PUBLISH_FAILED' });
+    }
+  });
+
   fastify.post('/posts', {
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('create') },
@@ -216,6 +455,10 @@ export function registerCoreRoutes(
         fastify,
         userId: authContext.registeredUser.id,
         kind: 'createPost',
+        // `diverges` — voir `ReplayCost` : chaque exécution INSÈRE une ligne.
+        // Rejouer sur un résultat disparu fabriquerait un doublon (contenu
+        // supprimé qui ressuscite), d'où le 410 rendu par le catch de la route.
+        replayCost: 'diverges',
         op: () => postService.createPost({
           ...parsed.data,
           content: parsed.data.content !== undefined ? SecuritySanitizer.sanitizeText(parsed.data.content) : undefined,
@@ -343,9 +586,14 @@ export function registerCoreRoutes(
           WIRE_BROADCAST
         ) as unknown as Post;
         if (postType === 'STORY') {
-          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
+          // U1 parity — voir `broadcastPostCreated` juste en dessous : sans
+          // l'écho du cmid, une STORY créée hors-ligne (dont un repost via
+          // `POST /posts { repostOfId }`) ne pouvait jamais réconcilier son
+          // item optimiste avec la story serveur.
+          socialEvents.broadcastStoryCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast story created failed'));
         } else if (postType === 'STATUS') {
-          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
+          // U1 parity — même raison que STORY ci-dessus.
+          socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch((err) => fastify.log.warn({ err }, '[POST /posts]: broadcast status created failed'));
         } else {
           // U1 — echo the request cmid so an offline author reconciles its
           // optimistic temp post (keyed by cmid) with this server post.
@@ -391,6 +639,14 @@ export function registerCoreRoutes(
         { statusCode: 201 }
       );
     } catch (error) {
+      // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
+      // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
+      // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
+      // disparaître. 410 le dit exactement : le geste a eu lieu, il n'y a
+      // rien à refaire.
+      if (error instanceof MutationResultGone) {
+        return sendGone(reply, 'Post already applied, its result is gone', { code: 'MUTATION_RESULT_GONE' });
+      }
       fastify.log.error(`[POST /posts] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }

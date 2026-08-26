@@ -256,6 +256,26 @@ export interface NotificationContext {
   readonly translatedContent?: string;
   /** GW5 — Langue de `translatedContent` (code du Prisme, ex. `en`). */
   readonly translatedLanguage?: string;
+  /**
+   * Cycle 124 — le CONTENU du message, pour la bulle que la NSE iOS
+   * pré-enregistre avant même que l'application démarre
+   * (`NotificationService.prePersistMessage`). Elle lisait `userInfo["content"]`,
+   * une clé que le fil push n'a jamais portée : la bulle était VIDE jusqu'à la
+   * synchro REST, c'est-à-dire pendant toute la fenêtre où un
+   * pré-enregistrement a une raison d'être.
+   *
+   * L'ORIGINAL, jamais la traduction : c'est le champ d'origine du message, et
+   * `messageOriginalLanguage` en est l'étiquette. La traduction servie a déjà
+   * `translatedContent`. Posé seulement quand l'aperçu EST le contenu du
+   * message — un placeholder de protection ou la transcription d'un vocal n'en
+   * sont pas — et retiré, comme tout champ porteur de contenu, sous
+   * `showPreview: false`.
+   */
+  readonly messageContent?: string;
+  /** Cycle 124 — langue de `messageContent`. La NSE repliait sur « en », donc
+   *  étiquetait faux tout message non anglais et faussait la résolution du
+   *  Prisme sur la bulle pré-enregistrée. @see schema.prisma Message.originalLanguage */
+  readonly messageOriginalLanguage?: string;
 }
 
 /**

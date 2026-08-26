@@ -69,6 +69,12 @@ jest.mock('../../../../middleware/rate-limiter', () => ({
 }));
 
 jest.mock('../../../../utils/withMutationLog', () => ({
+  // Le module réel est ÉTALÉ d'abord : `MutationResultGone` est une CLASSE
+  // dont les routes font `instanceof`, et `withMutationOutcome` est le
+  // chemin réel du repost. Une usine qui ne rendait que `withMutationLog`
+  // les laissait à `undefined` — `instanceof undefined` lève un TypeError
+  // qui se déguise en 500 sur des chemins d'erreur sans rapport.
+  ...(jest.requireActual('../../../../utils/withMutationLog') as object),
   withMutationLog: jest.fn<any>().mockImplementation(({ op }: any) => op()),
 }));
 
@@ -1559,15 +1565,122 @@ describe('POST /posts/:id/share — no body uses ?? {} fallback (line 480)', () 
   });
 });
 
-describe('POST /posts/:id/repost — invalid body uses fallback isQuote:false (lines 675-676)', () => {
-  it('returns 201 using fallback when RepostSchema.safeParse fails', async () => {
+// GARDE RETOURNÉE (fil rouge du repost, 2026-08-25) — elle gravait le défaut.
+//
+// Elle exigeait 201 « using fallback when RepostSchema.safeParse fails ». Ce
+// repli (`parsed.success ? parsed.data : { isQuote: false }`) jetait D'UN SEUL
+// COUP `targetType`, `content` ET `visibility` — puis le service appliquait
+// `?? PostType.POST`. Une source ÉPHÉMÈRE repartait donc en post PERMANENT
+// sans le moindre signal, ce qui est exactement ce que la Loi 5 (« le repost
+// miroite ») interdit et ce que `RepostPostPayload.targetType` (obligatoire
+// dans la file durable iOS) existe pour ne pas avoir à contourner.
+//
+// La garde n'est pas supprimée : elle est RÉÉCRITE dans l'autre sens. Un corps
+// invalide se refuse.
+describe('POST /posts/:id/repost — un corps invalide est REFUSÉ, jamais déprécié en POST', () => {
+  it('returns 400 when RepostSchema.safeParse fails', async () => {
     const app = await buildApp();
     // Send isQuote as a non-boolean string to make RepostSchema.safeParse fail
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/repost`,
       payload: { isQuote: 'not-a-boolean' },
     });
-    expect(res.statusCode).toBe(201);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    await app.close();
+  });
+});
+
+// ─── DELETE /posts/:id/like — QUELLE réaction part ───────────────────────────
+//
+// Règle produit (2026-08-25) : re-toucher le cœur retire la DERNIÈRE réaction
+// posée, une par une. Le client connaît sa propre pile — la route doit donc
+// pouvoir recevoir l'emoji à retirer, et le transmettre TEL QUEL au service.
+// Elle n'avait aucun `Body` : le geste partait à l'aveugle et le service
+// tirait un élément d'un ensemble non ordonné, dont l'emoji alimentait ensuite
+// la diffusion. Un client optimiste qui retirait un pouce s'entendait annoncer
+// le départ d'un cœur, et se désynchronisait sur un geste RÉUSSI.
+
+describe('DELETE /posts/:id/like — emoji désigné', () => {
+  it('transmet l\'emoji du corps au service et diffuse CET emoji', async () => {
+    mockUnlikePost.mockClear();
+    mockUnlikePost.mockResolvedValueOnce({
+      id: 'post-001', removedEmoji: '👍',
+      post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 1, reactionSummary: { '❤️': 1 }, visibility: 'PUBLIC', visibilityUserIds: [] },
+    });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like`, payload: { emoji: '👍' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBe('👍');
+    expect((app as any).socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
+      expect.objectContaining({ emoji: '👍' }),
+      'author-1', 'PUBLIC', [],
+    );
+    await app.close();
+  });
+
+  it('corps absent ⇒ aucun emoji fabriqué : le service choisit la plus récente', async () => {
+    mockUnlikePost.mockClear();
+    mockUnlikePost.mockResolvedValueOnce({
+      id: 'post-001', removedEmoji: '😂',
+      post: { id: 'post-001', type: 'POST', authorId: 'author-1', likeCount: 0, reactionSummary: {}, visibility: 'PUBLIC', visibilityUserIds: [] },
+    });
+    const app = await buildApp({ withSocialEvents: true });
+
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}/like` });
+
+    expect(res.statusCode).toBe(200);
+    // Surtout PAS '❤️' : un défaut fabriqué ici rendrait le repli « la plus
+    // récente » inatteignable pour tout client déjà déployé.
+    expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBeUndefined();
+    expect((app as any).socialEvents.broadcastPostUnliked).toHaveBeenCalledWith(
+      expect.objectContaining({ emoji: '😂' }),
+      'author-1', 'PUBLIC', [],
+    );
+    await app.close();
+  });
+
+  it('emoji hors format ⇒ 400, jamais un retrait à l\'aveugle', async () => {
+    mockUnlikePost.mockClear();
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'DELETE', url: `/posts/${POST_ID}/like`,
+      payload: { emoji: 'pas-un-emoji-mais-une-phrase-entiere' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(mockUnlikePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('désignation VIDE ⇒ 400 : seule la clé ABSENTE vaut « pas de désignation »', async () => {
+    mockUnlikePost.mockClear();
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'DELETE', url: `/posts/${POST_ID}/like`,
+      payload: { emoji: '   ' },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(mockUnlikePost).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('les blancs autour de l\'emoji ne changent pas ce qui est désigné', async () => {
+    mockUnlikePost.mockClear();
+    const app = await buildApp();
+
+    await app.inject({
+      method: 'DELETE', url: `/posts/${POST_ID}/like`,
+      payload: { emoji: ' 👍 ' },
+    });
+
+    expect(mockUnlikePost.mock.calls.at(-1)?.[2]).toBe('👍');
     await app.close();
   });
 });

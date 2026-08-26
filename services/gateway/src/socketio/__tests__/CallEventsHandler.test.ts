@@ -44,7 +44,16 @@ const mockCallServiceResolveEndReason = jest.fn((reason?: string) => {
   }
 }) as jest.Mock<any>;
 
-jest.mock('../../services/CallService', () => ({
+jest.mock('../../services/CallService', () => {
+  class CallAlreadyEndedError extends Error {
+    readonly endReason: string;
+    constructor(endReason: string) {
+      super('CALL_ENDED: This call has already ended');
+      this.name = 'CallAlreadyEndedError';
+      this.endReason = endReason;
+    }
+  }
+  return {
   CallService: jest.fn().mockImplementation(() => ({
     initiateCall: (...a: unknown[]) => mockCallServiceInitiateCall(...a),
     joinCall: (...a: unknown[]) => mockCallServiceJoinCall(...a),
@@ -69,7 +78,9 @@ jest.mock('../../services/CallService', () => ({
     forceEndOrphanedCallSession: (...a: unknown[]) => mockCallServiceForceEndOrphanedCallSession(...a),
     resolveEndReason: (...a: unknown[]) => mockCallServiceResolveEndReason(...a),
   })),
-}));
+  CallAlreadyEndedError,
+  };
+});
 
 const mockValidateSocketEvent = jest.fn() as jest.Mock<any>;
 const mockIsValidationFailure = jest.fn((r: any) => !r.success) as jest.Mock<any>;

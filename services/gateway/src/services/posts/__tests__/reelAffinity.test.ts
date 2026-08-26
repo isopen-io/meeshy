@@ -110,6 +110,30 @@ describe('reelAffinityBreakdown — seed signals', () => {
     expect(bd.seedSameLanguage).toBe(0);
   });
 
+  // `originalLanguage` vient de `Post` (candidat) et du réel-seed, tous deux
+  // BRUTS de la base : un `===` compare les formes verbatim. Un candidat
+  // région-tagué (`'fr-FR'`) et un seed canonique (`'fr'`) sont la MÊME langue —
+  // le scoring doit les reconnaître via la SSOT `normalizeLanguageForDedup`.
+  it('seedSameLanguage matche un candidat région-tagué et un seed canonique', () => {
+    const seed = makeSeed({ originalLanguage: 'fr' });
+    const bd = reelAffinityBreakdown(makeCandidate({ originalLanguage: 'fr-FR' }), makeCtx({ seed }));
+    expect(bd.seedSameLanguage).toBe(W.seedSameLanguage);
+  });
+
+  it('seedSameLanguage matche un seed région-tagué et un candidat canonique', () => {
+    const seed = makeSeed({ originalLanguage: 'en-US' });
+    const bd = reelAffinityBreakdown(makeCandidate({ originalLanguage: 'en' }), makeCtx({ seed }));
+    expect(bd.seedSameLanguage).toBe(W.seedSameLanguage);
+  });
+
+  // Contre-épreuve : la canonicalisation ne fait JAMAIS matcher deux langues
+  // réellement distinctes (garde anti-troncature de la SSOT).
+  it('seedSameLanguage = 0 pour deux langues distinctes taguées', () => {
+    const seed = makeSeed({ originalLanguage: 'en-US' });
+    const bd = reelAffinityBreakdown(makeCandidate({ originalLanguage: 'fr-FR' }), makeCtx({ seed }));
+    expect(bd.seedSameLanguage).toBe(0);
+  });
+
   it('seedSharedMention = W.seedSharedMention when mention overlap', () => {
     const seed = makeSeed({ mentionedUserIds: new Set(['user-X', 'user-Y']) });
     const bd = reelAffinityBreakdown(
@@ -165,6 +189,22 @@ describe('reelAffinityBreakdown — viewer affinity signals', () => {
   it('viewerLanguage = 0 when candidate language not in viewer set', () => {
     const ctx = makeCtx({ viewerLanguages: new Set(['en']) });
     const bd = reelAffinityBreakdown(makeCandidate({ originalLanguage: 'fr' }), ctx);
+    expect(bd.viewerLanguage).toBe(0);
+  });
+
+  // `viewerLanguages` est canonicalisé à la source (`getViewerLanguages`), mais
+  // le `originalLanguage` du candidat arrive BRUT de la base. Un candidat
+  // région-tagué (`'fr-FR'`) doit matcher le set canonique du lecteur (`{'fr'}`)
+  // — sinon le réel perd le poids `viewerLanguage`, ranking dégradé silencieux.
+  it('viewerLanguage matche un candidat région-tagué contre le set canonique du lecteur', () => {
+    const ctx = makeCtx({ viewerLanguages: new Set(['fr', 'en']) });
+    const bd = reelAffinityBreakdown(makeCandidate({ originalLanguage: 'fr-FR' }), ctx);
+    expect(bd.viewerLanguage).toBe(W.viewerLanguage);
+  });
+
+  it('viewerLanguage = 0 pour un candidat tagué d’une langue absente du set', () => {
+    const ctx = makeCtx({ viewerLanguages: new Set(['en']) });
+    const bd = reelAffinityBreakdown(makeCandidate({ originalLanguage: 'fr-FR' }), ctx);
     expect(bd.viewerLanguage).toBe(0);
   });
 });

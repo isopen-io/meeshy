@@ -860,6 +860,21 @@ model MessageAttachment {
   isForwarded               Boolean @default(false)
 
   // =====================================================
+  // PROVENANCE
+  // =====================================================
+  /// Le fichier sort de la caméra ou du micro DE L'APPLICATION — il n'a donc
+  /// encore été vu par personne d'autre que celui qui l'a pris.
+  ///
+  /// Rien dans un fichier ne distingue une photo prise à l'instant d'une photo
+  /// choisie dans la galerie : seul le client qui a ouvert la caméra le sait, et
+  /// il ne le sait qu'AU MOMENT de la capture. C'est pourquoi la valeur est
+  /// écrite ici, à l'envoi, et jamais recalculée ensuite — publier ce média des
+  /// jours plus tard depuis la feuille de partage doit encore pouvoir demander
+  /// confirmation.
+  /// @see packages/shared/utils/forward-to-publication.ts
+  capturedInApp             Boolean @default(false)
+
+  // =====================================================
   // SECRET / VIEW-ONCE / BLUR FIELDS
   // =====================================================
   /// View-once attachment (disappears after user views it)
@@ -1233,15 +1248,19 @@ model AttachmentReaction {
   message     Message           @relation("MessageAttachmentReactions", fields: [messageId], references: [id], onDelete: Cascade)
   participant Participant       @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  // Single-reaction-per-user model: the key omits `emoji` on purpose so the DB
-  // itself enforces "at most one row per (attachment, participant)". This makes
-  // AttachmentReactionService.addAttachmentReaction's upsert atomic — two
-  // concurrent adds with different emojis now race on the SAME document instead
-  // of each inserting their own row (mirrors Reaction, see
-  // 2026-07-04-attachment-reaction-single-per-user-unique-index.mongodb.js).
-  // Multi-réactions (2026-08-18) : triplet — un participant empile
-  // plusieurs emojis distincts par pièce jointe (parité messages/posts).
+  // Multi-réactions (2026-08-18) : la clé est un TRIPLET et porte l'emoji — un
+  // participant empile plusieurs emojis distincts par pièce jointe, en parité
+  // avec les messages et les posts. Le seul plafond est applicatif :
+  // MAX_REACTIONS_PER_OBJECT, cinq par personne et par objet.
   // Index Mongo : 2026-08-18-attachment-reaction-multi-per-user-unique-index.mongodb.js
+  //
+  // Le paragraphe qui vivait ici jusqu'au 2026-08-25 décrivait le modèle
+  // ANTÉRIEUR (« the key omits `emoji` on purpose … at most one row per
+  // (attachment, participant) », index de 2026-07-04) : il était démenti quatre
+  // lignes plus bas par le triplet lui-même, et une session le lisant en
+  // concluait que les réactions multiples sont interdites par conception.
+  // Un commentaire périmé sur un schéma est lu comme la loi ; il est retiré,
+  // pas conservé « pour l'histoire » — l'historique vit dans git.
   @@unique([attachmentId, participantId, emoji], name: "attachment_participant_reaction")
   @@index([attachmentId])
   @@index([messageId])
@@ -1841,6 +1860,13 @@ model AdminBroadcast {
   sentAt             DateTime?
   completedAt        DateTime?
   errorMessage       String?
+  /// Canal IN-APP (notification système à chaque compte ciblé) — distinct du
+  /// canal e-mail ci-dessus, les deux se cumulent sur une même diffusion.
+  inAppSentById      String?  @db.ObjectId
+  inAppSentAt        DateTime?
+  inAppCompletedAt   DateTime?
+  inAppSentCount     Int      @default(0)
+  inAppFailedCount   Int      @default(0)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

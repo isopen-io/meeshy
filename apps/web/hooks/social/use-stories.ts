@@ -6,6 +6,7 @@ import { queryKeys } from '@/lib/react-query/query-keys';
 import { storyService } from '@/services/story.service';
 import { useAuthStore } from '@/stores/auth-store';
 import { markScopeNotificationsRead } from '@/lib/notifications/notification-read-sync';
+import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type { Post, PostVisibility } from '@meeshy/shared/types/post';
 import type { CreateStoryRequest } from '@/services/story.service';
 
@@ -50,7 +51,7 @@ export function useCreateStoryMutation() {
         id: `_optimistic_${Date.now()}`,
         authorId: currentUser?.id ?? '',
         type: 'STORY',
-        visibility: (newStory.visibility ?? 'FRIENDS') as PostVisibility,
+        visibility: (newStory.visibility ?? DEFAULT_PUBLICATION_VISIBILITY) as PostVisibility,
         /* istanbul ignore next -- media-only stories legitimately omit content */
         content: newStory.content ?? null,
         storyEffects: newStory.storyEffects,
