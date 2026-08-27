@@ -61,6 +61,11 @@ export const shareLinkIncludeStructure = {
           // SSOT (qui ne demande que `rights`) — override volontaire, après le
           // spread.
           anonymousSession: { select: { profile: true, rights: true } },
+          // Même chose pour `user` : plus RICHE que la SSOT (profil affiché en
+          // plus du rôle), donc réécrit après le spread — mais `role` DOIT
+          // rester : c'est le champ que lit le bypass plateforme ADMIN/BIGBOSS
+          // (#3892, `historyFloorFor`). L'omettre ici l'aurait perdu SILENCIEUSEMENT,
+          // ce site étant le seul des appelants de la SSOT à redéclarer `user`.
           user: {
             select: {
               id: true,
@@ -71,7 +76,8 @@ export const shareLinkIncludeStructure = {
               avatar: true,
               systemLanguage: true,
               isOnline: true,
-              lastActiveAt: true
+              lastActiveAt: true,
+              role: true
             }
           }
         }

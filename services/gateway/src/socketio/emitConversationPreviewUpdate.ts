@@ -190,7 +190,26 @@ export async function emitConversationPreviewUpdate(
         // language preferences — without them there is no Prisme to resolve.
         // Et ce qui décide du PLANCHER d'historique de chaque lecteur : le
         // dernier message global peut précéder l'arrivée de l'un d'eux.
-        select: { ...PREVIEW_PRISM_PARTICIPANT_SELECT, ...HISTORY_FLOOR_PARTICIPANT_SELECT },
+        //
+        // `user` est réécrit à la MAIN après le double spread : les deux
+        // SSOT déclarent chacune leur propre `user`, et un spread naïf
+        // (`{...A, ...B}`) ferait gagner celui de HISTORY_FLOOR_PARTICIPANT_SELECT
+        // (`{ role }` seul) au prix des préférences de langue du Prisme —
+        // silencieusement, sans qu'aucun test de TYPE ne le voie (`tsc`
+        // l'a attrapé ici parce que `PreviewPrismParticipant` les exige).
+        select: {
+          ...PREVIEW_PRISM_PARTICIPANT_SELECT,
+          ...HISTORY_FLOOR_PARTICIPANT_SELECT,
+          user: {
+            select: {
+              systemLanguage: true,
+              regionalLanguage: true,
+              customDestinationLanguage: true,
+              deviceLocale: true,
+              role: true,
+            },
+          },
+        },
       }),
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },

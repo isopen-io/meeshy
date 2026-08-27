@@ -82,6 +82,67 @@ describe('historyFloorFor — (i) un administrateur voit tout', () => {
   });
 });
 
+// #3892 — décision porteur (2026-08-27) : un ADMIN/BIGBOSS de la PLATEFORME
+// bypasse le plancher même sans rang élevé DANS cette conversation précise —
+// même patron que la présence (`PresenceVisibilityService`, qui voit déjà
+// ADMIN/BIGBOSS). Un simple membre de la conversation qui se trouve être
+// ADMIN/BIGBOSS de la plateforme lit tout, comme s'il en était admin.
+describe('historyFloorFor — (i-bis) un administrateur ou BIGBOSS de la PLATEFORME voit tout', () => {
+  it('ouvre tout à un ADMIN plateforme, même simple membre DANS la conversation', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false }, user: { role: 'ADMIN' } },
+        { allowViewHistory: false },
+      ),
+    ).toBeNull();
+  });
+
+  it('ouvre tout à un BIGBOSS plateforme, même simple membre DANS la conversation', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'BIGBOSS' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it('replie la casse du rôle plateforme', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'admin' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it('ne fait PAS d’un MODERATOR plateforme un bypass — seuls ADMIN/BIGBOSS voient tout', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'MODERATOR' } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('un `user` absent (appelant qui n’a pas chargé la colonne) se comporte comme avant — aucun bypass, aucun throw', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('un `user.role` absent (participant sans compte — anonyme) se comporte comme avant', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: null },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+});
+
 describe('historyFloorFor — (ii) l’octroi par DATE d’un administrateur', () => {
   it('rend la date octroyée, même quand le droit figé refuse l’historique', () => {
     expect(
