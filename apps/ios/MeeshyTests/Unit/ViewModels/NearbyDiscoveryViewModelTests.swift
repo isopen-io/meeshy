@@ -808,25 +808,42 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
     /// modérateurs, admins et bigboss.** Cette carte montre le LIEU AFFICHÉ
     /// des publications du fil — pas le point consenti — c'est pourquoi elle
     /// n'est pas offerte à tout le monde.
-    func test_availableModes_offerDiscoverToPlatformStaffOnly() {
+    func test_availableSections_offerDiscoverToPlatformStaffOnly() {
         for role in ["BIGBOSS", "ADMIN", "MODERATOR", "moderator"] {
             let (sut, _, _, _) = makeSUT(viewerRole: role)
-            XCTAssertTrue(sut.canDiscover, "\(role) doit voir le mode Discover")
-            XCTAssertEqual(sut.availableModes, [.density, .pins, .list, .discover], role)
+            XCTAssertTrue(sut.canDiscover, "\(role) doit voir la section Discover")
+            XCTAssertEqual(sut.availableSections, [.nearby, .discover], role)
         }
         for role in ["USER", "AUDIT", "ANALYST", "", nil] as [String?] {
             let (sut, _, _, _) = makeSUT(viewerRole: role)
             XCTAssertFalse(sut.canDiscover, "\(role ?? "nil") ne doit pas voir Discover")
-            XCTAssertEqual(sut.availableModes, [.density, .pins, .list], role ?? "nil")
+            XCTAssertEqual(sut.availableSections, [.nearby], role ?? "nil")
         }
     }
 
-    func test_mode_discoverIsRefusedToARegularUser() {
+    /// Chaque section offre SES sous-modes (directive 2026-08-27) : Nearby a
+    /// Densité·Points·Liste, Discover a Densité·Populaire.
+    func test_sectionModes_nearbyHasDensityPinsList_discoverHasDensityPopular() {
+        XCTAssertEqual(NearbyDiscoverySection.nearby.modes, [.density, .pins, .list])
+        XCTAssertEqual(NearbyDiscoverySection.discover.modes, [.density, .popular])
+    }
+
+    /// Changer de section ramène le sous-mode au premier offert par la
+    /// nouvelle section — jamais un mode d'une autre section (ex. `.pins` en
+    /// Discover, qui n'existe pas là).
+    func test_changingSection_resetsModeToTheSectionsFirstMode() {
+        let (sut, _, _, _) = makeSUT(viewerRole: "ADMIN")
+        sut.mode = .pins
+        sut.section = .discover
+        XCTAssertEqual(sut.mode, .density, "Discover n'a pas Points — retombe sur son premier mode")
+    }
+
+    func test_section_discoverIsRefusedToARegularUser() {
         let (sut, _, _, _) = makeSUT(viewerRole: "USER")
 
-        sut.mode = .discover
+        sut.section = .discover
 
-        XCTAssertEqual(sut.mode, .density, "un rôle non autorisé retombe sur la densité")
+        XCTAssertEqual(sut.section, .nearby, "un rôle non autorisé retombe sur Nearby")
     }
 
     /// Discover = ce que montrait le bouton carte : les publications DU FIL
@@ -864,8 +881,8 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
         let (sut, _, _, _) = makeSUT(initialCoordinate: Self.paris, viewerRole: "ADMIN")
         await sut.load()
 
-        XCTAssertNil(sut.discoverEmptyReason, "hors du mode Discover, rien à dire")
-        sut.mode = .discover
+        XCTAssertNil(sut.discoverEmptyReason, "hors de la section Discover, rien à dire")
+        sut.section = .discover
         XCTAssertEqual(sut.discoverEmptyReason, .nothingOnTheMap)
     }
 

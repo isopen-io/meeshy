@@ -25,6 +25,10 @@ struct PostsMapRepresentable: UIViewRepresentable {
     /// Posts géolocalisés uniquement — le filtre vit chez l'appelant
     /// (`NearbyDiscoveryViewModel.discoverPosts`), source unique de la carte.
     let posts: [FeedPost]
+    /// **Discover · Populaire (directive 2026-08-27).** Quand `true`, les points
+    /// sont pondérés par la POPULARITÉ (vues + impressions) : les publications
+    /// les plus chaudes rendent une épingle plus opaque et plus grande.
+    var weightByPopularity: Bool = false
     @Binding var selectedPostId: String?
 
     func makeUIView(context: Context) -> MKMapView {
@@ -46,11 +50,12 @@ struct PostsMapRepresentable: UIViewRepresentable {
 
     func updateUIView(_ map: MKMapView, context: Context) {
         context.coordinator.selectedPostId = $selectedPostId
+        context.coordinator.weightByPopularity = weightByPopularity
         context.coordinator.apply(posts: posts, to: map, animatedFit: true)
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(selectedPostId: $selectedPostId)
+        Coordinator(selectedPostId: $selectedPostId, weightByPopularity: weightByPopularity)
     }
 
     final class Coordinator: NSObject, MKMapViewDelegate {
@@ -60,10 +65,15 @@ struct PostsMapRepresentable: UIViewRepresentable {
         // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
         nonisolated deinit {}
         var selectedPostId: Binding<String?>
+        var weightByPopularity: Bool
         private var appliedPostIds: Set<String> = []
+        /// Le maximum de popularité du lot courant — dénominateur de la
+        /// normalisation, jamais zéro.
+        private var maxPopularity: Int = 1
 
-        init(selectedPostId: Binding<String?>) {
+        init(selectedPostId: Binding<String?>, weightByPopularity: Bool) {
             self.selectedPostId = selectedPostId
+            self.weightByPopularity = weightByPopularity
         }
 
         /// Rejoue les annotations UNIQUEMENT quand l'ensemble des posts
@@ -79,6 +89,7 @@ struct PostsMapRepresentable: UIViewRepresentable {
                 guard let place = post.location else { return nil }
                 return PostMapAnnotation(post: post, place: place)
             }
+            maxPopularity = max(1, annotations.map(\.popularity).max() ?? 1)
             map.addAnnotations(annotations)
             if !annotations.isEmpty {
                 map.showAnnotations(annotations, animated: animatedFit)
@@ -100,10 +111,36 @@ struct PostsMapRepresentable: UIViewRepresentable {
                 for: annotation
             ) as? MKMarkerAnnotationView
             view?.clusteringIdentifier = "feed-post"
-            view?.markerTintColor = UIColor(MeeshyColors.indigo500)
             view?.glyphImage = UIImage(systemName: "text.bubble.fill")
-            view?.displayPriority = .defaultHigh
+            if weightByPopularity, let post = annotation as? PostMapAnnotation {
+                // Populaire : plus la publication est vue/impressionnée, plus
+                // l'épingle est chaude (indigo → rose), opaque et prioritaire
+                // (elle survit au clustering). Le froid reste indigo au repos.
+                let t = min(1, Double(post.popularity) / Double(maxPopularity))
+                view?.markerTintColor = Self.heatTint(CGFloat(t))
+                view?.alpha = 0.5 + 0.5 * CGFloat(t)
+                view?.displayPriority = t > 0.5 ? .required : .defaultHigh
+            } else {
+                view?.markerTintColor = UIColor(MeeshyColors.indigo500)
+                view?.alpha = 1
+                view?.displayPriority = .defaultHigh
+            }
             return view
+        }
+
+        /// Indigo (froid) → rose (chaud) par interpolation RGB — la teinte du
+        /// point Populaire selon `t ∈ [0,1]`.
+        static func heatTint(_ t: CGFloat) -> UIColor {
+            let cold = UIColor(MeeshyColors.indigo500)
+            let hot = UIColor.systemPink
+            var cr: CGFloat = 0, cg: CGFloat = 0, cb: CGFloat = 0, ca: CGFloat = 0
+            var hr: CGFloat = 0, hg: CGFloat = 0, hb: CGFloat = 0, ha: CGFloat = 0
+            cold.getRed(&cr, green: &cg, blue: &cb, alpha: &ca)
+            hot.getRed(&hr, green: &hg, blue: &hb, alpha: &ha)
+            return UIColor(red: cr + (hr - cr) * t,
+                           green: cg + (hg - cg) * t,
+                           blue: cb + (hb - cb) * t,
+                           alpha: ca + (ha - ca) * t)
         }
 
         func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
@@ -137,11 +174,14 @@ private final class PostMapAnnotation: NSObject, MKAnnotation {
     let coordinate: CLLocationCoordinate2D
     let title: String?
     let subtitle: String?
+    /// Popularité = vues + impressions. Pondère l'épingle en mode Populaire.
+    let popularity: Int
 
     init(post: FeedPost, place: SharedPlace) {
         self.postId = post.id
         self.coordinate = CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)
         self.title = post.author
         self.subtitle = place.name ?? place.address
+        self.popularity = post.viewCount + post.impressionCount
     }
 }

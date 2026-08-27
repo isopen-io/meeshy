@@ -101,7 +101,7 @@ struct NearbyDiscoveryView: View {
     /// En mode Discover, les raisons de proximité (position refusée, hors
     /// ligne…) ne s'appliquent pas : la carte du fil a la sienne.
     private var shownEmptyReason: NearbyEmptyReason? {
-        viewModel.mode == .discover ? viewModel.discoverEmptyReason : viewModel.emptyReason
+        viewModel.section == .discover ? viewModel.discoverEmptyReason : viewModel.emptyReason
     }
 
     var body: some View {
@@ -129,9 +129,9 @@ struct NearbyDiscoveryView: View {
                 if let post = selectedPost {
                     selectedPostCard(post)
                 }
-                // Le rayon ne gouverne que la proximité ; Discover montre le
-                // fil entier.
-                if viewModel.mode != .discover {
+                // Le rayon ne gouverne que la proximité ; Discover montre la
+                // plateforme entière.
+                if viewModel.section != .discover {
                     radiusPicker
                 }
             }
@@ -139,6 +139,7 @@ struct NearbyDiscoveryView: View {
         }
         .animation(.spring(response: 0.32, dampingFraction: 0.86), value: selectedPostId)
         .animation(.easeInOut(duration: 0.2), value: viewModel.mode)
+        .animation(.easeInOut(duration: 0.2), value: viewModel.section)
         .task { await viewModel.load() }
     }
 
@@ -146,14 +147,28 @@ struct NearbyDiscoveryView: View {
 
     @ViewBuilder
     private var surface: some View {
+        // La SECTION décide d'abord (directive 2026-08-27). Discover montre la
+        // plateforme (posts du fil sur la carte) ; son sous-mode Populaire
+        // chauffe les points par la popularité (vues + impressions).
+        if viewModel.section == .discover {
+            PostsMapRepresentable(
+                posts: viewModel.discoverPosts,
+                weightByPopularity: viewModel.mode == .popular,
+                selectedPostId: $selectedPostId
+            )
+        } else {
+            nearbySurface
+        }
+    }
+
+    @ViewBuilder
+    private var nearbySurface: some View {
         switch viewModel.mode {
         case .list:
             listSurface
-        case .discover:
-            // La carte des posts du fil (ex-bouton `map` du header), plantée
-            // sur le lieu AFFICHÉ — d'où le mode réservé au staff.
-            PostsMapRepresentable(posts: viewModel.discoverPosts, selectedPostId: $selectedPostId)
-        case .density, .pins:
+        // `.popular` n'existe que dans la section Discover (rendue à part) ;
+        // il n'atteint jamais la surface Nearby, mais le switch reste exhaustif.
+        case .density, .pins, .popular:
             NearbyDiscoveryMapView(
                 mode: viewModel.mode,
                 showsPins: viewModel.showsIndividualPins,
@@ -224,15 +239,7 @@ struct NearbyDiscoveryView: View {
 
             Spacer()
 
-            // Même clé que le titre de la route : deux entrées de catalogue
-            // pour un même mot finiraient par diverger d'une langue à l'autre.
-            Text(String(localized: "route.title.nearby", defaultValue: "À proximité", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
-                .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, MeeshySpacing.sm)
-                .background(Capsule().fill(theme.backgroundSecondary.opacity(0.9)))
-                .accessibilityAddTraits(.isHeader)
+            sectionSwitch
 
             Spacer()
 
@@ -259,9 +266,42 @@ struct NearbyDiscoveryView: View {
         .padding(.horizontal, MeeshySpacing.lg)
     }
 
-    /// Les segments viennent d'`availableModes` — le SEUL site où le rôle du
-    /// lecteur décide si Discover existe. Un segment posé à la main ici
-    /// passerait sous cette règle.
+    /// **Le switch de SECTION (directive 2026-08-27)** — Nearby ⟷ Discover, en
+    /// haut. Discover n'existe que pour le staff (`availableSections`) ; sans
+    /// lui, la place tient le titre « À proximité » comme avant.
+    @ViewBuilder
+    private var sectionSwitch: some View {
+        if viewModel.availableSections.count > 1 {
+            Picker("", selection: $viewModel.section) {
+                ForEach(viewModel.availableSections, id: \.self) { section in
+                    Text(Self.sectionLabel(section)).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 220)
+            .accessibilityIdentifier("feed.nearby.section")
+        } else {
+            Text(Self.sectionLabel(.nearby))
+                .font(MeeshyFont.relative(14, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .background(Capsule().fill(theme.backgroundSecondary.opacity(0.9)))
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private static func sectionLabel(_ section: NearbyDiscoverySection) -> String {
+        switch section {
+        case .nearby:
+            return String(localized: "route.title.nearby", defaultValue: "À proximité", bundle: .main)
+        case .discover:
+            return String(localized: "feed.nearby.mode.discover", defaultValue: "Découvrir", bundle: .main)
+        }
+    }
+
+    /// Les segments viennent d'`availableModes` (= `section.modes`) — le picker
+    /// contextuel des sous-modes de la section courante.
     private var modePicker: some View {
         Picker("", selection: $viewModel.mode) {
             ForEach(viewModel.availableModes, id: \.self) { mode in
@@ -282,8 +322,8 @@ struct NearbyDiscoveryView: View {
             return String(localized: "feed.nearby.mode.pins", defaultValue: "Points", bundle: .main)
         case .list:
             return String(localized: "feed.nearby.mode.list", defaultValue: "Liste", bundle: .main)
-        case .discover:
-            return String(localized: "feed.nearby.mode.discover", defaultValue: "Découvrir", bundle: .main)
+        case .popular:
+            return String(localized: "feed.nearby.mode.popular", defaultValue: "Populaire", bundle: .main)
         }
     }
 
@@ -310,7 +350,7 @@ struct NearbyDiscoveryView: View {
 
     private var statusText: String? {
         // Discover lit le cache du fil : ni recherche, ni revalidation à dire.
-        if viewModel.mode == .discover { return nil }
+        if viewModel.section == .discover { return nil }
         if viewModel.isOffline && viewModel.hasContent {
             return String(
                 localized: "feed.nearby.status.offline",
