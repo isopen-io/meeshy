@@ -1477,46 +1477,31 @@ struct ComposerDocumentSurface: View {
         // accessoires (le chip de lieu, la capsule de langue) en silence —
         // alors que ni l'un ni l'autre ne dépend de `tools`.
         if !tools.isEmpty || toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
-            // Les outils DÉFILENT horizontalement et passent SOUS le drapeau/
-            // langue, qui reste FIXE à droite (retour porteur 2026-08-27).
-            ZStack(alignment: .trailing) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        if let toolRowLeadingAccessory {
-                            toolRowLeadingAccessory
-                        }
-                        ForEach(tools, id: \.rawValue) { tool in
-                            toolButton(tool)
-                            // Icône « couleur de fond » JUSTE APRÈS l'emoji
-                            // (#4031) : elle replie/déplie la palette de couleurs.
-                            if tool == .emoji, onPickBackground != nil {
-                                backgroundColorToggle
-                            }
-                        }
-                        // Réserve pour que le dernier outil puisse défiler
-                        // entièrement, y compris sous le drapeau fixe.
-                        if toolRowTrailingAccessory != nil {
-                            Spacer(minLength: 56)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 16)
+            // Rangée STATIQUE, fond UNIFORME du plateau (retour porteur
+            // 2026-08-27) : le fond noir sous le drapeau du scroll précédent
+            // ne matchait pas le plateau navy — moche. Les outils tiennent à
+            // l'écran ; le drapeau/langue reste à droite, sans aucun fond
+            // ajouté. Si la rangée débordait un jour, la rendre scrollable
+            // exigera d'abord un fond d'occultation ALIGNÉ sur la teinte du
+            // plateau (pas une couleur en dur).
+            HStack(spacing: 16) {
+                if let toolRowLeadingAccessory {
+                    toolRowLeadingAccessory
                 }
+                ForEach(tools, id: \.rawValue) { tool in
+                    toolButton(tool)
+                    // Icône « couleur de fond » JUSTE APRÈS l'emoji (#4031) :
+                    // elle replie/déplie la palette de couleurs.
+                    if tool == .emoji, onPickBackground != nil {
+                        backgroundColorToggle
+                    }
+                }
+                Spacer(minLength: 8)
                 if let toolRowTrailingAccessory {
-                    // Fond opaque du plateau derrière le drapeau : les outils
-                    // qui défilent dessous disparaissent proprement.
                     toolRowTrailingAccessory
-                        .padding(.leading, 12)
-                        .padding(.trailing, 16)
-                        .padding(.vertical, 16)
-                        .background(
-                            LinearGradient(
-                                colors: [MeeshyColors.plateauNoir.opacity(0), MeeshyColors.plateauNoir, MeeshyColors.plateauNoir],
-                                startPoint: .leading, endPoint: .trailing
-                            )
-                        )
                 }
             }
+            .padding(16)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerDocumentCopy.toolRow))
         }
