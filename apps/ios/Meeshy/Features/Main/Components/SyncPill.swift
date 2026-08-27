@@ -32,11 +32,14 @@ enum SyncPillMetrics {
     /// c'est l'unité dans laquelle le décalage ci-dessous est exprimé.
     static let height: CGFloat = 22
 
-    /// Remontée demandée : trois fois la hauteur de la pastille. La pastille
-    /// naissait trop bas sous le chrome de ses hôtes (72 pt sous le haut en
-    /// conversation) ; elle se lisait comme un élément du contenu au lieu d'un
-    /// bandeau de statut.
-    static let topLift: CGFloat = 3 * height
+    /// Remontée demandée : quatre fois la hauteur de la pastille (#4016). La
+    /// pastille naissait trop bas sous le chrome de ses hôtes (72 pt sous le
+    /// haut en conversation) ; elle se lisait comme un élément du contenu au
+    /// lieu d'un bandeau de statut. Bornée à `0` par `liftedTopPadding`, cette
+    /// remontée pose la pastille JUSTE SOUS la Dynamic Island (le point de
+    /// montage `.safeAreaInset(edge: .top)` la garde déjà sous la safe area) —
+    /// remontée d'au moins sa taille par rapport à la valeur précédente.
+    static let topLift: CGFloat = 4 * height
 }
 
 struct SyncPillEntry: Identifiable, Equatable, Sendable {
@@ -132,6 +135,33 @@ struct SyncPill: View {
     /// fréquentes de cette vue). 30 Hz : fluide sans coût perceptible.
     @State private var marqueeTimer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
 
+    // MARK: - Activité récente : afficher, accentuer, s'effacer (#4017 / #4018)
+
+    /// Identifiants d'entrées déjà vus — sert à détecter l'arrivée d'une
+    /// entrée NEUVE (un nouveau typing, un nouvel envoi) pour déclencher
+    /// l'accentuation.
+    @State private var seenEntryIDs: Set<String> = []
+    /// La pastille est-elle visible ? Pilotée par l'activité récente : une
+    /// nouvelle entrée l'affiche, un silence de `idleHideDelay` l'efface —
+    /// sauf état PERSISTANT (hors-ligne, échec), qui la garde affichée.
+    @State private var isVisible: Bool = false
+    /// Phase d'accentuation transitoire (×1.5 + fond primaire + rebond) au
+    /// passage d'un nouveau contenu.
+    @State private var isAccented: Bool = false
+    /// Effacement différé (one-shot, annulable) — réarmé à chaque nouvelle
+    /// entrée. Borné, jamais `repeatForever` (cf. audit chauffe #3940).
+    @State private var hideWorkItem: DispatchWorkItem?
+    /// Retour de l'accent à l'état de repos (one-shot, annulable).
+    @State private var accentResetWorkItem: DispatchWorkItem?
+
+    /// Délai sans NOUVELLE entrée après lequel la pastille s'efface — évite
+    /// l'affichage permanent au repos (#4017). Réarmé à chaque arrivée.
+    private static let idleHideDelay: TimeInterval = 6.0
+    /// Durée de l'accent avant retour au repos (#4018).
+    private static let accentHold: TimeInterval = 0.5
+    /// Grossissement transitoire à l'arrivée d'un nouveau contenu (#4018).
+    private static let accentScale: CGFloat = 1.5
+
     init(
         entries: [SyncPillEntry],
         onTap: ((OutboxUIItem.Source) -> Void)? = nil
@@ -163,18 +193,81 @@ struct SyncPill: View {
 
     var body: some View {
         Group {
-            if !entries.isEmpty {
+            if !entries.isEmpty && isVisible {
                 pillContent
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
             } else {
                 EmptyView()
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: isVisible)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: entries.isEmpty)
-        .onAppear { rotator.setItemCount(entries.count) }
-        .adaptiveOnChange(of: entries.count) { _, newCount in
-            rotator.setItemCount(newCount)
+        .onAppear {
+            rotator.setItemCount(entries.count)
+            handleEntriesChange()
         }
+        // Observe l'ENSEMBLE des identifiants (pas les libellés) : une frappe
+        // continue garde le même id `typing.<conv>` — elle ne ré-accentue pas ;
+        // seule une entrée NEUVE (nouvelle conversation qui écrit, nouvel
+        // envoi) déclenche l'accent.
+        .adaptiveOnChange(of: entries.map(\.id)) { _, _ in
+            rotator.setItemCount(entries.count)
+            handleEntriesChange()
+        }
+    }
+
+    // MARK: - Pilotage de la visibilité et de l'accent
+
+    /// Une entrée PERSISTANTE (hors-ligne, reconnexion, échec) garde la
+    /// pastille affichée : l'utilisateur doit la voir tant que l'état dure.
+    /// Les entrées transitoires (synchro, frappe, envoi) s'effacent au repos.
+    private var entriesHavePersistentState: Bool {
+        entries.contains { $0.dotStyle == .warning || $0.dotStyle == .error }
+    }
+
+    private func handleEntriesChange() {
+        let currentIDs = Set(entries.map(\.id))
+        let hasNew = !currentIDs.subtracting(seenEntryIDs).isEmpty
+        seenEntryIDs = currentIDs
+
+        if entries.isEmpty {
+            hideWorkItem?.cancel(); hideWorkItem = nil
+            isVisible = false
+            return
+        }
+        if hasNew { surfaceWithAccent() }
+        scheduleAutoHide()
+    }
+
+    /// Affiche la pastille et joue l'accent transitoire (×1.5 + fond primaire
+    /// + rebond), puis programme le retour au repos (#4018).
+    private func surfaceWithAccent() {
+        isVisible = true
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55)) {
+            isAccented = true
+        }
+        accentResetWorkItem?.cancel()
+        let reset = DispatchWorkItem {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isAccented = false }
+        }
+        accentResetWorkItem = reset
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.accentHold, execute: reset)
+    }
+
+    /// Programme l'effacement au repos (#4017). Un état persistant l'annule et
+    /// garde la pastille affichée. One-shot borné (jamais `repeatForever`).
+    private func scheduleAutoHide() {
+        hideWorkItem?.cancel()
+        if entriesHavePersistentState {
+            isVisible = true
+            hideWorkItem = nil
+            return
+        }
+        let work = DispatchWorkItem {
+            withAnimation(.easeOut(duration: 0.3)) { isVisible = false }
+        }
+        hideWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleHideDelay, execute: work)
     }
 
     @ViewBuilder
@@ -193,7 +286,14 @@ struct SyncPill: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Capsule().fill(capsuleBackground))
+        .background(
+            Capsule()
+                .fill(capsuleBackground)
+                .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
+        )
+        // Accent (#4018) : la pastille grossit ×1.5 vers le BAS (ancrage .top)
+        // pour ne jamais empiéter sur la Dynamic Island au-dessus.
+        .scaleEffect(isAccented ? Self.accentScale : 1.0, anchor: .top)
         .contentShape(Capsule())
         .onTapGesture(perform: handleTap)
         .onLongPressGesture(minimumDuration: 0.5) {
@@ -238,7 +338,12 @@ struct SyncPill: View {
     /// uniquement sur le `Text` du label.
     private static let maxTextWidth: CGFloat = 160
 
-    private var textColor: Color { isDark ? .white.opacity(0.7) : .primary.opacity(0.6) }
+    private var textColor: Color {
+        // Sur le fond primaire de l'accent, le texte passe en blanc pour rester
+        // lisible (#4018).
+        if isAccented { return .white }
+        return isDark ? .white.opacity(0.7) : .primary.opacity(0.6)
+    }
 
     @ViewBuilder
     private var labelText: some View {
@@ -357,19 +462,24 @@ struct SyncPill: View {
 
     @ViewBuilder
     private var dotShape: some View {
-        switch visibleEntry?.dotStyle ?? .brand {
-        case .brand:
-            Circle().fill(MeeshyColors.brandGradient)
-        case .warning:
-            Circle().fill(MeeshyColors.warning)
-        case .success:
-            Circle().fill(MeeshyColors.success)
-        case .error:
-            Circle().fill(MeeshyColors.error)
+        if isAccented {
+            Circle().fill(Color.white)
+        } else {
+            switch visibleEntry?.dotStyle ?? .brand {
+            case .brand:
+                Circle().fill(MeeshyColors.brandGradient)
+            case .warning:
+                Circle().fill(MeeshyColors.warning)
+            case .success:
+                Circle().fill(MeeshyColors.success)
+            case .error:
+                Circle().fill(MeeshyColors.error)
+            }
         }
     }
 
     private var dotForeground: AnyShapeStyle {
+        if isAccented { return AnyShapeStyle(Color.white) }
         switch visibleEntry?.dotStyle ?? .brand {
         case .brand:    return AnyShapeStyle(MeeshyColors.brandGradient)
         case .warning:  return AnyShapeStyle(MeeshyColors.warning)
@@ -378,8 +488,14 @@ struct SyncPill: View {
         }
     }
 
-    private var capsuleBackground: Color {
-        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
+    /// Fond de la capsule — OPAQUE (#4016 : plus de fond quasi transparent à
+    /// 0,05/0,08 d'opacité), et ACCENTUÉ en couleur primaire de l'app pendant
+    /// l'accent (#4018).
+    private var capsuleBackground: AnyShapeStyle {
+        if isAccented {
+            return AnyShapeStyle(MeeshyColors.brandPrimary)
+        }
+        return AnyShapeStyle(isDark ? Color(white: 0.17) : Color.white)
     }
 
     private func handleTap() {
