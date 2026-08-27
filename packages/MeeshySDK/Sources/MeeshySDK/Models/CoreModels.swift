@@ -402,18 +402,26 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         guard let translations = lastMessageTranslations, !translations.isEmpty else {
             return lastMessagePreview
         }
-        // Canonicalise (case-fold + region-strip via the shared normalizer) every
-        // language token compared — reader languages, original language, and map
-        // keys — mirroring the TypeScript twin `resolveLastMessagePreview`
-        // (`normalizeLanguageForDedup`). `resolveUserLanguagesOrdered` already
-        // strips regions from the reader's languages, but `lastMessageOriginalLanguage`
-        // arrives raw and messages written before the write-boundary canonicalisation
-        // carry a region-tagged code (`en-US`, `pt-BR`); compared with `.lowercased()`
-        // alone, `en-us` never matched the normalized rank `en`, and a lower-ranked
-        // translation won — demoting the reader's PRIMARY language, the exact Prisme
-        // violation (#3) this resolver fights. Canonicalising at the comparison point
-        // is idempotent on already-canonical codes (zero regression).
-        let canon: (String) -> String = { MeeshyUser.normalizeLanguageCode($0) ?? $0.lowercased() }
+        // Canonicalise (case-fold + region-strip) every language token compared —
+        // reader languages, original language, and map keys — through the SSOT
+        // `MeeshyUser.normalizeLanguageForDedup`, the FAITHFUL Swift mirror of the
+        // TypeScript twin `resolveLastMessagePreview` (`normalizeLanguageForDedup`)
+        // and the Kotlin `LanguageCodeNormalizer.normalizeForDedup`.
+        // `resolveUserLanguagesOrdered` already strips regions from the reader's
+        // languages, but `lastMessageOriginalLanguage` arrives raw and messages
+        // written before the write-boundary canonicalisation carry a region-tagged
+        // code (`en-US`, `pt-BR`); compared with `.lowercased()` alone, `en-us`
+        // never matched the normalized rank `en`, and a lower-ranked translation
+        // won — demoting the reader's PRIMARY language, the exact Prisme violation
+        // (#3) this resolver fights. This used to inline `normalizeLanguageCode($0)
+        // ?? $0.lowercased()`, whose fallback kept the WHOLE string for a code the
+        // normalizer can't reduce — so an out-of-catalogue region-tagged code
+        // (`yue-HK`) canonicalised to `yue-hk` and never matched a `yue`, the sole
+        // fallback that diverged from the TS/Kotlin mirrors (both strip to the
+        // primary subtag). Routing through the shared dedup normalizer closes that
+        // gap; canonicalising at the comparison point is idempotent on
+        // already-canonical codes (zero regression).
+        let canon: (String) -> String = { MeeshyUser.normalizeLanguageForDedup($0) }
         let isBlank: (String) -> Bool = { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let preferred = preferredLanguages.filter { !isBlank($0) }.map(canon)
         let original = lastMessageOriginalLanguage.map(canon)

@@ -303,9 +303,9 @@ struct TextEditToolOptions: View {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return MeeshyUser.normalizeLanguageCode(trimmed)
-            ?? trimmed.split(whereSeparator: { $0 == "-" || $0 == "_" })
-                .first.map { $0.lowercased() } ?? trimmed.lowercased()
+        // Repli région/casse via le SSOT public `MeeshyUser.normalizeLanguageForDedup`
+        // (même clé que les pastilles côté preview/story) — plus de boucle inline.
+        return MeeshyUser.normalizeLanguageForDedup(trimmed)
     }
 
     private func languageChip(_ code: String) -> some View {
