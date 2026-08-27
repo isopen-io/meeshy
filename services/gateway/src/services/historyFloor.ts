@@ -44,7 +44,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
+import { hasMinimumMemberRole, isGlobalAdmin } from '@meeshy/shared/types/role-types';
 import { logger } from '../utils/logger';
 import type { ParticipantRightsOverride } from './participantRights';
 
@@ -61,6 +61,16 @@ export type HistoryFloorJoin = {
   readonly historyVisibleFrom?: Date | null;
   readonly permissions?: ParticipantRightsOverride | null;
   readonly anonymousSession?: { readonly rights?: ParticipantRightsOverride | null } | null;
+  /**
+   * Le rôle PLATEFORME du compte (`User.role`) — distinct de `role`, le rang
+   * DANS cette conversation. Décision porteur (2026-08-27, #3892) : un
+   * ADMIN/BIGBOSS de la plateforme bypasse le plancher même sans rang élevé
+   * ICI, même patron que la présence (`PresenceVisibilityService`, qui voit
+   * déjà ADMIN/BIGBOSS). `undefined` = appelant qui n'a pas chargé la
+   * colonne, `null` = participant sans compte (anonyme) — les deux se
+   * comportent comme avant, sans bypass.
+   */
+  readonly user?: { readonly role?: string | null } | null;
 };
 
 export type HistoryFloorParticipation = HistoryFloorJoin & {
@@ -77,7 +87,9 @@ export type ShareLinkHistoryGrant = { readonly allowViewHistory: boolean } | nul
  * règle inapplicable en aval sans qu'aucun témoin ne rougisse.
  *
  * `anonymousSession` est réduit à `rights` : le reste de la session (hash du
- * jeton, IP, empreinte) n'entre pas dans la question.
+ * jeton, IP, empreinte) n'entre pas dans la question. `user` est réduit à
+ * `role` — le rôle PLATEFORME, pour le bypass ADMIN/BIGBOSS (#3892) ; `null`
+ * pour un participant sans compte, jamais chargé pour rien d'autre.
  */
 export const HISTORY_FLOOR_PARTICIPANT_SELECT = {
   role: true,
@@ -86,6 +98,7 @@ export const HISTORY_FLOOR_PARTICIPANT_SELECT = {
   historyVisibleFrom: true,
   permissions: true,
   anonymousSession: { select: { rights: true } },
+  user: { select: { role: true } },
 } as const;
 
 type FloorVerdict =
@@ -99,6 +112,10 @@ type FloorVerdict =
  */
 function settleBeforeLink(join: HistoryFloorJoin): FloorVerdict {
   if (hasMinimumMemberRole(join.role ?? 'member', 'admin')) return { kind: 'settled', floor: null };
+  // Bypass PLATEFORME (#3892) — même rang que le (i) ci-dessus, avant tout ce
+  // qui suit : un ADMIN/BIGBOSS lit tout, y compris quand un octroi par date
+  // ou un droit figé plus restrictif existe sur SA propre ligne.
+  if (join.user?.role && isGlobalAdmin(join.user.role)) return { kind: 'settled', floor: null };
   if (join.historyVisibleFrom) return { kind: 'settled', floor: join.historyVisibleFrom };
 
   // Le droit figé au join, et la surcharge de l'hôte lue en premier — `??`
@@ -307,16 +324,42 @@ export function historyFloorClause(
   };
 }
 
+/** `where.createdAt.gte` voyage parfois en chaîne ISO (le connecteur Mongo l'accepte) — comparé, jamais ignoré. */
+function asDate(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
 /**
  * Pose le plancher sur une clause `where` de message, en se COMBINANT à toute
  * borne `createdAt` déjà présente (curseur `lt`, moitié `gt` du mode around).
  * Deux `gte` se départagent par la plus stricte : un plancher ne descend jamais
  * une borne que l'appelant avait déjà remontée.
+ *
+ * `where.createdAt` a DEUX formes possibles chez un appelant Prisma : un objet
+ * de bornes (`{ gte, lt, … }`, le cas courant ici) ou une `Date` LITTÉRALE
+ * (égalité stricte — aucun appelant actuel de ce module n'est dans ce cas,
+ * mais `Record<string, unknown>` ne l'exclut pas). Les deux DOIVENT restreindre,
+ * jamais élargir : une égalité `< floor` ne peut satisfaire aucun message qui
+ * satisfait aussi le plancher — le résultat est un intervalle vide
+ * (`{ gte: floor, lt: floor }`), pas `{ gte: floor }` seul, qui rouvrirait tout
+ * ce qui suit le plancher alors que l'appelant ne voulait qu'UNE date précise.
  */
 export function applyHistoryFloor<W extends Record<string, unknown>>(where: W, floor: Date | null): W {
   if (!floor) return where;
-  const prior = (where.createdAt ?? {}) as Record<string, unknown>;
-  const priorGte = prior.gte instanceof Date ? prior.gte : null;
+
+  const priorCreatedAt = where.createdAt;
+  if (priorCreatedAt instanceof Date) {
+    if (priorCreatedAt >= floor) return where;
+    return { ...where, createdAt: { gte: floor, lt: floor } };
+  }
+
+  const prior = (priorCreatedAt ?? {}) as Record<string, unknown>;
+  const priorGte = asDate(prior.gte);
   const gte = priorGte && priorGte > floor ? priorGte : floor;
   return { ...where, createdAt: { ...prior, gte } };
 }

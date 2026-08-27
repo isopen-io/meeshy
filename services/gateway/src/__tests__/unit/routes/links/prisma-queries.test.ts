@@ -25,6 +25,7 @@ import {
   countConversationMessages,
   shareLinkIncludeStructure,
 } from '../../../../routes/links/utils/prisma-queries';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT } from '../../../../services/historyFloor';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -496,5 +497,44 @@ describe('shareLinkIncludeStructure — participant fields read by callers', () 
       .participants as Record<string, any>;
 
     expect(participants.select.lastActiveAt).toBe(true);
+  });
+
+  // #3893 point 1 : ce `select` recopiait à la main les champs du SSOT
+  // (`HISTORY_FLOOR_PARTICIPANT_SELECT`) au lieu de l'étaler — un champ ajouté
+  // à la SSOT n'y arriverait pas silencieusement. Ce témoin compare les DEUX
+  // valeurs plutôt que de lister les clés à la main : il tombe dès que le
+  // `select` de ce fichier diverge de la SSOT, y compris pour un champ qui
+  // n'existe pas encore.
+  it('étale HISTORY_FLOOR_PARTICIPANT_SELECT — tout champ y ajouté arrive ici sans édition manuelle', () => {
+    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
+      .participants as Record<string, any>;
+
+    for (const [key, value] of Object.entries(HISTORY_FLOOR_PARTICIPANT_SELECT)) {
+      // `anonymousSession` et `user` sont volontairement plus RICHES ici
+      // (`profile` en plus de `rights` ; profil affiché en plus du rôle,
+      // exposés à la carte d'arrivée) — pas de simples miroirs. Chacun a son
+      // propre témoin ci-dessous, qui vérifie que le champ qui COMPTE pour
+      // `historyFloorFor` (`rights`, `role`) survit malgré la réécriture.
+      if (key === 'anonymousSession' || key === 'user') continue;
+      expect(participants.select[key]).toEqual(value);
+    }
+  });
+
+  it('anonymousSession reste plus RICHE que la SSOT — `profile` en plus de `rights`', () => {
+    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
+      .participants as Record<string, any>;
+
+    expect(participants.select.anonymousSession).toEqual({ select: { profile: true, rights: true } });
+  });
+
+  // #3892 : `user` est réécrit après le spread de la SSOT (profil affiché en
+  // plus du rôle) — ce site est le SEUL appelant de HISTORY_FLOOR_PARTICIPANT_SELECT
+  // à redéclarer `user`, donc le seul où `role` (le champ que lit le bypass
+  // plateforme ADMIN/BIGBOSS de `historyFloorFor`) pouvait se perdre en silence.
+  it('user.role reste servi malgré la réécriture — le bypass plateforme ADMIN/BIGBOSS en dépend', () => {
+    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
+      .participants as Record<string, any>;
+
+    expect(participants.select.user.select.role).toBe(true);
   });
 });

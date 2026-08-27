@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
-import { applyHistoryFloor } from '../../../services/historyFloor';
+import { applyHistoryFloor, HISTORY_FLOOR_PARTICIPANT_SELECT } from '../../../services/historyFloor';
 
 const senderInclude = {
   select: {
@@ -48,19 +48,24 @@ export const shareLinkIncludeStructure = {
           isOnline: true,
           lastActiveAt: true,
           isActive: true,
-          role: true,
-          joinedAt: true,
           userId: true,
-          permissions: true,
           // Ce qui décide du PLANCHER d'historique du lecteur (`historyFloorFor`)
           // — la ligne du lien est le seul endroit où `retrieval.ts` lit sa
-          // participation, donc elle doit porter toute la règle.
-          shareLinkId: true,
-          historyVisibleFrom: true,
+          // participation, donc elle doit porter toute la règle. Étalée
+          // depuis la SSOT (#3893) plutôt que recopiée : un champ qu'elle
+          // gagne arrive ici sans édition manuelle.
+          ...HISTORY_FLOOR_PARTICIPANT_SELECT,
           // `profile` et `rights` UNIQUEMENT : `anonymousSession.session` porte
           // le hash du jeton, l'IP et l'empreinte appareil — jamais exposables
-          // sur une route consultable sans authentification.
+          // sur une route consultable sans authentification. Plus RICHE que la
+          // SSOT (qui ne demande que `rights`) — override volontaire, après le
+          // spread.
           anonymousSession: { select: { profile: true, rights: true } },
+          // Même chose pour `user` : plus RICHE que la SSOT (profil affiché en
+          // plus du rôle), donc réécrit après le spread — mais `role` DOIT
+          // rester : c'est le champ que lit le bypass plateforme ADMIN/BIGBOSS
+          // (#3892, `historyFloorFor`). L'omettre ici l'aurait perdu SILENCIEUSEMENT,
+          // ce site étant le seul des appelants de la SSOT à redéclarer `user`.
           user: {
             select: {
               id: true,
@@ -71,7 +76,8 @@ export const shareLinkIncludeStructure = {
               avatar: true,
               systemLanguage: true,
               isOnline: true,
-              lastActiveAt: true
+              lastActiveAt: true,
+              role: true
             }
           }
         }

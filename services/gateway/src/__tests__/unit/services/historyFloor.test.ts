@@ -82,6 +82,67 @@ describe('historyFloorFor — (i) un administrateur voit tout', () => {
   });
 });
 
+// #3892 — décision porteur (2026-08-27) : un ADMIN/BIGBOSS de la PLATEFORME
+// bypasse le plancher même sans rang élevé DANS cette conversation précise —
+// même patron que la présence (`PresenceVisibilityService`, qui voit déjà
+// ADMIN/BIGBOSS). Un simple membre de la conversation qui se trouve être
+// ADMIN/BIGBOSS de la plateforme lit tout, comme s'il en était admin.
+describe('historyFloorFor — (i-bis) un administrateur ou BIGBOSS de la PLATEFORME voit tout', () => {
+  it('ouvre tout à un ADMIN plateforme, même simple membre DANS la conversation', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: 'sl-1', permissions: { canViewHistory: false }, user: { role: 'ADMIN' } },
+        { allowViewHistory: false },
+      ),
+    ).toBeNull();
+  });
+
+  it('ouvre tout à un BIGBOSS plateforme, même simple membre DANS la conversation', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'BIGBOSS' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it('replie la casse du rôle plateforme', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'admin' } },
+        null,
+      ),
+    ).toBeNull();
+  });
+
+  it('ne fait PAS d’un MODERATOR plateforme un bypass — seuls ADMIN/BIGBOSS voient tout', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: { role: 'MODERATOR' } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('un `user` absent (appelant qui n’a pas chargé la colonne) se comporte comme avant — aucun bypass, aucun throw', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false } },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+
+  it('un `user.role` absent (participant sans compte — anonyme) se comporte comme avant', () => {
+    expect(
+      historyFloorFor(
+        { role: 'member', joinedAt: JOINED, shareLinkId: null, permissions: { canViewHistory: false }, user: null },
+        null,
+      ),
+    ).toEqual(JOINED);
+  });
+});
+
 describe('historyFloorFor — (ii) l’octroi par DATE d’un administrateur', () => {
   it('rend la date octroyée, même quand le droit figé refuse l’historique', () => {
     expect(
@@ -374,6 +435,41 @@ describe('applyHistoryFloor', () => {
   it('garde la borne `gte` la plus STRICTE quand l’appelant en avait déjà une', () => {
     expect(applyHistoryFloor({ createdAt: { gte: LATER } }, JOINED)).toEqual({ createdAt: { gte: LATER } });
     expect(applyHistoryFloor({ createdAt: { gte: JOINED } }, LATER)).toEqual({ createdAt: { gte: LATER } });
+  });
+
+  // #3893 point 3 : `where.createdAt` peut arriver sous deux formes que le
+  // code d'origine ne reconnaissait pas — une Date LITTÉRALE (égalité, pas une
+  // borne) et un `gte` en chaîne ISO (le connecteur Mongo les accepte). Dans
+  // les deux cas, l'ancien code perdait la contrainte de l'appelant et la
+  // remplaçait par le plancher SEUL — un ÉLARGISSEMENT, jamais une restriction.
+  it('une Date LITTÉRALE déjà >= au plancher reste intacte — l’égalité est déjà plus stricte', () => {
+    expect(applyHistoryFloor({ conversationId: 'c1', createdAt: LATER }, JOINED)).toEqual({
+      conversationId: 'c1',
+      createdAt: LATER,
+    });
+  });
+
+  it('une Date LITTÉRALE antérieure au plancher devient un intervalle IMPOSSIBLE, jamais le plancher seul', () => {
+    const result = applyHistoryFloor({ conversationId: 'c1', createdAt: JOINED }, LATER) as unknown as {
+      createdAt: { gte: Date; lt: Date };
+    };
+    // Ne DOIT jamais dégénérer en `{ gte: LATER }` seul, qui rouvrirait tout
+    // ce qui suit le plancher — la ligne demandée par l'égalité, elle,
+    // n'existe pas dans cette fenêtre.
+    expect(result.createdAt.gte).toEqual(result.createdAt.lt);
+    expect(result.createdAt.gte >= LATER).toBe(true);
+  });
+
+  it('un `gte` en CHAÎNE ISO plus strict que le plancher est conservé — comparé, pas ignoré', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: LATER.toISOString() } }, JOINED)).toEqual({
+      createdAt: { gte: LATER },
+    });
+  });
+
+  it('un `gte` en CHAÎNE ISO moins strict que le plancher cède au plancher', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: JOINED.toISOString() } }, LATER)).toEqual({
+      createdAt: { gte: LATER },
+    });
   });
 });
 

@@ -14,7 +14,8 @@ import {
   HISTORY_FLOOR_PARTICIPANT_SELECT,
   historyReaderFromAuthContext,
   loadHistoryFloor,
-  loadReaderHistoryFloor
+  loadReaderHistoryFloor,
+  type HistoryFloorJoin
 } from '../../services/historyFloor';
 import {
   conversationSummarySchema,
@@ -117,7 +118,12 @@ export async function registerMessagesRetrievalRoutes(fastify: FastifyInstance) 
       }
 
       let hasAccess = false;
-      let member: { id: string; joinedAt: Date; shareLinkId: string | null } | null = null;
+      // Annotation alignée sur le `select` RÉEL (`{ id: true, ...HISTORY_FLOOR_PARTICIPANT_SELECT }`
+      // ci-dessous) — #3893 point 2. L'ancienne annotation, plus étroite,
+      // fonctionnait au runtime (typage structurel) mais affirmait faussement
+      // que `role`/`historyVisibleFrom`/`permissions`/`anonymousSession` ne
+      // sont pas servis ici, alors que `loadHistoryFloor` en dépend.
+      let member: ({ id: string } & HistoryFloorJoin) | null = null;
 
       if (hybridRequest.isAuthenticated && hybridRequest.user) {
         member = await fastify.prisma.participant.findFirst({

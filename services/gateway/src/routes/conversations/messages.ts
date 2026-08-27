@@ -1476,9 +1476,19 @@ export function registerMessagesRoutes(
           responsePayload.cursorPagination.hasMore = olderCount > 0;
         }
         if (lastMsg) {
+          // #3893 point 4 : seul agrégat de cette route sans le plancher
+          // appliqué EXPLICITEMENT — sûr aujourd'hui car son prédicat `gt`
+          // dérive d'un message déjà borné (`lastMsg` a lui-même passé le
+          // plancher), mais c'est le seul des quatre agrégats à ne pas passer
+          // par `applyHistoryFloor`, sur une route dont le commentaire dit
+          // explicitement « un seul oubli suffirait ». Même patron que
+          // `olderCount` ci-dessus.
           const newerCount = await prisma.message.count({
             where: applyPersonalHistoryHiding(
-              { conversationId, deletedAt: null, createdAt: { gt: new Date(lastMsg.createdAt) } },
+              applyHistoryFloor(
+                { conversationId, deletedAt: null, createdAt: { gt: new Date(lastMsg.createdAt) } },
+                historyStartDate
+              ),
               personalHiding
             )
           });

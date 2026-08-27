@@ -16,6 +16,7 @@ import {
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { shareLinkSchema } from './types';
+import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -285,8 +286,11 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
+      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
+      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
+      // replie la casse ET tolère les lignes historiques pas encore migrées.
       const isConversationAdmin = link.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
+        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
       );
 
       if (!isCreator && !isConversationAdmin) {
@@ -418,8 +422,11 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
+      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
+      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
+      // replie la casse ET tolère les lignes historiques pas encore migrées.
       const isConversationAdmin = link.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
+        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
       );
 
       if (!isCreator && !isConversationAdmin) {
@@ -542,8 +549,11 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
+      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
+      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
+      // replie la casse ET tolère les lignes historiques pas encore migrées.
       const isConversationAdmin = link.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
+        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
       );
 
       if (!isCreator && !isConversationAdmin) {
