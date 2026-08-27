@@ -141,12 +141,15 @@ struct SyncPill: View {
     /// entrée NEUVE (un nouveau typing, un nouvel envoi) pour déclencher
     /// l'accentuation.
     @State private var seenEntryIDs: Set<String> = []
-    /// Ids des signaux EN COURS (`isOngoingSignal`) actuellement responsables
-    /// de l'accent — directive porteur 2026-08-27 (précision #4026) : frappe
-    /// et reconnexion tiennent l'accent tant que leur id reste dans
-    /// `entries`, jamais un délai fixe. Vide ⇒ l'accent (s'il y en a un) suit
-    /// le pulse court existant (#4018).
-    @State private var accentedOngoingIDs: Set<String> = []
+    /// Échéance de la fenêtre d'accent (`SyncPillAccentLaw`, #4050).
+    ///
+    /// **Amende #4026** : l'accent ne suit plus la DURÉE du signal (frappe,
+    /// reconnexion) mais une fenêtre de six secondes réarmée par chaque entrée
+    /// NEUVE — « rester bien visible avant de reprendre la forme normale au
+    /// bout d'au moins 6 secondes si l'utilisateur écrit encore ; si un nouvel
+    /// utilisateur écrit entre-temps […] qu'elle grossisse encore aussi pendant
+    /// 6 s, et ainsi de suite » (directive porteur 2026-08-27).
+    @State private var accentDeadline: Date?
     /// La pastille est-elle visible ? Pilotée par l'activité récente : une
     /// nouvelle entrée l'affiche, un silence de `idleHideDelay` l'efface —
     /// sauf état PERSISTANT (hors-ligne, échec), qui la garde affichée.
@@ -162,9 +165,12 @@ struct SyncPill: View {
 
     /// Délai sans NOUVELLE entrée après lequel la pastille s'efface — évite
     /// l'affichage permanent au repos (#4017). Réarmé à chaque arrivée.
+    ///
+    /// Porte le même nombre que `SyncPillAccentLaw.accentWindow` sans être la
+    /// même durée : celle-ci décide de la DISPARITION, l'autre de la FORME.
+    /// Les deux sont nommées séparément pour qu'un réglage de l'une ne bouge
+    /// jamais l'autre (#4050).
     private static let idleHideDelay: TimeInterval = 6.0
-    /// Durée de l'accent avant retour au repos (#4018).
-    private static let accentHold: TimeInterval = 0.5
     /// Grossissement transitoire à l'arrivée d'un nouveau contenu (#4018).
     private static let accentScale: CGFloat = 1.5
 
@@ -231,14 +237,6 @@ struct SyncPill: View {
         entries.contains { $0.dotStyle == .warning || $0.dotStyle == .error }
     }
 
-    /// Un signal EN COURS (frappe, reconnexion) tient l'accent tant que son
-    /// id reste présent dans `entries` — jamais un délai fixe (directive
-    /// porteur 2026-08-27, précision #4026). Toute autre entrée (envoi/
-    /// mutation en échec) garde le pulse ×1.5 bref existant (#4018).
-    static func isOngoingSignal(_ entry: SyncPillEntry) -> Bool {
-        entry.dotStyle == .warning || entry.id.hasPrefix("typing.")
-    }
-
     private func handleEntriesChange() {
         let currentIDs = Set(entries.map(\.id))
         let newIDs = currentIDs.subtracting(seenEntryIDs)
@@ -247,54 +245,62 @@ struct SyncPill: View {
         if entries.isEmpty {
             hideWorkItem?.cancel(); hideWorkItem = nil
             accentResetWorkItem?.cancel(); accentResetWorkItem = nil
-            accentedOngoingIDs.removeAll()
+            accentDeadline = nil
+            setAccented(false)
             isVisible = false
             return
         }
 
-        // Les signaux en cours DÉJÀ accentués dont l'id a disparu (frappe
-        // stoppée, reconnexion terminée) sortent du suivi ; ceux tout juste
-        // arrivés y entrent. Tant qu'il en reste au moins un, l'accent est
-        // maintenu SANS minuteur — recalculé à chaque changement de `entries`
-        // (déjà observé via `.adaptiveOnChange(of: entries.map(\.id))`).
-        let currentOngoingIDs = Set(entries.filter(Self.isOngoingSignal).map(\.id))
-        accentedOngoingIDs.formIntersection(currentOngoingIDs)
-        accentedOngoingIDs.formUnion(newIDs.intersection(currentOngoingIDs))
-
-        if !accentedOngoingIDs.isEmpty {
-            isVisible = true
-            accentResetWorkItem?.cancel(); accentResetWorkItem = nil
-            if !isAccented {
-                withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55)) {
-                    isAccented = true
-                }
-            }
-        } else if !newIDs.isEmpty {
-            surfaceWithAccent()
-        } else if isAccented {
-            // Le dernier signal en cours vient de se terminer : retour au
-            // repos IMMÉDIAT — « puis redevient normale pour les autres
-            // messages » (directive porteur), pas après un délai périmé.
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isAccented = false }
-        }
+        // La fenêtre d'accent est gouvernée par le TEMPS, jamais par la durée
+        // du signal (`SyncPillAccentLaw`, #4050 — amende #4026). Une frappe qui
+        // continue garde le même id `typing.<conv>` : elle n'est pas neuve, donc
+        // elle ne réarme rien et la pastille reprend sa forme normale au bout de
+        // six secondes. Un DEUXIÈME typeur, lui, est une entrée neuve : fenêtre
+        // pleine à partir de son arrivée — « et ainsi de suite ».
+        let now = Date()
+        accentDeadline = SyncPillAccentLaw.deadline(
+            previous: accentDeadline,
+            hasNewEntries: !newIDs.isEmpty,
+            entriesAreEmpty: false,
+            now: now
+        )
+        if !newIDs.isEmpty { isVisible = true }
+        applyAccentWindow(now: now)
         scheduleAutoHide()
     }
 
-    /// Affiche la pastille et joue l'accent transitoire (×1.5 + fond primaire
-    /// + rebond), puis programme le retour au repos (#4018). Seulement pour
-    /// les entrées HORS signal en cours — celles-ci sont gérées par
-    /// `accentedOngoingIDs` dans `handleEntriesChange`, sans minuteur.
-    private func surfaceWithAccent() {
-        isVisible = true
-        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55)) {
-            isAccented = true
-        }
+    /// Aligne la forme sur la loi et programme le retour au repos À L'ÉCHÉANCE.
+    ///
+    /// Le minuteur est one-shot et systématiquement remplacé : un réarmement
+    /// annule le précédent, donc N arrivées successives ne laissent jamais
+    /// N retours au repos en vol (aucun empilement, aucune animation qui
+    /// saute). Borné, jamais `repeatForever` — cf. audit chauffe #3940.
+    private func applyAccentWindow(now: Date) {
         accentResetWorkItem?.cancel()
+        accentResetWorkItem = nil
+
+        let shouldAccent = SyncPillAccentLaw.isAccented(deadline: accentDeadline, now: now)
+        setAccented(shouldAccent)
+
+        guard shouldAccent, let deadline = accentDeadline else { return }
         let reset = DispatchWorkItem {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isAccented = false }
         }
         accentResetWorkItem = reset
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.accentHold, execute: reset)
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + max(0, deadline.timeIntervalSince(now)),
+            execute: reset
+        )
+    }
+
+    /// Pose la forme, en n'animant que les vrais changements — réarmer pendant
+    /// que la pastille est DÉJÀ grosse ne doit pas rejouer le rebond.
+    private func setAccented(_ accented: Bool) {
+        guard accented != isAccented else { return }
+        let curve: Animation = accented
+            ? (reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55))
+            : .spring(response: 0.3, dampingFraction: 0.7)
+        withAnimation(curve) { isAccented = accented }
     }
 
     /// Programme l'effacement au repos (#4017). Un état persistant l'annule et
@@ -310,7 +316,18 @@ struct SyncPill: View {
             withAnimation(.easeOut(duration: 0.3)) { isVisible = false }
         }
         hideWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleHideDelay, execute: work)
+        // L'effacement se compte depuis la FIN de l'accent, pas depuis
+        // l'arrivée (#4050) : les deux durées valent six secondes, et les faire
+        // partir ensemble aurait fait rétrécir ET disparaître la pastille au
+        // même instant — la forme normale n'aurait jamais été visible.
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + SyncPillAccentLaw.hideDelay(
+                deadline: accentDeadline,
+                now: Date(),
+                idleHideDelay: Self.idleHideDelay
+            ),
+            execute: work
+        )
     }
 
     @ViewBuilder

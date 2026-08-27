@@ -40,7 +40,17 @@ struct ConnectionBanner: View {
     /// conversations) désactive uniquement les entrées de frappe — le
     /// reste (statut connexion, file d'attente hors-ligne) fonctionne
     /// identiquement.
-    let conversationListViewModel: ConversationListViewModel?
+    ///
+    /// **Le view-model n'est PAS stocké** (#4049) : il n'est lu qu'à l'`init`,
+    /// pour en tirer le publisher ci-dessous. Le garder en propriété invitait
+    /// à écrire `conversationListViewModel.typingUsers` dans `entries` — ce
+    /// qui n'abonne rien et laissait la frappe sans effet à l'écran. Ne pas
+    /// avoir le champ rend ce défaut inécrivable.
+    ///
+    /// Les frappeurs, OBSERVÉS : la re-render reste confinée à la bannière —
+    /// l'hôte (`ConversationListVMOwner`) n'observe toujours rien, et
+    /// `RootView.body` ne se ré-évalue pas pour une frappe.
+    @StateObject private var typingSource: TypingEntriesSource
     /// `true` quand `StoryViewerView` est présenté en `fullScreenCover` —
     /// cache la pill pour qu'elle ne rende plus par-dessus le header story
     /// (bug 2026-05-27). Injecté explicitement pour la même raison que
@@ -106,10 +116,19 @@ struct ConnectionBanner: View {
         onItemTap: ((OutboxUIItem.Source) -> Void)? = nil,
         activeConversationId: (() -> String?)? = nil
     ) {
-        self.conversationListViewModel = conversationListViewModel
         self.isStoryViewerPresenting = isStoryViewerPresenting
         self.onItemTap = onItemTap
         self.activeConversationId = activeConversationId
+        // `@StateObject` : l'abonnement naît UNE fois par identité de vue, et
+        // survit aux reconstructions fréquentes de la bannière par ses hôtes.
+        // Le view-model, lui, a une identité stable (possédé par un
+        // `@StateObject` d'hôte), donc la valeur capturée à la première
+        // construction reste la bonne pour toute la durée de vie.
+        _typingSource = StateObject(
+            wrappedValue: TypingEntriesSource(
+                publisher: conversationListViewModel?.$typingUsers.eraseToAnyPublisher()
+            )
+        )
     }
 
     private var isDisconnected: Bool { statusVM.status == .disconnected }
@@ -179,12 +198,10 @@ struct ConnectionBanner: View {
             ))
         }
 
-        if let conversationListViewModel {
-            result.append(contentsOf: Self.typingEntries(
-                typingUsers: conversationListViewModel.typingUsers,
-                excluding: activeConversationId?()
-            ))
-        }
+        result.append(contentsOf: Self.typingEntries(
+            typingUsers: typingSource.typingUsers,
+            excluding: activeConversationId?()
+        ))
 
         return result
     }

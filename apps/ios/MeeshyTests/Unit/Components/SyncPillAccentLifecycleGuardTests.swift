@@ -2,66 +2,31 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// Directive porteur 2026-08-27 (précision #4026) : l'accent de la pastille
-/// (grossi ×1.5, fond primaire) pour une frappe (`typing.<conv>`) ou une
-/// reconnexion (`status.offline`/`status.disconnected`, dotStyle `.warning`)
-/// doit durer EXACTEMENT tant que le signal sous-jacent dure — jamais un
-/// délai fixe. `SyncPill.isOngoingSignal(_:)` est le prédicat pur qui décide
-/// ; testé directement (pas une garde de source) puisqu'il n'est pas
-/// `private` et ne touche aucun `@State`.
+/// **Le cycle de vie de l'accent de la pastille — forme de source.**
 ///
-/// Le reste de la mécanique (`handleEntriesChange`/`surfaceWithAccent`)
-/// pilote du `@State` privé de la View — non inspectable sans ViewInspector,
-/// donc gardé par forme de source, même patron que
-/// `ConversationSelectionGuardTests`/`FocalMatrixWiringGuardTests`.
+/// Histoire de la règle, parce qu'elle a changé deux fois en un jour et que
+/// la garde doit dire LAQUELLE elle garde :
+///
+/// - #4018 — l'accent était un pulse fixe de 0,5 s à chaque nouveau contenu.
+/// - #4026 — l'accent d'un signal EN COURS (frappe, reconnexion) durait
+///   exactement tant que le signal, via un suivi d'identifiants
+///   (`accentedOngoingIDs`) et sans aucun minuteur.
+/// - **#4050 (en vigueur)** — l'accent est une **fenêtre de six secondes
+///   réarmée par chaque entrée NEUVE**, gouvernée par le temps seul :
+///   « rester bien visible avant de reprendre la forme normale au bout d'au
+///   moins 6 secondes si l'utilisateur écrit encore ; si un nouvel utilisateur
+///   écrit entre-temps […] qu'elle grossisse encore aussi pendant 6 s, et ainsi
+///   de suite » (directive porteur 2026-08-27).
+///
+/// #4050 amende donc #4026 sur ses DEUX bords : la durée du signal n'entre
+/// plus dans la décision, ni pour prolonger l'accent, ni pour l'interrompre.
+/// La décision elle-même vit dans `SyncPillAccentLaw` et est testée par
+/// `SyncPillAccentWindowTests` ; cette garde-ci vérifie que la VUE la
+/// consomme — son `@State` privé n'étant pas inspectable sans ViewInspector,
+/// même patron que `ConversationSelectionGuardTests` /
+/// `FocalMatrixWiringGuardTests`.
 @MainActor
 final class SyncPillAccentLifecycleGuardTests: XCTestCase {
-
-    private func entry(
-        id: String,
-        dotStyle: SyncPillDotStyle,
-        label: String = "x"
-    ) -> SyncPillEntry {
-        SyncPillEntry(id: id, label: label, iconName: nil, dotStyle: dotStyle, source: nil)
-    }
-
-    // MARK: - `isOngoingSignal` — le prédicat pur
-
-    func test_isOngoingSignal_true_forATypingEntry() {
-        let typing = entry(id: "typing.conv1", dotStyle: .brand)
-        XCTAssertTrue(SyncPill.isOngoingSignal(typing),
-                      "une frappe est un signal en cours, quel que soit son dotStyle")
-    }
-
-    func test_isOngoingSignal_true_forAWarningDotStyle_offlineOrReconnecting() {
-        let offline = entry(id: "status.offline", dotStyle: .warning)
-        let disconnected = entry(id: "status.disconnected", dotStyle: .warning)
-        XCTAssertTrue(SyncPill.isOngoingSignal(offline))
-        XCTAssertTrue(SyncPill.isOngoingSignal(disconnected))
-    }
-
-    func test_isOngoingSignal_false_forTheTransientOnlineConfirmation() {
-        // status.online est `.success` — la reconnexion est déjà TERMINÉE à
-        // ce stade, elle doit garder le pulse bref existant (#4018), pas
-        // l'accent indéfini.
-        let online = entry(id: "status.online", dotStyle: .success)
-        XCTAssertFalse(SyncPill.isOngoingSignal(online))
-    }
-
-    func test_isOngoingSignal_false_forAFailedSend() {
-        // Un envoi/mutation en échec (dotStyle .error) N'EST PAS un signal en
-        // cours — le tenir accentué indéfiniment jusqu'à résolution manuelle
-        // contredirait le pulse bref voulu par #4018 pour cette famille.
-        let failed = entry(id: "outbox.msg-1", dotStyle: .error)
-        XCTAssertFalse(SyncPill.isOngoingSignal(failed))
-    }
-
-    func test_isOngoingSignal_false_forAPlainBrandEntry() {
-        let syncing = entry(id: "status.syncing", dotStyle: .brand)
-        XCTAssertFalse(SyncPill.isOngoingSignal(syncing))
-    }
-
-    // MARK: - Forme de source : pas de minuteur pour un signal en cours
 
     private func source(_ relativePath: String) throws -> String {
         let root = URL(fileURLWithPath: #filePath)
@@ -90,47 +55,92 @@ final class SyncPillAccentLifecycleGuardTests: XCTestCase {
         return nil
     }
 
-    func test_handleEntriesChange_tracksOngoingIDs_withoutSchedulingATimer() throws {
-        let code = try source("Features/Main/Components/SyncPill.swift")
+    private func pillSource() throws -> String {
+        try source("Features/Main/Components/SyncPill.swift")
+    }
+
+    // MARK: - La vue consomme la loi, elle ne la réécrit pas
+
+    func test_handleEntriesChange_delegatesTheWindowToTheLaw() throws {
+        let code = try pillSource()
         guard let fn = body(of: "private func handleEntriesChange() {", in: code) else {
             return XCTFail("`handleEntriesChange` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            fn.contains("accentedOngoingIDs.formIntersection(currentOngoingIDs)")
-                && fn.contains("accentedOngoingIDs.formUnion(newIDs.intersection(currentOngoingIDs))"),
-            "un signal en cours qui a disparu doit sortir du suivi, un nouveau doit y entrer."
+            fn.contains("SyncPillAccentLaw.deadline("),
+            "la fenêtre d'accent se décide dans `SyncPillAccentLaw`, jamais en ligne dans la vue : c'est là qu'elle est testée sur le temps injecté."
         )
         XCTAssertTrue(
-            fn.contains("if !accentedOngoingIDs.isEmpty") && !fn.contains("DispatchQueue.main.asyncAfter"),
-            "tant qu'un signal en cours est suivi, AUCUN minuteur ne doit être posé dans cette fonction — "
-                + "le retour au repos vient de la disparition de l'id, jamais d'un délai fixe."
+            fn.contains("hasNewEntries: !newIDs.isEmpty"),
+            "seule une entrée NEUVE réarme — une frappe qui continue garde son id `typing.<conv>` et ne doit rien prolonger (borne haute de #4050)."
         )
     }
 
-    func test_handleEntriesChange_endsTheAccentImmediately_whenTheLastOngoingSignalClears() throws {
-        let code = try source("Features/Main/Components/SyncPill.swift")
+    func test_theAccentTimerIsArmedOnTheDeadline_andReplacedOnEveryRearm() throws {
+        let code = try pillSource()
+        guard let fn = body(of: "private func applyAccentWindow(now: Date) {", in: code) else {
+            return XCTFail("`applyAccentWindow` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            fn.contains("accentResetWorkItem?.cancel()"),
+            "un réarmement doit ANNULER le retour au repos précédent : sans cela, N arrivées laissent N minuteurs en vol et la pastille redescend au milieu de sa fenêtre."
+        )
+        XCTAssertTrue(
+            fn.contains("deadline.timeIntervalSince(now)"),
+            "le retour au repos est programmé à l'ÉCHÉANCE de la fenêtre, pas après un délai fixe — c'est ce qui rend le réarmement exact."
+        )
+        XCTAssertFalse(
+            fn.contains("repeatForever"),
+            "minuteur borné, jamais répété — cf. audit chauffe #3940."
+        )
+    }
+
+    // MARK: - L'ancien régime ne revient pas
+
+    func test_theOngoingSignalRegimeIsGone() throws {
+        let code = try pillSource()
+        for vestige in ["accentedOngoingIDs", "isOngoingSignal", "accentHold"] {
+            XCTAssertFalse(
+                code.contains(vestige),
+                "`\(vestige)` appartient au régime #4026, où l'accent suivait la DURÉE du signal. #4050 l'amende : "
+                    + "le réintroduire ferait cohabiter deux horloges pour une seule forme."
+            )
+        }
+    }
+
+    func test_theAccentDoesNotEndWhenTheSignalDisappears() throws {
+        let code = try pillSource()
         guard let fn = body(of: "private func handleEntriesChange() {", in: code) else {
             return XCTFail("`handleEntriesChange` introuvable — la garde ne mesurerait rien.")
         }
-        XCTAssertTrue(
+        // La branche « le dernier signal en cours a disparu ⇒ accent coupé
+        // immédiatement » était le cœur de #4026. Sous #4050, seule l'échéance
+        // éteint l'accent (borne basse) — sauf file vide, traitée en amont par
+        // le retour anticipé.
+        XCTAssertFalse(
             fn.contains("else if isAccented {"),
-            "quand le dernier signal en cours disparaît et qu'aucune entrée neuve n'arrive, l'accent doit "
-                + "revenir au repos IMMÉDIATEMENT (directive porteur), pas après un délai périmé."
+            "la disparition d'un signal ne coupe plus l'accent : il tient ses six secondes même si la personne cesse d'écrire (borne basse de #4050)."
         )
     }
 
-    func test_isOngoingSignal_isDefinedOnceAndReusedByHandleEntriesChange() throws {
-        let code = try source("Features/Main/Components/SyncPill.swift")
+    // MARK: - Les deux durées de six secondes restent distinctes
+
+    func test_theHideDelayAndTheAccentWindowAreTwoNamedConstants() throws {
+        let code = try pillSource()
         XCTAssertTrue(
-            code.contains("static func isOngoingSignal(_ entry: SyncPillEntry) -> Bool"),
-            "le prédicat doit être une fonction UNIQUE, pas dupliqué inline à chaque site d'usage."
+            code.contains("private static let idleHideDelay: TimeInterval = 6.0"),
+            "le délai d'effacement (#4017) reste une constante de la VUE."
         )
-        guard let fn = body(of: "private func handleEntriesChange() {", in: code) else {
-            return XCTFail("`handleEntriesChange` introuvable — la garde ne mesurerait rien.")
+        guard let fn = body(of: "private func scheduleAutoHide() {", in: code) else {
+            return XCTFail("`scheduleAutoHide` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            fn.contains("entries.filter(Self.isOngoingSignal)"),
-            "`handleEntriesChange` doit appeler le prédicat partagé, jamais reproduire sa condition."
+            fn.contains("idleHideDelay: Self.idleHideDelay"),
+            "l'effacement passe SA durée à la loi : les deux valent six secondes aujourd'hui, régler l'une ne doit pas bouger l'autre."
+        )
+        XCTAssertTrue(
+            fn.contains("SyncPillAccentLaw.hideDelay("),
+            "l'effacement se compte depuis la FIN de l'accent (#4050) — parties du même instant, les deux durées auraient fait rétrécir et disparaître la pastille en même temps, et la forme normale n'aurait jamais été visible."
         )
     }
 }
