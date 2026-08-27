@@ -313,6 +313,34 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
         }
     }
 
+    // MARK: - B2 (#3925) — la description s'affiche par-dessus le canvas composé
+
+    /// La face LECTURE de la section description repliable du composer : le
+    /// contenu partagé (`slide.content`) s'affiche par-dessus le canvas, résolu
+    /// par le Prisme, et ne chevauche jamais la transcription vocale.
+    func test_laDescription_saffichePardessusLeCanvas_resolueParLePrisme() throws {
+        let canvas = try source()
+        XCTAssertTrue(
+            canvas.contains("currentVoiceCaption == nil, let description = currentStoryDescription"),
+            "L'overlay de description se peint sous le canvas gaté sur l'absence de transcription " +
+            "vocale — les deux ne se chevauchent jamais."
+        )
+        XCTAssertTrue(
+            canvas.contains("Text(description)"),
+            "Le texte de la description est bien PEINT par-dessus le canvas composé."
+        )
+        XCTAssertTrue(
+            canvas.contains("var currentStoryDescription"),
+            "La description résolue vit dans une propriété de `StoryCardView` (l'hôte du canvas), " +
+            "testable et unique."
+        )
+        XCTAssertTrue(
+            canvas.contains("resolvedContent(preferredLanguages: resolvedViewerLanguageChain)"),
+            "La description descend le Prisme (chaîne complète, repli original) — jamais " +
+            "`translations.first`."
+        )
+    }
+
     // MARK: - Le swap lui-même (s'active tout seul le jour où B4 le permet)
 
     /// Tant que `MeeshyScenePlayer` n'est pas monté ici, ce test dit POURQUOI —

@@ -450,6 +450,12 @@ struct MeeshyComposerHost: View {
     /// (`viewModel.backgroundColor`) pour que la scène montée l'affiche.
     @State private var documentBackground: String?
 
+    /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
+    /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
+    /// déplie sur un champ lié au CONTENU partagé (`documentText`). Vit dans le
+    /// MEUBLE, comme tout état de chrome de la scène.
+    @State private var descriptionExpanded = false
+
     /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
     /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
     /// (T2.1) ne portait encore le résultat d'aucun geste, faute de picker
@@ -722,6 +728,11 @@ struct MeeshyComposerHost: View {
             // plateau puis l'atelier —, et ce montage-ci est le SEUL.
             if paintsFormatFan { plateauTools }
             surface
+            // B2 (#3925) — la description repliable vit SOUS le canvas, en mode
+            // scène uniquement : c'est la surface d'édition, côté scène, du
+            // CONTENU partagé que B1 préserve entre les modes. Le reader
+            // l'affiche par-dessus le canvas composé (légende `content`).
+            if mountedSurface == .scene { sceneDescriptionSection }
             // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
             // peint donc les MÊMES trois zones seulement quand l'atelier les a
             // cédées : deux barres de publication, dont une inerte, seraient
@@ -1064,6 +1075,90 @@ struct MeeshyComposerHost: View {
             }
             return nil
         }
+    }
+
+    /// **B2 (#3925) — la description repliable sous le canvas.**
+    ///
+    /// En mode scène (Story/Réel), une section repliable liée au CONTENU
+    /// PARTAGÉ (`documentText`) : ce que l'auteur écrit ici part comme
+    /// `slide.content` (via `applyContentText`, le même canal que B1) et le
+    /// reader l'affiche par-dessus le canvas composé (la légende `content` des
+    /// viewers existants — `ReelsPlayerView`, `FeedPostCard`, `PostDetailView`,
+    /// le `StoryViewer`). C'est la surface d'ÉDITION, côté scène, du contenu que
+    /// B1 préserve entre les modes — jamais un second champ : une description
+    /// écrite ici et retrouvée dans le champ du document au retour, et l'inverse.
+    ///
+    /// Repliée par défaut (`descriptionExpanded`) : une barre compacte qui ne
+    /// mange pas le canvas, l'aperçu du contenu quand il existe, l'invite quand
+    /// il est vide.
+    private var sceneDescriptionSection: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "text.alignleft")
+                        .font(MeeshyFont.relative(13))
+                    Text(sceneDescriptionSummary)
+                        .font(MeeshyFont.relative(14))
+                        .lineLimit(1)
+                        .foregroundColor(documentText.isEmpty
+                                         ? MeeshyColors.textSecondary(isDark: true)
+                                         : MeeshyColors.textPrimary(isDark: true))
+                    Spacer(minLength: 8)
+                    Image(systemName: descriptionExpanded ? "chevron.down" : "chevron.up")
+                        .font(MeeshyFont.relative(11))
+                }
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 11)
+                .contentShape(Rectangle())
+            }
+            .accessibilityLabel(Text(String(
+                localized: "composer.scene.description.a11y.toggle",
+                defaultValue: "Afficher ou masquer la description", bundle: .main)))
+            .accessibilityValue(Text(sceneDescriptionSummary))
+
+            if descriptionExpanded {
+                TextField(
+                    String(localized: "composer.scene.description.placeholder",
+                           defaultValue: "Ajoutez une description…", bundle: .main),
+                    text: sceneDescriptionBinding,
+                    axis: .vertical
+                )
+                .lineLimit(1...4)
+                .font(MeeshyFont.relative(15))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 12)
+            }
+        }
+        .background(MeeshyColors.textPrimary(isDark: true).opacity(0.06))
+    }
+
+    /// L'aperçu de la barre repliée : le contenu quand il existe, l'invite
+    /// « ajoutez une description » quand il est vide — un contrôle sans effet
+    /// est absent, celui-ci dit toujours ce qu'il fait (loi 4).
+    private var sceneDescriptionSummary: String {
+        documentText.isEmpty
+            ? String(localized: "composer.scene.description.placeholder",
+                     defaultValue: "Ajoutez une description…", bundle: .main)
+            : documentText
+    }
+
+    /// **Le binding qui garde UN seul contenu.** Écrire dans la description met
+    /// à jour `documentText` (l'état partagé du meuble) ET le sème sur la slide
+    /// de la scène (`applyContentText`) : ainsi le texte part à la publication
+    /// depuis la scène, et se retrouve dans le champ du document au retour —
+    /// jamais deux champs à faire diverger (loi 9 / B1).
+    private var sceneDescriptionBinding: Binding<String> {
+        Binding(
+            get: { documentText },
+            set: { newValue in
+                documentText = newValue
+                viewModel.applyContentText(newValue)
+            }
+        )
     }
 
     /// **Le sélecteur de DESTINATION (F1, #3884)** — remplace l'interrupteur

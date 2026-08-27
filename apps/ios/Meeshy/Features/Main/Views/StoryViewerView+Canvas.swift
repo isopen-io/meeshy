@@ -1204,6 +1204,26 @@ struct StoryCardView: View {
         max(geometry.safeAreaInsets.top, 59)
     }
 
+    /// **La description de la story, affichée PAR-DESSUS le canvas composé (B2, #3925).**
+    ///
+    /// Le composer unifié garde UN seul contenu (`documentText` → `slide.content`
+    /// → `story.content`) et le publie ; jusqu'ici le viewer ne le rendait JAMAIS
+    /// au-dessus du média (seule la transcription vocale s'y superposait). B2 le
+    /// rend, comme la légende d'un réel (`ReelsPlayerView.reelDescriptionText`) —
+    /// c'est la face lecture de la section description repliable du composer.
+    ///
+    /// **Résolu par le Prisme** : `resolvedContent(preferredLanguages:)` descend
+    /// la chaîne complète (systemLanguage > regionalLanguage > customDestination
+    /// > deviceLocale) et retombe sur l'ORIGINAL, jamais `translations.first`.
+    /// `nil` sur contenu vide — un contrôle sans matière est absent (loi 4).
+    private var currentStoryDescription: String? {
+        guard let story = currentStory,
+              let resolved = story.resolvedContent(preferredLanguages: resolvedViewerLanguageChain),
+              !resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return resolved
+    }
+
     /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
     /// `.aspectRatio(.fit) + .frame(maxWidth/Height)` ne contraint pas
     /// correctement l'hôte canvas (`UIViewRepresentable`, monté sous
@@ -1676,6 +1696,36 @@ struct StoryCardView: View {
                         .background(
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(Color.black.opacity(0.55))
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, topInset + 130)
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+
+            // === Description overlay (B2, #3925 — la légende de la story) ===
+            //
+            // La face LECTURE de la section description repliable du composer :
+            // le contenu partagé du composer unifié (`slide.content`), résolu par
+            // le Prisme, s'affiche par-dessus le canvas composé — comme la légende
+            // d'un réel. Gaté sur `currentVoiceCaption == nil` : la transcription
+            // vocale (exploration à la demande, menu « … ») prend le bas de la
+            // scène quand elle est active — les deux ne se chevauchent jamais.
+            if currentVoiceCaption == nil, let description = currentStoryDescription {
+                VStack {
+                    Spacer()
+                    Text(description)
+                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black.opacity(0.45))
                         )
                         .padding(.horizontal, 20)
                         .padding(.bottom, topInset + 130)

@@ -152,4 +152,50 @@ final class ComposerSceneActivationTests: XCTestCase {
             "Seuls l'image et la vidéo sont portées dans la scène — filtrées par leur mime."
         )
     }
+
+    // 9 — B2 (#3925) : la section description repliable est peinte SOUS le canvas,
+    // en mode scène uniquement.
+    func test_laSectionDescription_estPeinteSousLaScene() throws {
+        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        XCTAssertTrue(raw.contains("private var sceneDescriptionSection"),
+                      "sceneDescriptionSection introuvable ou source vide")
+        let src = compact(raw)
+        XCTAssertTrue(
+            src.contains("ifmountedSurface==.scene{sceneDescriptionSection}"),
+            "La section description ne se peint qu'en mode SCÈNE (Story/Réel), sous le canvas."
+        )
+    }
+
+    // 10 — B2 : écrire la description garde UN seul contenu — elle met à jour
+    // `documentText` (l'état partagé) ET le sème sur la scène (`applyContentText`),
+    // jamais un second champ (loi 9 / B1).
+    func test_laDescription_gardeUnSeulContenu() throws {
+        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        XCTAssertTrue(raw.contains("private var sceneDescriptionBinding"),
+                      "sceneDescriptionBinding introuvable ou source vide")
+        let src = compact(raw)
+        XCTAssertTrue(
+            src.contains("documentText=newValue")
+                && src.contains("viewModel.applyContentText(newValue)"),
+            "La description écrit dans `documentText` (partagé) ET le sème sur la scène — "
+                + "un seul contenu, jamais deux champs à faire diverger."
+        )
+    }
+
+    // 11 — B2 : les libellés de la section sont traduits dans les 7 locales.
+    func test_lesLibellesDescription_sontTraduits_7Locales() throws {
+        let catalog = try source("Meeshy/Localizable.xcstrings")
+        let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
+        let strings = json?["strings"] as? [String: Any]
+        for key in ["composer.scene.description.placeholder",
+                    "composer.scene.description.a11y.toggle"] {
+            guard let entry = strings?[key] as? [String: Any],
+                  let locs = entry["localizations"] as? [String: Any] else {
+                return XCTFail("Clé « \(key) » absente du catalogue")
+            }
+            for loc in ["ar", "de", "en", "es", "fr", "it", "pt-BR"] {
+                XCTAssertNotNil(locs[loc], "Section description « \(key) » : locale « \(loc) » manquante")
+            }
+        }
+    }
 }
