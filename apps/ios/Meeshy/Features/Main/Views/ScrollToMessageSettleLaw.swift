@@ -6,10 +6,14 @@ import CoreGraphics
 /// (citation tapée, résultat de recherche, retour Résumé/Rivière).
 ///
 /// `scrollToItem(at:.centeredVertically, animated:)` calcule son offset
-/// d'arrivée UNE fois, sur le layout du moment — c'est-à-dire sur des
-/// hauteurs ESTIMÉES (`estimatedBubbleRowLayoutHeight` 80 /
-/// `estimatedFlatRowLayoutHeight` 150) pour toute cellule jamais réalisée
-/// entre la position courante et la cible. Pendant l'animation, ces cellules
+/// d'arrivée UNE fois, sur le layout du moment — c'est-à-dire sur la hauteur
+/// ESTIMÉE servie au layout (point de départ `estimatedBubbleRowLayoutHeight`
+/// 80 / `estimatedFlatRowLayoutHeight` 150, puis la valeur APPRISE du fil
+/// courant — `MessageListHeightEstimationLaw`, #4041) pour toute cellule
+/// jamais réalisée entre la position courante et la cible. Une estimation
+/// plus juste rapproche l'offset visé du bon, elle ne dispense JAMAIS de la
+/// vérification ci-dessous : un média qui se mesure tard reste hors de portée
+/// de toute estimation. Pendant l'animation, ces cellules
 /// se réalisent avec leurs hauteurs réelles (une bulle image tourne autour de
 /// 300 pt), le solveur self-sizing corrige `contentSize`, et l'animation —
 /// qui vise toujours l'offset périmé — atterrit À CÔTÉ du message demandé.

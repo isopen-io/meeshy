@@ -68,6 +68,93 @@ nonisolated enum MessageListOffsetCompensationLaw {
     }
 }
 
+/// **Loi d'estimation de hauteur de rangée** (issue #4041, capture
+/// utilisateur du 2026-08-27 : « l'effet de défilement étiré »).
+///
+/// Le layout compositionnel ne reçoit qu'UNE hauteur estimée — la liste n'a
+/// qu'une section (`MessageListSection.main`), il n'existe aucun canal par
+/// item. Tant que cette estimation valait la cote d'une TÊTE DE GROUPE
+/// (150 pt : en-tête d'identité réservé + marges), alors que la population
+/// dominante du fil est la rangée DE SUITE (~51 pt mesurés), chaque cellule
+/// réalisée arrivait ~100 pt trop haute avant de se rétracter. Mesure sur la
+/// capture : 114 pt à l'entrée, 51 pt une fois posée, résorption en ~150 ms.
+///
+/// Ce qui rendait l'écart VISIBLE plutôt qu'absorbé dans la frame, ce sont
+/// les trois gardes ci-dessus et ci-dessous — toutes justes, aucune touchée
+/// par ce lot : le plafond d'invalidations partielles avale la correction
+/// au-delà de quatre cellules par transaction, `selfSizingAdjustment` ne
+/// compense pas DANS la fenêtre, et le rattrapage complet attend la pose.
+/// **Une estimation JUSTE ne les contourne pas : elle les sollicite moins**,
+/// puisqu'une cellule dont la hauteur préférée égale l'estimation
+/// n'invalide pas du tout.
+///
+/// La loi décide QUAND remplacer l'estimation servie par ce que le fil
+/// mesure vraiment. Elle est un POINT FIXE : ré-appliquée à ce qu'elle vient
+/// de rendre, elle ne propose plus rien — adopter coûte une invalidation
+/// COMPLÈTE, s'y reprendre à chaque pose coûterait plus cher que le défaut
+/// corrigé.
+///
+/// **L'échantillon est l'état RÉEL du layout** (hauteurs des items visibles),
+/// jamais les seules corrections de self-sizing : n'échantillonner que les
+/// cellules qui INVALIDENT biaise vers celles dont l'estimation est déjà
+/// fausse — une fois la rangée de suite adoptée, elle disparaîtrait de
+/// l'échantillon et seules les têtes de groupe y resteraient ; la loi
+/// oscillerait de l'une à l'autre, une invalidation complète par pose.
+///
+/// Type pur, `nonisolated`, sans UIKit — même patron que
+/// `MessageListOffsetCompensationLaw`.
+nonisolated enum MessageListHeightEstimationLaw {
+
+    /// Cellules visibles en deçà desquelles on n'apprend rien : une
+    /// conversation qui vient de s'ouvrir sur trois messages n'est pas un
+    /// échantillon du fil.
+    static let minimumSamples = 6
+
+    /// Écart minimal entre l'estimation servie et ce que le fil mesure pour
+    /// qu'il vaille la peine d'adopter. En deçà, le remède (une invalidation
+    /// complète, donc un repositionnement ancré de tout le contenu non
+    /// mesuré) coûte plus cher que le mal.
+    static let adoptionThreshold: CGFloat = 12
+
+    /// Plancher : une rangée de suite d'une ligne porte au moins son texte
+    /// (`FocalMetrics.Text` — 15 pt × 1,42 ≈ 21) et ses deux
+    /// `Row.paddingVertical` (3 + 3). 32 laisse la marge sans jamais laisser
+    /// l'estimation s'effondrer sur des hauteurs dégénérées (cellules lues
+    /// en plein calcul de layout).
+    static let minimumEstimate: CGFloat = 32
+
+    /// Plafond : au-delà d'environ un quart d'écran, la liste ne réaliserait
+    /// plus assez de cellules par frame pour couvrir la fenêtre — un fil de
+    /// médias plein écran ne doit pas emporter l'estimation avec lui.
+    static let maximumEstimate: CGFloat = 240
+
+    /// L'estimation à adopter, ou `nil` s'il n'y a rien à changer.
+    ///
+    /// - Parameters:
+    ///   - visibleHeights: hauteurs des items visibles, telles que le layout
+    ///     les porte à cet instant (mesurées pour celles qui se sont posées,
+    ///     égales à l'estimation courante pour les autres — ce qui STABILISE
+    ///     la loi au lieu de la biaiser).
+    ///   - current: l'estimation actuellement servie au layout.
+    static func proposal(visibleHeights: [CGFloat], current: CGFloat) -> CGFloat? {
+        guard visibleHeights.count >= minimumSamples else { return nil }
+        let candidate = min(maximumEstimate, max(minimumEstimate, median(of: visibleHeights)))
+        guard abs(candidate - current) >= adoptionThreshold else { return nil }
+        return candidate
+    }
+
+    /// Médiane — jamais la moyenne : une minorité de rangées hautes (média,
+    /// citation, tête de groupe) tirerait la moyenne loin de la population
+    /// dominante, celle dont l'estimation doit être juste.
+    static func median(of values: [CGFloat]) -> CGFloat {
+        let sorted = values.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let middle = sorted.count / 2
+        guard sorted.count.isMultiple(of: 2) else { return sorted[middle] }
+        return (sorted[middle - 1] + sorted[middle]) / 2
+    }
+}
+
 /// Le layout de la liste de messages : un `UICollectionViewCompositionalLayout`
 /// qui absorbe dans `contentOffset` les corrections de layout survenant SOUS
 /// la fenêtre visible — dans la MÊME transaction de layout, donc sans aucune
@@ -249,6 +336,21 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     /// fin d'animation) : joue le rattrapage complet noté pendant le mouvement.
     func flushPendingRecoveryInvalidation() {
         guard recoveryInvalidationPending else { return }
+        fireOrDeferRecoveryInvalidation()
+    }
+
+    /// **Ré-estimation adoptée** (#4041) : l'hôte vient de remplacer la
+    /// hauteur estimée que son provider de section sert au layout. TOUT le
+    /// contenu encore non mesuré change alors de hauteur d'un coup.
+    ///
+    /// Le repositionnement passe donc par le chemin ANCRÉ — celui qui existe
+    /// déjà pour le rattrapage — et jamais par un `invalidateLayout()` nu :
+    /// une invalidation complète sans ancre fait glisser la lecture en
+    /// silence (mesuré en repro 2026-08-26 : `contentOffset` 968→842 en moins
+    /// de 20 ms, sans doigt ni décélération). Le même chemin garantit aussi
+    /// qu'une adoption arrivée pendant un mouvement est DIFFÉRÉE à la pose au
+    /// lieu de tuer la décélération.
+    func invalidateForAdoptedEstimate() {
         fireOrDeferRecoveryInvalidation()
     }
 

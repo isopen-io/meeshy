@@ -73,6 +73,7 @@
 		0BF51701F54AFBB0DC71DEA7 /* LivingSummaryHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 236AE1CA1D390A790A2759EA /* LivingSummaryHost.swift */; };
 		0C27AFEE4A5674724723BF85 /* FloatingCallPillViewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EC2DD8BDA6BA83E09D4A58 /* FloatingCallPillViewTests.swift */; };
 		0C49161FCC763DC8B88EA38D /* CommentTargetHunterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21222EB0CEF6B1025F1EE4F /* CommentTargetHunterTests.swift */; };
+		0C6A13737784AE51BBC6135A /* MessageListHeightEstimationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 500E09F78656B23A26AA1B8F /* MessageListHeightEstimationTests.swift */; };
 		0C7671FBFEA1304255081410 /* SingleSourceOfTruthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67ED6D6105D12DB604B7734C /* SingleSourceOfTruthTests.swift */; };
 		0C8CCC8DB7CB97820E8659BC /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60C3889D242EDB1DC4AB7E37 /* DependencyContainer.swift */; };
 		0CAD7D91895EA82408B41BD4 /* FocalTimestampRevealState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB9F5C7AD47AEB6C8C2BF5B /* FocalTimestampRevealState.swift */; };
@@ -1893,6 +1894,7 @@
 		4FCB60B9330CB9D6D6AB0C8C /* MediaPlaybackPositionSeedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPlaybackPositionSeedTests.swift; sourceTree = "<group>"; };
 		4FE581474B3BBD56EDAD6E0E /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
 		4FFDAF724B197FBC3B3FACCC /* DigestBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DigestBuilderTests.swift; sourceTree = "<group>"; };
+		500E09F78656B23A26AA1B8F /* MessageListHeightEstimationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListHeightEstimationTests.swift; sourceTree = "<group>"; };
 		501916DF18BCF574803C8008 /* LivingSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivingSummaryView.swift; sourceTree = "<group>"; };
 		50266C28923130C5BC3A4D00 /* ContactCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactCardView.swift; sourceTree = "<group>"; };
 		504C59EB711EC0CB5FEE3080 /* FeedPostCardLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedPostCardLayout.swift; sourceTree = "<group>"; };
@@ -3428,6 +3430,7 @@
 				F2960E5758EE3A27EE602820 /* LivingSummaryMountIdentityTests.swift */,
 				46E99EAB14CB0CB7637CFA78 /* LivingSummaryViewModelTests.swift */,
 				54188ED24C6434C94E85CD8F /* MessageGroupLanguageFanOutTests.swift */,
+				500E09F78656B23A26AA1B8F /* MessageListHeightEstimationTests.swift */,
 				42DC3B5888031A797D8F8A37 /* MessageListLayoutOffsetTests.swift */,
 				E0C0ABE31FC653BEEB2A3B08 /* ReadingModeLensCatalogTests.swift */,
 				033733ACBA7C77CB9E4C175A /* ReadingModePreferenceStoreTests.swift */,
@@ -6103,6 +6106,7 @@
 				20407CC2B00D51A6A651E03B /* MessageGroupLanguageFanOutTests.swift in Sources */,
 				97D0E518A8529A89577FA501 /* MessageLanguageDetailViewAdaptiveOnChangeSourceGuardTests.swift in Sources */,
 				91822BC57D513B09623484FA /* MessageLanguageDetailViewAudioRoutingTests.swift in Sources */,
+				0C6A13737784AE51BBC6135A /* MessageListHeightEstimationTests.swift in Sources */,
 				AA4269E6B7F477E08BC0DAFE /* MessageListLayoutOffsetTests.swift in Sources */,
 				2F880C6162C186814F408313 /* MessageListPerformanceTests.swift in Sources */,
 				40521AD207D27AACAEBC12CC /* MessageListSeenTrackingModeGateTests.swift in Sources */,

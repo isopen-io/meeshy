@@ -364,6 +364,34 @@ final class MessageListViewController: UIViewController {
     private static let estimatedFlatRowLayoutHeight: CGFloat = 150
     private static let estimatedBubbleRowLayoutHeight: CGFloat = 80
 
+    /// **Estimations APPRISES du fil courant** (#4041), une par famille de
+    /// rangée : la rangée plate (Focal/Script) et la bulle n'ont pas la même
+    /// cote, et une bascule de mode ne doit jamais servir celle de l'autre.
+    ///
+    /// Les deux constantes ci-dessus ne sont plus la valeur DÉFINITIVE mais
+    /// le point de DÉPART : 150 est la cote d'une TÊTE DE GROUPE, alors que
+    /// la population dominante d'un fil est la rangée DE SUITE (~51 pt
+    /// mesurés). Servir 150 à toutes faisait entrer chaque cellule ~100 pt
+    /// trop haute avant qu'elle ne se rétracte — l'« effet de défilement
+    /// étiré » de la capture du 2026-08-27.
+    ///
+    /// L'adoption passe par `MessageListHeightEstimationLaw` et n'a lieu qu'à
+    /// la POSE : changer l'estimation change la hauteur de tout le contenu
+    /// non mesuré, donc exige le chemin d'invalidation ANCRÉ du layout.
+    private var learnedFlatRowHeight: CGFloat?
+    private var learnedBubbleRowHeight: CGFloat?
+
+    /// L'estimation servie au provider de section en cet instant.
+    private var currentRowHeightEstimate: CGFloat {
+        readingMode.usesFlatRow
+            ? (learnedFlatRowHeight ?? Self.estimatedFlatRowLayoutHeight)
+            : (learnedBubbleRowHeight ?? Self.estimatedBubbleRowLayoutHeight)
+    }
+
+    /// Point d'accès de test (#4041) — `internal`, lu par `@testable import
+    /// Meeshy`, jamais par une autre cible app.
+    var rowHeightEstimateForTesting: CGFloat { currentRowHeightEstimate }
+
     /// Zone « près du bas » (en points d'offset) : en dessous, l'utilisateur
     /// SUIT la conversation — bouton « aller au bas » masqué, auto-scroll sur
     /// message entrant, et poussée naturelle des insertions en tête. Au-delà,
@@ -912,9 +940,11 @@ final class MessageListViewController: UIViewController {
         // sans quoi la scène visible saute (et l'échelle Focal avec elle,
         // `visualMidY` étant fonction de `center.y − offset`).
         let layout = MessageListLayout { [weak self] _, _ in
-            let estimate = (self?.readingMode.usesFlatRow ?? false)
-                ? Self.estimatedFlatRowLayoutHeight
-                : Self.estimatedBubbleRowLayoutHeight
+            // L'estimation est APPRISE du fil courant dès que la liste a
+            // posé assez de cellules (#4041) — la constante n'est plus que le
+            // point de départ. Repli sur la cote de bulle quand l'hôte est
+            // parti : comportement historique de ce closure, inchangé.
+            let estimate = self?.currentRowHeightEstimate ?? Self.estimatedBubbleRowLayoutHeight
             let itemSize = NSCollectionLayoutSize(
                 widthDimension: .fractionalWidth(1),
                 heightDimension: .estimated(estimate)
@@ -2065,6 +2095,11 @@ final class MessageListViewController: UIViewController {
             // momentum.
             if !self.store.isUserScrolling {
                 self.syncFocalFocusDetails()
+                // À l'OUVERTURE, la liste a posé ses premières cellules sans
+                // qu'aucun geste n'ait eu lieu : sans cette adoption, le tout
+                // premier défilement — celui de la capture #4041 — serait le
+                // seul à rester étiré.
+                self.adoptRowHeightEstimateIfWorthwhile()
             }
             if shouldAutoScroll {
                 // Le rouleau avance d'un cran, net — pas de ressort.
@@ -3091,6 +3126,40 @@ extension MessageListViewController: UICollectionViewDelegate {
         scrollSettleTarget = nil
     }
 
+    /// **Adopter ce que le fil MESURE** (#4041) — à la POSE uniquement.
+    ///
+    /// L'échantillon est l'état RÉEL du layout : la hauteur que chaque item
+    /// visible porte à cet instant, mesurée pour les cellules qui se sont
+    /// posées, égale à l'estimation courante pour les autres. N'échantillonner
+    /// que les cellules qui INVALIDENT biaiserait vers celles dont
+    /// l'estimation est déjà fausse : une fois la rangée de suite adoptée,
+    /// elle disparaîtrait de l'échantillon et seules les têtes de groupe y
+    /// resteraient — la loi oscillerait de l'une à l'autre, une invalidation
+    /// complète par pose.
+    ///
+    /// Jamais pendant un geste : la loi ne décide qu'au repos, et le layout
+    /// ancre le repositionnement qui suit.
+    func adoptRowHeightEstimateIfWorthwhile() {
+        guard isViewLoaded,
+              !collectionView.isDragging,
+              !collectionView.isDecelerating,
+              let layout = collectionView.collectionViewLayout as? MessageListLayout
+        else { return }
+        let visibleHeights = collectionView.indexPathsForVisibleItems.compactMap {
+            layout.layoutAttributesForItem(at: $0)?.frame.height
+        }
+        guard let adopted = MessageListHeightEstimationLaw.proposal(
+            visibleHeights: visibleHeights,
+            current: currentRowHeightEstimate
+        ) else { return }
+        if readingMode.usesFlatRow {
+            learnedFlatRowHeight = adopted
+        } else {
+            learnedBubbleRowHeight = adopted
+        }
+        layout.invalidateForAdoptedEstimate()
+    }
+
     /// Pose commune à l'arrêt (geste ou animation) — RETRAIT FOCAL iOS
     /// (2026-08-18) : plus d'élection, plus de nudge, plus de typographie de
     /// focus ; il ne reste que le chrome et les reconfigures différés.
@@ -3099,6 +3168,9 @@ extension MessageListViewController: UICollectionViewDelegate {
         // à la pose — plus jamais par re-proposition à chaque tour de boucle
         // (Time Profiler 2026-08-21, voir `MessageListLayout`).
         (collectionView.collectionViewLayout as? MessageListLayout)?.flushPendingRecoveryInvalidation()
+        // Le fil vient de montrer ce qu'il mesure vraiment (#4041) : c'est le
+        // seul moment où l'on a le droit de changer l'estimation servie.
+        adoptRowHeightEstimateIfWorthwhile()
         syncFocalFocusDetails()
         scheduleFocalFlatten()
         // Filet de la revue adversariale 2026-08-18 : une animation
