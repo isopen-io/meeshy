@@ -76,6 +76,16 @@ struct ConversationOverlayState {
     /// fois le menu refermé, même si l'auteur était en train de taper.
     /// `nil` tant qu'aucun longpress n'a capturé d'état à restituer.
     var restoreAfterLongPress: (isTyping: Bool, showOptions: Bool)? = nil
+    /// **Mode sélection multiple (#4005).** `true` pendant que la liste bascule
+    /// en sélection ; chaque bulle devient tappable pour ajouter/retirer de
+    /// `selectedMessageIds`, plafonné à `ConversationOverlayState.
+    /// selectionCap`. Quitter le mode (bouton Annuler) vide la sélection —
+    /// jamais de sélection résiduelle qui réapparaît au prochain appui long.
+    var isSelectionModeActive = false
+    var selectedMessageIds: Set<String> = []
+    /// Maximum de messages ET pièces jointes sélectionnables au total
+    /// (retour porteur 2026-08-27, #4005).
+    static let selectionCap = 100
     var detailSheetMessage: Message? = nil
     /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
     /// is presented — separate from `detailSheetMessage`, which stays wired to
@@ -186,6 +196,12 @@ struct ConversationComposerState {
     var showOptions = false
     var actionAlert: String? = nil
     var forwardMessage: Message? = nil
+    /// **Transfert groupé (#4005).** Vide pour les DEUX sites d'ouverture
+    /// historiques (longpress simple, swipe) — `forwardMessage` seul porte
+    /// alors tout. Non vide UNIQUEMENT depuis le mode sélection multiple :
+    /// `endSelectionMode()`-adjacent, posée puis effacée avec
+    /// `forwardMessage` par le MÊME `onDismiss` de la feuille.
+    var forwardAdditionalMessages: [Message] = []
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
     var composeMediaTarget: ComposableMediaTarget? = nil
@@ -948,6 +964,8 @@ struct ConversationView: View {
                     .presentationDetents([.medium, .large])
             }
             .sheet(item: $composerState.forwardMessage, onDismiss: {
+                // #4005 — le transfert groupé se referme AVEC le simple.
+                composerState.forwardAdditionalMessages = []
                 // La feuille est DÉMONTÉE : le plein écran peut prendre sa
                 // place. Promouvoir plus tôt présenterait deux modaux à la fois.
                 guard let attendue = composerState.pendingComposeTarget else { return }
@@ -956,6 +974,7 @@ struct ConversationView: View {
             }) { msgToForward in
                 ForwardPickerSheet(
                     message: msgToForward,
+                    additionalMessages: composerState.forwardAdditionalMessages,
                     sourceConversationId: conversation?.id ?? "",
                     accentColor: accentColor,
                     onOpenConversation: { router.navigateToConversation($0) },
@@ -1128,6 +1147,7 @@ struct ConversationView: View {
                         HapticFeedback.success()
                     },
                     onShare: { overlayState.shareMessage = msg },
+                    onSelect: { beginSelectionMode(seedingWith: msg.id) },
                     onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
@@ -1831,6 +1851,9 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.callDetailMessage = msg
                 },
+                isSelectionModeActive: overlayState.isSelectionModeActive,
+                selectedMessageIds: overlayState.selectedMessageIds,
+                onToggleSelection: { messageId in toggleMessageSelection(messageId) },
                 onAddReaction: { messageId, bubbleFrame in
                     // Exclusivité mutuelle : ouvrir la barre de quick-reaction
                     // ferme d'abord l'overlay d'appui-long s'il est visible.
@@ -2054,7 +2077,14 @@ struct ConversationView: View {
                             mentionSuggestionPanel
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        if let blockedId = blockedDirectParticipantId {
+                        if overlayState.isSelectionModeActive {
+                            // #4005 — remplace le composer, jamais un
+                            // troisième bandeau au-dessus : composer un
+                            // nouveau message et sélectionner des anciens
+                            // messages sont deux intentions qui ne
+                            // coexistent pas.
+                            selectionToolbar
+                        } else if let blockedId = blockedDirectParticipantId {
                             blockedComposerZone(userId: blockedId)
                         } else if viewModel.isConversationClosed {
                             closedConversationBanner
@@ -2832,6 +2862,21 @@ struct ConversationView: View {
                 ForEach(actions, id: \.self) { action in
                     if action == .delete { Divider() }
                     nativeMenuButton(action, msg: msg)
+                }
+
+                // « Sélectionner » (#4005) — utilitaire de LISTE, pas une
+                // action sur CE message : même patron que « Plus d'emojis »
+                // ci-dessus, un item manuel hors de `PrimaryAction`/`actions`
+                // (pas de doublon d'énumération avec `MoreItem.select`, qui
+                // sert l'overlay custom < iOS 26).
+                Divider()
+                Button {
+                    beginSelectionMode(seedingWith: msg.id)
+                } label: {
+                    Label(
+                        String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main),
+                        systemImage: "checkmark.circle"
+                    )
                 }
             }
         )

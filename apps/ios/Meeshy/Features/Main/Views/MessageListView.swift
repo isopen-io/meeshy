@@ -61,6 +61,14 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// pression. `true` (< iOS 26) garde le long-press → overlay custom.
     /// Les deux ne coexistent jamais (double déclenchement).
     var enableLongPress: Bool = true
+    /// **Mode sélection multiple (#4005).** `true` : un tap sur la cellule
+    /// bascule la sélection au lieu de son geste habituel — un capteur
+    /// transparent se pose PAR-DESSUS `content()` (fonctionne quel que soit
+    /// ce que fait la bulle en dessous : traduction, carrousel média, etc.),
+    /// et swipe/longpress s'effacent (une seule intention à la fois).
+    var isSelectionModeActive: Bool = false
+    var isSelected: Bool = false
+    var onToggleSelection: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
 
     @State private var offset: CGFloat = 0
@@ -127,7 +135,10 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
                 .onPreferenceChange(MediaScrubbingPreferenceKey.self) { isMediaScrubbing = $0 }
-                .simultaneousGesture(dragGesture)
+                // Mode sélection (#4005) : swipe/longpress s'effacent — une
+                // seule intention à la fois, même patron que le carrousel
+                // média (`isInlinePagingActive`) et le scrubbing.
+                .simultaneousGesture(dragGesture, including: isSelectionModeActive ? .none : .all)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
                 // (ConversationView) renders a custom overlay that keeps
@@ -149,7 +160,33 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // un `.contextMenu` NATIF (Liquid Glass) qui possède la
                 // pression ; ce geste custom est retiré pour éviter le
                 // double déclenchement (overlay custom + menu natif).
-                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress, action: onLongPress))
+                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress && !isSelectionModeActive, action: onLongPress))
+
+            // **Capteur de sélection (#4005).** Par-dessus TOUT — fonctionne
+            // quel que soit ce que fait la bulle en dessous (traduction,
+            // carrousel média…). Un tap qui aurait ouvert une action dans la
+            // bulle est INTERCEPTÉ pendant la sélection — comportement voulu,
+            // pas un défaut.
+            if isSelectionModeActive {
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onToggleSelection?() }
+                    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityLabel(Text(
+                        String(localized: "conversation.selection.toggleMessage", defaultValue: "Message", bundle: .main)
+                    ))
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if isSelectionModeActive {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
+                    .background(Circle().fill(.background).frame(width: 18, height: 18))
+                    .padding(6)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -461,6 +498,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
+    /// **Mode sélection multiple (#4005).** `false`/`[]` par défaut — sans
+    /// effet sur les écrans qui ne câblent pas ces trois paramètres.
+    var isSelectionModeActive: Bool = false
+    var selectedMessageIds: Set<String> = []
+    var onToggleSelection: ((String) -> Void)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -545,6 +587,10 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
+        // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
+        vc.isSelectionModeActive = isSelectionModeActive
+        vc.selectedMessageIds = selectedMessageIds
+        vc.onToggleSelection = onToggleSelection
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -617,6 +663,10 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
+        // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
+        vc.isSelectionModeActive = isSelectionModeActive
+        vc.selectedMessageIds = selectedMessageIds
+        vc.onToggleSelection = onToggleSelection
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment

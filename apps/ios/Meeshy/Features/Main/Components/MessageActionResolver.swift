@@ -32,6 +32,10 @@ enum MoreItem: String, Equatable {
     case edit, copy, share
     case language, views, reactions, transcription, sentiment, history
     case report
+    /// **Entrée en mode sélection multiple (#4005).** Aucune condition sur le
+    /// contexte du message — toujours offerte, en fin de liste (utilitaire de
+    /// LISTE, pas une action sur CE message précis).
+    case select
 }
 
 /// Section de la feuille « Plus… ».
@@ -206,6 +210,7 @@ enum MessageActionResolver {
         actions.append(ctx.isStarred ? .unstar : .star)
         if ctx.canDelete && ctx.hasMedia { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
+        actions.append(.select)
         sections.append(.actions(actions))
 
         // « Infos & Prisme » (explorables → morph icônes + contenu) : traduire

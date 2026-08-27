@@ -202,6 +202,27 @@ final class MessageListViewController: UIViewController {
             }
         }
     }
+    /// **Mode sélection multiple (#4005).** `didSet` gardé (`oldValue !=
+    /// newValue`), même patron que `readingMode` : une réaffectation
+    /// identique à chaque tick SwiftUI (`updateUIViewController` s'exécute à
+    /// chaque re-render) est un no-op — sans la garde, `applySnapshot`
+    /// rejouerait à chaque frappe dans le composer, par exemple.
+    var isSelectionModeActive: Bool = false {
+        didSet {
+            guard oldValue != isSelectionModeActive, isViewLoaded else { return }
+            applySnapshot(reconfigure: .allItems)
+        }
+    }
+    var selectedMessageIds: Set<String> = [] {
+        didSet {
+            guard oldValue != selectedMessageIds, isViewLoaded else { return }
+            applySnapshot(reconfigure: .allItems)
+        }
+    }
+    /// Bascule la sélection d'UN message — `ConversationView` décide de la
+    /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
+    /// ce contrôleur ne fait que relayer l'id tapé.
+    var onToggleSelection: ((String) -> Void)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -1242,6 +1263,9 @@ final class MessageListViewController: UIViewController {
             }
             let toggleReactionHandler = self.onToggleReaction
             let attachmentReactionHandler = self.onReactToAttachment
+            let selectionModeActive = self.isSelectionModeActive
+            let selectedIds = self.selectedMessageIds
+            let toggleSelectionHandler = self.onToggleSelection
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
             let showReadStatusHandler = self.onShowReadStatus
@@ -1631,7 +1655,10 @@ final class MessageListViewController: UIViewController {
                     onLongPress: { longPressHandler(messageId) },
                     // iOS 26+ (menu natif présent) : couper le long-press
                     // custom — le `.contextMenu` natif possède la pression.
-                    enableLongPress: nativeMenu == nil
+                    enableLongPress: nativeMenu == nil,
+                    isSelectionModeActive: selectionModeActive,
+                    isSelected: selectedIds.contains(messageId),
+                    onToggleSelection: { toggleSelectionHandler?(messageId) }
                 ) {
                     if let focalRow {
                         focalRow.equatable()

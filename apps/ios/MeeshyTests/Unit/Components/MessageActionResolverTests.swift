@@ -268,6 +268,20 @@ final class MessageActionResolverTests: XCTestCase {
         }
     }
 
+    // MARK: - moreSections : « Sélectionner » (#4005) — toujours offert, en fin de liste
+
+    func test_moreSections_alwaysIncludesSelect() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx()))
+        XCTAssertTrue(items.contains(.select), "« Sélectionner » doit toujours être offert — aucune "
+            + "condition de contexte, c'est un utilitaire de LISTE.")
+    }
+
+    func test_moreSections_select_isTheLastAction() {
+        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true, hasMedia: true)))
+        XCTAssertEqual(items.last, .select, "« Sélectionner » doit rester en fin de liste — utilitaire, "
+            + "pas une action sur CE message précis.")
+    }
+
     // MARK: - moreSections : SSOT « Plus… » (accueille pin/star/delete sortis du primaire)
 
     func test_moreSections_actionsIncludePinAndStar() {
