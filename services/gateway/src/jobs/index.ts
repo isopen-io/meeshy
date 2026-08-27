@@ -9,6 +9,7 @@ import { UnlockAccountsJob } from './unlock-accounts';
 import { NotificationDigestJob } from './notification-digest';
 import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
+import { GeoCacheCleanupJob } from './geo-cache-cleanup';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -24,6 +25,7 @@ export class BackgroundJobsManager {
   private notificationDigestJob: NotificationDigestJob;
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
+  private geoCacheCleanupJob: GeoCacheCleanupJob;
   private isRunning: boolean = false;
 
   constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
@@ -35,6 +37,7 @@ export class BackgroundJobsManager {
     this.notificationDigestJob = new NotificationDigestJob(prisma, emailService, magicLinkService);
     this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue ?? new RedisDeliveryQueue({ getNativeClient: () => null } as any));
     this.mutationLogCleanupJob = new MutationLogCleanupJob(prisma);
+    this.geoCacheCleanupJob = new GeoCacheCleanupJob();
   }
 
   /**
@@ -53,6 +56,7 @@ export class BackgroundJobsManager {
     this.notificationDigestJob.start();
     this.deliveryQueueCleanupJob.start();
     this.mutationLogCleanupJob.start();
+    this.geoCacheCleanupJob.start();
 
     this.isRunning = true;
     logger.info('All background jobs started successfully');
@@ -74,6 +78,7 @@ export class BackgroundJobsManager {
     this.notificationDigestJob.stop();
     this.deliveryQueueCleanupJob.stop();
     this.mutationLogCleanupJob.stop();
+    this.geoCacheCleanupJob.stop();
 
     this.isRunning = false;
     logger.info('All background jobs stopped successfully');
@@ -90,6 +95,7 @@ export class BackgroundJobsManager {
     await this.notificationDigestJob.runNow();
     await this.deliveryQueueCleanupJob.runNow();
     await this.mutationLogCleanupJob.runNow();
+    this.geoCacheCleanupJob.runNow();
 
     logger.info('All jobs completed');
   }
@@ -104,6 +110,7 @@ export class BackgroundJobsManager {
       notificationDigest: this.notificationDigestJob,
       deliveryQueueCleanup: this.deliveryQueueCleanupJob,
       mutationLogCleanup: this.mutationLogCleanupJob,
+      geoCacheCleanup: this.geoCacheCleanupJob,
     };
   }
 

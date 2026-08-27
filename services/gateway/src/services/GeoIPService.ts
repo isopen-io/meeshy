@@ -58,6 +58,36 @@ export interface RequestContext {
 const geoCache = new Map<string, { data: GeoIpData; expiry: number }>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+// Hard cap on cache entries. Expired entries are only skipped on READ, so
+// without a bound the map would retain one entry per distinct IP seen since
+// boot — an unbounded leak driven purely by the number of distinct clients.
+// The periodic GeoCacheCleanupJob drains expired entries; this cap is the
+// second line of defence against a distinct-IP flood between drains.
+export const MAX_GEO_CACHE_ENTRIES = 10_000;
+
+/**
+ * Number of entries currently held in the geo cache. Exposed for observability
+ * and to let the bound be asserted directly.
+ */
+export function geoCacheSize(): number {
+  return geoCache.size;
+}
+
+/**
+ * Write a geo result into the cache while keeping it bounded. The oldest
+ * inserted entry is also the closest to its TTL, so evicting it (FIFO) when at
+ * capacity approximates dropping the least-useful entry at O(1).
+ */
+function rememberGeo(ip: string, data: GeoIpData): void {
+  if (!geoCache.has(ip) && geoCache.size >= MAX_GEO_CACHE_ENTRIES) {
+    const oldest = geoCache.keys().next().value as string | undefined;
+    if (oldest !== undefined) {
+      geoCache.delete(oldest);
+    }
+  }
+  geoCache.set(ip, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+
 /**
  * Extract real IP from request, handling proxies
  */
@@ -199,8 +229,8 @@ export async function lookupGeoIp(ip: string): Promise<GeoIpData | null> {
       longitude: data.lon || null
     };
 
-    // Cache result
-    geoCache.set(ip, { data: geoData, expiry: Date.now() + CACHE_TTL_MS });
+    // Cache result (bounded — see rememberGeo)
+    rememberGeo(ip, geoData);
 
     return geoData;
 
@@ -351,15 +381,20 @@ function isPrivateIpv6(ip: string): boolean {
 }
 
 /**
- * Clear expired cache entries (call periodically)
+ * Clear expired cache entries. Scheduled by GeoCacheCleanupJob so expired
+ * entries are freed rather than merely skipped on read. Returns the number of
+ * entries removed (for observability).
  */
-export function cleanGeoCache(): void {
+export function cleanGeoCache(): number {
   const now = Date.now();
+  let removed = 0;
   for (const [ip, entry] of geoCache.entries()) {
     if (entry.expiry < now) {
       geoCache.delete(ip);
+      removed++;
     }
   }
+  return removed;
 }
 
 /**

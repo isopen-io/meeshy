@@ -40,6 +40,14 @@ jest.mock('../../../jobs/mutation-log-cleanup', () => ({
   })),
 }));
 
+jest.mock('../../../jobs/geo-cache-cleanup', () => ({
+  GeoCacheCleanupJob: jest.fn().mockImplementation(() => ({
+    start: jest.fn(),
+    stop: jest.fn(),
+    runNow: jest.fn().mockReturnValue(0),
+  })),
+}));
+
 jest.mock('../../../services/MagicLinkService', () => ({
   MagicLinkService: jest.fn().mockImplementation(() => ({})),
 }));
@@ -110,6 +118,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs.notificationDigest.start).toHaveBeenCalledTimes(1);
       expect(jobs.deliveryQueueCleanup.start).toHaveBeenCalledTimes(1);
       expect(jobs.mutationLogCleanup.start).toHaveBeenCalledTimes(1);
+      expect(jobs.geoCacheCleanup.start).toHaveBeenCalledTimes(1);
 
       expect(manager.isJobsRunning()).toBe(true);
       manager.stopAll();
@@ -139,6 +148,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs.notificationDigest.stop).toHaveBeenCalledTimes(1);
       expect(jobs.deliveryQueueCleanup.stop).toHaveBeenCalledTimes(1);
       expect(jobs.mutationLogCleanup.stop).toHaveBeenCalledTimes(1);
+      expect(jobs.geoCacheCleanup.stop).toHaveBeenCalledTimes(1);
 
       expect(manager.isJobsRunning()).toBe(false);
     });
@@ -170,6 +180,7 @@ describe('BackgroundJobsManager', () => {
       expect(jobs.notificationDigest.runNow).toHaveBeenCalledTimes(1);
       expect(jobs.deliveryQueueCleanup.runNow).toHaveBeenCalledTimes(1);
       expect(jobs.mutationLogCleanup.runNow).toHaveBeenCalledTimes(1);
+      expect(jobs.geoCacheCleanup.runNow).toHaveBeenCalledTimes(1);
     });
 
     it('does not require startAll() to be called first', async () => {
@@ -180,13 +191,14 @@ describe('BackgroundJobsManager', () => {
   // ─── getJobs() ───────────────────────────────────────────────────────────
 
   describe('getJobs()', () => {
-    it('returns all five job instances', () => {
+    it('returns all six job instances', () => {
       const jobs = manager.getJobs();
       expect(jobs).toHaveProperty('cleanupTokens');
       expect(jobs).toHaveProperty('unlockAccounts');
       expect(jobs).toHaveProperty('notificationDigest');
       expect(jobs).toHaveProperty('deliveryQueueCleanup');
       expect(jobs).toHaveProperty('mutationLogCleanup');
+      expect(jobs).toHaveProperty('geoCacheCleanup');
     });
   });
 
