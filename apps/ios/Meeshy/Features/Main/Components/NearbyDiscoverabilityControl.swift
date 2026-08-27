@@ -301,12 +301,12 @@ struct NearbyDiscoverabilityControl: View {
                     .accessibilityHidden(true)
                 Text(choice.isDiscoverable ? NearbyDiscoverabilityLabels.summaryEnabled : NearbyDiscoverabilityLabels.summaryDisabled)
                     .font(MeeshyFont.relative(13, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .lineLimit(1)
                 Spacer()
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(MeeshyColors.textMuted(isDark: true))
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)
@@ -342,11 +342,11 @@ struct NearbyDiscoverabilityControl: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(NearbyDiscoverabilityLabels.title)
                     .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(NearbyDiscoverabilityLabels.subtitle)
                     .font(MeeshyFont.relative(11))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(MeeshyColors.textMuted(isDark: true))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -396,7 +396,7 @@ struct NearbyDiscoverabilityControl: View {
                     .font(MeeshyFont.relative(12, weight: isSelected ? .semibold : .regular))
                     .lineLimit(1)
             }
-            .foregroundColor(isSelected ? .white : theme.textSecondary)
+            .foregroundColor(isSelected ? .white : MeeshyColors.textSecondary(isDark: true))
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.sm)
             .background(
@@ -442,11 +442,11 @@ struct NearbyDiscoverabilityControl: View {
         HStack(alignment: .top, spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(10))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(MeeshyColors.textMuted(isDark: true))
                 .accessibilityHidden(true)
             Text(text)
                 .font(MeeshyFont.relative(11))
-                .foregroundColor(theme.textMuted)
+                .foregroundColor(MeeshyColors.textMuted(isDark: true))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
