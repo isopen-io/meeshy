@@ -243,6 +243,63 @@ final class MentionComposerControllerTests: XCTestCase {
         XCTAssertEqual(mock.lastContextId, "conv-99")
     }
 
+    // MARK: - Context: composerDraft (#3904)
+
+    /// Un brouillon composer n'a pas encore d'id serveur : `.composerDraft`
+    /// ne doit JAMAIS programmer d'appel réseau, quelle que soit la requête —
+    /// seuls les candidats locaux (amis) répondent. Le sleep couvre large le
+    /// débounce de 300 ms : la question n'est pas un TIMING à rattraper mais
+    /// l'ABSENCE d'une tâche jamais programmée, donc la marge ne rend pas le
+    /// test flaky (zéro reste zéro, quelle que soit la durée d'attente).
+    func test_context_composerDraft_neverCallsTheRemoteService() async {
+        let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
+        let mockService = MockMentionService()
+        mockService.suggestionsResult = .success([makeSuggestion(username: "alicia")])
+        let (sut, mock) = makeSUT(context: .composerDraft, localCandidates: [alice], service: mockService)
+
+        sut.handleQuery(in: "@ali")
+        try? await Task.sleep(nanoseconds: 500_000_000)
+
+        XCTAssertEqual(
+            mock.suggestionsCallCount, 0,
+            "Un brouillon composer n'a aucun id serveur : aucun appel réseau ne doit partir."
+        )
+        XCTAssertEqual(
+            sut.suggestions.map(\.username), ["alice"],
+            "Les candidats locaux (amis) doivent rester la SEULE source pour un brouillon."
+        )
+    }
+
+    /// Le pendant positif : les candidats locaux filtrent bien, comme pour
+    /// les deux autres contextes — `.composerDraft` ne dégrade pas ce chemin.
+    func test_context_composerDraft_stillFiltersLocalCandidatesImmediately() {
+        let alice = makeCandidate(id: "1", username: "alice", displayName: "Alice")
+        let bob = makeCandidate(id: "2", username: "bob", displayName: "Bob")
+        let (sut, _) = makeSUT(context: .composerDraft, localCandidates: [alice, bob])
+
+        sut.handleQuery(in: "@al")
+
+        XCTAssertEqual(sut.suggestions.map(\.username), ["alice"])
+    }
+
+    // MARK: - Context.remoteContext
+
+    func test_remoteContext_conversation_returnsIdAndConversationType() {
+        let remote = MentionComposerController.Context.conversation(id: "conv-7").remoteContext
+        XCTAssertEqual(remote?.contextId, "conv-7")
+        XCTAssertEqual(remote?.contextType, .conversation)
+    }
+
+    func test_remoteContext_post_returnsIdAndPostType() {
+        let remote = MentionComposerController.Context.post(id: "post-7").remoteContext
+        XCTAssertEqual(remote?.contextId, "post-7")
+        XCTAssertEqual(remote?.contextType, .post)
+    }
+
+    func test_remoteContext_composerDraft_returnsNil() {
+        XCTAssertNil(MentionComposerController.Context.composerDraft.remoteContext)
+    }
+
     // MARK: - clearSuggestions
 
     func test_clearSuggestions_nilsActiveQueryAndEmptiesSuggestions() {

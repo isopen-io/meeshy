@@ -62,6 +62,30 @@ public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable {
     public let isOnline: Bool?
     public let lastActiveAt: Date?
 
+    /// Sans lui, un struct `public` sans initialiseur explicite ne reçoit
+    /// qu'un memberwise init INTERNAL — inconstructible depuis un autre
+    /// module (l'app, ses tests) alors que `FriendRequest` juste au-dessus
+    /// en a un. Même patron, pour la même raison.
+    public init(
+        id: String,
+        username: String,
+        firstName: String? = nil,
+        lastName: String? = nil,
+        displayName: String? = nil,
+        avatar: String? = nil,
+        isOnline: Bool? = nil,
+        lastActiveAt: Date? = nil
+    ) {
+        self.id = id
+        self.username = username
+        self.firstName = firstName
+        self.lastName = lastName
+        self.displayName = displayName
+        self.avatar = avatar
+        self.isOnline = isOnline
+        self.lastActiveAt = lastActiveAt
+    }
+
     public var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").nonEmpty ?? username
     }
