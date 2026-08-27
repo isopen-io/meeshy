@@ -788,7 +788,14 @@ extension APIMessage {
             if let reply = replyTo {
                 let isReplyMe = reply.senderId == currentUserId
                 let authorName = reply.sender?.name ?? "?"
-                let firstAtt = reply.attachments?.first
+                // Média REPRÉSENTATIF : le premier attachement HORS localisation
+                // (mimeType `application/x-location`, même discriminant que
+                // `MeeshyMessageAttachment.type` et que `openQuotedMedia`). Avant,
+                // `.first` pouvait désigner une localisation posée devant l'image/
+                // vidéo — l'icône de la citation décrivait alors une pièce jointe
+                // et le plein écran en ouvrait une autre (2026-08-27).
+                let firstAtt = reply.attachments?.first(where: { $0.mimeType != "application/x-location" })
+                    ?? reply.attachments?.first
                 // Single source of truth for mime → category: AttachmentKind
                 // (see `AttachmentKind.swift`). Pre-fix this stored the raw
                 // MIME (`"image/jpeg"`) which broke the reply-preview icon

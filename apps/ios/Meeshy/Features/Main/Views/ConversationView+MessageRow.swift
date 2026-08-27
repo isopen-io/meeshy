@@ -10,7 +10,10 @@ extension ConversationView {
 
 
     func triggerReply(for msg: Message) {
-        let firstAttachment = msg.attachments.first
+        // Le média REPRÉSENTATIF (premier hors localisation) — la MÊME règle
+        // que l'ouverture `openQuotedMedia`, pour que l'icône de la bannière
+        // désigne la pièce jointe que le plein écran ouvrira (2026-08-27).
+        let firstAttachment = msg.attachments.quotedRepresentative
         let preview = msg.content.isEmpty
             ? (firstAttachment.map { "[\($0.type.rawValue.capitalized)]" } ?? "")
             : msg.content

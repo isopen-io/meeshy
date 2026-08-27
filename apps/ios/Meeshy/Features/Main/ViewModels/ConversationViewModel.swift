@@ -3141,9 +3141,15 @@ class ConversationViewModel: ObservableObject {
               let quoted = messages.first(where: { $0.id == rid }) else {
             return nil
         }
+        // Média REPRÉSENTATIF (premier hors localisation) — la MÊME règle que
+        // l'ouverture `openQuotedMedia`, pour que l'icône optimiste désigne la
+        // pièce jointe que le plein écran ouvrira, et que l'étiquette d'aperçu
+        // décrive ce média plutôt qu'une localisation qui le précéderait
+        // (2026-08-27).
+        let representative = quoted.attachments.quotedRepresentative
         let previewText: String = {
             if !quoted.content.isEmpty { return quoted.content }
-            if let first = quoted.attachments.first {
+            if let first = representative {
                 return MediaKindLabel.summary(MediaKindLabel.kind(for: first.type))
             }
             return ""
@@ -3158,13 +3164,13 @@ class ConversationViewModel: ObservableObject {
             // avec. Sans ce report, la citation optimiste s'affichait en
             // initiales puis « sautait » a la photo au premier refresh serveur.
             authorAvatarUrl: quoted.senderAvatarURL,
-            attachmentType: quoted.attachments.first?.type.rawValue,
-            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl,
+            attachmentType: representative?.type.rawValue,
+            attachmentThumbnailUrl: representative?.thumbnailUrl,
             // Le message cite est en memoire : sa protection est CONNUE, pas
             // declaree par le fil. Sans ce report, la bulle optimiste d'une
             // reponse a un media a vue unique en montrait la vignette le temps
             // que le serveur accuse.
-            attachmentIsProtected: quoted.attachments.first.map { $0.isViewOnce || $0.isBlurred }
+            attachmentIsProtected: representative.map { $0.isViewOnce || $0.isBlurred }
         )
     }
 
