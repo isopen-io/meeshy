@@ -520,6 +520,7 @@ export function registerParticipantsRoutes(
                 conversationRole: { type: 'string', nullable: true },
                 joinedAt: { type: 'string', format: 'date-time', nullable: true },
                 historyVisibleFrom: { type: 'string', format: 'date-time', nullable: true, description: 'History grant by DATE set by a conversation admin: the participant reads everything written since this instant. null = no grant, the ordinary rule applies (admin sees all, otherwise the right frozen at join / the share link). Served to conversation admins, moderators and creators only — a plain member always reads null, whether or not a grant exists.' },
+                canGrantHistory: { type: 'boolean', description: 'Can the CURRENT viewer pose or revoke this grant (PATCH …/rights with historyVisibleFrom)? true only for conversation admins and creators — a moderator reads historyVisibleFrom above but cannot write it. Distinct from historyVisibleFrom itself: that field alone cannot tell a non-host apart from a host with no grant posed, both read null.' },
                 isOnline: { type: 'boolean' },
                 lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                 shareLinkName: { type: 'string', nullable: true, description: 'Name of the share link used to join' },
@@ -716,6 +717,13 @@ export function registerParticipantsRoutes(
         // se lirait « inconnu », et il n'existe volontairement aucun jumeau
         // `hasHistoryGrant` — l'EXISTENCE de l'octroi est justement le fait à taire.
         historyVisibleFrom: viewerHostsTheRoom ? (participant.historyVisibleFrom ?? null) : null,
+        // Répond à « CE lecteur peut-il POSER l'octroi ? », pas à « quel est
+        // l'octroi ? » ci-dessus. `PATCH …/rights` réserve `historyVisibleFrom`
+        // à admin/creator (`HISTORY_GRANT_REQUIRES_ADMIN`) — un modérateur est
+        // `viewerHostsTheRoom` et LIT le champ ci-dessus, mais ne peut pas
+        // l'écrire. Sans ce signal, le client ne peut distinguer « pas hôte » de
+        // « hôte, aucun octroi » : les deux rendent `historyVisibleFrom: null`.
+        canGrantHistory: ['admin', 'creator'].includes(viewerRole),
         isOnline: gatedPresence.isOnline,
         lastActiveAt: gatedPresence.lastActiveAt ?? null,
         shareLinkName: shareLink?.name ?? null,
