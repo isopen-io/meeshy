@@ -1301,7 +1301,13 @@ struct MeeshyComposerHost: View {
                         .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
                 )
         )
-        .padding(16)
+        // PAS de `.padding(16)` ici (revue Opus, débordement mesuré au
+        // simulateur 2026-08-27) : cette marge datait de l'ancien
+        // `.overlay()`, qui avait besoin de son propre inset — devenu enfant
+        // du `HStack` de `toolRow`, cette tuile hérite déjà du `.padding(16)`
+        // posé UNE fois sur toute la rangée. La garder ici l'ajoutait deux
+        // fois (32pt de trop) et faisait déborder `toolRow` de l'écran dès
+        // qu'un lieu ET la capsule de langue étaient présents ensemble.
     }
 
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
@@ -1355,7 +1361,10 @@ struct MeeshyComposerHost: View {
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.language))
         .accessibilityValue(documentLanguageDisplayName)
-        .padding(16)
+        // Même correctif que `documentLocationTile` : `.padding(16)` datait
+        // de l'ancien `.overlay(alignment: .bottomTrailing)` et doublait la
+        // marge une fois la capsule devenue enfant du `HStack` de `toolRow`
+        // — cause du débordement horizontal mesuré au simulateur.
     }
 
     /// Le sélecteur du dépôt, monté tel quel — même raison que
