@@ -122,7 +122,7 @@ enum CommentComposerStaging {
             if isVideo {
                 result.append(ComposerAttachment(
                     id: "video-\(UUID().uuidString)", type: .video,
-                    name: "Video", url: url, size: data.count, thumbnailColor: "FF6B6B"))
+                    name: MediaKindLabel.name(.video), url: url, size: data.count, thumbnailColor: "FF6B6B"))
             } else {
                 result.append(ComposerAttachment.image(url: url))
             }

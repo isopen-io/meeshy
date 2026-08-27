@@ -119,7 +119,7 @@ private struct StarredRow: View {
                     Image(systemName: "star.fill")
                         .font(MeeshyFont.relative(10, weight: .bold))
                         .foregroundStyle(MeeshyColors.warning)
-                    Text(snapshot.senderName ?? String(localized: "starred.messages.unknown_user", defaultValue: "Utilisateur", bundle: .main))
+                    Text(snapshot.senderName ?? String(localized: "common.unknown_user", defaultValue: "Utilisateur", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundStyle(accent)
                     Spacer(minLength: 4)

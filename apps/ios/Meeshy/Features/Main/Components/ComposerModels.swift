@@ -32,24 +32,13 @@ struct ComposerAttachment: Identifiable, Equatable {
         ComposerAttachment(
             id: "voice-\(Int(Date().timeIntervalSince1970 * 1000))",
             type: .voice,
-            name: "Message vocal (\(Self.formatDur(duration)))",
+            name: MediaKindLabel.voiceRecording(duration: duration),
             duration: duration,
             thumbnailColor: "FF6B6B"
         )
     }
 
-    static func location(lat: Double, lng: Double) -> ComposerAttachment {
-        ComposerAttachment(
-            id: "location-\(Int(Date().timeIntervalSince1970 * 1000))",
-            type: .location,
-            name: "Position actuelle",
-            latitude: lat,
-            longitude: lng,
-            thumbnailColor: "2ECC71"
-        )
-    }
-
-    static func image(url: URL? = nil, name: String = "Photo", color: String = "9B59B6") -> ComposerAttachment {
+    static func image(url: URL? = nil, name: String = MediaKindLabel.name(.photo), color: String = "9B59B6") -> ComposerAttachment {
         ComposerAttachment(
             id: "image-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 0...9999))",
             type: .image,
@@ -59,7 +48,7 @@ struct ComposerAttachment: Identifiable, Equatable {
         )
     }
 
-    static func file(url: URL? = nil, name: String = "Fichier", size: Int? = nil, color: String = "45B7D1") -> ComposerAttachment {
+    static func file(url: URL? = nil, name: String = MediaKindLabel.name(.file), size: Int? = nil, color: String = "45B7D1") -> ComposerAttachment {
         ComposerAttachment(
             id: "file-\(Int(Date().timeIntervalSince1970 * 1000))-\(Int.random(in: 0...9999))",
             type: .file,
@@ -68,10 +57,6 @@ struct ComposerAttachment: Identifiable, Equatable {
             size: size,
             thumbnailColor: color
         )
-    }
-
-    private static func formatDur(_ seconds: TimeInterval) -> String {
-        LocalizedNumber.duration(seconds: seconds)
     }
 }
 

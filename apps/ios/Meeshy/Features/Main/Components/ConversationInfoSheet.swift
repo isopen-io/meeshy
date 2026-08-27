@@ -1181,13 +1181,7 @@ struct ConversationInfoSheet: View {
     }
 
     private func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
-        switch type {
-        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
-        case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
-        case .file: return String(localized: "attachment.kind.file", defaultValue: "Fichier", bundle: .main)
-        case .location: return String(localized: "attachment.kind.location", defaultValue: "Position", bundle: .main)
-        }
+        MediaKindLabel.name(MediaKindLabel.kind(for: type))
     }
 
     private func relativeTime(from date: Date) -> String {
