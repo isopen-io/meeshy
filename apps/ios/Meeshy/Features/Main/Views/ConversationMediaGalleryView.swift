@@ -969,6 +969,13 @@ private struct GalleryVideoPage: View, Equatable {
         videoManagerActiveURL == attachment.fileUrl && videoManagerIsPlaying
     }
 
+    /// La vidéo est-elle prête à jouer sans téléchargement ? Gouverne
+    /// l'autoplay de la page active (le « et play » du double-tap).
+    private var isReadyForAutoplay: Bool {
+        if case .ready = availability { return true }
+        return false
+    }
+
     private var isPlayerAttached: Bool {
         videoManagerActiveURL == attachment.fileUrl
     }
@@ -1054,6 +1061,21 @@ private struct GalleryVideoPage: View, Equatable {
             guard isWindowed, isActive, poster == nil else { return }
             posterUnavailable = false
             await resolvePosterIfNeeded()
+        }
+        // Autoplay en plein écran (retour porteur 2026-08-27, cf. #4015) : la
+        // page vidéo ACTIVE et prête démarre la lecture d'elle-même — c'est ce
+        // que le double-tap depuis la bulle attend (« ouvrir en plein écran ET
+        // lire »). Ne rejoue pas si cette vidéo EST déjà le player actif
+        // (expand depuis une lecture inline en cours) ; les pages voisines
+        // fenêtrées (inactives) ne partent jamais. Re-clé sur `isReadyForAutoplay`
+        // pour démarrer dès que le fichier devient disponible.
+        .task(id: isActive && isReadyForAutoplay) {
+            guard isActive, isWindowed, isReadyForAutoplay,
+                  videoManagerActiveURL != attachment.fileUrl else { return }
+            videoManager.isForceMuted = false
+            videoManager.load(urlString: attachment.fileUrl, attachmentId: attachment.id.isEmpty ? nil : attachment.id)
+            videoManager.play()
+            onCacheActivation()
         }
         // Failsafe temporel (leçon 25) : un KVO manqué ne fige jamais le poster
         // sur une vidéo qui joue.
