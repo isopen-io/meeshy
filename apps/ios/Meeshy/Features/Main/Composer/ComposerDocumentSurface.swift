@@ -1360,6 +1360,12 @@ struct ComposerDocumentSurface: View {
     /// dépend, il ne fait que donner à la valeur d'effet une raison de changer.
     @State private var lastTappedTool: ComposerDocumentTool?
 
+    /// **La palette de couleur de fond est REPLIÉE par défaut (#4031, retour
+    /// porteur 2026-08-27).** L'icône « couleur de fond » de `toolRow` (juste
+    /// après l'emoji) la déplie ; au repos, la bande n'occupe plus l'espace en
+    /// permanence.
+    @State private var showColorPalette = false
+
     /// **Les mentions du brouillon (#3904)** — la surface reste sans état
     /// PARTAGÉ (`documentText` continue d'appartenir au meuble), mais
     /// l'autocomplétion @mention est de l'état d'UI éphémère, purement local
@@ -1471,32 +1477,84 @@ struct ComposerDocumentSurface: View {
         // accessoires (le chip de lieu, la capsule de langue) en silence —
         // alors que ni l'un ni l'autre ne dépend de `tools`.
         if !tools.isEmpty || toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
-            HStack(spacing: 16) {
-                if let toolRowLeadingAccessory {
-                    toolRowLeadingAccessory
-                }
-                ForEach(tools, id: \.rawValue) { tool in
-                    Button {
-                        lastTappedTool = tool
-                        onTool?(tool)
-                    } label: {
-                        Image(systemName: tool.symbolName)
-                            .font(.title3)
-                            .symbolRenderingMode(.hierarchical)
-                            .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                            .composerToolBounce(active: lastTappedTool == tool)
+            // Les outils DÉFILENT horizontalement et passent SOUS le drapeau/
+            // langue, qui reste FIXE à droite (retour porteur 2026-08-27).
+            ZStack(alignment: .trailing) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        if let toolRowLeadingAccessory {
+                            toolRowLeadingAccessory
+                        }
+                        ForEach(tools, id: \.rawValue) { tool in
+                            toolButton(tool)
+                            // Icône « couleur de fond » JUSTE APRÈS l'emoji
+                            // (#4031) : elle replie/déplie la palette de couleurs.
+                            if tool == .emoji, onPickBackground != nil {
+                                backgroundColorToggle
+                            }
+                        }
+                        // Réserve pour que le dernier outil puisse défiler
+                        // entièrement, y compris sous le drapeau fixe.
+                        if toolRowTrailingAccessory != nil {
+                            Spacer(minLength: 56)
+                        }
                     }
-                    .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 16)
                 }
-                Spacer()
                 if let toolRowTrailingAccessory {
+                    // Fond opaque du plateau derrière le drapeau : les outils
+                    // qui défilent dessous disparaissent proprement.
                     toolRowTrailingAccessory
+                        .padding(.leading, 12)
+                        .padding(.trailing, 16)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(
+                                colors: [MeeshyColors.plateauNoir.opacity(0), MeeshyColors.plateauNoir, MeeshyColors.plateauNoir],
+                                startPoint: .leading, endPoint: .trailing
+                            )
+                        )
                 }
             }
-            .padding(16)
             .accessibilityElement(children: .contain)
             .accessibilityLabel(Text(ComposerDocumentCopy.toolRow))
         }
+    }
+
+    /// Un bouton d'outil de la rangée (extrait pour intercaler l'icône couleur).
+    private func toolButton(_ tool: ComposerDocumentTool) -> some View {
+        Button {
+            lastTappedTool = tool
+            onTool?(tool)
+        } label: {
+            Image(systemName: tool.symbolName)
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .composerToolBounce(active: lastTappedTool == tool)
+        }
+        .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
+    }
+
+    /// L'icône « couleur de fond » (#4031) — replie/déplie `backgroundStrip`.
+    /// Active (palette dépliée) : teintée accent pour dire « ouvert ».
+    @ViewBuilder
+    private var backgroundColorToggle: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                showColorPalette.toggle()
+            }
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: "paintpalette")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(showColorPalette
+                    ? Color(hex: MeeshyColors.brandPrimaryHex)
+                    : MeeshyColors.textSecondary(isDark: true))
+        }
+        .accessibilityLabel(Text(ComposerDocumentCopy.background))
     }
 
     /// **Les vignettes du média choisi (B, #3883)** — la preuve VISIBLE qu'une
@@ -1540,7 +1598,9 @@ struct ComposerDocumentSurface: View {
     /// cet incrément sûr, pour ne pas inventer un patron d'UI qui sera jeté.
     @ViewBuilder
     private var backgroundStrip: some View {
-        if onPickBackground != nil {
+        // Repliée par défaut — dépliée par l'icône « couleur de fond » de la
+        // toolRow (#4031). Ne s'affiche plus en permanence.
+        if onPickBackground != nil && showColorPalette {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
