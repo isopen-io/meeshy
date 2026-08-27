@@ -111,17 +111,20 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
   // cette session) ⇒ affiché tel quel, sans spinner ; sinon chargé, avec la
   // vignette pour SEUL fond flou assumé pendant l'attente, jamais comme
   // l'image affichée nette elle-même.
-  const [isFullLoaded, setIsFullLoaded] = useState(() =>
-    fullscreenImageResidency.has(currentImage?.fileUrl)
-  );
-
-  useEffect(() => {
-    setIsFullLoaded(fullscreenImageResidency.has(currentImage?.fileUrl));
-  }, [currentImage?.fileUrl]);
+  // La résidence est DÉRIVÉE pendant le rendu, jamais resynchronisée par un
+  // effet : `useEffect` s'exécute APRÈS la peinture, si bien qu'en passant
+  // d'une image chargée à une image qui ne l'est pas, la première image
+  // affichée gardait l'ancien `true` — donc aucun fond — et le fond flou ne
+  // surgissait qu'à la peinture suivante. Une image noire perdue en plein
+  // geste de navigation (§ Fluidité, dimension 4).
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const isFullLoaded =
+    (!!currentImage?.fileUrl && loadedUrl === currentImage.fileUrl) ||
+    fullscreenImageResidency.has(currentImage?.fileUrl);
 
   const handleFullImageLoaded = useCallback(() => {
     fullscreenImageResidency.mark(currentImage?.fileUrl);
-    setIsFullLoaded(true);
+    setLoadedUrl(currentImage?.fileUrl ?? null);
   }, [currentImage?.fileUrl]);
 
   const fullscreenMount = useMemo(

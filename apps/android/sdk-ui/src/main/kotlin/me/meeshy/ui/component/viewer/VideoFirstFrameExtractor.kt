@@ -18,6 +18,19 @@ import kotlinx.coroutines.withContext
  * Orchestration app/SDK-UI : cette classe reste un atome — elle ne connaît
  * ni cache, ni politique réseau. L'appelant (le composable plein écran)
  * décide QUAND l'appeler et persiste le résultat (cf. `VideoPosterSource`).
+ *
+ * TROIS AVERTISSEMENTS pour le premier consommateur (#3942 — aucune
+ * visionneuse vidéo plein écran ne câble encore ces primitives) :
+ * 1. Le résultat est un [Bitmap], alors que [VideoPosterSource.resolve]
+ *    attend un `extractedFrameUrl: String?`. Le pont (fichier de cache, clé
+ *    Coil, `MemoryCache` alimenté à la main) reste à écrire — les deux
+ *    moitiés ne se composent PAS telles quelles.
+ * 2. `MediaMetadataRetriever.setDataSource` BLOQUE et n'observe pas
+ *    l'annulation de la coroutine : annuler l'appelant rend la main sans
+ *    libérer le thread d'E/S tant que la lecture n'a pas abouti.
+ * 3. Il n'y a AUCUN délai maximal, contrairement au miroir web
+ *    (`extractVideoFirstFrame`, 8 s) — sur un réseau lent,
+ *    [extractFromRemoteUrl] peut lire une grande partie du fichier.
  */
 public object VideoFirstFrameExtractor {
 

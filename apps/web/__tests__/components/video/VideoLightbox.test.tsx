@@ -1164,5 +1164,27 @@ describe('VideoLightbox', () => {
         expect((container.querySelector('video') as HTMLVideoElement).getAttribute('poster')).toBeNull();
       });
     });
+
+    it('keeps a frame that finished extracting after the viewer closed — the object URL it created is never orphaned', async () => {
+      let settleExtraction: (frame: string | null) => void = () => {};
+      (extractVideoFirstFrame as jest.Mock).mockImplementationOnce(
+        () =>
+          new Promise<string | null>((resolve) => {
+            settleExtraction = resolve;
+          })
+      );
+      const videos = [createMockVideo({ fileUrl: 'https://cdn.example/late.mp4' })];
+      const { unmount } = render(<VideoLightbox {...defaultProps} videos={videos} />);
+
+      unmount();
+      await act(async () => {
+        settleExtraction('blob:late-frame');
+      });
+
+      // Jeter la frame ici l'abandonnerait sans révocation possible (fuite)
+      // ET forcerait une ré-extraction à la réouverture : seul l'AFFICHAGE
+      // est annulable, jamais la mise en cache.
+      expect(fullscreenVideoPosterCache.get('https://cdn.example/late.mp4')).toBe('blob:late-frame');
+    });
   });
 });
