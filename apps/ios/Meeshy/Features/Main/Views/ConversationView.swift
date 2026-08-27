@@ -2050,7 +2050,9 @@ struct ConversationView: View {
                         ComposerSendFlyPreview(
                             text: payload.text,
                             accentColor: accentColor,
-                            secondaryColor: secondaryColor
+                            secondaryColor: secondaryColor,
+                            composerHeight: composerHeight,
+                            keyboardHeight: keyboardHeight
                         )
                         .padding(.bottom, composerHeight)
                         .allowsHitTesting(false)
