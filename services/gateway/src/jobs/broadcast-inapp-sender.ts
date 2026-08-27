@@ -5,6 +5,7 @@ import { buildBroadcastRecipientFilter, localizedBroadcastText, type BroadcastTa
 import {
   RECIPIENT_LANG_SELECT,
   recipientLanguage,
+  recipientLanguages,
   type RecipientLanguagePrefs,
 } from '../utils/recipient-language';
 
@@ -48,19 +49,23 @@ export class BroadcastInAppSenderJob {
       const translatedBodies = broadcast.translatedBodies as Record<string, string> | null;
 
       const deliverTo = async (user: { id: string } & RecipientLanguagePrefs): Promise<boolean | null> => {
-        // La langue sert ici de CLÉ dans `translatedSubjects`/`translatedBodies` :
-        // non normalisée, un `'pt-BR'` persisté verbatim ne matche aucune entrée
-        // et la diffusion retombe sur la langue de l'AUTEUR malgré une
-        // traduction `pt` disponible.
-        const lang = recipientLanguage(user, 'en');
+        // Deux rôles distincts pour la langue :
+        //  - CADRAGE (`lang` de la notification) = le rang le plus haut RENSEIGNÉ ;
+        //  - CONTENU (titre/corps) = la DESCENTE ORDONNÉE du Prisme, servie par
+        //    `localizedBroadcastText` (SSOT `resolvePrismTranslation`). Les clés
+        //    de `translatedSubjects`/`translatedBodies` et les rangs du lecteur y
+        //    sont canonicalisées ensemble : un `'pt-BR'` atteint la traduction
+        //    `pt`, et un rang 1 sans traduction laisse gagner un rang inférieur.
+        const framingLang = recipientLanguage(user, 'en');
+        const preferredLanguages = recipientLanguages(user);
         try {
           const created = await this.notifications.createSystemNotification({
             recipientUserId: user.id,
-            title: localizedBroadcastText({ translated: translatedSubjects, sourceLanguage: broadcast.sourceLanguage, original: broadcast.subject, lang }),
-            content: localizedBroadcastText({ translated: translatedBodies, sourceLanguage: broadcast.sourceLanguage, original: broadcast.body, lang }),
+            title: localizedBroadcastText({ translated: translatedSubjects, sourceLanguage: broadcast.sourceLanguage, original: broadcast.subject, preferredLanguages }),
+            content: localizedBroadcastText({ translated: translatedBodies, sourceLanguage: broadcast.sourceLanguage, original: broadcast.body, preferredLanguages }),
             systemType: 'announcement',
             priority: 'normal',
-            lang,
+            lang: framingLang,
           });
           return created === null ? null : true;
         } catch (error) {

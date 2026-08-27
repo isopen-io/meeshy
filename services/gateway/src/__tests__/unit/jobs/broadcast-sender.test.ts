@@ -166,7 +166,10 @@ describe('BroadcastSenderJob.execute', () => {
     );
   });
 
-  it('falls back to source language translation when user language has no translation', async () => {
+  it('serves the ORIGINAL (source text) when no rank of the reader has a translation', async () => {
+    // Prisme règle #1 : sans traduction vers une langue du lecteur, on affiche
+    // le contenu ORIGINAL (`broadcast.subject`), jamais une entrée source→source
+    // de la carte. Le lecteur est FR, seule une entrée `en` existe.
     const broadcast = {
       ...BASE_BROADCAST,
       sourceLanguage: 'en',
@@ -182,7 +185,7 @@ describe('BroadcastSenderJob.execute', () => {
     await promise;
 
     expect(emailService.sendBroadcastEmail).toHaveBeenCalledWith(
-      expect.objectContaining({ subject: 'English subject' }),
+      expect.objectContaining({ subject: 'Default subject', body: 'Default body' }),
     );
   });
 
