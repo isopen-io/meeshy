@@ -3,25 +3,47 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.Serializable
 
 /**
- * The durable form of one slide of an in-progress story composer draft — just the
- * fields this persistence slice round-trips faithfully: the slide's stable [id], its
- * caption [text], and the [mediaIds] attached to it (uploaded ids and offline
- * `cmid` placeholders alike). Richer on-canvas content (text/sticker elements,
- * filters, backgrounds, canvas transform) is deliberately **absent** here — a draft
- * that carries any of it is not yet persistable (see [me.meeshy] `StoryComposerAutosave`),
- * so a restore from this snapshot is never lossy.
+ * The durable form of one slide's persisted 9:16 canvas pan/zoom — the three scalars of
+ * the composer's `StoryCanvasTransform` ([scale], [offsetX], [offsetY]). A slide snapshot
+ * holds this only when the framing is **non-identity**: `null` means the slide was never
+ * panned or zoomed, so a legacy blob and a fresh slide both decode to "no transform"
+ * without carrying the default triple. Still primitive-only — no object graph, no
+ * polymorphic serialiser.
+ */
+@Serializable
+data class StoryDraftTransformSnapshot(
+    val scale: Float,
+    val offsetX: Float,
+    val offsetY: Float,
+)
+
+/**
+ * The durable form of one slide of an in-progress story composer draft — the fields this
+ * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
+ * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), and
+ * its persisted 9:16 canvas [transform] (pan/zoom, `null` = identity). Richer on-canvas
+ * content (text/sticker elements, filters, backgrounds, pinned duration) is deliberately
+ * **absent** here — a draft that carries any of it is not yet persistable (see [me.meeshy]
+ * `StoryComposerAutosave`), so a restore from this snapshot is never lossy.
  *
- * Every field is a primitive or a list of primitives, so the snapshot serialises
- * with no deep object graph and no polymorphic serialiser — the deliberate cost of
- * keeping this first cut thin and its round-trip trivially total.
+ * Every field is a primitive, a list of primitives, or the primitive-only
+ * [StoryDraftTransformSnapshot], so the snapshot serialises with no deep object graph and
+ * no polymorphic serialiser — the deliberate cost of keeping this cut thin and its
+ * round-trip trivially total.
  */
 @Serializable
 data class StoryDraftSlideSnapshot(
     val id: String,
     val text: String = "",
     val mediaIds: List<String> = emptyList(),
+    val transform: StoryDraftTransformSnapshot? = null,
 ) {
-    /** True once the slide carries content worth restoring: a caption or attached media. */
+    /**
+     * True once the slide carries content worth restoring: a caption or attached media. A
+     * canvas [transform] is fidelity that rides along with such content — a pan/zoom with
+     * no media to frame is meaningless — so it deliberately does **not** make a slide
+     * worth restoring on its own.
+     */
     val hasContent: Boolean get() = text.isNotBlank() || mediaIds.isNotEmpty()
 }
 

@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 
 /** The persistence action a composer change implies for its single durable draft. */
 sealed interface StoryDraftPersist {
@@ -22,15 +23,16 @@ sealed interface StoryDraftPersist {
  * [me.meeshy.sdk.story.StoryComposerDraftStore] owns bytes; this owns the *when* —
  * kept out of the Composable and off the ViewModel so every branch stays JVM-testable.
  *
- * ## Fidelity gate (this slice)
+ * ## Fidelity gate
  *
- * The [StoryComposerDraftSnapshot] round-trips a slide's caption, media and identity but
- * **not** its on-canvas rich content (text/sticker elements, filter, background, canvas
- * pan/zoom, pinned duration). So a draft carrying any of that would restore lossily — a
- * silent partial the user never asked for. This layer refuses that: a deck with rich
- * content is treated as *not yet persistable* — [resolve] purges any stale stored draft
- * (so a cold start never rebuilds a pre-rich version) and writes nothing new. Widening the
- * snapshot to carry rich content, lifting this gate, is a tracked follow-up.
+ * The [StoryComposerDraftSnapshot] round-trips a slide's caption, media, identity and its
+ * 9:16 canvas pan/zoom [StorySlide.transform] — but **not** its remaining on-canvas rich
+ * content (text/sticker elements, filter, background, pinned duration). So a draft carrying
+ * any of that would restore lossily — a silent partial the user never asked for. This layer
+ * refuses that: a deck with still-unrepresentable rich content is treated as *not yet
+ * persistable* — [resolve] purges any stale stored draft (so a cold start never rebuilds a
+ * pre-rich version) and writes nothing new. Widening the snapshot to carry the remaining
+ * rich content, lifting this gate further, is a tracked follow-up.
  */
 object StoryComposerAutosave {
 
@@ -75,16 +77,21 @@ object StoryComposerAutosave {
     }
 
     /**
-     * Whether [deck] is a freshly opened composer: exactly one slide, blank, with no media
-     * and no rich content — the only state a stored draft may be restored into.
+     * Whether [deck] is a freshly opened composer: exactly one slide, blank, with no media,
+     * no rich content, and an identity canvas transform — the only state a stored draft may
+     * be restored into. The transform is checked explicitly here (it is persistable, so no
+     * longer part of [deckHasRichContent]) so a silently panned empty canvas still counts as
+     * touched and a restore never clobbers it.
      */
     fun deckIsPristine(deck: StorySlideDeck): Boolean =
-        deck.size == 1 && !deck.hasText && !deck.hasMedia && !deckHasRichContent(deck)
+        deck.size == 1 && !deck.hasText && !deck.hasMedia && !deckHasRichContent(deck) &&
+            deck.slides.all { it.transform.isIdentity }
 
     /**
-     * Whether any slide carries on-canvas content this slice's snapshot cannot represent:
-     * a text or sticker element, a photo filter, a colour/media background, a pinned
-     * duration, or a non-identity canvas transform. Such a deck is not yet persistable.
+     * Whether any slide carries on-canvas content the snapshot cannot represent: a text or
+     * sticker element, a photo filter, a colour/media background, or a pinned duration. Such
+     * a deck is not yet persistable. The 9:16 canvas transform is **not** here — it is now
+     * round-tripped by the snapshot ([StorySlide.transform] ↔ [StoryDraftTransformSnapshot]).
      */
     fun deckHasRichContent(deck: StorySlideDeck): Boolean =
         deck.slides.any { slide ->
@@ -93,8 +100,7 @@ object StoryComposerAutosave {
                 slide.filter != null ||
                 slide.background != null ||
                 slide.backgroundMediaId != null ||
-                slide.durationSecondsPin != null ||
-                !slide.transform.isIdentity
+                slide.durationSecondsPin != null
         }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -107,7 +113,14 @@ fun StorySlideDeck.toDraftSnapshot(
     repostOfId: String?,
     nowIso: String,
 ): StoryComposerDraftSnapshot = StoryComposerDraftSnapshot(
-    slides = slides.map { StoryDraftSlideSnapshot(id = it.id, text = it.text, mediaIds = it.mediaIds) },
+    slides = slides.map {
+        StoryDraftSlideSnapshot(
+            id = it.id,
+            text = it.text,
+            mediaIds = it.mediaIds,
+            transform = it.transform.toDraftSnapshot(),
+        )
+    },
     selectedId = selectedId,
     visibility = visibility.wire,
     repostOfId = repostOfId?.takeIf { it.isNotBlank() },
@@ -117,13 +130,37 @@ fun StorySlideDeck.toDraftSnapshot(
 /**
  * Rebuilds a deck from a stored [StoryComposerDraftSnapshot], or `null` when the blob is
  * structurally broken (no slides, or a selection that names no present slide) — the deck
- * invariants would otherwise throw. Only the persistable fields (id / caption / media) are
- * restored; every richer field takes its fresh-slide default.
+ * invariants would otherwise throw. The persistable fields (id / caption / media / canvas
+ * transform) are restored; every still-gated richer field takes its fresh-slide default.
  */
 fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
     if (!isStructurallyValid) return null
     return StorySlideDeck(
-        slides = slides.map { StorySlide(id = it.id, text = it.text, mediaIds = it.mediaIds) },
+        slides = slides.map {
+            StorySlide(
+                id = it.id,
+                text = it.text,
+                mediaIds = it.mediaIds,
+                transform = it.transform.toCanvasTransform(),
+            )
+        },
         selectedId = selectedId,
     )
 }
+
+/**
+ * The durable form of a canvas transform — `null` when the framing is the identity (never
+ * panned or zoomed), so a fresh slide never bloats the snapshot with the default triple.
+ */
+private fun StoryCanvasTransform.toDraftSnapshot(): StoryDraftTransformSnapshot? =
+    if (isIdentity) null
+    else StoryDraftTransformSnapshot(scale = scale, offsetX = offsetX, offsetY = offsetY)
+
+/**
+ * Rebuilds a canvas transform from its durable form — `null` (no persisted framing) becomes
+ * the identity, the inverse of [toDraftSnapshot]. The values are seeded verbatim; the deck's
+ * own gestures re-clamp against a freshly measured canvas on the next interaction.
+ */
+private fun StoryDraftTransformSnapshot?.toCanvasTransform(): StoryCanvasTransform =
+    this?.let { StoryCanvasTransform(scale = it.scale, offsetX = it.offsetX, offsetY = it.offsetY) }
+        ?: StoryCanvasTransform.IDENTITY

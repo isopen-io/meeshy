@@ -29,6 +29,7 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.story.StoryComposerDraftStore
@@ -2546,6 +2547,44 @@ class StoryComposerViewModelTest {
         assertThat(saved).isNotNull()
         assertThat(saved!!.slides.single().text).isEqualTo("keep me")
         assertThat(saved.visibility).isEqualTo("PRIVATE")
+    }
+
+    @Test
+    fun `persistDraft saves the selected slide's canvas framing`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("framed")
+        vm.onCanvasTransform(panX = 40f, panY = 60f, zoom = 2f, canvasWidth = 1000f, canvasHeight = 2000f)
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        val transform = saved!!.slides.single().transform
+        assertThat(transform).isNotNull()
+        assertThat(transform!!.scale).isEqualTo(2f)
+        assertThat(transform.offsetX).isEqualTo(40f)
+        assertThat(transform.offsetY).isEqualTo(60f)
+    }
+
+    @Test
+    fun `onEnterComposer restores a persisted canvas framing`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "resume",
+                    transform = StoryDraftTransformSnapshot(scale = 2f, offsetX = 10f, offsetY = -5f),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.selectedSlide.transform)
+            .isEqualTo(StoryCanvasTransform(scale = 2f, offsetX = 10f, offsetY = -5f))
     }
 
     @Test
