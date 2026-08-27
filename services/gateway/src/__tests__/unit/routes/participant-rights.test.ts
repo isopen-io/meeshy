@@ -79,14 +79,14 @@ const registeredRow = {
 
 type Ctx = ReturnType<typeof setup>;
 
-function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow) {
+function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow, hosts: any[] = []) {
   const routes: { method: string; path: string; handler: any }[] = [];
   const register = (method: string) =>
     jest.fn<any>((path: string, options: any, handler: any) => {
       routes.push({ method, path, handler: handler ?? options.handler ?? options });
     });
 
-  const emitted: { event: string; payload: any }[] = [];
+  const emitted: { event: string; payload: any; room: string }[] = [];
 
   const prisma = {
     participant: {
@@ -97,7 +97,10 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow) {
         }
         return null;
       }),
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      // Les hôtes (admin/moderator/creator) de la conversation — #3898, la
+      // charge COMPLÈTE de `participant:rights-updated` part sur LEUR room
+      // personnelle en plus de la room de conversation (charge réduite).
+      findMany: jest.fn<any>().mockResolvedValue(hosts),
       update: jest.fn<any>(async ({ data }: any) => ({ ...targetRow, ...data })),
       create: jest.fn<any>(),
       count: jest.fn<any>().mockResolvedValue(0),
@@ -109,8 +112,8 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow) {
   };
 
   const io = {
-    to: jest.fn<any>(() => ({
-      emit: (event: string, payload: any) => { emitted.push({ event, payload }); },
+    to: jest.fn<any>((room: string) => ({
+      emit: (event: string, payload: any) => { emitted.push({ event, payload, room }); },
     })),
   };
 
@@ -381,8 +384,12 @@ describe('PATCH …/rights — `historyVisibleFrom`, l’octroi par date', () =>
 
     const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
     expect(events).toHaveLength(2);
-    expect(events[0]?.payload.historyVisibleFrom).toBe(GRANTED_FROM);
-    expect(events[0]?.payload.participantId).toBe(REGISTERED_ID);
+    // La charge COMPLÈTE (avec `historyVisibleFrom`) est celle de la room
+    // PERSONNELLE de l'inscrit — #3898 : la room de conversation ne la porte
+    // plus (voir le bloc dédié plus bas).
+    const ownRoomEvent = events.find((e) => e.room === `user:${registeredRow.userId}`);
+    expect(ownRoomEvent?.payload.historyVisibleFrom).toBe(GRANTED_FROM);
+    expect(ownRoomEvent?.payload.participantId).toBe(REGISTERED_ID);
     const rooms = (ctx.io.to as any).mock.calls.map((c: any[]) => c[0]);
     expect(rooms).toContain(`user:${registeredRow.userId}`);
   });
@@ -509,5 +516,89 @@ describe('PATCH …/rights — `historyVisibleFrom` ne peut pas être dans le fu
     await patchRights(ctx, { historyVisibleFrom: null }, REGISTERED_ID);
 
     expect(ctx.reply._status).toBe(200);
+  });
+});
+
+// ─── Dédoublement de l'émission — décision porteur #3898 (option b) ──────────
+//
+// `historyVisibleFrom` partait auparavant à TOUTE la room de conversation —
+// un fait de modération (« l'hôte a octroyé l'historique à X depuis le
+// 3 mars ») visible de n'importe quel membre connecté. Décision porteur
+// (2026-08-27) : dédoubler façon `presence-audience.ts`. Charge COMPLÈTE
+// (avec `historyVisibleFrom`) vers les rooms personnelles `user:<id>` des
+// admin/moderator/creator CONNECTÉS ; charge SANS le champ vers la room de
+// conversation. Un hôte connecté ET dans la room reçoit alors DEUX
+// événements — contrat client : le second (sans le champ) ne doit JAMAIS
+// écraser une valeur déjà reçue du premier.
+
+describe('PATCH …/rights — dédoublement de l’émission (#3898)', () => {
+  const GRANTED_FROM = '2026-01-01T00:00:00.000Z';
+  const OTHER_HOST_USER_ID = '507f1f77bcf86cd799439077';
+
+  const otherHost = { id: 'other-host-part', userId: OTHER_HOST_USER_ID, role: 'moderator' };
+
+  it('envoie la charge COMPLÈTE (avec historyVisibleFrom) à la room personnelle d’un AUTRE hôte', async () => {
+    const ctx = setup('admin', registeredRow, [otherHost]);
+
+    await patchRights(ctx, { historyVisibleFrom: GRANTED_FROM }, REGISTERED_ID);
+
+    const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+    const hostEvent = events.find((e) => e.room === `user:${OTHER_HOST_USER_ID}`);
+    expect(hostEvent).toBeTruthy();
+    expect(hostEvent?.payload.historyVisibleFrom).toBe(GRANTED_FROM);
+  });
+
+  it('la room de CONVERSATION ne porte PLUS `historyVisibleFrom` — la clé est ABSENTE, pas `null`', async () => {
+    const ctx = setup('admin', registeredRow, [otherHost]);
+
+    await patchRights(ctx, { historyVisibleFrom: GRANTED_FROM }, REGISTERED_ID);
+
+    const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+    const roomEvent = events.find((e) => e.room === `conversation:${CONV_ID}`);
+    expect(roomEvent).toBeTruthy();
+    expect('historyVisibleFrom' in roomEvent!.payload).toBe(false);
+  });
+
+  it('la room personnelle de l’INTÉRESSÉ continue de porter la charge complète', async () => {
+    const ctx = setup('admin', registeredRow, [otherHost]);
+
+    await patchRights(ctx, { historyVisibleFrom: GRANTED_FROM }, REGISTERED_ID);
+
+    const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+    const ownEvent = events.find((e) => e.room === `user:${registeredRow.userId}`);
+    expect(ownEvent?.payload.historyVisibleFrom).toBe(GRANTED_FROM);
+  });
+
+  it('n’ajoute AUCUNE émission de plus quand la conversation n’a aucun autre hôte connu', async () => {
+    const ctx = setup('admin', registeredRow, []);
+
+    await patchRights(ctx, { historyVisibleFrom: GRANTED_FROM }, REGISTERED_ID);
+
+    const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+    expect(events).toHaveLength(2);
+  });
+
+  it('adresse PLUSIEURS hôtes, chacun sur sa propre room personnelle', async () => {
+    const secondHost = { id: 'second-host-part', userId: '507f1f77bcf86cd799439088', role: 'admin' };
+    const ctx = setup('admin', registeredRow, [otherHost, secondHost]);
+
+    await patchRights(ctx, { historyVisibleFrom: GRANTED_FROM }, REGISTERED_ID);
+
+    const rooms = ctx.emitted
+      .filter((e) => e.event === 'participant:rights-updated')
+      .map((e) => e.room);
+    expect(rooms).toContain(`user:${otherHost.userId}`);
+    expect(rooms).toContain(`user:${secondHost.userId}`);
+  });
+
+  it('même une modification de droits BOOLÉENS (pas de date) atteint les autres hôtes', async () => {
+    const ctx = setup('admin', anonymousRow, [otherHost]);
+
+    await patchRights(ctx, { canSendFiles: true });
+
+    const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+    const hostEvent = events.find((e) => e.room === `user:${OTHER_HOST_USER_ID}`);
+    expect(hostEvent).toBeTruthy();
+    expect(hostEvent?.payload.rights.canSendFiles).toBe(true);
   });
 });

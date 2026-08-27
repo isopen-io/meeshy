@@ -26,6 +26,7 @@ import {
 } from '../../services/participantRights';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
+import { participantUserRooms } from '../../socketio/emitToConversationParticipants';
 import { endConversationMembership } from '../../socketio/endConversationMembership';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import {
@@ -927,26 +928,50 @@ export function registerParticipantsRoutes(
       const grantedFrom: Date | null =
         historyVisibleFrom !== undefined ? historyVisibleFrom : (target.historyVisibleFrom ?? null);
 
-      // Deux audiences, une seule émission par room : la conversation, pour que
-      // les autres hôtes voient le changement ; et la room personnelle du
-      // participant, parce qu'un visiteur sans compte n'a pas de ligne `User` et
-      // que sa room porte son `Participant.id`. Sans elle, l'intéressé — le seul
-      // que la décision contraint — serait le dernier informé.
+      // Deux audiences, DEUX charges — décision porteur #3898 (option b),
+      // même patron que `presence-audience.ts` : `historyVisibleFrom` est un
+      // fait de MODÉRATION (« l'hôte a octroyé l'historique à X depuis le
+      // 3 mars »), pas un fait de conversation ordinaire. La room de
+      // conversation entière ne le voit plus ; seuls les AUTRES HÔTES
+      // (admin/moderator/creator) et l'INTÉRESSÉ lui-même le reçoivent, sur
+      // leur room personnelle. Contrat client : un hôte connecté ET dans la
+      // room de conversation reçoit alors DEUX événements — celui, réduit, de
+      // la room de conversation ne doit JAMAIS écraser une valeur déjà reçue
+      // via sa room personnelle.
       const manager = fastify.socketIOHandler?.getManager();
       const io = manager?.getIO();
       if (io) {
-        const payload = {
+        const fullPayload = {
           conversationId,
           participantId: target.id,
           updatedBy: currentUserId ?? '',
           rights,
           historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
         };
-        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
+        // La clé est ABSENTE, jamais `null` : `null` dirait « octroi
+        // retiré », ce que la room de conversation n'a pas à savoir.
+        const { historyVisibleFrom: _omitted, ...roomPayload } = fullPayload;
+
+        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, roomPayload);
+
         // La room personnelle porte le `User.id` d'un inscrit et le
         // `Participant.id` d'un visiteur sans compte — même clé que
-        // `participantUserRoomTargets`.
-        io.to(ROOMS.user(target.userId ?? target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, payload);
+        // `participantUserRoomTargets`. L'intéressé reçoit toujours la charge
+        // complète : c'est SA date.
+        io.to(ROOMS.user(target.userId ?? target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
+
+        // Les AUTRES hôtes (admin/moderator/creator) de la conversation — pour
+        // qu'ils voient le changement, sans l'exposer à la room entière. Un
+        // hôte qui est AUSSI l'intéressé (rare : un admin octroie l'historique
+        // à un autre admin) reçoit deux fois la même charge sur sa room —
+        // idempotent, jamais faux.
+        const hosts = await prisma.participant.findMany({
+          where: { conversationId, isActive: true, role: { in: ['admin', 'moderator', 'creator'] } },
+          select: { id: true, userId: true }
+        });
+        for (const room of participantUserRooms(hosts)) {
+          io.to(room).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
+        }
       }
 
       // Le middleware d'auth met en cache la ligne participant : sans
