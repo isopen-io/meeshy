@@ -164,7 +164,8 @@ export const SendMessageBodySchema = z.object({
     (data.attachmentIds?.length ?? 0) > 0 ||
     Boolean(data.forwardedFromId) ||
     Boolean(data.copyAttachmentsFromMessageId) ||
-    Boolean(data.encryptedContent),
+    Boolean(data.encryptedContent) ||
+    Boolean(data.location),
   { message: 'Le message ne peut pas être vide', path: ['content'] },
 ).refine(noSilentDowngrade, NO_SILENT_DOWNGRADE_ISSUE);
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';

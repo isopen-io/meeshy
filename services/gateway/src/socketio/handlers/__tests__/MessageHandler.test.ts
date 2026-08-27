@@ -439,6 +439,33 @@ describe('MessageHandler', () => {
       expect(mockResolveParticipant).toHaveBeenCalled();
     });
 
+    // Quatrième porte de l'exemption de contenu vide, la même famille que
+    // copyAttachmentsFromMessageId ci-dessus, sur le même transport socket —
+    // celui qui rejoue une géolocalisation seule après l'échec du POST REST
+    // (fallback documenté du client iOS). Resté fermé, ce transport rejetait
+    // à coup sûr tout message de géolocalisation seule : ni texte, ni
+    // attachmentIds, la retentative ne pouvait donc jamais réussir (#4039,
+    // repro : envoi bloqué pour toujours dans le SyncPill).
+    it('does not reject an empty-content send carrying a location (location-only share)', async () => {
+      const GEO = { latitude: 48.8566, longitude: 2.3522, name: 'Paris' };
+      mockValidateMessageLength.mockReturnValue({ isValid: false, error: 'Le message ne peut pas être vide' });
+      mockValidateSocketEvent.mockReturnValue({
+        success: true,
+        data: makeValidSendData({ content: '', location: GEO }),
+      });
+
+      await handler.handleMessageSend(
+        socket,
+        makeValidSendData({ content: '', location: GEO }),
+        callback,
+      );
+
+      expect(callback).not.toHaveBeenCalledWith(
+        expect.objectContaining({ error: 'Le message ne peut pas être vide' }),
+      );
+      expect(mockResolveParticipant).toHaveBeenCalled();
+    });
+
     // Le champ doit aussi ARRIVER au service : franchir la garde sans être
     // transmis laisserait la copie de pièces jointes muette.
     it('forwards copyAttachmentsFromMessageId to the messaging service', async () => {

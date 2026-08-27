@@ -72,7 +72,13 @@ export class MessageValidator {
     // champ non déclaré. Il y est déclaré, et la garde de
     // `MessageHandler.handleMessageSend` l'exempte comme ici — les trois portes
     // ne s'ouvrent qu'ensemble.
-    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId && !request.copyAttachmentsFromMessageId) {
+    //
+    // `location` porte la MÊME exemption : une géolocalisation partagée SEULE
+    // (ni texte, ni pièce jointe) est un contenu à part entière. Sans cette
+    // ligne, ce message meurt ici en CONTENT_EMPTY sur CHAQUE tentative — une
+    // erreur de validation permanente, jamais transitoire — et reste bloqué
+    // pour toujours dans la file de retentative côté client (#4039).
+    if ((!request.content || request.content.trim().length === 0) && !hasAttachments && !request.encryptedPayload && !request.forwardedFromId && !request.copyAttachmentsFromMessageId && !request.location) {
       errors.push({
         field: 'content',
         message: 'Message content cannot be empty (unless attachments or encrypted payload are included)',

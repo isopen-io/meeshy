@@ -115,6 +115,21 @@ describe('MessageValidator.validateRequest', () => {
     expect(result.isValid).toBe(true);
   });
 
+  // Un lieu partagé rend aussi le corps non-vide — même famille que
+  // forwardedFromId/copyAttachmentsFromMessageId/attachmentIds ci-dessus.
+  // Repro prod : une géolocalisation SEULE (pas de texte, pas d'attachment)
+  // meurt ici en CONTENT_EMPTY, à coup sûr, sur CHAQUE tentative — le message
+  // ne part jamais et l'entrée reste bloquée dans le SyncPill pour toujours
+  // (#4039).
+  it('allows empty content when location is present (location-only share)', async () => {
+    const result = await validator.validateRequest(makeRequest({
+      content: '',
+      location: { latitude: 48.8566, longitude: 2.3522, name: 'Paris' },
+    }));
+    expect(result.errors.find(e => e.code === 'CONTENT_EMPTY')).toBeUndefined();
+    expect(result.isValid).toBe(true);
+  });
+
   it('errors when content exceeds MAX_MESSAGE_LENGTH (4000)', async () => {
     const result = await validator.validateRequest(makeRequest({ content: 'x'.repeat(4001) }));
     expect(result.errors.some(e => e.code === 'CONTENT_TOO_LONG')).toBe(true);

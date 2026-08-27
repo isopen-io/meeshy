@@ -82,6 +82,39 @@ describe('SendMessageBodySchema — content vs attachment validation', () => {
   });
 });
 
+// Un lieu partagé rend aussi le corps non-vide : une géolocalisation seule
+// n'a ni texte ni attachmentIds — même famille d'exemption que
+// forwardedFromId/copyAttachmentsFromMessageId ci-dessus. Sans elle, tout
+// message de géolocalisation seule meurt ici en "Le message ne peut pas être
+// vide", avant même d'atteindre MessageValidator (repro : envoi bloqué pour
+// toujours dans le SyncPill, #4039).
+describe('SendMessageBodySchema — lieu partagé seul', () => {
+  it('accepts a location-only message: empty content, no attachments, a location', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      clientMessageId: cid,
+      location: { latitude: 48.8566, longitude: 2.3522, name: 'Paris' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts a location-only message with content omitted entirely', () => {
+    const result = SendMessageBodySchema.safeParse({
+      clientMessageId: cid,
+      location: { latitude: 48.8566, longitude: 2.3522 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('still rejects an empty message with no content, no attachments and no location', () => {
+    const result = SendMessageBodySchema.safeParse({
+      content: '',
+      clientMessageId: cid,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('SendMessageBodySchema — clientMessageId is optional', () => {
   it('accepts a text message WITHOUT clientMessageId (non-sync clients, e.g. scripts)', () => {
     const result = SendMessageBodySchema.safeParse({ content: 'hello' });

@@ -353,12 +353,19 @@ export class MessageHandler {
       // QUATRIÈME porteur de la même exemption : un corps chiffré. Le
       // déclencheur est désormais l'enveloppe VALIDÉE ci-dessus, non plus un
       // champ brut que le fil ne portait jamais.
+      //
+      // CINQUIÈME porteur : une géolocalisation SEULE (`location`, ni texte ni
+      // attachmentIds). Restée fermée ici, cette porte rejetait à coup sûr —
+      // sur CHAQUE tentative, y compris le rejeu depuis la file offline —
+      // tout message de géolocalisation seule ; ce transport est le repli
+      // documenté quand le POST REST échoue (#4039).
       const validation = validateMessageLength(validated.content);
       if (
         !validation.isValid &&
         !encryptedPayload &&
         !validated.forwardedFromId &&
-        !validated.copyAttachmentsFromMessageId
+        !validated.copyAttachmentsFromMessageId &&
+        !validated.location
       ) {
         this._sendError(callback, validation.error || 'Message invalide', socket);
         return;
