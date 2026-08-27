@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import MeeshySDK
 @testable import Meeshy
 
 /// Plein écran NET (feature 3) — « l'image de base doit être nette ; pour une
@@ -45,6 +47,38 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     func test_imageSource_withoutFullURL_isNil_neverFallsBackToAThumbnail() {
         XCTAssertNil(FullscreenImageSource.resolve(fullURL: nil, thumbHash: "abc", isFullResident: false))
         XCTAssertNil(FullscreenImageSource.resolve(fullURL: "", thumbHash: "abc", isFullResident: true))
+    }
+
+    // MARK: - Image : probe de résidence (#3897)
+
+    func test_isResident_withNothingCached_isFalse() {
+        let url = "https://cdn.meeshy.me/x-\(UUID().uuidString).webp"
+        XCTAssertFalse(FullscreenImageSource.isResident(url))
+    }
+
+    func test_isResident_withTheBareFullFormatSlotCached_isTrue() {
+        let url = "https://cdn.meeshy.me/x-\(UUID().uuidString).webp"
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40), format: format).image { ctx in
+            UIColor.blue.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+        }
+        DiskCacheStore.cacheImageForPreview(image, key: url)
+
+        XCTAssertTrue(FullscreenImageSource.isResident(url))
+    }
+
+    /// #3897 — LE défaut : `isResident` sondait `cachedImage(for:)`, le slot
+    /// PLEIN FORMAT (bare) seul, aveugle aux variantes dimensionnées
+    /// (128–1024px) qu'une bulle ou un aperçu ont pu décoder pour la MÊME
+    /// URL. `hasAnyCachedImageVariant` est la sonde JUSTE — un revert vers
+    /// `cachedImage(for: resolved)` (bare, sans bucket) fait rougir ce test.
+    func test_isResident_readsThroughHasAnyCachedImageVariant_notTheBareSlotAlone() throws {
+        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let fn = try block(from: "nonisolated static func isResident(_ url: String) -> Bool {", upTo: "}\n}", in: code)
+        XCTAssertTrue(fn.contains("DiskCacheStore.hasAnyCachedImageVariant(for: resolved)"))
+        XCTAssertFalse(fn.contains("DiskCacheStore.cachedImage(for: resolved) != nil"),
+                       "aveugle au bucket de variante — une bulle ayant décodé 512px ne comptait pas comme résidente")
     }
 
     // MARK: - Vidéo : plan du poster net
@@ -159,9 +193,15 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// n'est pas « fait-elle 1080 ? » mais « une ré-extraction ferait-elle
     /// MIEUX ? » : sur une source inconnue, non.
     func test_posterGrade_unknownSource_acceptsWhatOurOwnExtractionCanProduce() {
+        // #3897 (tautologie retirée) : une seconde assertion réinjectait
+        // `VideoPosterGrade.fullscreenMinDimension` (1080, le SEUIL de
+        // l'ANCIEN défaut) comme `posterMaxDimension` — mais ce code path
+        // (source inconnue) ne compare plus JAMAIS à `fullscreenMinDimension`,
+        // seulement à `bubbleGradeMaxDimension` (400). N'importe quelle valeur
+        // > 400 aurait rendu `true` de façon identique : l'assertion ne
+        // vérifiait rien de spécifique à cette constante, sur ce chemin.
         XCTAssertTrue(VideoPosterGrade.isFullscreenSharp(posterMaxDimension: 854, sourceMaxDimension: nil),
                       "480p extrait par la cascade : rien de plus net n'existe — l'exiger boucle sans fin")
-        XCTAssertTrue(VideoPosterGrade.isFullscreenSharp(posterMaxDimension: VideoPosterGrade.fullscreenMinDimension, sourceMaxDimension: nil))
     }
 
     /// … sans pour autant tout accepter : la clé `thumb:<url>` est PARTAGÉE

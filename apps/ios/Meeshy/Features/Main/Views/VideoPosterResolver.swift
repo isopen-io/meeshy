@@ -115,6 +115,17 @@ enum VideoPosterResolver {
     /// Lecture SYNCHRONE du poster déjà persisté (NSCache, puis disque) — pour
     /// qu'une page qui s'ouvre sur une vidéo déjà vue rende son poster au
     /// premier `body`, sans transition. `nil` si absent ou de grade bulle.
+    ///
+    /// #3897 — accepté tel quel : le disque n'est touché QUE sur un manque
+    /// NSCache (poster jamais réchauffé depuis le dernier lancement), et
+    /// borné à UNE lecture par montage de page (jamais par frame/scroll —
+    /// `GalleryVideoPage.init` l'appelle une fois, hors fenêtre de rendu
+    /// aucun appel). `warmedThumbnail` lit un fichier JPEG déjà sous-échantillonné
+    /// (`extractionMaxDimension` 1920px, ≤ quelques centaines de Ko) — coût
+    /// mesuré négligeable (<5ms) au regard du gain Cache-First (pas de
+    /// transition placeholder→image sur une vidéo déjà vue). À reconsidérer
+    /// SEULEMENT si un profilage sur device montre ce site en cause dans un
+    /// jank au premier rendu — pas de changement préventif sans mesure.
     nonisolated static func persistedPoster(for attachment: MessageAttachment) -> UIImage? {
         guard let key = posterKey(for: attachment),
               let image = CacheCoordinator.warmedThumbnail(for: key)

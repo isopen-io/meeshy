@@ -551,6 +551,19 @@ internal struct _FullscreenRenderer: View {
         .offset(y: dismissOffset)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dismissOffset)
         .task(id: player.attachment.id) { await resolvePosterIfNeeded() }
+        // #3897 — sans ce relais, un poster non résolu au premier montage
+        // (fichier pas encore local, ex. politique réseau restrictive) ne
+        // l'était plus JAMAIS : `.task(id: player.attachment.id)` ne rejoue
+        // qu'au changement d'ATTACHMENT, jamais quand ce même attachment
+        // devient disponible après un téléchargement déclenché par
+        // `downloadOverlay`. Miroir de la page galerie app
+        // (`GalleryVideoPage.task(id: downloader.isCached)`). La comparaison
+        // `== .ready` (pas `player.availability` brut) évite de rejouer à
+        // chaque tick de `.downloading(progress:)`.
+        .task(id: player.availability == .ready) {
+            guard poster == nil, player.availability == .ready else { return }
+            await resolvePosterIfNeeded()
+        }
         .task(id: manager.player != nil) { await armSurfaceReadyFailsafe() }
         .onAppear {
             watchStartTime = Date()

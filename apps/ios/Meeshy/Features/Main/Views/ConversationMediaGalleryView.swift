@@ -632,9 +632,16 @@ enum FullscreenImageSource {
     /// la NSCache est de toute façon réchauffé de façon synchrone par
     /// `ProgressiveCachedImage.init` — il s'affiche immédiatement, et le fond
     /// passé n'est alors jamais décodé.
+    ///
+    /// #3897 — `hasAnyCachedImageVariant`, pas `cachedImage(for:)` seul :
+    /// cette dernière ne sonde que le slot PLEIN FORMAT (bare), aveugle aux
+    /// variantes dimensionnées (128–1024px) qu'une bulle ou un aperçu ont pu
+    /// décoder pour la MÊME URL. Une variante bucketée résidente est un
+    /// signal juste de résidence pour ce PROBE (backdrop oui/non) même si
+    /// elle n'est pas ce que `ProgressiveCachedImage` servira en `fullUrl:`.
     nonisolated static func isResident(_ url: String) -> Bool {
         let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString ?? url
-        return DiskCacheStore.cachedImage(for: resolved) != nil
+        return DiskCacheStore.hasAnyCachedImageVariant(for: resolved)
     }
 }
 
