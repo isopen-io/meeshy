@@ -1,0 +1,170 @@
+import XCTest
+
+/// Garde de forme pour #3927 : le bouton d'envoi apparaît/disparaît en
+/// tourbillon (grossit+tourne à l'arrivée, rétrécit+tourne en sens inverse
+/// au départ) ; à défaut de contenu à envoyer, le même emplacement (44×44)
+/// affiche deux boutons emoji rapides — les 2 plus utilisés, sourcés par
+/// `EmojiUsageTracker` (même mécanisme que les réactions rapides,
+/// `MessageOverlayMenu.swift`) — dont le tap envoie DIRECTEMENT ce
+/// message-emoji.
+final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
+
+    private static let composerPath = "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar.swift"
+
+    // MARK: - `actionButton` bascule entre bouton d'envoi et emojis rapides
+
+    func test_actionButtonBlock_switchesBetweenSendButtonAndQuickEmojiButtons() throws {
+        let block = try Self.actionButtonBlock()
+        XCTAssertTrue(block.contains("quickEmojiButtons"), "l'emplacement idle doit afficher `quickEmojiButtons`")
+        XCTAssertTrue(block.contains("showsQuickEmoji"), "la bascule doit être pilotée par une condition nommée, pas un booléen anonyme")
+    }
+
+    /// L'emplacement (slot) ne doit JAMAIS s'effondrer — directive du
+    /// 2026-05-28 (bug « on ne voit pas le bouton envoyer ») déjà gardée par
+    /// `ComposerTransparentAndConditionalSendSourceGuardTests` : le
+    /// `.frame(width: 44, height: 44)` doit rester appliqué UNE SEULE fois,
+    /// à l'extérieur du if/else qui bascule le contenu — jamais dupliqué par
+    /// branche (ce qui romprait l'invariant si une seule branche l'avait).
+    func test_actionButtonBlock_frameIsAppliedOnceOutsideTheBranch() throws {
+        let block = try Self.actionButtonBlock()
+        let occurrences = block.components(separatedBy: ".frame(width: 44, height: 44)").count - 1
+        XCTAssertEqual(occurrences, 1, "le cadre fixe doit envelopper le if/else UNE seule fois — trouvé \(occurrences)")
+    }
+
+    func test_actionButtonBlock_hidesQuickEmojiInEditModeAndWhenEmojiDisabled() throws {
+        let block = try Self.actionButtonBlock()
+        guard let range = block.range(of: "let showsQuickEmoji = ") else {
+            return XCTFail("déclaration de `showsQuickEmoji` introuvable")
+        }
+        let lineEnd = block[range.upperBound...].firstIndex(of: "\n") ?? block.endIndex
+        let line = block[range.lowerBound..<lineEnd]
+        XCTAssertTrue(line.contains("!isEditMode"), "les emojis rapides ne doivent jamais remplacer le bouton « enregistrer » de l'édition")
+        XCTAssertTrue(line.contains("showEmoji"), "les emojis rapides doivent respecter le drapeau `showEmoji` de l'hôte")
+    }
+
+    // MARK: - Transition tourbillon appliquée aux deux branches
+
+    func test_actionButtonBlock_appliesTourbillonTransitionToBothBranches() throws {
+        let block = try Self.actionButtonBlock()
+        let occurrences = block.components(separatedBy: "tourbillonTransition").count - 1
+        XCTAssertEqual(occurrences, 2, "la transition tourbillon doit s'appliquer aux DEUX branches (emojis ↔ bouton d'envoi) — trouvé \(occurrences)")
+    }
+
+    func test_tourbillonTransition_isAsymmetricWithOppositeRotationSigns() throws {
+        let block = try Self.propertyBlock(anchor: "var tourbillonTransition: AnyTransition {")
+        XCTAssertTrue(block.contains(".asymmetric("), "l'apparition et la disparition doivent être des animations DISTINCTES (grossir en tournant / rétrécir en tournant en sens inverse)")
+        XCTAssertTrue(block.contains("insertion:"), "insertion manquante")
+        XCTAssertTrue(block.contains("removal:"), "removal manquante")
+        XCTAssertTrue(
+            block.contains("-250") || block.contains("-260") || block.contains("-270") || block.contains("-240"),
+            "l'insertion doit tourner dans un sens (rotation négative) — tourbillon qui apparaît en grossissant"
+        )
+    }
+
+    func test_tourbillonEffect_scalesRotatesAndFadesTheContent() throws {
+        let source = try Self.strippedSource()
+        guard let structRange = source.range(of: "struct TourbillonEffect: ViewModifier {") else {
+            return XCTFail("`TourbillonEffect` introuvable — le tourbillon doit être un ViewModifier réutilisable")
+        }
+        var depth = 0
+        var index = structRange.lowerBound
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = source.index(after: index)
+        }
+        let block = String(source[structRange.lowerBound...index])
+        XCTAssertTrue(block.contains("scaleEffect"), "le tourbillon doit grossir/rétrécir")
+        XCTAssertTrue(block.contains("rotationEffect"), "le tourbillon doit tourner")
+        XCTAssertTrue(block.contains("opacity"), "le tourbillon doit s'estomper à l'apparition/disparition")
+    }
+
+    // MARK: - Emojis rapides : source, envoi direct, enregistrement d'usage
+
+    func test_quickSendEmojis_sourcesTopTwoFromEmojiUsageTracker() throws {
+        let block = try Self.propertyBlock(anchor: "var quickSendEmojis: [String] {")
+        XCTAssertTrue(
+            block.contains("EmojiUsageTracker.topEmojis(count: 2"),
+            "les emojis rapides doivent venir du tracker partagé des réactions, limité à 2"
+        )
+    }
+
+    func test_sendQuickEmoji_recordsUsageAndReusesHandleSend() throws {
+        let source = try Self.strippedSource()
+        guard let funcRange = source.range(of: "func sendQuickEmoji(") else {
+            return XCTFail("`sendQuickEmoji(_:)` introuvable")
+        }
+        var depth = 0
+        var index = funcRange.lowerBound
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = source.index(after: index)
+        }
+        let block = String(source[funcRange.lowerBound...index])
+        XCTAssertTrue(
+            block.contains("EmojiUsageTracker.recordUsage(emoji:"),
+            "un tap sur un emoji rapide doit enregistrer son usage — sinon le classement top-2 ne bouge jamais"
+        )
+        XCTAssertTrue(
+            block.contains("handleSend()"),
+            "l'envoi direct doit réutiliser `handleSend()` — SOURCE UNIQUE du dispatch (onCustomSend/onSendMessage/onSend), jamais une réimplémentation locale"
+        )
+    }
+
+    // MARK: - Extraction
+
+    private struct GuardIsBlind: Error, CustomStringConvertible {
+        let description: String
+    }
+
+    private static func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Composer
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .deletingLastPathComponent()   // apps
+            .deletingLastPathComponent()   // repo root
+    }
+
+    private static func strippedSource() throws -> String {
+        let file = repoRoot().appendingPathComponent(composerPath)
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            throw XCTSkip("Source introuvable depuis \(repoRoot().path) — arbre source indisponible")
+        }
+        return AppSourceGuard.stripComments(try String(contentsOf: file, encoding: .utf8))
+    }
+
+    private static func actionButtonBlock() throws -> String {
+        try propertyBlock(anchor: "var actionButton: some View {")
+    }
+
+    private static func propertyBlock(anchor: String) throws -> String {
+        let source = try strippedSource()
+        guard let anchorRange = source.range(of: anchor) else {
+            throw GuardIsBlind(description: "Ancre « \(anchor) » introuvable : la garde ne garde plus rien")
+        }
+        var depth = 0
+        var index = anchorRange.lowerBound
+        while index < source.endIndex {
+            let character = source[index]
+            if character == "{" {
+                depth += 1
+            } else if character == "}" {
+                depth -= 1
+                if depth == 0 {
+                    return String(source[anchorRange.lowerBound...index])
+                }
+            }
+            index = source.index(after: index)
+        }
+        throw GuardIsBlind(description: "Accolade fermante du bloc introuvable pour « \(anchor) »")
+    }
+}

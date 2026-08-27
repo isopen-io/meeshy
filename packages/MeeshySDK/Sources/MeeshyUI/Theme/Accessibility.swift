@@ -174,6 +174,7 @@ public enum MeeshyA11yID {
 
     // Conversation / composer
     public static let composerSend = "composer.send"
+    public static let composerQuickEmoji = "composer.quickEmoji"
     public static let composerTextField = "composer.textField"
     public static let conversationMessageList = "conversation.messageList"
     public static let conversationScrollToBottom = "conversation.scrollToBottom"
