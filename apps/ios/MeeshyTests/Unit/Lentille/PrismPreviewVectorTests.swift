@@ -90,8 +90,8 @@ final class PrismPreviewVectorTests: XCTestCase {
         XCTAssertFalse(Self.loadCases().isEmpty, "prism-preview.vectors.json a chargé ZÉRO cas — leçon 257, jamais de vert silencieux")
     }
 
-    func test_vectors_totalCaseCount_isTwentyTwo() {
-        XCTAssertEqual(Self.loadCases().count, 22, "prism-preview.vectors.json ne contient plus 22 cas — vérifier si des vecteurs ont été ajoutés/retirés avant d'ajuster ce nombre.")
+    func test_vectors_totalCaseCount_isThirty() {
+        XCTAssertEqual(Self.loadCases().count, 30, "prism-preview.vectors.json ne contient plus 30 cas — vérifier si des vecteurs ont été ajoutés/retirés avant d'ajuster ce nombre.")
     }
 
     // MARK: - Rejeu des 22 vecteurs contre l'API RÉELLE (jamais de loi réimplémentée)
