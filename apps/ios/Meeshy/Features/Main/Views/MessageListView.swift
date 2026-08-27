@@ -443,7 +443,12 @@ struct MessageListView: UIViewControllerRepresentable {
     /// en deux l'identité et la barre de méta que le mode Focal fait tenir à
     /// cheval sur son cadre. L'overlay rend désormais le message NORMAL, dans
     /// tous les modes de lecture.
-    var onLongPress: ((String) -> Void)?
+    ///
+    /// Le SECOND paramètre du tuple porte désormais le frame RÉEL de la
+    /// cellule (`cellFrameInWindow`, résolu côté UIKit) — #4004 (2026-08-27) :
+    /// `MessageFramePreferenceKey` ne traverse la frontière UIKit qu'en mode
+    /// Rivière (`RiverBubbleView`), jamais pour la liste standard.
+    var onLongPress: ((String, CGRect?) -> Void)?
     /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
     /// construit par `ConversationView` (là où toutes les actions sont déjà
     /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le

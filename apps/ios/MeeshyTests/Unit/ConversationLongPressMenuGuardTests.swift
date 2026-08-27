@@ -72,8 +72,16 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
             return XCTFail("`presentLongPressMenu` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
+            fn.contains("guard let frame = cellFrame,"),
+            "`presentLongPressMenu` doit lire la position réelle via le paramètre `cellFrame` (résolu côté "
+                + "UIKit, `cellFrameInWindow`) — PAS `frameTracker`, qui n'est jamais alimenté en mode liste "
+                + "standard (revue 2026-08-27)."
+        )
+        XCTAssertFalse(
             fn.contains("frameTracker.frame(for:"),
-            "`presentLongPressMenu` doit lire la position réelle du message via `frameTracker`."
+            "`presentLongPressMenu` ne doit PLUS lire `frameTracker` : `MessageFramePreferenceKey` ne "
+                + "traverse la frontière UIKit qu'en mode Rivière (seul site qui la publie réellement) — "
+                + "l'utiliser ici rendrait le repositionnement un NO-OP silencieux en mode liste standard."
         )
         XCTAssertTrue(
             fn.contains("scrollState.scrollToMessageId ="),
@@ -83,6 +91,28 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
         XCTAssertTrue(
             fn.contains("scrollState.scrollToMessageTrigger +="),
             "`presentLongPressMenu` doit incrémenter `scrollToMessageTrigger` pour déclencher le scroll."
+        )
+    }
+
+    // MARK: - Le frame voyage AVEC l'appel, résolu côté UIKit (même patron qu'`onAddReaction`)
+
+    func test_cellFrameInWindow_isTheSourceOfTruth_forTheStandardListMode() throws {
+        let code = try source("Features/Main/Views/MessageListViewController.swift")
+        guard let handler = body(of: "let longPressHandler: ((String) -> Void) = { [weak self] tappedId in", in: code) else {
+            return XCTFail("Le wrapper `longPressHandler` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            handler.contains("self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))"),
+            "Le wrapper `longPressHandler` doit résoudre le frame via `cellFrameInWindow` et le transmettre "
+                + "AVEC l'id — même patron qu'`addReactionHandler`, la seule voie fiable en mode liste standard."
+        )
+    }
+
+    func test_onLongPress_propertyType_carriesTheFrame() throws {
+        let code = try source("Features/Main/Views/MessageListViewController.swift")
+        XCTAssertTrue(
+            code.contains("var onLongPress: ((String, CGRect?) -> Void)?"),
+            "`MessageListViewController.onLongPress` doit porter le frame (`CGRect?`), pas seulement l'id."
         )
     }
 
@@ -105,8 +135,9 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
     func test_customLongPressSite_callsPresentLongPressMenu() throws {
         let code = try source("Features/Main/Views/ConversationView.swift")
         XCTAssertTrue(
-            code.contains("presentLongPressMenu(for: msg)"),
-            "Le site du longpress custom doit appeler `presentLongPressMenu(for:)` — point d'entrée unique."
+            code.contains("presentLongPressMenu(for: msg, cellFrame: cellFrame)"),
+            "Le site du longpress custom doit appeler `presentLongPressMenu(for:cellFrame:)` avec le frame "
+                + "reçu du callback — point d'entrée unique."
         )
     }
 

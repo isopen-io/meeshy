@@ -161,8 +161,12 @@ final class MessageListViewController: UIViewController {
     /// Long press on a bubble — opens the contextual options menu. L'aperçu
     /// élevé est le message NORMAL, dans tous les modes de lecture
     /// (directive 2026-08-23) : voir la note à l'emplacement de l'ancien
-    /// `focalOverlayPreview`.
-    var onLongPress: ((String) -> Void)?
+    /// `focalOverlayPreview`. Carries the message id and the tapped bubble
+    /// cell's on-screen frame (window coords; `nil` when the cell is not
+    /// realized), même patron qu'`onAddReaction` — #4004 (2026-08-27) : le
+    /// menu longpress ferme le clavier et remonte le message vers le centre
+    /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
+    var onLongPress: ((String, CGRect?) -> Void)?
     /// iOS 26+ : builder du contenu `.contextMenu` NATIF (Liquid Glass) d'une
     /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
     /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
@@ -1221,12 +1225,20 @@ final class MessageListViewController: UIViewController {
             let storyReplyHandler = self.onStoryReplyTap
             let swipeReplyHandler = self.onSwipeReply
             let swipeForwardHandler = self.onSwipeForward
-            let longPressHandler = self.onLongPress
             // Wrap the raw handler so each tap also carries the bubble cell's
             // on-screen frame — the quick-reaction bar anchors to it.
             let addReactionHandler: ((String) -> Void) = { [weak self] tappedId in
                 guard let self else { return }
                 self.onAddReaction?(tappedId, self.cellFrameInWindow(messageId: tappedId))
+            }
+            // Même patron qu'`addReactionHandler` : le frame de la cellule est
+            // résolu ICI (UIKit, `cellFrameInWindow`) et voyage AVEC l'appel —
+            // `MessageFramePreferenceKey` (mode Rivière uniquement) ne
+            // traverse pas la frontière UIKit pour ce mode-ci (#4004, revue
+            // 2026-08-27).
+            let longPressHandler: ((String) -> Void) = { [weak self] tappedId in
+                guard let self else { return }
+                self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))
             }
             let toggleReactionHandler = self.onToggleReaction
             let attachmentReactionHandler = self.onReactToAttachment
@@ -1582,7 +1594,7 @@ final class MessageListViewController: UIViewController {
                 // de l'appui long — même gestionnaire, donc même liste
                 // d'actions (édition, suppression, signalement, traduction),
                 // sans qu'aucune seconde liste n'existe à maintenir.
-                focalActions.onMore = { _ in longPressHandler?(messageId) }
+                focalActions.onMore = { _ in longPressHandler(messageId) }
                 focalActions.onViewStory = (senderRingState != .none) ? { _ in viewSenderStoryHandler?(senderId) } : nil
                 focalActions.onCallBack = { _ in
                     guard let summary = message.callSummary else { return }
@@ -1616,7 +1628,7 @@ final class MessageListViewController: UIViewController {
                     uniformFlatDirection: self.readingMode.usesFlatRow,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
-                    onLongPress: { longPressHandler?(messageId) },
+                    onLongPress: { longPressHandler(messageId) },
                     // iOS 26+ (menu natif présent) : couper le long-press
                     // custom — le `.contextMenu` natif possède la pression.
                     enableLongPress: nativeMenu == nil

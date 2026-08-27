@@ -1794,7 +1794,7 @@ struct ConversationView: View {
                           msg.isForwardable else { return }
                     composerState.forwardMessage = msg
                 },
-                onLongPress: { messageId in
+                onLongPress: { messageId, cellFrame in
                     guard overlayState.longPressEnabled else { return }
                     // Exclusivité mutuelle : si la barre de quick-reaction est
                     // déjà ouverte, l'appui-long ne fait rien (une seule feature
@@ -1816,9 +1816,11 @@ struct ConversationView: View {
                     // (`PrimaryAction.callDetail`, cf. `onShowCallDetail`).
                     //
                     // Le clavier + le repositionnement vers le centre (#4004)
-                    // passent tous les deux par `presentLongPressMenu` — point
-                    // d'entrée unique, partagé avec le menu natif iOS 26+.
-                    presentLongPressMenu(for: msg)
+                    // passent tous les deux par `presentLongPressMenu`. Le
+                    // menu NATIF iOS 26+ est présenté par le système, sans
+                    // point d'interception avant ouverture — ce site est le
+                    // SEUL point d'entrée (menu custom, < iOS 26).
+                    presentLongPressMenu(for: msg, cellFrame: cellFrame)
                 },
                 // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`

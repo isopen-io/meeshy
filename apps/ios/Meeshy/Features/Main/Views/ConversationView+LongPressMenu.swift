@@ -33,22 +33,31 @@ extension ConversationView {
     ///    centre déjà verticalement sa cible
     ///    (`collectionView.scrollToItem(at: .centeredVertically:)`).
     ///
-    /// `frameTracker.frame(for:)` peut rendre `nil` (bulle jamais publiée —
-    /// Focal/Script, cf. le commentaire du site d'appel de
-    /// `MessageOverlayMenu`) : dans ce cas aucun ajustement de scroll n'a de
-    /// sens, le menu se présente directement.
+    /// `cellFrame` (`nil` si la cellule n'est pas matérialisée) vient du
+    /// SITE D'APPEL UIKit (`MessageListViewController.cellFrameInWindow`,
+    /// même patron qu'`onAddReaction`) — **pas** de `frameTracker` (revue
+    /// 2026-08-27) : `MessageFramePreferenceKey` ne traverse la frontière
+    /// UIKit qu'en mode Rivière (`RiverBubbleView`, seul site qui la publie
+    /// réellement) ; la liste standard (`MessageListView`/
+    /// `MessageListViewController`) a RETIRÉ sa propre publication au profit
+    /// de `cellFrameInWindow` — lire `frameTracker.frame(for:)` ici aurait
+    /// rendu ce correctif un NO-OP silencieux dans le mode de lecture le
+    /// plus courant.
+    ///
+    /// `cellFrame == nil` : aucun ajustement de scroll n'a de sens, le menu
+    /// se présente directement.
     ///
     /// L'état désactivé ici (clavier, panneau d'options) est mémorisé dans
     /// `overlayState.restoreAfterLongPress` et restitué par
     /// `restoreStateAfterLongPressIfNeeded()`, appelée quand le menu se
     /// referme.
-    func presentLongPressMenu(for message: Message) {
+    func presentLongPressMenu(for message: Message, cellFrame: CGRect?) {
         overlayState.overlayMessage = message
         overlayState.restoreAfterLongPress = (isTyping: isTyping, showOptions: composerState.showOptions)
         isTyping = false
         composerState.showOptions = false
 
-        guard let frame = frameTracker.frame(for: message.id),
+        guard let frame = cellFrame,
               frame.midY > UIScreen.main.bounds.height * Self.longPressRepositionThreshold
         else {
             overlayState.showOverlayMenu = true
