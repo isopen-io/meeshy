@@ -2009,58 +2009,22 @@ struct ConversationView: View {
 
             VStack {
                 Spacer()
-                VStack(spacing: 0) {
-                    if viewModel.activeMentionQuery != nil {
-                        mentionSuggestionPanel
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                    if let blockedId = blockedDirectParticipantId {
-                        blockedComposerZone(userId: blockedId)
-                    } else if viewModel.isConversationClosed {
-                        closedConversationBanner
-                    } else {
-                        themedComposer
-                    }
-                    // Panneau emoji inline — glisse vers le haut À LA PLACE DU
-                    // CLAVIER, donc EN DESSOUS de la barre de composition (jamais
-                    // au-dessus). Même placement que le carrousel de pièces
-                    // jointes et que le composer story, pour une bascule
-                    // clavier ⇄ emoji sans saut visuel.
-                    if composerState.showTextEmojiPicker {
-                        EmojiKeyboardPanel(
-                            style: isDark ? .dark : .light,
-                            onSelect: { emoji in
-                                composerState.emojiToInject = emoji
-                            }
-                        )
-                        .frame(height: 260)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                // Composer transparent, sans fond (#3920, directive porteur
-                // 2026-08-26) : le seul état qui dépendait de ce matériau
-                // PARTAGÉ était le composer nu — `mentionSuggestionPanel`,
-                // `EmojiKeyboardPanel`, `closedConversationBanner` et
-                // `blockedComposerZone` se dotent CHACUN de leur propre fond
-                // (`.ultraThinMaterial`/`.regularMaterial`), donc aucun n'en
-                // dépend plus ici.
-                .ignoresSafeArea(.container, edges: .bottom)
-                .background(
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { updateComposerHeight(geo.size.height) }
-                            .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
-                    }
-                )
-                // #3918 — le texte envoyé survole depuis le composer.
-                // Overlay pur, jamais dans le flux : ne pousse ni ne
-                // redimensionne rien autour de lui.
-                .overlay(alignment: .bottom) {
+                ZStack(alignment: .bottom) {
+                    // #3918, refonte #3935 — le texte envoyé survole depuis le
+                    // composer. Posé en PREMIER calque du ZStack (donc DERRIÈRE
+                    // le composer qui suit) : tant que la capsule n'a pas
+                    // dépassé le bord haut de `themedComposer`, le fond opaque
+                    // de la barre (`composerBackground`) l'occulte — la course
+                    // se lit comme venant DE DERRIÈRE la barre, jamais
+                    // par-dessus ses boutons/champ de texte (retour porteur
+                    // 2026-08-27 : un `.overlay()` posé APRÈS le composer la
+                    // dessinait au-dessus). Pur calque de rendu : ne pousse ni
+                    // ne redimensionne rien autour de lui.
                     if let payload = sendFlyPayload {
                         ComposerSendFlyPreview(
                             text: payload.text,
-                            accentColor: accentColor,
-                            secondaryColor: secondaryColor,
+                            readingMode: readingModeController.mode,
+                            isDark: isDark,
                             composerHeight: composerHeight,
                             keyboardHeight: keyboardHeight
                         )
@@ -2068,6 +2032,50 @@ struct ConversationView: View {
                         .allowsHitTesting(false)
                         .id(payload.id)
                     }
+
+                    VStack(spacing: 0) {
+                        if viewModel.activeMentionQuery != nil {
+                            mentionSuggestionPanel
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        if let blockedId = blockedDirectParticipantId {
+                            blockedComposerZone(userId: blockedId)
+                        } else if viewModel.isConversationClosed {
+                            closedConversationBanner
+                        } else {
+                            themedComposer
+                        }
+                        // Panneau emoji inline — glisse vers le haut À LA PLACE DU
+                        // CLAVIER, donc EN DESSOUS de la barre de composition (jamais
+                        // au-dessus). Même placement que le carrousel de pièces
+                        // jointes et que le composer story, pour une bascule
+                        // clavier ⇄ emoji sans saut visuel.
+                        if composerState.showTextEmojiPicker {
+                            EmojiKeyboardPanel(
+                                style: isDark ? .dark : .light,
+                                onSelect: { emoji in
+                                    composerState.emojiToInject = emoji
+                                }
+                            )
+                            .frame(height: 260)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    // Composer transparent, sans fond (#3920, directive porteur
+                    // 2026-08-26) : le seul état qui dépendait de ce matériau
+                    // PARTAGÉ était le composer nu — `mentionSuggestionPanel`,
+                    // `EmojiKeyboardPanel`, `closedConversationBanner` et
+                    // `blockedComposerZone` se dotent CHACUN de leur propre fond
+                    // (`.ultraThinMaterial`/`.regularMaterial`), donc aucun n'en
+                    // dépend plus ici.
+                    .ignoresSafeArea(.container, edges: .bottom)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear
+                                .onAppear { updateComposerHeight(geo.size.height) }
+                                .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
+                        }
+                    )
                 }
             }
             // R-7 (2026-08-22) : en Rivière, le composeur passe AU-DESSUS du
