@@ -29,7 +29,7 @@ extension StoryComposerViewModel {
         }
     }
 
-    var canAddSlide: Bool { slides.count < 10 }
+    public var canAddSlide: Bool { slides.count < 10 }
 
     var currentSlideDuration: Float {
         // Source de vérité = `effects.timelineDuration` (autoritaire, lu par
@@ -69,14 +69,14 @@ extension StoryComposerViewModel {
         }
     }
 
-    func addSlide() {
+    public func addSlide() {
         guard canAddSlide else { return }
         let slide = StorySlide(order: slides.count)
         slides.append(slide)
         currentSlideIndex = slides.count - 1
     }
 
-    func removeSlide(at index: Int) {
+    public func removeSlide(at index: Int) {
         guard slides.count > 1, slides.indices.contains(index) else { return }
         let slide = slides[index]
         let slideId = slide.id
@@ -205,7 +205,7 @@ extension StoryComposerViewModel {
         reorderSlides()
     }
 
-    func selectSlide(at index: Int) {
+    public func selectSlide(at index: Int) {
         guard slides.indices.contains(index) else { return }
         saveBackgroundTransform()
         selectedElementId = nil

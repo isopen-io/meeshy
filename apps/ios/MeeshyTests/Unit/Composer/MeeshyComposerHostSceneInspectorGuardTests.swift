@@ -41,7 +41,7 @@ final class MeeshyComposerHostSceneInspectorGuardTests: XCTestCase {
         let code = try hostSource()
         let compacted = compact(code)
         XCTAssertTrue(
-            compacted.contains("sceneInspector:documentBackground==nil?nil:EmbeddedSceneInspector(viewModel:viewModel,kind:selectedSceneItemKind).map{AnyView($0)}"),
+            compacted.contains("sceneInspector:!documentHasScene?nil:EmbeddedSceneInspector(viewModel:viewModel,kind:selectedSceneItemKind).map{AnyView($0)}"),
             "`documentSurface` doit gater `sceneInspector` sur la présence de la scène ET déléguer le "
                 + "reste à l'`init?` de `EmbeddedSceneInspector(viewModel:kind:)` — le MÊME modèle que "
                 + "l'atelier, et une loi 4 que le meuble ne PEUT pas enfreindre (l'init échoue pour tout "

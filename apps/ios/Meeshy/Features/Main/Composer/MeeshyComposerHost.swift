@@ -434,6 +434,19 @@ struct MeeshyComposerHost: View {
     /// ne repartait qu'à `[]` avant ce lot.
     @State private var documentLocalMedia: [ComposerDocumentMedia] = []
 
+    /// **Quelle slide porte quel média (modèle § 3, #4038).** En profil Post,
+    /// **une slide EST un média du post** : chaque média visuel ingéré a donc SA
+    /// slide, dont il devient le fond (§ 4).
+    ///
+    /// **Ce n'est pas une seconde vérité.** `documentLocalMedia` reste la source
+    /// UNIQUE — c'est elle que le plan de publication lit. Cette table n'est
+    /// qu'un INDEX de la dérivation, clé `sourceURL`, qui permet deux choses
+    /// qu'une simple reconstruction ne permettrait pas : ne pas re-poser un
+    /// média déjà posé, et retrouver la slide à retirer quand son média
+    /// disparaît. Reconstruire les slides à chaque changement aurait jeté au
+    /// passage tout ce que l'auteur a composé DESSUS.
+    @State private var slideIdByMediaURL: [URL: String] = [:]
+
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate. La couleur est semée dans l'atelier
     /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois
@@ -780,6 +793,22 @@ struct MeeshyComposerHost: View {
             guard surface == .scene else { return }
             carryContentIntoSceneIfNeeded()
         }
+        // #4038 — en Post, chaque média ingéré devient SA slide. Site UNIQUE :
+        // les trois portes d'ingestion (photothèque, caméra, importateur)
+        // écrivent toutes dans `documentLocalMedia`, donc brancher la dérivation
+        // sur la LISTE plutôt que sur chaque porte évite d'en oublier une —
+        // c'est un inventaire qu'on ne peut pas laisser diverger.
+        // `initial: true` couvre les portes qui ouvrent AVEC un média (reprise
+        // de brouillon, média reçu d'une conversation).
+        .adaptiveOnChange(of: documentLocalMedia, initial: true) { _, _ in
+            syncPostMediaIntoSlides()
+        }
+        // Basculer vers Post après avoir composé ailleurs doit rattraper la
+        // dérivation : sans ça, un média ingéré en Story puis ramené en Post
+        // n'aurait jamais sa slide (loi 9 — le contenu est PRÉSERVÉ).
+        .adaptiveOnChange(of: selectedFormat) { _, _ in
+            syncPostMediaIntoSlides()
+        }
     }
 
     /// La graine entre par la RÈGLE, jamais par quatre affectations écrites
@@ -992,7 +1021,7 @@ struct MeeshyComposerHost: View {
                 get: { viewModel.currentSlide },
                 set: { viewModel.currentSlide = $0 }
             ),
-            showsScene: documentBackground != nil,
+            showsScene: documentHasScene,
             sceneAspectRatio: viewModel.currentCanvasRatio,
             // Lot 3A (#4035) — état INSPECTEUR : retenir la sélection remontée
             // par le canvas, et monter la zone contextuelle SEULEMENT quand
@@ -1001,6 +1030,16 @@ struct MeeshyComposerHost: View {
             // (`EmbeddedSceneInspector`, qui lit le MÊME `viewModel`).
             onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
             onSceneBackgroundTapped: { selectedSceneItemKind = nil },
+            // Taper une vignette amène SA slide sur la scène (#4038). La table
+            // `slideIdByMediaURL` est justement l'index qui relie les deux ;
+            // sans elle il faudrait deviner par l'ordre, qui ment dès qu'un
+            // média est retiré au milieu.
+            onSelectMedia: { media in
+                guard let slideId = slideIdByMediaURL[media.url],
+                      let index = viewModel.slides.firstIndex(where: { $0.id == slideId })
+                else { return }
+                viewModel.selectSlide(at: index)
+            },
             // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
             // contrôles la zone sert est la décision du SDK, portée par l'`init?`
             // de `EmbeddedSceneInspector` (il échoue pour tout kind qu'aucun
@@ -1008,10 +1047,12 @@ struct MeeshyComposerHost: View {
             // `documentBackground != nil` s'y ajoute : sans la scène (fond
             // retiré), une sélection restée en mémoire peindrait la zone
             // au-dessus de rien — un contrôle orphelin.
-            sceneInspector: documentBackground == nil
+            sceneInspector: !documentHasScene
                 ? nil
                 : EmbeddedSceneInspector(viewModel: viewModel, kind: selectedSceneItemKind)
                     .map { AnyView($0) },
+            sceneImages: viewModel.loadedImages,
+            sceneImagesVersion: viewModel.loadedImagesVersion,
             // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
             // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —
             // exactement le point où `toolRow` peint sa première icône (elle
@@ -1230,6 +1271,57 @@ struct MeeshyComposerHost: View {
     /// dont le contenu ne change pas, et `applyContentMedia` mémorise les
     /// sources déjà portées — refaire le report à chaque entrée en scène ne
     /// duplique rien.
+    /// **En Post, chaque média posé devient SA slide (modèle § 3, #4038).**
+    ///
+    /// Le modèle dit qu'en profil Post une slide EST un média du post — c'est ce
+    /// qui distingue un CARROUSEL (N slides d'un média) d'une SCÈNE COMPOSÉE
+    /// (une slide, un fond et des premiers plans). Story et Réel ne passent donc
+    /// pas ici : leur report reste `carryContentIntoSceneIfNeeded`, qui pose tout
+    /// sur la slide courante — en Réel il n'y a qu'une slide (le réel EST la
+    /// scène), en Story l'auteur compose sur celle qu'il regarde.
+    ///
+    /// **La première slide est RÉEMPLOYÉE, jamais doublée** : un composer neuf
+    /// naît avec une slide vierge (`slides = [StorySlide()]`), et lui en ajouter
+    /// une pour le premier média aurait laissé un carrousel dont la première vue
+    /// est vide.
+    ///
+    /// Le retrait suit le même index : un média retiré de la bande retire SA
+    /// slide. `removeSlide` refuse de descendre sous une slide — retirer le
+    /// dernier média laisse donc une slide vierge, ce qui est exactement l'état
+    /// d'un post sans média.
+    private func syncPostMediaIntoSlides() {
+        guard selectedFormat == .post else { return }
+
+        for media in documentContentMedia where slideIdByMediaURL[media.sourceURL] == nil {
+            let target: String
+            if slideIdByMediaURL.isEmpty,
+               (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
+                target = viewModel.currentSlide.id
+            } else {
+                viewModel.addSlide()
+                target = viewModel.currentSlide.id
+            }
+            viewModel.applyContentMedia([media], intoSlideId: target)
+            slideIdByMediaURL[media.sourceURL] = target
+        }
+
+        let present = Set(documentContentMedia.map(\.sourceURL))
+        for (url, slideId) in slideIdByMediaURL where !present.contains(url) {
+            if let index = viewModel.slides.firstIndex(where: { $0.id == slideId }) {
+                viewModel.removeSlide(at: index)
+            }
+            slideIdByMediaURL.removeValue(forKey: url)
+        }
+    }
+
+    /// La scène est peinte dès qu'il y a QUELQUE CHOSE à peindre — un fond
+    /// choisi, ou au moins un média devenu slide. La lier au seul
+    /// `documentBackground` (Phase 2) la réservait aux fonds de COULEUR, donc
+    /// laissait un post de photos sans aucune scène.
+    private var documentHasScene: Bool {
+        documentBackground != nil || !slideIdByMediaURL.isEmpty
+    }
+
     private func carryContentIntoSceneIfNeeded() {
         // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
         // tout objet posé.

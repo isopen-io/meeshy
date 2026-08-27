@@ -11,8 +11,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Slides
 
-    @Published var slides: [StorySlide] = [StorySlide()]
-    @Published var currentSlideIndex: Int = 0
+    // `public internal(set)` (#4038) : le meuble app-side LIT les slides pour
+    // dériver le rail et savoir laquelle porte quel média — il n'en MUTE jamais
+    // le tableau, les mutations passant par `addSlide` / `removeSlide` /
+    // `selectSlide`. Déjà exposées par le protocole `StoryComposerProviding`.
+    @Published public internal(set) var slides: [StorySlide] = [StorySlide()]
+    @Published public internal(set) var currentSlideIndex: Int = 0
     @Published var slideImages: [String: UIImage] = [:]
 
     // MARK: - Repost source (Patch B.6 — exposed publicly so the iOS caller in Phase C
@@ -300,9 +304,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Media Storage (pre-publication)
 
-    @Published var loadedImages: [String: UIImage] = [:]
-    @Published var loadedVideoURLs: [String: URL] = [:]
-    @Published var loadedAudioURLs: [String: URL] = [:]
+    // `public internal(set)` (#4038) : `EmbeddedSceneCanvas` doit RECEVOIR ces
+    // bitmaps, sinon un fond MÉDIA ne se stampe pas — l'app les lit pour les lui
+    // passer, elle ne les écrit jamais.
+    @Published public internal(set) var loadedImages: [String: UIImage] = [:]
+    @Published public internal(set) var loadedVideoURLs: [String: URL] = [:]
+    @Published public internal(set) var loadedAudioURLs: [String: URL] = [:]
 
     /// **Les sources déjà PORTÉES dans la scène (B1, #3924).** Clé
     /// d'idempotence d'`applyContentMedia` : les closures de bascule de mode
@@ -320,7 +327,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// principal restait stale après image edit (les dicts UIImage ne sont
     /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
     /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
-    @Published var loadedImagesVersion: UInt64 = 0
+    @Published public internal(set) var loadedImagesVersion: UInt64 = 0
 
     /// Enregistre (ou retire, si `image == nil`) le bitmap importé/édité d'un
     /// média sous sa clé ET **bump `loadedImagesVersion`** dans la foulée.

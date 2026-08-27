@@ -57,31 +57,76 @@ public struct EmbeddedSceneCanvas: View {
     /// objet) — l'hôte l'utilise typiquement pour effacer sa sélection.
     public var onBackgroundTapped: (() -> Void)?
 
+    /// **Les bitmaps du composer, keyés par id d'objet média (#4038).**
+    ///
+    /// Sans eux, un fond MÉDIA ne se stampe pas : `StoryCanvasUIView` résout ses
+    /// images par `ComposerImageCacheReader`, alimenté par ce cache. La Phase 2
+    /// n'a jamais montré que des fonds de COULEUR — le manque n'a donc mordu
+    /// qu'au premier post à photos, où la carte se peignait au tiers de sa
+    /// taille, calée en haut à gauche.
+    public var loadedImages: [String: UIImage]
+
+    /// Cookie monotone : les dictionnaires d'`UIImage` ne sont pas `Equatable`,
+    /// donc c'est LUI qui dit au canvas qu'un bitmap a changé. Le transmettre
+    /// sans le cookie laisserait le canvas sur sa version périmée.
+    public var loadedImagesVersion: UInt64
+
     public init(
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
         cornerRadius: CGFloat = 22,
         onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
-        onBackgroundTapped: (() -> Void)? = nil
+        onBackgroundTapped: (() -> Void)? = nil,
+        loadedImages: [String: UIImage] = [:],
+        loadedImagesVersion: UInt64 = 0,
+        referenceViewport: CGSize = CGSize(width: 402, height: 874)
     ) {
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
         self.onItemTapped = onItemTapped
         self.onBackgroundTapped = onBackgroundTapped
+        self.loadedImages = loadedImages
+        self.loadedImagesVersion = loadedImagesVersion
+        self.referenceViewport = referenceViewport
     }
+
+    /// **Taille de RÉFÉRENCE du canvas, avant réduction (#4038).**
+    ///
+    /// Le canvas est monté à CETTE taille puis ramené à la carte par
+    /// `scaleEffect` — jamais monté petit. C'est ce que fait l'atelier plein
+    /// écran (`canvasComposerLayer` : `canvasCore(...).frame(fit).scaleEffect(...)`),
+    /// et la raison est mesurable : monté directement à la taille de la carte,
+    /// un fond MÉDIA se peignait au tiers de sa taille, calé en haut à gauche.
+    /// La Phase 2 n'ayant jamais montré que des fonds de COULEUR — que le layer
+    /// étire quelles que soient ses bounds — le défaut a attendu le premier post
+    /// à photos pour se voir.
+    ///
+    /// Défaut : un viewport de téléphone, celui auquel l'atelier monte son
+    /// propre canvas (mesuré 392×696 sur iPhone 16 Pro).
+    public var referenceViewport: CGSize
 
     public var body: some View {
         GeometryReader { proxy in
             // Bounds intrinsèques FIXES au ratio, centrés (« fit ») dans la
             // zone bornée que le parent nous donne — jamais l'écran entier.
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: aspectRatio)
+            let reference = CanvasGeometry.aspectFitSize(in: referenceViewport, ratio: aspectRatio)
+            let scale = reference.width > 0 ? fit.width / reference.width : 1
             StoryComposerCanvasView(
                 slide: $slide,
                 onItemTapped: onItemTapped,
                 onBackgroundTapped: onBackgroundTapped,
-                canvasCornerRadius: cornerRadius
+                loadedImages: loadedImages,
+                loadedImagesVersion: loadedImagesVersion,
+                // Rayon compensé par l'échelle : la carte est rendue à sa taille
+                // de référence PUIS réduite, donc un rayon UIKit de
+                // `cornerRadius / scale` atterrit bien à `cornerRadius` à l'écran
+                // (même compensation que `canvasComposerLayer`).
+                canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0
             )
+            .frame(width: reference.width, height: reference.height)
+            .scaleEffect(scale, anchor: .center)
             .frame(width: fit.width, height: fit.height)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)

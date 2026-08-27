@@ -55,8 +55,19 @@ public extension StoryComposerViewModel {
     /// Ne porte QUE l'image et la vidéo : un son ou un document n'a pas de place
     /// de FOND sur un canvas, et la qualification réel qui les concerne se règle
     /// en amont, côté hôte.
-    func applyContentMedia(_ items: [ComposerContentMedia]) {
-        let slideId = currentSlide.id
+    /// **`intoSlideId` — poser sur une slide DÉSIGNÉE plutôt que la courante.**
+    /// Le modèle (§ 3, `docs/product/meeshy-composer-modele.md`) dit qu'en profil
+    /// Post **une slide EST un média du post** : l'hôte crée donc une slide par
+    /// média et vise son id. Sans ce paramètre, tout atterrissait sur la slide
+    /// COURANTE et un post à trois photos n'aurait jamais eu qu'une slide — une
+    /// scène composée, ce qui est un AUTRE objet produit.
+    ///
+    /// Paramètre OPAQUE : le SDK ne sait pas pourquoi l'hôte vise cette slide-là.
+    /// « Une slide par média en Post, une seule en Réel » est une décision
+    /// produit, donc app-side. Optionnel ⇒ les sites de bascule de mode, qui
+    /// posent bien sur la slide courante, ne changent pas d'un caractère.
+    func applyContentMedia(_ items: [ComposerContentMedia], intoSlideId targetSlideId: String? = nil) {
+        let slideId = targetSlideId ?? currentSlide.id
         for item in items where !carriedContentSources.contains(item.sourceURL) {
             let objectId = UUID().uuidString
             switch item.kind {

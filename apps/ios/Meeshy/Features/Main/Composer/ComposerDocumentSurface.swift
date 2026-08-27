@@ -1360,6 +1360,14 @@ struct ComposerDocumentSurface: View {
     /// Relais du tap sur le FOND de la scène (désélection).
     var onSceneBackgroundTapped: (() -> Void)? = nil
 
+    /// **Naviguer entre les slides depuis la bande de vignettes (#4038).**
+    /// En Post, une slide EST un média — la bande DIT donc déjà les slides.
+    /// Lui donner la navigation évite d'ajouter un second rail à côté d'elle,
+    /// qui montrerait exactement la même chose (loi 2, et le rail de barre haute
+    /// de #4047 la remplacera d'un seul tenant). `nil` ⇒ la bande reste ce
+    /// qu'elle était, un inventaire avec son bouton de retrait.
+    var onSelectMedia: ((ComposerDocumentMedia) -> Void)? = nil
+
     /// **La zone contextuelle de l'état INSPECTEUR (lot 3A, #4035 — planche
     /// P4 §3).** Rendue DIRECTEMENT au-dessus de `toolRow` — seulement quand
     /// l'hôte retient une sélection sur la scène. `nil` ⇒ ABSENTE (loi 4 :
@@ -1367,6 +1375,14 @@ struct ComposerDocumentSurface: View {
     /// `toolRowLeadingAccessory`/`toolRowTrailingAccessory` : un slot opaque,
     /// la surface ne sait rien de CE qui compose la zone.
     var sceneInspector: AnyView? = nil
+
+    /// **Les bitmaps de la scène incrustée (#4038).** Sans eux, un fond MÉDIA ne
+    /// se stampe pas — la Phase 2 n'ayant montré que des fonds de COULEUR, le
+    /// manque n'a mordu qu'au premier post à photos. `sceneImagesVersion` est le
+    /// cookie qui dit au canvas qu'un bitmap a changé (un dictionnaire d'images
+    /// n'est pas `Equatable`).
+    var sceneImages: [String: UIImage] = [:]
+    var sceneImagesVersion: UInt64 = 0
 
     /// **Le slot de tête de `toolRow` (#3903).** Un chip d'état actif (le lieu,
     /// aujourd'hui) qui doit s'insérer DANS la disposition de la rangée d'outils
@@ -1505,7 +1521,9 @@ struct ComposerDocumentSurface: View {
                     aspectRatio: sceneAspectRatio,
                     cornerRadius: 22,
                     onItemTapped: onSceneItemTapped,
-                    onBackgroundTapped: onSceneBackgroundTapped
+                    onBackgroundTapped: onSceneBackgroundTapped,
+                    loadedImages: sceneImages,
+                    loadedImagesVersion: sceneImagesVersion
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 14)
@@ -1654,6 +1672,10 @@ struct ComposerDocumentSurface: View {
                         ComposerMediaThumbnail(media: media) {
                             onRemoveMedia?(media)
                         }
+                        // Loi 4 : la vignette n'est un CONTRÔLE que si l'hôte
+                        // sait quoi faire du tap. Sans relais, elle reste ce
+                        // qu'elle a toujours été.
+                        .onTapGesture { onSelectMedia?(media) }
                     }
                 }
                 .padding(.horizontal, 16)
