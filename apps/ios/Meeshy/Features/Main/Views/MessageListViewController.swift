@@ -1923,7 +1923,24 @@ final class MessageListViewController: UIViewController {
             && (collectionView.isDragging || collectionView.isDecelerating)
         if isDeferringReconfigure {
             hasDeferredGlobalReconfigure = true
-            if reconfigure == .allItems { deferredReconfigureScope = .allItems }
+            // #4022 — `.allItems` domine toujours ; `.items` s'ACCUMULE (union)
+            // au lieu d'être jeté avec `itemsToReconfigure` ci-dessous. Avant ce
+            // correctif, seul `.allItems` était retenu ici : un `.items` (coche
+            // de sélection, #515) arrivé pendant une décélération perdait
+            // silencieusement son id à reconfigurer — le compteur de sélection
+            // changeait, la coche visuelle non.
+            switch reconfigure {
+            case .allItems:
+                deferredReconfigureScope = .allItems
+            case .items(let ids):
+                if case .items(let pending) = deferredReconfigureScope {
+                    deferredReconfigureScope = .items(pending.union(ids))
+                } else if deferredReconfigureScope != .allItems {
+                    deferredReconfigureScope = .items(ids)
+                }
+            case .changedRecords:
+                break
+            }
             itemsToReconfigure = []
         } else {
             lastReconfigureBaseline = Dictionary(

@@ -339,9 +339,19 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             settle.contains("readingMode"),
             "…et sans regarder le mode : un flush conditionné laisserait un état périmé à l'écran"
         )
+        // #4022 — la portée retenue pendant le geste n'est plus un simple `if`
+        // (qui ne savait garder que `.allItems`) mais un `switch` qui accumule
+        // aussi `.items` (union) au lieu de le jeter ; `.allItems` continue de
+        // DOMINER (retenu inchangé quel que soit ce qui arrive ensuite).
         XCTAssertTrue(
-            host.contains("if reconfigure == .allItems { deferredReconfigureScope = .allItems }"),
+            host.contains("case .allItems: deferredReconfigureScope = .allItems"),
             "la PORTÉE demandée pendant le geste est retenue (`.allItems` domine) — sans elle, le flush resservirait moins que ce que le report a retenu"
+        )
+        XCTAssertTrue(
+            host.contains("case .items(let ids):") && host.contains(".union(ids)"),
+            "un `.items` demandé pendant le geste doit s'ACCUMULER (union) plutôt que d'être jeté — sinon "
+                + "une coche posée en pleine décélération incrémente le compteur sans jamais peindre "
+                + "visuellement la sélection (#4022)"
         )
     }
 

@@ -229,10 +229,11 @@ final class ConversationSelectionGuardTests: XCTestCase {
             return XCTFail("`selectedMessageIds` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            block.contains("applySnapshot(reconfigure: .items(oldValue.symmetricDifference(selectedMessageIds)))"),
-            "Une coche ne doit reconfigurer QUE les id dont l'état a changé (différence symétrique) — "
-                + "`.allItems` reconfigurerait TOUTE rangée visible pour un état qui ne change que sur UN "
-                + "message, défaisant le gate `.equatable()` (#515)."
+            block.contains("let changedIds = oldValue.symmetricDifference(selectedMessageIds)")
+                && block.contains("applySnapshot(reconfigure: .items(changedLocalIds))"),
+            "Une coche ne doit reconfigurer QUE les id dont l'état a changé (différence symétrique, "
+                + "traduite serveur→local pour #4022) — `.allItems` reconfigurerait TOUTE rangée visible "
+                + "pour un état qui ne change que sur UN message, défaisant le gate `.equatable()` (#515)."
         )
         XCTAssertFalse(
             block.contains(".allItems"),
@@ -298,6 +299,34 @@ final class ConversationSelectionGuardTests: XCTestCase {
             bodyBlock.contains("content()\n                .padding(.leading, selectionShift)"),
             "`content()` doit être poussé à droite de `selectionShift` — c'est ce qui ouvre la "
                 + "marge où loge le cercle d'une bulle reçue."
+        )
+    }
+
+    // MARK: - #4022 : un `.items` reconfigure demandé PENDANT une décélération
+    // ne doit plus être PERDU — il doit s'ACCUMULER (union) dans
+    // `deferredReconfigureScope` au lieu d'être jeté avec le reste de
+    // `itemsToReconfigure`. Sans ce correctif, une coche posée pendant que la
+    // liste décélère incrémentait le compteur (source de vérité
+    // `overlayState.selectedMessageIds`) sans jamais peindre visuellement la
+    // sélection — le reconfigure ciblé s'évaporait à la pose du geste.
+
+    func test_deferredReconfigure_accumulatesItemsScope_ratherThanDroppingIt() throws {
+        let code = try source("Features/Main/Views/MessageListViewController.swift")
+        guard let fn = body(of: "private func applySnapshot(reconfigure: SnapshotReconfigureScope = .changedRecords) {", in: code) else {
+            return XCTFail("`applySnapshot` introuvable — la garde ne mesurerait rien.")
+        }
+        guard let deferBlock = body(of: "if isDeferringReconfigure {", in: fn) else {
+            return XCTFail("Branche de report introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            deferBlock.contains("case .items(let ids):") && deferBlock.contains(".union(ids)"),
+            "Un `.items` demandé pendant un report doit s'ACCUMULER (union) dans `deferredReconfigureScope`, "
+                + "jamais être jeté — sinon une coche posée en pleine décélération incrémente le compteur "
+                + "sans jamais peindre visuellement la sélection (#4022)."
+        )
+        XCTAssertTrue(
+            deferBlock.contains("case .allItems:") && deferBlock.contains("deferredReconfigureScope = .allItems"),
+            "`.allItems` doit continuer de DOMINER (une bascule globale prime sur des ids ciblés)."
         )
     }
 

@@ -102,6 +102,9 @@ struct ConversationOverlayState {
     var quickReactionAnchorFrame: CGRect? = nil
     var emojiOnlyMode = false
     var deleteConfirmMessageId: String? = nil
+    /// #4024 — confirmation de suppression GROUPÉE (mode sélection multiple),
+    /// distincte de `deleteConfirmMessageId` (suppression d'UN message).
+    var deleteConfirmSelectionActive = false
     /// Message dont la feuille de partage système (`UIActivityViewController`)
     /// est présentée — action « Partager » du menu « Plus… ».
     var shareMessage: Message? = nil
@@ -959,6 +962,27 @@ struct ConversationView: View {
             } message: { _ in
                 Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
             }
+            // #4024 — même contrat que la confirmation ci-dessus, sur la
+            // SÉLECTION entière plutôt qu'un seul message : "pour tous"
+            // n'apparaît que si `selectionAllowsDeleteForAll` (TOUS les
+            // messages sélectionnés sont miens ET encore dans la fenêtre).
+            .confirmationDialog(
+                String(localized: "conversation.view.delete_message.title", bundle: .main),
+                isPresented: $overlayState.deleteConfirmSelectionActive,
+                titleVisibility: .visible
+            ) {
+                if selectionAllowsDeleteForAll {
+                    Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
+                        deleteSelectedMessages(mode: .everyone)
+                    }
+                }
+                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
+                    deleteSelectedMessages(mode: .local)
+                }
+                Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
+            } message: {
+                Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
+            }
             .sheet(item: $overlayState.shareMessage) { msg in
                 ShareSheet(activityItems: [viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content])
                     .presentationDetents([.medium, .large])
@@ -1116,7 +1140,12 @@ struct ConversationView: View {
                     translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
                     editRevisions: viewModel.editRevisions(for: msg.id),
                     onReply: { triggerReply(for: msg) },
-                    onForward: { composerState.forwardMessage = msg },
+                    // #4021 — transférer ARME la sélection multiple au lieu
+                    // d'ouvrir directement le picker pour ce seul message :
+                    // l'utilisateur peut revenir cocher d'autres messages, ou
+                    // transférer juste celui-ci via le bouton de la barre de
+                    // sélection (qui, lui, ouvre réellement le picker).
+                    onForward: { beginSelectionMode(seedingWith: msg.id) },
                     onThread: {
                         overlayState.replyThreadParentId = msg.id
                         overlayState.showReplyThread = true
@@ -1806,12 +1835,13 @@ struct ConversationView: View {
                     triggerReply(for: msg)
                 },
                 onSwipeForward: { messageId in
-                    // Restore swipe-to-forward: opens the forward picker via
-                    // composerState. HapticFeedback already fires inside the
-                    // swipe container — we only stage the message here.
+                    // #4021 — swipe-to-forward ARME la sélection multiple,
+                    // même contrat que le "Transférer" du menu long-press
+                    // ci-dessus. HapticFeedback already fires inside the
+                    // swipe container — we only seed the selection here.
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }),
                           msg.isForwardable else { return }
-                    composerState.forwardMessage = msg
+                    beginSelectionMode(seedingWith: msg.id)
                 },
                 onLongPress: { messageId, cellFrame in
                     guard overlayState.longPressEnabled else { return }

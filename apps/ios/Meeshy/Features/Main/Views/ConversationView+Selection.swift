@@ -52,6 +52,28 @@ extension ConversationView {
         viewModel.messages.filter { overlayState.selectedMessageIds.contains($0.id) }
     }
 
+    /// #4024 — « pour tous » n'est proposé QUE si TOUS les messages
+    /// sélectionnés sont éligibles (miens ET encore dans la fenêtre) ;
+    /// une sélection vide n'autorise rien.
+    var selectionAllowsDeleteForAll: Bool {
+        let selected = selectedMessagesInThreadOrder
+        guard !selected.isEmpty else { return false }
+        return selected.allSatisfy { viewModel.canDeleteForEveryone($0) }
+    }
+
+    /// #4024 — supprime toute la sélection dans le mode demandé, puis quitte
+    /// le mode sélection. Réutilise `deleteMessage(messageId:mode:)`, le même
+    /// chemin que la suppression d'un seul message.
+    func deleteSelectedMessages(mode: ConversationViewModel.DeleteMode) {
+        let ids = overlayState.selectedMessageIds
+        endSelectionMode()
+        Task {
+            for id in ids {
+                await viewModel.deleteMessage(messageId: id, mode: mode)
+            }
+        }
+    }
+
     /// **La barre d'action du mode sélection (#4005).** Remplace le composer
     /// tant que la sélection est active — voir le site de montage
     /// (`ConversationView.body`, branche `isSelectionModeActive`).
@@ -64,6 +86,19 @@ extension ConversationView {
                     .font(MeeshyFont.relative(15, weight: .medium))
             }
             .accessibilityIdentifier("conversation.selection.cancel")
+
+            // #4024 — Supprimer, à côté d'Annuler. Ouvre la confirmation
+            // groupée (pour tous / pour moi, gardée par
+            // `selectionAllowsDeleteForAll`) — jamais de suppression directe
+            // sans confirmation, même règle que la suppression d'un message.
+            Button(role: .destructive) {
+                overlayState.deleteConfirmSelectionActive = true
+            } label: {
+                Image(systemName: "trash")
+            }
+            .disabled(overlayState.selectedMessageIds.isEmpty)
+            .accessibilityLabel(String(localized: "conversation.view.delete_message.title", bundle: .main))
+            .accessibilityIdentifier("conversation.selection.delete")
 
             Spacer(minLength: 0)
 
