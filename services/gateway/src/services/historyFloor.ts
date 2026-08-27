@@ -307,16 +307,42 @@ export function historyFloorClause(
   };
 }
 
+/** `where.createdAt.gte` voyage parfois en chaîne ISO (le connecteur Mongo l'accepte) — comparé, jamais ignoré. */
+function asDate(value: unknown): Date | null {
+  if (value instanceof Date) return value;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
 /**
  * Pose le plancher sur une clause `where` de message, en se COMBINANT à toute
  * borne `createdAt` déjà présente (curseur `lt`, moitié `gt` du mode around).
  * Deux `gte` se départagent par la plus stricte : un plancher ne descend jamais
  * une borne que l'appelant avait déjà remontée.
+ *
+ * `where.createdAt` a DEUX formes possibles chez un appelant Prisma : un objet
+ * de bornes (`{ gte, lt, … }`, le cas courant ici) ou une `Date` LITTÉRALE
+ * (égalité stricte — aucun appelant actuel de ce module n'est dans ce cas,
+ * mais `Record<string, unknown>` ne l'exclut pas). Les deux DOIVENT restreindre,
+ * jamais élargir : une égalité `< floor` ne peut satisfaire aucun message qui
+ * satisfait aussi le plancher — le résultat est un intervalle vide
+ * (`{ gte: floor, lt: floor }`), pas `{ gte: floor }` seul, qui rouvrirait tout
+ * ce qui suit le plancher alors que l'appelant ne voulait qu'UNE date précise.
  */
 export function applyHistoryFloor<W extends Record<string, unknown>>(where: W, floor: Date | null): W {
   if (!floor) return where;
-  const prior = (where.createdAt ?? {}) as Record<string, unknown>;
-  const priorGte = prior.gte instanceof Date ? prior.gte : null;
+
+  const priorCreatedAt = where.createdAt;
+  if (priorCreatedAt instanceof Date) {
+    if (priorCreatedAt >= floor) return where;
+    return { ...where, createdAt: { gte: floor, lt: floor } };
+  }
+
+  const prior = (priorCreatedAt ?? {}) as Record<string, unknown>;
+  const priorGte = asDate(prior.gte);
   const gte = priorGte && priorGte > floor ? priorGte : floor;
   return { ...where, createdAt: { ...prior, gte } };
 }

@@ -375,6 +375,41 @@ describe('applyHistoryFloor', () => {
     expect(applyHistoryFloor({ createdAt: { gte: LATER } }, JOINED)).toEqual({ createdAt: { gte: LATER } });
     expect(applyHistoryFloor({ createdAt: { gte: JOINED } }, LATER)).toEqual({ createdAt: { gte: LATER } });
   });
+
+  // #3893 point 3 : `where.createdAt` peut arriver sous deux formes que le
+  // code d'origine ne reconnaissait pas — une Date LITTÉRALE (égalité, pas une
+  // borne) et un `gte` en chaîne ISO (le connecteur Mongo les accepte). Dans
+  // les deux cas, l'ancien code perdait la contrainte de l'appelant et la
+  // remplaçait par le plancher SEUL — un ÉLARGISSEMENT, jamais une restriction.
+  it('une Date LITTÉRALE déjà >= au plancher reste intacte — l’égalité est déjà plus stricte', () => {
+    expect(applyHistoryFloor({ conversationId: 'c1', createdAt: LATER }, JOINED)).toEqual({
+      conversationId: 'c1',
+      createdAt: LATER,
+    });
+  });
+
+  it('une Date LITTÉRALE antérieure au plancher devient un intervalle IMPOSSIBLE, jamais le plancher seul', () => {
+    const result = applyHistoryFloor({ conversationId: 'c1', createdAt: JOINED }, LATER) as unknown as {
+      createdAt: { gte: Date; lt: Date };
+    };
+    // Ne DOIT jamais dégénérer en `{ gte: LATER }` seul, qui rouvrirait tout
+    // ce qui suit le plancher — la ligne demandée par l'égalité, elle,
+    // n'existe pas dans cette fenêtre.
+    expect(result.createdAt.gte).toEqual(result.createdAt.lt);
+    expect(result.createdAt.gte >= LATER).toBe(true);
+  });
+
+  it('un `gte` en CHAÎNE ISO plus strict que le plancher est conservé — comparé, pas ignoré', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: LATER.toISOString() } }, JOINED)).toEqual({
+      createdAt: { gte: LATER },
+    });
+  });
+
+  it('un `gte` en CHAÎNE ISO moins strict que le plancher cède au plancher', () => {
+    expect(applyHistoryFloor({ createdAt: { gte: JOINED.toISOString() } }, LATER)).toEqual({
+      createdAt: { gte: LATER },
+    });
+  });
 });
 
 describe('loadHistoryFloorsOrFail', () => {
