@@ -243,6 +243,12 @@ struct ConversationComposerState {
     var pendingReplyReference: ReplyReference? = nil
     var editingMessageId: String? = nil
     var editingOriginalContent: String? = nil
+    /// **Le brouillon en cours au moment d'entrer en édition (#4003).** Sans
+    /// lui, `beginEdit` écrase silencieusement ce que l'auteur était en train
+    /// de composer, et `cancelEdit`/`submitEdit` ne pouvaient rien restituer.
+    /// Posé UNE fois par `beginEdit` (jamais réécrit tant qu'une édition est
+    /// en cours), consommé et effacé par `cancelEdit`.
+    var draftBeforeEdit: String? = nil
 
     // Reply attachment preview
     var previewMedia: PreviewMedia? = nil
@@ -1104,7 +1110,7 @@ struct ConversationView: View {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
                     },
                     onDeleteMessage: { overlayState.deleteConfirmMessageId = msg.id },
-                    onEdit: { composerState.editingMessageId = msg.id },
+                    onEdit: { beginEdit(msg) },
                     onCopy: {
                         UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                         HapticFeedback.success()
@@ -2662,11 +2668,7 @@ struct ConversationView: View {
                     UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                     HapticFeedback.success()
                 },
-                onEdit: {
-                    composerState.editingMessageId = msg.id
-                    composerState.editingOriginalContent = msg.content
-                    composerText.text = msg.content
-                },
+                onEdit: { beginEdit(msg) },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onToggleStar: {
                     _ = viewModel.toggleStar(
@@ -2834,9 +2836,7 @@ struct ConversationView: View {
         switch action {
         case .edit:
             Button {
-                composerState.editingMessageId = msg.id
-                composerState.editingOriginalContent = msg.content
-                composerText.text = msg.content
+                beginEdit(msg)
             } label: {
                 Label(String(localized: "action.edit", defaultValue: "Éditer", bundle: .main), systemImage: "pencil")
             }
