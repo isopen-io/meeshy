@@ -69,11 +69,25 @@ function makePrisma(methods: Partial<{
       update: methods.update ?? jest.fn(),
       count: methods.count ?? jest.fn(),
     },
+    // `createUser` route désormais aussi par `ensureGlobalConversationMembership`
+    // (#3876) — repli SANS salon global trouvé par défaut : les describe
+    // blocks qui ne testent pas ce comportement restent silencieux.
+    conversation: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    participant: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'part-new' }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    message: {
+      create: jest.fn().mockResolvedValue({ id: 'msg-1' }),
+    },
   } as unknown as PrismaClient;
 }
 
-function makeService(prisma?: PrismaClient) {
-  return new UserManagementService(prisma ?? makePrisma());
+function makeService(prisma?: PrismaClient, deps?: { revokeSessions?: unknown; resolveSocketManager?: unknown }) {
+  return new UserManagementService(prisma ?? makePrisma(), deps as never);
 }
 
 beforeEach(() => {
@@ -432,6 +446,64 @@ describe('UserManagementService.createUser', () => {
 
     const callData = (create.mock.calls[0] as any[])[0].data;
     expect(callData.systemLanguage).toBe('en');
+  });
+});
+
+// ─── createUser — rejoint le salon global "meeshy" comme un inscrit (#3876) ────
+//
+// Avant ce lot, seule l'inscription publique (`AuthService.register`)
+// ajoutait l'utilisateur au salon global — un compte créé par un
+// administrateur n'y entrait jamais.
+
+describe('UserManagementService.createUser — adhésion au salon global', () => {
+  const CREATE_DTO = {
+    username: 'alice', firstName: 'Alice', lastName: 'Smith',
+    email: 'alice@example.com', password: 'pw',
+    displayName: null, bio: null, phoneNumber: null,
+  };
+
+  it('ajoute le compte créé au salon global quand il existe', async () => {
+    const user = makeUser({ id: 'new-admin-created-id', displayName: 'Alice Smith' });
+    const create = jest.fn().mockResolvedValue(user);
+    const prisma = makePrisma({ create });
+    (prisma as any).conversation.findFirst.mockResolvedValue({ id: 'conv-global', identifier: 'meeshy' });
+    const svc = makeService(prisma);
+
+    await svc.createUser(CREATE_DTO as any, 'creator-id');
+
+    expect((prisma as any).participant.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          conversationId: 'conv-global',
+          userId: 'new-admin-created-id',
+          role: 'member',
+        }),
+      }),
+    );
+  });
+
+  it("ne fait PAS échouer la création du compte si l'ajout au salon global échoue", async () => {
+    const user = makeUser({ id: 'new-id' });
+    const create = jest.fn().mockResolvedValue(user);
+    const prisma = makePrisma({ create });
+    (prisma as any).conversation.findFirst.mockRejectedValue(new Error('mongo down'));
+    const svc = makeService(prisma);
+
+    const result = await svc.createUser(CREATE_DTO as any, 'creator-id');
+
+    expect(result).toBe(user);
+  });
+
+  it("n'ajoute rien au salon global s'il est introuvable — repli silencieux, pas d'erreur", async () => {
+    const user = makeUser({ id: 'new-id' });
+    const create = jest.fn().mockResolvedValue(user);
+    const prisma = makePrisma({ create }); // conversation.findFirst → null par défaut
+    const svc = makeService(prisma);
+
+    const result = await svc.createUser(CREATE_DTO as any, 'creator-id');
+
+    expect(result).toBe(user);
+    expect((prisma as any).participant.create).not.toHaveBeenCalled();
   });
 });
 

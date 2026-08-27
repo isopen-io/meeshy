@@ -108,6 +108,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Initialiser les services
   const userManagementService = new UserManagementService(fastify.prisma, {
     revokeSessions: deactivatedUserSessionRevoker(fastify),
+    // Résolu à l'appel, comme `deactivatedUserSessionRevoker` : le manager
+    // n'existe pas encore quand les routes s'enregistrent. Alimente l'avis
+    // d'arrivée + l'effectif temps réel de `ensureGlobalConversationMembership`
+    // (#3876) quand `createUser` ajoute le compte au salon global.
+    resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
 

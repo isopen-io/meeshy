@@ -21,7 +21,7 @@ jest.mock('../../../services/AuthService', () => ({
   })),
 }));
 
-import { InitService } from '../../../services/InitService';
+import { InitService, reservedGlobalMemberRole } from '../../../services/InitService';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -169,38 +169,24 @@ describe('InitService.shouldInitialize', () => {
   });
 });
 
-// ─── addUserToMeeshyConversation — casse du rôle ─────────────────────────────
+// ─── reservedGlobalMemberRole — casse du rôle ────────────────────────────────
 //
 // `Participant.role` est une casse UNIQUE en base (minuscules, `MemberRole` de
 // `@meeshy/shared/types/role-types`) — la casse que les gardes comparent
 // (`hasMinimumMemberRole`, `role === 'admin'` dans `routes/conversations/participants.ts`).
 // Ce seed écrivait `'CREATOR'` / `'ADMIN'` / `'MEMBER'` : un « ADMIN » du salon
-// global n'était administrateur nulle part (#3875).
+// global n'était administrateur nulle part (#3875). L'ajout lui-même est
+// désormais délégué à `ensureGlobalConversationMembership` (#3876, source
+// unique, sa propre suite de tests) — ce module ne garde que le mapping
+// username → rôle réservé, propre au seed.
 
-describe('InitService.addUserToMeeshyConversation — casse du rôle', () => {
-  const GLOBAL_CONV = { id: 'conv-global', identifier: 'meeshy' };
-
-  const makeMinimalPrisma = () => ({
-    conversation: { findFirst: jest.fn<any>().mockResolvedValue(GLOBAL_CONV) },
-    participant: {
-      findFirst: jest.fn<any>().mockResolvedValue(null), // pas encore membre
-      create: jest.fn<any>().mockResolvedValue({ id: 'part-new' }),
-    },
-  });
-
+describe('InitService.reservedGlobalMemberRole', () => {
   it.each([
     ['meeshy', 'creator'],
     ['admin', 'admin'],
     ['some-regular-user', 'member'],
-  ])('écrit role=%s → %s, jamais la casse majuscule', async (username, expectedRole) => {
-    const prisma = makeMinimalPrisma();
-    const sut = new InitService(prisma as any);
-
-    await (sut as any).addUserToMeeshyConversation('user-id', username);
-
-    expect(prisma.participant.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ role: expectedRole }) }),
-    );
+  ])('username=%s → role=%s, jamais la casse majuscule', (username, expectedRole) => {
+    expect(reservedGlobalMemberRole(username)).toBe(expectedRole);
   });
 });
 

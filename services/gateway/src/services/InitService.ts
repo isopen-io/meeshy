@@ -1,11 +1,26 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AuthService } from './AuthService';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { ensureGlobalConversationMembership } from './conversations/ensureGlobalConversationMembership';
 
 // Logger dédié pour InitService
 const logger = enhancedLogger.child({ module: 'InitService' });
+
+/**
+ * Le rôle DANS LE SALON GLOBAL réservé aux trois comptes de bootstrap —
+ * `meeshy` (créateur), `admin` (administrateur), tout le reste (membre
+ * ordinaire, y compris `atabeth`). Distinct du rôle PLATEFORME
+ * (`User.role`, BIGBOSS/ADMIN/…) : un compte peut être BIGBOSS globalement
+ * sans être `creator` de CE salon précis si un jour le seed change de nom.
+ */
+export function reservedGlobalMemberRole(username: string): MemberRoleType {
+  if (username === 'meeshy') return 'creator';
+  if (username === 'admin') return 'admin';
+  return 'member';
+}
 
 
 export class InitService {
@@ -176,20 +191,18 @@ export class InitService {
       });
 
       // Ajouter l'utilisateur comme CREATOR de la conversation meeshy —
-      // `Participant.role` est en minuscules en base (#3875), la casse que
-      // les gardes comparent (`hasMinimumMemberRole`, `role === 'admin'`).
-      await this.prisma.participant.create({
-        data: {
-          conversationId: this.globalConversationId,
-          userId: user.id,
-          type: 'user',
-          displayName: user.displayName || user.username,
-          role: 'creator',
-          joinedAt: new Date(),
-          isActive: true,
-          permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
-        }
-      });
+      // `ensureGlobalConversationMembership` (#3876) est la SOURCE UNIQUE de
+      // cet ajout. Trouvé pendant ce lot : `register()` ci-dessus a DÉJÀ
+      // rejoint le salon global en `member` (rôle par défaut) puisque
+      // `createGlobalConversation()` s'exécute avant ce point — un second
+      // `participant.create` direct pour la MÊME paire
+      // `(conversationId, userId)` violait l'index unique et laissait BIGBOSS
+      // coincé à `member`. La fonction partagée MET À NIVEAU une
+      // participation déjà existante quand un rôle explicite est demandé.
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma },
+        { userId: user.id, displayName: user.displayName || user.username, role: 'creator' }
+      );
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur Bigboss "${username}":`, error);
@@ -260,7 +273,10 @@ export class InitService {
 
       // Ajouter l'utilisateur à la conversation globale meeshy
       const userId = existingUser ? existingUser.id : (await this.prisma.user.findFirst({ where: { username } }))!.id;
-      await this.addUserToMeeshyConversation(userId, username);
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma },
+        { userId, displayName: username, role: reservedGlobalMemberRole(username) }
+      );
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la configuration de l'utilisateur Admin "${username}":`, error);
@@ -392,62 +408,15 @@ export class InitService {
         data: { role: role as any }
       });
 
-      // Ajouter l'utilisateur à la conversation globale meeshy
-      await this.addUserToMeeshyConversation(user.id, username);
+      // Ajouter l'utilisateur à la conversation globale meeshy —
+      // `ensureGlobalConversationMembership` (#3876) est la SOURCE UNIQUE.
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma },
+        { userId: user.id, displayName: username, role: reservedGlobalMemberRole(username) }
+      );
 
     } catch (error) {
       logger.error(`[INIT] ❌ Erreur lors de la création de l'utilisateur André Tabeth "${username}":`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Ajoute un utilisateur à la conversation globale meeshy
-   */
-  private async addUserToMeeshyConversation(userId: string, username: string): Promise<void> {
-    try {
-      // Récupérer l'ID de la conversation globale
-      const globalConversation = await this.prisma.conversation.findFirst({
-        where: { identifier: 'meeshy' }
-      });
-
-      if (!globalConversation) {
-        return;
-      }
-
-      // Vérifier si l'utilisateur est déjà membre de la conversation
-      const existingMember = await this.prisma.participant.findFirst({
-        where: {
-          conversationId: globalConversation.id,
-          userId: userId
-        }
-      });
-
-      if (!existingMember) {
-        // Déterminer le rôle selon l'utilisateur — `Participant.role` est
-        // toujours en minuscules (`MemberRole` de `@meeshy/shared/types/role-types`),
-        // la casse que les gardes comparent (`hasMinimumMemberRole`, `role === 'admin'`).
-        const role = username === 'meeshy' ? 'creator' :
-                    username === 'admin' ? 'admin' : 'member';
-
-        // Ajouter l'utilisateur comme membre de la conversation meeshy
-        await this.prisma.participant.create({
-          data: {
-            conversationId: globalConversation.id,
-            userId: userId,
-            type: 'user',
-            displayName: username,
-            role: role,
-            joinedAt: new Date(),
-            isActive: true,
-            permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
-          }
-        });
-
-      } else {
-      }
-    } catch (error) {
-      logger.error(`[INIT] ❌ Erreur lors de l'ajout de l'utilisateur "${username}" à la conversation meeshy:`, error);
       throw error;
     }
   }
@@ -464,7 +433,10 @@ export class InitService {
       });
 
       for (const user of users) {
-        await this.addUserToMeeshyConversation(user.id, user.username);
+        await ensureGlobalConversationMembership(
+          { prisma: this.prisma },
+          { userId: user.id, displayName: user.displayName || user.username, role: reservedGlobalMemberRole(user.username) }
+        );
       }
 
     } catch (error) {

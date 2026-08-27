@@ -11,6 +11,10 @@ import {
 } from '@meeshy/shared/types';
 import * as bcrypt from 'bcrypt';
 import { logger, logWarn } from '../../utils/logger';
+import {
+  ensureGlobalConversationMembership,
+  type GlobalMembershipSocketManager,
+} from '../conversations/ensureGlobalConversationMembership';
 
 type UserSortKey = NonNullable<UserFilters['sortBy']>;
 
@@ -41,6 +45,13 @@ export type SessionRevoker = (userId: string) => Promise<unknown>;
 
 export type UserManagementServiceDeps = {
   readonly revokeSessions?: SessionRevoker;
+  /**
+   * Résolu PARESSEUSEMENT, comme `deactivatedUserSessionRevoker` : le manager
+   * n'existe pas encore quand les routes s'enregistrent. Absent = pas de
+   * socket, l'ajout au salon global reste persisté (voir
+   * `ensureGlobalConversationMembership`).
+   */
+  readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
 };
 
 export class UserManagementService {
@@ -156,6 +167,15 @@ export class UserManagementService {
 
   /**
    * Crée un nouvel utilisateur
+   *
+   * Rejoint le salon global "meeshy" COMME UN INSCRIT (#3876) : avant ce lot,
+   * seule l'inscription publique (`AuthService.register`) faisait cet ajout —
+   * un compte créé par un administrateur n'y entrait jamais.
+   * `ensureGlobalConversationMembership` est la SOURCE UNIQUE, partagée par
+   * l'inscription, cette création admin et le seed (`InitService`).
+   *
+   * Best-effort, comme l'inscription publique : une panne de l'ajout au salon
+   * global ne doit pas faire échouer la création du compte.
    */
   async createUser(data: CreateUserDTO, creatorId: string): Promise<FullUser> {
     // Hash du mot de passe
@@ -179,6 +199,15 @@ export class UserManagementService {
         // TODO: Initialize UserPreferences.application when implemented
       }
     });
+
+    try {
+      await ensureGlobalConversationMembership(
+        { prisma: this.prisma, resolveSocketManager: this.deps.resolveSocketManager },
+        { userId: user.id, displayName: user.displayName || user.username }
+      );
+    } catch (error) {
+      logWarn(logger, `[UserManagement] Global conversation join failed for admin-created user ${user.id}`, error);
+    }
 
     return user as unknown as FullUser;
   }
