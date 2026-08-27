@@ -468,6 +468,24 @@ describe('POST /posts/:id/view — service error', () => {
   });
 });
 
+// #4044 — repro live : la vue est déjà enregistrée DURABLEMENT par
+// `recordView` avant que `getPostById` (lecture lourde, sans try/catch
+// propre, appelée ici pour trois champs seulement) ne soit invoquée pour
+// l'enrichissement OPTIONNEL de diffusion temps réel. Un échec de CETTE
+// lecture ne doit jamais transformer une vue déjà comptée en 500 permanent
+// (retenté 5×, jamais résolu côté client — c'est le bug rapporté : des
+// marquages de vue de story épuisant leurs tentatives avec la même erreur).
+describe('POST /posts/:id/view — getPostById enrichment failure does not fail the request', () => {
+  it('still returns 200 with viewed: true when getPostById throws', async () => {
+    mockGetPostById.mockRejectedValueOnce(new Error('Mongo timeout'));
+    const app = await buildApp({ withSocialEvents: true, withNotifications: true });
+    const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/view`, payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.viewed).toBe(true);
+    await app.close();
+  });
+});
+
 // ─── POST /posts/:id/anonymous-view ──────────────────────────────────────────
 
 describe('POST /posts/:id/anonymous-view — authenticated user is skipped', () => {

@@ -416,16 +416,30 @@ export function registerInteractionRoutes(
         // référence tranche — l'auteur reçoit donc son événement temps réel pour
         // une vue que `recordView` vient d'enregistrer. Ces deux-là ne peuvent
         // plus diverger.
-        const post = await postService.getPostById(postId, viewerId);
-        if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
-          safeBroadcast('story:viewed', () => {
-            socialEvents.broadcastStoryViewed({
-              storyId: postId,
-              viewerId: authContext.registeredUser.id,
-              viewerUsername: authContext.registeredUser.username ?? '',
-              viewCount: post.viewCount,
-            }, post.authorId);
-          });
+        //
+        // #4044 — `getPostById` est la lecture LOURDE du détail (réactions,
+        // bookmark, comptage de reposts, résolution de référence…), sans
+        // AUCUN try/catch propre, appelée ici pour trois champs seulement
+        // (type, authorId, viewCount). La vue vient déjà d'être enregistrée
+        // DURABLEMENT par `recordView` ci-dessus — un échec de CET
+        // enrichissement optionnel (diffusion temps réel) ne doit jamais
+        // faire échouer la réponse au client, qui verrait un 500 permanent
+        // (retenté 5×, jamais résolu, la vue pourtant déjà comptée) pour un
+        // post dont l'auteur ne recevra qu'une notification temps réel en moins.
+        try {
+          const post = await postService.getPostById(postId, viewerId);
+          if (post && post.type === 'STORY' && post.authorId !== authContext.registeredUser.id) {
+            safeBroadcast('story:viewed', () => {
+              socialEvents.broadcastStoryViewed({
+                storyId: postId,
+                viewerId: authContext.registeredUser.id,
+                viewerUsername: authContext.registeredUser.username ?? '',
+                viewCount: post.viewCount,
+              }, post.authorId);
+            });
+          }
+        } catch (broadcastError) {
+          enhancedLogger.warn('[POST /posts/:postId/view]: story-viewed broadcast enrichment failed — view already recorded, not surfacing as an error', { err: broadcastError });
         }
       }
 
