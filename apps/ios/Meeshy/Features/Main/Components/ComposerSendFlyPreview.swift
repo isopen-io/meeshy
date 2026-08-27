@@ -54,11 +54,26 @@ struct ComposerSendFlyPreview: View {
     /// DÉJÀ porter cette forme dès son apparition — jamais une capsule
     /// générique.
     private var usesBubbleShape: Bool {
-        switch readingMode {
-        case .focal, .script:
-            return false
+        Self.landsAboveComposer(in: readingMode)
+    }
+
+    /// Le survol n'a de sens QUE dans les modes où une bulle neuve ATTERRIT
+    /// juste au-dessus du composer (liste inversée) : bulles, rivière, résumé.
+    /// En **Focal/Script**, le message paraît INSTANTANÉMENT dans le flux
+    /// PLAT — une rangée plate à gauche, sous le label d'auteur (« Toi »),
+    /// avec son propre indent (`FocalRow.emojiBlock`) — à un tout autre
+    /// endroit que ce survol (collé au bord, `.padding(.horizontal, 12)`,
+    /// ancré `.padding(.bottom, composerHeight)`). Le survol y DUPLIQUE donc
+    /// l'emoji/texte en bas à gauche, un fantôme mal placé pendant que le
+    /// vrai message a déjà pris sa place — retour porteur (2026-08-27) :
+    /// « l'emoji apparaît à gauche avant de prendre sa place ». L'hôte NE LE
+    /// MONTE PAS dans ces modes (voir `ConversationView.swift`).
+    static func landsAboveComposer(in mode: ConversationReadingMode) -> Bool {
+        switch mode {
         case .bubbles, .river, .summary:
             return true
+        case .focal, .script:
+            return false
         }
     }
 

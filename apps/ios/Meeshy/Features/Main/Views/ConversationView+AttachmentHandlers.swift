@@ -83,6 +83,12 @@ extension ConversationView {
     /// un envoi pièce-jointe-seule n'a rien à faire voler.
     func triggerSendFlyAnimation(text: String) {
         guard !text.isEmpty else { return }
+        // Le survol ne s'arme QUE dans les modes où une bulle neuve atterrit
+        // au-dessus du composer (bulles/rivière/résumé). En Focal/Script le
+        // vrai message paraît instantanément dans le flux plat — armer le
+        // survol y poserait un fantôme dupliqué en bas à gauche (glitch
+        // porteur 2026-08-27). Voir `ComposerSendFlyPreview.landsAboveComposer`.
+        guard ComposerSendFlyPreview.landsAboveComposer(in: readingModeController.mode) else { return }
         let payload = ComposerSendFlyPayload(text: text)
         sendFlyPayload = payload
         // `self` est une struct SwiftUI : la fermeture copie la vue, mais

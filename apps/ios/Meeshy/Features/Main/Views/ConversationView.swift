@@ -2019,7 +2019,8 @@ struct ConversationView: View {
                     // `.overlay()` posé APRÈS le composer le dessinerait
                     // au-dessus). Pur calque de rendu : ne pousse ni ne
                     // redimensionne rien autour de lui.
-                    if let payload = sendFlyPayload {
+                    if let payload = sendFlyPayload,
+                       ComposerSendFlyPreview.landsAboveComposer(in: readingModeController.mode) {
                         ComposerSendFlyPreview(
                             text: payload.text,
                             readingMode: readingModeController.mode,
