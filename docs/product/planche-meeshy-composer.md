@@ -65,6 +65,25 @@ valeur unique, et déjà celle des deux autres sélecteurs de l'écran (audience
 l'atelier). Il n'y figure **que ce que le contexte permet** : l'itération porte sur `offeredFormats`
 et sur rien d'autre, donc un format non offert y est ABSENT, jamais grisé (loi 4).
 
+**Le menu offre les QUATRE formats, filtrés par disponibilité — Mood compris (#4030).** Le fil
+n'en offrait que deux (+ Réel quand la composition qualifie) : le Mood n'était atteignable que par sa
+propre porte, si bien qu'écrire deux lignes ici puis vouloir en faire une humeur obligeait à fermer,
+revenir et **retaper** — la loi 9 (« le contenu est préservé à travers les formats ») tombait sur le
+seul format qu'aucune bascule n'atteignait. Le Mood est offert **quand la composition est du texte
+seul, non vide** : une carte d'humeur n'a ni scène ni pièce jointe. Son gate est la JUMELLE de celui
+du Réel et lui est **exclusif par construction** — l'un exige un média, l'autre l'interdit.
+
+**Un gate qui se referme sous les doigts est un défaut, pas une rigueur.** Posé sur le seul texte,
+celui du Mood aurait retiré le format à l'auteur qui efface sa phrase pour la réécrire : l'offre se
+serait refermée, le repli l'aurait renvoyé au document **en pleine frappe**. Un emoji déjà posé est
+la preuve qu'une humeur est en cours — il tient le format ouvert le temps de la composition, sans
+pour autant racheter un média.
+
+**Et l'ordre n'est pas négociable : le publieur AVANT l'éventail.** Offrir `.status` sans donner à la
+porte du fil sa branche d'envoi aurait armé une flèche que le plan d'envoi refuse sur son premier
+`guard` — format offert, bonne surface, envoi qui ne part pas. Le pire des deux mondes, puisqu'il a
+l'air de marcher.
+
 **Le `⋯` porte ce que le document sait faire et que rien d'autre à l'écran ne fait** — pas les
 entrées de l'atelier reprises par ressemblance de nom. Transitions et Timeline outillent une scène
 COMPOSÉE, que cette surface n'édite pas ; « supprimer les slides » a déjà son geste (le ✕ de chaque

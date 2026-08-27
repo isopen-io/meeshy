@@ -213,12 +213,25 @@ nonisolated extension ComposerProfile {
     ///   format propre d'une porte — sans quoi l'invariant « l'éventail
     ///   contient toujours le format initial » tomberait pour l'onglet réels,
     ///   dont la composition n'existe pas encore quand la caméra s'ouvre.
+    ///
+    /// - Parameter compositionQualifiesAsMood: `qualifiesAsMood` de la
+    ///   composition COURANTE (#4030). Jumeau du précédent, et EXCLUSIF de lui
+    ///   par le prédicat : le réel exige un média, le mood exige qu'il n'y en
+    ///   ait aucun. Il n'ouvre le quatrième format que sur le FIL — une porte
+    ///   qui gagnerait le mood sans l'avoir demandé publierait un format que sa
+    ///   chaîne ne sait pas produire.
     static func profile(
         for origin: ComposerOrigin,
-        compositionQualifiesAsReel: Bool = false
+        compositionQualifiesAsReel: Bool = false,
+        compositionQualifiesAsMood: Bool = false
     ) -> ComposerProfile {
         func plusReel(_ base: [ComposerFormat]) -> [ComposerFormat] {
             compositionQualifiesAsReel ? base + [.reel] : base
+        }
+
+        /// N'est appliqué qu'au fil (`.feedComposer`) — voir le paramètre.
+        func plusMood(_ base: [ComposerFormat]) -> [ComposerFormat] {
+            compositionQualifiesAsMood ? base + [.status] : base
         }
 
         switch origin {
@@ -275,9 +288,18 @@ nonisolated extension ComposerProfile {
             // des formats, lui, ne descend toujours PAS sous le document — le
             // paragraphe de `MeeshyComposerHost.documentSurface` dit le blocage
             // SDK qui l'y retient.
+            //
+            // **#4030 — le quatrième format rejoint l'éventail du fil.** Le
+            // mood n'était atteignable que par sa porte (`.moodChip`) : écrire
+            // deux lignes ici puis vouloir en faire un mood obligeait à fermer,
+            // revenir et retaper — la loi 9 tombait sur le seul format
+            // qu'aucune bascule n'atteignait. `plusMood` et `plusReel` ne se
+            // cumulent jamais (l'un exige un média, l'autre l'interdit) ; la
+            // composition est jugée par `ComposerMoodGate`, que le meuble
+            // nourrit comme il nourrit déjà le gate du réel.
             return ComposerProfile(
                 initialFormat: .post,
-                offeredFormats: plusReel([.post, .story]),
+                offeredFormats: plusMood(plusReel([.post, .story])),
                 showsSlides: true,
                 showsTimeline: true,
                 opensWith: .keyboardOnContent,

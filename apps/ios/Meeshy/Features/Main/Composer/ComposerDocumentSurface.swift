@@ -2247,7 +2247,64 @@ struct DocumentComposerDoor: View {
     /// budget, retirera le post optimiste avec son propre toast
     /// (`observeOutcome`). Fermer sur cette acceptation-là est donc juste — le
     /// contenu est durable —, et lire `true` comme « publié » serait faux.
+    /// **L'ENVOI — un AIGUILLAGE sur le format depuis #4030**, mot pour mot la
+    /// forme que la porte du mood a prise au lot 4.7, et pour la même raison.
+    ///
+    /// L'éventail du fil offre désormais `.status` quand la composition est du
+    /// TEXTE SEUL (`ComposerMoodGate`). Sans cette branche, choisir « Mood »
+    /// aurait monté la bonne surface, armé la flèche… et
+    /// `ComposerDocumentSendPlan` l'aurait refusée sur son premier `guard`
+    /// (`draft.format == .post` ⇒ `.wrongFormat`). L'auteur aurait vu un format
+    /// offert, une surface juste, et un envoi qui ne part pas — « le pire des
+    /// deux mondes, puisqu'il aurait eu l'air de marcher ».
+    ///
+    /// Le `switch` est EXHAUSTIF : un cinquième format casse la compilation ici
+    /// avant de pouvoir être avalé par un `default`.
+    ///
+    /// `.story` / `.reel` restent refusés, et ce n'est pas un trou de ce lot :
+    /// sous ces deux formats le routage monte la SCÈNE, dont le chrome
+    /// appartient à l'atelier — ce publieur n'est jamais atteint. Les écrire en
+    /// refus plutôt qu'en `fatalError` garde la porte honnête si le routage
+    /// changeait.
     private func publish(_ draft: ComposerDocumentDraft) async -> Bool {
+        switch draft.format {
+        case .post: return await publishDocument(draft)
+        case .status: return await publishMood(draft)
+        case .story, .reel: return refuse()
+        }
+    }
+
+    /// **Le MOOD publié depuis le fil (#4030).**
+    ///
+    /// Il passe par `StatusViewModel`, que la porte reçoit déjà — le même
+    /// modèle que la porte du mood appelle, jamais un second chemin d'envoi.
+    ///
+    /// Il ne SUPPLANTE aucune ligne de file : cette porte ne sème aucune graine
+    /// de mood (`moodSeed: nil`), donc aucune reprise hors-ligne n'est en cours
+    /// ici — la supplantation appartient à la porte qui, elle, en récupère une.
+    ///
+    /// **Il hérite de la dette CONSIGNÉE du lot 4.5** : `setStatus` ne rend
+    /// rien, donc cette branche rend `true` même quand le gateway a répondu 500.
+    /// L'asymétrie avec `publishDocument` ci-dessous est assumée, pas oubliée ;
+    /// sa levée commence par faire rendre un résultat à `setStatus`, et elle
+    /// vaudra alors pour les DEUX portes d'un coup.
+    private func publishMood(_ draft: ComposerDocumentDraft) async -> Bool {
+        guard let emoji = draft.emoji else { return refuse() }
+
+        HapticFeedback.success()
+        await statusViewModel.setStatus(
+            emoji: emoji,
+            content: draft.text,
+            visibility: draft.visibility.rawValue,
+            visibilityUserIds: draft.visibilityUserIds,
+            audioUrl: draft.audioUrl,
+            repostOfId: draft.repostOfId,
+            mentions: draft.mentions
+        )
+        return true
+    }
+
+    private func publishDocument(_ draft: ComposerDocumentDraft) async -> Bool {
         guard case .send = ComposerDocumentSendPlan.plan(
             for: draft,
             isOffline: NetworkMonitor.shared.isOffline

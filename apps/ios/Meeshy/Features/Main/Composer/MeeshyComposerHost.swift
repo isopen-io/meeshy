@@ -72,6 +72,51 @@ nonisolated enum ComposerReelGate {
     }
 }
 
+/// **Le gate du MOOD — la jumelle de `ComposerReelGate` (#4030).**
+///
+/// Le fan du fil offrait `[.post, .story]` et, quand la composition qualifiait,
+/// `.reel`. Le quatrième format n'était atteignable que par sa PORTE
+/// (`.moodChip`) : un auteur qui venait d'écrire deux lignes dans le composer
+/// du fil devait fermer, revenir par le chip mood et retaper — la loi 9 (le
+/// contenu est PRÉSERVÉ à travers les formats) tombait sur le seul format
+/// qu'aucune bascule n'atteignait.
+///
+/// **Les deux gates sont MUTUELLEMENT EXCLUSIFS par construction** : le réel
+/// exige un média, le mood exige qu'il n'y en ait AUCUN. Aucun `if` ne l'écrit
+/// — c'est le prédicat lui-même qui le tient, et un témoin le prouve sur la
+/// table plutôt que de le supposer.
+///
+/// **Pourquoi l'emoji entre dans le prédicat.** Un gate posé sur le seul texte
+/// se refermerait sous les doigts de l'auteur qui efface sa phrase pour la
+/// réécrire : l'offre perdrait `.status`, le repli
+/// (`ComposerFormatFanPolicy.resolvedSelection`) le ramènerait au document, et
+/// la surface changerait EN PLEINE FRAPPE. Un emoji déjà posé est la preuve
+/// qu'un mood est en cours — il tient le format ouvert le temps de la
+/// composition. Il ne rachète pour autant PAS un média : la carte mood n'a
+/// nulle part où le mettre.
+nonisolated enum ComposerMoodGate {
+
+    /// « Contenu uniquement du texte, non vide » — plus l'échappatoire de
+    /// l'emoji ci-dessus.
+    static func compositionQualifiesAsMood(
+        text: String,
+        hasMedia: Bool,
+        hasScene: Bool,
+        moodEmoji: String?
+    ) -> Bool {
+        guard !hasMedia, !hasScene else { return false }
+        if let moodEmoji, !moodEmoji.isEmpty { return true }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Ce que vaut le gate quand il n'y a RIEN à juger — DÉRIVÉ du prédicat,
+    /// jamais écrit `false` : le littéral en dur est précisément ce que V1 a eu
+    /// à retrouver en deux exemplaires.
+    static var withoutComposition: Bool {
+        compositionQualifiesAsMood(text: "", hasMedia: false, hasScene: false, moodEmoji: nil)
+    }
+}
+
 /// **Le meuble** du composer unifié (C2) — plateau, scène, socle permanent.
 ///
 /// Ce que ce type est, et surtout ce qu'il n'est PAS :
@@ -591,10 +636,30 @@ struct MeeshyComposerHost: View {
             || ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
     }
 
+    /// **#4030 — le gate du mood, nourri de la MÊME composition que celui du
+    /// réel.** Le mood est une carte SANS scène et SANS média : il ne regarde
+    /// donc pas `currentEffects` objet par objet comme le fait le réel, mais
+    /// les deux faits que le meuble tient déjà — ce que l'auteur a ingéré
+    /// (`documentLocalMedia`) et si une scène existe (`documentHasScene`, qui
+    /// couvre autant le fond de couleur que les médias montés en slides).
+    ///
+    /// `moodEmoji` entre dans le prédicat pour la raison écrite sur
+    /// `ComposerMoodGate` : sans lui, effacer sa phrase pour la réécrire
+    /// retirerait le format sous les doigts de l'auteur.
+    private var moodGate: Bool {
+        ComposerMoodGate.compositionQualifiesAsMood(
+            text: documentText,
+            hasMedia: !documentLocalMedia.isEmpty,
+            hasScene: documentHasScene,
+            moodEmoji: moodEmoji
+        )
+    }
+
     private var profile: ComposerProfile {
         ComposerProfile.profile(
             for: intent.origin,
-            compositionQualifiesAsReel: reelGate
+            compositionQualifiesAsReel: reelGate,
+            compositionQualifiesAsMood: moodGate
         )
     }
 

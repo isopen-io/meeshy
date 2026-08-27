@@ -2360,11 +2360,49 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         return bloc
     }
 
+    /// **L'ancre a bougé au #4030, et la garde y GAGNE en précision.**
+    ///
+    /// `publish(_:)` est devenu un AIGUILLAGE sur le format — le fil offrant
+    /// désormais `.status`, un brouillon de mood doit partir par
+    /// `StatusViewModel` et non par le plan du document. Ce que les gardes
+    /// ci-dessous protègent (file durable, plan consulté, aucun upload direct,
+    /// deux refus) est propre à l'envoi du DOCUMENT : elles lisent donc le
+    /// corps qui le porte, et non l'aiguillage de trois lignes qui le choisit.
+    ///
+    /// Laisser l'ancre sur `publish(` les aurait rendues vertes sur un corps
+    /// qui ne contient plus rien de ce qu'elles cherchent — ou rouges pour la
+    /// mauvaise raison, ce qui est arrivé et a fait trouver ce lot.
     private func doorSendBlock() throws -> String {
-        guard let bloc = blockBody(startingAt: "private func publish(", in: try doorBlock()) else {
+        guard let bloc = blockBody(startingAt: "private func publishDocument(", in: try doorBlock()) else {
+            throw AncreDePorteIntrouvable(quoi: "DocumentComposerDoor.publishDocument")
+        }
+        return bloc
+    }
+
+    /// L'aiguillage lui-même, qui n'existait pas avant #4030.
+    private func doorRoutingBlock() throws -> String {
+        guard let bloc = blockBody(startingAt: "private func publish(_ draft: ComposerDocumentDraft)",
+                                   in: try doorBlock()) else {
             throw AncreDePorteIntrouvable(quoi: "DocumentComposerDoor.publish")
         }
         return bloc
+    }
+
+    /// **#4030 — l'aiguillage est EXHAUSTIF, et chaque format part par SON
+    /// publieur.** Le fil offre `.status` quand la composition est du texte
+    /// seul ; sans branche, `ComposerDocumentSendPlan` l'aurait refusé sur son
+    /// premier `guard` — format offert, bonne surface, envoi qui ne part pas.
+    func test_laPorteDuDocument_aiguilleSurLeFormat_etNeConfondPasLesDeuxPublieurs() throws {
+        let aiguillage = try doorRoutingBlock()
+
+        XCTAssertTrue(aiguillage.contains("switch draft.format"),
+                      "L'envoi doit AIGUILLER sur le format — le bloc lu n'est pas celui de l'aiguillage.")
+        XCTAssertTrue(aiguillage.contains("case .post: return await publishDocument(draft)"),
+                      "Le POST garde son publieur — celui que gardent les quatre témoins ci-dessous.")
+        XCTAssertTrue(aiguillage.contains("case .status: return await publishMood(draft)"),
+                      "Le MOOD doit avoir le SIEN : le plan du document le refuserait sur `draft.format == .post`.")
+        XCTAssertFalse(aiguillage.contains("ComposerDocumentSendPlan"),
+                       "L'aiguillage ne doit RIEN décider de l'envoi : il choisit un publieur, un point.")
     }
 
     private func planBlock() throws -> String {
@@ -2589,8 +2627,10 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         // désormais `draft.originalLanguage`, et le meuble porte la capsule et
         // le sélecteur qui l'alimentent.
         let porte = try surfaceSource()
+        // Ancre déplacée au #4030 : l'envoi du DOCUMENT est `publishDocument`,
+        // `publish` n'étant plus qu'un aiguillage sur le format.
         guard let envoi = corpsDeDeclaration(
-            commencantPar: "private func publish(_ draft: ComposerDocumentDraft)",
+            commencantPar: "private func publishDocument(_ draft: ComposerDocumentDraft)",
             dans: porte
         ) else {
             return XCTFail("L'envoi de la porte du document est introuvable — la garde ne mesurerait RIEN.")
