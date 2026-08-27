@@ -45,13 +45,13 @@ const CONV_ID = '507f1f77bcf86cd799439033';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function makePreValidationAuth(authenticated: boolean) {
+function makePreValidationAuth(authenticated: boolean, platformRole: string = 'USER') {
   return async (req: FastifyRequest) => {
     if (authenticated) {
       (req as any).authContext = {
         isAuthenticated: true,
         userId: USER_ID,
-        registeredUser: { id: USER_ID, role: 'USER' },
+        registeredUser: { id: USER_ID, role: platformRole },
       };
     } else {
       (req as any).authContext = { isAuthenticated: false, userId: null };
@@ -159,11 +159,12 @@ async function buildApp(opts: {
   authenticated?: boolean;
   prisma?: any;
   socket?: SocketRecorder;
+  platformRole?: string;
 } = {}): Promise<FastifyInstance> {
-  const { authenticated = true, prisma = makePrisma(), socket } = opts;
+  const { authenticated = true, prisma = makePrisma(), socket, platformRole = 'USER' } = opts;
 
   const app = Fastify({ logger: false });
-  const requiredAuth = makePreValidationAuth(authenticated);
+  const requiredAuth = makePreValidationAuth(authenticated, platformRole);
 
   if (socket) {
     app.decorate('socketIOHandler', { getManager: jest.fn(() => socket.manager) });
@@ -425,6 +426,89 @@ describe('PATCH ban — le créateur reste protégé quelle que soit la casse (#
       .mockResolvedValueOnce({ id: 'part-curr', role: 'ADMIN' })
       .mockResolvedValueOnce({ id: 'part-tgt', userId: TARGET_ID, role: 'member', bannedAt: new Date(), leftAt: null });
     const app = await buildApp({ prisma });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).not.toBe(403);
+    await app.close();
+  });
+});
+
+/**
+ * **Un administrateur de la PLATEFORME agit avec les droits du créateur**
+ * (issue #3941, décision porteur du 2026-08-27 en tranchant #3892).
+ *
+ * Bannir et débannir ne consultaient que le rang de conversation. Un `ADMIN`
+ * de la plateforme, membre du fil, n'y pouvait rien — alors qu'il retire déjà
+ * un participant et change déjà un rang deux routes plus loin.
+ *
+ * **La décision porte sur ce que l'acteur peut FAIRE, pas sur ce qui le
+ * protège.** « Agir AVEC les droits du créateur » place l'administrateur AU
+ * NIVEAU du créateur, jamais au-dessus : la règle du rang strictement
+ * supérieur continue donc de les départager, et aucun des deux ne bannit
+ * l'autre. Le côté CIBLE reste inchangé — un administrateur de plateforme
+ * n'hérite d'aucune protection supplémentaire dans une conversation dont il
+ * n'est pas l'hôte, ce qui reste le comportement d'avant ce lot.
+ */
+describe('Bannir — l’autorité de plateforme (#3941)', () => {
+  it('laisse un ADMIN de la plateforme, simple membre, bannir un membre', async () => {
+    const app = await buildApp({
+      prisma: makePrisma({ currentRole: 'member', targetRole: 'member' }),
+      platformRole: 'ADMIN',
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('ne laisse PAS un ADMIN de la plateforme bannir le créateur — au niveau du créateur, jamais au-dessus', async () => {
+    const app = await buildApp({
+      prisma: makePrisma({ currentRole: 'member', targetRole: 'creator' }),
+      platformRole: 'ADMIN',
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+    const app = await buildApp({
+      prisma: makePrisma({ currentRole: 'member', targetRole: 'member' }),
+      platformRole: 'MODERATOR',
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('laisse un BIGBOSS de la plateforme, simple membre, débannir', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>()
+      .mockResolvedValueOnce({ id: 'part-curr', role: 'member' })
+      .mockResolvedValueOnce({ id: 'part-tgt', userId: TARGET_ID, role: 'member', bannedAt: new Date(), leftAt: null });
+    const app = await buildApp({ prisma, platformRole: 'BIGBOSS' });
 
     const res = await app.inject({
       method: 'PATCH',

@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { hasMinimumMemberRole, isMemberCreator, memberRoleCasings } from '@meeshy/shared/types/role-types';
+import { isMemberCreator, MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -1808,8 +1809,6 @@ export function registerCoreRoutes(
         where: {
           conversationId: conversationId,
           userId: userId,
-          // Un `where` Prisma ne replie pas la casse (#4008).
-          role: { in: memberRoleCasings(['creator', 'admin', 'moderator']) },
           isActive: true
         },
         select: {
@@ -1818,7 +1817,16 @@ export function registerCoreRoutes(
         }
       });
 
-      if (!membership && id !== "meeshy") {
+      // Le rang ne se filtre PLUS dans la requête : un administrateur de la
+      // plateforme simple membre n'y était pas refusé — sa ligne n'était même
+      // pas chargée, et le point de contrôle n'existait pas là où on le
+      // cherchait (#3941). La requête ramène l'appartenance, la loi décide.
+      const actor = {
+        conversationRole: membership?.role,
+        platformRole: authRequest.authContext.registeredUser?.role,
+      };
+
+      if (!actorHasMinimumRole(actor, MemberRole.MODERATOR) && id !== "meeshy") {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à modifier cette conversation');
       }
 
@@ -1827,12 +1835,12 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'The global conversation cannot be modified');
       }
 
-      // À corriger AVEC le `in` ci-dessus, jamais après : élargir la requête
-      // sans élargir cette restriction rendrait atteignable un modérateur
-      // écrit `MODERATOR` que l'égalité stricte laisserait modifier les
-      // permissions (#4008). Une garde qui ACCORDE et une garde qui
-      // RESTREINT lisent la même colonne en sens inverse.
-      if (membership?.role != null && !hasMinimumMemberRole(membership.role, 'admin')) {
+      // Le rang d'écriture, le canal d'annonces et le mode lent sont des
+      // PERMISSIONS : un modérateur de conversation ne les touche pas. La
+      // restriction lit la même colonne que la garde ci-dessus, en sens
+      // INVERSE — l'une accorde, l'autre retient — et les deux doivent donc
+      // se déplacer ensemble (#4008, #3941).
+      if (!actorHasMinimumRole(actor, MemberRole.ADMIN)) {
         if (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
             slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
           return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
@@ -2069,12 +2077,18 @@ export function registerCoreRoutes(
         where: {
           conversationId: conversationId,
           userId: userId,
-          role: { in: memberRoleCasings(['creator', 'admin']) },
           isActive: true
-        }
+        },
+        select: { role: true }
       });
 
-      if (!membership) {
+      if (!actorHasMinimumRole(
+        {
+          conversationRole: membership?.role,
+          platformRole: authRequest.authContext.registeredUser?.role,
+        },
+        MemberRole.ADMIN,
+      )) {
         return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer cette conversation');
       }
 

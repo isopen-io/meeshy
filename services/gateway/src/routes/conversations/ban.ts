@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify'
-import { memberRoleLevel, hasMinimumMemberRole } from '@meeshy/shared/types/role-types'
+import { memberRoleLevel, MemberRole } from '@meeshy/shared/types/role-types'
+import { actorHasMinimumRole, actorRoleLevel } from '../../utils/conversation-authority'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
@@ -76,7 +77,14 @@ export function registerBanRoutes(
         return sendBadRequest(reply, 'Ce participant est déjà banni')
       }
 
-      const currentLevel = memberRoleLevel(currentParticipant.role ?? 'member')
+      // L'acteur porte son rôle de PLATEFORME (#3941) ; la cible non — la
+      // décision porteur dit ce qu'un administrateur peut FAIRE, pas ce qui
+      // le protège. Au NIVEAU du créateur et jamais au-dessus, donc aucun
+      // des deux ne bannit l'autre.
+      const currentLevel = actorRoleLevel({
+        conversationRole: currentParticipant.role,
+        platformRole: authRequest.authContext.registeredUser?.role,
+      })
       const targetLevel = memberRoleLevel(targetParticipant.role ?? 'member')
 
       if (currentLevel <= targetLevel) {
@@ -228,7 +236,13 @@ export function registerBanRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
-      if (!hasMinimumMemberRole(currentParticipant.role ?? 'member', 'admin')) {
+      if (!actorHasMinimumRole(
+        {
+          conversationRole: currentParticipant.role,
+          platformRole: authRequest.authContext.registeredUser?.role,
+        },
+        MemberRole.ADMIN,
+      )) {
         return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
       }
 

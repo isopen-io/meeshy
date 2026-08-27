@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { hasMinimumMemberRole, isGlobalAdmin, memberRoleCasings } from '@meeshy/shared/types/role-types';
+import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
@@ -358,7 +359,15 @@ export function registerSharingRoutes(
       }
 
       // Vérifier si l'utilisateur est modérateur/admin de la conversation
-      const isModerator = hasMinimumMemberRole(membership.role ?? 'member', 'moderator');
+      // « toute la visibilité de la conversation » (#3941) : un administrateur
+      // de la plateforme voit TOUS les liens, pas seulement les siens.
+      const isModerator = actorHasMinimumRole(
+        {
+          conversationRole: membership.role,
+          platformRole: authRequest.authContext.registeredUser?.role,
+        },
+        MemberRole.MODERATOR,
+      );
 
       // Filtrer les liens selon les droits:
       // - Modérateurs: voient TOUS les liens
@@ -758,9 +767,13 @@ export function registerSharingRoutes(
       }
 
       // Vérifier que l'inviteur a les permissions pour inviter
-      const canInvite =
-        hasMinimumMemberRole(inviterMember.role ?? 'member', 'admin') ||
-        isGlobalAdmin(authContext.registeredUser.role ?? '');
+      const canInvite = actorHasMinimumRole(
+        {
+          conversationRole: inviterMember.role,
+          platformRole: authContext.registeredUser.role,
+        },
+        MemberRole.ADMIN,
+      );
 
       if (!canInvite) {
         return sendForbidden(reply, 'Vous n\'avez pas les permissions pour inviter des utilisateurs');

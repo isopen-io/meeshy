@@ -665,3 +665,66 @@ describe('PATCH …/rights — l’éventail des hôtes voit les DEUX casses', (
     expect(where.role.in).not.toContain('MEMBER');
   });
 });
+
+/**
+ * **Un administrateur de la PLATEFORME agit avec les droits du créateur**
+ * (issue #3941, décision porteur du 2026-08-27 en tranchant #3892).
+ *
+ * L'audit de #3941 a trouvé ce bypass posé à trois points de contrôle sur
+ * quatorze — retirer un participant, changer un rang, inviter — et absent
+ * partout ailleurs, sans qu'aucune décision ne l'explique. `PATCH …/rights`
+ * était l'un des absents : un `ADMIN` de la plateforme, membre de la
+ * conversation, se voyait refuser des droits qu'il tient partout ailleurs.
+ *
+ * Le bypass suppose une APPARTENANCE : `setup()` pose une ligne de
+ * participation, et c'est elle que la route charge avant de consulter la loi.
+ */
+describe('PATCH …/rights — l’administrateur de plateforme agit avec les droits du créateur (#3941)', () => {
+  async function patchRightsAs(ctx: Ctx, platformRole: string, body: any) {
+    const route = ctx.routes.find(
+      (r) => r.method === 'PATCH' && r.path.includes('participants/:participantId/rights')
+    );
+    if (!route) throw new Error('route PATCH …/rights absente');
+    await route.handler(
+      {
+        params: { id: CONV_ID, participantId: ANON_ID },
+        body,
+        authContext: {
+          userId: HOST_ID,
+          isAuthenticated: true,
+          registeredUser: { id: HOST_ID, role: platformRole },
+        },
+      },
+      ctx.reply
+    );
+    return ctx.reply._body?.data;
+  }
+
+  it.each(['ADMIN', 'BIGBOSS'])(
+    'un %s de la plateforme, simple membre de la conversation, pose les droits d’entrée',
+    async (platformRole) => {
+      const ctx = setup('member');
+
+      await patchRightsAs(ctx, platformRole, { canSendFiles: true });
+
+      expect(ctx.reply._status).toBe(200);
+    },
+  );
+
+  it('un ADMIN de la plateforme pose l’octroi d’historique, réservé au rang admin', async () => {
+    const ctx = setup('member');
+
+    await patchRightsAs(ctx, 'ADMIN', { historyVisibleFrom: '2026-01-01T00:00:00.000Z' });
+
+    expect(ctx.reply._status).toBe(200);
+  });
+
+  it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+    const ctx = setup('member');
+
+    await patchRightsAs(ctx, 'MODERATOR', { canSendFiles: true });
+
+    expect(ctx.reply._status).toBe(403);
+    expect(ctx.prisma.participant.update).not.toHaveBeenCalled();
+  });
+});

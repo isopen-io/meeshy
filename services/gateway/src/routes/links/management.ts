@@ -10,7 +10,8 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
-import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
+import { MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -114,9 +115,12 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
       const isCreator = shareLink.createdBy === userId;
       const member = shareLink.conversation.participants[0];
-      // Même repli de casse que son jumeau `PATCH /links/:linkId` douze lignes
-      // plus bas, qui l'applique déjà depuis #3875 (#4008).
-      const isConversationAdmin = member != null && hasMinimumMemberRole(member.role ?? 'member', 'admin');
+      // Même repli de casse (#4008) et même autorité de plateforme (#3941)
+      // que son jumeau `PATCH /links/:linkId` plus bas.
+      const isConversationAdmin = member != null && actorHasMinimumRole(
+        { conversationRole: member.role, platformRole: request.authContext.registeredUser?.role },
+        MemberRole.ADMIN,
+      );
 
       if (!isCreator && !isConversationAdmin) {
         return sendForbidden(reply, 'Seuls les créateurs du lien ou les administrateurs de la conversation peuvent le modifier');
@@ -241,7 +245,10 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
       // replie la casse ET tolère les lignes historiques pas encore migrées.
       const isConversationAdmin = shareLink.conversation.participants.some(member =>
-        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
+        actorHasMinimumRole(
+          { conversationRole: member.role, platformRole: request.authContext.registeredUser?.role },
+          MemberRole.MODERATOR,
+        )
       );
 
       if (!isCreator && !isConversationAdmin) {

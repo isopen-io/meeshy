@@ -37,6 +37,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { isGlobalAdmin, hasMinimumMemberRole, isMemberCreator, memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
 import { z } from 'zod';
@@ -644,8 +645,13 @@ export function registerParticipantsRoutes(
           })
         : null;
 
-      const viewerRole = (viewerRow?.role ?? 'member').toLowerCase();
-      const viewerHostsTheRoom = viewerRole === 'admin' || viewerRole === 'moderator' || viewerRole === 'creator';
+      // « toute la visibilité de la conversation » (#3941) : un administrateur
+      // de la plateforme voit la fiche comme un hôte la voit.
+      const viewerActor = {
+        conversationRole: viewerRow?.role,
+        platformRole: viewerContext?.registeredUser?.role,
+      };
+      const viewerHostsTheRoom = actorHasMinimumRole(viewerActor, MemberRole.MODERATOR);
 
       const profile = participant.anonymousSession?.profile;
       const isAnonymous = participant.type === 'anonymous';
@@ -746,7 +752,7 @@ export function registerParticipantsRoutes(
         // `viewerHostsTheRoom` et LIT le champ ci-dessus, mais ne peut pas
         // l'écrire. Sans ce signal, le client ne peut distinguer « pas hôte » de
         // « hôte, aucun octroi » : les deux rendent `historyVisibleFrom: null`.
-        canGrantHistory: ['admin', 'creator'].includes(viewerRole),
+        canGrantHistory: actorHasMinimumRole(viewerActor, MemberRole.ADMIN),
         isOnline: gatedPresence.isOnline,
         lastActiveAt: gatedPresence.lastActiveAt ?? null,
         shareLinkName: shareLink?.name ?? null,
@@ -892,8 +898,11 @@ export function registerParticipantsRoutes(
           })
         : null;
 
-      const viewerRole = (viewerRow?.role ?? 'member').toLowerCase();
-      if (!['admin', 'moderator', 'creator'].includes(viewerRole)) {
+      const viewerActor = {
+        conversationRole: viewerRow?.role,
+        platformRole: authRequest.authContext?.registeredUser?.role,
+      };
+      if (!actorHasMinimumRole(viewerActor, MemberRole.MODERATOR)) {
         return sendForbidden(reply, 'Only conversation admins and moderators may change a visitor\'s rights');
       }
 
@@ -905,7 +914,7 @@ export function registerParticipantsRoutes(
       // ligne. La garde porte sur le CHAMP, pas sur la route : les droits
       // booléens que ce même endpoint lui confie ne franchissent aucun plancher
       // et restent à sa portée.
-      if (historyVisibleFrom !== undefined && !['admin', 'creator'].includes(viewerRole)) {
+      if (historyVisibleFrom !== undefined && !actorHasMinimumRole(viewerActor, MemberRole.ADMIN)) {
         return sendForbidden(
           reply,
           'Only conversation admins may grant or revoke history access by date',
@@ -1122,7 +1131,13 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      if (!hasMinimumMemberRole(currentUserParticipant.role ?? 'member', 'moderator')) {
+      if (!actorHasMinimumRole(
+        {
+          conversationRole: currentUserParticipant.role,
+          platformRole: authRequest.authContext.registeredUser?.role,
+        },
+        MemberRole.MODERATOR,
+      )) {
         return sendForbidden(reply, 'Only admins and moderators can add participants');
       }
 
@@ -1431,10 +1446,13 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const isPlatformAdmin = isGlobalAdmin(currentUserParticipant.user?.role ?? '');
-      const isConversationHost = hasMinimumMemberRole(currentUserParticipant.role ?? 'member', 'moderator');
-
-      if (!isPlatformAdmin && !isConversationHost) {
+      if (!actorHasMinimumRole(
+        {
+          conversationRole: currentUserParticipant.role,
+          platformRole: currentUserParticipant.user?.role,
+        },
+        MemberRole.MODERATOR,
+      )) {
         return sendForbidden(reply, 'Vous n\'avez pas les droits pour supprimer des participants');
       }
 
@@ -1682,10 +1700,13 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const isPlatformAdmin = isGlobalAdmin(currentUserParticipant.user?.role ?? '');
-      const isConversationAdmin = hasMinimumMemberRole(currentUserParticipant.role ?? 'member', 'admin');
-
-      if (!isPlatformAdmin && !isConversationAdmin) {
+      if (!actorHasMinimumRole(
+        {
+          conversationRole: currentUserParticipant.role,
+          platformRole: currentUserParticipant.user?.role,
+        },
+        MemberRole.ADMIN,
+      )) {
         return sendForbidden(reply, 'Vous n\'avez pas les droits pour modifier les rôles des participants');
       }
 

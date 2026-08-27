@@ -16,7 +16,8 @@ import {
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { shareLinkSchema } from './types';
-import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
+import { MemberRole } from '@meeshy/shared/types/role-types';
+import { actorHasMinimumRole } from '../../utils/conversation-authority';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -287,11 +288,15 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
-      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
-      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
-      // replie la casse ET tolère les lignes historiques pas encore migrées.
+      // Le rang de conversation replie sa casse (#3875) et l'administrateur de
+      // la plateforme agit avec les droits du créateur (#3941) : un lien de
+      // partage est une affaire d'administration de conversation comme une
+      // autre. `some` sur une liste déjà filtrée sur l'appelant.
       const isConversationAdmin = link.conversation.participants.some(member =>
-        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
+        actorHasMinimumRole(
+          { conversationRole: member.role, platformRole: request.authContext.registeredUser?.role },
+          MemberRole.MODERATOR,
+        )
       );
 
       if (!isCreator && !isConversationAdmin) {
@@ -424,11 +429,15 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
-      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
-      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
-      // replie la casse ET tolère les lignes historiques pas encore migrées.
+      // Le rang de conversation replie sa casse (#3875) et l'administrateur de
+      // la plateforme agit avec les droits du créateur (#3941) : un lien de
+      // partage est une affaire d'administration de conversation comme une
+      // autre. `some` sur une liste déjà filtrée sur l'appelant.
       const isConversationAdmin = link.conversation.participants.some(member =>
-        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
+        actorHasMinimumRole(
+          { conversationRole: member.role, platformRole: request.authContext.registeredUser?.role },
+          MemberRole.MODERATOR,
+        )
       );
 
       if (!isCreator && !isConversationAdmin) {
@@ -552,11 +561,15 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = link.createdBy === userId;
-      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
-      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
-      // replie la casse ET tolère les lignes historiques pas encore migrées.
+      // Le rang de conversation replie sa casse (#3875) et l'administrateur de
+      // la plateforme agit avec les droits du créateur (#3941) : un lien de
+      // partage est une affaire d'administration de conversation comme une
+      // autre. `some` sur une liste déjà filtrée sur l'appelant.
       const isConversationAdmin = link.conversation.participants.some(member =>
-        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
+        actorHasMinimumRole(
+          { conversationRole: member.role, platformRole: request.authContext.registeredUser?.role },
+          MemberRole.MODERATOR,
+        )
       );
 
       if (!isCreator && !isConversationAdmin) {

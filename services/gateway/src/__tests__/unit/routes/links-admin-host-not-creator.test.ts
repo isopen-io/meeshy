@@ -127,7 +127,7 @@ function makeUpdatedLink() {
   };
 }
 
-async function buildApp(prisma: any) {
+async function buildApp(prisma: any, platformRole: string = 'USER') {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
   app.addHook('onRequest', async (req) => {
@@ -140,7 +140,7 @@ async function buildApp(prisma: any) {
         lastName: 'User',
         displayName: 'Test User',
         avatar: null,
-        role: 'USER',
+        role: platformRole,
       },
     };
   });
@@ -256,6 +256,47 @@ describe('Routes d’administration d’un lien — l’hôte non-créateur est 
 
       const where = prisma.conversationShareLink.findFirst.mock.calls[0][0].where;
       expect(where).toEqual({ linkId: LINK_PUBLIC_ID });
+      await app.close();
+    });
+  });
+});
+
+/**
+ * **Un administrateur de la PLATEFORME agit avec les droits du créateur**
+ * (issue #3941, décision porteur du 2026-08-27 en tranchant #3892).
+ *
+ * Administrer un lien de partage est une affaire d'administration de
+ * conversation comme une autre. Ces routes ne consultaient que le rang de
+ * conversation — et, avant #4007, ne consultaient même pas celui-là.
+ */
+describe('Routes d’administration d’un lien — l’autorité de plateforme (#3941)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  describe.each(ROUTES)('$name', ({ inject, arm }) => {
+    it('répond à un ADMIN de la plateforme, simple membre de la conversation', async () => {
+      const prisma = makePrisma();
+      prisma.conversationShareLink.findFirst = findFirstHonouringWhere(
+        linkCreatedByOtherWithCallerAs('member')
+      );
+      arm(prisma);
+      const app = await buildApp(prisma, 'ADMIN');
+
+      const res = await app.inject(inject);
+
+      expect(res.statusCode).toBe(200);
+      await app.close();
+    });
+
+    it('refuse un MODERATOR de la plateforme — participant ordinaire dans une conversation', async () => {
+      const prisma = makePrisma();
+      prisma.conversationShareLink.findFirst = findFirstHonouringWhere(
+        linkCreatedByOtherWithCallerAs('member')
+      );
+      const app = await buildApp(prisma, 'MODERATOR');
+
+      const res = await app.inject(inject);
+
+      expect(res.statusCode).toBe(403);
       await app.close();
     });
   });

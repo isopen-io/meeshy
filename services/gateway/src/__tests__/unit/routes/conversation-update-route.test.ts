@@ -105,11 +105,19 @@ function createMockPrisma(callerRole: string | null = 'creator') {
     ],
   }));
 
-  const findFirst = jest.fn(async () =>
-    callerRole === null
-      ? null
-      : { id: 'p-admin', userId: ADMIN_ID, role: callerRole, isActive: true, conversation: { type: 'group' } },
-  );
+  // **Un `findFirst` qui HONORE le filtre de rang.**
+  //
+  // Les deux gardes de `core.ts` filtraient le rang DANS la requête. Un mock
+  // qui rend sa ligne quel que soit le `where` ne les exerce donc pas du tout :
+  // c'est ce qui obligeait « refuse un simple membre » à simuler l'absence
+  // (`callerRole = null`) plutôt que le rang, et ce qui rendait le point de
+  // contrôle invisible aux tests (#3941, même vert par omission que #4007).
+  const findFirst = jest.fn(async (args: any) => {
+    if (callerRole === null) return null;
+    const allowed = args?.where?.role?.in as string[] | undefined;
+    if (allowed && !allowed.includes(callerRole)) return null;
+    return { id: 'p-admin', userId: ADMIN_ID, role: callerRole, isActive: true, conversation: { type: 'group' } };
+  });
 
   const findUnique = jest.fn(async () => ({
     id: CONV_ID,
@@ -470,5 +478,127 @@ describe('La conversation globale reste intouchable', () => {
     expect(res.statusCode).toBe(403);
     expect(conversationUpdate).not.toHaveBeenCalled();
     await app.close();
+  });
+});
+
+/**
+ * **Un administrateur de la PLATEFORME agit avec les droits du créateur**
+ * (issue #3941, décision porteur du 2026-08-27 en tranchant #3892).
+ *
+ * Ces deux gardes ne se contentaient pas d'ignorer le rôle de plateforme :
+ * elles filtraient le rang DANS LA REQUÊTE (`role: { in: [...] }`). Un
+ * administrateur simple membre n'était donc pas « refusé » — sa ligne de
+ * participation n'était jamais chargée, et le code n'avait plus rien à
+ * décider. C'est la forme la plus silencieuse de l'incohérence relevée par
+ * #3941 : le point de contrôle n'existe pas là où on le cherche.
+ *
+ * La requête charge désormais l'appartenance, et la décision se prend en
+ * JavaScript, où le rôle de plateforme est lisible — même déplacement que
+ * pour #4007 sur les routes de lien.
+ */
+describe('Autorité de plateforme sur une conversation (#3941)', () => {
+  beforeEach(() => {
+    mockResolveConversationId.mockReset();
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockResolveForTargets.mockReset();
+    mockResolveForTargets.mockImplementation(lawFaithfulResolver());
+  });
+
+  describe('PUT /conversations/:id — éditer', () => {
+    it('refuse un simple membre sans rôle de plateforme', async () => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, 'USER');
+
+      const res = await update(app, 'PUT', { title: 'Renommé par un membre' });
+
+      expect(res.statusCode).toBe(403);
+      expect(conversationUpdate).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it.each(['ADMIN', 'BIGBOSS'])('laisse éditer un %s de la plateforme simple membre', async (platformRole) => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, platformRole);
+
+      const res = await update(app, 'PUT', { title: 'Renommé par la plateforme' });
+
+      expect(res.statusCode).toBe(200);
+      expect(conversationUpdate).toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('un MODERATOR de la plateforme reste un participant ordinaire', async () => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, 'MODERATOR');
+
+      const res = await update(app, 'PUT', { title: 'Renommé par un modérateur global' });
+
+      expect(res.statusCode).toBe(403);
+      expect(conversationUpdate).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('un ADMIN de la plateforme touche aux permissions, qu’un modérateur de conversation ne peut pas changer', async () => {
+      const { prisma, conversationUpdate } = createMockPrisma('moderator');
+      const app = await buildApp(prisma, 'ADMIN');
+
+      const res = await update(app, 'PUT', { slowModeSeconds: 30 });
+
+      expect(res.statusCode).toBe(200);
+      expect(conversationUpdate).toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('un modérateur de conversation reste tenu à l’écart des permissions', async () => {
+      const { prisma, conversationUpdate } = createMockPrisma('moderator');
+      const app = await buildApp(prisma, 'USER');
+
+      const res = await update(app, 'PUT', { slowModeSeconds: 30 });
+
+      expect(res.statusCode).toBe(403);
+      expect(conversationUpdate).not.toHaveBeenCalled();
+      await app.close();
+    });
+  });
+
+  describe('DELETE /conversations/:id — supprimer', () => {
+    const remove = (app: FastifyInstance) =>
+      app.inject({
+        method: 'DELETE',
+        url: `/conversations/${CONV_ID}`,
+        headers: { authorization: 'Bearer x' },
+      });
+
+    it('refuse un simple membre sans rôle de plateforme', async () => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, 'USER');
+
+      const res = await remove(app);
+
+      expect(res.statusCode).toBe(403);
+      expect(conversationUpdate).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it('refuse un modérateur de conversation — supprimer reste au rang admin', async () => {
+      const { prisma } = createMockPrisma('moderator');
+      const app = await buildApp(prisma, 'USER');
+
+      const res = await remove(app);
+
+      expect(res.statusCode).toBe(403);
+      await app.close();
+    });
+
+    it('laisse supprimer un ADMIN de la plateforme simple membre', async () => {
+      const { prisma, conversationUpdate } = createMockPrisma('member');
+      const app = await buildApp(prisma, 'ADMIN');
+
+      const res = await remove(app);
+
+      expect(res.statusCode).toBe(200);
+      expect(conversationUpdate).toHaveBeenCalled();
+      await app.close();
+    });
   });
 });
