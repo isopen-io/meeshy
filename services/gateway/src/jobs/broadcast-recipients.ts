@@ -1,4 +1,5 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 
 export type BroadcastTargeting = {
   readonly languages?: readonly string[];
@@ -43,13 +44,35 @@ export function buildBroadcastRecipientFilter(
   };
 }
 
-/** Sujet/corps dans la langue du destinataire, repli langue source puis original. */
+/**
+ * Sujet/corps servis dans la langue du destinataire — la DESCENTE ORDONNÉE du
+ * Prisme, jamais un rang unique.
+ *
+ * On parcourt les langues du lecteur DANS L'ORDRE (`preferredLanguages`, la
+ * sortie de `recipientLanguages()`) ; la première qui porte une traduction
+ * gagne. C'est la SSOT `resolvePrismTranslation` — celle que descend déjà la
+ * bannière de notification —, pas une boucle réécrite ici (le `CLAUDE.md` du
+ * gateway l'interdit : « NEVER reimplement the priority order locally »).
+ *
+ * `null` de la SSOT ⇒ servir l'ORIGINAL : soit la langue de tête EST la langue
+ * source, soit aucun rang du lecteur n'a de traduction. Dans les deux cas
+ * l'original (écrit en `sourceLanguage`) est le bon texte — JAMAIS une
+ * traduction quelconque (règle #1 du Prisme).
+ *
+ * La langue de CADRAGE (chrome d'e-mail, `lang` de la notification) est un rôle
+ * DISTINCT, résolu par `recipientLanguage(user, fallback)` : elle reste au rang
+ * le plus haut RENSEIGNÉ même quand le contenu descend à un rang inférieur.
+ */
 export function localizedBroadcastText(params: {
   readonly translated: Readonly<Record<string, string>> | null | undefined;
   readonly sourceLanguage: string;
   readonly original: string;
-  readonly lang: string;
+  readonly preferredLanguages: readonly string[];
 }): string {
-  const translated = params.translated ?? {};
-  return translated[params.lang] || translated[params.sourceLanguage] || params.original;
+  const resolved = resolvePrismTranslation({
+    translations: params.translated ?? null,
+    originalLanguage: params.sourceLanguage,
+    preferredLanguages: params.preferredLanguages,
+  });
+  return resolved ? resolved.text : params.original;
 }

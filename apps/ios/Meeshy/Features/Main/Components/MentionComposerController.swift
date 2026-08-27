@@ -21,17 +21,22 @@ public final class MentionComposerController: ObservableObject {
         case conversation(id: String)
         case post(id: String)
 
-        var contextId: String {
-            switch self {
-            case .conversation(let id): return id
-            case .post(let id): return id
-            }
-        }
+        /// **Un brouillon composer PAS ENCORE publié (#3904).** Aucun id
+        /// serveur n'existe tant que le contenu n'est pas envoyé — donc aucun
+        /// appel réseau n'est possible. Les candidats servis viennent
+        /// UNIQUEMENT de `localCandidates` (les amis acceptés, cf. site de
+        /// montage). `remoteContext` rend `nil` pour ce cas, et
+        /// `handleQuery` s'arrête avant de programmer le débounce distant.
+        case composerDraft
 
-        var contextType: MentionContextType {
+        /// `nil` ⇒ aucune requête distante possible (cas `.composerDraft`) :
+        /// remplace les anciennes propriétés `contextId`/`contextType`, dont
+        /// l'exhaustivité aurait exigé une valeur FACTICE pour ce cas.
+        var remoteContext: (contextId: String, contextType: MentionContextType)? {
             switch self {
-            case .conversation: return .conversation
-            case .post: return .post
+            case .conversation(let id): return (id, .conversation)
+            case .post(let id): return (id, .post)
+            case .composerDraft: return nil
             }
         }
     }
@@ -83,7 +88,8 @@ public final class MentionComposerController: ObservableObject {
         suggestions = filtered
 
         debounceTask?.cancel()
-        guard query.count >= Self.minQueryLengthForAPI else { return }
+        guard query.count >= Self.minQueryLengthForAPI,
+              let remoteContext = context.remoteContext else { return }
 
         debounceTask = Task { [weak self] in
             guard let self else { return }
@@ -91,8 +97,8 @@ public final class MentionComposerController: ObservableObject {
                 try await Task.sleep(nanoseconds: Self.debounceMs)
                 guard !Task.isCancelled else { return }
                 let apiResults = try await service.suggestions(
-                    contextId: context.contextId,
-                    contextType: context.contextType,
+                    contextId: remoteContext.contextId,
+                    contextType: remoteContext.contextType,
                     query: query
                 )
                 guard !Task.isCancelled else { return }

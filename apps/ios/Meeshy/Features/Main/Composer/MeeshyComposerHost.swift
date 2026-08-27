@@ -435,10 +435,12 @@ struct MeeshyComposerHost: View {
     @State private var documentLocalMedia: [ComposerDocumentMedia] = []
 
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
-    /// de fond, la surface reste plate ; une couleur fait NAÎTRE la scène 9:16
-    /// (`ComposerSceneActivation.activatesScene`) — « un post sans visuel
-    /// devient une toile ». La couleur est aussi semée dans l'atelier
-    /// (`viewModel.backgroundColor`) pour que la scène montée l'affiche.
+    /// de fond, la surface reste plate. La couleur est semée dans l'atelier
+    /// (`viewModel.applyBackground(hex:)`) pour que la scène l'affiche une fois
+    /// montée — mais depuis #3939 (retour porteur 2026-08-27), choisir un fond
+    /// ne fait plus NAÎTRE la scène plein écran toute seule (voir
+    /// `mountedSurface`) : cette valeur reste posée en attendant l'incrustation
+    /// du canvas DANS l'écran document, restant à livrer.
     @State private var documentBackground: String?
 
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
@@ -598,17 +600,19 @@ struct MeeshyComposerHost: View {
     /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
     /// lectures de la même expression auraient été trois occasions de diverger.
     private var mountedSurface: ComposerSurfaceKind {
-        // F2 — une couleur de fond fait naître la scène 9:16 même sur un POST
-        // (« un post sans visuel devient une toile »). Décision PURE
-        // (`ComposerSceneActivation`), jamais recopiée ici.
-        //
         // B3 (#3926) — STORY et RÉEL montent la scène par le ROUTAGE
-        // (`ComposerSurfaceRouting` envoie `.story`/`.reel` sur `.scene`), plus
-        // par une destination du socle : l'éventail écrit `selectedFormat`, et
-        // le routage tranche. C'est ce qui fait de l'éventail le seul sélecteur.
-        if ComposerSceneActivation.activatesScene(background: documentBackground) {
-            return .scene
-        }
+        // (`ComposerSurfaceRouting` envoie `.story`/`.reel` sur `.scene`), une
+        // destination du socle que l'éventail écrit (`selectedFormat`) — c'est
+        // ce qui fait de l'éventail le seul sélecteur.
+        //
+        // **Choisir une couleur de fond ne bascule PLUS ici (#3939, retour
+        // porteur 2026-08-27).** L'ancienne règle F2 (`ComposerSceneActivation`,
+        // supprimée) faisait naître la scène 9:16 PLEIN ÉCRAN dès qu'un fond
+        // était choisi — remplacement de route surprenant, pas demandé :
+        // l'auteur reste sur l'écran document qu'il a ouvert. `documentBackground`
+        // continue d'être posé (utile à l'atelier une fois qu'il s'incrustera),
+        // mais ne route plus vers `.scene` seul. Voir #3939 pour l'incrustation
+        // du canvas DANS l'écran document, restant à livrer.
         return ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
     }
 
@@ -966,24 +970,33 @@ struct MeeshyComposerHost: View {
                 // ce fond fait basculer la surface sur `.scene`.
                 documentBackground = hex
                 viewModel.applyBackground(hex: hex)
-            }
+            },
+            // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
+            // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —
+            // exactement le point où `toolRow` peint sa première icône (elle
+            // aussi calée au bord de tête). Un overlay et le premier enfant
+            // d'un `HStack` occupent le MÊME z-niveau : rien n'empêchait le
+            // chevauchement, à aucune taille d'écran ni palier de Dynamic
+            // Type. Elle voyage désormais par `toolRowLeadingAccessory`, un
+            // slot rendu DANS le `HStack` de `toolRow` — deux enfants d'un
+            // `HStack` ne se superposent jamais, par construction.
+            toolRowLeadingAccessory: documentLocation.map { AnyView(documentLocationTile($0)) },
+            // **La capsule de langue, corrigée revue Opus 2026-08-27** : elle
+            // voyageait en `.overlay(alignment: .bottomTrailing)` sur TOUTE la
+            // surface, sur la promesse que `toolRow` restait « la seule ligne
+            // peinte au bas de la surface ». #3904 a rendu cette promesse
+            // fausse — la bande de mentions peut désormais s'afficher SOUS
+            // `toolRow` — et l'overlay recouvrait alors la moitié de la bande
+            // (chevauchement mesuré : bande ≈82pt, capsule posée en bas-droite
+            // sur ≈43pt). Même correctif que la tuile de lieu, à l'autre bout
+            // du `HStack` : `toolRowTrailingAccessory`, un enfant du flux, ne
+            // chevauche jamais ce qui se peint plus bas dans le `VStack`.
+            toolRowTrailingAccessory: AnyView(documentLanguageCapsule)
         )
-        // La capsule se superpose plutôt que d'être peinte PAR la surface :
-        // `ComposerDocumentSurface` reste une présentation sans état, et c'est
-        // le meuble qui possède `documentLanguage` — exactement comme il
-        // possède déjà `documentText`. `.bottomTrailing` la pose au bord de la
-        // rangée d'outils, seule ligne peinte au bas de la surface.
-        .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
         // B3 (#3926) — le choix POST/RÉEL/STORY n'est plus un overlay du
         // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
         // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
         // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
-        // **La tuile de lieu (T2.5)**, symétrique de la capsule de langue —
-        // `.bottomLeading` face à `.bottomTrailing` : les deux occupent le bas
-        // de la surface, sur les bords opposés de la rangée d'outils.
-        .overlay(alignment: .bottomLeading) {
-            if let place = documentLocation { documentLocationTile(place) }
-        }
         // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
         // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
         // et des notices — bien plus large qu'une capsule, il ne doit
@@ -1268,7 +1281,7 @@ struct MeeshyComposerHost: View {
             Image(systemName: "mappin.circle.fill")
                 .font(MeeshyFont.relative(12))
                 .foregroundColor(MeeshyColors.indigo400)
-            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+            Text(MediaKindLabel.placeLabel(place.name))
                 .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: true))
                 .lineLimit(1)
@@ -1292,7 +1305,13 @@ struct MeeshyComposerHost: View {
                         .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
                 )
         )
-        .padding(16)
+        // PAS de `.padding(16)` ici (revue Opus, débordement mesuré au
+        // simulateur 2026-08-27) : cette marge datait de l'ancien
+        // `.overlay()`, qui avait besoin de son propre inset — devenu enfant
+        // du `HStack` de `toolRow`, cette tuile hérite déjà du `.padding(16)`
+        // posé UNE fois sur toute la rangée. La garder ici l'ajoutait deux
+        // fois (32pt de trop) et faisait déborder `toolRow` de l'écran dès
+        // qu'un lieu ET la capsule de langue étaient présents ensemble.
     }
 
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
@@ -1346,7 +1365,10 @@ struct MeeshyComposerHost: View {
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.language))
         .accessibilityValue(documentLanguageDisplayName)
-        .padding(16)
+        // Même correctif que `documentLocationTile` : `.padding(16)` datait
+        // de l'ancien `.overlay(alignment: .bottomTrailing)` et doublait la
+        // marge une fois la capsule devenue enfant du `HStack` de `toolRow`
+        // — cause du débordement horizontal mesuré au simulateur.
     }
 
     /// Le sélecteur du dépôt, monté tel quel — même raison que

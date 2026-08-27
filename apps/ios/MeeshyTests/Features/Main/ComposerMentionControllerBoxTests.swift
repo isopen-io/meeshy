@@ -1,0 +1,54 @@
+import Combine
+import XCTest
+@testable import Meeshy
+import MeeshySDK
+
+@MainActor
+final class ComposerMentionControllerBoxTests: XCTestCase {
+
+    /// **La preuve qui aurait attrapé une capture figée à la construction.**
+    /// `controller` est accédé (donc initialisé paresseusement) AVANT que
+    /// `candidates` ne soit réglé — si la closure de `localCandidates` avait
+    /// capturé une copie de `candidates` plutôt que `self` par référence
+    /// faible, cette suggestion resterait vide pour toujours.
+    func test_controller_seesCandidatesSetAfterItWasFirstAccessed() {
+        let box = ComposerMentionControllerBox()
+        _ = box.controller // force l'initialisation paresseuse en premier
+
+        box.candidates = [
+            MentionCandidate(id: "1", username: "alice", displayName: "Alice", avatarURL: nil)
+        ]
+        box.controller.handleQuery(in: "@al")
+
+        XCTAssertEqual(
+            box.controller.suggestions.map(\.username), ["alice"],
+            "`controller` doit lire `candidates` PAR RÉFÉRENCE (`[weak self]`), pas une copie figée à l'init."
+        )
+    }
+
+    /// **Le relais `objectWillChange` (revue Opus 2026-08-27).** `@StateObject
+    /// private var mentionBox` n'abonne la vue hôte qu'au publisher de LA
+    /// BOÎTE — `MentionComposerController` est un `ObservableObject` imbriqué,
+    /// Combine ne le traverse jamais tout seul. Sans ce relais, lire
+    /// `mentionBox.controller.activeQuery` dans un `body` ne déclenche AUCUNE
+    /// ré-évaluation quand `handleQuery` publie une nouvelle requête : la
+    /// bande de mentions n'apparaîtrait qu'à la frappe SUIVANTE.
+    func test_box_forwardsControllerObjectWillChange_toItsOwnPublisher() {
+        let box = ComposerMentionControllerBox()
+        _ = box.controller // force l'initialisation paresseuse en premier
+
+        // `assertForOverFulfill = false` : `handleQuery` mute PLUSIEURS
+        // `@Published` du contrôleur (`activeQuery` puis `suggestions`), donc
+        // PLUSIEURS relais légitimes — seul le PREMIER compte pour prouver
+        // que la boîte n'est pas sourde à son contrôleur, le nombre exact
+        // relève d'un détail d'implémentation de `MentionComposerController`.
+        let expectation = expectation(description: "la boîte publie quand le contrôleur publie")
+        expectation.assertForOverFulfill = false
+        let cancellable = box.objectWillChange.sink { expectation.fulfill() }
+
+        box.controller.handleQuery(in: "@al")
+
+        wait(for: [expectation], timeout: 1)
+        cancellable.cancel()
+    }
+}

@@ -286,8 +286,8 @@ struct CommentsSheetView: View {
     @State private var showCommentFilePicker: Bool = false
     @State private var showCommentLocationPicker: Bool = false
     /// Lieu choisi via le picker, en attente d'envoi (Task 11/12, 2026-07-29).
-    /// `SharedPlace` porte le nom ; `ComposerAttachment.location` ne le
-    /// portait pas et n'est plus le véhicule.
+    /// `SharedPlace` porte le nom ; la fabrique `ComposerAttachment.location`
+    /// ne le portait pas, n'était plus le véhicule, et a été retirée (248i).
     @State private var commentPendingPlace: SharedPlace? = nil
     /// "Éditer" from the recent-media strip — the editor opens before staging;
     /// the edited output is ingested, never the original.
@@ -1622,7 +1622,7 @@ struct CommentsSheetView: View {
                         Image(systemName: "location.fill")
                             .font(.caption)
                             .foregroundColor(MeeshyColors.success)
-                        Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                        Text(MediaKindLabel.placeLabel(place.name))
                             .font(.caption.weight(.medium))
                             .lineLimit(1)
                             .frame(maxWidth: 120)
@@ -1737,7 +1737,7 @@ struct CommentsSheetView: View {
                 let attachment: ComposerAttachment = isVideo
                     ? ComposerAttachment(
                         id: "video-\(UUID().uuidString)", type: .video,
-                        name: String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main),
+                        name: MediaKindLabel.name(.video),
                         url: url, size: data.count, thumbnailColor: "FF6B6B")
                     : ComposerAttachment.image(url: url)
                 await MainActor.run { commentAttachments.append(attachment) }
@@ -1769,7 +1769,7 @@ struct CommentsSheetView: View {
             commentAttachments.append(
                 ComposerAttachment(
                     id: "video-\(UUID().uuidString)", type: .video,
-                    name: String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main),
+                    name: MediaKindLabel.name(.video),
                     url: url, thumbnailColor: "FF6B6B"
                 )
             )

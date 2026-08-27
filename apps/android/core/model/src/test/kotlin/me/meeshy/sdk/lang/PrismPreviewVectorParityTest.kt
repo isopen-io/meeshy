@@ -93,19 +93,19 @@ class PrismPreviewVectorParityTest {
     // --- Garde de harnais (leçon 257 : jamais de vert silencieux à zéro cas) ---
 
     @Test
-    fun `loads thirty vectors, never zero`() {
+    fun `loads thirty-three vectors, never zero`() {
         val vectors = loadVectors()
         assertThat(vectors).isNotEmpty()
         // Re-preuve du compte au moment de l'écriture. Un changement doit être
         // investigué avant d'ajuster ce nombre. Passé de 22 à 30 quand le fichier
         // partagé a gagné 8 cas (`57fddee7`, shared-only : l'attestation de
-        // l'APPLICATION de la réduction) sans que ce miroir Android soit remis à
-        // jour — les 30 passent déjà `every vector matches`, seul ce compte était
-        // resté figé.
-        assertThat(vectors).hasSize(30)
+        // l'APPLICATION de la réduction), puis de 30 à 33 avec les 3 cas
+        // `yue-HK` (repli région-strippé, hors catalogue) — tous passent déjà
+        // `every vector matches`, seul ce compte doit suivre.
+        assertThat(vectors).hasSize(33)
     }
 
-    // --- 30 vecteurs → resolveLastMessagePreview (égalité stricte) ---
+    // --- tous les vecteurs → resolveLastMessagePreview (égalité stricte) ---
 
     @Test
     fun `every vector matches resolveLastMessagePreview exactly`() {

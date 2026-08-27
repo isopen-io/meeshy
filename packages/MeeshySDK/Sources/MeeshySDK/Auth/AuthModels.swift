@@ -466,6 +466,38 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         return primary
     }
 
+    /// La clé canonique sous laquelle deux identifiants de langue sont considérés
+    /// comme LA MÊME — pour la déduplication et le rapprochement de clés du Prisme.
+    ///
+    /// Miroir FIDÈLE de `normalizeLanguageForDedup`
+    /// (`packages/shared/utils/language-normalize.ts`, SSOT TS) et de
+    /// `LanguageCodeNormalizer.normalizeForDedup`
+    /// (`apps/android/core/model/.../lang/LanguageCodeNormalizer.kt`) :
+    /// `normalizeLanguageCode` d'abord, sinon le SOUS-TAG PRIMAIRE lowercased
+    /// (région strippée), sinon la chaîne entière lowercased. TOTALE — ne rend
+    /// jamais `nil`, parce qu'une comparaison doit produire une clé pour CHAQUE
+    /// jeton qu'on lui donne, même ceux que `normalizeLanguageCode` rejette.
+    ///
+    /// Le REPLI strippe la région pour TOUT code, pas seulement ceux que
+    /// `normalizeLanguageCode` sait réduire. Sans lui, un code HORS CATALOGUE
+    /// tagué région (`"yue-HK"`, Cantonais absent du catalogue Meeshy)
+    /// canoniserait vers `"yue-hk"` avec un `.lowercased()` brut et ne
+    /// matcherait pas un `"yue"` — comptant pour deux langues distinctes et
+    /// rétrogradant la langue PRIMAIRE du lecteur : la violation exacte du
+    /// Prisme (#3) que le rapprochement de clés combat. Les miroirs TS/Kotlin
+    /// strippent déjà la région au repli ; ce site alignait un `.lowercased()`
+    /// verbatim, seul divergent des trois.
+    ///
+    /// Toute évolution DOIT toucher les TROIS sites (TS + Kotlin + Swift).
+    public static func normalizeLanguageForDedup(_ code: String) -> String {
+        if let normalized = normalizeLanguageCode(code) { return normalized }
+        let primary = code
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(omittingEmptySubsequences: false, whereSeparator: { $0 == "-" || $0 == "_" })
+            .first.map { $0.lowercased() } ?? ""
+        return primary.isEmpty ? code.lowercased() : primary
+    }
+
     /// Table de réduction des codes ISO 639-1 DÉPRÉCIÉS vers leur code canonique
     /// courant (miroir de `LEGACY_ISO_639_1` dans
     /// `packages/shared/utils/language-normalize.ts`). `iw`/`in`/`ji` sont les

@@ -2417,11 +2417,12 @@ class ConversationViewModel: ObservableObject {
         mentionController.clearDraft()
     }
 
-    /// French preview shown in the conversation list for an OPTIMISTIC message:
-    /// the caption when present, else a short media label (mirrors the server's
-    /// last-message preview wording). Used to surface a just-sent message in the
-    /// list before any server ACK. `nonisolated static` so the media path can
-    /// compute it for a `Task.detached`.
+    /// Preview shown in the conversation list for an OPTIMISTIC message: the
+    /// caption when present, else the media label of ``MediaKindLabel`` in its
+    /// registre APERÇU (mirrors the server's last-message preview wording).
+    /// Used to surface a just-sent message in the list before any server ACK.
+    /// `nonisolated static` so the media path can compute it for a
+    /// `Task.detached`.
     nonisolated static func optimisticListPreview(text: String,
                                                   messageType: Message.MessageType,
                                                   location: SharedPlace? = nil,
@@ -2436,16 +2437,10 @@ class ConversationViewModel: ObservableObject {
         if let location {
             if let name = location.name, !name.isEmpty { return "📍 \(name)" }
             if let address = location.address, !address.isEmpty { return "📍 \(address)" }
-            return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: bundle, locale: locale)
+            return MediaKindLabel.summary(.location, bundle: bundle, locale: locale)
         }
-        switch messageType {
-        case .image: return String(localized: "media.summary.photo", defaultValue: "📷 Photo", bundle: bundle, locale: locale)
-        case .video: return String(localized: "media.summary.video", defaultValue: "🎥 Vidéo", bundle: bundle, locale: locale)
-        case .audio: return String(localized: "media.summary.voice", defaultValue: "🎙️ Message vocal", bundle: bundle, locale: locale)
-        case .file: return String(localized: "media.summary.file", defaultValue: "📎 Fichier", bundle: bundle, locale: locale)
-        case .location: return String(localized: "media.summary.location", defaultValue: "📍 Position", bundle: bundle, locale: locale)
-        default: return ""
-        }
+        guard let kind = MediaKindLabel.kind(for: messageType) else { return "" }
+        return MediaKindLabel.summary(kind, bundle: bundle, locale: locale)
     }
 
     @discardableResult
@@ -3149,19 +3144,13 @@ class ConversationViewModel: ObservableObject {
         let previewText: String = {
             if !quoted.content.isEmpty { return quoted.content }
             if let first = quoted.attachments.first {
-                switch first.type {
-                case .image: return "\u{1F4F7} Photo"
-                case .video: return "\u{1F3AC} Video"
-                case .audio: return "\u{1F3B5} Message vocal"
-                case .file: return "\u{1F4CE} Fichier"
-                default: return "\u{1F4CE} Piece jointe"
-                }
+                return MediaKindLabel.summary(MediaKindLabel.kind(for: first.type))
             }
             return ""
         }()
         return ReplyReference(
             messageId: rid,
-            authorName: quoted.senderName ?? "Utilisateur",
+            authorName: quoted.senderName ?? String(localized: "common.unknown_user", defaultValue: "Utilisateur", bundle: .main),
             previewText: previewText,
             isMe: quoted.isMe,
             authorColor: quoted.senderColor,
@@ -3295,15 +3284,9 @@ class ConversationViewModel: ObservableObject {
         let msg = messages[idx]
         let canonicalId = serverId(for: messageId)
 
-        let attachmentKind = msg.attachments.first.map { att -> String in
-            switch att.type {
-            case .image: return "image"
-            case .video: return "video"
-            case .audio: return "audio"
-            case .file: return "file"
-            case .location: return "location"
-            }
-        }
+        // `AttachmentType` est un `String` enum : son `rawValue` EST le
+        // vocabulaire sérialisé de l'instantané (« image », « video »…).
+        let attachmentKind = msg.attachments.first?.type.rawValue
 
         // Prefer the active translation for the user's preferred language so
         // the starred preview matches what the user actually read, not the
@@ -3314,14 +3297,8 @@ class ConversationViewModel: ObservableObject {
                 return translation.translatedContent
             }
             if msg.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                switch attachmentKind {
-                case "image": return "\u{1F4F7} Photo"
-                case "video": return "\u{1F3AC} Video"
-                case "audio": return "\u{1F3B5} Message vocal"
-                case "file": return "\u{1F4CE} Fichier"
-                case "location": return "\u{1F4CD} Localisation"
-                default: return ""
-                }
+                guard let kind = attachmentKind.flatMap(MediaKindLabel.kind(forAttachmentRawValue:)) else { return "" }
+                return MediaKindLabel.summary(kind)
             }
             return msg.content
         }()

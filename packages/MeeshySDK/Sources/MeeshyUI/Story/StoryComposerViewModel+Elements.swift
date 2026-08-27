@@ -33,12 +33,12 @@ extension StoryComposerViewModel {
         guard let raw else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        // Même réduction que `StoryPrismeMatch.base` côté SDK — ce dernier est
-        // interne à MeeshySDK, donc invisible ici : normalisation officielle,
-        // puis repli qui rabote la région et la casse (`pt-BR` → `pt`).
-        let base = MeeshyUser.normalizeLanguageCode(trimmed)
-            ?? trimmed.split(whereSeparator: { $0 == "-" || $0 == "_" })
-                .first.map { $0.lowercased() } ?? trimmed.lowercased()
+        // Même réduction que `StoryPrismeMatch.base` côté SDK, désormais le SSOT
+        // PUBLIC `MeeshyUser.normalizeLanguageForDedup` : normalisation officielle,
+        // puis repli qui rabote la région et la casse (`pt-BR` → `pt`). Ce site
+        // ré-inlinait la boucle parce que `StoryPrismeMatch` est interne à
+        // MeeshySDK ; le helper de dedup est public, donc plus de troisième jumelle.
+        let base = MeeshyUser.normalizeLanguageForDedup(trimmed)
         guard !base.isEmpty, base != "emoji", base != "dictation" else { return nil }
         return base
     }
