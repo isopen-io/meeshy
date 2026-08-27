@@ -26,37 +26,31 @@ final class ComposerSceneActivationTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    // 1 — DÉCISION PURE : une couleur de fond OU la destination STORY monte la
-    // scène ; un post plat sans fond reste plat.
-    func test_uneCouleurDeFond_ouStory_monteLaScene() {
+    // 1 — DÉCISION PURE : une couleur de fond fait naître la scène. STORY/RÉEL,
+    // eux, montent la scène par le FORMAT (routage), plus par ce prédicat (B3).
+    func test_uneCouleurDeFond_monteLaScene() {
         XCTAssertTrue(
-            ComposerSceneActivation.activatesScene(background: "1E90FF", destination: .post),
+            ComposerSceneActivation.activatesScene(background: "1E90FF"),
             "Une couleur de fond fait d'un POST une toile — la scène 9:16 naît."
         )
-        XCTAssertTrue(
-            ComposerSceneActivation.activatesScene(background: nil, destination: .story),
-            "La destination STORY monte la scène (F1, mountsScene), même sans fond choisi."
-        )
         XCTAssertFalse(
-            ComposerSceneActivation.activatesScene(background: nil, destination: .post),
-            "Sans fond ni STORY, la surface reste plate — pas de scène imposée."
-        )
-        XCTAssertFalse(
-            ComposerSceneActivation.activatesScene(background: nil, destination: .reel),
-            "Un RÉEL sans fond reste sur la surface document — la scène ne naît que par le fond ou STORY."
+            ComposerSceneActivation.activatesScene(background: nil),
+            "Sans fond, la surface reste celle du routage : STORY/RÉEL montent la scène "
+                + "par le FORMAT que l'éventail écrit, jamais par ce prédicat (B3, #3926)."
         )
     }
 
-    // 2 — le MEUBLE consulte la décision pure et monte `.scene` — jamais un
-    // seuil recopié, jamais un booléen ad hoc.
+    // 2 — le MEUBLE consulte la décision pure (le fond) et laisse le ROUTAGE
+    // monter la scène pour STORY/RÉEL — jamais un seuil recopié, jamais un
+    // booléen de destination ad hoc.
     func test_leMeuble_monteLaScene_parLaDecisionPure() throws {
         let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
         XCTAssertTrue(raw.contains("private var mountedSurface"),
                       "mountedSurface introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
-            src.contains("ComposerSceneActivation.activatesScene(background:documentBackground,destination:documentDestination)"),
-            "`mountedSurface` consulte la décision PURE — le fond et la destination, pas une condition recopiée."
+            src.contains("ComposerSceneActivation.activatesScene(background:documentBackground)"),
+            "`mountedSurface` consulte la décision PURE du fond — plus de destination, le routage tranche le reste."
         )
         XCTAssertTrue(
             src.contains("vardocumentBackground:String?"),
@@ -140,16 +134,21 @@ final class ComposerSceneActivationTests: XCTestCase {
     }
 
     // 8 — B1 : la liste portée à la scène ne contient que l'IMAGE et la VIDÉO
-    // (un son ou un document joint n'a pas de place de fond sur un canvas).
+    // (un son ou un document joint n'a pas de place de fond sur un canvas), et
+    // le classement passe par le SEUL classeur MIME du dépôt.
     func test_leMediaPorte_neContientQueImageEtVideo() throws {
         let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
         XCTAssertTrue(raw.contains("private var documentContentMedia"),
                       "documentContentMedia introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
-            src.contains("media.mimeType.hasPrefix(\"image/\")")
-                && src.contains("media.mimeType.hasPrefix(\"video/\")"),
-            "Seuls l'image et la vidéo sont portées dans la scène — filtrées par leur mime."
+            src.contains("ComposerIngestRouter.route(mime:media.mimeType)"),
+            "Le classement image/vidéo passe par `ComposerIngestRouter.route(mime:)` — le SEUL classeur MIME "
+                + "du dépôt, jamais un `hasPrefix` recopié."
+        )
+        XCTAssertTrue(
+            src.contains("case.audio,.file:") && src.contains("returnnil"),
+            "Le son et le document générique ne sont PAS portés (pas de place de fond sur un canvas)."
         )
     }
 

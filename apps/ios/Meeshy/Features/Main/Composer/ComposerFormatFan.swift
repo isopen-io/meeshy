@@ -39,96 +39,63 @@ nonisolated enum ComposerFormatFanPolicy {
     }
 }
 
-/// **OÙ l'éventail a le droit de se peindre** — la règle de PLACEMENT (lot 4.7).
+/// **OÙ l'éventail a le droit de se peindre** — la règle de PLACEMENT.
 ///
 /// Elle est la jumelle de `ComposerFormatFanPolicy` et répond à une question
-/// DIFFÉRENTE, qu'il ne faut jamais confondre avec elle : celle-ci dit s'il y a
-/// quelque chose à OFFRIR (un chip unique n'est pas un choix), celle-là dit si
-/// la surface montée peut SUPPORTER une bascule. Les deux se lisent ensemble —
-/// une création de mood autorise le placement et n'offre pourtant rien — et
-/// elles se lisent à UN seul endroit, `mounts` : voir son doc-comment.
+/// DIFFÉRENTE : celle-ci dit s'il y a quelque chose à OFFRIR (un chip unique
+/// n'est pas un choix), celle-là disait si la surface montée pouvait SUPPORTER
+/// une bascule sans perdre ce qui est composé.
 ///
-/// *L'éventail se peint là où TOUS les formats offerts atterrissent du MÊME
-/// côté de la frontière « scène / pas de scène » que la surface montée.*
+/// **La frontière qu'elle gardait est LEVÉE depuis B1/B2 (#3924/#3925), et
+/// c'est le fond du chantier B.** Jadis l'éventail était tenu hors du document
+/// de `.feedComposer` : son offre contient `.story` (et, dès qu'un média
+/// qualifie, `.reel`), que le routage envoie à la SCÈNE, et un auteur qui y
+/// tapait son post puis choisissait « Story » voyait sa saisie disparaître —
+/// rien ne faisait entrer du texte dans un canvas. La règle NOMMAIT elle-même
+/// sa condition de levée : « un écrivain public de TEXTE atteignable par le
+/// meuble ». Elle est REMPLIE :
 ///
-/// Cette frontière-là, et pas une autre, parce que c'est elle qui sépare deux
-/// ÉTATS. `documentText`, `moodEmoji` et l'audience sont l'état du MEUBLE : ils
-/// suivent toute bascule entre document et mood. La composition d'une scène,
-/// elle, vit dans l'atelier — et rien ne fait entrer du texte dans un CANVAS,
-/// mesuré sur les 14 fichiers `StoryComposerViewModel*.swift` : aucun écrivain
-/// public de l'atelier n'accepte du texte.
+/// - B1 (`StoryComposerViewModel.applyContentText`) fait suivre le TEXTE, et
+///   `applyContentMedia` le MÉDIA, vers la scène qui naît ;
+/// - B2 (la section description repliable) partage ce texte dans les deux sens ;
+/// - le média local reste l'état du MEUBLE (`documentLocalMedia`), donc un
+///   retour scène→document ne perd que les objets AJOUTÉS sur le canvas —
+///   inhérent à une surface plate, jamais une saisie effacée.
 ///
-/// **La règle est SYMÉTRIQUE depuis le 2026-08-25, et elle ne l'était pas.** Sa
-/// branche `.scene` rendait `true` SANS CONDITION, au motif que `.cameraReady`,
-/// `.videoCameraReady` et `.resume` rendent `.scene` quel que soit le format.
-/// C'était vrai de ces TROIS ouvertures et faux de la BRANCHE : le routage monte
-/// aussi la scène sur `.keyboardOnContent` + `.story` / `.reel`. Une porte de ce
-/// profil peignait donc l'éventail à l'ouverture puis le PERDAIT au premier tap
-/// vers un format-document — une porte à SENS UNIQUE, c'est-à-dire le défaut
-/// même que cette règle existe pour nommer.
+/// Le contenu PARTAGÉ suivant désormais la bascule dans les deux sens, l'éventail
+/// se peint là où il est VISIBLE : `paints` rend `true` partout, et `mounts` se
+/// réduit à `isVisible`. C'est ce qui fait de l'éventail le SEUL sélecteur de
+/// mode (B3, #3926) — le sélecteur de destination contextuel du document
+/// (`documentDestinationSelector`, F1) est retiré, et RÉEL rejoint STORY sur la
+/// scène (le média prend le canvas), comme la directive produit le pose.
 ///
-/// **Le cas qui l'a imposée a été TRANCHÉ au lot 5, et pas dans le sens qu'on
-/// attendait.** `.conversationMedia` portait `opensWith: .keyboardOnContent` et
-/// une offre `[.story, .post]` : la règle rendait donc `false`, et câbler la
-/// porte telle quelle aurait livré trois formats déclarés sans aucun contrôle.
-/// C'est le PROFIL qui a cédé, pas la règle — son ouverture est devenue
-/// `.mediaSeeded`, qui envoie ses trois formats sur la scène. La règle a fait
-/// exactement ce qu'on lui demandait : elle a nommé un défaut avant qu'un
-/// utilisateur ne le voie. Les portes de production n'en changent pas d'un
-/// pixel — toutes ouvrent sur une capture, une reprise ou une graine, où tous
-/// les formats atterrissent sur la scène.
-///
-/// Le cas qui rend cette règle nécessaire dans l'AUTRE sens est
-/// `.feedComposer` : son offre contient `.story`, que le routage envoie à la
-/// scène. Descendre l'éventail sous son document ferait disparaître la saisie
-/// sans un mot, sur la porte la plus fréquentée de l'app. Sa condition de levée
-/// est côté SDK — un écrivain public de TEXTE atteignable par le meuble — et
-/// l'éventail y descendra AVEC le transfert de la saisie, jamais avant lui.
-///
-/// La porte de REPUBLICATION D'UN MOOD, elle, n'offre que `[.status, .post]` :
-/// deux formats qui restent sur des surfaces sans atelier. C'est ce que cette
-/// règle rend visible et que l'ancien montage — le plateau coiffant la seule
-/// scène — confondait avec le cas précédent.
-///
-/// **Le paramètre `opening` n'est pas redondant avec `surface`.** La surface
-/// montée ne dit que le format COURANT ; c'est l'ouverture qui permet de savoir
-/// où atterriraient les AUTRES.
+/// **Les paramètres `surface`/`opening` restent** pour les appelants et les
+/// gardes, et parce qu'une frontière pourrait renaître (un futur format sans
+/// chemin de transfert) ; ils ne CONTRAIGNENT simplement plus, la frontière
+/// qu'ils portaient n'existant plus.
 nonisolated enum ComposerFormatFanPlacement {
 
+    /// `true` PARTOUT depuis B1/B2 : le contenu partagé (texte, média,
+    /// description) suit la bascule document↔scène dans les deux sens, si bien
+    /// qu'aucune surface ne crée plus de porte à sens unique. Voir le doc de
+    /// l'enum pour la condition de levée que ce `true` acquitte.
     static func paints(
         surface: ComposerSurfaceKind,
         opening: ComposerOpening,
         offeredFormats: [ComposerFormat]
     ) -> Bool {
-        func monteUneScene(_ format: ComposerFormat) -> Bool {
-            ComposerSurfaceRouting.surface(opening: opening, format: format) == .scene
-        }
-        switch surface {
-        case .scene:
-            return offeredFormats.allSatisfy(monteUneScene)
-        case .document, .mood:
-            return offeredFormats.allSatisfy { !monteUneScene($0) }
-        }
+        true
     }
 
     /// **Les DEUX règles de l'éventail, lues à UN seul endroit.**
     ///
-    /// La CONJONCTION est elle-même une règle, et l'écrire chez l'appelant — un
-    /// `body`, une propriété du meuble — la rendrait invisible aux tests : c'est
-    /// ainsi qu'une règle produit se met à exister en deux exemplaires. La
-    /// mesure qui l'a imposée est une mutation : remplacer ce `&&` par un `||`
-    /// laissait VERTES les quatre gardes de source qui entouraient l'ancienne
-    /// écriture — toutes cherchaient la PRÉSENCE des deux symboles, aucune leur
-    /// conjonction — et repeignait l'éventail sous le document de
-    /// `.feedComposer`, la régression exacte que `paints` existe pour empêcher.
-    ///
-    /// L'ordre des deux termes n'a aucun effet sur le résultat ; il en a un sur
-    /// la lecture. « Y a-t-il quelque chose à offrir ? » précède « où le
-    /// poser ? ». C'est aussi ce premier terme, et lui seul, qui écarte la
-    /// CRÉATION de mood : son placement est autorisé (aucun de ses formats ne
-    /// renvoie à une scène) et son offre est unique. Sans lui, le plateau y
-    /// monterait une rangée VIDE — seize points de remplissage vertical en haut
-    /// d'un écran livré, ce que la loi 4 nomme.
+    /// La CONJONCTION reste écrite ici, à UN seul endroit, même si `paints` rend
+    /// désormais `true` : la garder rend la visibilité seule maîtresse du
+    /// montage aujourd'hui, ET laisse `paints` reprendre la main le jour où une
+    /// frontière renaîtrait, sans qu'aucun appelant n'ait à changer. La règle
+    /// qui écarte la CRÉATION de mood est donc toujours la visibilité : son
+    /// offre est unique (`[.status]`), et un chip unique est une affordance sans
+    /// choix — la rangée VIDE que la loi 4 nomme.
     static func mounts(
         surface: ComposerSurfaceKind,
         opening: ComposerOpening,

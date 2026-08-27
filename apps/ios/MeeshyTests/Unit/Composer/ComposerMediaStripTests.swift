@@ -77,13 +77,20 @@ final class ComposerMediaStripTests: XCTestCase {
         )
     }
 
-    // 4 — le toggle POST↔RÉEL est GATÉ sur la qualification (loi 4 : sans effet ⇒ absent).
-    func test_leToggle_estGateSurLaQualification() throws {
+    // 4 — le choix de mode RESPIRE avec la composition, via l'ÉVENTAIL (B3,
+    // #3926) : le gate du réel lit `documentComposesReel`, si bien que l'éventail
+    // offre RÉEL dès que le média du document qualifie — plus de sélecteur de
+    // destination séparé (loi 4 : un seul contrôle, jamais deux).
+    func test_leType_respireAvecLaComposition_viaLEventail() throws {
         let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
         XCTAssertTrue(
-            src.contains("ifdocumentComposesReel{documentDestinationSelector}"),
-            "L'interrupteur POST↔RÉEL ne se peint que quand la composition QUALIFIE (loi 4) — un contrôle "
-                + "sans effet est absent, jamais grisé."
+            src.contains("varreelGate:Bool") && src.contains("documentComposesReel"),
+            "Le gate du réel de l'éventail respire sur la composition du DOCUMENT (`documentComposesReel`), "
+                + "pas seulement sur l'atelier — l'offre RÉEL apparaît à temps pour servir à basculer."
+        )
+        XCTAssertFalse(
+            src.contains("documentDestinationSelector"),
+            "Le sélecteur de destination contextuel est RETIRÉ (B3) : l'éventail est le seul sélecteur de mode."
         )
     }
 
