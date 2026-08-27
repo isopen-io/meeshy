@@ -559,7 +559,7 @@ describe('AuthService', () => {
           userId: 'new-user-id',
           type: 'user',
           displayName: expect.any(String),
-          role: 'MEMBER',
+          role: 'member',
           permissions: {
             canSendMessages: true,
             canSendFiles: true,

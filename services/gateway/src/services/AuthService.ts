@@ -24,7 +24,10 @@ import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetSe
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { recipientLanguage } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
-import { postJoinSystemMessage, type JoinSystemMessageDeps } from './conversations/joinSystemMessage';
+import {
+  ensureGlobalConversationMembership,
+  type GlobalMembershipSocketManager,
+} from './conversations/ensureGlobalConversationMembership';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -81,18 +84,16 @@ export interface RegisterResult {
   };
 }
 
-/**
- * Ce qu'il faut du manager Socket.IO pour annoncer une arrivée dans le fil.
- * Résolu PARESSEUSEMENT, comme `ExpiredMessagesCleanupService` : le manager
- * n'existe pas encore quand les routes s'enregistrent, et une capture retiendrait
- * `null` pour toujours. Absent = pas de socket, l'avis reste persisté.
- */
-export type JoinNoticeBroadcaster = {
-  broadcastMessage(message: unknown, conversationId: string): Promise<void>;
-};
-
 export type AuthServiceOptions = {
-  readonly resolveSocketManager?: () => JoinNoticeBroadcaster | null | undefined;
+  /**
+   * Ce qu'il faut du manager Socket.IO pour annoncer une arrivée dans le
+   * salon global — voir `GlobalMembershipSocketManager`. Résolu
+   * PARESSEUSEMENT, comme `ExpiredMessagesCleanupService` : le manager
+   * n'existe pas encore quand les routes s'enregistrent, et une capture
+   * retiendrait `null` pour toujours. Absent = pas de socket, l'ajout reste
+   * persisté.
+   */
+  readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
 };
 
 export class AuthService {
@@ -100,7 +101,7 @@ export class AuthService {
   private jwtSecret: string;
   private emailService: EmailService;
   private frontendUrl: string;
-  private readonly resolveSocketManager?: () => JoinNoticeBroadcaster | null | undefined;
+  private readonly resolveSocketManager?: () => GlobalMembershipSocketManager | null | undefined;
 
   constructor(prisma: PrismaClient, jwtSecret: string, options: AuthServiceOptions = {}) {
     this.prisma = prisma;
@@ -127,13 +128,6 @@ export class AuthService {
    */
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
-  }
-
-  /** La diffusion de l'avis d'arrivée, résolue à l'appel — même forme que les quatre autres portes. */
-  private joinNoticeBroadcast(): JoinSystemMessageDeps['broadcast'] {
-    const resolve = this.resolveSocketManager;
-    if (!resolve) return undefined;
-    return (message, conversationId) => resolve()?.broadcastMessage(message, conversationId) ?? Promise.resolve();
   }
 
   /**
@@ -650,65 +644,18 @@ export class AuthService {
         // Don't fail registration if email fails - user can request a new one
       }
 
-      // Ajouter automatiquement l'utilisateur à la conversation globale "meeshy"
+      // Ajouter automatiquement l'utilisateur à la conversation globale
+      // "meeshy" — cinquième porte d'entrée, même loi que les quatre autres
+      // (`routes/anonymous.ts`, `sharing.ts` ×2, `participants.ts`) : le salon
+      // global voit arriver l'inscrit comme n'importe quel fil.
+      // `ensureGlobalConversationMembership` est la SOURCE UNIQUE de cet
+      // ajout (#3876) — partagée par l'inscription publique, la création
+      // d'un compte par un administrateur et le seed (`InitService`).
       try {
-        const globalConversation = await this.prisma.conversation.findFirst({
-          where: { identifier: 'meeshy' }
-        });
-
-        if (globalConversation) {
-          // Vérifier si l'utilisateur n'est pas déjà membre
-          const existingMember = await this.prisma.participant.findFirst({
-            where: {
-              conversationId: globalConversation.id,
-              userId: user.id
-            }
-          });
-
-          if (!existingMember) {
-            const member = await this.prisma.participant.create({
-              data: {
-                conversationId: globalConversation.id,
-                userId: user.id,
-                type: 'user',
-                displayName: user.displayName || user.username,
-                role: 'MEMBER',
-                permissions: {
-                  canSendMessages: true,
-                  canSendFiles: true,
-                  canSendImages: true,
-                  canSendVideos: true,
-                  canSendAudios: true,
-                  canSendLocations: true,
-                  canSendLinks: true,
-                  // L'inscrit lit le salon global depuis son arrivée, comme
-                  // tout membre ajouté après coup (`services/historyFloor`).
-                  canViewHistory: false
-                },
-                joinedAt: new Date(),
-                isActive: true
-              }
-            });
-
-            // Cinquième porte d'entrée, même loi que les quatre autres
-            // (`routes/anonymous.ts`, `sharing.ts` ×2, `participants.ts`) : le
-            // salon global voit arriver l'inscrit comme n'importe quel fil.
-            // `postJoinSystemMessage` ne rejette jamais — l'avis est un
-            // accessoire de l'inscription, jamais sa condition.
-            await postJoinSystemMessage(
-              { prisma: this.prisma, broadcast: this.joinNoticeBroadcast() },
-              {
-                conversationId: globalConversation.id,
-                participantId: member.id,
-                displayName: user.displayName || user.username,
-                isAnonymous: false,
-                viaShareLink: false
-              }
-            );
-          }
-        } else {
-          logger.warn('[AUTH] ⚠️ Conversation globale "meeshy" non trouvée - impossible d\'ajouter l\'utilisateur');
-        }
+        await ensureGlobalConversationMembership(
+          { prisma: this.prisma, resolveSocketManager: this.resolveSocketManager },
+          { userId: user.id, displayName: user.displayName || user.username }
+        );
       } catch (error) {
         logger.error('[AUTH] ❌ Erreur lors de l\'ajout à la conversation globale:', error);
         // Ne pas faire échouer l'inscription si l'ajout à la conversation échoue

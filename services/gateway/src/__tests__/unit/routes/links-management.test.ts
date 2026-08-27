@@ -388,15 +388,42 @@ describe('PATCH /links/:linkId', () => {
     await app.close();
   });
 
-  it('returns 403 when participant has role "admin" (lowercase, PATCH uses uppercase ADMIN/MODERATOR)', async () => {
+  it('returns 200 when participant has role "admin" (lowercase — la seule casse écrite en base, #3875)', async () => {
     const prisma = makePrisma();
-    // PATCH route checks for 'ADMIN' and 'MODERATOR' (uppercase), not 'admin'/'creator'
+    const updatedLink = {
+      id: LINK_DB_ID,
+      linkId: LINK_PUBLIC_ID,
+      conversation: { id: CONV_ID, title: 'T', description: null, type: 'group', isActive: true, createdAt: new Date(), updatedAt: new Date() },
+      creator: { id: OTHER_USER_ID, username: 'other', firstName: null, lastName: null, displayName: null, avatar: null },
+    };
     prisma.conversationShareLink.findFirst.mockResolvedValue(
       makeShareLink({
         createdBy: OTHER_USER_ID,
         conversation: {
           id: CONV_ID,
           participants: [{ userId: USER_ID, role: 'admin', isActive: true }],
+        },
+      })
+    );
+    prisma.conversationShareLink.update.mockResolvedValue(updatedLink);
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}`,
+      payload: { isActive: false },
+    });
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('returns 403 when participant has role "member" (ni admin ni modérateur)', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({
+        createdBy: OTHER_USER_ID,
+        conversation: {
+          id: CONV_ID,
+          participants: [{ userId: USER_ID, role: 'member', isActive: true }],
         },
       })
     );

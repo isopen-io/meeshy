@@ -169,6 +169,41 @@ describe('InitService.shouldInitialize', () => {
   });
 });
 
+// ─── addUserToMeeshyConversation — casse du rôle ─────────────────────────────
+//
+// `Participant.role` est une casse UNIQUE en base (minuscules, `MemberRole` de
+// `@meeshy/shared/types/role-types`) — la casse que les gardes comparent
+// (`hasMinimumMemberRole`, `role === 'admin'` dans `routes/conversations/participants.ts`).
+// Ce seed écrivait `'CREATOR'` / `'ADMIN'` / `'MEMBER'` : un « ADMIN » du salon
+// global n'était administrateur nulle part (#3875).
+
+describe('InitService.addUserToMeeshyConversation — casse du rôle', () => {
+  const GLOBAL_CONV = { id: 'conv-global', identifier: 'meeshy' };
+
+  const makeMinimalPrisma = () => ({
+    conversation: { findFirst: jest.fn<any>().mockResolvedValue(GLOBAL_CONV) },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null), // pas encore membre
+      create: jest.fn<any>().mockResolvedValue({ id: 'part-new' }),
+    },
+  });
+
+  it.each([
+    ['meeshy', 'creator'],
+    ['admin', 'admin'],
+    ['some-regular-user', 'member'],
+  ])('écrit role=%s → %s, jamais la casse majuscule', async (username, expectedRole) => {
+    const prisma = makeMinimalPrisma();
+    const sut = new InitService(prisma as any);
+
+    await (sut as any).addUserToMeeshyConversation('user-id', username);
+
+    expect(prisma.participant.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ role: expectedRole }) }),
+    );
+  });
+});
+
 // ─── ensurePostGeoIndex ───────────────────────────────────────────────────────
 //
 // L'index `2dsphere` de `Post.geoPoint` vivait dans `initializeDatabase()`,

@@ -10,6 +10,7 @@ import {
   sendInternalError
 } from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
+import { hasMinimumMemberRole } from '@meeshy/shared/types/role-types';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
@@ -237,8 +238,11 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       }
 
       const isCreator = shareLink.createdBy === userId;
+      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
+      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
+      // replie la casse ET tolère les lignes historiques pas encore migrées.
       const isConversationAdmin = shareLink.conversation.participants.some(member =>
-        member.role === 'ADMIN' || member.role === 'MODERATOR'
+        hasMinimumMemberRole(member.role ?? 'member', 'moderator')
       );
 
       if (!isCreator && !isConversationAdmin) {

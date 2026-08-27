@@ -14,7 +14,7 @@ export class InitService {
   private globalConversationId: string;
   private directConversationId: string;
   private groupConversationId: string;
-  
+
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
     this.authService = new AuthService(prisma, process.env.JWT_SECRET || 'default-jwt-secret');
@@ -26,7 +26,7 @@ export class InitService {
   async initializeDatabase(): Promise<void> {
     const forceReset = process.env.FORCE_DB_RESET === 'true';
     const isProduction = process.env.NODE_ENV === 'production';
-    
+
     // GARDE-FOU CRITIQUE: Empêcher FORCE_DB_RESET=true en production
     if (forceReset && isProduction) {
       const errorMessage = '🚨 ERREUR CRITIQUE: FORCE_DB_RESET=true détecté en PRODUCTION! Ceci supprimerait TOUTES les données!';
@@ -35,7 +35,7 @@ export class InitService {
       logger.error('[INIT] 💡 Si vous devez vraiment réinitialiser en production, contactez un administrateur');
       throw new Error('FORCE_DB_RESET=true est interdit en production pour protéger les données');
     }
-    
+
     if (forceReset) {
       await this.resetDatabase();
     } else {
@@ -60,12 +60,12 @@ export class InitService {
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de l\'initialisation:', error);
       logger.error('[INIT] 💡 Détails de l\'erreur:', error.message);
-      
+
       // En mode développement, on ne fait pas échouer le serveur
       if (process.env.NODE_ENV === 'development') {
         return;
       }
-      
+
       throw error;
     }
   }
@@ -175,14 +175,16 @@ export class InitService {
         data: { role: UserRoleEnum.BIGBOSS }
       });
 
-      // Ajouter l'utilisateur comme CREATOR de la conversation meeshy
+      // Ajouter l'utilisateur comme CREATOR de la conversation meeshy —
+      // `Participant.role` est en minuscules en base (#3875), la casse que
+      // les gardes comparent (`hasMinimumMemberRole`, `role === 'admin'`).
       await this.prisma.participant.create({
         data: {
           conversationId: this.globalConversationId,
           userId: user.id,
           type: 'user',
           displayName: user.displayName || user.username,
-          role: 'CREATOR',
+          role: 'creator',
           joinedAt: new Date(),
           isActive: true,
           permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -217,18 +219,18 @@ export class InitService {
       });
 
       if (existingUser) {
-        
+
         // Mettre à jour le rôle vers ADMIN et les langues configurables
         await this.prisma.user.update({
           where: { id: existingUser.id },
-          data: { 
+          data: {
             role: UserRoleEnum.ADMIN,
             systemLanguage,
             regionalLanguage,
             customDestinationLanguage
           }
         });
-        
+
       } else {
 
         // Créer l'utilisateur via l'API de création de compte
@@ -306,7 +308,7 @@ export class InitService {
    * Réinitialise complètement la base de données
    */
   private async resetDatabase(): Promise<void> {
-    
+
     try {
       // Utiliser $runCommandRaw pour drop les collections directement
       // Ceci évite les problèmes de contraintes de clés étrangères avec les auto-relations
@@ -318,7 +320,7 @@ export class InitService {
         'Conversation',
         'User'
       ];
-      
+
       for (const collection of collections) {
         try {
           await this.prisma.$runCommandRaw({
@@ -330,7 +332,7 @@ export class InitService {
           }
         }
       }
-      
+
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la réinitialisation de la base de données', error);
       throw error;
@@ -422,10 +424,12 @@ export class InitService {
       });
 
       if (!existingMember) {
-        // Déterminer le rôle selon l'utilisateur
-        const role = username === 'meeshy' ? 'CREATOR' : 
-                    username === 'admin' ? 'ADMIN' : 'MEMBER';
-        
+        // Déterminer le rôle selon l'utilisateur — `Participant.role` est
+        // toujours en minuscules (`MemberRole` de `@meeshy/shared/types/role-types`),
+        // la casse que les gardes comparent (`hasMinimumMemberRole`, `role === 'admin'`).
+        const role = username === 'meeshy' ? 'creator' :
+                    username === 'admin' ? 'admin' : 'member';
+
         // Ajouter l'utilisateur comme membre de la conversation meeshy
         await this.prisma.participant.create({
           data: {
@@ -439,7 +443,7 @@ export class InitService {
             permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
           }
         });
-        
+
       } else {
       }
     } catch (error) {
@@ -551,7 +555,7 @@ export class InitService {
             userId: userId1,
             type: 'user',
             displayName: 'User 1',
-            role: 'ADMIN',
+            role: 'admin',
             joinedAt: new Date(),
             isActive: true,
             permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -561,7 +565,7 @@ export class InitService {
             userId: userId2,
             type: 'user',
             displayName: 'User 2',
-            role: 'ADMIN',
+            role: 'admin',
             joinedAt: new Date(),
             isActive: true,
             permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -583,7 +587,7 @@ export class InitService {
     try {
       // Générer un identifiant unique pour la conversation de groupe
       const identifier = `mshy_meeshy-infrastructure-team-one`;
-      
+
       // Vérifier si la conversation existe déjà
       const existingConversation = await this.prisma.conversation.findFirst({
         where: { identifier }
@@ -614,7 +618,7 @@ export class InitService {
         userId,
         type: 'user' as const,
         displayName: `User ${index + 1}`,
-        role: index === 0 ? 'CREATOR' : 'ADMIN',
+        role: index === 0 ? 'creator' : 'admin',
         joinedAt: new Date(),
         isActive: true,
         permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendVideos: true, canSendAudios: true, canSendLocations: true, canSendLinks: true }
@@ -636,13 +640,13 @@ export class InitService {
   async shouldInitialize(): Promise<boolean> {
     const forceReset = process.env.FORCE_DB_RESET === 'true';
     const isProduction = process.env.NODE_ENV === 'production';
-    
+
     // GARDE-FOU CRITIQUE: Bloquer FORCE_DB_RESET=true en production
     if (forceReset && isProduction) {
       logger.error('[INIT] 🚨 FORCE_DB_RESET=true détecté en PRODUCTION - BLOQUÉ pour protection des données');
       return false;
     }
-    
+
     if (forceReset) {
       return true;
     }
@@ -690,11 +694,11 @@ export class InitService {
 
       // Si la conversation globale, les utilisateurs ou leurs appartenances n'existent pas, initialisation nécessaire
       const needsInit = !globalConversation || !bigbossUser || !adminUser || !atabethUser || !bigbossMember || !adminMember;
-      
+
       if (needsInit) {
       } else {
       }
-      
+
       return needsInit;
     } catch (error) {
       logger.error('[INIT] ❌ Erreur lors de la vérification de l\'initialisation:', error);
