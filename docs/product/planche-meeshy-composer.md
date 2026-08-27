@@ -16,6 +16,46 @@ Un seul composer produit quatre formats — **Story**, **Post**, **Réel**, **Mo
 posés sur une **scène 9:16** à trois plans (`.background` · `.content` · `.foreground`), lus par une
 **timeline « un plan »**. Changer de format ne jette jamais le contenu (loi 9, livrée 2026-08-27).
 
+## Le modèle — slides, scènes, objets (normalisé 2026-08-27)
+
+> **Sémantique complète : [`meeshy-composer-modele.md`](meeshy-composer-modele.md).**
+> La planche porte la VISION, ce fichier-là porte la SÉMANTIQUE ; en cas d'écart sur un
+> **nom** ou une **règle**, le modèle a raison.
+
+```
+MeeshyPublication  (profil S | R | P | M)
+└── slides: [MeeshySlide]                     1..10
+     └── MeeshySlide = MeeshyScene + description
+          └── MeeshyScene (ratio)
+               └── objects: [MeeshyObject]    plans: background · content · foreground
+```
+
+Quatre noms, et rien d'autre : **`MeeshyObject`** (l'unité posée) · **`MeeshyScene`** (la surface
+qui les restitue) · **`MeeshySlide`** (une scène + sa description) · **`MeeshyPublication`**
+(un profil + ses slides). Tout code neuf et toute issue parlent ce vocabulaire (#4048).
+
+**Une slide est TOUJOURS une scène.** Une slide qui ne porte qu'un média est une scène dont le seul
+objet est son fond — il n'existe pas deux formes de slide. C'est ce que la planche disait déjà
+(« chaque slide est une Scene du document », P8), et c'est ce qui rend vraie sans cas particulier
+la demande de départ : une scène doit pouvoir être **un seul média présentable** dans un réel ou un post.
+
+**Ce qu'une slide SIGNIFIE dépend du profil** — le point le plus facile à rater :
+
+| | Story (S) | Réel (R) | Post (P) | Mood (M) |
+|---|---|---|---|---|
+| Une slide EST | une story entière | le réel entier (le réel EST la scène) | **UN média du post** | — |
+| Nombre de slides | plusieurs | 1 | plusieurs | 0 |
+| Le texte de la slide est | **le contenu** | **le contenu** | **la légende de ce média** | — |
+| `content` de la publication | = le texte de sa slide | = le texte de sa slide | **propre au post** | le contenu, seul |
+| Sortir un média de la scène | interdit | autorisé | autorisé | — |
+
+**Poser un média, une seule règle** : pas de fond ⇒ le média **devient le fond** ; un fond déjà là ⇒
+il devient un objet de **premier plan**. Un audio devient le **son de fond** s'il n'y en a pas.
+Aucune question n'est posée à l'utilisateur (#4038).
+
+**Un objet se manipule par appui long** : Monter · Reculer · Modifier · Sortir de la scène (sauf en
+Story) — chacune servie seulement si elle a un effet, jamais grisée (#4046).
+
 ## Les onze lois (doctrine, P1)
 1. **Un seul document** rend les quatre formats ; le format est un habillage, pas un modèle séparé.
 2. **Réemploi total** : chaque brique existante (SDK, viewers, éditeurs) est câblée, jamais reconstruite.
