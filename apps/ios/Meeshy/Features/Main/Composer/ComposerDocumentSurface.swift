@@ -1192,6 +1192,15 @@ nonisolated enum ComposerDocumentCopy {
                defaultValue: "Médias joints", bundle: .main)
     }
 
+    /// Le libellé du groupe de la bande de mentions (#3904, revue Opus
+    /// 2026-08-27) — même patron que `mediaStrip`/`toolRow` : sans lui, le
+    /// rotor VoiceOver ne trouve la bande qu'élément par élément, jamais
+    /// comme un groupe nommé.
+    static var mentionStrip: String {
+        String(localized: "composer.document.a11y.mentions",
+               defaultValue: "Suggestions de mention", bundle: .main)
+    }
+
     /// Le libellé du picker de couleur de fond (F2, #3883… F2, #3885) — clé
     /// neuve sur le patron de `mediaStrip` (dotée, à l'abri du cliquet
     /// français), traduite dans les sept locales.
@@ -1342,12 +1351,38 @@ struct ComposerDocumentSurface: View {
     /// fond (loi 4) — la surface reste sans état.
     var onPickBackground: ((String) -> Void)? = nil
 
+    /// **Le slot de tête de `toolRow` (#3903).** Un chip d'état actif (le lieu,
+    /// aujourd'hui) qui doit s'insérer DANS la disposition de la rangée d'outils
+    /// plutôt que d'être stacké par-dessus : deux enfants d'un `HStack` ne se
+    /// superposent jamais, quelle que soit la taille d'écran ou le palier de
+    /// Dynamic Type — c'est la rangée elle-même qui garantit l'absence de
+    /// chevauchement. `nil` ⇒ aucun chip, la rangée ne réserve aucune place.
+    var toolRowLeadingAccessory: AnyView? = nil
+
+    /// **Le slot de queue de `toolRow` (#3904, revue Opus 2026-08-27).** Même
+    /// raisonnement que le slot de tête, à l'autre bout : la capsule de langue
+    /// voyageait en `.overlay(alignment: .bottomTrailing)` sur TOUTE la
+    /// surface, un raisonnement valable tant que `toolRow` était la dernière
+    /// ligne peinte — ce qui a cessé d'être vrai dès que la bande de mentions
+    /// (#3904) a pu s'afficher SOUS elle. Un enfant du `HStack` ne chevauche
+    /// jamais la bande, quel que soit ce qui se peint plus bas dans le
+    /// `VStack` parent.
+    var toolRowTrailingAccessory: AnyView? = nil
+
     @FocusState private var isContentFocused: Bool
 
     /// Le dernier outil tapé — pilote le rebond SF (`.symbolEffect(.bounce)`)
     /// de l'icône concernée. Purement décoratif : aucune décision produit n'en
     /// dépend, il ne fait que donner à la valeur d'effet une raison de changer.
     @State private var lastTappedTool: ComposerDocumentTool?
+
+    /// **Les mentions du brouillon (#3904)** — la surface reste sans état
+    /// PARTAGÉ (`documentText` continue d'appartenir au meuble), mais
+    /// l'autocomplétion @mention est de l'état d'UI éphémère, purement local
+    /// à cet écran : `ComposerMentionControllerBox` la porte seule, sur le
+    /// même patron que les `@StateObject` locaux de `PostDetailView` /
+    /// `FeedCommentsSheet`.
+    @StateObject private var mentionBox = ComposerMentionControllerBox()
 
     /// Le même délai que la feuille historique. Une prise de focus posée dans
     /// le tour de boucle de la présentation est avalée par l'animation de
@@ -1362,8 +1397,28 @@ struct ComposerDocumentSurface: View {
             mediaStrip
             backgroundStrip
             toolRow
+            // `!suggestions.isEmpty`, pas seulement `activeQuery != nil` (revue
+            // Opus 2026-08-27) : en `.composerDraft`, il n'y a AUCUN appel
+            // réseau en attente qui remplirait la liste plus tard — pas d'ami
+            // accepté, une requête sans correspondance, ou le temps du `.task`
+            // de chargement sont tous des états NOMINAUX. Gater sur la seule
+            // requête active peindrait une bande de verre vide dans chacun.
+            if mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty {
+                ComposerMentionStrip(
+                    controller: mentionBox.controller,
+                    currentText: text,
+                    onSelect: { updated in text = updated }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(
+            .spring(response: 0.3, dampingFraction: 0.8),
+            value: mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty
+        )
         .onAppear { raiseKeyboardIfPromised() }
+        .task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        .adaptiveOnChange(of: text) { _, newText in mentionBox.controller.handleQuery(in: newText) }
     }
 
     /// L'issue, en haut à gauche — la position qu'occupe déjà la croix de
@@ -1419,8 +1474,15 @@ struct ComposerDocumentSurface: View {
     /// Les y recopier aurait posé six contrastes non mesurés d'un coup.
     @ViewBuilder
     private var toolRow: some View {
-        if !tools.isEmpty {
+        // `|| toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil` :
+        // sans ça, une rangée d'outils vide ferait aussi disparaître les deux
+        // accessoires (le chip de lieu, la capsule de langue) en silence —
+        // alors que ni l'un ni l'autre ne dépend de `tools`.
+        if !tools.isEmpty || toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
             HStack(spacing: 16) {
+                if let toolRowLeadingAccessory {
+                    toolRowLeadingAccessory
+                }
                 ForEach(tools, id: \.rawValue) { tool in
                     Button {
                         lastTappedTool = tool
@@ -1435,6 +1497,9 @@ struct ComposerDocumentSurface: View {
                     .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
                 }
                 Spacer()
+                if let toolRowTrailingAccessory {
+                    toolRowTrailingAccessory
+                }
             }
             .padding(16)
             .accessibilityElement(children: .contain)

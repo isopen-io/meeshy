@@ -81,6 +81,32 @@ nonisolated enum NearbyDiscoverabilityLabels {
         )
     }
 
+    /// **Le résumé replié (#3905).** Deux libellés COURTS, distincts du
+    /// `title`/`subtitle` complets — trop longs pour une ligne compacte — et
+    /// qui disent l'état en un mot, sans qu'il faille déplier pour le savoir.
+    static var summaryEnabled: String {
+        String(localized: "feed.nearby.consent.summaryEnabled", defaultValue: "Position activée", bundle: .main)
+    }
+
+    static var summaryDisabled: String {
+        String(localized: "feed.nearby.consent.summaryDisabled", defaultValue: "Position", bundle: .main)
+    }
+
+    /// **Le hint du bouton de repli, distinct de `hint` (revue Opus
+    /// 2026-08-27).** `hint` décrit ce que fait la FEATURE (la portée de la
+    /// recherche à proximité) — c'est le hint légitime du `Toggle` dans
+    /// `header`. Le bouton de résumé, lui, DÉPLIE/REPLIE ; lui donner le même
+    /// hint que le `Toggle` fait annoncer deux éléments identiquement nommés
+    /// par VoiceOver, l'un bouton l'autre interrupteur, que Voice Control ne
+    /// peut plus départager.
+    static var summaryHint: String {
+        String(
+            localized: "feed.nearby.consent.summaryHint",
+            defaultValue: "Affiche ou masque les réglages de position à proximité.",
+            bundle: .main
+        )
+    }
+
     /// **La phrase de rassurance, restreinte à ce qu'elle gouverne.**
     ///
     /// Elle disait « Meeshy n'enregistre jamais une position plus précise que
@@ -212,6 +238,12 @@ struct NearbyDiscoverabilityControl: View {
     @Binding var choice: NearbyDiscoverabilityChoice
     let accentColor: String
 
+    /// **Replié par défaut (#3905).** Le détail complet (`header`, sélecteur
+    /// de grain, notices) n'occupait jusqu'ici jamais moins que sa pleine
+    /// hauteur pour un réglage secondaire. État PUREMENT d'affichage — la
+    /// spec ne demande rien à mémoriser d'une ouverture à l'autre.
+    @State private var isExpanded = false
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     /// Le `Toggle` reçoit un binding qui passe par le geste du modèle plutôt
@@ -229,10 +261,13 @@ struct NearbyDiscoverabilityControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            header
-            if choice.isDiscoverable {
-                tierPicker
-                notices
+            summary
+            if isExpanded {
+                header
+                if choice.isDiscoverable {
+                    tierPicker
+                    notices
+                }
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -242,6 +277,62 @@ struct NearbyDiscoverabilityControl: View {
                 .fill(Color(hex: accentColor).opacity(0.08))
         )
         .animation(.easeInOut(duration: 0.18), value: choice.isDiscoverable)
+        .animation(.easeInOut(duration: 0.2), value: isExpanded)
+    }
+
+    // MARK: - Résumé replié
+
+    /// **Le résumé (#3905)** — toujours peint, à toute taille : c'est lui qui
+    /// réduit le contrôle à une fraction de l'espace tant que l'auteur n'a
+    /// pas demandé le détail. Le déplier ne change pas l'état de découvrabilité
+    /// — c'est UNE autre affaire, celle du `Toggle` de `header`.
+    private var summary: some View {
+        Button {
+            HapticFeedback.light()
+            // Une seule animation pour ce changement : `.animation(value:
+            // isExpanded)` sur le conteneur du `body` (ci-dessus) l'anime déjà
+            // — un `withAnimation` ici serait redondant.
+            isExpanded.toggle()
+        } label: {
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(MeeshyFont.relative(12))
+                    .foregroundColor(Color(hex: accentColor))
+                    .accessibilityHidden(true)
+                Text(choice.isDiscoverable ? NearbyDiscoverabilityLabels.summaryEnabled : NearbyDiscoverabilityLabels.summaryDisabled)
+                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(1)
+                Spacer()
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("feed.nearby.consent.summary")
+        // Le libellé accessible DOIT correspondre au texte visible (WCAG
+        // 2.5.3, Label in Name) — revue Opus 2026-08-27. `title` était le
+        // libellé complet du `Toggle` (« Rendre ce contenu trouvable à
+        // proximité »), jamais lu sur ce bouton : Voice Control fait
+        // correspondre le NOM accessible, « Toucher Position » n'aurait rien
+        // activé.
+        .accessibilityLabel(
+            choice.isDiscoverable ? NearbyDiscoverabilityLabels.summaryEnabled : NearbyDiscoverabilityLabels.summaryDisabled
+        )
+        .accessibilityValue(
+            isExpanded
+                ? String(localized: "feed.nearby.consent.expanded", defaultValue: "Déplié", bundle: .main)
+                : String(localized: "feed.nearby.consent.collapsed", defaultValue: "Replié", bundle: .main)
+        )
+        // Hint DISTINCT de celui du `Toggle` de `header` (`hint`, qui décrit
+        // la FEATURE) — ce bouton déplie/replie, il ne change pas la
+        // découvrabilité. Même hint que le `Toggle` ferait annoncer deux
+        // éléments identiquement nommés par VoiceOver.
+        .accessibilityHint(NearbyDiscoverabilityLabels.summaryHint)
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - En-tête

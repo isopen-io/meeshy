@@ -966,24 +966,33 @@ struct MeeshyComposerHost: View {
                 // ce fond fait basculer la surface sur `.scene`.
                 documentBackground = hex
                 viewModel.applyBackground(hex: hex)
-            }
+            },
+            // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
+            // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —
+            // exactement le point où `toolRow` peint sa première icône (elle
+            // aussi calée au bord de tête). Un overlay et le premier enfant
+            // d'un `HStack` occupent le MÊME z-niveau : rien n'empêchait le
+            // chevauchement, à aucune taille d'écran ni palier de Dynamic
+            // Type. Elle voyage désormais par `toolRowLeadingAccessory`, un
+            // slot rendu DANS le `HStack` de `toolRow` — deux enfants d'un
+            // `HStack` ne se superposent jamais, par construction.
+            toolRowLeadingAccessory: documentLocation.map { AnyView(documentLocationTile($0)) },
+            // **La capsule de langue, corrigée revue Opus 2026-08-27** : elle
+            // voyageait en `.overlay(alignment: .bottomTrailing)` sur TOUTE la
+            // surface, sur la promesse que `toolRow` restait « la seule ligne
+            // peinte au bas de la surface ». #3904 a rendu cette promesse
+            // fausse — la bande de mentions peut désormais s'afficher SOUS
+            // `toolRow` — et l'overlay recouvrait alors la moitié de la bande
+            // (chevauchement mesuré : bande ≈82pt, capsule posée en bas-droite
+            // sur ≈43pt). Même correctif que la tuile de lieu, à l'autre bout
+            // du `HStack` : `toolRowTrailingAccessory`, un enfant du flux, ne
+            // chevauche jamais ce qui se peint plus bas dans le `VStack`.
+            toolRowTrailingAccessory: AnyView(documentLanguageCapsule)
         )
-        // La capsule se superpose plutôt que d'être peinte PAR la surface :
-        // `ComposerDocumentSurface` reste une présentation sans état, et c'est
-        // le meuble qui possède `documentLanguage` — exactement comme il
-        // possède déjà `documentText`. `.bottomTrailing` la pose au bord de la
-        // rangée d'outils, seule ligne peinte au bas de la surface.
-        .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
         // B3 (#3926) — le choix POST/RÉEL/STORY n'est plus un overlay du
         // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
         // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
         // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
-        // **La tuile de lieu (T2.5)**, symétrique de la capsule de langue —
-        // `.bottomLeading` face à `.bottomTrailing` : les deux occupent le bas
-        // de la surface, sur les bords opposés de la rangée d'outils.
-        .overlay(alignment: .bottomLeading) {
-            if let place = documentLocation { documentLocationTile(place) }
-        }
         // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
         // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
         // et des notices — bien plus large qu'une capsule, il ne doit
