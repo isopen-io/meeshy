@@ -70,6 +70,12 @@ struct ConversationOverlayState {
     /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
     var showOverlayMenu = false
     var longPressEnabled = false
+    /// **L'état à restituer à la fermeture du menu longpress (#4004).**
+    /// `presentLongPressMenu` désactive le clavier/le panneau d'options AVANT
+    /// de présenter le menu — sans cette mémoire, ils resteraient fermés une
+    /// fois le menu refermé, même si l'auteur était en train de taper.
+    /// `nil` tant qu'aucun longpress n'a capturé d'état à restituer.
+    var restoreAfterLongPress: (isTyping: Bool, showOptions: Bool)? = nil
     var detailSheetMessage: Message? = nil
     /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
     /// is presented — separate from `detailSheetMessage`, which stays wired to
@@ -974,6 +980,12 @@ struct ConversationView: View {
             .blur(radius: overlayState.showOverlayMenu ? 12 : 0)
             .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
             .overlay { overlayMenuContent }
+            // #4004 — restitue le clavier/panneau d'options désactivés par
+            // `presentLongPressMenu` à l'ouverture, quand le menu se referme
+            // (tap ailleurs, swipe, action choisie).
+            .adaptiveOnChange(of: overlayState.showOverlayMenu) { _, isShowing in
+                if !isShowing { restoreStateAfterLongPressIfNeeded() }
+            }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
                 frameTracker.update(frames)
             }
@@ -1783,10 +1795,6 @@ struct ConversationView: View {
                     composerState.forwardMessage = msg
                 },
                 onLongPress: { messageId in
-                    // Preserve l'overlay menu existant (MessageOverlayMenu panel).
-                    // L'infrastructure frame-tracking + LayoutEngine reste en place
-                    // et sera utilisée ensuite pour lifter la bulle dans le flow
-                    // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     // Exclusivité mutuelle : si la barre de quick-reaction est
                     // déjà ouverte, l'appui-long ne fait rien (une seule feature
@@ -1806,8 +1814,11 @@ struct ConversationView: View {
                     // La feuille de détail d'un appel n'est pas perdue pour
                     // autant : elle est devenue une ACTION du menu
                     // (`PrimaryAction.callDetail`, cf. `onShowCallDetail`).
-                    overlayState.overlayMessage = msg
-                    overlayState.showOverlayMenu = true
+                    //
+                    // Le clavier + le repositionnement vers le centre (#4004)
+                    // passent tous les deux par `presentLongPressMenu` — point
+                    // d'entrée unique, partagé avec le menu natif iOS 26+.
+                    presentLongPressMenu(for: msg)
                 },
                 // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
