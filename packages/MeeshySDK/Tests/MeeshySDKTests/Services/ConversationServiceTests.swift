@@ -349,6 +349,49 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertTrue(page.hasMore, "Falls back to offset pagination's hasMore when cursorPagination is absent")
     }
 
+    // MARK: - updateHistoryGrant (#3877)
+
+    /// Distinct de `updateParticipantRights` : ce levier vaut pour TOUT
+    /// participant, et sa réponse ne porte que `historyVisibleFrom`.
+    func test_updateHistoryGrant_posesTheGrant_sendsISODateAndReturnsIt() async throws {
+        let granted = Date(timeIntervalSince1970: 1_768_435_200) // 2026-01-15T00:00:00Z
+        let response = APIResponse(
+            success: true,
+            data: ParticipantHistoryGrantUpdateResult(participantId: "p1", conversationId: "c1", historyVisibleFrom: granted),
+            error: nil
+        )
+        mock.stub("/conversations/c1/participants/p1/rights", result: response)
+
+        let result = try await service.updateHistoryGrant(conversationId: "c1", participantId: "p1", historyVisibleFrom: granted)
+
+        XCTAssertEqual(result, granted)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/c1/participants/p1/rights")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
+        XCTAssertNotNil(mock.lastRequest?.bodyJSON?["historyVisibleFrom"] as? String)
+    }
+
+    /// Retirer l'octroi doit envoyer `null` EXPLICITE, jamais une clé absente
+    /// — le gateway distingue les deux (absente = ne touche à rien, `null` =
+    /// retire). `NSNull` est ce que `JSONSerialization` rend pour un `null`
+    /// JSON une fois réinterprété en `[String: Any]`.
+    func test_updateHistoryGrant_revokesWithExplicitNull_notAnAbsentKey() async throws {
+        let response = APIResponse(
+            success: true,
+            data: ParticipantHistoryGrantUpdateResult(participantId: "p1", conversationId: "c1", historyVisibleFrom: nil),
+            error: nil
+        )
+        mock.stub("/conversations/c1/participants/p1/rights", result: response)
+
+        let result = try await service.updateHistoryGrant(conversationId: "c1", participantId: "p1", historyVisibleFrom: nil)
+
+        XCTAssertNil(result)
+        let body = mock.lastRequest?.bodyJSON
+        XCTAssertNotNil(body, "the body must be present")
+        XCTAssertTrue(body?.keys.contains("historyVisibleFrom") ?? false, "the key must be present, not omitted")
+        XCTAssertTrue(body?["historyVisibleFrom"] is NSNull, "the value must be explicit JSON null")
+    }
+
     func test_listPage_missingAllMeta_inferHasMoreFromPageFill() async throws {
         let body = ConversationListResponseBody(
             success: true,

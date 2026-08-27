@@ -216,5 +216,65 @@ final class ConversationParticipantProfileTests: XCTestCase {
         XCTAssertNil(profile.entryCapabilities)
         XCTAssertNil(profile.entryLink)
         XCTAssertEqual(profile.username, "alice")
+        XCTAssertNil(profile.historyVisibleFrom)
+        XCTAssertNil(profile.canGrantHistory)
+    }
+
+    // MARK: - Octroi d'historique par date (#3877)
+
+    /// Vaut pour TOUT participant, contrairement à `entryCapabilities` /
+    /// `entryLink` — d'où un payload d'INSCRIT dédié, où les deux blocs
+    /// ci-dessus sont absents mais l'octroi peut quand même être servi.
+    private func registeredHostPayload(historyVisibleFrom: String?, canGrantHistory: Bool) -> String {
+        """
+        {
+            "participantId": "p2",
+            "conversationId": "c1",
+            "isAnonymous": false,
+            "userId": "u1",
+            "username": "alice",
+            "displayName": "Alice",
+            "firstName": null,
+            "lastName": null,
+            "avatar": null,
+            "language": "fr",
+            "country": null,
+            "conversationRole": "member",
+            "joinedAt": "2026-08-18T09:00:00.000Z",
+            "isOnline": true,
+            "lastActiveAt": null,
+            "shareLinkName": null,
+            "hasEmail": false,
+            "hasBirthday": false,
+            "email": null,
+            "birthday": null,
+            "historyVisibleFrom": \(historyVisibleFrom.map { "\"\($0)\"" } ?? "null"),
+            "canGrantHistory": \(canGrantHistory)
+        }
+        """
+    }
+
+    func test_historyVisibleFrom_decodesForAnyParticipant_notJustAnonymous() throws {
+        let profile = try decode(registeredHostPayload(historyVisibleFrom: "2026-01-15T00:00:00.000Z", canGrantHistory: true))
+
+        XCTAssertNotNil(profile.historyVisibleFrom)
+        XCTAssertEqual(profile.canGrantHistory, true)
+    }
+
+    /// `canGrantHistory` répond à « ce lecteur peut-il écrire ? » — distinct de
+    /// « quel est l'octroi ? ». Un modérateur lit l'octroi mais ne peut pas
+    /// l'écrire : les deux valeurs doivent pouvoir varier indépendamment.
+    func test_canGrantHistory_canBeFalseWhileHistoryVisibleFromIsSet() throws {
+        let profile = try decode(registeredHostPayload(historyVisibleFrom: "2026-01-15T00:00:00.000Z", canGrantHistory: false))
+
+        XCTAssertNotNil(profile.historyVisibleFrom)
+        XCTAssertEqual(profile.canGrantHistory, false)
+    }
+
+    func test_historyVisibleFrom_decodesNullAsNoGrant() throws {
+        let profile = try decode(registeredHostPayload(historyVisibleFrom: nil, canGrantHistory: true))
+
+        XCTAssertNil(profile.historyVisibleFrom)
+        XCTAssertEqual(profile.canGrantHistory, true)
     }
 }
