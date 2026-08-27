@@ -42,14 +42,33 @@ public struct EmbeddedSceneCanvas: View {
     /// `.clipShape`.
     public var cornerRadius: CGFloat
 
+    /// Notifié quand l'utilisateur tape un objet de la scène (texte, média,
+    /// sticker, lieu) — transmis tel quel à `StoryComposerCanvasView`.
+    ///
+    /// **Lot 3A du composer unifié (#4035).** Avant ce champ, la scène
+    /// incrustée ne transmettait AUCUN rappel de sélection : taper un objet
+    /// ne remontait rien à l'hôte, qui n'avait donc aucun moyen de faire
+    /// paraître ses contrôles. Paramètre opaque (une closure, pas une
+    /// décision) — SDK-pur : quel contrôle montrer pour quel objet reste une
+    /// décision app-side.
+    public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+
+    /// Notifié quand l'utilisateur tape le FOND de la scène (hors de tout
+    /// objet) — l'hôte l'utilise typiquement pour effacer sa sélection.
+    public var onBackgroundTapped: (() -> Void)?
+
     public init(
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
-        cornerRadius: CGFloat = 22
+        cornerRadius: CGFloat = 22,
+        onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+        onBackgroundTapped: (() -> Void)? = nil
     ) {
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
+        self.onItemTapped = onItemTapped
+        self.onBackgroundTapped = onBackgroundTapped
     }
 
     public var body: some View {
@@ -59,6 +78,8 @@ public struct EmbeddedSceneCanvas: View {
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: aspectRatio)
             StoryComposerCanvasView(
                 slide: $slide,
+                onItemTapped: onItemTapped,
+                onBackgroundTapped: onBackgroundTapped,
                 canvasCornerRadius: cornerRadius
             )
             .frame(width: fit.width, height: fit.height)

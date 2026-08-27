@@ -1350,6 +1350,24 @@ struct ComposerDocumentSurface: View {
     /// paysage (source de vérité partagée avec l'atelier et le reader).
     var sceneAspectRatio: CGFloat = CanvasGeometry.portraitRatio
 
+    /// **Relais du tap sur un objet de la scène incrustée (lot 3A du composer
+    /// unifié, #4035).** L'hôte retient la sélection et décide de monter
+    /// `sceneInspector` — la surface reste sans état sur CE que ce tap
+    /// signifie. `nil` ⇒ la scène reste sans sélection observable
+    /// (comportement Phase 1/2 inchangé).
+    var onSceneItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
+
+    /// Relais du tap sur le FOND de la scène (désélection).
+    var onSceneBackgroundTapped: (() -> Void)? = nil
+
+    /// **La zone contextuelle de l'état INSPECTEUR (lot 3A, #4035 — planche
+    /// P4 §3).** Rendue DIRECTEMENT au-dessus de `toolRow` — seulement quand
+    /// l'hôte retient une sélection sur la scène. `nil` ⇒ ABSENTE (loi 4 :
+    /// « jamais de vide-mystère, jamais de contrôle grisé »). Même patron que
+    /// `toolRowLeadingAccessory`/`toolRowTrailingAccessory` : un slot opaque,
+    /// la surface ne sait rien de CE qui compose la zone.
+    var sceneInspector: AnyView? = nil
+
     /// **Le slot de tête de `toolRow` (#3903).** Un chip d'état actif (le lieu,
     /// aujourd'hui) qui doit s'insérer DANS la disposition de la rangée d'outils
     /// plutôt que d'être stacké par-dessus : deux enfants d'un `HStack` ne se
@@ -1423,6 +1441,22 @@ struct ComposerDocumentSurface: View {
             Spacer(minLength: 0)
             mediaStrip
             backgroundStrip
+            // **État INSPECTEUR (lot 3A, #4035 — planche P4 §3).** Juste
+            // au-dessus de `toolRow`, montée SEULEMENT quand une sélection
+            // existe sur la scène — `nil` ⇒ rien peint (loi 4).
+            //
+            // **Montée SANS transition ni animation, délibérément.** La zone
+            // est un frère du `VStack` qui porte aussi `content` — donc la
+            // scène incrustée. Animer son insertion ferait varier la hauteur
+            // du canvas sur chaque frame du ressort, et `StoryCanvasUIView`
+            // reconstruit ses layers à chaque `layoutSubviews` : une tempête
+            // perf sur le geste le plus fréquent du composer. C'est la règle
+            // écrite en tête d'`EmbeddedSceneCanvas` (« On n'anime JAMAIS la
+            // frame du canvas ») ; un placement animé se fera plus tard par
+            // `scaleEffect`/`offset` sur le CONTENEUR, jamais par la hauteur.
+            if let sceneInspector {
+                sceneInspector
+            }
             toolRow
         }
         .animation(
@@ -1469,7 +1503,9 @@ struct ComposerDocumentSurface: View {
                 EmbeddedSceneCanvas(
                     slide: sceneSlide,
                     aspectRatio: sceneAspectRatio,
-                    cornerRadius: 22
+                    cornerRadius: 22,
+                    onItemTapped: onSceneItemTapped,
+                    onBackgroundTapped: onSceneBackgroundTapped
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(.horizontal, 14)

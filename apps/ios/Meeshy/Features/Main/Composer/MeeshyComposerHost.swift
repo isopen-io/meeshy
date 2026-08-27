@@ -443,6 +443,19 @@ struct MeeshyComposerHost: View {
     /// du canvas DANS l'écran document, restant à livrer.
     @State private var documentBackground: String?
 
+    /// **Lot 3A du composer unifié (#4035) — la sélection sur la scène
+    /// incrustée.** Alimentée par `onSceneItemTapped`/`onSceneBackgroundTapped`
+    /// (Phase 1/2, `EmbeddedSceneCanvas`) : `nil` ⇒ aucun objet sélectionné ⇒
+    /// `ComposerDocumentSurface.sceneInspector` reste ABSENT (loi 4, planche P4
+    /// §3).
+    ///
+    /// On retient le KIND, pas l'id : c'est lui qui décide QUELS contrôles
+    /// s'appliquent (§ P4 §3, « les contrôles de l'objet courant, eux seuls »),
+    /// et l'inspecteur lit le contenu directement sur `viewModel` — source
+    /// unique. Garder l'id en plus serait un état MORT, qui masquerait une
+    /// lecture morte le jour où un lot suivant croirait s'en servir.
+    @State private var selectedSceneItemKind: StoryCanvasUIView.CanvasItemKind?
+
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
     /// déplie sur un champ lié au CONTENU partagé (`documentText`). Vit dans le
@@ -981,6 +994,24 @@ struct MeeshyComposerHost: View {
             ),
             showsScene: documentBackground != nil,
             sceneAspectRatio: viewModel.currentCanvasRatio,
+            // Lot 3A (#4035) — état INSPECTEUR : retenir la sélection remontée
+            // par le canvas, et monter la zone contextuelle SEULEMENT quand
+            // elle existe (loi 4). Le meuble ne décide QUE de l'ABSENCE/
+            // PRÉSENCE ; ce que la zone montre reste au SDK
+            // (`EmbeddedSceneInspector`, qui lit le MÊME `viewModel`).
+            onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
+            onSceneBackgroundTapped: { selectedSceneItemKind = nil },
+            // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
+            // contrôles la zone sert est la décision du SDK, portée par l'`init?`
+            // de `EmbeddedSceneInspector` (il échoue pour tout kind qu'aucun
+            // contrôle ne sert — loi 4 rendue impossible à enfreindre ici).
+            // `documentBackground != nil` s'y ajoute : sans la scène (fond
+            // retiré), une sélection restée en mémoire peindrait la zone
+            // au-dessus de rien — un contrôle orphelin.
+            sceneInspector: documentBackground == nil
+                ? nil
+                : EmbeddedSceneInspector(viewModel: viewModel, kind: selectedSceneItemKind)
+                    .map { AnyView($0) },
             // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
             // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —
             // exactement le point où `toolRow` peint sa première icône (elle

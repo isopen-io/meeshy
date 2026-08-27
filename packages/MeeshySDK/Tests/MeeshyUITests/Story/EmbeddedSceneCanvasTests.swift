@@ -45,4 +45,42 @@ final class EmbeddedSceneCanvasTests: XCTestCase {
         XCTAssertEqual(fit.width, 320, accuracy: 0.5, "largeur bornée par le conteneur")
         XCTAssertLessThan(fit.height, 380, "hauteur plus courte en paysage")
     }
+
+    // MARK: - Lot 3A (#4035) — la scène remonte la sélection à l'hôte
+
+    /// Sans ce rappel, taper un objet de la scène incrustée ne remontait rien
+    /// à l'hôte : aucun moyen de faire paraître ses contrôles au-dessus de la
+    /// rangée d'outils de l'écran document (planche P4 §3, état INSPECTEUR).
+    func test_onItemTapped_isForwardedFromInit() {
+        var tapped: (id: String, kind: StoryCanvasUIView.CanvasItemKind)?
+        let canvas = EmbeddedSceneCanvas(
+            slide: .constant(StorySlide()),
+            onItemTapped: { id, kind in tapped = (id, kind) }
+        )
+        canvas.onItemTapped?("element-1", .text)
+        XCTAssertEqual(tapped?.id, "element-1")
+        XCTAssertEqual(tapped?.kind, .text)
+    }
+
+    /// Le tap sur le FOND (hors de tout objet) doit pouvoir remonter une
+    /// désélection — sans lui, l'hôte n'a aucun moyen d'effacer la zone
+    /// contextuelle une fois montée.
+    func test_onBackgroundTapped_isForwardedFromInit() {
+        var backgroundTapCount = 0
+        let canvas = EmbeddedSceneCanvas(
+            slide: .constant(StorySlide()),
+            onBackgroundTapped: { backgroundTapCount += 1 }
+        )
+        canvas.onBackgroundTapped?()
+        XCTAssertEqual(backgroundTapCount, 1)
+    }
+
+    /// Source-compatibilité : les call sites Phase 1 (`EmbeddedSceneCanvas(slide:aspectRatio:cornerRadius:)`,
+    /// sans les deux nouveaux paramètres) doivent continuer à compiler et à
+    /// rendre un canvas sans aucun rappel de sélection.
+    func test_defaultCallbacks_areNil_forSourceCompatibility() {
+        let canvas = EmbeddedSceneCanvas(slide: .constant(StorySlide()))
+        XCTAssertNil(canvas.onItemTapped)
+        XCTAssertNil(canvas.onBackgroundTapped)
+    }
 }

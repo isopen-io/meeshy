@@ -1,16 +1,29 @@
 import SwiftUI
 import MeeshySDK
 
-struct StoryFilterGridView: View {
+/// **Public depuis le lot 3A du composer unifié (#4035).** Déjà une vue
+/// autonome — aucun rappel, aucune dépendance à la coquille plein écran
+/// (`StoryComposerView` / `ComposerControlsLayer` / `ComposerBottomBand` /
+/// `ComposerToolPanelHost`) — c'est ce qui en fait le candidat le plus sûr
+/// pour le premier montage de `EmbeddedSceneInspector` (zone contextuelle
+/// NEUVE de l'écran document). L'init explicite préserve le site d'appel
+/// existant de `ComposerToolPanelHost.textPanel` (mêmes labels, même ordre) :
+/// zéro régression sur l'atelier.
+public struct StoryFilterGridView: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
+
+    public init(viewModel: StoryComposerViewModel, previewImage: UIImage? = nil) {
+        self.viewModel = viewModel
+        self.previewImage = previewImage
+    }
 
     @Environment(\.colorScheme) private var colorScheme
     /// Tile-sized downsample of `previewImage`, computed once per slide so each
     /// tile's `StoryFilterProcessor.apply` runs on a small bitmap (cheap + cached).
     @State private var thumbnailBase: UIImage?
 
-    var body: some View {
+    public var body: some View {
         // Header interne + background ultraThinMaterial retires : le bandeau parent
         // (ComposerToolPanelHost) fournit deja le bouton retour "< Filtres" et le
         // background glass. Triple encapsulation visuelle eliminee.
