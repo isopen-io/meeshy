@@ -232,6 +232,41 @@ describe('MessageTranslationService._extractConversationLanguages', () => {
     expect(languages).not.toContain('ES-ES');
   });
 
+  it('region-strips an irreducible region-tagged anonymous participant.language, matching the registered branch (Prisme rule #1)', async () => {
+    // `normalizeLanguageCode` cannot reduce an ISO 639-3 code with no Meeshy
+    // catalog entry (Filipino `fil`, Cantonese `yue`, …). The registered branch
+    // still region-strips it (`resolveUserLanguagesOrdered` → `normalizeInAppLanguage`
+    // → `'fil-PH'` → `'fil'`); the anonymous branch used to keep the region tag
+    // (`'fil-PH'.toLowerCase()` → `'fil-ph'`), injecting a SECOND, never-matching
+    // NLLB target for the very same language — a wasted translation request and a
+    // Prisme rule #1 miss, exactly the collision class the cased-code fix closes.
+    // Both branches must now collapse onto the single region-blind `'fil'`.
+    const { prisma } = makePrismaMock({
+      participants: [
+        {
+          type: 'user',
+          user: {
+            id: 'alice',
+            username: 'alice',
+            systemLanguage: 'fil-PH',
+            regionalLanguage: null,
+            customDestinationLanguage: null,
+            deviceLocale: null,
+          },
+        },
+        { type: 'anonymous', language: 'fil-PH' },
+      ],
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const svc = new MessageTranslationService(prisma as any);
+    const languages = await extractLanguages(svc, 'conv-irreducible-region');
+
+    expect(languages).toEqual(['fil']);
+    expect(languages).not.toContain('fil-ph');
+    expect(languages).not.toContain('fil-PH');
+  });
+
   it('returns [] when autoTranslateEnabled is false on the conversation', async () => {
     const { prisma } = makePrismaMock({
       conversationAutoTranslate: false,
