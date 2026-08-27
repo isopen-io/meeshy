@@ -304,6 +304,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
 
+    /// **Les sources déjà PORTÉES dans la scène (B1, #3924).** Clé
+    /// d'idempotence d'`applyContentMedia` : les closures de bascule de mode
+    /// refirent à chaque changement (Post↔Story↔Réel), et sans cette mémoire un
+    /// simple aller-retour dupliquerait chaque média du document. La source est
+    /// l'URL LOCALE que l'hôte passe — jamais l'`obj.id` généré, qui change à
+    /// chaque pose.
+    var carriedContentSources: Set<URL> = []
+
     /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
     /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
     /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
