@@ -3,14 +3,18 @@ import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
-/// **F2 (#3885) — choisir une couleur de fond fait NAÎTRE la scène 9:16.**
+/// **#3939 (retour porteur 2026-08-27) — choisir une couleur de fond ne fait
+/// PLUS naître la scène 9:16 plein écran.**
 ///
-/// « Un post sans visuel devient une toile. » La surface document était plate
-/// (texte + bande média) ; poser une couleur de fond — ou choisir la
-/// destination STORY (F1) — bascule `mountedSurface` vers `.scene`, montant
-/// l'atelier 9:16 existant (`StoryComposerView`) avec la couleur semée. La
-/// décision est une fonction PURE, testable off-main ; la scène et son picker
-/// de fond existent déjà côté SDK — F2 les CÂBLE, ne les reconstruit pas.
+/// L'ancienne règle F2 (#3885, `ComposerSceneActivation.activatesScene`,
+/// SUPPRIMÉE) faisait basculer `mountedSurface` vers `.scene` dès qu'un fond
+/// était choisi — un remplacement de route surprenant, jamais demandé :
+/// l'auteur voulait rester sur l'écran document. Incrément SÛR de #3939 :
+/// cette bascule est coupée ; l'incrustation du canvas DANS l'écran document
+/// reste à livrer (sous-tâche explicite de #3939, budget dédié).
+///
+/// STORY/RÉEL, eux, continuent de monter la scène par le FORMAT (routage,
+/// B3/#3926) — INCHANGÉ par ce correctif.
 final class ComposerSceneActivationTests: XCTestCase {
 
     private static let iosRoot = URL(fileURLWithPath: #filePath)
@@ -26,35 +30,41 @@ final class ComposerSceneActivationTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    // 1 — DÉCISION PURE : une couleur de fond fait naître la scène. STORY/RÉEL,
-    // eux, montent la scène par le FORMAT (routage), plus par ce prédicat (B3).
-    func test_uneCouleurDeFond_monteLaScene() {
-        XCTAssertTrue(
-            ComposerSceneActivation.activatesScene(background: "1E90FF"),
-            "Une couleur de fond fait d'un POST une toile — la scène 9:16 naît."
+    // 1 — le prédicat F2 est SUPPRIMÉ : plus aucun site ne doit le citer, ni
+    // dans le meuble ni ailleurs — sa réapparition serait la régression même
+    // que ce lot corrige.
+    func test_composerSceneActivation_neSuPlusReferencee() throws {
+        // Commentaires STRIPPÉS avant l'assertion : le fichier explique le
+        // retrait dans un doc-comment qui cite l'ANCIEN nom du type à des
+        // fins historiques — une assertion sur `raw` non dépouillé se
+        // contredirait elle-même (le commentaire qui EXPLIQUE la suppression
+        // ferait rougir le test qui la VÉRIFIE). Seul du CODE qui réintroduit
+        // le type doit faire rougir cette garde.
+        let code = AppSourceGuard.stripComments(
+            try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
         )
         XCTAssertFalse(
-            ComposerSceneActivation.activatesScene(background: nil),
-            "Sans fond, la surface reste celle du routage : STORY/RÉEL montent la scène "
-                + "par le FORMAT que l'éventail écrit, jamais par ce prédicat (B3, #3926)."
+            code.contains("ComposerSceneActivation"),
+            "`ComposerSceneActivation` ne doit plus être référencée — choisir un fond ne bascule plus "
+                + "`mountedSurface` vers `.scene` (#3939)."
         )
     }
 
-    // 2 — le MEUBLE consulte la décision pure (le fond) et laisse le ROUTAGE
-    // monter la scène pour STORY/RÉEL — jamais un seuil recopié, jamais un
-    // booléen de destination ad hoc.
-    func test_leMeuble_monteLaScene_parLaDecisionPure() throws {
+    // 2 — le MEUBLE monte la scène UNIQUEMENT par le routage du format
+    // (STORY/RÉEL) — jamais par la couleur de fond choisie.
+    func test_leMeuble_monteLaScene_parLeRoutageDuFormatSeul() throws {
         let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
         XCTAssertTrue(raw.contains("private var mountedSurface"),
                       "mountedSurface introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
-            src.contains("ComposerSceneActivation.activatesScene(background:documentBackground)"),
-            "`mountedSurface` consulte la décision PURE du fond — plus de destination, le routage tranche le reste."
+            src.contains("returnComposerSurfaceRouting.surface(opening:profile.opensWith,format:selectedFormat)"),
+            "`mountedSurface` doit renvoyer directement le routage du format — plus de branche sur le fond."
         )
         XCTAssertTrue(
             src.contains("vardocumentBackground:String?"),
-            "La couleur de fond choisie vit dans le SOCLE (`documentBackground`), `nil` = surface plate."
+            "La couleur de fond choisie reste posée dans le SOCLE (`documentBackground`) — utile à "
+                + "l'atelier une fois l'incrustation livrée (#3939), même sans effet de routage aujourd'hui."
         )
     }
 

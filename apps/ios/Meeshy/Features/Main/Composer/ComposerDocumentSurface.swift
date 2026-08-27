@@ -957,22 +957,6 @@ nonisolated enum ComposerDocumentMediaFactory {
 /// est entendu par le serveur comme un EFFACEMENT), et la liste nominative
 /// écartée quand l'audience ne l'exige pas. Les laisser aux quatre sites de
 /// montage du lot 4.6, ce serait écrire la loi 3 quatre fois.
-/// **Ce qui fait naître la scène 9:16 depuis la surface document (F2, #3885).**
-///
-/// Une couleur de FOND suffit : « un post sans visuel devient une toile ».
-///
-/// **B3 (#3926) — la destination STORY/RÉEL ne passe plus par ici.** Elle
-/// passe par le FORMAT que l'éventail écrit (`selectedFormat`), que
-/// `ComposerSurfaceRouting` envoie sur `.scene`. `ComposerSceneActivation` ne
-/// garde donc que l'activation par le fond — la seule qui ne s'exprime pas déjà
-/// par un format. Réduire le prédicat à sa cause unique évite deux chemins vers
-/// la même bascule.
-nonisolated enum ComposerSceneActivation {
-    static func activatesScene(background: String?) -> Bool {
-        background != nil
-    }
-}
-
 nonisolated struct ComposerDocumentDraft: Equatable {
     let format: ComposerFormat
 
@@ -1393,10 +1377,14 @@ struct ComposerDocumentSurface: View {
         VStack(alignment: .leading, spacing: 0) {
             exitAffordance
             content
-            Spacer(minLength: 0)
-            mediaStrip
-            backgroundStrip
-            toolRow
+            // **Sous la zone de texte, pas au bas de l'écran (retour porteur
+            // 2026-08-27).** La bande vivait après `toolRow` — à côté des
+            // boutons d'action, loin d'où l'auteur tape. Elle voyage
+            // maintenant DIRECTEMENT sous `content`, avant le `Spacer` qui
+            // pousse le reste vers le bas : la plus proche approximation du
+            // curseur sans faire passer `TextEditor` par un pont UIKit
+            // (`UITextView` + `caretRect`, qu'aucun composant du dépôt ne
+            // fait aujourd'hui) — décision confirmée avec le porteur.
             // `!suggestions.isEmpty`, pas seulement `activeQuery != nil` (revue
             // Opus 2026-08-27) : en `.composerDraft`, il n'y a AUCUN appel
             // réseau en attente qui remplirait la liste plus tard — pas d'ami
@@ -1409,8 +1397,12 @@ struct ComposerDocumentSurface: View {
                     currentText: text,
                     onSelect: { updated in text = updated }
                 )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(.move(edge: .top).combined(with: .opacity))
             }
+            Spacer(minLength: 0)
+            mediaStrip
+            backgroundStrip
+            toolRow
         }
         .animation(
             .spring(response: 0.3, dampingFraction: 0.8),
@@ -1534,8 +1526,18 @@ struct ComposerDocumentSurface: View {
     /// devient une toile ». Une bande horizontale de pastilles sur la palette
     /// PARTAGÉE du SDK (`StoryBackgroundPalette.colors`, jamais recopiée) ;
     /// taper une couleur REMONTE au meuble (`onPickBackground`), qui pose le
-    /// fond du socle et fait naître la scène. `nil` closure ⇒ aucune bande
-    /// (loi 4) — la surface reste sans état.
+    /// fond du socle. `nil` closure ⇒ aucune bande (loi 4) — la surface reste
+    /// sans état.
+    ///
+    /// **Ne fait plus naître la scène (#3939, retour porteur 2026-08-27) :**
+    /// choisir une couleur pose `documentBackground` (utile pour l'atelier
+    /// quand il finira par s'incruster) mais ne bascule plus `mountedSurface`
+    /// — cette bande reste donc temporairement SANS effet visuel tant que
+    /// #3939 (incrustation du canvas dans l'écran document) n'est pas livré.
+    /// La forme CIBLE — révéler la palette via l'icône de fond DANS `toolRow`,
+    /// plutôt qu'un champ repliable séparé — appartient aussi à #3939 ; cette
+    /// bande garde volontairement sa forme antérieure (toujours visible) dans
+    /// cet incrément sûr, pour ne pas inventer un patron d'UI qui sera jeté.
     @ViewBuilder
     private var backgroundStrip: some View {
         if onPickBackground != nil {
