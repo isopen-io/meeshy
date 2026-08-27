@@ -93,6 +93,25 @@ plus loin que le rail : texte, fond, lieu et transcription en plus des médias. 
 servie ⇒ **aucun `⋯`** : un menu vide est la forme la plus sournoise de l'UI morte, il a l'air de
 marcher jusqu'au tap.
 
+**Le composant Position porte le LIEU, pas la catégorie « position » (#4034).** Son titre était le
+mot « Position » ; le nom du lieu vivait ailleurs, dans un chip de la rangée d'outils, avec sa propre
+croix. Un réglage dont l'objet se lit à l'autre bout de l'écran n'est pas un réglage — c'est deux
+moitiés qu'on rapproche de tête. L'entête réunit les trois questions de l'auteur sur une ligne :
+*quel lieu ?* (le nom), *est-il trouvable ?* (la bascule), *comment l'enlever ?* (une croix en
+verre). Le chip de la rangée disparaît.
+
+**Et le titre descend jusqu'à l'adresse avant d'abandonner.** Un point posé à la main n'a pas de
+nom : l'entête affichait alors « Position » — le mot générique — pendant que l'adresse complète
+venait d'être montrée par le sélecteur, une seconde plus tôt. Une PUCE répond à « y a-t-il un
+lieu ? » et peut se contenter du mot ; un TITRE répond à « lequel ? » et doit descendre : nom, puis
+adresse, puis le mot en dernier recours.
+
+**Le composant se monte sur le LIEU, jamais sur l'opt-in.** La découvrabilité « à proximité » exige
+une audience publique ; le lieu, non. Garder l'ancienne garde après avoir retiré le chip aurait fait
+disparaître de l'écran le lieu d'un post privé — et avec lui le seul moyen de le retirer. La règle
+d'opt-in gouverne désormais l'INTÉRIEUR du composant : sans elle, ni bascule, ni chevron, ni détail
+(loi 4). Reste le nom et sa croix.
+
 **Le ✕ de retrait ne se peint que sur la slide SÉLECTIONNÉE.** À 40 pt il occupe le quart du chip :
 viser une vignette pour naviguer la supprimait. Sélectionner reste à un geste sur tout chip,
 supprimer en demande deux — l'ordre juste pour une action irréversible.

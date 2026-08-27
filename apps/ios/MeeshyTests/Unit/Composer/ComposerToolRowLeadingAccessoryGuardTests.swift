@@ -130,10 +130,39 @@ final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
             "`documentSurface` doit passer `toolRowLeadingAccessory:` à `ComposerDocumentSurface(` — sans cela "
                 + "le chip de lieu n'est plus affiché du tout."
         )
-        XCTAssertTrue(
+        // **#4034 a retiré la tuile de la rangée**, et l'assertion qui exigeait
+        // `documentLocationTile` a suivi son objet. Ce que #3903 protège — le
+        // lieu ne se STACKE plus par-dessus la surface — reste tenu par
+        // l'assertion négative ci-dessus ; ce que la tuile portait (le nom, le
+        // retrait) est désormais gardé par
+        // `NearbyDiscoverabilityControlFoldGuardTests`, à son nouveau site.
+        XCTAssertFalse(
             block.contains("documentLocationTile"),
-            "`documentLocationTile` doit toujours être construit quelque part dans `documentSurface` — la "
-                + "tuile elle-même n'a pas changé, seul son point d'attache dans la disposition change."
+            "La tuile de lieu de la rangée d'outils a été RETIRÉE au #4034 : le nom du lieu, son réglage et "
+                + "sa croix vivent dans l'entête du composant Position. La reconstruire ici remettrait la même "
+                + "information à deux endroits de l'écran."
+        )
+    }
+
+    /// **Le lieu a un site, et un seul (#4034).**
+    ///
+    /// La garde ci-dessus est NÉGATIVE : elle interdit l'ancien site sans rien
+    /// exiger du nouveau, et passerait au vert le jour où le lieu ne serait
+    /// peint NULLE PART. Celle-ci est sa moitié positive.
+    func test_host_paintsTheLocationExactlyOnce_inTheLocationCard() throws {
+        let source = try hostSource()
+        XCTAssertFalse(source.isEmpty, "Source du meuble vide — la garde serait verte par omission.")
+
+        XCTAssertEqual(
+            source.components(separatedBy: "NearbyDiscoverabilityControl(").count - 1, 1,
+            "Le composant Position doit être monté par EXACTEMENT un site : deux montages donneraient deux "
+                + "entêtes pour un seul lieu."
+        )
+        XCTAssertTrue(
+            source.contains("placeName: MediaKindLabel.placeTitle(name: place.name, address: place.address)"),
+            "L'entête doit porter le TITRE du lieu — nom, à défaut ADRESSE. `placeLabel` s'arrête au nom et "
+                + "retombe sur le mot « Position » à côté d'une adresse connue : c'est le défaut de #4034 une "
+                + "couche plus bas, mesuré au simulateur le 2026-08-28."
         )
     }
 }

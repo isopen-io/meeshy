@@ -84,12 +84,26 @@ nonisolated enum NearbyDiscoverabilityLabels {
     /// **Le résumé replié (#3905).** Deux libellés COURTS, distincts du
     /// `title`/`subtitle` complets — trop longs pour une ligne compacte — et
     /// qui disent l'état en un mot, sans qu'il faille déplier pour le savoir.
+    /// **Reformulés au #4034, clés INCHANGÉES.** Ils disaient « Position
+    /// activée » / « Position » à l'époque où ils étaient le TITRE du contrôle
+    /// replié. Le titre est désormais le nom du lieu, et ces deux libellés
+    /// passent en sous-titre : y répéter « Position » sous « Marché de
+    /// Sandaga » n'aurait rien dit de plus que l'icône. Ils nomment donc ce
+    /// qu'ils gouvernent VRAIMENT — la découvrabilité à proximité, distincte du
+    /// lieu lui-même. Les sept traductions du catalogue ont suivi ; ouvrir deux
+    /// clés neuves aurait laissé les anciennes mortes derrière.
     static var summaryEnabled: String {
-        String(localized: "feed.nearby.consent.summaryEnabled", defaultValue: "Position activée", bundle: .main)
+        String(localized: "feed.nearby.consent.summaryEnabled", defaultValue: "Trouvable à proximité", bundle: .main)
     }
 
     static var summaryDisabled: String {
-        String(localized: "feed.nearby.consent.summaryDisabled", defaultValue: "Position", bundle: .main)
+        String(localized: "feed.nearby.consent.summaryDisabled", defaultValue: "Non trouvable à proximité", bundle: .main)
+    }
+
+    /// La croix de l'entête (#4034). Elle retire le LIEU — pas la
+    /// découvrabilité, qui se referme d'elle-même faute d'objet.
+    static var removePlace: String {
+        String(localized: "feed.nearby.place.remove", defaultValue: "Retirer le lieu", bundle: .main)
     }
 
     /// **Le hint du bouton de repli, distinct de `hint` (revue Opus
@@ -238,6 +252,35 @@ struct NearbyDiscoverabilityControl: View {
     @Binding var choice: NearbyDiscoverabilityChoice
     let accentColor: String
 
+    /// **Le TITRE du composant est le lieu RÉEL (#4034).** Il portait le mot
+    /// « Position », qui nommait la CATÉGORIE du réglage et non son contenu :
+    /// l'auteur voyait « Position » sans savoir LEQUEL partait, alors que le
+    /// nom du lieu était déjà connu — il vivait dans un chip séparé de la
+    /// rangée d'outils, c'est-à-dire à un autre endroit de l'écran que le
+    /// réglage qui le gouverne. Deux moitiés d'une même information à deux
+    /// endroits : c'est ce que ce lot referme.
+    let placeName: String
+
+    /// **La découvrabilité et le LIEU sont deux affaires distinctes**, et ce
+    /// paramètre porte la frontière. Le lieu part avec la publication dès qu'il
+    /// est posé ; la découvrabilité « à proximité » est un SECOND opt-in que
+    /// seule une audience publique autorise (`FeedNearbyDiscoverability.offers`).
+    ///
+    /// Le composant se monte donc sur le LIEU et non sur l'opt-in : sans ce
+    /// paramètre, un post privé avec un lieu n'aurait plus rien à l'écran pour
+    /// le dire — le chip de la rangée d'outils ayant disparu, l'auteur aurait
+    /// perdu à la fois l'affichage du lieu ET le moyen de le retirer.
+    ///
+    /// `false` ⇒ ni bascule, ni chevron, ni détail : rien à régler, donc aucun
+    /// contrôle (loi 4). Reste le nom du lieu et sa croix.
+    let offersDiscoverability: Bool
+
+    /// **La croix de l'entête supprime le LIEU**, pas la découvrabilité.
+    /// Retirer le lieu referme le second opt-in par voie de conséquence — la
+    /// garde `offers(hasPlace:)` s'en charge —, jamais par une seconde
+    /// écriture de la même règle.
+    let onRemovePlace: () -> Void
+
     /// **Replié par défaut (#3905).** Le détail complet (`header`, sélecteur
     /// de grain, notices) n'occupait jusqu'ici jamais moins que sa pleine
     /// hauteur pour un réglage secondaire. État PUREMENT d'affichage — la
@@ -261,9 +304,9 @@ struct NearbyDiscoverabilityControl: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            summary
+            placeHeader
             if isExpanded {
-                header
+                discoverabilityDetail
                 if choice.isDiscoverable {
                     tierPicker
                     notices
@@ -280,79 +323,141 @@ struct NearbyDiscoverabilityControl: View {
         .animation(.easeInOut(duration: 0.2), value: isExpanded)
     }
 
-    // MARK: - Résumé replié
+    // MARK: - L'entête : le lieu, son réglage, sa croix
 
-    /// **Le résumé (#3905)** — toujours peint, à toute taille : c'est lui qui
-    /// réduit le contrôle à une fraction de l'espace tant que l'auteur n'a
-    /// pas demandé le détail. Le déplier ne change pas l'état de découvrabilité
-    /// — c'est UNE autre affaire, celle du `Toggle` de `header`.
-    private var summary: some View {
-        Button {
-            HapticFeedback.light()
-            // Une seule animation pour ce changement : `.animation(value:
-            // isExpanded)` sur le conteneur du `body` (ci-dessus) l'anime déjà
-            // — un `withAnimation` ici serait redondant.
-            isExpanded.toggle()
-        } label: {
-            HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "mappin.and.ellipse")
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(Color(hex: accentColor))
-                    .accessibilityHidden(true)
-                Text(choice.isDiscoverable ? NearbyDiscoverabilityLabels.summaryEnabled : NearbyDiscoverabilityLabels.summaryDisabled)
-                    .font(MeeshyFont.relative(13, weight: .medium))
+    /// **L'ENTÊTE (#4034)** — trois choses sur une ligne, chacune répondant à
+    /// une question différente de l'auteur : *quel lieu ?* (le nom), *est-il
+    /// trouvable ?* (la bascule), *comment l'enlever ?* (la croix).
+    ///
+    /// Elles vivaient à trois endroits : le nom dans un chip de la rangée
+    /// d'outils, la bascule derrière un pli, le retrait sur le chip. Un
+    /// réglage dont l'objet se lit à l'autre bout de l'écran n'est pas un
+    /// réglage — c'est deux moitiés qu'on rapproche de tête.
+    ///
+    /// **Ce que #4034 SUPERSÈDE de #3905** : la bascule était gatée par
+    /// `isExpanded`, précisément pour que l'état replié ne montre qu'un résumé.
+    /// La demande porteur du 2026-08-27 la ramène dans l'entête — c'est le
+    /// DÉTAIL (grain, notices) que le pli cache désormais, pas l'état.
+    private var placeHeader: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            expander
+            if offersDiscoverability {
+                Toggle("", isOn: isDiscoverable)
+                    .labelsHidden()
+                    .tint(Color(hex: accentColor))
+                    .accessibilityIdentifier("feed.nearby.consent.toggle")
+                    .accessibilityLabel(NearbyDiscoverabilityLabels.title)
+                    .accessibilityHint(NearbyDiscoverabilityLabels.hint)
+            }
+            removePlaceButton
+        }
+    }
+
+    /// Le nom du lieu, l'état courant, et le chevron — un seul bouton, parce
+    /// qu'un titre qui déplie doit être tapable sur toute sa largeur.
+    ///
+    /// **Il n'est un bouton que s'il a quelque chose à déplier.** Sans opt-in
+    /// offert il n'y a ni grain ni notice : le chevron disparaît et le titre
+    /// cesse d'être interactif, plutôt que d'ouvrir sur du vide (loi 4).
+    @ViewBuilder
+    private var expander: some View {
+        if offersDiscoverability {
+            Button {
+                HapticFeedback.light()
+                isExpanded.toggle()
+            } label: {
+                expanderLabel
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("feed.nearby.consent.summary")
+            // Le libellé accessible DOIT correspondre au texte visible (WCAG
+            // 2.5.3, Label in Name) — et le texte visible est désormais le NOM
+            // DU LIEU. « Toucher Position » n'activerait rien.
+            .accessibilityLabel(placeName)
+            .accessibilityValue(
+                isExpanded
+                    ? String(localized: "feed.nearby.consent.expanded", defaultValue: "Déplié", bundle: .main)
+                    : String(localized: "feed.nearby.consent.collapsed", defaultValue: "Replié", bundle: .main)
+            )
+            .accessibilityHint(NearbyDiscoverabilityLabels.summaryHint)
+            .accessibilityAddTraits(.isButton)
+        } else {
+            expanderLabel
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(placeName)
+        }
+    }
+
+    /// Le contenu peint par `expander`, écrit UNE fois : les deux branches
+    /// ci-dessus ne diffèrent que par l'interactivité, jamais par ce qu'elles
+    /// montrent — deux copies auraient divergé au premier ajustement.
+    private var expanderLabel: some View {
+        HStack(spacing: MeeshySpacing.xs) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(MeeshyFont.relative(13))
+                .foregroundColor(Color(hex: accentColor))
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(placeName)
+                    .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .lineLimit(1)
-                Spacer()
+                if offersDiscoverability {
+                    Text(choice.isDiscoverable
+                         ? NearbyDiscoverabilityLabels.summaryEnabled
+                         : NearbyDiscoverabilityLabels.summaryDisabled)
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(MeeshyColors.textMuted(isDark: true))
+                        .lineLimit(1)
+                }
+            }
+            if offersDiscoverability {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(MeeshyColors.textMuted(isDark: true))
                     .accessibilityHidden(true)
             }
-            .frame(minHeight: 44)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("feed.nearby.consent.summary")
-        // Le libellé accessible DOIT correspondre au texte visible (WCAG
-        // 2.5.3, Label in Name) — revue Opus 2026-08-27. `title` était le
-        // libellé complet du `Toggle` (« Rendre ce contenu trouvable à
-        // proximité »), jamais lu sur ce bouton : Voice Control fait
-        // correspondre le NOM accessible, « Toucher Position » n'aurait rien
-        // activé.
-        .accessibilityLabel(
-            choice.isDiscoverable ? NearbyDiscoverabilityLabels.summaryEnabled : NearbyDiscoverabilityLabels.summaryDisabled
-        )
-        .accessibilityValue(
-            isExpanded
-                ? String(localized: "feed.nearby.consent.expanded", defaultValue: "Déplié", bundle: .main)
-                : String(localized: "feed.nearby.consent.collapsed", defaultValue: "Replié", bundle: .main)
-        )
-        // Hint DISTINCT de celui du `Toggle` de `header` (`hint`, qui décrit
-        // la FEATURE) — ce bouton déplie/replie, il ne change pas la
-        // découvrabilité. Même hint que le `Toggle` ferait annoncer deux
-        // éléments identiquement nommés par VoiceOver.
-        .accessibilityHint(NearbyDiscoverabilityLabels.summaryHint)
-        .accessibilityAddTraits(.isButton)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
-    // MARK: - En-tête
-
-    private var header: some View {
-        Toggle(isOn: isDiscoverable) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(NearbyDiscoverabilityLabels.title)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(NearbyDiscoverabilityLabels.subtitle)
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(MeeshyColors.textMuted(isDark: true))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+    /// **La croix, en VERRE** (#4034) — même matériau que la fermeture de la
+    /// barre haute du composer, parce que c'est le même geste : retirer ce que
+    /// l'entête nomme.
+    ///
+    /// `adaptiveGlass` et non `glassControlForeground()` : ce dernier peint son
+    /// premier plan en `indigo950` sous un thème clair, alors que ce contrôle
+    /// est peint sur un plateau TOUJOURS sombre (tous ses jetons sont pris en
+    /// `isDark: true`). Le premier plan est donc posé explicitement.
+    private var removePlaceButton: some View {
+        Button {
+            HapticFeedback.light()
+            onRemovePlace()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: 28, height: 28)
+                .adaptiveGlass(in: Circle())
         }
-        .tint(Color(hex: accentColor))
-        .accessibilityIdentifier("feed.nearby.consent.toggle")
-        .accessibilityHint(NearbyDiscoverabilityLabels.hint)
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("feed.nearby.place.remove")
+        .accessibilityLabel(NearbyDiscoverabilityLabels.removePlace)
+    }
+
+    // MARK: - Le détail, derrière le pli
+
+    /// Ce que le pli cache désormais : l'EXPLICATION du second opt-in, puis le
+    /// grain et les notices quand il est actif. L'ÉTAT, lui, est monté dans
+    /// l'entête — c'est l'inversion que #4034 opère sur #3905.
+    @ViewBuilder
+    private var discoverabilityDetail: some View {
+        Text(NearbyDiscoverabilityLabels.subtitle)
+            .font(MeeshyFont.relative(11))
+            .foregroundColor(MeeshyColors.textMuted(isDark: true))
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Sélecteur de grain

@@ -1177,7 +1177,17 @@ struct MeeshyComposerHost: View {
             // Type. Elle voyage désormais par `toolRowLeadingAccessory`, un
             // slot rendu DANS le `HStack` de `toolRow` — deux enfants d'un
             // `HStack` ne se superposent jamais, par construction.
-            toolRowLeadingAccessory: documentLocation.map { AnyView(documentLocationTile($0)) },
+            // **Le chip de lieu est RETIRÉ de la rangée (#4034)** : le nom du
+            // lieu, son réglage et sa croix vivent désormais dans l'entête du
+            // composant Position, en bas. Deux moitiés d'une même information à
+            // deux endroits de l'écran, c'est ce que ce lot referme.
+            //
+            // Le SLOT reste, et ce n'est pas de la dette : il est le jumeau
+            // symétrique de `toolRowTrailingAccessory` (la capsule de langue,
+            // vivante), et c'est LUI qui tient l'invariant anti-chevauchement
+            // de #3903 — tout futur chip de tête devra passer par là plutôt que
+            // par un `.overlay`.
+            toolRowLeadingAccessory: nil,
             // **La capsule de langue, corrigée revue Opus 2026-08-27** : elle
             // voyageait en `.overlay(alignment: .bottomTrailing)` sur TOUTE la
             // surface, sur la promesse que `toolRow` restait « la seule ligne
@@ -1201,10 +1211,22 @@ struct MeeshyComposerHost: View {
         // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
         // != nil` seul : l'audience compte autant que le lieu.
         .safeAreaInset(edge: .bottom) {
-            if documentOffersNearbyDiscoverability {
+            // **#4034 — le composant se monte sur le LIEU, plus sur l'opt-in.**
+            // Il était gaté par `documentOffersNearbyDiscoverability` (lieu ET
+            // audience publique) à l'époque où le nom du lieu vivait ailleurs,
+            // dans un chip de la rangée d'outils. Ce chip est retiré — l'info
+            // vit dans l'entête du composant —, si bien que garder l'ancienne
+            // garde aurait fait DISPARAÎTRE de l'écran le lieu d'un post privé,
+            // avec le seul moyen de le retirer. La découvrabilité, elle, reste
+            // gouvernée par sa règle : c'est `offersDiscoverability` qui la
+            // porte À L'INTÉRIEUR du composant.
+            if let place = documentLocation {
                 NearbyDiscoverabilityControl(
                     choice: $documentDiscoverability,
-                    accentColor: MeeshyColors.brandPrimaryHex
+                    accentColor: MeeshyColors.brandPrimaryHex,
+                    placeName: MediaKindLabel.placeTitle(name: place.name, address: place.address),
+                    offersDiscoverability: documentOffersNearbyDiscoverability,
+                    onRemovePlace: { documentLocation = nil }
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
@@ -1604,54 +1626,6 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// **La tuile de lieu (T2.5)** — un chip retirable (l'idiome capsule du
-    /// meuble), jamais le pavé pin-drop du composer inline (`feedPlaceTile`),
-    /// que ce meuble n'a pas de rangée de vignettes pour accueillir.
-    ///
-    /// Retirer le lieu ne referme PAS le second opt-in — même comportement que
-    /// `feedPlaceTile` (`FeedView+Attachments.swift`), dont le bouton de
-    /// retrait ne touche pas `nearbyDiscoverability` : la garde de
-    /// `documentOffersNearbyDiscoverability` (`hasPlace: false`) suffit à
-    /// masquer le contrôle et à priver `discoverabilityPrecision` de toute
-    /// valeur, sans qu'il faille une seconde écriture de la même règle.
-    private func documentLocationTile(_ place: SharedPlace) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "mappin.circle.fill")
-                .font(MeeshyFont.relative(12))
-                .foregroundColor(MeeshyColors.indigo400)
-            Text(MediaKindLabel.placeLabel(place.name))
-                .font(MeeshyFont.relative(12, weight: .medium))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .lineLimit(1)
-            Button {
-                HapticFeedback.light()
-                documentLocation = nil
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(12))
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-            }
-            .accessibilityLabel(String(localized: "feed.attachment.remove", defaultValue: "Retirer la pièce jointe", bundle: .main))
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.indigo400.opacity(0.15))
-                .overlay(
-                    Capsule()
-                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1)
-                )
-        )
-        // PAS de `.padding(16)` ici (revue Opus, débordement mesuré au
-        // simulateur 2026-08-27) : cette marge datait de l'ancien
-        // `.overlay()`, qui avait besoin de son propre inset — devenu enfant
-        // du `HStack` de `toolRow`, cette tuile hérite déjà du `.padding(16)`
-        // posé UNE fois sur toute la rangée. La garder ici l'ajoutait deux
-        // fois (32pt de trop) et faisait déborder `toolRow` de l'écran dès
-        // qu'un lieu ET la capsule de langue étaient présents ensemble.
-    }
-
     /// **Le SECOND opt-in n'est offert que sous la MÊME garde que le composer
     /// inline** — `FeedNearbyDiscoverability.offers(hasPlace:visibility:)`,
     /// APPELÉE et jamais recopiée (`hasPlace && visibility == .public`) : une
@@ -1703,7 +1677,8 @@ struct MeeshyComposerHost: View {
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.language))
         .accessibilityValue(documentLanguageDisplayName)
-        // Même correctif que `documentLocationTile` : `.padding(16)` datait
+        // Même correctif que l'ancienne tuile de lieu (#4034, retirée) :
+        // `.padding(16)` datait
         // de l'ancien `.overlay(alignment: .bottomTrailing)` et doublait la
         // marge une fois la capsule devenue enfant du `HStack` de `toolRow`
         // — cause du débordement horizontal mesuré au simulateur.

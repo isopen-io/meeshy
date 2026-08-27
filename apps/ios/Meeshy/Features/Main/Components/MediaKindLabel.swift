@@ -146,6 +146,31 @@ nonisolated enum MediaKindLabel {
         return placeName
     }
 
+    /// **Le TITRE d'un lieu (#4034)** — ce qui l'IDENTIFIE, par précision
+    /// décroissante : son nom, à défaut son adresse, à défaut seulement le mot
+    /// générique.
+    ///
+    /// `placeLabel` ci-dessus s'arrête au nom, et c'est juste pour une PUCE
+    /// d'inventaire, qui répond à « y a-t-il un lieu attaché ? ». Un TITRE
+    /// répond à « lequel ? » — et un point posé à la main n'a pas de nom tout
+    /// en portant l'adresse que le sélecteur venait d'afficher. Retomber sur
+    /// « Position » juste à côté d'une adresse connue est le défaut même que
+    /// #4034 corrige, une couche plus bas : mesuré au simulateur le
+    /// 2026-08-28, l'entête du composant Position affichait « Location » sous
+    /// un lieu dont l'adresse complète était à l'écran une seconde plus tôt.
+    ///
+    /// Le mot générique reste le DERNIER recours, jamais le premier : un lieu
+    /// sans nom ni adresse existe (un point posé en mer), et un titre vide
+    /// serait pire que le mot.
+    static func placeTitle(name placeName: String?,
+                           address: String?,
+                           bundle: Bundle = .main,
+                           locale: Locale = .current) -> String {
+        if let placeName, !placeName.isEmpty { return placeName }
+        if let address, !address.isEmpty { return address }
+        return name(.location, bundle: bundle, locale: locale)
+    }
+
     // MARK: - Passerelles depuis les vocabulaires de type du dépôt
 
     /// Depuis le type d'une pièce jointe. Total par construction : les cinq

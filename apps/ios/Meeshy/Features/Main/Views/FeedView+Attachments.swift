@@ -608,7 +608,14 @@ extension FeedView {
             if feedOffersNearbyDiscoverability {
                 NearbyDiscoverabilityControl(
                     choice: $nearbyDiscoverability,
-                    accentColor: MeeshyColors.brandPrimaryHex
+                    accentColor: MeeshyColors.brandPrimaryHex,
+                    // #4034 — le composant porte le nom du lieu qu'il gouverne.
+                    // La feuille historique garde SA vignette de lieu (elle a
+                    // une rangée de pièces jointes pour l'accueillir), donc le
+                    // retrait passe par le même canal qu'elle : `pendingPlace`.
+                    placeName: MediaKindLabel.placeTitle(name: pendingPlace?.name, address: pendingPlace?.address),
+                    offersDiscoverability: true,
+                    onRemovePlace: { pendingPlace = nil }
                 )
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
@@ -1120,7 +1127,10 @@ struct FeedComposerSheet: View {
                 if offersNearbyDiscoverability {
                     NearbyDiscoverabilityControl(
                         choice: $nearbyDiscoverability,
-                        accentColor: MeeshyColors.brandPrimaryHex
+                        accentColor: MeeshyColors.brandPrimaryHex,
+                        placeName: MediaKindLabel.placeTitle(name: pendingPlace?.name, address: pendingPlace?.address),
+                        offersDiscoverability: true,
+                        onRemovePlace: { pendingPlace = nil }
                     )
                     .padding(.horizontal, 16)
                     .padding(.bottom, 10)

@@ -618,43 +618,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الموقع"
+            "value": "غير قابل للاكتشاف في الجوار"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Standort"
+            "value": "Nicht in der Nähe auffindbar"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Location"
+            "value": "Not findable nearby"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ubicación"
+            "value": "No visible en las cercanías"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Position"
+            "value": "Non trouvable à proximité"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Posizione"
+            "value": "Non trovabile nelle vicinanze"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Localização"
+            "value": "Não encontrável por perto"
           }
         }
       }
@@ -665,43 +665,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "الموقع مفعّل"
+            "value": "قابل للاكتشاف في الجوار"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Standort aktiviert"
+            "value": "In der Nähe auffindbar"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Location enabled"
+            "value": "Findable nearby"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ubicación activada"
+            "value": "Visible en las cercanías"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Position activée"
+            "value": "Trouvable à proximité"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Posizione attivata"
+            "value": "Trovabile nelle vicinanze"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Localização ativada"
+            "value": "Encontrável por perto"
           }
         }
       }
@@ -155897,6 +155897,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bairro (~1 km)"
+          }
+        }
+      }
+    },
+    "feed.nearby.place.remove": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إزالة الموقع"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ort entfernen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove the place"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar el lugar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer le lieu"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rimuovi il luogo"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remover o local"
           }
         }
       }

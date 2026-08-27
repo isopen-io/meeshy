@@ -160,4 +160,59 @@ final class MediaKindLabelTests: XCTestCase {
         XCTAssertEqual(ComposerAttachment.image().name, MediaKindLabel.name(.photo))
         XCTAssertEqual(ComposerAttachment.file().name, MediaKindLabel.name(.file))
     }
+
+    // MARK: - #4034 — le TITRE d'un lieu, distinct de sa puce
+
+    /// Le nom gagne quand il existe : c'est le plus précis des trois.
+    func test_placeTitle_prefereLeNomQuandIlExiste() {
+        XCTAssertEqual(
+            MediaKindLabel.placeTitle(name: "Marché de Sandaga",
+                                      address: "Av. Lamine Guèye, Dakar"),
+            "Marché de Sandaga"
+        )
+    }
+
+    /// **Le défaut mesuré au simulateur le 2026-08-28.** Un point posé à la
+    /// main n'a pas de nom ; l'entête affichait alors « Position » alors que
+    /// l'adresse complète venait d'être montrée par le sélecteur. Le titre doit
+    /// dire LEQUEL, pas la catégorie.
+    func test_placeTitle_tombeSurLAdresse_avantLeMotGenerique() {
+        let titre = MediaKindLabel.placeTitle(name: nil,
+                                              address: "Stockton St, San Francisco")
+        XCTAssertEqual(titre, "Stockton St, San Francisco")
+        XCTAssertNotEqual(titre, MediaKindLabel.name(.location),
+                          "Le mot générique ne doit JAMAIS gagner sur une adresse connue.")
+    }
+
+    /// Le vide n'est pas une valeur — même règle que `placeLabel`, dont le `??`
+    /// seul laissait passer la chaîne vide.
+    func test_placeTitle_traiteLeVideCommeAbsent() {
+        XCTAssertEqual(
+            MediaKindLabel.placeTitle(name: "", address: "Stockton St"),
+            "Stockton St"
+        )
+        XCTAssertEqual(
+            MediaKindLabel.placeTitle(name: "", address: ""),
+            MediaKindLabel.name(.location)
+        )
+    }
+
+    /// Le mot générique reste le DERNIER recours : un lieu sans nom ni adresse
+    /// existe, et un titre vide serait pire que le mot.
+    func test_placeTitle_gardeLeMotGenerique_enDernierRecours() {
+        XCTAssertEqual(
+            MediaKindLabel.placeTitle(name: nil, address: nil),
+            MediaKindLabel.name(.location)
+        )
+    }
+
+    /// La PUCE, elle, n'a pas changé : elle répond à « y a-t-il un lieu ? » et
+    /// n'a jamais eu à dire lequel. Les deux règles restent distinctes.
+    func test_placeLabel_resteInchangee_etDifferentDeplaceTitle() {
+        XCTAssertEqual(MediaKindLabel.placeLabel(nil), MediaKindLabel.name(.location))
+        XCTAssertNotEqual(
+            MediaKindLabel.placeLabel(nil),
+            MediaKindLabel.placeTitle(name: nil, address: "Stockton St")
+        )
+    }
 }
