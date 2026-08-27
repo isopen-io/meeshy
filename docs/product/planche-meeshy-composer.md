@@ -81,9 +81,28 @@ Milestones sémantiques du projet #1, chacun un résultat :
 Le milestone **#4 « Composer v2 — finitions »** porte déjà le gros du reste (timeline #3561, reader #3566,
 file #3562/#3568, audio #3564/#3567, capture #3776, portes #3783/#3844, scène #3557, gardes #3558/#3559…).
 
-## Vues de référence (captures) — produites par #3989
-À déposer dans `docs/product/planche-meeshy-composer/` (PNG), une par vue cible : composer au repos ·
-états AMORCE / INSPECTEUR · socle 3 membres · scène 9:16 à bandes · panneaux Texte (18 styles) / Média
-(8 filtres) / Son / Dessin / Sticker / Lieu / Références / Fond · timeline plan 2D · aperçu ScenePlayer ·
-les 3 chromes viewers + bulle Mood · Étagère · carte de navigation P3 · iconographie (SF Symbols) ·
-éditeurs (trim / rognage / cut). Tant que ce dossier est vide, se référer au `.html`.
+## Vues de référence (captures) — #3989
+Générées depuis le rendu du `.html` (Chrome, ×2) dans `docs/product/planche-meeshy-composer/`.
+**46 captures** : 40 maquettes téléphone `<section>-figNN.png` + 6 planches de section `<section>-full.png`.
+
+| Fichier | Vue |
+|---|---|
+| `p4-fig01.png` | Le composer au repos (profil Story, socle 3 membres, scène 9:16 à bandes) |
+| `p5-fig01..04.png` | Les portes d'entrée (tray, feed, réels, mood/repost) |
+| `p6-fig01..03.png` | La scène : porteur 9:16, porteur 16:9 à bandes, document sans scène |
+| `p7-full.png` | Les 9 outils (Texte · Média · Son · Dessin · Sticker · Lieu · Références · Fond · Slides) |
+| `p8-full.png` | La timeline « un plan » |
+| `p9-fig01..03.png` | La capture par appui long |
+| `p10-fig01..03.png` | Le socle & la publication (audience, aperçu, Publier) |
+| `p11-fig01.png` | L'Étagère |
+| `p12-fig01..03.png` | Les trois chromes viewers |
+| `p13-full.png` | La matrice maîtresse (outil × format) |
+| `p18-fig01..06.png` | Les entrées externes (partage entrant, média reçu) |
+| `p19-fig01..03.png` · `p20-fig01..04.png` | Continuité/PiP · la rupture v3 vécue |
+| `p21-full.png` | Les 18 styles de texte (chacun dans sa police) |
+| `p22-full.png` | L'iconographie (le SF Symbol de chaque contrôle) |
+| `p23-fig01..03.png` | Les éditeurs (trim audio · rognage image · cut vidéo) |
+| `p24-full.png` · `p24-fig01..06.png` | Les cas d'usage (carrousels & réels, avec/sans son) |
+
+Régénérer : ouvrir le `.html` dans un navigateur et capturer chaque `.phfig` + les sections `#p7/#p8/#p13/#p21/#p22/#p24`.
+Ces captures sont des **spécimens de DESIGN** (rendu de la vision), pas l'état de l'app — l'implémentation se vérifie au simulateur (issue par issue).
