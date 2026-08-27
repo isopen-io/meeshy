@@ -87,6 +87,16 @@ final class ForwardPickerViewModel: ObservableObject {
         conversationTargets = []
         targets = []
         paginationState = .idle
+        // Cache-first : les conversations de la machine s'affichent IMMÉDIATEMENT
+        // (aucun spinner quand le cache « list » est plein), puis revalidation
+        // silencieuse via fetchNextPage. Réintroduit le cache-first supprimé par
+        // le refactor 99ceb9a49b (ForwardPickerViewModel devenu réseau-pur).
+        switch await CacheCoordinator.shared.conversations.load(for: "list") {
+        case .fresh(let data, _), .stale(let data, _):
+            appendConversationTargets(data.map(Self.makeTarget))
+        case .expired, .empty:
+            break
+        }
         await fetchNextPage()
     }
 
