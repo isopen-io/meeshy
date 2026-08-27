@@ -9,8 +9,11 @@ import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.InMemoryCategorySnapshotStore
 import me.meeshy.sdk.chat.InMemoryConversationDraftStore
 import me.meeshy.sdk.lock.InMemoryConversationLockStore
+import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
+import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
 import me.meeshy.sdk.outbox.OutboxMutation
@@ -53,7 +56,14 @@ class SessionTeardownTest {
         categoryStore: InMemoryCategorySnapshotStore = InMemoryCategorySnapshotStore(),
         draftStore: InMemoryConversationDraftStore = InMemoryConversationDraftStore(),
         lockStore: InMemoryConversationLockStore = InMemoryConversationLockStore(),
-    ) = DefaultSessionTeardown(db, categoryStore, draftStore, lockStore)
+        storyDraftStore: InMemoryStoryComposerDraftStore = InMemoryStoryComposerDraftStore(),
+    ) = DefaultSessionTeardown(db, categoryStore, draftStore, lockStore, storyDraftStore)
+
+    private fun composerDraft() = StoryComposerDraftSnapshot(
+        slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "half-written story", mediaIds = listOf("cmid_1"))),
+        selectedId = "s1",
+        updatedAt = "2026-08-27T12:00:00Z",
+    )
 
     @Test
     fun wipe_clearsEveryRoomTable() = runTest {
@@ -106,11 +116,27 @@ class SessionTeardownTest {
     }
 
     @Test
+    fun wipe_removesTheStoryComposerDraft() = runTest {
+        val storyDraftStore = InMemoryStoryComposerDraftStore(initial = composerDraft())
+        assertThat(storyDraftStore.load()).isNotNull()
+
+        teardown(storyDraftStore = storyDraftStore).wipe()
+
+        assertThat(storyDraftStore.load()).isNull()
+    }
+
+    @Test
     fun wipe_isIdempotentOnAnAlreadyClearDevice() = runTest {
         val categoryStore = InMemoryCategorySnapshotStore()
         val draftStore = InMemoryConversationDraftStore()
         val lockStore = InMemoryConversationLockStore()
-        val instance = teardown(categoryStore = categoryStore, draftStore = draftStore, lockStore = lockStore)
+        val storyDraftStore = InMemoryStoryComposerDraftStore()
+        val instance = teardown(
+            categoryStore = categoryStore,
+            draftStore = draftStore,
+            lockStore = lockStore,
+            storyDraftStore = storyDraftStore,
+        )
 
         instance.wipe()
         instance.wipe()
@@ -120,5 +146,6 @@ class SessionTeardownTest {
         assertThat(draftStore.observeAll().first()).isEmpty()
         assertThat(lockStore.hasMasterPin()).isFalse()
         assertThat(lockStore.lockedConversationIds).isEmpty()
+        assertThat(storyDraftStore.load()).isNull()
     }
 }
