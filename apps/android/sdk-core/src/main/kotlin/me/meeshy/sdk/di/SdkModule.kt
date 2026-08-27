@@ -239,8 +239,15 @@ object SdkModule {
         categorySnapshotStore: CategorySnapshotStore,
         conversationDraftStore: ConversationDraftStore,
         conversationLockStore: ConversationLockStore,
+        storyComposerDraftStore: StoryComposerDraftStore,
     ): SessionTeardown =
-        DefaultSessionTeardown(database, categorySnapshotStore, conversationDraftStore, conversationLockStore)
+        DefaultSessionTeardown(
+            database,
+            categorySnapshotStore,
+            conversationDraftStore,
+            conversationLockStore,
+            storyComposerDraftStore,
+        )
 
     @Provides
     @Singleton
