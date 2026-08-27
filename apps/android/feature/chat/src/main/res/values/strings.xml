@@ -250,4 +250,27 @@
     <string name="share_target_send">Send</string>
     <string name="share_target_sent">Sent</string>
     <string name="share_target_signed_out">Sign in to Meeshy to share content.</string>
+
+    <!-- Fiche d'un participant (#3943) -->
+    <string name="participant_profile_open_a11y">Open %1$s’s profile</string>
+    <string name="participant_profile_error">This profile could not be loaded</string>
+    <string name="participant_profile_retry">Retry</string>
+    <string name="participant_profile_joined">Joined on %1$s</string>
+    <string name="participant_profile_via_link">Came in through “%1$s”</string>
+    <string name="participant_profile_capabilities">In this conversation</string>
+    <string name="participant_profile_no_restriction">No restriction</string>
+    <string name="participant_profile_history">History</string>
+    <string name="participant_profile_history_since">Sees history since %1$s</string>
+    <string name="participant_profile_history_none">Sees the conversation from their arrival</string>
+    <string name="participant_profile_history_set">Open history from a date</string>
+    <string name="participant_profile_history_clear">Remove</string>
+    <string name="participant_profile_history_failed">The change was refused</string>
+    <string name="participant_profile_denied_can_view_history">Does not see messages sent before joining</string>
+    <string name="participant_profile_denied_can_send_messages">Cannot write messages</string>
+    <string name="participant_profile_denied_can_send_images">Cannot send photos</string>
+    <string name="participant_profile_denied_can_send_files">Cannot send files</string>
+    <string name="participant_profile_denied_can_send_videos">Cannot send videos</string>
+    <string name="participant_profile_denied_can_send_audios">Cannot send audio</string>
+    <string name="participant_profile_denied_can_send_links">Cannot send links</string>
+    <string name="participant_profile_denied_can_send_locations">Cannot share their location</string>
 </resources>

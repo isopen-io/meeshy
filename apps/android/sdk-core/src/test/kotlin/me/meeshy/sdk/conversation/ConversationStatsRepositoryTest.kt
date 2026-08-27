@@ -22,6 +22,20 @@ import org.junit.Test
 
 /** Every unrelated endpoint answers "not wired" so a stray call fails loudly. */
 private abstract class StubStatsApi : ConversationApi {
+    // #3943 — la fiche d'un participant. Ces quatre stubs implémentent
+    // `ConversationApi` À LA MAIN : chaque route ajoutée à l'interface est donc
+    // un inventaire à tenir dans quatre fichiers, et le compilateur est le seul
+    // à s'en souvenir. Refusent par défaut — un test qui a besoin de la route
+    // la redéfinit.
+    override suspend fun participantProfile(id: String, participantId: String) =
+        me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.model.ApiParticipantProfile>(success = false)
+
+    override suspend fun updateHistoryGrant(
+        id: String,
+        participantId: String,
+        body: me.meeshy.sdk.model.HistoryGrantUpdate,
+    ) = me.meeshy.sdk.model.ApiResponse<me.meeshy.sdk.net.api.ParticipantRightsUpdateResult>(success = false)
+
     override suspend fun list(offset: Int?, limit: Int?) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun search(query: String) = ApiResponse<List<ApiConversation>>(success = false)
     override suspend fun getById(id: String) = ApiResponse<ApiConversation>(success = false)

@@ -250,4 +250,27 @@
     <string name="share_target_send">Enviar</string>
     <string name="share_target_sent">Enviado</string>
     <string name="share_target_signed_out">Inicia sesión en Meeshy para compartir contenido.</string>
+
+    <!-- Fiche d'un participant (#3943) -->
+    <string name="participant_profile_open_a11y">Abrir la ficha de %1$s</string>
+    <string name="participant_profile_error">No se pudo cargar esta ficha</string>
+    <string name="participant_profile_retry">Reintentar</string>
+    <string name="participant_profile_joined">Se unió el %1$s</string>
+    <string name="participant_profile_via_link">Entró por «%1$s»</string>
+    <string name="participant_profile_capabilities">En esta conversación</string>
+    <string name="participant_profile_no_restriction">Sin restricciones</string>
+    <string name="participant_profile_history">Historial</string>
+    <string name="participant_profile_history_since">Ve el historial desde el %1$s</string>
+    <string name="participant_profile_history_none">Ve la conversación desde su llegada</string>
+    <string name="participant_profile_history_set">Abrir el historial desde una fecha</string>
+    <string name="participant_profile_history_clear">Quitar</string>
+    <string name="participant_profile_history_failed">Se rechazó el cambio</string>
+    <string name="participant_profile_denied_can_view_history">No ve los mensajes anteriores a su llegada</string>
+    <string name="participant_profile_denied_can_send_messages">No puede escribir mensajes</string>
+    <string name="participant_profile_denied_can_send_images">No puede enviar fotos</string>
+    <string name="participant_profile_denied_can_send_files">No puede enviar archivos</string>
+    <string name="participant_profile_denied_can_send_videos">No puede enviar vídeos</string>
+    <string name="participant_profile_denied_can_send_audios">No puede enviar audio</string>
+    <string name="participant_profile_denied_can_send_links">No puede enviar enlaces</string>
+    <string name="participant_profile_denied_can_send_locations">No puede compartir su ubicación</string>
 </resources>

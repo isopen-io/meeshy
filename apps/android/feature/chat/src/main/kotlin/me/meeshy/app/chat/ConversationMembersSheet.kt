@@ -2,6 +2,7 @@ package me.meeshy.app.chat
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -79,6 +80,9 @@ fun ConversationMembersSheet(
     var pendingRemoval by remember { mutableStateOf<PaginatedParticipant?>(null) }
     var pendingBan by remember { mutableStateOf<PaginatedParticipant?>(null) }
     var showAddSheet by remember { mutableStateOf(false) }
+    // Taper une ligne n'ouvrait RIEN avant #3943 : la fiche d'un participant
+    // n'existait pas sur Android, alors que iOS et web la rendent depuis #3877.
+    var openProfileFor by remember { mutableStateOf<PaginatedParticipant?>(null) }
 
     LaunchedEffect(conversationId) { viewModel.load(conversationId) }
     LaunchedEffect(state.actionFailed) {
@@ -90,6 +94,19 @@ fun ConversationMembersSheet(
             ).show()
             viewModel.dismissActionError()
         }
+    }
+
+    openProfileFor?.let { member ->
+        ParticipantProfileSheet(
+            conversationId = conversationId,
+            // Le `Participant.id`, jamais le `User.id` : le sujet de la fiche
+            // est souvent un visiteur venu par un lien, qui n'a aucune ligne
+            // `User`. Les gestes du menu voisin visent l'autre colonne.
+            participantId = member.id,
+            displayName = member.displayLabel,
+            accentColor = accentColor,
+            onDismiss = { openProfileFor = null },
+        )
     }
 
     ModalBottomSheet(
@@ -172,6 +189,7 @@ fun ConversationMembersSheet(
                             onRoleAction = { action -> viewModel.changeRole(member, action) },
                             onRemove = { pendingRemoval = member },
                             onBan = { pendingBan = member },
+                            onOpenProfile = { openProfileFor = member },
                         )
                     }
                     if (state.isLoadingMore) {
@@ -268,13 +286,16 @@ private fun MemberRow(
     onRoleAction: (MemberRoleAction) -> Unit,
     onRemove: () -> Unit,
     onBan: () -> Unit,
+    onOpenProfile: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val name = member.displayLabel
 
+    val openProfileLabel = stringResource(R.string.participant_profile_open_a11y, name)
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClickLabel = openProfileLabel, onClick = onOpenProfile)
             .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),

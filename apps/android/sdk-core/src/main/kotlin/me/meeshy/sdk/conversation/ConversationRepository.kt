@@ -12,9 +12,11 @@ import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiParticipantProfile
 import me.meeshy.sdk.model.ApiConversationPreferences
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.HistoryGrantUpdate
 import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
@@ -23,6 +25,7 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
+import me.meeshy.sdk.net.api.ParticipantRightsUpdateResult
 import me.meeshy.sdk.net.api.ParticipantRoleUpdate
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
@@ -211,6 +214,49 @@ class ConversationRepository @Inject constructor(
      */
     suspend fun banParticipant(id: String, userId: String): NetworkResult<Unit> =
         apiCallUnit { conversationApi.banParticipant(id, userId) }
+
+    /**
+     * La fiche d'UN participant (#3943) — identité, capacités d'entrée, réglages
+     * du lien emprunté et octroi d'historique.
+     *
+     * **[participantId] est un `Participant.id`, jamais un `User.id`** : le
+     * sujet est souvent un visiteur venu par un lien, qui n'a aucune ligne
+     * `User`. Les méthodes voisines de cette classe prennent l'autre colonne —
+     * la ressemblance des deux chemins est un piège, pas une symétrie.
+     *
+     * Pas de cache : la fiche porte des faits que le gateway gate PAR LECTEUR
+     * (`email`, `entryLink`, `historyVisibleFrom`, `canGrantHistory`). Une
+     * copie locale les servirait à un lecteur pour qui ils ont été masqués — la
+     * garde vit côté serveur, et rien ici ne doit lui survivre.
+     */
+    suspend fun participantProfile(
+        id: String,
+        participantId: String,
+    ): NetworkResult<ApiParticipantProfile> =
+        apiCall { conversationApi.participantProfile(id, participantId) }
+
+    /**
+     * Pose ou retire « voit l'historique depuis le \<date\> » (#3877, #3943).
+     *
+     * [historyVisibleFrom] `null` RETIRE l'octroi — et c'est une valeur, pas une
+     * absence : [HistoryGrantUpdate] force l'encodage de la clé pour que le
+     * gateway puisse distinguer « retirer » de « ne rien dire ».
+     *
+     * Réservé aux admin/creator, arbitré par le SERVEUR ; le client ne fait que
+     * gater l'affordance sur `canGrantHistory`, qu'il ne recalcule jamais.
+     */
+    suspend fun updateHistoryGrant(
+        id: String,
+        participantId: String,
+        historyVisibleFrom: String?,
+    ): NetworkResult<ParticipantRightsUpdateResult> =
+        apiCall {
+            conversationApi.updateHistoryGrant(
+                id,
+                participantId,
+                HistoryGrantUpdate(historyVisibleFrom),
+            )
+        }
 
     /**
      * Optimistic mark-as-read (ARCHITECTURE.md §5): the cached badge drops to

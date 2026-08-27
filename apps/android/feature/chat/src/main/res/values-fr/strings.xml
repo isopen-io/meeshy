@@ -250,4 +250,27 @@
     <string name="share_target_send">Envoyer</string>
     <string name="share_target_sent">Envoyé</string>
     <string name="share_target_signed_out">Connectez-vous à Meeshy pour partager du contenu.</string>
+
+    <!-- Fiche d'un participant (#3943) -->
+    <string name="participant_profile_open_a11y">Ouvrir la fiche de %1$s</string>
+    <string name="participant_profile_error">Impossible de charger cette fiche</string>
+    <string name="participant_profile_retry">Réessayer</string>
+    <string name="participant_profile_joined">Arrivé le %1$s</string>
+    <string name="participant_profile_via_link">Entré par « %1$s »</string>
+    <string name="participant_profile_capabilities">Dans cette conversation</string>
+    <string name="participant_profile_no_restriction">Aucune restriction</string>
+    <string name="participant_profile_history">Historique</string>
+    <string name="participant_profile_history_since">Voit l’historique depuis le %1$s</string>
+    <string name="participant_profile_history_none">Voit la conversation depuis son arrivée</string>
+    <string name="participant_profile_history_set">Ouvrir l’historique depuis une date</string>
+    <string name="participant_profile_history_clear">Retirer</string>
+    <string name="participant_profile_history_failed">La modification a été refusée</string>
+    <string name="participant_profile_denied_can_view_history">Ne voit pas les messages antérieurs à son arrivée</string>
+    <string name="participant_profile_denied_can_send_messages">Ne peut pas écrire de messages</string>
+    <string name="participant_profile_denied_can_send_images">Ne peut pas envoyer de photos</string>
+    <string name="participant_profile_denied_can_send_files">Ne peut pas envoyer de fichiers</string>
+    <string name="participant_profile_denied_can_send_videos">Ne peut pas envoyer de vidéos</string>
+    <string name="participant_profile_denied_can_send_audios">Ne peut pas envoyer d’audio</string>
+    <string name="participant_profile_denied_can_send_links">Ne peut pas envoyer de liens</string>
+    <string name="participant_profile_denied_can_send_locations">Ne peut pas partager sa position</string>
 </resources>

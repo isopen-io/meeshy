@@ -2,7 +2,9 @@ package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiParticipantProfile
 import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.HistoryGrantUpdate
 import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
@@ -199,4 +201,53 @@ interface ConversationApi {
         @Path("id") id: String,
         @Path("userId") userId: String,
     ): ApiResponse<Unit>
+
+    /**
+     * La fiche d'UN participant — identité, capacités d'entrée, réglages du lien
+     * emprunté et octroi d'historique (#3943, port Android de ce que iOS et web
+     * rendent depuis #3877).
+     *
+     * **Le segment porte un `Participant.id`, pas un `User.id`** : le sujet de
+     * cette route est souvent un visiteur venu par un lien partagé, qui n'a
+     * aucune ligne `User`. Les routes voisines de cette même interface nomment
+     * leur paramètre `userId` et visent l'autre colonne — la ressemblance des
+     * deux chemins est un piège, pas une symétrie.
+     *
+     * Le gateway décide seul de ce qu'il sert : `email`, `birthday`, `entryLink`
+     * et `historyVisibleFrom` reviennent `null` à qui n'est pas hôte. Rien n'est
+     * re-filtré ici.
+     */
+    @GET("conversations/{id}/participants/{participantId}/profile")
+    suspend fun participantProfile(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+    ): ApiResponse<ApiParticipantProfile>
+
+    /**
+     * Pose ou retire « voit l'historique depuis le \<date\> » sur un participant.
+     *
+     * Réservé aux admin/creator de la conversation — le serveur tranche, le
+     * client ne fait que gater l'affordance sur `canGrantHistory`. `null`
+     * explicite RETIRE l'octroi ; la clé absente ne dirait rien, et le gateway
+     * distingue les deux (cf. [HistoryGrantUpdate]).
+     */
+    @PATCH("conversations/{id}/participants/{participantId}/rights")
+    suspend fun updateHistoryGrant(
+        @Path("id") id: String,
+        @Path("participantId") participantId: String,
+        @Body body: HistoryGrantUpdate,
+    ): ApiResponse<ParticipantRightsUpdateResult>
 }
+
+/**
+ * Ce que rend `PATCH …/rights` : l'état résolu après écriture, jamais le delta
+ * envoyé. Tous les champs ont un défaut — un modèle plus strict que le fil ne
+ * rendrait pas une réponse incomplète, il ne rendrait rien.
+ */
+@Serializable
+data class ParticipantRightsUpdateResult(
+    val participantId: String? = null,
+    val conversationId: String? = null,
+    val historyVisibleFrom: String? = null,
+    val rights: me.meeshy.sdk.model.ParticipantEntryCapabilities? = null,
+)
