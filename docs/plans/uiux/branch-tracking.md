@@ -14,7 +14,75 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 247i, 2026-08-26)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 248i, 2026-08-27)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **Synchronisation 248i** : branche `claude/intelligent-noether-do61b0` **repartie de `origin/main` `40ea0579`** · itération **248i** · **PR [#3934](https://github.com/isopen-io/meeshy/pull/3934)** · tête `3667ad3e`. PR ouvertes au départ : **#3931** (iOS, clé de dédup du Prisme — `packages/MeeshySDK` + tests, **aucun fichier commun**) et **#3861** (gateway). Aucun conflit de fichier possible.
+> - **✅ Verdict CI — suite COMPLÈTE : 8685 passés / 0 échec / 5 sautés sur 8690** (`"result": "Passed"`, `testFailures: []`, run [33042166760](https://github.com/isopen-io/meeshy/actions/runs/33042166760), job **`Build app + tests unitaires`**, `COMPILE_ONLY: false`, simulateur iPhone 16 Pro / iOS 18.2). Les 16 autres checks de la PR sont verts (Trivy neutre, Voice E2E sauté par construction).
+> - **⚠️ LE NOM DU CHECK A ENCORE PIÉGÉ — et il faut l'écrire ici.** Le PREMIER run de la PR affichait **`Build app (app + cibles de test)`**, vert : c'est le nom que `ios.yml:250` donne au job quand `scope.run_tests` est faux, donc **compile seule**. Sur ce dépôt, **la suite iOS ne tourne sur une branche ou une PR que si le SUJET du commit de tête porte `smoke test`, `run test` ou `to test`** (ou sur `workflow_dispatch`). Quinze checks verts, dont un dont le nom commence par les trois mêmes mots que le vrai gate, ne disaient RIEN des deux suites neuves du lot. **Mettre le mot-clé dans le sujet du commit qui livre** — c'est ce qu'a fait `3667ad3e`.
+> - **Les trois doutes assumés sont LEVÉS** (leçon 247i : un doute publié se solde dès qu'il est mesuré) : (1) la surcharge `kind(for:)` sur `AttachmentType`/`MessageType` avec retours `Kind`/`Kind?` compile — tous les appels sont APPLIQUÉS ; (2) le défaut d'argument `name: String = MediaKindLabel.name(.photo)` sur la fabrique d'un type isolé `MainActor` compile, `MediaKindLabel` étant `nonisolated` ; (3) `@MainActor` sur `MediaKindLabelTests` est correct, les deux tests qui touchent `ComposerAttachment` passent.
+> - **⚠️ L'unique échec du lot, et sa leçon.** Le run sur `c71aa2af` rendait 8684/1/5 : `NumericAccessibilityValueGuardTests.test_convertedDurationHostsNameTheSingleSource`. Supprimer `ComposerModels.formatDur` (dernier appelant disparu) a fait sortir ce fichier de la liste des onze hôtes qui doivent NOMMER `LocalizedNumber`. La minuterie n'avait pas disparu : elle avait **déménagé** dans `MediaKindLabel.voiceRecording(duration:)`. **Un inventaire d'hôtes SUIT l'hôte, il ne se raccourcit pas** — onze entrées avant, onze après ; retirer l'entrée aurait rendu la garde verte d'un cran de couverture en moins, le mode d'échec silencieux que son propre doc-comment décrit. Avant de supprimer un helper de formatage, chercher les gardes qui NOMMENT son fichier, pas seulement celles qui testent son comportement.
+>
+> ### 248i — le cliquet français ne voyait pas ce qui n'était jamais devenu une clé
+>
+> `FrenchDefaultValueRatchetTests` (225i) interdit qu'une clé au `defaultValue`
+> français manque au catalogue. Il n'inspecte que les appels `String(localized:)` :
+> **une chaîne française qui n'est jamais devenue une clé ne franchit jamais son
+> extracteur.** Dix-sept étiquettes de média étaient gravées dans le code d'app,
+> sur des surfaces visibles, pendant que les MÊMES textes vivaient au catalogue,
+> traduits en sept langues.
+>
+> - **Neuf tables « nature du média → étiquette »** dans l'app, sur **deux**
+>   familles de clés au contenu strictement identique en 7 locales
+>   (`attachment.label.*` ↔ `attachment.kind.*` — dix entrées pour cinq notions).
+>   Trois corps (`ConversationView+Composer`, `FeedView+Attachments`,
+>   `FeedComposerSheet`) sont identiques **au caractère près**, et le deuxième est
+>   surmonté d'un commentaire qui le déclare déjà « la même SSOT » que le premier.
+>   **Un commentaire ne fait pas d'une copie une source unique** — et c'est
+>   exactement ce qui a tenu la surface dans la colonne des sites conformes.
+> - **Le pire défaut venait d'un `default:` sur un `enum` fini.** La citation d'un
+>   message répondait « 📎 Piece jointe » pour un **lieu** — `AttachmentType` n'a
+>   que cinq cas, le cinquième tombait dans le fourre-tout — pendant que la même
+>   donnée, une ligne plus haut dans la liste, disait « 📍 Position ». Un
+>   `default:` sur un `enum` fini ne protège d'aucun cas futur (l'ajout d'un cas
+>   doit rendre le `switch` non exhaustif : c'est l'alerte qu'on veut) et avale un
+>   cas présent.
+> - **Correctif** : `MediaKindLabel` (`nonisolated enum`), `Kind` = image exacte
+>   d'`AttachmentType` sans fourre-tout, **deux registres** — `name(_:)` (« Photo »,
+>   là où une icône double déjà le texte) et `summary(_:)` (« 📷 Photo », là où
+>   l'aperçu tient seul en ligne) — plus trois cas nommés qui portent une RÈGLE :
+>   `attachmentLabel(for:)` (une pièce jointe préfère son identité à son type),
+>   `placeLabel(_:)` (le `??` des six copies laissait passer la chaîne VIDE),
+>   `voiceRecording(duration:)`.
+> - **⚠️ LE PIÈGE, et la règle qu'il donne.** L'intention était de retirer SIX clés
+>   jumelles sans consommateur apparent sous `apps/ios/Meeshy`. Le balayage lancé
+>   sur **tous** les `sourceRoots` du cliquet a montré que **quatre sont lues par le
+>   SDK** (`AttachmentKind.swift`, `NotificationModels.swift`) — **`bundle: .main`,
+>   donc sur le catalogue de l'APP**. Quatre surfaces auraient rendu leur
+>   identifiant brut. **« Cette clé n'a plus de consommateur » est une affirmation
+>   sur le DÉPÔT, pas sur le répertoire qu'on édite** : un catalogue est une
+>   ressource de bundle, lue par tout ce qui s'y lie — y compris des cibles que la
+>   piste courante interdit de toucher. Seules **deux** clés sont parties.
+> - **Preuve hors toolchain** : les deux cliquets répliqués fidèlement et exécutés
+>   sur `origin/main` **et** sur la branche — étiquettes gravées **17 → 0**, clés
+>   citées hors source unique **44 → 0**, clés brutes 0, clés orphelines 0, backlog
+>   non traduit **102 / 102** (plafond 1545). 1265 fichiers, 4930 appels
+>   `String(localized:)`. Catalogue 3377 → 3376, diff **48/95** histogram, reparse
+>   JSON valide.
+> - **⚠️ Trois doutes assumés, à SOLDER au retour de CI** (leçon 247i : un doute
+>   publié se solde dès qu'il est mesuré) : (1) surcharge `kind(for:)` sur
+>   `AttachmentType`/`MessageType` avec retours `Kind`/`Kind?` ; (2) défaut
+>   d'argument `name: String = MediaKindLabel.name(.photo)` sur une fabrique d'un
+>   type isolé `MainActor` ; (3) `@MainActor` sur `MediaKindLabelTests`, requis
+>   pour atteindre `ComposerAttachment`.
+> - **Suites 249i+** : (a) les deux dernières copies de la table vivent dans le
+>   **SDK** — hors périmètre de piste, et ce sont elles qui maintiennent en vie les
+>   quatre clés restées au catalogue ; (b) `MessageAttachment.durationFormatted`
+>   (SDK) grave encore `String(format: "%d:%02d")` — le défaut de 247i sur la seule
+>   copie que 247i ne pouvait pas atteindre ; (c) `optimisticListPreview` compose
+>   « 📍 \(nom) » avec l'emoji gravé (seam connu, laissé sciemment).
+>
+> ---
+>
+> **POINTEUR 247i (2026-08-26) — historique**
 > - **Synchronisation** : branche `claude/intelligent-noether-llro07` **repartie de `origin/main` `4b9acd3f`** · itération **247i** · **PR [#3526](https://github.com/isopen-io/meeshy/pull/3526)** · **MERGÉE le 2026-08-26 (`5741414e`)**. Aucune PR iOS ouverte au départ (#3523 présence/backend, #3525 web) : aucun conflit de fichier possible.
 > - **✅ Verdict final 247i — suite COMPLÈTE : 8449 passés / 0 échec / 5 sautés sur 8454** (tête `36c2d31d`, check **`Build app + tests unitaires`**, `COMPILE_ONLY=false`, `"result": "Passed"`, `testFailures: []`, simulateur iPhone 16 Pro / iOS 18.2). Le NOM du check a été relu AVANT sa couleur (leçon 240i (c)) : c'est bien la suite, pas la compile seule.
 > - **Atterrissage vérifié EN ENTIER sur `main`** (contrôle imposé par la leçon 236i) : `LocalizedNumber.{duration,spokenDuration,wholeSeconds,DurationClock}`, les 11 hôtes convertis, la garde étendue, les 3 suites réalignées, l'analyse et le plan. **Balayage post-merge : les SEULES occurrences de `String(format: "%…d:%02d")` restant sous `apps/ios/Meeshy` sont les deux attendues** — la citation en doc-comment de `LocalizedNumber` (mangée par le dépouilleur de la garde) et `NotificationSettingsView`, allowlistée nommément.

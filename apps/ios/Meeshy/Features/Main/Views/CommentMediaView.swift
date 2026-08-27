@@ -88,7 +88,7 @@ struct CommentAttachmentsTray: View {
                 .font(.caption)
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityHidden(true)
-            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+            Text(MediaKindLabel.placeLabel(place.name))
                 .font(.caption.weight(.medium))
                 .lineLimit(1)
                 .frame(maxWidth: 120)

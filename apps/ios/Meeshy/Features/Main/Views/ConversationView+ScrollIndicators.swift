@@ -105,13 +105,7 @@ extension ConversationView {
 
     var unreadAttachmentTypeLabel: String? {
         guard let att = unreadAttachment else { return nil }
-        switch att.type {
-        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
-        case .audio: return String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
-        case .file: return String(localized: "attachment.label.file", defaultValue: "File", bundle: .main)
-        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
-        }
+        return MediaKindLabel.name(MediaKindLabel.kind(for: att.type))
     }
 
     /// SF Symbol describing the last unread attachment's type — drives the

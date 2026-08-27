@@ -187,13 +187,7 @@ struct AttachmentLoadingTile: View {
     /// label and as the VoiceOver accessibility label (which must stay the
     /// media kind even in the `.failed` state, where the error goes to value).
     private var kindLabel: String {
-        switch prep.kind {
-        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
-        case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
-        case .file:  return String(localized: "attachment.kind.file", defaultValue: "File", bundle: .main)
-        case .location: return String(localized: "attachment.kind.location", defaultValue: "Location", bundle: .main)
-        }
+        MediaKindLabel.name(MediaKindLabel.kind(for: prep.kind))
     }
 
     // MARK: - Accessibility

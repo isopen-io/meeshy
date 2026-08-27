@@ -1098,7 +1098,7 @@ extension ConversationView {
     /// le composer (régression que l'ancien `MessageAttachment.location`
     /// couvrait par accident).
     private func pendingPlaceTile(_ place: SharedPlace) -> some View {
-        let label = place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
+        let label = MediaKindLabel.placeLabel(place.name)
         return VStack(spacing: 4) {
             ZStack(alignment: .topTrailing) {
                 locationTileFallback()
@@ -1146,13 +1146,7 @@ extension ConversationView {
     }
 
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
-        switch attachment.type {
-        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
-        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
-        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
-        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
-        }
+        MediaKindLabel.attachmentLabel(for: attachment)
     }
 
     // See ConversationView+AttachmentHandlers.swift for: startRecording, stopAndPreviewRecording, stopAndSendRecording, sendMessageWithAttachments, handlePhotoSelection, generateVideoThumbnail, handleFileImport, mimeTypeForURL, getFileSize, handleCameraCapture, sendMessage
