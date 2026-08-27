@@ -53,6 +53,14 @@ la demande de départ : une scène doit pouvoir être **un seul média présenta
 il devient un objet de **premier plan**. Un audio devient le **son de fond** s'il n'y en a pas.
 Aucune question n'est posée à l'utilisateur (#4038).
 
+**Le mime DÉCLARÉ voyage avec le média posé (#4038).** Poser un média sur une scène le COPIE sous
+`{objectId}.{ext}`, et c'est ce NOM que tout l'aval relit pour étiqueter le téléversement. Le choix
+de l'extension EST donc le transport du mime — et il était guessé : une URL source sans extension
+faisait baptiser « jpg » un PNG, « mov » un MP4. Rien ne rougissait : le fichier existe, l'objet se
+pose, le canvas l'affiche ; seul le serveur reçoit un type faux. L'ordre est désormais
+**extension de la source → mime déclaré → repli**, et le repli n'a pas disparu : il a cessé d'être
+le premier choix.
+
 **La barre haute porte le rail des slides** — `✕ · [Post ▾] · ▭ ▭ ＋ · ⋯` : fermer, le type de
 publication, **les slides du document**, le menu. Le rail y remplace le bandeau de vignettes d'un
 seul tenant : les slides sont la STRUCTURE du document, elles se lisent donc là où se lit le type,

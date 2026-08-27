@@ -24,10 +24,51 @@ public struct ComposerContentMedia: Equatable, Sendable {
     public let kind: Kind
     public let durationMs: Int?
 
-    public init(sourceURL: URL, kind: Kind, durationMs: Int? = nil) {
+    /// **Le mime DÉCLARÉ à la source (#4038)** — celui que le sélecteur a dit,
+    /// jamais un mime re-dérivé du nom du fichier.
+    ///
+    /// Il compte parce que la pose COPIE le fichier sous `{objectId}.{ext}` et
+    /// que tout l'aval lit ce nom : `MimeTypeResolver.mimeType(forURL:)` est ce
+    /// qui étiquette le téléversement. Le choix de l'extension EST donc le
+    /// transport du mime — et il était GUESSÉ : `pathExtension.isEmpty ? "jpg"`
+    /// baptisait « jpg » un PNG ou un HEIC dont l'URL source n'avait pas
+    /// d'extension. Le fichier partait alors sous une étiquette fausse, sans que
+    /// rien ne rougisse.
+    ///
+    /// `nil` ⇒ la source n'a rien déclaré : le repli historique s'applique. Ne
+    /// jamais inventer un mime ici — c'est exactement ce que le repli « jpg »
+    /// faisait.
+    public let mimeType: String?
+
+    public init(sourceURL: URL, kind: Kind, durationMs: Int? = nil, mimeType: String? = nil) {
         self.sourceURL = sourceURL
         self.kind = kind
         self.durationMs = durationMs
+        self.mimeType = mimeType
+    }
+}
+
+/// **L'extension sous laquelle un média porté est MATÉRIALISÉ (#4038).**
+///
+/// Règle pure, hors de toute vue, parce qu'elle décide de ce que le serveur
+/// recevra comme type : l'extension de la source quand elle existe (elle est la
+/// plus fidèle — c'est le fichier lui-même qui la porte), à défaut celle que le
+/// mime DÉCLARÉ commande, et seulement en dernier recours le repli historique.
+///
+/// Le repli reste `jpg` et ce n'est pas un oubli : une image sans extension NI
+/// mime déclaré n'a plus aucune source de vérité, et `jpg` est le format que
+/// l'app écrit elle-même pour ses captures. Ce qui change est qu'il cesse d'être
+/// le PREMIER choix.
+public nonisolated enum ComposerContentMediaFile {
+    public static func fileExtension(sourceURL: URL,
+                                     declaredMimeType: String?,
+                                     fallback: String) -> String {
+        if !sourceURL.pathExtension.isEmpty { return sourceURL.pathExtension }
+        if let declaredMimeType,
+           let derived = MimeTypeResolver.preferredExtension(for: declaredMimeType) {
+            return derived
+        }
+        return fallback
     }
 }
 
@@ -73,7 +114,11 @@ public extension StoryComposerViewModel {
             switch item.kind {
             case .image:
                 guard let image = UIImage(contentsOfFile: item.sourceURL.path) else { continue }
-                let ext = item.sourceURL.pathExtension.isEmpty ? "jpg" : item.sourceURL.pathExtension
+                let ext = ComposerContentMediaFile.fileExtension(
+                    sourceURL: item.sourceURL,
+                    declaredMimeType: item.mimeType,
+                    fallback: "jpg"
+                )
                 let destination = FileManager.default.temporaryDirectory
                     .appendingPathComponent("\(objectId).\(ext)")
                 try? FileManager.default.removeItem(at: destination)
@@ -86,7 +131,8 @@ public extension StoryComposerViewModel {
 
             case .video:
                 guard let copied = StoryComposerSeedFile.copyForComposer(
-                        source: item.sourceURL, objectId: objectId) else { continue }
+                        source: item.sourceURL, objectId: objectId,
+                        declaredMimeType: item.mimeType) else { continue }
                 let duration = item.durationMs.map { Float($0) / 1000 }
                 guard insertForegroundVideo(
                         url: copied, thumbnail: nil, aspectRatio: nil,

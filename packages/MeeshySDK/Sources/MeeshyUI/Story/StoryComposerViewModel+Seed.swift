@@ -77,9 +77,19 @@ enum StoryComposerSeedFile {
     /// ne pose alors AUCUN objet. Un objet sans actif chargé serait sauté par
     /// `runStoryUpload` avec son log « layer will be invisible to viewers » :
     /// une couche déclarée que personne ne verrait jamais.
-    static func copyForComposer(source: URL, objectId: String) -> URL? {
+    /// `declaredMimeType` — le mime que la SOURCE a annoncé (#4038). Il décide
+    /// de l'extension quand l'URL n'en porte aucune : le nom du fichier copié
+    /// est ce que tout l'aval relit pour étiqueter le téléversement
+    /// (`MimeTypeResolver.mimeType(forURL:)`), si bien qu'un repli codé en dur
+    /// baptisait « mov » une vidéo qui ne l'était pas. `nil` ⇒ repli historique.
+    static func copyForComposer(source: URL, objectId: String,
+                                declaredMimeType: String? = nil) -> URL? {
         guard FileManager.default.fileExists(atPath: source.path) else { return nil }
-        let ext = source.pathExtension.isEmpty ? "mov" : source.pathExtension
+        let ext = ComposerContentMediaFile.fileExtension(
+            sourceURL: source,
+            declaredMimeType: declaredMimeType,
+            fallback: "mov"
+        )
         let destination = FileManager.default.temporaryDirectory
             .appendingPathComponent("\(objectId).\(ext)")
         try? FileManager.default.removeItem(at: destination)

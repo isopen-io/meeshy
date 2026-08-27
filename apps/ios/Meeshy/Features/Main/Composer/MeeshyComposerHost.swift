@@ -1298,11 +1298,18 @@ struct MeeshyComposerHost: View {
     private var documentContentMedia: [ComposerContentMedia] {
         documentLocalMedia.compactMap { media in
             switch ComposerIngestRouter.route(mime: media.mimeType) {
+            // **Le mime DÉCLARÉ voyage avec le média (#4038)** — jamais
+            // re-dérivé du nom du fichier. La pose COPIE la source sous
+            // `{objectId}.{ext}`, et c'est ce nom que l'aval relit pour
+            // étiqueter le téléversement : sans le mime, une URL sans extension
+            // partait sous un repli codé en dur (« jpg » / « mov »).
             case .image:
-                return ComposerContentMedia(sourceURL: media.url, kind: .image)
+                return ComposerContentMedia(
+                    sourceURL: media.url, kind: .image, mimeType: media.mimeType)
             case .video:
                 return ComposerContentMedia(
-                    sourceURL: media.url, kind: .video, durationMs: media.durationMs)
+                    sourceURL: media.url, kind: .video,
+                    durationMs: media.durationMs, mimeType: media.mimeType)
             case .audio, .file:
                 return nil
             }
