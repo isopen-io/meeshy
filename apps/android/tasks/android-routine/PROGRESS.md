@@ -2,6 +2,73 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-27 **logout wipes the in-progress story composer draft** (slice
+> `story-composer-draft-wipe-on-teardown`, feature-parity §A logout-teardown line — its follow-up note).
+> This closes the **last of the three story-draft follow-ups** the autosave/reconcile slices predicted
+> (rich-content serialization + in-canvas re-capture affordance remain, tracked on the E. Stories line).
+> Before this, `SessionTeardown.wipe()` cleared Room + category snapshot + chat drafts + conversation
+> locks but NOT the story composer draft store — a per-account, non-namespaced Preferences DataStore
+> added later by `story-composer-draft-autosave`. A second account signing in on a shared device
+> inherited the previous account's half-written story (caption + attached media + audience): the same
+> cross-account privacy leak `wipe()` was built to prevent, reintroduced by a store the seam predates.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3861 only (gateway broadcast
+> Prisme) — not a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision, nothing of
+> mine to merge. Prior slice (`story-draft-lost-media-reconcile`) is on `main` (HEAD `c327bdd6`, verified
+> the reconciler is present in `origin/main`). Branched off freshly-fetched `origin/main`; local HEAD ==
+> origin/main before branching (`git rev-list --left-right --count` = 0/0).
+>
+> **The fix — one constructor param + one call + DI wire.** `DefaultSessionTeardown` gains
+> `storyComposerDraftStore: StoryComposerDraftStore` and calls `.clear()` in `wipe()` after the existing
+> four clears (same rule as the chat draft store; `clear()` is the store's own single-slot removal, no-op
+> when absent so idempotency holds). `SdkModule.providesSessionTeardown` injects the already-provided
+> `StoryComposerDraftStore` singleton — both `story` and `session` packages live in `:sdk-core`, so no
+> Gradle dependency change. Doc-comment updated to list the story composer draft among the wiped stores.
+>
+> **Blocker found & hotfixed first (#3930, merged to `main` before this slice).** The teardown PR's CI
+> surfaced a PRE-EXISTING red on `main`, unrelated to this diff: `PrismPreviewVectorParityTest > loads
+> twenty-two vectors, never zero` (`:core:model`). The shared contract fixture
+> `packages/shared/fixtures/reading-modes/prism-preview.vectors.json` grew 22→30 vectors in `57fddee7`
+> (shared-only), so the path-filtered Android workflow never re-ran and the Android mirror test kept
+> asserting `hasSize(22)` — a latent red that surfaces on the NEXT `apps/android` PR and blocks all
+> Android CI. Root-caused (the resolver is correct: the companion `every vector matches
+> resolveLastMessagePreview exactly` passes for all 30; only the count assertion was stale), fixed as a
+> DEDICATED hotfix PR #3930 (test-only, `22→30` + honest method rename — kept OUT of this feature slice
+> per NOTES "fix as a dedicated hotfix PR, not folded"), verified green locally + CI green, squash-merged
+> to `main`. This branch then merged `main` in to pick up the fix so its own CI re-runs green.
+>
+> **Tests: +1** (`SessionTeardownTest.wipe_removesTheStoryComposerDraft`: seeds a real
+> `StoryComposerDraftSnapshot` via `InMemoryStoryComposerDraftStore(initial=…)`, asserts `load()` is
+> non-null pre-wipe and null post-wipe) + a story-draft assertion added to the existing idempotent test.
+> Non-tautological: the witness test seeds a real draft and asserts the store is emptied by `wipe()`, not
+> a restated constant. **Mutation-RED-proven**: commenting out `storyComposerDraftStore.clear()` fails
+> **exactly** `wipe_removesTheStoryComposerDraft` (6 run, 1 failed); every other teardown test (Room,
+> category, chat draft, lock, idempotent) stays green — the idempotent test's added story assertion seeds
+> an empty store so it is a completeness check, not a second mutation witness. Restored after.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then the documented android-37 copy→patch (`sdkmanager "platforms;android-37.0"`, `cp -r android-37.0
+> android-37`, patch `source.properties` `AndroidVersion.ApiLevel` 37.0→37; compileSdk=37).
+>
+> **Verified**: targeted `:sdk-core:testDebugUnitTest --tests SessionTeardownTest` **BUILD SUCCESSFUL in
+> 1m 5s** (all 6 tests green), then the mutation proof (1 RED, restored). The **full** CI-mirror gate
+> (`assembleDebug` + all-module `testDebugUnitTest`) could NOT complete locally this run: Maven Central
+> (`repo.maven.apache.org`) returned `429 Too Many Requests` across 6+ exponential-backoff attempts,
+> blocking `:sdk-ui`/`:app` dependency downloads — the ROUTINE §CI-reality "toolchain unavailable, not
+> skipped" case (my diff is `:sdk-core`-only; `:sdk-ui`/`:app` do not depend on it, and `:sdk-core`
+> compiled + tested GREEN). The **Android** CI check on the PR is therefore the authoritative full gate.
+> Reviewer **PASS** (diff `apps/android` only — 1 core file + 1 DI provider + 1 test file + 3 tracking
+> docs; SDK purity — `SessionTeardown` is `:sdk-core` teardown plumbing, always-wipes, no product "when"
+> decision; SSOT — one teardown seam reusing the store's own `clear()`, no reimplementation; no
+> tautological tests; no coverage floor lowered, no existing test weakened).
+>
+> **Next**: widen the story composer snapshot to carry rich on-canvas content (annotate the deck graph
+> `@Serializable` — sealed `StoryBackgroundValue`/`StoryTextBackground` need closed-polymorphic
+> serializers — OR a `StoryEffects`-based reverse map; lifts the fidelity gate AND lets the reconciler
+> clean `backgroundMediaId`), OR surface `recaptureSlideIds` as an in-canvas re-capture affordance (the
+> reducer already returns them; today only the aggregate notice shows). Both are the remaining two of the
+> three story-draft follow-ups. Scout `feature-parity.md` read-only before branching.
+
 > On 2026-08-26 **a restored story draft no longer resurrects media that is gone** (slice
 > `story-draft-lost-media-reconcile`, feature-parity E. Stories — the "Draft save/restore … + lost-media
 > detection / re-capture prompt" line: its lost-media half now ships, closing the follow-up the previous

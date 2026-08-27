@@ -97,7 +97,11 @@ class PrismPreviewVectorParityTest {
         val vectors = loadVectors()
         assertThat(vectors).isNotEmpty()
         // Re-preuve du compte au moment de l'écriture. Un changement doit être
-        // investigué avant d'ajuster ce nombre.
+        // investigué avant d'ajuster ce nombre. Passé de 22 à 30 quand le fichier
+        // partagé a gagné 8 cas (`57fddee7`, shared-only : l'attestation de
+        // l'APPLICATION de la réduction), puis de 30 à 33 avec les 3 cas
+        // `yue-HK` (repli région-strippé, hors catalogue) — tous passent déjà
+        // `every vector matches`, seul ce compte doit suivre.
         assertThat(vectors).hasSize(33)
     }
 
