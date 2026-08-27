@@ -8,16 +8,25 @@ public struct FullscreenImageView: View {
     public let imageURL: String?
     public let fallbackText: String
     public let accentColor: String
+    /// #3897 — décision produit EXPOSÉE, pas codée en dur. Défaut `true` :
+    /// ouvrir plein écran est un geste manuel (§14.1), donc la politique
+    /// réseau ambiante (Low Data / Wi-Fi seul) est bypassée par défaut — un
+    /// spinner infini serait pire qu'un octet dépensé sur un geste explicite.
+    /// Un futur appelant présentant cette vue SANS geste explicite (ex. un
+    /// aperçu déclenché ambiante) peut désormais demander `false` sans
+    /// dupliquer la vue.
+    public let autoLoad: Bool
     @Environment(\.dismiss) private var dismiss
 
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
     @State private var isDragging = false
 
-    public init(imageURL: String?, fallbackText: String, accentColor: String) {
+    public init(imageURL: String?, fallbackText: String, accentColor: String, autoLoad: Bool = true) {
         self.imageURL = imageURL
         self.fallbackText = fallbackText
         self.accentColor = accentColor
+        self.autoLoad = autoLoad
     }
 
     public var body: some View {
@@ -34,7 +43,17 @@ public struct FullscreenImageView: View {
                 // la politique réseau ambiante (Low Data / Wi-Fi seul) ne doit
                 // jamais laisser le viewer sur un spinner infini quand l'image
                 // n'est pas encore sur l'appareil.
-                CachedAsyncImage(url: urlString, autoLoad: true) {
+                // targetSize: WindowMetrics.windowSize (#3895) — sans lui, le
+                // décodage plafonnait au budget PAR DÉFAUT du pipeline (1200 px)
+                // quel que soit l'écran : flou sur une fenêtre plus large qu'un
+                // iPhone (iPad), gaspillage mémoire sur une fenêtre plus petite.
+                // Un avatar/bannière n'a pas de variantes responsive
+                // (`MeeshyUser.avatarURL`/`bannerURL` sont de simples chaînes,
+                // contrairement à `MessageAttachment.imageVariants`) —
+                // `ImageVariantSelector.bestImageURL` y serait un no-op (candidats
+                // vides → toujours l'original) ; le levier applicable est la
+                // taille de décodage, pas la sélection d'URL.
+                CachedAsyncImage(url: urlString, targetSize: WindowMetrics.windowSize, autoLoad: autoLoad) {
                     ProgressView()
                         .tint(Color(hex: accentColor))
                 }

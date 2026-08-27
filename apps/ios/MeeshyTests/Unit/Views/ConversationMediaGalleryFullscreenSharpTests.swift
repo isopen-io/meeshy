@@ -204,20 +204,50 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     private static let legacyPlayer = "Meeshy/Features/Main/Views/VideoLegacySupport.swift"
     private static let resolver = "Meeshy/Features/Main/Views/VideoPosterResolver.swift"
 
-    /// Dans la fenêtre de rendu, la page image monte le plein format FORCÉ et
-    /// ne passe plus `thumbnailUrl:` — la vignette pouvait rester l'image
-    /// affichée quand la politique réseau bloquait le plein format.
-    func test_imagePage_inWindow_mountsTheFullFormatForced_withoutAThumbnailStage() throws {
+    /// Dans la fenêtre de rendu, la page image monte le plein format FORCÉ.
+    /// Corrigé (#3895) : `mount == nil` doit rendre le glyphe d'état vide —
+    /// jamais un `ProgressiveCachedImage(fullUrl: nil)` qui tourne pour
+    /// toujours — et la vignette serveur redevient un ÉTAGE DE CHARGEMENT
+    /// (jamais l'étage final : `fullUrl` reste le plein format forcé) tant
+    /// que le plein format n'est pas résident, pour ne pas régresser vers un
+    /// thumbHash ~32px étiré plein écran sur lien lent.
+    func test_imagePage_inWindow_mountsTheFullFormatForced_withAThumbnailLoadingStage() throws {
         let code = AppSourceGuard.stripComments(try source(Self.gallery))
         let page = try block(from: "struct GalleryImagePage: View, Equatable", upTo: "struct GalleryVideoPage", in: code)
-        let inWindow = try block(from: "if rendersFullPixels {", upTo: "} else {", in: page)
+        // `upTo: "targetSize: Self.previewSize"` — pas `"} else {"` : la
+        // structure interne `if let mount { … } else { emptyStateGlyph }`
+        // contient SON PROPRE `} else {`, atteint par `block()` avant celui
+        // qui ferme réellement `if rendersFullPixels` — un marqueur unique à
+        // la branche hors-fenêtre (thumbnail preview) fixe la borne juste.
+        let inWindow = try block(from: "if rendersFullPixels {", upTo: "targetSize: Self.previewSize", in: page)
         XCTAssertTrue(inWindow.contains("FullscreenImageSource.resolve("),
                       "la source d'affichage passe par la décision pure")
-        XCTAssertTrue(inWindow.contains("thumbnailUrl: nil"),
-                      "aucun étage vignette dans la fenêtre de rendu")
+        XCTAssertTrue(inWindow.contains("if let mount {"),
+                      "mount == nil doit être géré explicitement — jamais monter ProgressiveCachedImage(fullUrl: nil)")
+        XCTAssertTrue(inWindow.contains("emptyStateGlyph"),
+                      "sans plein format à charger, la page rend le glyphe d'état vide, jamais un spinner infini")
+        XCTAssertTrue(inWindow.contains("thumbnailUrl: mount.isResident ? nil : thumbnailURL"),
+                      "vignette serveur en étage de CHARGEMENT (pas la vignette blur ~32px) tant que non résident")
         XCTAssertTrue(inWindow.contains("autoLoad: true"),
                       "l'ouverture plein écran est un geste manuel : le plein format se charge toujours (§14.1)")
-        XCTAssertFalse(inWindow.contains("thumbnailUrl: thumbnailURL"))
+    }
+
+    /// `FullscreenImageSource.resolve` rend `nil` (aucune URL plein format
+    /// exploitable) : la page ne doit JAMAIS monter `ProgressiveCachedImage`
+    /// avec `fullUrl: nil` — ce qui produit un spinner qui tourne pour
+    /// toujours puisque `fullUrl` ne se peuplera jamais. Le doc-comment de
+    /// `FullscreenImageSource` promet un glyphe d'état vide ; ce test verrouille
+    /// que le code ne jette plus le cas `nil` via l'optional-chaining qui
+    /// produisait le défaut (`mount?.fullURL` toujours atteignable même quand
+    /// `mount == nil`, au lieu d'un branchement explicite).
+    func test_imagePage_withoutMount_neverOptionalChainsIntoAnInfiniteSpinner() throws {
+        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let page = try block(from: "struct GalleryImagePage: View, Equatable", upTo: "struct GalleryVideoPage", in: code)
+        let inWindow = try block(from: "if rendersFullPixels {", upTo: "targetSize: Self.previewSize", in: page)
+        XCTAssertFalse(inWindow.contains("fullUrl: mount?.fullURL"),
+                      "l'optional-chaining sur mount jette le cas nil au lieu de le traiter explicitement")
+        XCTAssertFalse(inWindow.contains("thumbHash: mount?.backdropThumbHash"),
+                      "idem pour le thumbHash — jeté silencieusement quand mount == nil")
     }
 
     /// Le poster net reste monté tant que la couche vidéo n'a pas COMPOSÉ sa

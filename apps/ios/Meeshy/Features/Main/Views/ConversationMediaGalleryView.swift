@@ -692,6 +692,18 @@ private struct GalleryImagePage: View, Equatable {
         !attachment.fileUrl.isEmpty || thumbnailURL != nil || attachment.thumbHash != nil
     }
 
+    /// Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i). Partagé par
+    /// les deux cas « rien à afficher » : aucune source exploitable du tout
+    /// (`hasRenderableSource == false`), et — dans la fenêtre de rendu —
+    /// `FullscreenImageSource.resolve` qui rend `nil` (aucune URL plein
+    /// format malgré une source partielle, ex. thumbHash seul).
+    private var emptyStateGlyph: some View {
+        Image(systemName: "photo")
+            .font(.system(size: 48))
+            .foregroundColor(.white.opacity(0.3))
+            .accessibilityHidden(true)
+    }
+
     var body: some View {
         ZStack {
             Color.black
@@ -710,11 +722,7 @@ private struct GalleryImagePage: View, Equatable {
                     .accessibilityLabel(accessibilityLabel)
                     .accessibilityAddTraits(.isImage)
             } else {
-                // Glyphe d'état-vide décoratif ≥40pt figé (doctrine 74i/86i).
-                Image(systemName: "photo")
-                    .font(.system(size: 48))
-                    .foregroundColor(.white.opacity(0.3))
-                    .accessibilityHidden(true)
+                emptyStateGlyph
             }
         }
         .contentShape(Rectangle())
@@ -739,23 +747,38 @@ private struct GalleryImagePage: View, Equatable {
     /// qui borne le nombre d'images décodées vivantes, quel que soit le nombre
     /// de médias traversés. La bascule se produit à ±2 pages — jamais à
     /// l'écran, donc jamais visible.
+    ///
+    /// Corrigé (#3895) : `mount == nil` — aucune URL plein format exploitable
+    /// — est géré EXPLICITEMENT (glyphe d'état vide), jamais laissé fuiter en
+    /// `ProgressiveCachedImage(fullUrl: nil)` via l'optional-chaining : sans
+    /// `fullUrl`, le `.task` de chargement n'a jamais rien à charger et le
+    /// placeholder (`ProgressView`) tourne pour toujours. Et tant que le plein
+    /// format n'est pas résident, la vignette SERVEUR (centaines de px) reste
+    /// un étage de CHARGEMENT — jamais l'étage final, `fullUrl` reste le plein
+    /// format forcé — pour ne pas régresser vers un thumbHash ~32px étiré
+    /// plein écran pendant le téléchargement sur lien lent.
     @ViewBuilder
     private var imageLayer: some View {
         if rendersFullPixels {
             // Feature 3 : plein format NET — résident ⇒ tel quel ; sinon chargé
-            // (forcé, geste manuel) sur le seul thumbHash. Jamais la vignette.
+            // (forcé, geste manuel), la vignette serveur en fond le temps du
+            // téléchargement, jamais comme étage final.
             let mount = FullscreenImageSource.resolve(
                 fullURL: fullPixelURL,
                 thumbHash: attachment.thumbHash,
                 isFullResident: fullPixelURL.map(FullscreenImageSource.isResident) ?? false
             )
-            ProgressiveCachedImage(
-                thumbHash: mount?.backdropThumbHash,
-                thumbnailUrl: nil,
-                fullUrl: mount?.fullURL,
-                autoLoad: true
-            ) {
-                ProgressView().tint(.white)
+            if let mount {
+                ProgressiveCachedImage(
+                    thumbHash: mount.backdropThumbHash,
+                    thumbnailUrl: mount.isResident ? nil : thumbnailURL,
+                    fullUrl: mount.fullURL,
+                    autoLoad: true
+                ) {
+                    ProgressView().tint(.white)
+                }
+            } else {
+                emptyStateGlyph
             }
         } else {
             ProgressiveCachedImage(
