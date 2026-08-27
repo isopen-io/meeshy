@@ -94,8 +94,9 @@ struct SyncPill: View {
 
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
-    // The status dot pulses with `.repeatForever` in the app's persistent
-    // chrome — motion the user cannot dismiss. Reduce Motion must reach it.
+    // The status dot pulses in the app's persistent chrome — motion the user
+    // cannot dismiss. Reduce Motion must reach it. (The pulse is driven by
+    // `dotTimer`, not by a `repeatForever` curve — see `pulseCurve`.)
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dotPhase: Int = 0
     // `@State` (not `let`) — a plain stored `let` re-evaluates its initializer
