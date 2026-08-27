@@ -2,6 +2,64 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-27 **a story draft's photo filter (and its intensity) survives leaving the composer** (slice
+> `story-draft-persist-filter`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> SECOND dimension of the fidelity gate, after the canvas transform). Before this, a slide's `StoryFilter`
+> + `filterIntensity` counted as unrepresentable "rich content": a user who tinted a photo (VINTAGE, BW,
+> DRAMATIC…) and left came back to the filter gone — or, if the filter was the only non-primitive touch, saw
+> the whole draft purged rather than restored lossily. A filter is one enum + one float — trivially
+> serialisable — so it never needed gating; the transform slice simply hadn't reached it yet.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3934 + #3931 (iOS Prism) + #3861
+> (gateway broadcast Prisme) — none a `claude/apps/android/<slice-id>` routine slice, no `apps/android`
+> collision, nothing of mine to merge. Prior slice (`story-draft-persist-canvas-transform`) is on `main`
+> (#3932, HEAD `1fff6a45`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before
+> branching. Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — one nullable primitive snapshot + one mapper + a decoupled gate** (mirrors the transform
+> slice exactly). (1) `core:model`: `StoryDraftFilterSnapshot(filter: StoryFilter, intensity: Float)`
+> `@Serializable`, and `StoryDraftSlideSnapshot.filter: StoryDraftFilterSnapshot? = null` (`null` = no
+> filter; legacy blob and fresh slide both decode to null; intensity rides only WITH a filter — strength
+> tints nothing on its own, so it is never persisted alone). `hasContent` unchanged — a filter is fidelity,
+> not restore-triggering content. (2) `:feature:stories` `StoryComposerAutosave`: `toDraftSnapshot` maps via
+> `StorySlide.toFilterSnapshot()` (no filter ⇒ null); `toDeck` restores `null`→no-filter at
+> `StoryFilterMatrix.DEFAULT_INTENSITY`. (3) The gate is DECOUPLED: `deckHasRichContent` drops
+> `slide.filter != null` (now representable), and `deckIsPristine` gains `it.filter == null` so a silently
+> picked filter on an empty canvas still counts as touched (old pristine semantics preserved exactly).
+>
+> **Tests: +12.** 5 `StoryComposerDraftSnapshotTest` (filter survives JSON round-trip; legacy blob → null;
+> filter-alone never worth restoring; changed filter / changed intensity / cleared filter are different
+> content), 5 `StoryComposerAutosaveTest` (gate now false for a filtered slide; filtered blank slide not
+> pristine; `toDraftSnapshot` carries filter+intensity/no-filter→null; `toDeck` restores/null→default;
+> deck↔snapshot↔deck round-trip; a media slide with a filter resolves to **Save** carrying it; applying a
+> filter to a saved draft resolves to **Save** not None), 2 `StoryComposerViewModelTest` end-to-end
+> (`persistDraft` saves the filter+intensity; `onEnterComposer` restores them). The pre-existing rich-gate
+> purge test was retargeted from a (now-liftable) filter trigger to a still-gated sticker — a legitimate
+> retarget to a valid rich dimension, not a weakening. Non-tautological: each drives a real deck/snapshot
+> through the mapper/gate and asserts the transformed result.
+> **Mutation-RED-proven TWICE**: re-adding `slide.filter != null` to `deckHasRichContent` reddens EXACTLY
+> the 3 filter gate/save tests (34 run, 3 failed); removing `&& it.filter == null` from `deckIsPristine`
+> reddens EXACTLY `a single blank slide with a filter is not pristine` (34 run, 1 failed); every other test
+> stays green in both. Restored after each.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then the documented android-37 copy→patch (`platforms;android-37.0` → `cp -r android-37.0 android-37`,
+> patch `source.properties` ApiLevel 37.0→37; compileSdk=37).
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest`
+> (ALL modules) **BUILD SUCCESSFUL in 3m 53s**, plus the two touched suites run in isolation green and both
+> mutation proofs. Reviewer **PASS** (diff `apps/android` only — 2 main + 3 test; SDK purity — the snapshot
+> is a `:core:model` primitive value, the mapper/gate are `:feature:stories` orchestration; SSOT — one
+> snapshot type, `StoryFilter`/`StorySlide` stay the deck's filter SSOT; no tautological tests; no coverage
+> floor lowered; the one retargeted test asserts a still-valid rich dimension).
+>
+> **Next**: continue lifting the fidelity gate — remaining rich dimensions are the pinned duration
+> (`Double?`, the next cheapest scalar, mirrors this slice's pattern one-to-one), the background
+> (`StoryBackgroundValue` sealed → closed-polymorphic or a wire-string projection; + `backgroundMediaId`
+> String? / `backgroundLoop` Boolean), and the two object-list dimensions (text/sticker elements → their own
+> `@Serializable` mirror snapshots, largest, one slice each). Duration pin is the cheapest next increment;
+> the object-list ones want their own slices. Scout `feature-parity.md` E. Stories read-only before branching.
+
 > On 2026-08-27 **a story draft's canvas framing (pan/zoom) survives leaving the composer** (slice
 > `story-draft-persist-canvas-transform`, feature-parity E. Stories — the "Draft save/restore …" line;
 > lifts the FIRST dimension of the load-bearing fidelity gate the autosave slice installed). Before this,

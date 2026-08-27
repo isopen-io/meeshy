@@ -21,6 +21,7 @@ class StoryComposerDraftSnapshotTest {
                 text = "one",
                 mediaIds = listOf("m1", "m2"),
                 transform = StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f),
+                filter = StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f),
             ),
             StoryDraftSlideSnapshot(id = "s2", text = "two"),
         ),
@@ -42,7 +43,10 @@ class StoryComposerDraftSnapshotTest {
         assertThat(restored).isEqualTo(original)
         assertThat(restored.slides.first().transform)
             .isEqualTo(StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f))
+        assertThat(restored.slides.first().filter)
+            .isEqualTo(StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f))
         assertThat(restored.slides[1].transform).isNull()
+        assertThat(restored.slides[1].filter).isNull()
     }
 
     @Test
@@ -52,6 +56,15 @@ class StoryComposerDraftSnapshotTest {
         val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
 
         assertThat(decoded.slides.single().transform).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a filter decodes to a null filter`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().filter).isNull()
     }
 
     @Test
@@ -124,6 +137,21 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a photo filter alone never makes a snapshot worth restoring`() {
+        val filterOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    filter = StoryDraftFilterSnapshot(filter = StoryFilter.BW, intensity = 1f),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(filterOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
     fun `a structurally invalid snapshot is never worth restoring even with content`() {
         val invalid = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "content")),
@@ -169,6 +197,35 @@ class StoryComposerDraftSnapshotTest {
     fun `clearing a canvas transform is different content`() {
         val a = sample()
         val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(transform = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed photo filter is different content`() {
+        val a = sample()
+        val b = a.copy(
+            slides = a.slides.mapIndexed { i, s ->
+                if (i == 0) s.copy(filter = StoryDraftFilterSnapshot(filter = StoryFilter.COOL, intensity = 0.7f)) else s
+            },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed filter intensity alone is different content`() {
+        val a = sample()
+        val b = a.copy(
+            slides = a.slides.mapIndexed { i, s ->
+                if (i == 0) s.copy(filter = s.filter?.copy(intensity = 0.1f)) else s
+            },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a photo filter is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(filter = null) else s })
         assertThat(a.sameContentAs(b)).isFalse()
     }
 }

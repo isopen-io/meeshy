@@ -28,6 +28,7 @@ import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.session.SessionRepository
@@ -2585,6 +2586,42 @@ class StoryComposerViewModelTest {
 
         assertThat(vm.state.value.deck.selectedSlide.transform)
             .isEqualTo(StoryCanvasTransform(scale = 2f, offsetX = 10f, offsetY = -5f))
+    }
+
+    @Test
+    fun `persistDraft saves the selected slide's photo filter and intensity`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("filtered")
+        vm.onSelectFilter(StoryFilter.DRAMATIC)
+        vm.onFilterIntensityChange(0.4f)
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.slides.single().filter)
+            .isEqualTo(StoryDraftFilterSnapshot(filter = StoryFilter.DRAMATIC, intensity = 0.4f))
+    }
+
+    @Test
+    fun `onEnterComposer restores a persisted photo filter`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "resume",
+                    filter = StoryDraftFilterSnapshot(filter = StoryFilter.WARM, intensity = 0.6f),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.selectedSlideFilter).isEqualTo(StoryFilter.WARM)
+        assertThat(vm.state.value.selectedSlideFilterIntensity).isEqualTo(0.6f)
     }
 
     @Test

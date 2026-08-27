@@ -18,13 +18,30 @@ data class StoryDraftTransformSnapshot(
 )
 
 /**
+ * The durable form of one slide's persisted photo filter — the [filter] the composer's
+ * Effets picker chose and its [intensity] (0..1 strength). A slide snapshot holds this
+ * only when a filter is **set**: `null` means the slide has no filter, so a legacy blob
+ * and a fresh slide both decode to "no filter" without inventing a default. Intensity has
+ * no visual effect with no filter to blend, so it is carried only alongside a filter and
+ * never persisted on its own — the same "fidelity rides with its content" rule the
+ * [StoryDraftTransformSnapshot] follows. [StoryFilter] is already primitive-serialisable,
+ * so this stays object-graph-free.
+ */
+@Serializable
+data class StoryDraftFilterSnapshot(
+    val filter: StoryFilter,
+    val intensity: Float,
+)
+
+/**
  * The durable form of one slide of an in-progress story composer draft — the fields this
  * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
- * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), and
- * its persisted 9:16 canvas [transform] (pan/zoom, `null` = identity). Richer on-canvas
- * content (text/sticker elements, filters, backgrounds, pinned duration) is deliberately
- * **absent** here — a draft that carries any of it is not yet persistable (see [me.meeshy]
- * `StoryComposerAutosave`), so a restore from this snapshot is never lossy.
+ * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), its
+ * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), and its photo [filter]
+ * (`null` = none). Richer on-canvas content (text/sticker elements, backgrounds, pinned
+ * duration) is deliberately **absent** here — a draft that carries any of it is not yet
+ * persistable (see [me.meeshy] `StoryComposerAutosave`), so a restore from this snapshot
+ * is never lossy.
  *
  * Every field is a primitive, a list of primitives, or the primitive-only
  * [StoryDraftTransformSnapshot], so the snapshot serialises with no deep object graph and
@@ -37,12 +54,13 @@ data class StoryDraftSlideSnapshot(
     val text: String = "",
     val mediaIds: List<String> = emptyList(),
     val transform: StoryDraftTransformSnapshot? = null,
+    val filter: StoryDraftFilterSnapshot? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption or attached media. A
-     * canvas [transform] is fidelity that rides along with such content — a pan/zoom with
-     * no media to frame is meaningless — so it deliberately does **not** make a slide
-     * worth restoring on its own.
+     * canvas [transform] and a photo [filter] are fidelity that ride along with such
+     * content — a pan/zoom or a filter with no media to frame or tint is meaningless — so
+     * they deliberately do **not** make a slide worth restoring on their own.
      */
     val hasContent: Boolean get() = text.isNotBlank() || mediaIds.isNotEmpty()
 }
