@@ -5,13 +5,15 @@
 
 'use client';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
 import { Button } from '../ui/button';
+import { resolveFullscreenImageSource } from '@/lib/images/fullscreen-source';
+import { fullscreenImageResidency } from '@/lib/images/residency-cache';
 
 interface ImageLightboxProps {
   images: Attachment[];
@@ -103,6 +105,35 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
   const currentImage = (images && images.length > 0 && currentIndex >= 0 && currentIndex < images.length)
     ? images[currentIndex]
     : null;
+
+  // Feature 3 (#3878, miroir du patron iOS #3871) : le plein écran s'ouvre
+  // sur le plein format NET — résident (déjà chargé côté client pendant
+  // cette session) ⇒ affiché tel quel, sans spinner ; sinon chargé, avec la
+  // vignette pour SEUL fond flou assumé pendant l'attente, jamais comme
+  // l'image affichée nette elle-même.
+  const [isFullLoaded, setIsFullLoaded] = useState(() =>
+    fullscreenImageResidency.has(currentImage?.fileUrl)
+  );
+
+  useEffect(() => {
+    setIsFullLoaded(fullscreenImageResidency.has(currentImage?.fileUrl));
+  }, [currentImage?.fileUrl]);
+
+  const handleFullImageLoaded = useCallback(() => {
+    fullscreenImageResidency.mark(currentImage?.fileUrl);
+    setIsFullLoaded(true);
+  }, [currentImage?.fileUrl]);
+
+  const fullscreenMount = useMemo(
+    () =>
+      resolveFullscreenImageSource({
+        fullUrl: currentImage?.fileUrl,
+        thumbnailUrl: currentImage?.thumbnailUrl,
+        isFullResident: isFullLoaded,
+      }),
+    [currentImage, isFullLoaded]
+  );
+
   const canGoPrevious = currentIndex > 0;
   const canGoNext = images && currentIndex < images.length - 1;
 
@@ -224,29 +255,44 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
               </Button>
             </div>
           ) : (
-            <motion.img
-              key={currentImage.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{
-                opacity: 1,
-                scale: zoom,
-                rotate: rotation
-              }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.2 }}
-              src={currentImage.fileUrl}
-              alt={currentImage.originalName}
-              className="max-w-full max-h-full object-contain cursor-pointer"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose();
-              }}
-              onError={(_e) => {
-                console.error('[ImageLightbox] Erreur chargement image:', currentImage.fileUrl);
-                setImageError(true);
-              }}
-              draggable={false}
-            />
+            <>
+              {/* Fond flou assumé pendant le chargement du plein format —
+                  jamais l'image affichée nette elle-même. Absent dès que le
+                  plein format est résident (rien à couvrir, aucune transition). */}
+              {fullscreenMount?.backdropUrl && (
+                <img
+                  key={`backdrop-${fullscreenMount.fullUrl}`}
+                  src={fullscreenMount.backdropUrl}
+                  alt=""
+                  aria-hidden="true"
+                  className="absolute inset-0 w-full h-full object-cover blur-3xl scale-110 opacity-50 pointer-events-none select-none"
+                />
+              )}
+              <motion.img
+                key={currentImage.id}
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{
+                  opacity: 1,
+                  scale: zoom,
+                  rotate: rotation
+                }}
+                exit={{ opacity: 0, scale: 0.9 }}
+                transition={{ duration: 0.2 }}
+                src={fullscreenMount?.fullUrl ?? currentImage.fileUrl}
+                alt={currentImage.originalName}
+                className="max-w-full max-h-full object-contain cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                onLoad={handleFullImageLoaded}
+                onError={(_e) => {
+                  console.error('[ImageLightbox] Erreur chargement image:', currentImage.fileUrl);
+                  setImageError(true);
+                }}
+                draggable={false}
+              />
+            </>
           )}
         </div>
 

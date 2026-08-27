@@ -24,6 +24,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
 import { formatDuration } from '@/utils/audio-formatters';
 import { Button } from '../ui/button';
+import {
+  resolveFullscreenVideoPoster,
+  extractVideoFirstFrame,
+  fullscreenVideoPosterCache,
+} from '@/lib/images/video-poster';
 
 interface VideoLightboxProps {
   videos: Attachment[];
@@ -114,6 +119,41 @@ export function VideoLightbox({
   }, [isOpen]);
 
   const currentVideo = videos[currentIndex];
+
+  // Feature 3 (#3878, miroir du patron iOS #3871 — VideoPosterResolver) : le
+  // poster plein écran est la première image NETTE de la vidéo, extraite par
+  // canvas `<video>` + seek — jamais la vignette basse résolution. Résidente
+  // (déjà extraite pendant cette session) ⇒ appliquée immédiatement, sans
+  // nouvelle extraction (Cache-First) ; sinon extraite en arrière-plan et la
+  // vignette ne sert QUE de fond flou assumé pendant l'attente.
+  const [extractedPosterUrl, setExtractedPosterUrl] = useState<string | null>(() =>
+    fullscreenVideoPosterCache.get(videos[initialIndex]?.fileUrl)
+  );
+
+  useEffect(() => {
+    const fileUrl = currentVideo?.fileUrl;
+    const cached = fullscreenVideoPosterCache.get(fileUrl);
+    setExtractedPosterUrl(cached);
+    if (cached || !fileUrl) return;
+
+    let cancelled = false;
+    extractVideoFirstFrame(fileUrl).then((frame) => {
+      if (cancelled || !frame) return;
+      fullscreenVideoPosterCache.set(fileUrl, frame);
+      setExtractedPosterUrl(frame);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentVideo?.fileUrl]);
+
+  const posterMount = resolveFullscreenVideoPoster({
+    extractedFrameUrl: extractedPosterUrl,
+    thumbnailUrl: currentVideo?.thumbnailUrl,
+    isExtractedResident: extractedPosterUrl !== null,
+  });
+
   const goToPrevious = useCallback(() => {
     if (videos.length > 1) {
       // Navigation circulaire
@@ -505,12 +545,24 @@ export function VideoLightbox({
             style={getVideoContainerStyle()}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Fond flou assumé pendant l'extraction du poster net — jamais
+                le poster affiché lui-même. Absent dès qu'une image nette
+                (extraite ou résidente) est disponible. */}
+            {posterMount.backdropUrl && (
+              <img
+                src={posterMount.backdropUrl}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover blur-3xl scale-110 opacity-50 pointer-events-none select-none"
+              />
+            )}
             <video
               ref={videoRef}
               src={currentVideo.fileUrl}
+              poster={posterMount.posterUrl ?? undefined}
               onLoadedMetadata={handleLoadedMetadata}
               onEnded={handleEnded}
-              className="w-full h-full object-contain bg-black"
+              className={`w-full h-full object-contain ${posterMount.backdropUrl ? 'bg-transparent' : 'bg-black'}`}
               controls={false}
               playsInline
             >
