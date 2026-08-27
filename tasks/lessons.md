@@ -17040,3 +17040,105 @@ d'échec n'est pas l'erreur — c'est la **réponse bien formée à côté**. M�
 que la leçon 296 (une suite ciblée est verte parce qu'elle n'a pas exécuté la
 garde) et que le § « Canal de STATUT ment sur le FAIT » de la mémoire : le signal
 est présent, lisible, et porte sur autre chose que ce qu'on croit mesurer.
+
+## Leçon 299
+
+**Une comparaison de rôle qui échoue « fermé » quand elle ACCORDE échoue
+« ouvert » quand elle REFUSE.** Le sens de la garde décide du sens de la panne.
+
+#4008 énumérait ~10 lecteurs de `Participant.role` comparant en minuscules
+strictes, et les classait tous « fail-closed — un droit refusé, jamais accordé à
+tort ». L'audit en a trouvé quatre de plus, et surtout **cinq qui échouaient
+OUVERTS**, parce qu'ils ne servaient pas à accorder un pouvoir mais à en
+refuser un :
+
+| site | ce que la garde fait | effet d'une ligne `CREATOR` majuscule |
+|---|---|---|
+| `leave.ts` | REFUSE un départ | le créateur quitte en laissant tous ses membres |
+| `participants.ts` | REFUSE une rétrogradation | le créateur devient rétrogradable |
+| `ban.ts` | COMPARE deux rangs | `?? 0` fait du créateur le rang le plus BAS, donc bannissable |
+| `delete-for-me.ts` | DÉCLENCHE le transfert d'ownership | conversation sans créateur, en répondant 200 |
+| `core.ts` | RESTREINT le modérateur | latent : atteignable dès que le filtre voisin s'élargit |
+
+Trois formes distinctes se cachaient derrière « comparaison de rôle » :
+**accorder** (fail-closed), **refuser** (fail-open), et **déclencher une
+conséquence** — cette dernière ne rend ni erreur ni log, seulement un état
+laissé derrière. `delete-for-me.ts` répondait 200.
+
+> Devant une famille de sites qu'une issue range d'un seul côté, ne pas
+> demander « la comparaison est-elle juste ? » mais **« que fait cette garde —
+> accorde, refuse, ou déclenche ? »**. La réponse change le SENS de la panne,
+> donc sa gravité, donc l'ordre dans lequel on la corrige.
+
+Corollaire mesuré : un repli `?? 0` sur un rang INCONNU protège l'appelant et
+**déprotège la cible**. Le même défaut, lu depuis l'autre bout de la
+comparaison, change de camp.
+
+Et le piège s'est refermé une seconde fois **dans le correctif** : la loi
+d'autorité de #3941 repliait d'abord un rang inconnu sur `member`. Or
+`MEMBER_ROLE_HIERARCHY` place `member` à 10 et rend 0 pour l'inconnu — le repli
+« prudent » PROMOUVAIT donc les lignes corrompues au-dessus de leur niveau
+réel. **Un repli fail-closed mal choisi accorde exactement ce qu'il croyait
+refuser.** Attrapé par une garde voisine (`ban uses ?? 0 for both roles`) qui
+ne parlait pas du tout de plateforme — le gate COMPLET, pas la suite ciblée.
+
+## Leçon 300
+
+**Un mock qui ignore le `where` ne teste pas la requête : il teste le reste du
+handler en supposant la requête juste.**
+
+#4007 : trois routes chargeaient un lien par
+`findFirst({ where: { linkId, createdBy: userId } })`, rendant `isCreator`
+tautologique et le `403` d'en dessous inatteignable. Le fichier de test voisin
+contenait pourtant **`returns 200 when user is conversation ADMIN`** — vert,
+pendant que la production rendait 404. Son mock posait `mockResolvedValue(row)` :
+la ligne revenait quel que soit le filtre. **Le seul `where` que le test ne
+jouait pas était justement celui qui décidait.**
+
+Le motif s'est représenté dans le MÊME lot, sur un autre harnais (#3941,
+`conversation-update-route.test.ts`) : là, le rang était filtré DANS la requête,
+si bien qu'un administrateur de plateforme simple membre n'était pas *refusé* —
+sa ligne n'était jamais chargée. Le point de contrôle n'existait pas là où on le
+cherchait, et le test ne pouvait pas le voir.
+
+> **Quand une décision d'autorisation vit dans un `where`, le faux Prisma doit
+> HONORER ce `where`** — sinon la garde est hors de portée du test, dans les
+> deux sens. Le témoin qui l'attrape n'est pas une assertion de plus : c'est un
+> faux qui applique la sémantique du filtre sur les champs scalaires.
+
+Corollaire de conception, tiré des deux correctifs : **une décision
+d'autorisation ne se prend pas dans une requête.** La requête ramène
+l'appartenance ; la loi décide. C'est ce déplacement qui a rendu les deux sites
+testables ET corrects — et il vaut au-delà de Prisma, partout où un filtre de
+lecture fait office de garde.
+
+## Leçon 301
+
+**Rendre un champ optionnel côté ÉMETTEUR n'est pas un geste local.**
+
+Le `CLAUDE.md` porte déjà la règle « un champ que le client lit
+AUTORITATIVEMENT n'est plus optionnel pour l'émetteur ». #4009 en a rencontré la
+**réciproque** : retirer `rights.canViewHistory` de la charge diffusée à la room
+était juste sur le principe, et le test SDK l'a dit littéralement —
+
+    keyNotFound(canViewHistory)
+
+Le champ était un `Bool` NON optionnel côté Swift : le décodage LÈVE sur la
+charge réduite, et l'événement ENTIER est perdu. Un simple membre aurait cessé
+de recevoir **tout** changement de droits — pas seulement celui qu'on lui cache.
+Côté web, le handler recopiait `rights` EN BLOC : un hôte reçoit les DEUX
+charges (réduite par la room, complète par sa room personnelle) et **leur ordre
+ne se suppose pas**, si bien que la charge réduite effaçait le champ de la fiche
+affichée au hasard de l'arrivée.
+
+> Avant de retirer un champ d'une charge, demander : **que fait chaque lecteur
+> de son ABSENCE ?** Trois réponses possibles, et une seule est bénigne — il
+> l'ignore ; il LÈVE (et perd tout le message) ; il l'écrase par un défaut.
+
+Et le dernier maillon, celui qu'on ne voit qu'en le cherchant : **une garde qui
+ne garde qu'un des deux chemins n'en garde aucun.** La route REST sert
+`entryCapabilities` — donc `canViewHistory` — sans condition à tout membre,
+alors qu'elle garde déjà `historyVisibleFrom` derrière `viewerHostsTheRoom`.
+Retirer le champ du push ne protège rien tant que le pull le sert (suivi
+#4056). C'est la forme du cycle 122 du Prisme — « qui AFFICHE ce que le
+correctif élit ? » — appliquée à une garde de confidentialité.
