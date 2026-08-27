@@ -93,15 +93,15 @@ class PrismPreviewVectorParityTest {
     // --- Garde de harnais (leçon 257 : jamais de vert silencieux à zéro cas) ---
 
     @Test
-    fun `loads twenty-two vectors, never zero`() {
+    fun `loads thirty-three vectors, never zero`() {
         val vectors = loadVectors()
         assertThat(vectors).isNotEmpty()
         // Re-preuve du compte au moment de l'écriture. Un changement doit être
         // investigué avant d'ajuster ce nombre.
-        assertThat(vectors).hasSize(22)
+        assertThat(vectors).hasSize(33)
     }
 
-    // --- 22 vecteurs → resolveLastMessagePreview (égalité stricte) ---
+    // --- tous les vecteurs → resolveLastMessagePreview (égalité stricte) ---
 
     @Test
     fun `every vector matches resolveLastMessagePreview exactly`() {

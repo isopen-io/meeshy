@@ -156,6 +156,21 @@
       "_label": "réduit une CLÉ à tag de script (zh-Hant-HK) au rang du lecteur (zh)",
       "input": { "preview": "Hello", "translations": { "zh-Hant-HK": "你好" }, "originalLanguage": "en", "preferredLanguages": ["zh"] },
       "expected": "你好"
+    },
+    {
+      "_label": "strippe la région d'une CLÉ HORS CATALOGUE taguée région (yue-HK) au REPLI — matche le rang lecteur (yue)",
+      "input": { "preview": "Hello", "translations": { "yue-HK": "你哋好" }, "originalLanguage": "en", "preferredLanguages": ["yue"] },
+      "expected": "你哋好"
+    },
+    {
+      "_label": "strippe la région d'une LANGUE LECTEUR HORS CATALOGUE taguée région (yue-HK) au REPLI — matche une clé (yue)",
+      "input": { "preview": "Hello", "translations": { "yue": "你哋好" }, "originalLanguage": "en", "preferredLanguages": ["yue-HK"] },
+      "expected": "你哋好"
+    },
+    {
+      "_label": "langue d'ORIGINE HORS CATALOGUE taguée région (yue-HK) : concourt à son rang réduit (yue) au REPLI, avant une trad de rang inférieur",
+      "input": { "preview": "你哋好", "translations": { "en": "Hello" }, "originalLanguage": "yue-HK", "preferredLanguages": ["yue", "en"] },
+      "expected": "你哋好"
     }
   ]
 }

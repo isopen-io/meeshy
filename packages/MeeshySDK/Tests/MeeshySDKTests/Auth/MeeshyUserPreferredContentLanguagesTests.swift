@@ -168,4 +168,59 @@ final class MeeshyUserPreferredContentLanguagesTests: XCTestCase {
         XCTAssertNil(MeeshyUser.normalizeLanguageCode("xyz"))
         XCTAssertNil(MeeshyUser.normalizeLanguageCode("enx"))
     }
+
+    // MARK: - normalizeLanguageForDedup — SSOT du rapprochement de clés du Prisme
+
+    func test_normalizeLanguageForDedup_reducibleCodesMatchNormalizeLanguageCode() {
+        // Sur le chemin DÉFINI, la clé de dedup == `normalizeLanguageCode` :
+        // casse repliée, région strippée, réduction 639-3/alias appliquée.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("EN"), "en")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("en-US"), "en")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("pt-BR"), "pt")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("zh-Hant-HK"), "zh")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("fra"), "fr")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("iw"), "he")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("bas-CM"), "bas")
+    }
+
+    func test_normalizeLanguageForDedup_outOfCatalogueRegionTagged_stripsRegion() {
+        // LE défaut corrigé : un code HORS CATALOGUE tagué région tombe au REPLI.
+        // Un `.lowercased()` verbatim (l'ancien inline de `resolvedLastMessagePreview`)
+        // rendait `"yue-hk"` et ne matchait pas un `"yue"` ; le repli DOIT
+        // stripper la région comme les miroirs TS/Kotlin.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("yue-HK"), "yue")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("yue"), "yue")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("yue_hk"), "yue")
+        // Les deux formes canonisent vers la MÊME clé : une seule langue, pas deux.
+        XCTAssertEqual(
+            MeeshyUser.normalizeLanguageForDedup("yue-HK"),
+            MeeshyUser.normalizeLanguageForDedup("yue")
+        )
+    }
+
+    func test_normalizeLanguageForDedup_isTotal_neverEmptyOnUnknown() {
+        // TOTALE : rend toujours une clé (jamais nil), même pour un code que
+        // `normalizeLanguageCode` rejette — une comparaison doit produire une clé.
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("xyz"), "xyz")
+        XCTAssertEqual(MeeshyUser.normalizeLanguageForDedup("xyz-AB"), "xyz")
+    }
+
+    func test_resolvedLastMessagePreview_outOfCatalogueRegionTaggedKey_servesTranslation() {
+        // Régression du défaut de divergence : une CLÉ hors catalogue taguée
+        // région (`yue-HK`) doit matcher un lecteur `yue` et servir la traduction,
+        // pas retomber sur l'aperçu original — la parité exacte avec TS/Android.
+        var conversation = MeeshyConversation(
+            id: "prism-dedup",
+            identifier: "prism-dedup",
+            type: .direct,
+            lastMessagePreview: "Hello"
+        )
+        conversation.lastMessageOriginalLanguage = "en"
+        conversation.lastMessageTranslations = ["yue-HK": "你哋好"]
+
+        XCTAssertEqual(
+            conversation.resolvedLastMessagePreview(preferredLanguages: ["yue"]),
+            "你哋好"
+        )
+    }
 }
