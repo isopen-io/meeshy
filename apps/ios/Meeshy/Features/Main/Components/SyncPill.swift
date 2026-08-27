@@ -313,6 +313,27 @@ struct SyncPill: View {
         }
     }
 
+    /// Courbe du pouls — une transition BORNÉE, jamais `repeatForever`.
+    ///
+    /// La répétition vient DÉJÀ de `dotTimer` : il avance `dotPhase` toutes les
+    /// 0,5 s, et `pulseOpacity` alterne 1.0 / 0.4 avec sa parité. La courbe n'a
+    /// donc qu'un aller à décrire, et 0,4 s le fait tenir dans le tic.
+    ///
+    /// Une courbe `repeatForever` réarmée par ce même tic ne serait pas
+    /// REMPLACÉE par la suivante : n'ayant pas de fin, l'animation précédente
+    /// est toujours en vol, et SwiftUI les COMBINE. Le jeu d'animations
+    /// concurrentes de l'attribut s'allongeait donc de deux entrées par seconde,
+    /// indéfiniment, chacune réévaluée à CHAQUE frame (120 Hz en ProMotion) —
+    /// une chauffe qui ne se voit pas à l'ouverture de l'écran mais CROÎT avec
+    /// le temps qu'on y passe. Mesuré sur iPhone 16 Pro Max / iOS 26.6 (#3940) :
+    /// conversation ouverte et INACTIVE, 9,4 % à 15,3 % de CPU selon le mode de
+    /// lecture, dont 44 % à 68 % dans `DefaultCombiningAnimation.animate` sur
+    /// le fil `com.apple.SwiftUI.AsyncRenderer`.
+    ///
+    /// La pastille garde son pouls : c'est la courbe qui se borne, pas l'effet
+    /// qui disparaît. Garde : `TickedRepeatForeverAnimationSourceGuardTests`.
+    private static let pulseCurve: Animation = .easeInOut(duration: 0.4)
+
     /// Leading visual indicator. If the entry carries a concrete SFSymbol
     /// (e.g. `wifi.slash` for offline) we render it tinted by the dot
     /// style; otherwise we fall back to the pulsing 6×6 circle used by
@@ -324,12 +345,12 @@ struct SyncPill: View {
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundStyle(dotForeground)
                 .opacity(pulseOpacity)
-                .animation(reduceMotion ? nil : Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+                .animation(reduceMotion ? nil : Self.pulseCurve, value: dotPhase)
         } else {
             dotShape
                 .frame(width: 6, height: 6)
                 .opacity(pulseOpacity)
-                .animation(reduceMotion ? nil : Animation.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+                .animation(reduceMotion ? nil : Self.pulseCurve, value: dotPhase)
         }
     }
 
