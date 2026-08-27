@@ -1060,7 +1060,16 @@ final class NotificationActionHandlerTests: XCTestCase {
 
     /// La branche `notification_revoked` vit AVANT la logique de sync du push
     /// silencieux et termine le handler en `.noData` : ce push ne porte aucun
-    /// compteur, il ne doit ni déclencher `syncNow()` ni l'ack de réception.
+    /// compteur, il ne doit ni déclencher `syncNow()` (le total messages) ni
+    /// l'ack de réception.
+    ///
+    /// #3894 — ce canal est celui qu'emprunte l'app quand le socket n'est PAS
+    /// là (arrière-plan) : il doit faire les QUATRE choses que fait le socket
+    /// `notification:deleted` app ouverte — pas seulement retirer la
+    /// bannière. `applyServerRevocation` (cache + compteur/badge de la
+    /// cloche) doit donc être appelé, APRÈS l'amorce du jeton d'auth qu'exige
+    /// son appel réseau (même amorce que `NotificationActionHandler.handle()`),
+    /// et AVANT `completionHandler(.noData)`.
     func test_appDelegate_handlesRevocationPush_beforeSilentSync_andCompletesNoData() throws {
         let code = AppSourceGuard.stripComments(try appSource("Meeshy/AppDelegate.swift"))
         guard let branch = code.range(of: "NotificationRevocationPayload(userInfo: userInfo)"),
@@ -1070,7 +1079,17 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertTrue(branch.lowerBound < sync.lowerBound, "la révocation se traite avant la sync")
         let tail = code[branch.upperBound...].prefix(700)
         XCTAssertTrue(tail.contains("revokeDeliveredBanners(notificationIds:"))
+        XCTAssertTrue(tail.contains("APIClient.shared.authToken = AuthManager.shared.authToken"),
+                      "un cold-launch en arrière-plan ne passe jamais par checkExistingSession — sans cette amorce, le GET /notifications/unread-count échoue en 401")
+        XCTAssertTrue(tail.contains("NotificationToastManager.shared.applyServerRevocation(notificationIds:"),
+                      "le cache et le compteur/badge de la cloche doivent être mis à jour, pas seulement la bannière")
         XCTAssertTrue(tail.contains("completionHandler(.noData)"))
+
+        let authIdx = tail.range(of: "APIClient.shared.authToken = AuthManager.shared.authToken")!.lowerBound
+        let revocationIdx = tail.range(of: "applyServerRevocation(notificationIds:")!.lowerBound
+        let completionIdx = tail.range(of: "completionHandler(.noData)")!.lowerBound
+        XCTAssertTrue(authIdx < revocationIdx, "le jeton doit être amorcé AVANT tout appel réseau")
+        XCTAssertTrue(revocationIdx < completionIdx, "le retrait cache/compteur doit être ATTENDU avant de rendre la main à iOS")
     }
 
     func test_app_wiresSocketDeletions_toTheBannerRevocation() throws {

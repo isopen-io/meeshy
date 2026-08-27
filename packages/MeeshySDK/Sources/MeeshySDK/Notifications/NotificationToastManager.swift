@@ -340,6 +340,19 @@ public final class NotificationToastManager: ObservableObject {
         }
     }
 
+    /// Cache + republication pour UNE notification déjà retirée côté serveur —
+    /// l'atome PARTAGÉ entre `delete()` (geste local), `handleNotificationDeleted`
+    /// (socket `notification:deleted`) et `applyServerRevocation(notificationIds:)`
+    /// (push `notification_revoked`, #3894). La republication
+    /// (`notificationWasDeleted`) est ce que `NotificationActionHandler.observeRevocations`
+    /// traduit en retrait de bannière livrée. `internal` (pas `private`) :
+    /// point d'entrée de test pour le comportement cache + publication sans
+    /// déclencher le réseau de `refreshUnreadCount()`.
+    func applyRevocationLocally(_ notificationId: String) {
+        applyDeletionToCache(notificationId)
+        notificationWasDeleted.send(notificationId)
+    }
+
     /// Marque UNE notification lue : serveur + cache + publication vers les
     /// vues. Point d'entrée unique pour que les trois restent alignés (la liste
     /// in-app appelait le service directement et ne touchait que sa copie
@@ -381,10 +394,28 @@ public final class NotificationToastManager: ObservableObject {
             logger.error("Failed to delete notification \(notificationId): \(error.localizedDescription)")
             return false
         }
-        applyDeletionToCache(notificationId)
-        notificationWasDeleted.send(notificationId)
+        applyRevocationLocally(notificationId)
         await refreshUnreadCount()
         return true
+    }
+
+    /// Applique, pour un LOT de notifications déjà révoquées côté SERVEUR, le
+    /// même geste que le socket `notification:deleted` fait une par une —
+    /// cache + republication (retrait de bannière via
+    /// `NotificationActionHandler.observeRevocations`) — PLUS le recalcul du
+    /// compteur de la cloche.
+    ///
+    /// Point d'entrée du push de contrôle `notification_revoked`
+    /// (`AppDelegate`, app fermée/arrière-plan, #3894) : ce canal n'a PAS le
+    /// `notification:counts` compagnon que le socket reçoit pour recaler la
+    /// cloche (un seul push de contrôle par révocation — voir
+    /// `notificationRevocationPush.ts` côté gateway) ; cette méthode referme
+    /// la boucle en le redemandant elle-même via `refreshUnreadCount()`, le
+    /// MÊME appel que `delete()` utilise pour le geste local équivalent.
+    public func applyServerRevocation(notificationIds: [String]) async {
+        guard !notificationIds.isEmpty else { return }
+        notificationIds.forEach(applyRevocationLocally)
+        await refreshUnreadCount()
     }
 
     /// Émet le `POST /notifications/conversation/:id/read` au plus une fois
@@ -624,8 +655,7 @@ public final class NotificationToastManager: ObservableObject {
     }
 
     private func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
-        applyDeletionToCache(event.notificationId)
-        notificationWasDeleted.send(event.notificationId)
+        applyRevocationLocally(event.notificationId)
     }
 
     /// Un AUTRE appareil du même compte vient de marquer un LOT lu. Les chemins
