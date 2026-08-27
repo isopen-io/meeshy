@@ -901,7 +901,15 @@ struct ThemedFeedOverlay: View {
         .fullScreenCover(isPresented: $showFullComposer) {
             DocumentComposerDoor(
                 intent: ComposerIntent(origin: .feedComposer),
-                viewModel: viewModel
+                viewModel: viewModel,
+                // Réinjectés à travers la frontière du cover : l'APERÇU du
+                // socle monte `StoryViewerView`, qui les lit en
+                // `@EnvironmentObject` — et un cover ne recopie pas
+                // l'environnement de son hôte.
+                storyViewModel: storyViewModel,
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel
             )
         }
         .fullScreenCover(item: $quoteOriginalPost) { quoted in

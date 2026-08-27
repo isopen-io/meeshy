@@ -687,7 +687,14 @@ struct MeeshyComposerHost: View {
     /// invisible aux tests, et c'est ainsi qu'une règle produit se met à exister
     /// en deux exemplaires.
     private var paintedSocleZones: [ComposerTopBarControl] {
-        ComposerChromeOwnership.socleZones(for: mountedSurface)
+        ComposerChromeOwnership.socleZones(
+            for: mountedSurface,
+            // L'œil n'a d'objet que s'il y a une scène à montrer — c'est la
+            // condition que le doc-comment de `socleZones` avait écrite en
+            // 2026-08-24 comme prix de son retour, et elle se vérifie ICI,
+            // jamais dans le corps du socle.
+            documentHasScene: documentHasScene
+        )
     }
 
     /// **OÙ le plateau — donc l'éventail — a le droit de se peindre.**
@@ -728,12 +735,26 @@ struct MeeshyComposerHost: View {
     /// ce `&&` par un `||` laissait passer les quatre gardes de source qui
     /// l'entouraient. `ComposerFormatFanPlacement.mounts` la porte désormais, et
     /// cette propriété n'est plus que sa LECTURE.
-    private var paintsFormatFan: Bool {
+    private var mountsFormatFan: Bool {
         ComposerFormatFanPlacement.mounts(
             surface: mountedSurface,
             opening: profile.opensWith,
             offeredFormats: profile.offeredFormats
         )
+    }
+
+    /// **La RANGÉE du plateau le peint-elle ?** — `mountsFormatFan` dit QUE
+    /// l'éventail est servi, `place` dit OÙ, et cette propriété joint les deux.
+    ///
+    /// La jonction est ici, dans une propriété NOMMÉE, jamais dans le `body` :
+    /// une condition écrite dans un `body` est invisible aux tests, et c'est
+    /// exactement la faute que la note ci-dessus raconte avoir déjà commise un
+    /// cran plus haut. Sa jumelle vit au site d'appel de la surface document
+    /// (`place == .documentHeader`), et l'exhaustivité du `switch` de `place`
+    /// interdit qu'elles soient vraies ensemble.
+    private var paintsFormatFan: Bool {
+        mountsFormatFan
+            && ComposerFormatFanPlacement.place(for: mountedSurface) == .plateauRow
     }
 
     /// **Les audiences que le meuble a le droit de proposer**, lues UNE fois et
@@ -761,6 +782,18 @@ struct MeeshyComposerHost: View {
             // republication de mood n'existait alors sur aucun écran. La
             // disposition de la scène est inchangée — un `VStack` qui empile le
             // plateau puis l'atelier —, et ce montage-ci est le SEUL.
+            // **La surface DOCUMENT porte le chip dans SA barre haute (#4047).**
+            // Il flottait ici, seul sur une rangée au-dessus de tout, pendant
+            // que la barre de la surface ne portait qu'un `✕`. Le header voulu
+            // est d'un seul tenant — `✕ · type · slides` — et une rangée
+            // au-dessus d'une barre est deux barres.
+            //
+            // **La condition n'est PAS écrite ici.** `ComposerFormatFanPlacement`
+            // porte les deux places (`paints` / `paintsInDocumentHeader`), et
+            // elles sont EXCLUSIVES par construction. Un `&& mountedSurface !=
+            // .document` ajouté sur cette ligne aurait été une seconde écriture
+            // de la règle, invisible aux tests — exactement ce que la garde de
+            // ce `body` interdit, et elle a rougi pour le dire.
             if paintsFormatFan { plateauTools }
             surface
             // B2 (#3925) — la description repliable vit SOUS le canvas, en mode
@@ -1040,6 +1073,18 @@ struct MeeshyComposerHost: View {
                 else { return }
                 viewModel.selectSlide(at: index)
             },
+            // …et le rail DIT laquelle est à l'écran (#4047). La résolution est
+            // ici parce que la carte `média → slide` et la slide courante
+            // vivent ici : demander à la surface de la refaire l'obligerait à
+            // lire le ViewModel, donc à cesser d'être sans état.
+            // #4047 — le chip de TYPE descend dans la barre haute de la
+            // surface, entre la fermeture et les slides. `nil` quand la règle
+            // de placement ne le sert pas : la surface n'a alors rien à peindre
+            // là, et non un trou à combler.
+            formatFan: mountsFormatFan
+                && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
+                ? AnyView(formatChip) : nil,
+            selectedMediaURL: selectedSlideMediaURL,
             // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
             // contrôles la zone sert est la décision du SDK, portée par l'`init?`
             // de `EmbeddedSceneInspector` (il échoue pour tout kind qu'aucun
@@ -1312,6 +1357,22 @@ struct MeeshyComposerHost: View {
             }
             slideIdByMediaURL.removeValue(forKey: url)
         }
+    }
+
+    /// **Quel média le rail doit CERCLER (#4047).**
+    ///
+    /// L'index `slideIdByMediaURL` est lu à l'ENVERS : il relie une URL à une
+    /// slide, on cherche l'URL dont la slide est la courante. Passer par lui
+    /// plutôt que par l'ordre des tableaux est ce qui tient quand un média est
+    /// retiré au milieu — l'ordre ment alors, l'index non.
+    ///
+    /// `nil` quand rien ne correspond : un document sans média, une slide qui
+    /// n'est celle d'aucun média (le cas du fond de COULEUR seul). Aucun anneau
+    /// est la bonne réponse dans les deux cas — jamais un anneau par défaut sur
+    /// la première vignette, qui affirmerait une position fausse.
+    private var selectedSlideMediaURL: URL? {
+        let current = viewModel.currentSlide.id
+        return slideIdByMediaURL.first(where: { $0.value == current })?.key
     }
 
     /// La scène est peinte dès qu'il y a QUELQUE CHOSE à peindre — un fond
@@ -1772,15 +1833,27 @@ struct MeeshyComposerHost: View {
     private var plateauTools: some View {
         HStack(spacing: 12) {
             Spacer()
-            ComposerFormatFan(
-                offeredFormats: profile.offeredFormats,
-                selection: formatSelection
-            )
+            formatChip
         }
-        .font(.footnote.weight(.semibold))
-        .foregroundColor(MeeshyColors.textSecondary(isDark: true))
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
+    }
+
+    /// **Le SITE UNIQUE du sélecteur de format.**
+    ///
+    /// Deux places le montent — la rangée du plateau (scène, mood) et la barre
+    /// haute du document (#4047) — et elles sont EXCLUSIVES par la règle de
+    /// placement, jamais par une condition écrite dans un `body`. Une seule
+    /// CONSTRUCTION les sert toutes les deux : en écrire une par place aurait
+    /// donné deux sélecteurs à faire diverger, et le compte d'occurrences que
+    /// les gardes tiennent est là pour l'interdire.
+    private var formatChip: some View {
+        ComposerFormatFan(
+            offeredFormats: profile.offeredFormats,
+            selection: formatSelection
+        )
+        .font(.footnote.weight(.semibold))
+        .foregroundColor(MeeshyColors.textSecondary(isDark: true))
     }
 
     // MARK: - Le socle — jamais conditionnel à la PORTE
@@ -1792,8 +1865,10 @@ struct MeeshyComposerHost: View {
     /// jamais dit qu'il peignait une commande sans objet — il s'efface déjà
     /// devant l'atelier, qui peint les mêmes zones (`body`, plus haut). Le lot 4
     /// tient la même phrase jusqu'au bout : l'audience n'est pas peinte là où la
-    /// surface porte son propre sélecteur, et l'œil n'est peint NULLE PART —
-    /// aucune des deux surfaces où le socle vit n'a de canvas à lire.
+    /// surface porte son propre sélecteur, et l'œil ne l'est que là où il a un
+    /// canvas à lire — le DOCUMENT, depuis que chaque média du post y est une
+    /// slide (#4038). Sous le mood il n'y a toujours aucun canvas, et il n'y
+    /// est donc toujours pas peint.
     ///
     /// Ce qui RESTE peint, en revanche, tient : l'audience est un vrai
     /// sélecteur avec sa mémoire, la flèche un vrai bouton avec son gate de
@@ -1808,11 +1883,54 @@ struct MeeshyComposerHost: View {
         HStack(spacing: 10) {
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
+            if paintedSocleZones.contains(.preview) { previewButton }
             publishButton
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 12)
+    }
+
+    /// **L'œil — voir le post COMME IL SERA LU, avant de le publier.**
+    ///
+    /// Il ne rend rien lui-même : il remet les slides composées au rappel
+    /// `onPreview`, que la PORTE branche sur `StoryViewerView` — le lecteur
+    /// réel, celui qui rendra la publication. C'est la loi 6 tenue à la
+    /// lettre : un aperçu maison serait un quatrième chemin de rendu, et il
+    /// mentirait le premier jour où le lecteur changerait sans lui.
+    ///
+    /// **Ce que le meuble remet vient du ViewModel, pas d'un instantané de
+    /// vue.** L'atelier passe par `snapshotAllSlides()` parce que sa slide
+    /// COURANTE vit dans un état de vue (`buildEffects()`) qu'il doit d'abord
+    /// replier dans le tableau. Ici la scène incrustée édite
+    /// `viewModel.currentSlide` en direct par un `Binding` : le tableau EST
+    /// déjà à jour, et le replier une seconde fois écraserait la slide courante
+    /// par une copie plus ancienne.
+    ///
+    /// Aucun `NotificationCenter.storyComposerMuteCanvas` n'est posté, à la
+    /// différence de l'atelier : la scène incrustée ne joue aucun son, il n'y a
+    /// donc rien à faire taire — poster quand même laisserait un canvas MUET
+    /// derrière l'aperçu, sans personne pour le rallumer sur cette surface.
+    private var previewButton: some View {
+        Button {
+            onPreview(
+                viewModel.slides,
+                viewModel.slideImages,
+                viewModel.loadedImages,
+                viewModel.loadedVideoURLs,
+                viewModel.loadedAudioURLs
+            )
+        } label: {
+            Image(systemName: "eye")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(String(
+            localized: "composer.a11y.preview",
+            defaultValue: "Aperçu", bundle: .main
+        )))
     }
 
     /// **L'audience du socle CHOISIT — elle ne témoigne plus.**

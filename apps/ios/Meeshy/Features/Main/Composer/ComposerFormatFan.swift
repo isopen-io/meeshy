@@ -87,6 +87,37 @@ nonisolated enum ComposerFormatFanPlacement {
         true
     }
 
+    /// **OÙ, une fois qu'on sait QUE (directive porteur 2026-08-27, #4047).**
+    ///
+    /// `paints` et `mounts` répondent « l'éventail est-il servi ici ? » ; cette
+    /// fonction répond « à quel ENDROIT de l'écran ». Les deux questions sont
+    /// restées confondues tant qu'il n'y avait qu'un endroit — la rangée du
+    /// plateau — et les séparer était le prix du header d'un seul tenant.
+    ///
+    /// **La séparation, plutôt qu'un `paints` rendu faux pour le document, est
+    /// délibérée** : rendre `paints(.document) == false` aurait dit « le
+    /// document n'offre plus le format », ce qui est FAUX et fait rougir, à
+    /// juste titre, les gardes qui tiennent la levée de frontière de B1/B2. Le
+    /// format y est offert exactement comme avant ; seule sa place a bougé.
+    ///
+    /// Une valeur par surface, donc jamais deux sélecteurs à l'écran : c'est
+    /// l'EXHAUSTIVITÉ du `switch` qui le garantit, pas un compte d'occurrences
+    /// dans un fichier — un compte se contourne en renommant, un `switch` non.
+    enum Place: Equatable {
+        /// La rangée au-dessus de la surface — scène et mood.
+        case plateauRow
+        /// La barre haute de la surface, entre la fermeture et le rail des
+        /// slides — le document, et lui seul.
+        case documentHeader
+    }
+
+    static func place(for surface: ComposerSurfaceKind) -> Place {
+        switch surface {
+        case .scene, .mood: return .plateauRow
+        case .document: return .documentHeader
+        }
+    }
+
     /// **Les DEUX règles de l'éventail, lues à UN seul endroit.**
     ///
     /// La CONJONCTION reste écrite ici, à UN seul endroit, même si `paints` rend
@@ -150,40 +181,56 @@ struct ComposerFormatFan: View {
         }
     }
 
-    /// L'itération porte sur `offeredFormats` et sur rien d'autre : la table de
-    /// C1 reste la seule source. `enumerated()` plutôt que `id: \.self` —
-    /// `ComposerFormat` est `Equatable`, pas `Hashable`, et le rendre `Hashable`
-    /// pour le seul confort d'un `ForEach` élargirait un modèle gelé.
+    /// **Un MENU VERTICAL en verre, plus une rangée de chips (directive porteur
+    /// 2026-08-27).**
+    ///
+    /// La rangée horizontale peignait TOUS les formats côte à côte. Deux raisons
+    /// de la remplacer, et la seconde est la vraie :
+    ///
+    /// 1. elle mange la largeur de la barre haute, qui porte désormais aussi la
+    ///    fermeture et le rail des slides (#4047) — une rangée qui grandit avec
+    ///    le nombre de formats repousserait les slides hors de l'écran ;
+    /// 2. **elle ne dit pas ce qui est SÉLECTIONNÉ, elle le teinte.** Un menu
+    ///    nomme l'état courant sur son propre libellé, ce qui est la forme juste
+    ///    pour un réglage à valeur unique — et c'est déjà l'idiome des deux
+    ///    autres sélecteurs du composer (`audienceChip` du meuble,
+    ///    `visibilityMenu` de l'atelier). Trois formes pour trois réglages du
+    ///    même écran était la divergence.
+    ///
+    /// « N'y afficher que ce que le contexte permet » n'ajoute AUCUNE règle :
+    /// c'est déjà ce que `offeredFormats` porte depuis C1, table par table, et
+    /// l'itération n'a jamais eu d'autre source. La loi 4 y est donc tenue à
+    /// l'identique — un format non offert est ABSENT du menu, jamais grisé.
+    ///
+    /// Le verre est `adaptiveGlass`, jamais `.glassEffect` en direct : le
+    /// composer tourne d'iOS 16 à 26, et l'API n'existe qu'à partir de 26.
     private var fan: some View {
-        HStack(spacing: 4) {
+        Menu {
             ForEach(Array(offeredFormats.enumerated()), id: \.offset) { entry in
-                chip(entry.element)
+                let format = entry.element
+                Button {
+                    selection = format
+                } label: {
+                    Label(
+                        ComposerFormatCopy.label(format),
+                        systemImage: format == selection ? "checkmark" : ""
+                    )
+                }
             }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(ComposerFormatCopy.selector))
-    }
-
-    /// Le chip SÉLECTIONNÉ se marque par sa surface, pas par la couleur de son
-    /// texte : l'accent `indigo400` est un jeton de COMPOSANT (mesuré à 3:1),
-    /// et l'utiliser comme texte l'aurait fait tomber sous le seuil AA du texte
-    /// normal sur les trois teintes du plateau.
-    private func chip(_ format: ComposerFormat) -> some View {
-        let isSelected = format == selection
-        return Button {
-            selection = format
         } label: {
-            Text(ComposerFormatCopy.label(format))
-                .font(.footnote.weight(.semibold))
-                .foregroundColor(isSelected
-                                 ? MeeshyColors.textPrimary(isDark: true)
-                                 : MeeshyColors.textSecondary(isDark: true))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    Capsule().fill(isSelected ? ComposerFormatFanPalette.selectedFill : Color.clear)
-                )
+            HStack(spacing: 4) {
+                Text(ComposerFormatCopy.label(selection))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .adaptiveGlass(in: Capsule(), tint: ComposerFormatFanPalette.selectedFill)
         }
-        .accessibilityAddTraits(isSelected ? AccessibilityTraits.isSelected : [])
+        .accessibilityLabel(Text(ComposerFormatCopy.selector))
+        .accessibilityValue(Text(ComposerFormatCopy.label(selection)))
     }
 }

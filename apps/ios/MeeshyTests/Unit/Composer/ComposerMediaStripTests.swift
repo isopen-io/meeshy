@@ -47,7 +47,15 @@ final class ComposerMediaStripTests: XCTestCase {
     // 2 — la surface PEINT le média reçu, en vignettes retirables.
     func test_laSurface_peintLeMedia_enVignettesRetirables() throws {
         let raw = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        XCTAssertTrue(raw.contains("private var mediaStrip"), "mediaStrip introuvable ou source vide")
+        // Le ruban a été MONTÉ en barre haute au 2026-08-27 (#4047) et s'appelle
+        // désormais `slideRail` — en Post une slide EST un média, le rail des
+        // slides et l'inventaire des pièces jointes sont le MÊME objet. Ce que
+        // cette garde protège n'a pas changé d'un mot : le média choisi est
+        // VISIBLE et RETIRABLE. Seul son logement a bougé.
+        XCTAssertTrue(raw.contains("private var slideRail"), "slideRail introuvable ou source vide")
+        XCTAssertFalse(raw.contains("private var mediaStrip"),
+            "Le ruban vit en DEUX exemplaires — l'ancien en bas, le rail en haut : deux inventaires du "
+                + "même média, à faire diverger au premier chemin d'ingestion qui n'alimente que l'un.")
         let src = compact(raw)
         XCTAssertTrue(
             src.contains("varlocalMedia:[ComposerDocumentMedia]"),

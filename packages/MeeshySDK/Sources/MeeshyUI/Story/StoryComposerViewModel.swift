@@ -17,7 +17,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // `selectSlide`. Déjà exposées par le protocole `StoryComposerProviding`.
     @Published public internal(set) var slides: [StorySlide] = [StorySlide()]
     @Published public internal(set) var currentSlideIndex: Int = 0
-    @Published var slideImages: [String: UIImage] = [:]
+    /// `public internal(set)` comme ses voisines (`loadedImages`, `loadedVideoURLs`,
+    /// `loadedAudioURLs`) : un hôte app doit pouvoir composer l'APERÇU sans monter
+    /// l'atelier — `snapshotAllSlides()` vit sur la VUE, donc hors de portée d'un
+    /// meuble qui incruste la scène. En écriture, le ViewModel reste seul maître.
+    @Published public internal(set) var slideImages: [String: UIImage] = [:]
 
     // MARK: - Repost source (Patch B.6 — exposed publicly so the iOS caller in Phase C
     // can read them before invoking PostService.create / createStory with repostOfId).

@@ -167,6 +167,16 @@ nonisolated enum ComposerChromeOwnership {
     ///   dans un doc-comment. La loi 6 ferme l'autre issue : fabriquer un
     ///   aperçu maison du texte serait un quatrième chemin de rendu. L'œil
     ///   revient le jour où le document a des médias à montrer, pas avant.
+    ///
+    ///   **Ce jour est le 2026-08-27, et la condition est tenue au mot.** Depuis
+    ///   #4038, chaque média du post EST une slide dont il est le fond : la
+    ///   surface document a enfin quelque chose à montrer. L'œil revient donc —
+    ///   mais SEULEMENT quand la scène existe (`documentHasScene`), jamais sur
+    ///   un post de texte nu, qui rouvrirait exactement le vide d'où il venait.
+    ///   Et il ne fabrique aucun aperçu : il remet les slides au LECTEUR
+    ///   (`StoryViewerView`, `isPreviewMode: true`) que la porte du média de
+    ///   conversation monte déjà — un seul chemin de rendu, pas un quatrième.
+    ///
     ///   L'audience, elle, RESTE — et elle CHOISIT depuis le même lot
     ///   (`MeeshyComposerHost.audienceChip`), avec la mémoire du format post
     ///   (`ComposerAudienceMemory.postKey`).
@@ -190,10 +200,20 @@ nonisolated enum ComposerChromeOwnership {
     /// **Divergence ASSUMÉE avec le plan du lot 4**, qui écrivait « sous `.mood`
     /// … audience + flèche ». La mesure a tranché contre lui, et le dire ici vaut
     /// mieux que de le laisser découvrir à l'écran.
-    static func socleZones(for surface: ComposerSurfaceKind) -> [ComposerTopBarControl] {
+    /// `documentHasScene` a un DÉFAUT `false`, et c'est le défaut SÛR : un
+    /// appelant qui l'ignore obtient le socle SANS œil, jamais un œil sur un
+    /// document vide. Le paramètre n'est pas un `if` déplacé dans un `body` —
+    /// il reste dans la RÈGLE, donc éprouvable sans monter une vue, ce que la
+    /// note en tête de ce type demande explicitement.
+    static func socleZones(
+        for surface: ComposerSurfaceKind,
+        documentHasScene: Bool = false
+    ) -> [ComposerTopBarControl] {
         switch surface {
         case .scene: return []
-        case .document: return [.audience, .publish]
+        case .document: return documentHasScene
+            ? [.audience, .preview, .publish]
+            : [.audience, .publish]
         case .mood: return [.publish]
         }
     }
@@ -1322,7 +1342,10 @@ struct ComposerDocumentSurface: View {
     /// **Le média LOCAL déjà choisi (B, #3883).** La surface le REÇOIT et le
     /// peint — elle reste sans état ; le meuble possède `documentLocalMedia`.
     /// Sélectionner une photo ne montrait rien jusqu'ici : la preuve visible du
-    /// choix vit désormais dans `mediaStrip`.
+    /// choix vit dans `slideRail`, monté en BARRE HAUTE (#4047) — en Post une
+    /// slide EST un média, le rail des slides et l'inventaire des pièces
+    /// jointes sont donc le MÊME objet, et n'en faire qu'un est ce qui les
+    /// empêche de diverger.
     var localMedia: [ComposerDocumentMedia] = []
 
     /// Retirer une vignette. Le meuble ôte l'élément de `documentLocalMedia`, ce
@@ -1360,13 +1383,31 @@ struct ComposerDocumentSurface: View {
     /// Relais du tap sur le FOND de la scène (désélection).
     var onSceneBackgroundTapped: (() -> Void)? = nil
 
-    /// **Naviguer entre les slides depuis la bande de vignettes (#4038).**
-    /// En Post, une slide EST un média — la bande DIT donc déjà les slides.
-    /// Lui donner la navigation évite d'ajouter un second rail à côté d'elle,
-    /// qui montrerait exactement la même chose (loi 2, et le rail de barre haute
-    /// de #4047 la remplacera d'un seul tenant). `nil` ⇒ la bande reste ce
-    /// qu'elle était, un inventaire avec son bouton de retrait.
+    /// **Naviguer entre les slides depuis le RAIL (#4038, monté en barre haute
+    /// par #4047).** En Post, une slide EST un média — le rail DIT donc déjà les
+    /// slides. Lui donner la navigation évite d'ajouter un second rail à côté du
+    /// premier, qui montrerait exactement la même chose (loi 2). `nil` ⇒ le rail
+    /// reste ce qu'il était, un inventaire avec son bouton de retrait.
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)? = nil
+
+    /// **Le chip de TYPE DE PUBLICATION, dans la BARRE HAUTE (#4047).**
+    ///
+    /// Un slot opaque : la surface ne sait pas ce qu'est un format, ni quels
+    /// formats sont offerts — c'est la règle de placement du meuble
+    /// (`ComposerFormatFanPlacement`) qui décide, et l'éventail lui-même
+    /// (`ComposerFormatFan`) qui les peint. La surface ne fait que lui donner sa
+    /// PLACE, entre la fermeture et les slides.
+    ///
+    /// `nil` ⇒ rien peint. Le meuble le passe seulement là où il peignait déjà
+    /// sa rangée `plateauTools` ; ailleurs, la barre garde sa forme courte.
+    var formatFan: AnyView? = nil
+
+    /// **Le média dont la slide est à l'écran (#4047).** Le rail le cercle.
+    /// L'hôte le RÉSOUT (il seul tient la carte `média → slide` et la slide
+    /// courante) ; la surface ne fait que le peindre — sans quoi elle aurait
+    /// besoin du ViewModel pour savoir où l'on est, et cesserait d'être sans
+    /// état. `nil` ⇒ aucun anneau : c'est l'état d'un document sans scène.
+    var selectedMediaURL: URL? = nil
 
     /// **La zone contextuelle de l'état INSPECTEUR (lot 3A, #4035 — planche
     /// P4 §3).** Rendue DIRECTEMENT au-dessus de `toolRow` — seulement quand
@@ -1455,7 +1496,6 @@ struct ComposerDocumentSurface: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
             Spacer(minLength: 0)
-            mediaStrip
             backgroundStrip
             // **État INSPECTEUR (lot 3A, #4035 — planche P4 §3).** Juste
             // au-dessus de `toolRow`, montée SEULEMENT quand une sélection
@@ -1489,18 +1529,90 @@ struct ComposerDocumentSurface: View {
     /// geste. Elle n'est PAS dans le socle : le socle a trois zones et ne bouge
     /// jamais (loi 5), y ajouter une quatrième pour la seule surface document
     /// l'aurait fait dépendre de la porte.
+    /// **La barre haute : fermer, puis le RAIL DES SLIDES (#4047).**
+    ///
+    /// La planche la dessine `✕ · [type ▾] · ▭ ▭ ＋ · ⋯`. Trois des quatre
+    /// zones y sont : la fermeture, le TYPE DE PUBLICATION (descendu de sa
+    /// rangée propre, où il flottait seul au-dessus de la surface) et le RAIL.
+    ///
+    /// **Le `⋯` est ABSENT, et c'est une réponse, pas un oubli.** Il n'a aucun
+    /// menu sur cette surface : l'atelier y range ses transitions, sa timeline
+    /// et sa purge de slides, dont rien n'existe ici. Peindre un `⋯` qui
+    /// n'ouvre rien serait exactement l'UI morte que la loi 4 interdit — et
+    /// c'est le motif que ce chantier RETIRE, pas celui qu'il installe. Il
+    /// arrive avec son premier contenu, pas avant.
+    ///
+    /// **Le rail REMPLACE la bande basse, il ne s'y ajoute pas.** Deux bandes
+    /// montrant les mêmes vignettes auraient été deux inventaires à faire
+    /// diverger, et la seconde aurait menti la première fois qu'un média serait
+    /// entré par un chemin qui ne les alimente pas toutes les deux. C'est le
+    /// « d'un seul tenant » de #4047, pris au mot.
+    ///
+    /// Les slides sont la STRUCTURE du document : elles se lisent donc là où se
+    /// lit le type de publication, pas au milieu des outils.
     private var exitAffordance: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 12) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                    .font(.system(size: 13, weight: .bold))
+                    // **Pas `glassControlForeground()`, et c'est délibéré.** Le
+                    // helper du SDK rend `indigo950` en thème CLAIR — juste sur
+                    // une surface qui suit le thème, faux ici : le plateau du
+                    // composer est sombre EN PERMANENCE (tout ce fichier passe
+                    // `isDark: true` en dur). On y aurait peint du sombre sur du
+                    // sombre dès que l'appareil quitte le mode nuit.
+                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .frame(width: ComposerControlMetrics.visualDiameter,
+                           height: ComposerControlMetrics.visualDiameter)
+                    .adaptiveGlass(in: Circle())
             }
             .accessibilityLabel(Text(ComposerDocumentCopy.close))
-            Spacer()
+            if let formatFan { formatFan.fixedSize() }
+            slideRail
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
+    }
+
+    /// **Le rail des slides (#4047).** Une vignette par slide, celle qu'on
+    /// regarde cerclée, chacune retirable. `localMedia` vide ⇒ RIEN — pas une
+    /// bande à hauteur nulle, pas un rail de zéro chip : un document sans média
+    /// n'a qu'une slide, et un rail d'un seul élément ne navigue vers rien
+    /// (loi 4).
+    ///
+    /// **Aucun `＋` en v1, et c'est une RÉPONSE.** La planche en dessine un,
+    /// mais en Post une slide EST un média : un `＋` y créerait une slide VIDE,
+    /// donc un média fantôme dans le carrousel — un post qu'on publierait avec
+    /// un trou. Le seul geste honnête pour ajouter une slide en Post est
+    /// l'outil photo, qui existe déjà. Le `＋` revient avec le profil où une
+    /// slide vide a un sens (Story), pas avant.
+    @ViewBuilder
+    private var slideRail: some View {
+        if !localMedia.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(localMedia, id: \.url) { media in
+                        ComposerMediaThumbnail(
+                            media: media,
+                            side: 40,
+                            isSelected: media.url == selectedMediaURL,
+                            showsRemove: media.url == selectedMediaURL
+                        ) {
+                            onRemoveMedia?(media)
+                        }
+                        // Loi 4 : la vignette n'est un CONTRÔLE que si l'hôte
+                        // sait quoi faire du tap. Sans relais, elle reste ce
+                        // qu'elle a toujours été.
+                        .onTapGesture { onSelectMedia?(media) }
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
+        }
     }
 
     /// Le placeholder n'est PAS peint en `textMuted`, qui serait le réflexe.
@@ -1659,33 +1771,6 @@ struct ComposerDocumentSurface: View {
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
     }
 
-    /// **Les vignettes du média choisi (B, #3883)** — la preuve VISIBLE qu'une
-    /// sélection a pris. `localMedia` vide ⇒ rien de peint (aucune bande à
-    /// hauteur nulle). Chaque vignette est RETIRABLE ; retirer re-juge le format
-    /// (le toggle POST↔RÉEL suit, loi 4).
-    @ViewBuilder
-    private var mediaStrip: some View {
-        if !localMedia.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(localMedia, id: \.url) { media in
-                        ComposerMediaThumbnail(media: media) {
-                            onRemoveMedia?(media)
-                        }
-                        // Loi 4 : la vignette n'est un CONTRÔLE que si l'hôte
-                        // sait quoi faire du tap. Sans relais, elle reste ce
-                        // qu'elle a toujours été.
-                        .onTapGesture { onSelectMedia?(media) }
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-            }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
-        }
-    }
-
     /// **Le picker de couleur de fond (F2, #3885)** — « un post sans visuel
     /// devient une toile ». Une bande horizontale de pastilles sur la palette
     /// PARTAGÉE du SDK (`StoryBackgroundPalette.colors`, jamais recopiée) ;
@@ -1774,6 +1859,28 @@ extension View {
 /// produit). La croix ôte l'élément, ce qui re-juge le format côté meuble.
 private struct ComposerMediaThumbnail: View {
     let media: ComposerDocumentMedia
+    /// **Le rail de la barre haute est PLUS PETIT que la bande d'origine.** Une
+    /// vignette de 64 pt y volerait la moitié de la rangée qui porte aussi la
+    /// fermeture ; 40 pt tient la ligne sans descendre sous la cible tactile,
+    /// qui reste servie par la zone de tap du chip entier (44 pt avec son
+    /// espacement).
+    var side: CGFloat = 64
+    /// **La slide qu'on REGARDE porte un anneau.** Sans lui, le rail dit ce que
+    /// le post contient mais jamais où l'on est : taper une vignette changerait
+    /// la scène sans que rien, dans le rail, ne le confirme — un contrôle dont
+    /// l'effet est ailleurs et invisible ici.
+    var isSelected: Bool = false
+    /// **Le ✕ ne se peint que sur le chip SÉLECTIONNÉ, et c'est un correctif de
+    /// PIXEL, pas de goût.** À 64 pt (l'ancienne bande basse) le ✕ occupait un
+    /// coin ; à 40 pt il mange le quart du chip, et le test au simulateur l'a
+    /// montré sans appel : viser une vignette pour NAVIGUER la supprime. Le
+    /// rail deviendrait un champ de mines — le geste le plus fréquent
+    /// déclenchant le plus destructeur.
+    ///
+    /// Sélectionner reste donc à UN geste sur tout chip ; supprimer en demande
+    /// deux (sélectionner, puis ✕), ce qui est l'ordre juste pour une action
+    /// irréversible.
+    var showsRemove: Bool = true
     let onRemove: () -> Void
 
     @State private var preview: UIImage?
@@ -1781,22 +1888,30 @@ private struct ComposerMediaThumbnail: View {
     private var isImage: Bool { media.mimeType.hasPrefix("image") }
     private var isVideo: Bool { media.mimeType.hasPrefix("video") }
 
+    private var corner: CGFloat { side >= 56 ? 12 : 8 }
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             base
-                .frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Button(action: onRemove) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.body)
-                    .symbolRenderingMode(.palette)
-                    .foregroundStyle(.white, .black.opacity(0.55))
+                .frame(width: side, height: side)
+                .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .strokeBorder(.white, lineWidth: isSelected ? 2 : 0)
+                )
+            if showsRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(side >= 56 ? .body : .caption)
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, .black.opacity(0.55))
+                }
+                .padding(side >= 56 ? 4 : 2)
+                .accessibilityLabel(Text(String(
+                    localized: "composer.a11y.removeAttachment",
+                    defaultValue: "Retirer la pièce jointe", bundle: .main
+                )))
             }
-            .padding(4)
-            .accessibilityLabel(Text(String(
-                localized: "composer.a11y.removeAttachment",
-                defaultValue: "Retirer la pièce jointe", bundle: .main
-            )))
         }
         .task(id: media.url) {
             guard isImage else { return }
@@ -1815,10 +1930,10 @@ private struct ComposerMediaThumbnail: View {
                 .scaledToFill()
         } else {
             ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
                     .fill(.ultraThinMaterial)
                 Image(systemName: isVideo ? "play.rectangle.fill" : (isImage ? "photo" : "doc.fill"))
-                    .font(.title3)
+                    .font(side >= 56 ? .title3 : .footnote)
                     .symbolRenderingMode(.hierarchical)
                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))
             }
@@ -1922,9 +2037,30 @@ struct DocumentComposerDoor: View {
     /// raison, mot pour mot, que porte déjà la porte du mood.
     let viewModel: FeedViewModel
 
+    /// **Réinjectés à travers la frontière du cover d'APERÇU.**
+    /// `StoryViewerView` les lit en `@EnvironmentObject`, et un cover ne
+    /// recopie pas l'environnement de son hôte — même raison, mot pour mot, que
+    /// porte déjà `ConversationMediaComposerDoor`, qui monte le MÊME lecteur.
+    /// Sans eux, l'œil ouvrirait un écran qui plante à la première lecture
+    /// d'environnement, pas un aperçu.
+    let storyViewModel: StoryViewModel
+    let router: Router
+    let conversationListViewModel: ConversationListViewModel
+    let statusViewModel: StatusViewModel
+
     @Environment(\.dismiss) private var dismiss
 
+    /// L'aperçu demandé. `nil` ⇒ aucun cover — l'œil est le seul écrivain.
+    @State private var previewAssets: StoryPreviewAssets?
+
     var body: some View {
+        composerHost
+            .fullScreenCover(item: $previewAssets) { assets in
+                apercu(assets)
+            }
+    }
+
+    private var composerHost: some View {
         MeeshyComposerHost(
             intent: intent,
             // La mémoire d'audience du format POST est tenue par le MEUBLE, qui
@@ -1949,9 +2085,53 @@ struct DocumentComposerDoor: View {
             // NI lieu — semer ici poserait un canvas que cette porte ne monte
             // jamais, et dont le publieur ne saurait rien faire.
             mediaSeed: nil,
-            onPreview: { _, _, _, _, _ in },
+            // **L'œil du socle atterrit ICI (#4047).** Il fut un no-op tant
+            // que la surface document n'avait rien à montrer ; depuis #4038
+            // chaque média du post est une slide, et la charge est réelle.
+            // Un no-op laissé en place aurait fait de l'œil un contrôle SANS
+            // EFFET — la loi 4 enfreinte de la manière la plus coûteuse, celle
+            // qui a l'air de marcher.
+            onPreview: { slides, images, loadedImgs, videoURLs, audioURLs in
+                previewAssets = StoryPreviewAssets(
+                    slides: slides,
+                    backgroundImages: images,
+                    loadedImages: loadedImgs,
+                    videoURLs: videoURLs,
+                    audioURLs: audioURLs
+                )
+            },
             onDismiss: { dismiss() }
         )
+    }
+
+    /// L'aperçu est rendu par le LECTEUR (`StoryViewerView`), pas par un
+    /// composant maison — loi 6, et le MÊME montage que
+    /// `ConversationMediaComposerDoor.apercu`. Un troisième chemin d'aperçu
+    /// mentirait tôt ou tard sur ce qui sera publié.
+    private func apercu(_ assets: StoryPreviewAssets) -> some View {
+        let items = assets.slides.map { $0.toPreviewStoryItem() }
+        let group = StoryGroup(
+            id: "preview",
+            username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
+            avatarColor: MeeshyColors.brandPrimaryHex,
+            stories: items
+        )
+        return StoryViewerView(
+            viewModel: storyViewModel,
+            groups: [group],
+            currentGroupIndex: 0,
+            isPresented: Binding(
+                get: { previewAssets != nil },
+                set: { if !$0 { previewAssets = nil } }
+            ),
+            isPreviewMode: true,
+            preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
+            preloadedVideoURLs: assets.videoURLs,
+            preloadedAudioURLs: assets.audioURLs
+        )
+        .environmentObject(router)
+        .environmentObject(conversationListViewModel)
+        .environmentObject(statusViewModel)
     }
 
     /// **L'ENVOI DURABLE**, en trois temps que rien ne doit fusionner.

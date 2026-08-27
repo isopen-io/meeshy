@@ -85,4 +85,52 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
         XCTAssertTrue(compacted.contains("viewModel.selectSlide(at:index)"),
             "…jusqu'à `selectSlide`, sans quoi taper une vignette ne changerait rien à l'écran.")
     }
+
+    // MARK: - Le rail en barre haute (#4047)
+
+    /// **Le rail DIT où l'on est, pas seulement ce que le post contient.**
+    /// Sans anneau, taper une vignette change la scène sans que rien, dans le
+    /// rail, ne le confirme : un contrôle dont l'effet est ailleurs ET
+    /// invisible ici. La résolution appartient au MEUBLE — lui seul tient la
+    /// carte `média → slide` et la slide courante.
+    func test_theRailKnowsWhichSlideIsOnScreen() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("selectedMediaURL:selectedSlideMediaURL"),
+            "Le meuble doit dire à la surface QUELLE vignette cercler.")
+        XCTAssertTrue(
+            compacted.contains("slideIdByMediaURL.first(where:{$0.value==current})?.key"),
+            "La résolution passe par l'INDEX, jamais par l'ordre des tableaux — l'ordre ment dès qu'un "
+                + "média est retiré au milieu."
+        )
+    }
+
+    /// **Le rail vit dans la BARRE HAUTE, et en UN seul exemplaire.** Deux
+    /// bandes montrant les mêmes vignettes seraient deux inventaires à faire
+    /// diverger, et la seconde mentirait au premier chemin d'ingestion qui
+    /// n'alimente que l'une. C'est le « d'un seul tenant » de #4047.
+    func test_theRailLivesInTheTopBar_andOnlyThere() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        XCTAssertTrue(source.contains("struct ComposerDocumentSurface"),
+            "La source de la surface est introuvable — la garde ne mesurerait RIEN.")
+        XCTAssertEqual(
+            source.components(separatedBy: "slideRail").count - 1, 2,
+            "`slideRail` doit apparaître EXACTEMENT deux fois : sa déclaration et son unique montage, "
+                + "dans la barre haute. Un troisième site est un second rail."
+        )
+
+        guard let barre = source.range(of: "private var exitAffordance"),
+              let fin = source.range(of: "private var slideRail", range: barre.upperBound..<source.endIndex)
+        else {
+            return XCTFail("`exitAffordance` doit précéder `slideRail` — la barre haute le MONTE.")
+        }
+        XCTAssertTrue(
+            source[barre.upperBound..<fin.lowerBound].contains("slideRail"),
+            "La barre haute doit monter le rail. Ailleurs, il redevient la bande basse que #4047 remplace."
+        )
+    }
 }

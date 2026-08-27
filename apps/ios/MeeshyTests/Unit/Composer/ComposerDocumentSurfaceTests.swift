@@ -450,7 +450,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
         }
 
-        XCTAssertTrue(plateau.contains("ComposerFormatFan("), "Le bloc lu n'est pas celui du plateau.")
+        XCTAssertTrue(plateau.contains("formatChip"), "Le bloc lu n'est pas celui du plateau.")
         XCTAssertTrue(
             corpsDuMeuble.contains("plateauTools"),
             "Le `body` du meuble ne monte plus le plateau : l'éventail cesserait de se peindre PARTOUT, y "
@@ -469,10 +469,30 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         XCTAssertFalse(
             document.contains("plateauTools") || document.contains("ComposerFormatFan("),
-            "La surface document peint l'éventail elle-même : deux montages pour un seul sélecteur. L'éventail "
-                + "coiffe le document depuis le PLATEAU (le `body`, sous `paintsFormatFan`), jamais depuis la "
-                + "surface — un seul site gouverné par la règle de placement."
+            "La surface document RECONSTRUIT l'éventail : deux constructions pour un seul sélecteur, à faire "
+                + "diverger. Elle en reçoit le MÊME (`formatChip`), et la place est décidée par la règle."
         )
+
+        // **Le document a changé de PLACE au 2026-08-27, pas de règle** (#4047,
+        // directive porteur) : le chip descend dans SA barre haute, entre la
+        // fermeture et le rail des slides — la rangée du plateau y aurait fait
+        // deux barres empilées pour un header que la planche dessine d'un seul
+        // tenant.
+        //
+        // Ce que cette garde protégeait — « un seul sélecteur à l'écran » —
+        // n'est pas affaibli, il est mieux dit : au lieu de compter des
+        // occurrences dans un fichier (qu'un renommage contourne), elle asserte
+        // l'EXCLUSIVITÉ des deux places sur CHAQUE surface. Deux sélecteurs
+        // simultanés deviennent impossibles par la règle, pas par convention.
+        XCTAssertEqual(
+            ComposerFormatFanPlacement.place(for: .document), .documentHeader,
+            "Le document porte le chip dans SA barre haute — entre la fermeture et le rail des slides. "
+                + "La rangée du plateau y ferait deux barres empilées pour un header d'un seul tenant."
+        )
+        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .scene), .plateauRow)
+        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .mood), .plateauRow,
+            "La scène et le mood gardent la rangée : ni l'une ni l'autre n'a de barre haute à elle où loger "
+                + "le chip.")
 
         // La question n'est pas « quel bloc le peint » mais « combien de fois le
         // meuble le peint », et la réponse doit rester UNE. Le site a changé au
@@ -872,19 +892,12 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
 
     /// Le corps d'un BLOC par appariement d'accolades. `nil` quand l'ancre a
     /// disparu — l'appelant fait alors rougir, jamais passer.
+    ///
+    /// Relais vers la fonction de FICHIER : la suite de CONTRASTE, plus bas, en
+    /// a besoin aussi (elle doit lire le bloc de la surface, pas le fichier qui
+    /// héberge aussi la porte). Deux copies auraient divergé sur l'appariement.
     private func corpsDeDeclaration(commencantPar ancre: String, dans code: String) -> String? {
-        guard let debut = code.range(of: ancre) else { return nil }
-        var profondeur = 0
-        var corps = ""
-        for caractere in code[debut.lowerBound...] {
-            corps.append(caractere)
-            if caractere == "{" { profondeur += 1 }
-            if caractere == "}" {
-                profondeur -= 1
-                if profondeur == 0 { return corps }
-            }
-        }
-        return nil
+        corpsDuBloc(commencantPar: ancre, dans: code)
     }
 
     // MARK: - Lot 4.9 — le socle VIVANT sous le document
@@ -2713,8 +2726,19 @@ final class ComposerDocumentSurfaceContrastTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-        XCTAssertTrue(code.contains("struct ComposerDocumentSurface"), "Source de la surface introuvable — la garde ne mesurerait rien")
+        let fichier = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        XCTAssertTrue(fichier.contains("struct ComposerDocumentSurface"), "Source de la surface introuvable — la garde ne mesurerait rien")
+
+        // **Le bloc de la SURFACE, pas le fichier.** Le fichier héberge aussi
+        // `DocumentComposerDoor`, qui monte l'APERÇU (`StoryViewerView`) et lui
+        // passe une couleur d'avatar : un jeton qui n'est ni un texte ni un
+        // fond du plateau, et que mesurer ici n'aurait aucun sens. La garde dit
+        // « tout ce que la SURFACE peint » — elle lisait le fichier entier, ce
+        // qui la faisait rougir pour du code qui ne peint pas la surface.
+        guard let code = corpsDuBloc(commencantPar: "struct ComposerDocumentSurface", dans: fichier) else {
+            return XCTFail("Le bloc de `ComposerDocumentSurface` est introuvable — la garde ne mesurerait RIEN.")
+        }
+        XCTAssertTrue(code.contains("MeeshyColors."), "Le bloc lu ne peint aucun jeton — la garde serait vacante.")
 
         let mesures = peints.map { $0.0 }
         for ligne in code.split(separator: "\n") where ligne.contains("MeeshyColors.") {
@@ -2724,4 +2748,21 @@ final class ComposerDocumentSurfaceContrastTests: XCTestCase {
             )
         }
     }
+}
+
+/// Le corps d'un BLOC par appariement d'accolades — fonction de FICHIER, parce
+/// que deux suites de ce fichier la lisent.
+fileprivate func corpsDuBloc(commencantPar ancre: String, dans code: String) -> String? {
+    guard let debut = code.range(of: ancre) else { return nil }
+    var profondeur = 0
+    var corps = ""
+    for caractere in code[debut.lowerBound...] {
+        corps.append(caractere)
+        if caractere == "{" { profondeur += 1 }
+        if caractere == "}" {
+            profondeur -= 1
+            if profondeur == 0 { return corps }
+        }
+    }
+    return nil
 }

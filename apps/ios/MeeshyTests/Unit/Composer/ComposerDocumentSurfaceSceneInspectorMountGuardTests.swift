@@ -89,8 +89,13 @@ final class ComposerDocumentSurfaceSceneInspectorMountGuardTests: XCTestCase {
             return XCTFail("`sceneInspector` doit apparaître AVANT `toolRow` dans `body`.")
         }
         let between = bodyBlock[inspectorRange.upperBound..<toolRowRange.lowerBound]
-        XCTAssertFalse(between.contains("mediaStrip"),
-            "`mediaStrip` s'intercale entre `sceneInspector` et `toolRow` — la zone contextuelle doit rester "
+        // `slideRail`, pas `mediaStrip` : la bande de vignettes est MONTÉE en
+        // barre haute au 2026-08-27 (#4047). Épingler le nom disparu aurait
+        // laissé une garde toujours verte — le mode d'extinction silencieuse
+        // propre aux gardes négatives. Elle garde donc le rail à sa NOUVELLE
+        // place : si quelqu'un le redescend, il ne doit pas atterrir ici.
+        XCTAssertFalse(between.contains("slideRail"),
+            "`slideRail` s'intercale entre `sceneInspector` et `toolRow` — la zone contextuelle doit rester "
                 + "JUSTE au-dessus de la rangée d'outils.")
         XCTAssertFalse(between.contains("backgroundStrip"),
             "`backgroundStrip` s'intercale entre `sceneInspector` et `toolRow` — la zone contextuelle doit "

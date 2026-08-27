@@ -53,6 +53,26 @@ la demande de départ : une scène doit pouvoir être **un seul média présenta
 il devient un objet de **premier plan**. Un audio devient le **son de fond** s'il n'y en a pas.
 Aucune question n'est posée à l'utilisateur (#4038).
 
+**La barre haute porte le rail des slides** — `✕ · [Post ▾] · ▭ ▭ ＋ · ⋯` : fermer, le type de
+publication, **les slides du document**, le menu. Le rail y remplace le bandeau de vignettes d'un
+seul tenant : les slides sont la STRUCTURE du document, elles se lisent donc là où se lit le type,
+pas au milieu des outils (#4047).
+
+**Le type de publication est un MENU VERTICAL en verre, pas une rangée de chips.** Une rangée
+grandit avec le nombre de formats et repousse les slides hors de l'écran ; surtout, elle ne DIT pas
+l'état courant, elle le teinte. Un menu le nomme sur son libellé — la forme juste pour un réglage à
+valeur unique, et déjà celle des deux autres sélecteurs de l'écran (audience du socle, visibilité de
+l'atelier). Il n'y figure **que ce que le contexte permet** : l'itération porte sur `offeredFormats`
+et sur rien d'autre, donc un format non offert y est ABSENT, jamais grisé (loi 4).
+
+**Le ✕ de retrait ne se peint que sur la slide SÉLECTIONNÉE.** À 40 pt il occupe le quart du chip :
+viser une vignette pour naviguer la supprimait. Sélectionner reste à un geste sur tout chip,
+supprimer en demande deux — l'ordre juste pour une action irréversible.
+
+**L'ŒIL d'aperçu revient au socle** dès que le document a une scène, et seulement là. Il ne rend
+rien lui-même : il remet les slides au LECTEUR (`StoryViewerView`), celui qui rendra la publication
+— loi 6, un aperçu maison serait un quatrième chemin de rendu.
+
 **Un objet se manipule par appui long** : Monter · Reculer · Modifier · Sortir de la scène (sauf en
 Story) — chacune servie seulement si elle a un effet, jamais grisée (#4046).
 

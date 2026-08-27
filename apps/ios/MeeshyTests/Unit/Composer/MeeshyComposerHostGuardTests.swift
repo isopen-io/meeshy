@@ -175,33 +175,95 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// partagent un seul registre de rendu ; un quatrième chemin d'aperçu
     /// casserait le WYSIWYG par construction.
     ///
-    /// **Elle exigeait `MeeshyScenePlayer(` dans le meuble. Le lot 4.9 a retiré
-    /// l'œil, et laissée telle quelle elle serait devenue un rouge pour la
-    /// mauvaise raison** — celui qu'on « corrige » en supprimant l'assertion.
-    /// Elle change donc d'objet plutôt que de disparaître, et devient une
-    /// ÉQUIVALENCE, ce qui la rend strictement plus forte que ce qu'elle était :
+    /// **Elle a changé d'OBJET deux fois, jamais de sens.** Elle exigeait
+    /// `MeeshyScenePlayer(` dans le meuble ; le lot 4.9 a retiré l'œil et elle
+    /// est devenue une ÉQUIVALENCE. Le 2026-08-27 l'œil REVIENT — la condition
+    /// que `socleZones` avait posée comme prix de son retour (« le jour où le
+    /// document a des médias à montrer ») étant tenue depuis #4038 — et il
+    /// revient sur un AUTRE lecteur : plus `MeeshyScenePlayer` (qui ne rend
+    /// qu'une scène), mais le rappel `onPreview`, que la porte branche sur
+    /// `StoryViewerView` — le lecteur qui rendra vraiment la publication.
     ///
-    /// - un œil peint SANS le lecteur ⇒ quelqu'un a écrit un aperçu maison, ce
-    ///   qu'interdit la loi 6 ;
-    /// - le lecteur SANS aucun œil peint ⇒ du code d'aperçu survit à
+    /// L'équivalence tient donc, mot pour mot :
+    ///
+    /// - un œil peint SANS remise au lecteur ⇒ quelqu'un a écrit un aperçu
+    ///   maison, ce qu'interdit la loi 6 ;
+    /// - un bouton d'aperçu SANS aucun œil peint ⇒ du code d'aperçu survit à
     ///   l'affordance qui l'ouvrait, et la prochaine session le rebranchera en
     ///   croyant réparer.
     ///
-    /// Elle ne peut donc pas devenir vacante : quel que soit le côté qui bouge,
-    /// l'autre doit suivre dans le même commit.
+    /// **Épinglé sur `previewButton`, jamais sur `onPreview(`.** Le meuble
+    /// TRANSMET déjà `onPreview` à l'atelier (`onPreview: onPreview`) : y
+    /// épingler la garde la rendrait vraie quoi qu'il arrive, donc vacante.
+    /// C'est le bouton du SOCLE qui est le sujet.
     func test_lOeilEtSonLecteur_vivent_etMeurent_ensemble() throws {
         let code = try hostCode()
         let unOeilEstPeint = [ComposerSurfaceKind.scene, .document, .mood]
-            .contains { ComposerChromeOwnership.socleZones(for: $0).contains(.preview) }
+            .contains {
+                ComposerChromeOwnership.socleZones(for: $0, documentHasScene: true)
+                    .contains(.preview)
+            }
 
         XCTAssertEqual(
-            unOeilEstPeint, code.contains("MeeshyScenePlayer("),
+            unOeilEstPeint, code.contains("private var previewButton"),
             unOeilEstPeint
-                ? "Le socle peint un œil sans monter `MeeshyScenePlayer` : c'est un quatrième chemin d'aperçu, "
-                    + "et il ment sur ce qui sera publié (loi 6)."
-                : "Le meuble monte encore `MeeshyScenePlayer` alors qu'aucune surface ne peint d'œil : du code "
+                ? "Le socle peint un œil que le meuble n'assemble pas : la règle promet une commande "
+                    + "qui n'existe pas."
+                : "Le meuble porte encore `previewButton` alors qu'aucune surface ne peint d'œil : du code "
                     + "d'aperçu survit à l'affordance qui l'ouvrait, et la prochaine session le rebranchera en "
                     + "croyant réparer."
+        )
+
+        guard unOeilEstPeint else { return }
+        let compacted = code.components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(
+            compacted.contains("privatevarpreviewButton:someView{Button{onPreview("),
+            "L'œil doit REMETTRE les slides au rappel `onPreview` sans rien rendre lui-même. Tout autre "
+                + "corps est un quatrième chemin d'aperçu, et il mentira sur ce qui est publié (loi 6)."
+        )
+    }
+
+    /// **Un œil qui ouvre un no-op n'est pas un aperçu — c'est le défaut du lot
+    /// 3A rejoué.** Ce lot-là avait livré un contrôle dont le type était juste
+    /// et que RIEN ne pouvait atteindre ; dix-neuf tests le vérifiaient sans
+    /// jamais le montrer. La garde qui l'aurait attrapé ne demande ni le type ni
+    /// le câblage, mais l'EFFET : au bout de `onPreview`, y a-t-il un lecteur ?
+    ///
+    /// `DocumentComposerDoor` posait `onPreview: { _, _, _, _, _ in }` — un
+    /// no-op parfaitement légitime tant qu'aucun œil n'était peint, et un
+    /// mensonge à la seconde où l'un l'est.
+    func test_laPorteDuDocument_rendVraimentLApercu_pasUnNoOp() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // .../Unit/Composer
+            .deletingLastPathComponent()   // .../Unit
+            .deletingLastPathComponent()   // .../MeeshyTests
+            .deletingLastPathComponent()   // .../apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let raw = try String(contentsOf: url, encoding: .utf8)
+        let code = AppSourceGuard.stripComments(raw)
+        let compacted = code.components(separatedBy: .whitespacesAndNewlines).joined()
+
+        XCTAssertTrue(code.contains("struct DocumentComposerDoor"),
+                      "La source de la porte est introuvable — la garde ci-dessous ne mesurerait RIEN.")
+
+        let oeilPeint = ComposerChromeOwnership
+            .socleZones(for: .document, documentHasScene: true)
+            .contains(.preview)
+        guard oeilPeint else { return }
+
+        XCTAssertFalse(
+            compacted.contains("onPreview:{_,_,_,_,_in}"),
+            "La porte du document avale l'aperçu dans un no-op alors que le socle peint un œil : "
+                + "le contrôle EXISTE et ne fait RIEN (loi 4)."
+        )
+        XCTAssertTrue(
+            compacted.contains("previewAssets=StoryPreviewAssets("),
+            "L'aperçu doit être RETENU par la porte — sans état, le cover n'a rien à présenter."
+        )
+        XCTAssertTrue(
+            compacted.contains("StoryViewerView(") && compacted.contains("isPreviewMode:true"),
+            "L'aperçu doit être rendu par le LECTEUR en mode aperçu, jamais par un composant maison "
+                + "(loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
         )
     }
 
@@ -1451,7 +1513,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
         let compacte = compact(corps)
 
-        XCTAssertTrue(compacte.contains(compact("ComposerFormatFan(")), "Le bloc lu n'est pas celui du plateau.")
+        // `formatChip`, pas `ComposerFormatFan(` : la CONSTRUCTION de l'éventail
+        // a été extraite au 2026-08-27 (#4047) pour qu'UNE seule serve ses deux
+        // places — la rangée du plateau et la barre haute du document. Le
+        // plateau monte donc le chip, il ne le construit plus.
+        XCTAssertTrue(compacte.contains(compact("formatChip")), "Le bloc lu n'est pas celui du plateau.")
 
         let boutons = occurrences(of: "Button", in: compacte)
         XCTAssertLessThanOrEqual(
@@ -1967,8 +2033,12 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
         let compacte = compact(corps)
 
+        // Même raison qu'au-dessus (#4047) : le plateau MONTE le chip
+        // (`formatChip`, site unique de construction), il ne le construit plus.
+        // Ce que la garde protège — « l'éventail vit dans le plateau, pas dans
+        // le socle » — est inchangé : le socle reste verrouillé sur ses zones.
         XCTAssertTrue(
-            compacte.contains(compact("ComposerFormatFan(")),
+            compacte.contains(compact("formatChip")),
             "L'éventail se peint dans le plateau, sur le flanc opposé aux outils de composition."
         )
         for interdit in [".disabled(", ".opacity("] {
