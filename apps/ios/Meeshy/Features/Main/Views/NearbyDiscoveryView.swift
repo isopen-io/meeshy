@@ -151,11 +151,9 @@ struct NearbyDiscoveryView: View {
         // plateforme (posts du fil sur la carte) ; son sous-mode Populaire
         // chauffe les points par la popularité (vues + impressions).
         if viewModel.section == .discover {
-            PostsMapRepresentable(
-                posts: viewModel.discoverPosts,
-                weightByPopularity: viewModel.mode == .popular,
-                selectedPostId: $selectedPostId
-            )
+            PostsMapRepresentable(posts: viewModel.discoverPosts,
+                                  weightByPopularity: viewModel.mode == .popular,
+                                  selectedPostId: $selectedPostId)
         } else {
             nearbySurface
         }
