@@ -203,4 +203,45 @@ class FeedMediaGalleryTest {
         assertThat(gallery.authorNames).hasSize(3)
         assertThat(gallery.createdAtIsos).hasSize(3)
     }
+
+    // #3878 — the thumbnail travels alongside the full-resolution url, never
+    // replacing it: the viewer uses it only as a blurred backdrop while the
+    // sharp image loads.
+
+    @Test
+    fun `an images thumbnail travels alongside its full-resolution url`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(
+                listOf(
+                    image("a", url = "https://cdn/a-full.jpg", thumb = "https://cdn/a-thumb.jpg"),
+                    image("b", url = "https://cdn/b-full.jpg"),
+                ),
+            ),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls)
+            .containsExactly("https://cdn/a-full.jpg", "https://cdn/b-full.jpg")
+            .inOrder()
+        assertThat(gallery.thumbnailUrls)
+            .containsExactly("https://cdn/a-thumb.jpg", null)
+            .inOrder()
+    }
+
+    @Test
+    fun `thumbnail urls list is always the same size as image urls`() {
+        val gallery = FeedMediaGallery.of(
+            presentation(listOf(image("a", "a", thumb = "ta"), image("b", "b"))),
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.thumbnailUrls).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun `no images yields no thumbnail urls`() {
+        val gallery = FeedMediaGallery.of(presentation(emptyList()), imageIndex = 0)
+
+        assertThat(gallery.thumbnailUrls).isEmpty()
+    }
 }
