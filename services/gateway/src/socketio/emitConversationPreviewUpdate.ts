@@ -53,6 +53,45 @@ const PREVIEW_MESSAGE_SELECT = {
   originalLanguage: true,
 } as const;
 
+/**
+ * La projection du participant, seul site du dépôt qui compose DEUX SSOT dont
+ * chacune déclare son propre `user`.
+ *
+ * `id` n'est pas de la décoration : il NOMME la room personnelle d'un
+ * participant sans ligne `User`. Ne sélectionner que `userId` n'ignorait pas
+ * l'identité de repli, il ne la lisait jamais. `user` porte les préférences de
+ * langue du lecteur — sans elles il n'y a pas de Prisme à résoudre — et son
+ * rôle PLATEFORME, qui décide du PLANCHER d'historique (#3892) : le dernier
+ * message global peut précéder l'arrivée de l'un d'eux.
+ *
+ * **`user` est réécrit à la MAIN, et c'est un piège armé.** Un spread naïf
+ * (`{...A, ...B}`) ferait gagner le `user` de `HISTORY_FLOOR_PARTICIPANT_SELECT`
+ * (`{ role }` seul) au prix des préférences de langue du Prisme. La fusion
+ * explicite corrige cela — mais elle FIGE la liste : un champ ajouté demain à
+ * l'un ou l'autre `select.user` n'arrivera pas ici, silencieusement, et
+ * `tsc` ne verra que la moitié Prisme (`PreviewPrismParticipant` l'exige ;
+ * `HistoryFloorJoin.user` est OPTIONNEL, donc sa perte ne compile pas moins
+ * bien). C'est exactement le défaut que #3892 a trouvé sur ce site.
+ *
+ * D'où l'extraction : la constante est EXPORTÉE pour qu'un témoin puisse la
+ * comparer champ par champ aux deux SSOT — même cliquet que
+ * `shareLinkIncludeStructure` (`routes/links/utils/prisma-queries.ts`), l'autre
+ * site qui redéclare son `user`, et le seul des deux que #3892 ait gardé.
+ */
+export const PREVIEW_PARTICIPANT_SELECT = {
+  ...PREVIEW_PRISM_PARTICIPANT_SELECT,
+  ...HISTORY_FLOOR_PARTICIPANT_SELECT,
+  user: {
+    select: {
+      systemLanguage: true,
+      regionalLanguage: true,
+      customDestinationLanguage: true,
+      deviceLocale: true,
+      role: true,
+    },
+  },
+} as const;
+
 /** Ce qu'un dernier message — global ou propre à un lecteur — met sur le fil. */
 type PreviewMessage = {
   id: string;
@@ -191,25 +230,7 @@ export async function emitConversationPreviewUpdate(
         // Et ce qui décide du PLANCHER d'historique de chaque lecteur : le
         // dernier message global peut précéder l'arrivée de l'un d'eux.
         //
-        // `user` est réécrit à la MAIN après le double spread : les deux
-        // SSOT déclarent chacune leur propre `user`, et un spread naïf
-        // (`{...A, ...B}`) ferait gagner celui de HISTORY_FLOOR_PARTICIPANT_SELECT
-        // (`{ role }` seul) au prix des préférences de langue du Prisme —
-        // silencieusement, sans qu'aucun test de TYPE ne le voie (`tsc`
-        // l'a attrapé ici parce que `PreviewPrismParticipant` les exige).
-        select: {
-          ...PREVIEW_PRISM_PARTICIPANT_SELECT,
-          ...HISTORY_FLOOR_PARTICIPANT_SELECT,
-          user: {
-            select: {
-              systemLanguage: true,
-              regionalLanguage: true,
-              customDestinationLanguage: true,
-              deviceLocale: true,
-              role: true,
-            },
-          },
-        },
+        select: PREVIEW_PARTICIPANT_SELECT,
       }),
       prisma.message.findFirst({
         where: { conversationId, deletedAt: null },

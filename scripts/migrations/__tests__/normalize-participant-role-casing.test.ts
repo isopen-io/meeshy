@@ -110,6 +110,27 @@ test('rogne les espaces autour du rôle avant de comparer', () => {
   assert.deepEqual(plan.fixes, [{ id: '1', from: '  ADMIN  ', to: 'admin' }]);
 });
 
+// Le témoin ci-dessus ne peut pas tomber sur le rognage seul : `'  ADMIN  '`
+// sort déjà par la branche MAJUSCULES. Celui-ci l'isole — une valeur dont SEULS
+// les espaces sont fautifs. Classer sur la forme rognée la donnait pour « déjà
+// canonique » et laissait la BASE avec ses espaces, où `hasMinimumMemberRole`
+// retombe au niveau 0 (membre rétrogradé, en silence).
+test('normalise une valeur dont SEULS les espaces sont fautifs', () => {
+  const plan = planNormalize([row('1', ' member '), row('2', 'admin ')]);
+  assert.equal(plan.skips.length, 0);
+  assert.deepEqual(plan.fixes, [
+    { id: '1', from: ' member ', to: 'member' },
+    { id: '2', from: 'admin ', to: 'admin' },
+  ]);
+});
+
+test('reste idempotent après un fix de pur espacement', () => {
+  const first = planNormalize([row('1', ' member ')]);
+  const second = planNormalize([row('1', first.fixes[0].to)]);
+  assert.equal(second.fixes.length, 0);
+  assert.equal(second.skips.length, 0);
+});
+
 test('saute un rôle inconnu au lieu de deviner, quelle que soit sa casse', () => {
   const plan = planNormalize([row('1', 'OWNER')]);
   assert.equal(plan.fixes.length, 0);

@@ -13,13 +13,20 @@
 //
 // Comment une ligne est classée
 // -----------------------------
-// Toute ligne dont `role` (après repli sur `'member'` si absent — le défaut du
-// schéma) N'EST PAS déjà l'une des quatre valeurs canoniques en minuscules est
-// candidate. Le candidat de remplacement est `role.trim().toLowerCase()`. Il
-// n'est retenu que s'il fait PARTIE des quatre rôles reconnus
+// Le candidat de remplacement est `role.trim().toLowerCase()`. Il n'est retenu
+// que s'il fait PARTIE des quatre rôles reconnus
 // (`creator`/`admin`/`moderator`/`member`) — un rôle inconnu (typo, valeur
-// legacy jamais vue) est RAPPORTÉ et SAUTÉ, jamais deviné. Le script est
-// IDEMPOTENT : au second passage, `planNormalize` ne trouve plus rien à faire.
+// legacy jamais vue) est RAPPORTÉ et SAUTÉ, jamais deviné.
+//
+// La ligne est ensuite candidate dès que la valeur STOCKÉE diffère de ce
+// candidat — jamais « dès que sa forme rognée n'est pas canonique », qui
+// laissait `' member '` en base sous prétexte qu'il se replie bien. Un `role`
+// ABSENT est laissé tel quel : il relève du défaut du schéma
+// (`@default("member")`), et le matérialiser serait une écriture que personne
+// n'a demandée.
+//
+// Le script est IDEMPOTENT : au second passage, la valeur stockée EST son
+// candidat, donc `planNormalize` ne trouve plus rien à faire.
 //
 // Écriture explicite
 // -------------------
@@ -31,6 +38,8 @@
 //
 // Default (dry-run): inspecte et rapporte le compte de lignes affectées, sans
 //   écrire, sur MONGODB_URL/DATABASE_URL depuis .env (base locale/dev).
+//   `--dry-run` est accepté mais inutile : c'est le comportement par défaut,
+//   et SEUL `--apply` écrit.
 // --apply:      applique la normalisation en base.
 // --production: utilise MONGODB_PRODUCTION_URL au lieu de MONGODB_URL.
 //
@@ -88,19 +97,27 @@ export function planNormalize(participants: readonly ParticipantRow[]): Normaliz
   const skips: RoleSkip[] = []
 
   for (const participant of participants) {
-    const raw = (participant.role ?? 'member').trim()
+    // Un `role` ABSENT relève du défaut du schéma (`@default("member")`) : le
+    // MATÉRIALISER serait une écriture que personne n'a demandée.
+    if (participant.role == null) continue
 
-    // Déjà dans la casse canonique — rien à faire, c'est ce qui rend le
-    // script idempotent au second passage.
-    if (isCanonical(raw)) continue
-
-    const candidate = raw.toLowerCase()
+    const candidate = participant.role.trim().toLowerCase()
     if (!isCanonical(candidate)) {
-      skips.push({ id: participant._id, role: participant.role ?? '', reason: 'unrecognized-role' })
+      skips.push({ id: participant._id, role: participant.role, reason: 'unrecognized-role' })
       continue
     }
 
-    fixes.push({ id: participant._id, from: participant.role ?? '', to: candidate })
+    // Comparé à la valeur STOCKÉE, jamais à sa forme rognée — c'est ce qui rend
+    // le script idempotent au second passage ET ce qui rattrape `' member '`.
+    // Classer sur le rognage faisait sortir cette ligne par « déjà canonique »
+    // alors que la BASE porte encore ses espaces : `hasMinimumMemberRole` y
+    // indexe `MEMBER_ROLE_HIERARCHY[' member ']` → `undefined` → niveau 0, donc
+    // un membre RÉTROGRADÉ sous `member`, en silence, et le `role: { in: [...] }`
+    // de `participants.ts` ne le reconnaît pas davantage. Une ligne qui
+    // s'écrivait déjà exactement `'member'` ne produit, elle, aucun fix.
+    if (participant.role === candidate) continue
+
+    fixes.push({ id: participant._id, from: participant.role, to: candidate })
   }
 
   return { fixes, skips }
@@ -129,7 +146,23 @@ async function main() {
 
   try {
     const collection = client.db().collection('Participant')
-    const docs = await collection.find({}, { projection: { role: 1 } }).toArray()
+
+    // `Participant` porte une ligne par (conversation, identité) : la
+    // collection entière ne tient pas en mémoire sur une base de production, et
+    // ce script n'a encore JAMAIS tourné — un `find({})` y serait découvert le
+    // jour du dry-run, c'est-à-dire au pire moment. Seules les lignes
+    // CANDIDATES sont ramenées : `$nin` sur les quatre valeurs canoniques
+    // laisse passer toute autre casse (`'ADMIN'`), tout espacement fautif
+    // (`' member '`) et les lignes SANS `role` (un champ absent n'égale aucune
+    // valeur), que `planNormalize` sait déjà laisser tranquilles.
+    //
+    // Le TOTAL reste rapporté — il vient d'un `countDocuments`, qui ne ramène
+    // rien : un rapport de dry-run qui ne dit pas sur quelle population il a
+    // travaillé n'est pas un rapport.
+    const total = await collection.countDocuments({})
+    const docs = await collection
+      .find({ role: { $nin: [...CANONICAL_MEMBER_ROLES] } }, { projection: { role: 1 } })
+      .toArray()
 
     const participants: ParticipantRow[] = docs.map((doc) => ({
       _id: String(doc._id),
@@ -138,7 +171,7 @@ async function main() {
 
     const plan = planNormalize(participants)
 
-    log(`${participants.length} participations inspectées — ${plan.fixes.length} à normaliser, ${plan.skips.length} sautées`)
+    log(`${total} participations en base, ${participants.length} candidates — ${plan.fixes.length} à normaliser, ${plan.skips.length} sautées`)
     for (const fix of plan.fixes) {
       log(`  FIX  ${fix.id}  "${fix.from}" → "${fix.to}"`)
     }

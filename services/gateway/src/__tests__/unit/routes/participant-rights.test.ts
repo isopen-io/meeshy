@@ -117,6 +117,12 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow, host
     })),
   };
 
+  // Le manager est HOISTÉ (au lieu d'être fabriqué à chaque `getManager()`) :
+  // sans cela `invalidateParticipantCache` est un mock neuf à chaque appel et
+  // aucun témoin ne peut voir si le durable a bien été posé.
+  const invalidateParticipantCache = jest.fn();
+  const manager = { getIO: () => io, invalidateParticipantCache };
+
   const fastify = {
     get: register('GET'),
     post: register('POST'),
@@ -129,7 +135,7 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow, host
     // sur le handler ferait passer un test que `tsc` refuse — c'est exactement
     // ce qui a fait rougir `Build (bun)` en CI pendant que la suite était verte.
     socketIOHandler: {
-      getManager: () => ({ getIO: () => io, invalidateParticipantCache: jest.fn() }),
+      getManager: () => manager,
     },
   } as any;
 
@@ -139,7 +145,7 @@ function setup(viewerRole: string = 'admin', targetRow: any = anonymousRow, host
   reply.status = jest.fn((code: number) => { reply._status = code; return reply; });
   reply.send = jest.fn((body: any) => { reply._body = body; return reply; });
 
-  return { routes, prisma, reply, emitted, io };
+  return { routes, prisma, reply, emitted, io, invalidateParticipantCache };
 }
 
 async function patchRights(ctx: Ctx, body: any, participantId: string = ANON_ID) {
@@ -600,5 +606,62 @@ describe('PATCH …/rights — dédoublement de l’émission (#3898)', () => {
     const hostEvent = events.find((e) => e.room === `user:${OTHER_HOST_USER_ID}`);
     expect(hostEvent).toBeTruthy();
     expect(hostEvent?.payload.rights.canSendFiles).toBe(true);
+  });
+});
+
+describe('PATCH …/rights — la diffusion est ACCESSOIRE, l’écriture est acquise', () => {
+  // Le lot #3898 a introduit le premier `await` de ce handler APRÈS l'écriture :
+  // une lecture Prisma pour trouver les autres hôtes. Elle vivait sous le
+  // `try/catch` de la route, dont l'issue est un 500 — si bien qu'un accroc
+  // Mongo sur un canal purement cosmétique annonçait à l'hôte que son geste
+  // avait échoué alors qu'il était DÉJÀ persisté, et sautait au passage
+  // l'invalidation du cache de droits (le prochain envoi du visiteur restait
+  // arbitré sur ses anciens droits pendant toute la durée du cache).
+  it('une panne de l’éventail ne fait PAS échouer une écriture déjà persistée', async () => {
+    const ctx = setup('admin');
+    ctx.prisma.participant.findMany.mockRejectedValue(new Error('mongo down'));
+
+    await patchRights(ctx, { canSendFiles: true });
+
+    expect(ctx.prisma.participant.update).toHaveBeenCalledTimes(1);
+    expect(ctx.reply._status).toBe(200);
+  });
+
+  it('le cache de droits est invalidé même quand l’éventail tombe', async () => {
+    const ctx = setup('admin');
+    ctx.prisma.participant.findMany.mockRejectedValue(new Error('mongo down'));
+
+    await patchRights(ctx, { canSendFiles: true });
+
+    expect(ctx.invalidateParticipantCache).toHaveBeenCalledWith(ANON_ID, CONV_ID);
+  });
+});
+
+describe('PATCH …/rights — l’éventail des hôtes voit les DEUX casses', () => {
+  // Le filtre part en BASE, où un `in` Prisma ne connaît pas
+  // `mode: 'insensitive'`. `Participant.role` s'écrit en minuscules depuis
+  // #3875, mais les lignes antérieures portent encore `'ADMIN'`/`'CREATOR'`
+  // tant que la migration n'a pas tourné en production — et le symptôme d'un
+  // filtre trop étroit est un administrateur qui ne reçoit tout simplement pas
+  // l'événement, en silence.
+  it('interroge les rangs hôtes dans les deux casses', async () => {
+    const ctx = setup('admin');
+
+    await patchRights(ctx, { canSendFiles: true });
+
+    const where = (ctx.prisma.participant.findMany.mock.calls[0][0] as any).where;
+    for (const role of ['creator', 'admin', 'moderator', 'CREATOR', 'ADMIN', 'MODERATOR']) {
+      expect(where.role.in).toContain(role);
+    }
+  });
+
+  it('n’élargit pas au simple membre', async () => {
+    const ctx = setup('admin');
+
+    await patchRights(ctx, { canSendFiles: true });
+
+    const where = (ctx.prisma.participant.findMany.mock.calls[0][0] as any).where;
+    expect(where.role.in).not.toContain('member');
+    expect(where.role.in).not.toContain('MEMBER');
   });
 });

@@ -22,13 +22,19 @@ const USER_ID = 'user-new';
 type Harness = {
   prisma: {
     conversation: { findFirst: jest.Mock };
-    participant: { findFirst: jest.Mock; create: jest.Mock; update: jest.Mock; findMany: jest.Mock };
+    participant: {
+      findFirst: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
+    };
     message: { create: jest.Mock };
   };
 };
 
-function harness(overrides: { globalConv?: any; existingMember?: any } = {}): Harness {
-  const { globalConv = GLOBAL_CONV, existingMember = null } = overrides;
+function harness(overrides: { globalConv?: any; existingMember?: any; memberCount?: number } = {}): Harness {
+  const { globalConv = GLOBAL_CONV, existingMember = null, memberCount = 3 } = overrides;
   return {
     prisma: {
       conversation: { findFirst: jest.fn<any>().mockResolvedValue(globalConv) },
@@ -37,6 +43,7 @@ function harness(overrides: { globalConv?: any; existingMember?: any } = {}): Ha
         create: jest.fn<any>().mockResolvedValue({ id: 'part-new' }),
         update: jest.fn<any>().mockResolvedValue({}),
         findMany: jest.fn<any>().mockResolvedValue([]),
+        count: jest.fn<any>().mockResolvedValue(memberCount),
       },
       message: { create: jest.fn<any>().mockResolvedValue({ id: 'msg-1' }) },
     },
@@ -211,9 +218,54 @@ describe('ensureGlobalConversationMembership', () => {
     expect(h.prisma.participant.create).toHaveBeenCalledTimes(1);
   });
 
+  // Le salon global contient TOUS les inscrits : c'est le seul des six
+  // appelants d'`emitConversationMemberCountEvent` dont l'audience n'est pas
+  // bornée par la taille d'une conversation ordinaire. Charger la liste
+  // entière pour en prendre la LONGUEUR ramenait N lignes en mémoire à chaque
+  // création de compte, puis chaînait un `.to()` par destinataire — or
+  // `BroadcastOperator.to()` recopie son Set de rooms à chaque appel, donc
+  // N(N+1)/2 insertions synchrones sur la boucle d'événements. Les deux
+  // témoins ci-dessous gardent la borne, chacun d'un côté du plafond.
+  it('COMPTE l\'effectif au lieu de charger la liste entière', async () => {
+    const { io } = makeIo();
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    expect(h.prisma.participant.count).toHaveBeenCalledWith({
+      where: { conversationId: GLOBAL_CONV.id, isActive: true },
+    });
+    // Toute lecture de l'audience est BORNÉE — jamais un `findMany` nu.
+    for (const call of h.prisma.participant.findMany.mock.calls) {
+      expect(typeof (call[0] as any).take).toBe('number');
+    }
+  });
+
+  it('AU-DESSUS du plafond, ne charge QUE les lecteurs à effectif exact', async () => {
+    const { io } = makeIo();
+    h = harness({ memberCount: 50_000 });
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    const where = (h.prisma.participant.findMany.mock.calls[0][0] as any).where;
+    // Sans ce `OR`, la requête ramenait les 50 000 lignes : au-dessus du
+    // plafond, tout lecteur non autorisé à l'effectif exact reçoit une charge
+    // IDENTIQUE à celle de la room de conversation, donc sa room personnelle
+    // n'apporte rien.
+    expect(Array.isArray(where.OR)).toBe(true);
+    expect(where.OR).toHaveLength(2);
+  });
+
   it('AVALE une panne de l\'effectif temps réel — accessoire, jamais une condition de l\'ajout', async () => {
     const { io } = makeIo();
-    h.prisma.participant.findMany.mockRejectedValue(new Error('mongo down'));
+    h.prisma.participant.count.mockRejectedValue(new Error('mongo down'));
     const resolveSocketManager = jest.fn<any>().mockReturnValue({
       broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
       getIO: () => io,

@@ -51,6 +51,20 @@ const EXPECTED_CALLERS = [
   'services/InitService.ts',
 ] as const;
 
+/**
+ * Les seuls sites de PRODUCTION qui créent une ligne `User`.
+ *
+ * `InitService` n'y figure pas : il ne crée aucun compte lui-même, il appelle
+ * `AuthService.register()` — donc il hérite de l'ajout par ce chemin, en plus
+ * de son propre appel pour imposer le rang du salon global.
+ */
+const EXPECTED_USER_CREATORS = [
+  'services/AuthService.ts',
+  'services/admin/user-management.service.ts',
+] as const;
+
+const USER_WRITE = /\.user\.(create|createMany|upsert)\s*\(/;
+
 describe('garde — ajout au salon global, source unique', () => {
   it('balaie bien les sources qu\'il prétend garder', () => {
     const files = scannedFiles();
@@ -85,5 +99,35 @@ describe('garde — ajout au salon global, source unique', () => {
       const content = readFileSync(path, 'utf8');
       expect(content).toMatch(/\bensureGlobalConversationMembership\(/);
     }
+  });
+
+  /**
+   * Les témoins ci-dessus figent une liste d'appelants — ils portent donc
+   * l'affirmation VÉRIFIABLE (« ces fichiers appellent la fonction ») et pas
+   * l'autre (« ce sont les fichiers où la règle s'applique »), qui est celle
+   * qui compte. Un quatrième `prisma.user.create` posé demain sans l'ajout au
+   * salon global ne ferait rougir aucun des trois : c'est exactement le défaut
+   * que #3876 vient de corriger sur la création admin, et rien n'empêchait sa
+   * répétition.
+   *
+   * Ce cliquet-ci part donc de l'AUTRE bout — il énumère ce qui CRÉE UN
+   * COMPTE, et exige que chaque site soit une porte connue. Quand il tombe :
+   * la réparation est d'appeler `ensureGlobalConversationMembership`, jamais
+   * d'ajouter une ligne à l'inventaire.
+   */
+  it('AUCUN site de création de compte n\'échappe aux portes connues', () => {
+    const creators = scannedFiles()
+      .filter((file) => USER_WRITE.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(GATEWAY_SRC, file));
+
+    expect(creators.sort()).toEqual([...EXPECTED_USER_CREATORS].sort());
+  });
+
+  it('le balayage de création de compte SAIT reconnaître une écriture', () => {
+    // Une garde négative dont le motif ne matche rien reste verte pour la
+    // mauvaise raison : on prouve d'abord que le motif voit ce qu'il cherche.
+    expect(USER_WRITE.test('await this.prisma.user.create({ data })')).toBe(true);
+    expect(USER_WRITE.test('await tx.user.upsert({ where })')).toBe(true);
+    expect(USER_WRITE.test('await prisma.userPreference.create({ data })')).toBe(false);
   });
 });

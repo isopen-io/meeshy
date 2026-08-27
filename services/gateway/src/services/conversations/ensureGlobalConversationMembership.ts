@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { MemberRoleType } from '@meeshy/shared/types/role-types';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { MEMBER_COUNT_DISPLAY_CAP } from '@meeshy/shared/utils/member-visibility';
 import { postJoinSystemMessage, type JoinSystemMessageDeps } from './joinSystemMessage';
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount';
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
@@ -150,9 +151,49 @@ export async function ensureGlobalConversationMembership(
 }
 
 /**
+ * Les titres qui ouvrent l'effectif ENTIER, traduits en requête : miroir de
+ * `canViewExactMemberCount` (`@meeshy/shared/utils/member-visibility`), le rôle
+ * PLATEFORME à partir de MODERATOR OU le rang DANS la conversation à partir
+ * d'`admin`. Les DEUX casses du rang de conversation sont listées : un `in`
+ * Prisma ne connaît pas `mode: 'insensitive'`, et les lignes écrites avant
+ * #3875 portent encore `'ADMIN'`/`'CREATOR'` tant que
+ * `scripts/migrations/normalize-participant-role-casing.ts` n'a pas tourné.
+ */
+const EXACT_COUNT_PLATFORM_ROLES = ['MODERATOR', 'ADMIN', 'BIGBOSS'] as const;
+const EXACT_COUNT_CONVERSATION_ROLES = ['admin', 'creator', 'ADMIN', 'CREATOR'] as const;
+
+/** Borne dure de l'éventail EXACT — un salon ne se lit jamais en entier ici. */
+const EXACT_COUNT_AUDIENCE_LIMIT = 200;
+
+const MEMBER_COUNT_AUDIENCE_SELECT = {
+  id: true,
+  userId: true,
+  role: true,
+  user: { select: { role: true } },
+} as const;
+
+/**
  * L'effectif temps réel — best-effort, séparé de l'écriture comme la
  * diffusion de l'avis d'arrivée : un salon sans socket, ou un socket tombé, ne
  * doit ni annuler l'ajout ni faire échouer l'inscription.
+ *
+ * **L'effectif se COMPTE, la liste ne se charge pas.** Ce site est le seul des
+ * six appelants d'`emitConversationMemberCountEvent` à viser le salon GLOBAL,
+ * qui contient par construction TOUS les inscrits — les cinq autres visent une
+ * conversation ordinaire, bornée par sa taille. Charger l'audience entière pour
+ * en prendre la LONGUEUR ramenait donc N lignes en mémoire à chaque création de
+ * compte, et le fan-out qui suit chaîne un `.to()` par destinataire, or
+ * `BroadcastOperator.to()` RECOPIE son Set de rooms à chaque appel
+ * (`socket.io/dist/broadcast-operator.js`) : N(N+1)/2 insertions, synchrones,
+ * sur la boucle d'événements, à chaque inscription.
+ *
+ * L'audience est donc bornée, et le plafond d'affichage est lui-même la borne
+ * juste : AU-DESSUS de `MEMBER_COUNT_DISPLAY_CAP`, les lecteurs non autorisés
+ * à l'effectif exact reçoivent une charge IDENTIQUE à celle que la room de
+ * conversation porte déjà (`presentMemberCount` rend le même objet), donc leur
+ * room personnelle n'apporte rien ; seuls les lecteurs à effectif EXACT en ont
+ * encore besoin. SOUS le plafond, l'audience complète tient en ≤ 199 lignes et
+ * le comportement est inchangé.
  */
 async function emitMemberCountBestEffort(
   deps: GlobalMembershipDeps,
@@ -163,10 +204,28 @@ async function emitMemberCountBestEffort(
   if (!io) return;
 
   try {
-    const audience = await deps.prisma.participant.findMany({
-      where: { conversationId: params.conversationId, isActive: true, NOT: { userId: params.userId } },
-      select: { id: true, userId: true, role: true, user: { select: { role: true } } },
+    const memberCount = await deps.prisma.participant.count({
+      where: { conversationId: params.conversationId, isActive: true },
     });
+
+    const others = { conversationId: params.conversationId, isActive: true, NOT: { userId: params.userId } };
+    const audience = memberCount <= MEMBER_COUNT_DISPLAY_CAP
+      ? await deps.prisma.participant.findMany({
+          where: others,
+          select: MEMBER_COUNT_AUDIENCE_SELECT,
+          take: MEMBER_COUNT_DISPLAY_CAP,
+        })
+      : await deps.prisma.participant.findMany({
+          where: {
+            ...others,
+            OR: [
+              { role: { in: [...EXACT_COUNT_CONVERSATION_ROLES] } },
+              { user: { role: { in: [...EXACT_COUNT_PLATFORM_ROLES] } } },
+            ],
+          },
+          select: MEMBER_COUNT_AUDIENCE_SELECT,
+          take: EXACT_COUNT_AUDIENCE_LIMIT,
+        });
 
     emitConversationMemberCountEvent({
       io,
@@ -179,7 +238,7 @@ async function emitMemberCountBestEffort(
         displayName: params.displayName,
         joinedAt: params.joinedAt.toISOString(),
       },
-      memberCount: audience.length + 1,
+      memberCount,
     });
   } catch (error) {
     logger.warn('member count event not emitted', {

@@ -36,11 +36,33 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
-import { isGlobalAdmin } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin, hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
 import { z } from 'zod';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
+
+/**
+ * Les rangs qui font un HÔTE de la conversation, tels qu'un `where` Prisma peut
+ * les matcher. DÉRIVÉS de la hiérarchie plutôt que retapés : un rang ajouté
+ * au-dessus de `moderator` en fera partie sans qu'on ait à y penser, et le
+ * dépôt n'a qu'UNE autorité sur « qui est au-dessus de qui »
+ * (`hasMinimumMemberRole`).
+ *
+ * Les DEUX casses y figurent, et ce n'est pas une précaution : le filtre part
+ * en BASE, où un `in` Prisma ne connaît pas `mode: 'insensitive'`.
+ * `Participant.role` s'écrit en minuscules depuis #3875, mais les lignes
+ * écrites AVANT portent encore `'ADMIN'`/`'CREATOR'` tant que
+ * `scripts/migrations/normalize-participant-role-casing.ts` n'a pas tourné en
+ * production — et le symptôme d'un filtre trop étroit est un administrateur
+ * qui ne reçoit tout simplement PAS l'événement, en silence, sans erreur.
+ * Deux lignes plus haut, la garde du demandeur replie déjà la casse
+ * (`viewerRole.toLowerCase()`) : le filtre de base ne doit pas être le seul
+ * endroit du fichier qui l'ignore.
+ */
+const CONVERSATION_HOST_ROLE_MATCHES: readonly string[] = Object.values(MemberRole)
+  .filter((role) => hasMinimumMemberRole(role, MemberRole.MODERATOR))
+  .flatMap((role) => [role, role.toUpperCase()]);
 
 /**
  * `PATCH …/rights` : un instant ISO 8601 (décalage admis), `null` pour retirer,
@@ -942,50 +964,80 @@ export function registerParticipantsRoutes(
       // 3 mars »), pas un fait de conversation ordinaire. La room de
       // conversation entière ne le voit plus ; seuls les AUTRES HÔTES
       // (admin/moderator/creator) et l'INTÉRESSÉ lui-même le reçoivent, sur
-      // leur room personnelle. Contrat client : un hôte connecté ET dans la
-      // room de conversation reçoit alors DEUX événements — celui, réduit, de
-      // la room de conversation ne doit JAMAIS écraser une valeur déjà reçue
-      // via sa room personnelle.
+      // leur room personnelle.
+      //
+      // Contrat client : un hôte connecté ET dans la room de conversation
+      // reçoit DEUX événements pour le même changement, et **leur ordre ne se
+      // suppose pas** — la charge réduite part d'ailleurs en PREMIER ici, une
+      // lecture Prisma la séparant des rooms personnelles. Ce qui tient le
+      // contrat n'est donc pas un rang mais la forme : la charge réduite
+      // n'AFFIRME rien sur l'octroi (clé ABSENTE, jamais `null`), donc un
+      // client qui discrimine sur la PRÉSENCE de la clé converge vers le même
+      // état quel que soit l'ordre d'arrivée. Les deux consommateurs le font
+      // (`carriesHistoryGrant` côté iOS, `!== undefined` côté web) ; Android
+      // n'a pas de consommateur. Un client qui recopierait la valeur
+      // INCONDITIONNELLEMENT effacerait l'octroi — c'est la règle du § « Un
+      // champ que le client lit AUTORITATIVEMENT n'est plus optionnel pour
+      // l'émetteur » (CLAUDE.md), appliquée ici.
       const manager = fastify.socketIOHandler?.getManager();
       const io = manager?.getIO();
-      if (io) {
-        const fullPayload = {
-          conversationId,
-          participantId: target.id,
-          updatedBy: currentUserId ?? '',
-          rights,
-          historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
-        };
-        // La clé est ABSENTE, jamais `null` : `null` dirait « octroi
-        // retiré », ce que la room de conversation n'a pas à savoir.
-        const { historyVisibleFrom: _omitted, ...roomPayload } = fullPayload;
-
-        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, roomPayload);
-
-        // La room personnelle porte le `User.id` d'un inscrit et le
-        // `Participant.id` d'un visiteur sans compte — même clé que
-        // `participantUserRoomTargets`. L'intéressé reçoit toujours la charge
-        // complète : c'est SA date.
-        io.to(ROOMS.user(target.userId ?? target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
-
-        // Les AUTRES hôtes (admin/moderator/creator) de la conversation — pour
-        // qu'ils voient le changement, sans l'exposer à la room entière. Un
-        // hôte qui est AUSSI l'intéressé (rare : un admin octroie l'historique
-        // à un autre admin) reçoit deux fois la même charge sur sa room —
-        // idempotent, jamais faux.
-        const hosts = await prisma.participant.findMany({
-          where: { conversationId, isActive: true, role: { in: ['admin', 'moderator', 'creator'] } },
-          select: { id: true, userId: true }
-        });
-        for (const room of participantUserRooms(hosts)) {
-          io.to(room).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
-        }
-      }
 
       // Le middleware d'auth met en cache la ligne participant : sans
       // invalidation, le prochain envoi de ce visiteur serait arbitré sur ses
       // anciens droits pendant toute la durée du cache.
+      //
+      // Posée AVANT la diffusion, jamais après : l'écriture est acquise, et
+      // tout ce qui suit est accessoire. La laisser derrière l'éventail la
+      // rendait otage d'une lecture Prisma et d'un `.emit()` — dont le dépôt
+      // dit lui-même qu'il LÈVE quand l'adaptateur ou l'encodeur est en défaut
+      // (`emitWithSeq`). Même ordre que `_emitPresenceSnapshot`, qui place le
+      // durable HORS de son `try`.
       manager?.invalidateParticipantCache?.(target.id, conversationId);
+
+      try {
+        if (io) {
+          const fullPayload = {
+            conversationId,
+            participantId: target.id,
+            updatedBy: currentUserId ?? '',
+            rights,
+            historyVisibleFrom: grantedFrom ? grantedFrom.toISOString() : null
+          };
+          // La clé est ABSENTE, jamais `null` : `null` dirait « octroi
+          // retiré », ce que la room de conversation n'a pas à savoir.
+          const { historyVisibleFrom: _omitted, ...roomPayload } = fullPayload;
+
+          io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, roomPayload);
+
+          // La room personnelle porte le `User.id` d'un inscrit et le
+          // `Participant.id` d'un visiteur sans compte — même clé que
+          // `participantUserRoomTargets`. L'intéressé reçoit toujours la charge
+          // complète : c'est SA date.
+          io.to(ROOMS.user(target.userId ?? target.id)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
+
+          // Les AUTRES hôtes (admin/moderator/creator) de la conversation — pour
+          // qu'ils voient le changement, sans l'exposer à la room entière. Un
+          // hôte qui est AUSSI l'intéressé (rare : un admin octroie l'historique
+          // à un autre admin) reçoit deux fois la même charge sur sa room —
+          // idempotent, jamais faux.
+          const hosts = await prisma.participant.findMany({
+            where: { conversationId, isActive: true, role: { in: [...CONVERSATION_HOST_ROLE_MATCHES] } },
+            select: { id: true, userId: true }
+          });
+          for (const room of participantUserRooms(hosts)) {
+            io.to(room).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, fullPayload);
+          }
+        }
+      } catch (error) {
+        // La diffusion est ACCESSOIRE : l'écriture est persistée et le cache
+        // déjà invalidé. Rendre 500 ici annoncerait à l'hôte que son geste a
+        // échoué alors qu'il a pris effet — et le ferait rejouer.
+        logger.warn('participant rights broadcast failed', {
+          conversationId,
+          participantId: target.id,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
 
       return sendSuccess(reply, {
         participantId: target.id,
