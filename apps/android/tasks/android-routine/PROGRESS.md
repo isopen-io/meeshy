@@ -25,6 +25,18 @@
 > `StoryComposerDraftStore` singleton — both `story` and `session` packages live in `:sdk-core`, so no
 > Gradle dependency change. Doc-comment updated to list the story composer draft among the wiped stores.
 >
+> **Blocker found & hotfixed first (#3930, merged to `main` before this slice).** The teardown PR's CI
+> surfaced a PRE-EXISTING red on `main`, unrelated to this diff: `PrismPreviewVectorParityTest > loads
+> twenty-two vectors, never zero` (`:core:model`). The shared contract fixture
+> `packages/shared/fixtures/reading-modes/prism-preview.vectors.json` grew 22→30 vectors in `57fddee7`
+> (shared-only), so the path-filtered Android workflow never re-ran and the Android mirror test kept
+> asserting `hasSize(22)` — a latent red that surfaces on the NEXT `apps/android` PR and blocks all
+> Android CI. Root-caused (the resolver is correct: the companion `every vector matches
+> resolveLastMessagePreview exactly` passes for all 30; only the count assertion was stale), fixed as a
+> DEDICATED hotfix PR #3930 (test-only, `22→30` + honest method rename — kept OUT of this feature slice
+> per NOTES "fix as a dedicated hotfix PR, not folded"), verified green locally + CI green, squash-merged
+> to `main`. This branch then merged `main` in to pick up the fix so its own CI re-runs green.
+>
 > **Tests: +1** (`SessionTeardownTest.wipe_removesTheStoryComposerDraft`: seeds a real
 > `StoryComposerDraftSnapshot` via `InMemoryStoryComposerDraftStore(initial=…)`, asserts `load()` is
 > non-null pre-wipe and null post-wipe) + a story-draft assertion added to the existing idempotent test.
