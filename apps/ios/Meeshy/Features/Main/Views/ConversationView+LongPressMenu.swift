@@ -88,10 +88,17 @@ extension ConversationView {
     func restoreStateAfterLongPressIfNeeded() {
         guard let saved = overlayState.restoreAfterLongPress else { return }
         overlayState.restoreAfterLongPress = nil
-        guard composerState.editingMessageId == nil else {
+        if composerState.editingMessageId != nil {
             isTyping = true
             return
         }
+        // Retour porteur 2026-08-27 : « Sélectionner » (menu longpress)
+        // rouvrait le clavier — `showOverlayMenu` retombe à `false` au MÊME
+        // dismiss que `beginSelectionMode`, et cette fonction restituait
+        // l'état PRÉ-longpress sans savoir qu'une sélection venait de
+        // s'ouvrir. Le composer est REMPLACÉ par `selectionToolbar` en mode
+        // sélection (voir `ConversationView.body`) — rien à restituer.
+        guard !overlayState.isSelectionModeActive else { return }
         isTyping = saved.isTyping
         composerState.showOptions = saved.showOptions
     }

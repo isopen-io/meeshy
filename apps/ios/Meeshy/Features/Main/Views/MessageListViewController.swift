@@ -216,7 +216,13 @@ final class MessageListViewController: UIViewController {
     var selectedMessageIds: Set<String> = [] {
         didSet {
             guard oldValue != selectedMessageIds, isViewLoaded else { return }
-            applySnapshot(reconfigure: .allItems)
+            // Retour porteur 2026-08-27 (#515) : `.allItems` reconfigurait
+            // TOUTE rangée visible pour une coche qui ne change QUE sur UN
+            // message — contraire au gate `.equatable()` (#515) que ce coût
+            // existe précisément pour éviter. La différence symétrique des
+            // deux `Set` est exactement l'ensemble des id dont l'état de
+            // coche a changé.
+            applySnapshot(reconfigure: .items(oldValue.symmetricDifference(selectedMessageIds)))
         }
     }
     /// Bascule la sélection d'UN message — `ConversationView` décide de la
@@ -1746,9 +1752,15 @@ final class MessageListViewController: UIViewController {
     /// `.allItems` : bascules GLOBALES qui changent le rendu de toutes les
     /// rangées sans toucher aux records — thème, terme de recherche,
     /// révision de langue préférée, consentement voix.
-    enum SnapshotReconfigureScope {
+    enum SnapshotReconfigureScope: Equatable {
         case changedRecords
         case allItems
+        /// Reconfigure UNIQUEMENT ces `localId` — retour porteur 2026-08-27
+        /// (#515) : la sélection multiple (#4005) posait `.allItems` sur
+        /// CHAQUE coche, reconfigurant toute rangée visible pour un état qui
+        /// ne change QUE sur UN message. Contraire au gate `.equatable()`
+        /// (#515) que ce coût existe précisément pour éviter.
+        case items(Set<String>)
     }
 
     /// Versions posées à la DERNIÈRE pose non différée — la base du diff
@@ -1847,6 +1859,11 @@ final class MessageListViewController: UIViewController {
         switch reconfigure {
         case .allItems:
             itemsToReconfigure = items.filter { previousItems.contains($0) }
+        case .items(let targetLocalIds):
+            itemsToReconfigure = targetLocalIds.compactMap { localId in
+                let item = MessageListItem.message(localId: localId)
+                return previousItems.contains(item) ? item : nil
+            }
         case .changedRecords:
             // Seuls les records dont la VERSION a bougé depuis la base — les
             // séparateurs de jour ne se reconfigurent jamais ici (leur libellé

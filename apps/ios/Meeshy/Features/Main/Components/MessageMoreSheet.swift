@@ -30,9 +30,6 @@ struct MessageMoreSheet: View {
     var onEdit: (() -> Void)? = nil
     var onCopy: (() -> Void)? = nil
     var onShare: (() -> Void)? = nil
-    /// **Entrée en mode sélection multiple (#4005).** `nil` = hôte n'a rien
-    /// branché (loi 4).
-    var onSelect: (() -> Void)? = nil
     /// Ajout d'une réaction depuis la vue « Réactions » de « Plus… » (voir + ajouter).
     var onReact: ((String) -> Void)? = nil
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
@@ -273,7 +270,6 @@ struct MessageMoreSheet: View {
             case .edit: onEdit?()
             case .copy: onCopy?()
             case .share: onShare?()
-            case .select: onSelect?()
             default: break
             }
             dismiss()
@@ -345,7 +341,7 @@ struct MessageMoreSheet: View {
 
     private func isExploration(_ item: MoreItem) -> Bool {
         switch item {
-        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share, .select: return false
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share: return false
         case .views, .reactions, .language, .transcription, .sentiment, .history, .report: return true
         }
     }
@@ -369,7 +365,6 @@ struct MessageMoreSheet: View {
         case .transcription: return MeeshyColors.indigo600
         case .history: return MeeshyColors.warning
         case .report: return MeeshyColors.error
-        case .select: return theme.textSecondary
         }
     }
 
@@ -441,7 +436,7 @@ struct MessageMoreSheet: View {
             MessageEditsDetailView(message: message, editRevisions: editRevisions)
         case .report:
             MessageReportDetailView(message: message, onReport: { onReport?($0, $1); dismiss() }, onDismiss: { dismiss() })
-        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share, .select:
+        case .reply, .forward, .thread, .media, .pin, .unpin, .star, .unstar, .delete, .edit, .copy, .share:
             EmptyView()
         }
     }
@@ -467,7 +462,6 @@ struct MessageMoreSheet: View {
         case .sentiment: return "brain.head.profile"
         case .history: return "clock.arrow.circlepath"
         case .report: return "exclamationmark.triangle"
-        case .select: return "checkmark.circle"
         }
     }
 
@@ -492,7 +486,6 @@ struct MessageMoreSheet: View {
         case .sentiment: return String(localized: "message-detail.tab.sentiment", defaultValue: "Sentiment", bundle: .main)
         case .history: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
         case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
-        case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
         }
     }
 }

@@ -41,12 +41,12 @@ final class MessageActionResolverTests: XCTestCase {
 
     func test_primaryActions_receivedText_isTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx())
-        XCTAssertEqual(a, [.translate, .copy, .more])
+        XCTAssertEqual(a, [.select, .translate, .copy, .more])
     }
 
     func test_primaryActions_ownEditableText_isEditTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
-        XCTAssertEqual(a, [.edit, .translate, .copy, .more])
+        XCTAssertEqual(a, [.edit, .select, .translate, .copy, .more])
     }
 
     func test_primaryActions_neverContainsDelete_evenWhenDeletable() {
@@ -71,13 +71,15 @@ final class MessageActionResolverTests: XCTestCase {
 
     func test_primaryActions_singleMediaNoText_isSaveMediaMore() {
         let a = MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1))
-        XCTAssertEqual(a, [.saveMedia, .more])
+        XCTAssertEqual(a, [.select, .saveMedia, .more])
     }
 
-    func test_primaryActions_multiMediaNoText_dropsSaveMedia_fallsBackToPin() {
+    func test_primaryActions_multiMediaNoText_dropsSaveMedia_selectCoversTheFallback() {
         let a = MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 3))
         XCTAssertFalse(a.contains(.saveMedia), "multi-attachment passe par la galerie, pas le menu")
-        XCTAssertEqual(a, [.pin, .more], "aucune action clé → repli pin pour ne pas afficher un menu vide")
+        // Le repli pin est SANS OBJET depuis que `.select` garantit `out`
+        // non vide (voir le résolveur) — la liste se limite à Sélectionner + Plus…
+        XCTAssertEqual(a, [.select, .more], "aucune action clé au-delà de Sélectionner, toujours offerte")
     }
 
     func test_primaryActions_imageOnly_dropsTranslate() {
@@ -131,7 +133,7 @@ final class MessageActionResolverTests: XCTestCase {
             ctx(hasText: false, hasMedia: true,
                 saveableAttachmentCount: 1, canComposeMedia: true))
 
-        XCTAssertEqual(a, [.saveMedia, .compose, .more])
+        XCTAssertEqual(a, [.select, .saveMedia, .compose, .more])
     }
 
     /// Le voisinage n'est pas décoratif : « Composer » suit immédiatement
@@ -156,7 +158,7 @@ final class MessageActionResolverTests: XCTestCase {
             ctx(hasText: false, hasMedia: true,
                 saveableAttachmentCount: 1, canComposeMedia: false))
 
-        XCTAssertEqual(a, [.saveMedia, .more])
+        XCTAssertEqual(a, [.select, .saveMedia, .more])
     }
 
     // MARK: - LA règle d'offre : UN site, trois lecteurs
@@ -270,17 +272,20 @@ final class MessageActionResolverTests: XCTestCase {
 
     // MARK: - moreSections : « Sélectionner » (#4005) — toujours offert, en fin de liste
 
-    func test_moreSections_alwaysIncludesSelect() {
-        let items = actionItems(MessageActionResolver.moreSections(ctx()))
-        XCTAssertTrue(items.contains(.select), "« Sélectionner » doit toujours être offert — aucune "
-            + "condition de contexte, c'est un utilitaire de LISTE.")
+    // MARK: - primaryActions : « Sélectionner » promu en primaire (retour porteur 2026-08-27)
+
+    func test_primaryActions_alwaysIncludesSelect() {
+        XCTAssertTrue(MessageActionResolver.primaryActions(ctx()).contains(.select),
+            "« Sélectionner » doit toujours être offert, comme .compose/.edit — aucune condition de contexte.")
+        XCTAssertTrue(
+            MessageActionResolver.primaryActions(ctx(hasText: false)).contains(.select),
+            "Toujours offert même sans texte — utilitaire de LISTE, pas une action sur CE message."
+        )
     }
 
-    func test_moreSections_select_isTheLastAction() {
-        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true, hasMedia: true)))
-        XCTAssertEqual(items.last, .select, "« Sélectionner » doit rester en fin de liste — utilitaire, "
-            + "pas une action sur CE message précis.")
-    }
+    // `MoreItem` n'a plus DU TOUT de cas `.select` (retiré, pas seulement
+    // filtré) — le type system garantit déjà qu'aucune section « Plus… » ne
+    // peut le porter. Aucun test runtime n'a de sens pour cet invariant.
 
     // MARK: - moreSections : SSOT « Plus… » (accueille pin/star/delete sortis du primaire)
 

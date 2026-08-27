@@ -218,20 +218,61 @@ final class ConversationSelectionGuardTests: XCTestCase {
         )
     }
 
+    // MARK: - Retour porteur 2026-08-27 (#515) : une coche ne reconfigure QUE
+    // sa propre rangée — `.allItems` sur `selectedMessageIds` allait à
+    // l'encontre du gate `.equatable()` (#515), qui existe précisément pour
+    // que les bulles IMMOBILES restent bon marché.
+
+    func test_selectedMessageIds_reconfiguresOnlyTheChangedItems_notAllItems() throws {
+        let code = try source("Features/Main/Views/MessageListViewController.swift")
+        guard let block = body(of: "var selectedMessageIds: Set<String> = [] {", in: code) else {
+            return XCTFail("`selectedMessageIds` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            block.contains("applySnapshot(reconfigure: .items(oldValue.symmetricDifference(selectedMessageIds)))"),
+            "Une coche ne doit reconfigurer QUE les id dont l'état a changé (différence symétrique) — "
+                + "`.allItems` reconfigurerait TOUTE rangée visible pour un état qui ne change que sur UN "
+                + "message, défaisant le gate `.equatable()` (#515)."
+        )
+        XCTAssertFalse(
+            block.contains(".allItems"),
+            "`selectedMessageIds` ne doit plus poser `.allItems` — seul `isSelectionModeActive` "
+                + "(bascule GLOBALE, affecte toute rangée) le justifie encore."
+        )
+    }
+
+    func test_snapshotReconfigureScope_itemsCase_filtersToOnlyExistingTargets() throws {
+        let code = try source("Features/Main/Views/MessageListViewController.swift")
+        guard let fn = body(of: "case .items(let targetLocalIds):", in: code) else {
+            return XCTFail("Le cas `.items` d'`applySnapshot` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            fn.contains("previousItems.contains(item) ? item : nil"),
+            "Le reconfigure ciblé doit, comme `.allItems`, se filtrer aux items déjà PRÉSENTS dans le "
+                + "snapshot appliqué — reconfigurer un id en cours d'INSERTION est non supporté "
+                + "(commentaire voisin de `applySnapshot`)."
+        )
+    }
+
     // MARK: - Retour porteur 2026-08-27 (#4005 bis) : la bulle REÇUE se décale
     // pour loger le cercle de sélection CENTRÉ entre le bord et la bulle —
     // la bulle ENVOYÉE, elle, ne bouge pas (son cercle coïncide déjà avec
     // son propre coin, les deux ancrés à droite).
 
-    func test_selectionShift_appliesOnlyToReceivedBubbles_duringSelection() throws {
+    func test_selectionShift_appliesToAllBubbles_regardlessOfIsMine() throws {
         let code = try source("Features/Main/Views/MessageListView.swift")
         guard let prop = body(of: "private var selectionShift: CGFloat {", in: code) else {
             return XCTFail("`selectionShift` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
-            prop.contains("guard isSelectionModeActive, !isMine else { return 0 }"),
-            "Le décalage doit être nul hors sélection ET pour une bulle ENVOYÉE — seule la bulle "
-                + "REÇUE se décale."
+            prop.contains("guard isSelectionModeActive else { return 0 }"),
+            "Le décalage doit être nul hors sélection SEULEMENT — retour porteur 2026-08-27 ter : "
+                + "« qu'importe le mode », la bulle ENVOYÉE se décale exactement comme la REÇUE."
+        )
+        XCTAssertFalse(
+            prop.contains("!isMine"),
+            "Aucune condition sur `isMine` ne doit subsister dans `selectionShift` — le décalage est "
+                + "uniforme, plus de branchement par sens de bulle."
         )
     }
 
@@ -260,20 +301,24 @@ final class ConversationSelectionGuardTests: XCTestCase {
         )
     }
 
-    func test_selectionCircle_switchesCorner_byIsMine() throws {
+    func test_selectionCircle_alwaysTopLeading_regardlessOfIsMine() throws {
         let code = try source("Features/Main/Views/MessageListView.swift")
         XCTAssertTrue(
+            code.contains(".overlay(alignment: .topLeading) {"),
+            "Le cercle doit TOUJOURS se poser au coin haut-GAUCHE — retour porteur 2026-08-27 ter : "
+                + "« qu'importe le mode », plus de branchement par `isMine`."
+        )
+        XCTAssertFalse(
             code.contains(".overlay(alignment: isMine ? .topTrailing : .topLeading) {"),
-            "Le cercle doit changer de coin selon `isMine` — coin droit pour une bulle envoyée "
-                + "(inchangé), coin GAUCHE pour une bulle reçue (retour porteur 2026-08-27)."
+            "L'ancien branchement conditionnel par `isMine` ne doit plus exister."
         )
         guard let prop = body(of: "private var selectionLeadingCircleInset: CGFloat {", in: code) else {
             return XCTFail("`selectionLeadingCircleInset` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
             prop.contains("(selectionShift - Self.selectionCircleDiameter) / 2"),
-            "Le cercle d'une bulle reçue doit être CENTRÉ dans la marge ouverte par "
-                + "`selectionShift` — ni collé au bord, ni collé à la bulle."
+            "Le cercle doit être CENTRÉ dans la marge ouverte par `selectionShift` — ni collé au bord, "
+                + "ni collé à la bulle."
         )
     }
 }

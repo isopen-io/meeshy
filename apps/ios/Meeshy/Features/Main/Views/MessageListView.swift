@@ -97,13 +97,13 @@ struct BubbleSwipeContainer<Content: View>: View {
         }
     }
 
-    /// **Retour porteur 2026-08-27 (#4005 bis).** En mode sélection, une
-    /// bulle REÇUE (`!isMine`) se décalait sous le cercle de sélection posé
-    /// au coin droit de la RANGÉE (loin de la bulle, souvent au milieu de
-    /// l'écran) — le cercle n'avait aucun rapport visuel avec sa bulle.
-    /// Les bulles ENVOYÉES restent inchangées : leur cercle, déjà au coin
-    /// haut-droit de la rangée, coïncide avec le coin de LEUR bulle (rangée
-    /// et bulle sont toutes deux ancrées à droite).
+    /// **Retour porteur 2026-08-27 (#4005 bis, puis ter).** En mode
+    /// sélection, une bulle se décalait à droite pour loger son cercle
+    /// SEULEMENT si elle était REÇUE (`!isMine`) — la bulle ENVOYÉE gardait
+    /// son cercle au coin haut-droit. Deuxième retour porteur, explicite :
+    /// **toujours à gauche, qu'importe `isMine` ET qu'importe le mode de
+    /// lecture** — colonne de cases à cocher unique, façon Mail/Fichiers,
+    /// jamais un coin qui dépend du sens de la bulle.
     ///
     /// Diamètre du glyphe SF Symbol (`.font(.system(size: 20))` ci-dessous,
     /// halo de fond exclu) — l'unité que le porteur nomme « taille du
@@ -116,11 +116,12 @@ struct BubbleSwipeContainer<Content: View>: View {
         uniformFlatDirection ? 2 : 3
     }
 
-    /// Largeur de la marge ouverte à GAUCHE d'une bulle reçue en mode
-    /// sélection — 0 si non concerné (bulle envoyée, ou sélection inactive)
-    /// pour laisser le repos hors-sélection strictement inchangé.
+    /// Largeur de la marge ouverte à GAUCHE de la bulle en mode sélection —
+    /// 0 hors sélection, pour laisser le repos existant strictement
+    /// inchangé. S'applique à TOUTE bulle, envoyée ou reçue (retour porteur
+    /// 2026-08-27 ter : « qu'importe le mode »).
     private var selectionShift: CGFloat {
-        guard isSelectionModeActive, !isMine else { return 0 }
+        guard isSelectionModeActive else { return 0 }
         return Self.selectionCircleDiameter * selectionShiftMultiplier
     }
 
@@ -212,19 +213,17 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ))
             }
         }
-        // Bulle envoyée : coin haut-droit de la RANGÉE, inchangé (coïncide
-        // avec le coin de la bulle, elle aussi ancrée à droite). Bulle
-        // reçue : coin haut-GAUCHE, centré dans `selectionShift` par
-        // `selectionLeadingCircleInset` — voir ce champ.
-        .overlay(alignment: isMine ? .topTrailing : .topLeading) {
+        // Toujours coin haut-GAUCHE, centré dans `selectionShift` par
+        // `selectionLeadingCircleInset` — qu'importe `isMine`, qu'importe le
+        // mode de lecture (retour porteur 2026-08-27 ter).
+        .overlay(alignment: .topLeading) {
             if isSelectionModeActive {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
                     .background(Circle().fill(.background).frame(width: 18, height: 18))
                     .padding(.top, 6)
-                    .padding(.trailing, isMine ? 6 : 0)
-                    .padding(.leading, isMine ? 0 : selectionLeadingCircleInset)
+                    .padding(.leading, selectionLeadingCircleInset)
                     .allowsHitTesting(false)
             }
         }

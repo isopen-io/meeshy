@@ -1147,7 +1147,6 @@ struct ConversationView: View {
                         HapticFeedback.success()
                     },
                     onShare: { overlayState.shareMessage = msg },
-                    onSelect: { beginSelectionMode(seedingWith: msg.id) },
                     onReact: { emoji in viewModel.toggleReaction(messageId: msg.id, emoji: emoji) },
                     onSelectTranslation: { translation in
                         viewModel.setActiveTranslation(for: msg.id, translation: translation)
@@ -2750,6 +2749,7 @@ struct ConversationView: View {
                     // que le second déclencheur, un seul chemin de présentation.
                     composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
                 },
+                onSelect: { beginSelectionMode(seedingWith: msg.id) },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                 mentionDisplayNames: viewModel.mentionDisplayNames,
@@ -2863,21 +2863,6 @@ struct ConversationView: View {
                     if action == .delete { Divider() }
                     nativeMenuButton(action, msg: msg)
                 }
-
-                // « Sélectionner » (#4005) — utilitaire de LISTE, pas une
-                // action sur CE message : même patron que « Plus d'emojis »
-                // ci-dessus, un item manuel hors de `PrimaryAction`/`actions`
-                // (pas de doublon d'énumération avec `MoreItem.select`, qui
-                // sert l'overlay custom < iOS 26).
-                Divider()
-                Button {
-                    beginSelectionMode(seedingWith: msg.id)
-                } label: {
-                    Label(
-                        String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main),
-                        systemImage: "checkmark.circle"
-                    )
-                }
             }
         )
     }
@@ -2892,6 +2877,15 @@ struct ConversationView: View {
     @ViewBuilder
     private func nativeMenuButton(_ action: PrimaryAction, msg: Message) -> some View {
         switch action {
+        case .select:
+            Button {
+                beginSelectionMode(seedingWith: msg.id)
+            } label: {
+                Label(
+                    String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main),
+                    systemImage: "checkmark.circle"
+                )
+            }
         case .edit:
             Button {
                 beginEdit(msg)

@@ -168,9 +168,25 @@ final class ConversationLongPressMenuGuardTests: XCTestCase {
             "La restitution doit reposer `isTyping` sur la valeur sauvegardée AVANT le longpress."
         )
         XCTAssertTrue(
-            fn.contains("composerState.editingMessageId == nil"),
+            fn.contains("composerState.editingMessageId != nil"),
             "La restitution doit être COURT-CIRCUITÉE si une édition vient de démarrer — sinon elle "
                 + "écraserait le clavier que `beginEdit` veut ouvert."
+        )
+    }
+
+    // MARK: - Retour porteur 2026-08-27 : « Sélectionner » rouvrait le clavier
+    // (le composer, REMPLACÉ par `selectionToolbar`, n'a rien à restituer).
+
+    func test_restoreStateAfterLongPressIfNeeded_skipsRestore_whenSelectionModeJustStarted() throws {
+        let code = try source("Features/Main/Views/ConversationView+LongPressMenu.swift")
+        guard let fn = body(of: "func restoreStateAfterLongPressIfNeeded(", in: code) else {
+            return XCTFail("`restoreStateAfterLongPressIfNeeded` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            fn.contains("guard !overlayState.isSelectionModeActive else { return }"),
+            "Taper « Sélectionner » ferme le menu (`showOverlayMenu = false`) au MÊME dismiss que "
+                + "`beginSelectionMode` — sans cette garde, la restitution rouvrirait le clavier sur un "
+                + "composer que `selectionToolbar` a déjà remplacé."
         )
     }
 
