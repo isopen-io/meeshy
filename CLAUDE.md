@@ -536,7 +536,7 @@ accent = hueShift(primary, −30°)
 ## MeeshyComposer — la planche est le document de DESIGN maintenu
 `docs/product/planche-meeshy-composer.html` (ex-`docs/superpowers/specs/2026-08-19-meeshy-composer-views.html`, 100+ révisions) est la **vision de design vivante** du composer : matrice feature × état (`data-task` / `data-kind` / `data-state`), onze lois, inventaire, budgets, risques, et les VUES cibles (anatomie, scène 9:16, outils, timeline, étagère, viewers, 18 styles de texte, iconographie, éditeurs). C'est cette vision, validée, que MeeshyComposer / Scène / Timeline doivent reproduire à la fin.
 - La planche porte la VISION ; **l'ÉTAT de chaque tâche est porté par son issue GitHub** (champ « Tâche P0 » = identifiant de ligne ; milestone « MeeshyComposer — livré » pour le fait). Une ligne de la matrice qui bascule (`docs(p0): …`) le fait dans le même commit que le gate, et l'issue correspondante se ferme / passe `In Progress` dans le même mouvement — si les deux divergent, l'issue a raison.
-- La page publiée https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce est le RENDU de design de ce fichier (artifact = design, autorisé) : republiée depuis le fichier tracké à chaque révision, jamais depuis une copie, jamais doublée d'une page « progress ».
+- La page publiée https://claude.ai/code/artifact/d97246fa-df52-42c3-9f82-42d3d7151590 est le RENDU de design de ce fichier (artifact = design, autorisé) : republiée depuis le fichier tracké à chaque révision, jamais depuis une copie, jamais doublée d'une page « progress ».
 - Les rendus des vues (PNG/PDF) vivent dans `docs/product/planche-meeshy-composer/` et sont référencés par les issues du projet « Meeshy — pilotage ».
 
 ## Subdirectory CLAUDE.md Files
