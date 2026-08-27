@@ -217,4 +217,63 @@ final class ConversationSelectionGuardTests: XCTestCase {
                 + "rejouerait à chaque tick SwiftUI, y compris à chaque frappe dans le composer."
         )
     }
+
+    // MARK: - Retour porteur 2026-08-27 (#4005 bis) : la bulle REÇUE se décale
+    // pour loger le cercle de sélection CENTRÉ entre le bord et la bulle —
+    // la bulle ENVOYÉE, elle, ne bouge pas (son cercle coïncide déjà avec
+    // son propre coin, les deux ancrés à droite).
+
+    func test_selectionShift_appliesOnlyToReceivedBubbles_duringSelection() throws {
+        let code = try source("Features/Main/Views/MessageListView.swift")
+        guard let prop = body(of: "private var selectionShift: CGFloat {", in: code) else {
+            return XCTFail("`selectionShift` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            prop.contains("guard isSelectionModeActive, !isMine else { return 0 }"),
+            "Le décalage doit être nul hors sélection ET pour une bulle ENVOYÉE — seule la bulle "
+                + "REÇUE se décale."
+        )
+    }
+
+    func test_selectionShiftMultiplier_is3ForBubbleAnd2ForFlatRow() throws {
+        let code = try source("Features/Main/Views/MessageListView.swift")
+        guard let prop = body(of: "private var selectionShiftMultiplier: CGFloat {", in: code) else {
+            return XCTFail("`selectionShiftMultiplier` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            prop.contains("uniformFlatDirection ? 2 : 3"),
+            "Retour porteur explicite : 3× le diamètre du cercle en mode bulle "
+                + "(`uniformFlatDirection == false`), 2× en mode plat Focal/Script "
+                + "(`uniformFlatDirection == true`)."
+        )
+    }
+
+    func test_content_isPushedRightBy_selectionShift() throws {
+        let code = try source("Features/Main/Views/MessageListView.swift")
+        guard let bodyBlock = body(of: "var body: some View {", in: code) else {
+            return XCTFail("`body` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            bodyBlock.contains("content()\n                .padding(.leading, selectionShift)"),
+            "`content()` doit être poussé à droite de `selectionShift` — c'est ce qui ouvre la "
+                + "marge où loge le cercle d'une bulle reçue."
+        )
+    }
+
+    func test_selectionCircle_switchesCorner_byIsMine() throws {
+        let code = try source("Features/Main/Views/MessageListView.swift")
+        XCTAssertTrue(
+            code.contains(".overlay(alignment: isMine ? .topTrailing : .topLeading) {"),
+            "Le cercle doit changer de coin selon `isMine` — coin droit pour une bulle envoyée "
+                + "(inchangé), coin GAUCHE pour une bulle reçue (retour porteur 2026-08-27)."
+        )
+        guard let prop = body(of: "private var selectionLeadingCircleInset: CGFloat {", in: code) else {
+            return XCTFail("`selectionLeadingCircleInset` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            prop.contains("(selectionShift - Self.selectionCircleDiameter) / 2"),
+            "Le cercle d'une bulle reçue doit être CENTRÉ dans la marge ouverte par "
+                + "`selectionShift` — ni collé au bord, ni collé à la bulle."
+        )
+    }
 }

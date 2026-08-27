@@ -97,6 +97,39 @@ struct BubbleSwipeContainer<Content: View>: View {
         }
     }
 
+    /// **Retour porteur 2026-08-27 (#4005 bis).** En mode sélection, une
+    /// bulle REÇUE (`!isMine`) se décalait sous le cercle de sélection posé
+    /// au coin droit de la RANGÉE (loin de la bulle, souvent au milieu de
+    /// l'écran) — le cercle n'avait aucun rapport visuel avec sa bulle.
+    /// Les bulles ENVOYÉES restent inchangées : leur cercle, déjà au coin
+    /// haut-droit de la rangée, coïncide avec le coin de LEUR bulle (rangée
+    /// et bulle sont toutes deux ancrées à droite).
+    ///
+    /// Diamètre du glyphe SF Symbol (`.font(.system(size: 20))` ci-dessous,
+    /// halo de fond exclu) — l'unité que le porteur nomme « taille du
+    /// cercle ».
+    private static var selectionCircleDiameter: CGFloat { 20 }
+
+    /// Bulle (River/Résumé compris, `uniformFlatDirection == false`) : 3×.
+    /// Plat (Focal/Script, `uniformFlatDirection == true`) : 2×.
+    private var selectionShiftMultiplier: CGFloat {
+        uniformFlatDirection ? 2 : 3
+    }
+
+    /// Largeur de la marge ouverte à GAUCHE d'une bulle reçue en mode
+    /// sélection — 0 si non concerné (bulle envoyée, ou sélection inactive)
+    /// pour laisser le repos hors-sélection strictement inchangé.
+    private var selectionShift: CGFloat {
+        guard isSelectionModeActive, !isMine else { return 0 }
+        return Self.selectionCircleDiameter * selectionShiftMultiplier
+    }
+
+    /// Centre le cercle DANS `selectionShift` (bord ← [marge] → bulle),
+    /// plutôt que collé à l'un ou l'autre.
+    private var selectionLeadingCircleInset: CGFloat {
+        max(0, (selectionShift - Self.selectionCircleDiameter) / 2)
+    }
+
     // Pre-formatted on `messageCreatedAt` (a `let`) so the indicator's body
     // re-evaluation during drag doesn't re-run `Date.formatted` 60 times per
     // second. SwiftUI doesn't track these as dependencies (they're computed
@@ -121,6 +154,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .padding(.horizontal, 8)
 
             content()
+                .padding(.leading, selectionShift)
                 .offset(x: offset)
                 .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
                 .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
@@ -178,13 +212,19 @@ struct BubbleSwipeContainer<Content: View>: View {
                     ))
             }
         }
-        .overlay(alignment: .topTrailing) {
+        // Bulle envoyée : coin haut-droit de la RANGÉE, inchangé (coïncide
+        // avec le coin de la bulle, elle aussi ancrée à droite). Bulle
+        // reçue : coin haut-GAUCHE, centré dans `selectionShift` par
+        // `selectionLeadingCircleInset` — voir ce champ.
+        .overlay(alignment: isMine ? .topTrailing : .topLeading) {
             if isSelectionModeActive {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
                     .background(Circle().fill(.background).frame(width: 18, height: 18))
-                    .padding(6)
+                    .padding(.top, 6)
+                    .padding(.trailing, isMine ? 6 : 0)
+                    .padding(.leading, isMine ? 0 : selectionLeadingCircleInset)
                     .allowsHitTesting(false)
             }
         }
