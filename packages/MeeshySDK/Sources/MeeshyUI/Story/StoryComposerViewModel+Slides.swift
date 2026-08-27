@@ -7,7 +7,10 @@ import PencilKit
 // MARK: - StoryComposerViewModel + Slides
 
 extension StoryComposerViewModel {
-    var currentSlide: StorySlide {
+    // `public` (Phase 2, #3939) : le meuble app-side (`MeeshyComposerHost`) lie
+    // `EmbeddedSceneCanvas` à la slide courante pour l'incruster dans l'écran
+    // document. Déjà exposée par le protocole `StoryComposerProviding`.
+    public var currentSlide: StorySlide {
         get {
             // The composer holds the invariant `slides` is never empty
             // (init seeds [StorySlide()], removeSlide refuses to drop the

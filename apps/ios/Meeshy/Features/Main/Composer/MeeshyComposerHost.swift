@@ -964,13 +964,23 @@ struct MeeshyComposerHost: View {
             localMedia: documentLocalMedia,
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onPickBackground: { hex in
-                // Choisir un fond pose la couleur et fait naître la scène (F2) ;
-                // le REPORT du contenu (langue, texte, média) est branché en UN
-                // seul endroit sur `mountedSurface` (B3), et se déclenche dès que
-                // ce fond fait basculer la surface sur `.scene`.
+                // Phase 2 (#3939) — choisir un fond pose la couleur SUR la slide
+                // courante et fait apparaître la scène INCRUSTÉE dans l'écran
+                // document (via `showsScene` ci-dessous), SANS basculer sur
+                // l'atelier plein écran. Le report du contenu reste géré ailleurs.
                 documentBackground = hex
                 viewModel.applyBackground(hex: hex)
             },
+            // Phase 2 (#3939) — la scène 9:16 s'incruste EN HAUT de l'écran
+            // document dès qu'un fond est choisi. Elle édite la slide courante
+            // de l'atelier (source de vérité unique) ; son ratio suit le fond
+            // (portrait par défaut, paysage si image de fond paysage).
+            sceneSlide: Binding(
+                get: { viewModel.currentSlide },
+                set: { viewModel.currentSlide = $0 }
+            ),
+            showsScene: documentBackground != nil,
+            sceneAspectRatio: viewModel.currentCanvasRatio,
             // **La tuile de lieu (T2.5), corrigée #3903** : elle voyageait en
             // `.overlay(alignment: .bottomLeading)` sur TOUTE la surface —
             // exactement le point où `toolRow` peint sa première icône (elle

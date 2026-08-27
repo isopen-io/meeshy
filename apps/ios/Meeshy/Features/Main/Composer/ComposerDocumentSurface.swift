@@ -1335,6 +1335,21 @@ struct ComposerDocumentSurface: View {
     /// fond (loi 4) — la surface reste sans état.
     var onPickBackground: ((String) -> Void)? = nil
 
+    /// **La scène incrustée (Phase 2 du composer unifié, #3939).** La slide
+    /// éditée par la scène 9:16 qui s'incruste EN HAUT de l'écran document dès
+    /// qu'un fond est choisi (ou qu'un média/scène existe). `nil` ⇒ pas de
+    /// scène, l'écran reste texte seul (comportement historique).
+    var sceneSlide: Binding<StorySlide>? = nil
+
+    /// La scène doit-elle être montée ? Découplé de `sceneSlide != nil` pour
+    /// que le meuble garde la décision (« un fond a été choisi » / « un média
+    /// qualifie »), la surface restant une pure présentation.
+    var showsScene: Bool = false
+
+    /// Ratio de la scène incrustée — 9:16 par défaut, 16:9 si le fond est
+    /// paysage (source de vérité partagée avec l'atelier et le reader).
+    var sceneAspectRatio: CGFloat = CanvasGeometry.portraitRatio
+
     /// **Le slot de tête de `toolRow` (#3903).** Un chip d'état actif (le lieu,
     /// aujourd'hui) qui doit s'insérer DANS la disposition de la rangée d'outils
     /// plutôt que d'être stacké par-dessus : deux enfants d'un `HStack` ne se
@@ -1443,7 +1458,32 @@ struct ComposerDocumentSurface: View {
     /// normal, constat déjà consigné par `ComposerPlateauTests` avec un témoin
     /// négatif. `textSecondary` est le seul premier plan mesuré au-dessus du
     /// seuil sur les TROIS teintes, et le plateau se choisit.
+    @ViewBuilder
     private var content: some View {
+        if showsScene, let sceneSlide {
+            // **Phase 2 (#3939) — la scène est incrustée EN HAUT.** Dès qu'un
+            // fond est choisi, la scène 9:16 (peinte de ce fond) occupe le haut
+            // de l'écran document, arrondie ; le texte devient la DESCRIPTION,
+            // sous la scène. Plus de switch vers l'atelier plein écran.
+            VStack(spacing: 8) {
+                EmbeddedSceneCanvas(
+                    slide: sceneSlide,
+                    aspectRatio: sceneAspectRatio,
+                    cornerRadius: 22
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                sceneDescriptionField
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            textOnlyContent
+        }
+    }
+
+    /// L'écran document HISTORIQUE — texte long seul, sans scène.
+    private var textOnlyContent: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(ComposerDocumentCopy.placeholder)
@@ -1461,6 +1501,29 @@ struct ComposerDocumentSurface: View {
                 .frame(minHeight: 120)
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
+                .accessibilityLabel(Text(ComposerDocumentCopy.placeholder))
+        }
+    }
+
+    /// La description repliable sous la scène incrustée (Phase 2). Champ
+    /// compact — le contenu long vit sur le canvas, ceci le légende.
+    private var sceneDescriptionField: some View {
+        ZStack(alignment: .topLeading) {
+            if text.isEmpty {
+                Text(ComposerDocumentCopy.placeholder)
+                    .font(.callout)
+                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .allowsHitTesting(false)
+            }
+            TextEditor(text: $text)
+                .focused($isContentFocused)
+                .scrollContentBackground(.hidden)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .font(.callout)
+                .frame(height: 56)
+                .padding(.horizontal, 12)
                 .accessibilityLabel(Text(ComposerDocumentCopy.placeholder))
         }
     }

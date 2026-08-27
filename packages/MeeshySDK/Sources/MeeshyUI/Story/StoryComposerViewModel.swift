@@ -485,6 +485,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// qui normalise le préfixe `#`. Le `didSet` propage à la slide courante.
     public func applyBackground(hex: String) {
         backgroundColor = hex.hasPrefix("#") ? hex : "#\(hex)"
+        // Phase 2 (#3939) — poser aussi le fond SUR la slide courante, pour que
+        // la scène incrustée dans l'écran document l'AFFICHE immédiatement (sans
+        // dépendre de la chaîne de sync de l'atelier plein écran, qui ne tourne
+        // pas sous la surface document). Idempotent (garde d'égalité interne).
+        applyBackgroundColorToCurrentSlide()
     }
 
     /// **Semer le CONTENU depuis un hôte app (B1, #3924).** Point d'entrée

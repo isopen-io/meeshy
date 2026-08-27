@@ -64,7 +64,10 @@ extension StoryComposerViewModel {
     /// paysage → 16:9 horizontal, sinon 9:16 vertical par défaut. Lu par le
     /// cadrage du canvas composer (`StoryComposerView+Canvas`) — réactif car
     /// `currentEffects` dérive de `slides` (@Published).
-    var currentCanvasRatio: CGFloat {
+    ///
+    /// `public` (Phase 2, #3939) : le meuble app-side cadre `EmbeddedSceneCanvas`
+    /// incrusté à ce ratio (portrait par défaut, paysage si fond paysage).
+    public var currentCanvasRatio: CGFloat {
         CGFloat(currentEffects.canvasAspect.ratio)
     }
 
