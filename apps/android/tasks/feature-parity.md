@@ -4082,8 +4082,25 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       emptied-purges, 2 `MediaBlobStoreTest` has, 2 `MediaBlobDaoTest` exists, 4 `OutboxIdsTest` isCmid).
       Mutation-RED-proven (neutering the availability filter reddens EXACTLY the 8 cleaning-dependent
       tests; the pure loss-reporting/order and no-media-slide tests stay green).
-      **Pending**: widening the snapshot to carry rich on-canvas content (lifts the fidelity gate) and
-      wiping the store on account teardown (`SessionTeardown`).
+      **Canvas framing persistence done** (slice `story-draft-persist-canvas-transform`, 2026-08-27):
+      the first dimension of the fidelity gate is lifted — a slide's 9:16 pan/zoom
+      (`StoryCanvasTransform`) now round-trips through the snapshot, so a user who framed a photo and
+      left the composer gets that framing back on return. New primitive-only
+      `StoryDraftTransformSnapshot(scale,offsetX,offsetY)` on `StoryDraftSlideSnapshot` (nullable,
+      `null` = identity, so legacy blobs and fresh slides decode without carrying the default triple);
+      `toDraftSnapshot`/`toDeck` map `StorySlide.transform` ↔ the snapshot; `deckHasRichContent` no
+      longer counts a non-identity transform (it is now representable), while `deckIsPristine` gained an
+      explicit identity-transform check so a silently panned empty canvas still counts as touched and a
+      restore never clobbers it. A transform is *fidelity* not *content* — it never makes a draft worth
+      restoring on its own (a pan with no media to frame is meaningless). +11 tests (5
+      `StoryComposerDraftSnapshotTest` transform round-trip/legacy-null/worth-restoring/same-content×2, 4
+      `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways/round-trip + 2 resolve Save, 2
+      `StoryComposerViewModelTest` persist-framing/restore-framing). Mutation-RED-proven: re-adding the
+      transform to the rich-content gate reddens EXACTLY the 3 transform-persistence autosave tests
+      (gate-false + both resolve-Save); mapping and pristine tests stay green.
+      **Pending**: widening the snapshot to carry the remaining rich on-canvas content — text/sticker
+      elements, filter (+intensity), background (+loop/media), pinned duration — lifts the rest of the
+      fidelity gate.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and

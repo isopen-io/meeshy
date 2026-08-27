@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.model.StoryFilter
 import org.junit.Test
 
@@ -10,8 +11,9 @@ import org.junit.Test
  * [StoryComposerAutosave] — the pure decision layer that turns a live composer deck into
  * a save / clear / no-op against the durable draft store, and restores a stored draft
  * only into a pristine composer. The rich-content fidelity gate (a draft carrying
- * elements/stickers/filter/background/duration/transform is not yet persistable) is the
- * load-bearing rule: it keeps a restore from ever being lossy.
+ * elements/stickers/filter/background/duration is not yet persistable) is the
+ * load-bearing rule: it keeps a restore from ever being lossy. The 9:16 canvas pan/zoom
+ * transform is persistable and round-trips through the snapshot.
  */
 class StoryComposerAutosaveTest {
 
@@ -172,11 +174,11 @@ class StoryComposerAutosaveTest {
     }
 
     @Test
-    fun `deckHasRichContent is true for a non-identity canvas transform`() {
+    fun `deckHasRichContent is false for a non-identity canvas transform now that it is persistable`() {
         val deck = blankDeck().updateSelectedTransform(
             StoryCanvasTransform(scale = 2f).clampedTo(1000f, 1000f),
         )
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isTrue()
+        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
     }
 
     // ---- deckIsPristine ----
@@ -194,6 +196,14 @@ class StoryComposerAutosaveTest {
     @Test
     fun `a two-slide deck is not pristine`() {
         assertThat(StoryComposerAutosave.deckIsPristine(blankDeck().addSlide("s2"))).isFalse()
+    }
+
+    @Test
+    fun `a single blank slide with a non-identity transform is not pristine`() {
+        val panned = blankDeck().updateSelectedTransform(
+            StoryCanvasTransform(scale = 2f).clampedTo(1000f, 1000f),
+        )
+        assertThat(StoryComposerAutosave.deckIsPristine(panned)).isFalse()
     }
 
     // ---- restore ----
@@ -248,5 +258,107 @@ class StoryComposerAutosaveTest {
     fun `toDeck returns null for a structurally broken snapshot`() {
         val broken = StoryComposerDraftSnapshot(slides = emptyList(), selectedId = "s1")
         assertThat(broken.toDeck()).isNull()
+    }
+
+    // ---- canvas transform persistence ----
+
+    private fun pannedTransform() =
+        StoryCanvasTransform(scale = 2f).apply(panX = 40f, panY = -25f, zoom = 1f, canvasWidth = 1000f, canvasHeight = 1000f)
+
+    @Test
+    fun `toDraftSnapshot carries a non-identity canvas transform and maps identity to null`() {
+        val transform = pannedTransform()
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .updateSelectedTransform(transform)
+            .addSlide("s2")
+            .updateSelectedText("plain")
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+
+        assertThat(snap.slides.first().transform).isEqualTo(
+            StoryDraftTransformSnapshot(
+                scale = transform.scale,
+                offsetX = transform.offsetX,
+                offsetY = transform.offsetY,
+            ),
+        )
+        assertThat(snap.slides[1].transform).isNull()
+    }
+
+    @Test
+    fun `toDeck restores a persisted canvas transform and a null transform to identity`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    mediaIds = listOf("m1"),
+                    transform = StoryDraftTransformSnapshot(scale = 3f, offsetX = 7f, offsetY = -4f),
+                ),
+                StoryDraftSlideSnapshot(id = "s2", text = "plain"),
+            ),
+            selectedId = "s1",
+        )
+
+        val deck = snap.toDeck()
+
+        assertThat(deck).isNotNull()
+        assertThat(deck!!.slides.first().transform)
+            .isEqualTo(StoryCanvasTransform(scale = 3f, offsetX = 7f, offsetY = -4f))
+        assertThat(deck.slides[1].transform).isEqualTo(StoryCanvasTransform.IDENTITY)
+    }
+
+    @Test
+    fun `a canvas transform survives the deck-snapshot-deck round-trip`() {
+        val transform = pannedTransform()
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .updateSelectedTransform(transform)
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().transform).isEqualTo(transform)
+    }
+
+    @Test
+    fun `a media slide framed by a non-identity transform resolves to Save carrying that transform`() {
+        val transform = pannedTransform()
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .updateSelectedTransform(transform)
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().transform).isEqualTo(
+            StoryDraftTransformSnapshot(
+                scale = transform.scale,
+                offsetX = transform.offsetX,
+                offsetY = transform.offsetY,
+            ),
+        )
+    }
+
+    @Test
+    fun `panning an already-saved draft resolves to Save, not None`() {
+        val deck = StorySlideDeck.single("s1").addMediaToSelected("m1")
+        val previous = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck.updateSelectedTransform(pannedTransform()),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
     }
 }

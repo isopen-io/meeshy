@@ -5,6 +5,33 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-27 — a "fidelity gate" over a field that's actually primitive was never a real gate; decouple the gate from pristine before lifting one dimension (slice `story-draft-persist-canvas-transform`)
+The story autosave slice installed a fidelity gate: any slide carrying rich on-canvas content
+(elements/stickers/filter/background/duration/**transform**) was treated as "not persistable" and its
+draft purged rather than restored lossily. But the canvas transform is three floats — trivially
+serialisable. It was in the gate only because the autosave slice hadn't *reached* it, not because it
+couldn't be represented. Lifting it is a textbook thin slice: a nullable primitive snapshot + two mappers.
+- **`deckHasRichContent` (the persistence gate) and `deckIsPristine` (untouched-detection) shared one
+  predicate — decouple them before removing a field from the gate.** Pristine originally = "no rich
+  content" and rich content INCLUDED a non-identity transform, so a silently panned empty canvas counted
+  as touched (a restore wouldn't clobber it). Dropping transform from `deckHasRichContent` (now
+  representable) would have SILENTLY widened pristine to ignore a panned canvas. Fix: `deckIsPristine`
+  gained its own explicit `slides.all { it.transform.isIdentity }`. **When you pull a field out of a
+  predicate that two behaviours share, ask which behaviours still need it and give them their own check.**
+- **A restored-fidelity field is not restore-TRIGGERING content — keep `hasContent`/`isWorthRestoring`
+  unchanged.** A pan/zoom with no media to frame is meaningless; the transform rides along with content
+  (text or media) that already makes the draft worth restoring. So `StoryDraftSlideSnapshot.hasContent`
+  deliberately still checks only text/media. A test asserts a transform-only snapshot is NOT worth
+  restoring — the witness that fidelity ≠ content.
+- **`null` = identity keeps the snapshot thin and legacy-safe.** The transform snapshot is nullable and
+  emitted only when non-identity, so a fresh slide and a pre-slice persisted blob both decode to `null`
+  without ever carrying the default `(1,0,0)` triple — no schema-version bump, no migration.
+- **Flipping ONE assertion to the new correct verdict is a behaviour change, not a weakened test.** The
+  pre-existing `deckHasRichContent is true for a non-identity canvas transform` became `... is false ...`.
+  The reviewer rule "never weaken a test" is about relaxing/deleting assertions to dodge a failure; here
+  the behaviour itself changed and the assertion asserts the new truth. The mutation proof (re-add the
+  transform to the gate → exactly the 3 persistence tests go red) is what proves it's still load-bearing.
+
 ## 2026-08-26 — a predicted-unreachable slice becomes a clean pure-core once its seam ships; keep the availability suspend OUT of the pure predicate (slice `story-draft-lost-media-reconcile`)
 The `story-composer-repost-link` NOTES entry (below) had explicitly deferred lost-media detection as
 "unreachable through the public API today — a dangling id can't exist until a draft-RESTORE seam

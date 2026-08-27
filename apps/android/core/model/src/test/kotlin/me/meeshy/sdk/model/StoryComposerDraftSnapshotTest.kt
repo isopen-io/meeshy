@@ -16,7 +16,12 @@ class StoryComposerDraftSnapshotTest {
 
     private fun sample() = StoryComposerDraftSnapshot(
         slides = listOf(
-            StoryDraftSlideSnapshot(id = "s1", text = "one", mediaIds = listOf("m1", "m2")),
+            StoryDraftSlideSnapshot(
+                id = "s1",
+                text = "one",
+                mediaIds = listOf("m1", "m2"),
+                transform = StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f),
+            ),
             StoryDraftSlideSnapshot(id = "s2", text = "two"),
         ),
         selectedId = "s2",
@@ -35,6 +40,18 @@ class StoryComposerDraftSnapshotTest {
         )
 
         assertThat(restored).isEqualTo(original)
+        assertThat(restored.slides.first().transform)
+            .isEqualTo(StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f))
+        assertThat(restored.slides[1].transform).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a transform decodes to a null transform`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().transform).isNull()
     }
 
     @Test
@@ -92,6 +109,21 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a canvas transform alone never makes a snapshot worth restoring`() {
+        val transformOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    transform = StoryDraftTransformSnapshot(scale = 2f, offsetX = 5f, offsetY = 0f),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(transformOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
     fun `a structurally invalid snapshot is never worth restoring even with content`() {
         val invalid = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "content")),
@@ -120,5 +152,23 @@ class StoryComposerDraftSnapshotTest {
     fun `a changed visibility is different content`() {
         val a = sample()
         assertThat(a.sameContentAs(a.copy(visibility = "PUBLIC"))).isFalse()
+    }
+
+    @Test
+    fun `a changed canvas transform is different content`() {
+        val a = sample()
+        val b = a.copy(
+            slides = a.slides.mapIndexed { i, s ->
+                if (i == 0) s.copy(transform = StoryDraftTransformSnapshot(scale = 3f, offsetX = 0f, offsetY = 0f)) else s
+            },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a canvas transform is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(transform = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
     }
 }

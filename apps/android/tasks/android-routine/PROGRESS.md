@@ -2,6 +2,67 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-27 **a story draft's canvas framing (pan/zoom) survives leaving the composer** (slice
+> `story-draft-persist-canvas-transform`, feature-parity E. Stories — the "Draft save/restore …" line;
+> lifts the FIRST dimension of the load-bearing fidelity gate the autosave slice installed). Before this,
+> a slide's 9:16 `StoryCanvasTransform` counted as unrepresentable "rich content": a user who pinch-zoomed
+> and panned a photo, then left, came back to the framing reset to identity (or, if that transform was the
+> only non-primitive touch, saw the whole draft purged rather than restored lossily). The transform is
+> three floats — trivially serialisable — so it never needed gating; the autosave slice simply hadn't
+> reached it yet.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #3931 (iOS Prism dedup) + #3861
+> (gateway broadcast Prisme) — neither a `claude/apps/android/<slice-id>` routine slice, no `apps/android`
+> collision, nothing of mine to merge. Prior slice (`story-composer-draft-wipe-on-teardown`) is on `main`
+> (#3929, HEAD `40ea0579`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before
+> branching (`git rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (5 files: 2 main
+> + 3 test).
+>
+> **The fix — one nullable primitive snapshot + two mappers + a decoupled gate.** (1) `core:model`:
+> `StoryDraftTransformSnapshot(scale,offsetX,offsetY)` `@Serializable`, and `StoryDraftSlideSnapshot.transform:
+> StoryDraftTransformSnapshot? = null` (`null` = identity; legacy blob and fresh slide both decode to null,
+> never the default triple). `hasContent` unchanged — a transform is fidelity, not restore-triggering
+> content. (2) `:feature:stories` `StoryComposerAutosave`: `toDraftSnapshot`/`toDeck` map
+> `StorySlide.transform` ↔ the snapshot via two private extension mappers (identity ⇒ null; null ⇒
+> `IDENTITY`). (3) The gate is DECOUPLED: `deckHasRichContent` drops `!slide.transform.isIdentity` (now
+> representable), and `deckIsPristine` gains an explicit `slides.all { it.transform.isIdentity }` so the
+> old pristine semantics (a panned empty canvas counts as touched) are preserved exactly.
+>
+> **Tests: +11.** 5 `StoryComposerDraftSnapshotTest` (transform survives JSON round-trip; legacy blob →
+> null; transform-alone never worth restoring; changed/cleared transform is different content), 4+2
+> `StoryComposerAutosaveTest` (gate now false for a non-identity transform; single-blank-panned slide not
+> pristine; `toDraftSnapshot` carries/identity→null; `toDeck` restores/null→identity; deck↔snapshot↔deck
+> round-trip; a media slide framed by a transform resolves to **Save** carrying it; panning a saved draft
+> resolves to **Save** not None), 2 `StoryComposerViewModelTest` end-to-end wiring (`persistDraft` saves the
+> selected slide's framing; `onEnterComposer` restores it). Non-tautological: each drives a real
+> deck/snapshot through the mapper/gate and asserts the transformed result, never a restated constant.
+> **Mutation-RED-proven**: re-adding `|| !slide.transform.isIdentity` to `deckHasRichContent` reddens
+> EXACTLY the 3 transform-persistence autosave tests (gate-false + both resolve-Save); every mapping,
+> pristine, and pre-existing test stays green (27 run, 3 failed). Restored after.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then the documented android-37 copy→patch (`platforms;android-37.0` → `cp -r android-37.0 android-37`,
+> patch `source.properties` ApiLevel 37.0→37; compileSdk=37).
+>
+> **Verified — FULL local CI-mirror gate GREEN this run** (Maven Central 429-throttled but cleared on
+> exponential-backoff retries, ROUTINE §CI-reality): `:app:assembleDebug` **BUILD SUCCESSFUL**, then the
+> COMPLETE test suites of both touched modules `:core:model:testDebugUnitTest` + `:feature:stories:testDebugUnitTest`
+> **BUILD SUCCESSFUL**, plus the mutation proof (3 RED, restored). No other module is touched (both API
+> additions are backward-compatible/defaulted), so their tests are unaffected; the **Android** CI check on
+> the PR runs the full all-module `testDebugUnitTest` as the authoritative gate. Reviewer **PASS** (diff
+> `apps/android` only — 2 main + 3 test; SDK purity — the snapshot is a `:core:model` primitive value, the
+> mappers/gate are `:feature:stories` orchestration; SSOT — one snapshot type, `StoryCanvasTransform` stays
+> the deck's transform SSOT; no tautological tests; no coverage floor lowered, no existing test weakened —
+> the one flipped assertion asserts the NEW correct behaviour, a genuine behaviour change).
+>
+> **Next**: continue lifting the fidelity gate — the remaining rich dimensions are text/sticker elements
+> (object lists: `StoryTextElement`/`StoryStickerElement` → `@Serializable` mirror snapshots), filter (enum
+> + intensity float), background (`StoryBackgroundValue` sealed → closed-polymorphic or a wire-string
+> projection; + `backgroundMediaId`/`backgroundLoop`), and the pinned duration (`Double?`). The scalar-ish
+> ones (filter enum+intensity, duration pin, background-loop) are the cheapest next increment and mirror
+> this slice's pattern; the two object-list dimensions (elements/stickers) are the largest and want their
+> own slices. Scout `feature-parity.md` E. Stories read-only before branching.
+
 > On 2026-08-27 **logout wipes the in-progress story composer draft** (slice
 > `story-composer-draft-wipe-on-teardown`, feature-parity §A logout-teardown line — its follow-up note).
 > This closes the **last of the three story-draft follow-ups** the autosave/reconcile slices predicted
