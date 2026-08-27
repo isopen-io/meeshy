@@ -2,16 +2,21 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-/// **F1 (#3884) — dès qu'un média qualifie, on choisit d'un geste entre RÉEL et
-/// STORY (et le POST reste offert).**
+/// **B3 (#3926) — le sélecteur de destination contextuel est REPLIÉ dans
+/// l'éventail : un seul sélecteur de mode.**
 ///
-/// Jusqu'ici la surface document n'offrait qu'un interrupteur binaire POST↔RÉEL
-/// (`documentForcePlainPost`) ; le 3e terme STORY manquait au sélecteur. Ce lot
-/// remplace le booléen par une DESTINATION à trois états — un type SOMME pur,
-/// testable off-main — qui gouverne le type publié : `.post`/`.reel` de bout en
-/// bout via `forcePlainPost` (le serveur accepte), `.story` monte la scène
-/// (F2). Zéro clé i18n neuve : `feed.composer.type.post`/`.reel` +
-/// `content.type.story` existent déjà dans les 7 locales.
+/// F1 (#3884) avait posé, sur la surface document, un sélecteur à trois segments
+/// POST · RÉEL · STORY (`ComposerDocumentDestination` + `documentDestinationSelector`)
+/// — un stopgap tant que le contenu ne pouvait pas suivre la bascule vers la
+/// scène. B1/B2 ayant levé ce blocage (le texte, le média et la description
+/// suivent document↔scène), B3 fond ce choix dans l'ÉVENTAIL existant
+/// (`ComposerFormatFan`) : l'éventail offre RÉEL/STORY quand le média du document
+/// qualifie, RÉEL rejoint STORY sur la SCÈNE (le média prend le canvas, directive
+/// produit), et le sélecteur contextuel DISPARAÎT.
+///
+/// Ces gardes verrouillent la SUPERSESSION : l'ancien apparat retiré, le nouveau
+/// comportement en place. Elles remplacent les huit gardes de F1, dont l'objet
+/// (un second sélecteur de format) n'existe plus.
 final class ComposerDestinationSelectorTests: XCTestCase {
 
     private static let iosRoot = URL(fileURLWithPath: #filePath)
@@ -27,103 +32,84 @@ final class ComposerDestinationSelectorTests: XCTestCase {
             .components(separatedBy: .whitespacesAndNewlines).joined()
     }
 
-    // 1 — GOUVERNANCE : chaque destination porte SON type publié, SON forçage et
-    // dit si elle monte la scène. C'est la loi que « le type choisi gouverne la
-    // publication » — pure, sans vue.
-    func test_chaqueDestination_gouverneLeType() {
-        XCTAssertEqual(ComposerDocumentDestination.post.postType, .post)
-        XCTAssertEqual(ComposerDocumentDestination.reel.postType, .reel)
-        XCTAssertEqual(ComposerDocumentDestination.story.postType, .story)
-
-        XCTAssertTrue(ComposerDocumentDestination.post.forcePlainPost,
-                      "Choisir POST retient un post simple malgré la qualification.")
-        XCTAssertFalse(ComposerDocumentDestination.reel.forcePlainPost)
-        XCTAssertFalse(ComposerDocumentDestination.story.forcePlainPost)
-
-        XCTAssertTrue(ComposerDocumentDestination.story.mountsScene,
-                      "STORY monte la scène 9:16 (F2) — POST/RÉEL restent sur la surface plate.")
-        XCTAssertFalse(ComposerDocumentDestination.post.mountsScene)
-        XCTAssertFalse(ComposerDocumentDestination.reel.mountsScene)
-    }
-
-    // 2 — les TROIS destinations, dans l'ordre POST · RÉEL · STORY.
-    func test_lesTroisDestinations_dansLOrdre() {
-        XCTAssertEqual(ComposerDocumentDestination.allCases, [.post, .reel, .story])
-    }
-
-    // 3 — le sélecteur APPARAÎT quand le média qualifie — sur un audio ≥ 3 s ET
-    // sur 2 images (le prédicat exact du critère de fin).
-    func test_leSelecteur_apparait_surAudio_etSur2Images() {
-        XCTAssertTrue(
-            ReelComposition.qualifiesAsReel(mimeTypes: ["audio/mp4"], durationsMs: [3000]),
-            "Un audio ≥ 3 s qualifie — le sélecteur RÉEL/STORY apparaît."
+    // 1 — RÉEL et STORY montent la SCÈNE par le routage (le média prend le
+    // canvas) : c'est la loi qui rend l'éventail suffisant pour les trois modes.
+    func test_reelEtStory_montentLaScene_postResteDocument() {
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .story), .scene,
+            "STORY monte la scène 9:16."
         )
-        XCTAssertTrue(
-            ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg", "image/png"]),
-            "Deux images qualifient — le sélecteur apparaît."
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .reel), .scene,
+            "RÉEL rejoint STORY sur la scène — le média prend le canvas (directive produit, B3)."
+        )
+        XCTAssertEqual(
+            ComposerSurfaceRouting.surface(opening: .keyboardOnContent, format: .post), .document,
+            "POST reste la surface document plate — ses médias forment un carrousel, jamais un canvas."
+        )
+    }
+
+    // 2 — l'ÉVENTAIL est le seul sélecteur : l'enum et le sélecteur de F1 ont
+    // disparu du composer (code mort retiré, pas juste caché).
+    func test_leSelecteurDeDestination_aDisparu_duComposer() throws {
+        let host = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        XCTAssertFalse(
+            host.contains("documentDestinationSelector"),
+            "Le sélecteur de destination contextuel est retiré du meuble (B3)."
         )
         XCTAssertFalse(
-            ReelComposition.qualifiesAsReel(mimeTypes: ["image/jpeg"]),
-            "Une seule image ne qualifie pas — pas de sélecteur (loi 4)."
+            host.contains("ComposerDocumentDestination"),
+            "L'enum de destination n'est plus référencé — l'éventail (`ComposerFormat`) est la seule source du mode."
+        )
+        let surface = compact(try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"))
+        XCTAssertFalse(
+            surface.contains("enumComposerDocumentDestination"),
+            "L'enum `ComposerDocumentDestination` est SUPPRIMÉ, jamais laissé en jumelle divergente."
         )
     }
 
-    // 4 — le meuble PEINT le sélecteur, gaté sur la MÊME qualification que
-    // l'interrupteur qu'il remplace (loi 4 : sans effet ⇒ absent).
-    func test_leMeuble_peintLeSelecteur_gateSurLaQualification() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(raw.contains("private var documentDestinationSelector"),
-                      "documentDestinationSelector introuvable ou source vide")
-        let src = compact(raw)
+    // 3 — l'éventail RESPIRE avec le média du document : `reelGate` lit
+    // `documentComposesReel`, l'offre RÉEL apparaît à temps pour servir à basculer.
+    func test_lEventail_respireAvecLeMediaDuDocument() throws {
+        let host = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        XCTAssertTrue(host.contains("private var reelGate"), "reelGate introuvable ou source vide")
+        let src = compact(host)
         XCTAssertTrue(
-            src.contains("ifdocumentComposesReel{documentDestinationSelector}"),
-            "Le sélecteur ne se peint que quand la composition QUALIFIE — le même gate que l'ancien "
-                + "interrupteur POST↔RÉEL, jamais un seuil recopié."
-        )
-        XCTAssertTrue(
-            src.contains("vardocumentDestination:ComposerDocumentDestination"),
-            "La destination est le SOCLE — un état à trois valeurs, jamais un booléen POST↔RÉEL."
+            src.contains("varreelGate:Bool") && src.contains("documentComposesReel"),
+            "Le gate du réel de l'éventail lit `documentComposesReel` — l'offre respire sur la composition du document."
         )
     }
 
-    // 5 — le sélecteur offre les TROIS destinations (itère `allCases`), non un
-    // choix codé en dur qui oublierait STORY.
-    func test_leSelecteur_offreLesTroisDestinations() throws {
+    // 4 — le report du contenu vers la scène a UN seul site (l'`onChange` sur
+    // `mountedSurface`), plus une closure par bouton : quel que soit le contrôle
+    // qui bascule, le texte et le média suivent (loi 9, B1).
+    func test_leReportDuContenu_aUnSeulSite_surMountedSurface() throws {
         let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
         XCTAssertTrue(
-            src.contains("ComposerDocumentDestination.allCases"),
-            "Le sélecteur itère `ComposerDocumentDestination.allCases` — ajouter une destination demain "
-                + "la peint sans toucher la vue."
+            src.contains("privatefunccarryContentIntoSceneIfNeeded()"),
+            "Le report vit dans UNE fonction nommée, testable et unique."
+        )
+        XCTAssertTrue(
+            src.contains(".adaptiveOnChange(of:mountedSurface,initial:true)"),
+            "Le report se branche sur `mountedSurface` : il se déclenche quand la scène naît, quel que soit le contrôle."
+        )
+        XCTAssertTrue(
+            src.contains("carryContentIntoSceneIfNeeded()"),
+            "…et le body appelle bien ce report."
         )
     }
 
-    // 6 — la PUBLICATION transmet le forçage de la DESTINATION, jamais un
-    // littéral ni un booléen fantôme.
-    func test_laPublication_transmetLeForcageDeLaDestination() throws {
+    // 5 — la publication du document est TOUJOURS un POST simple : RÉEL/STORY
+    // partent par la scène, jamais un réel promu en silence depuis le document.
+    func test_laPublicationDuDocument_estToujoursUnPostSimple() throws {
         let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
         XCTAssertTrue(
+            src.contains("forcePlainPost:true"),
+            "Le document publie un POST simple (carrousel possible), jamais un réel — RÉEL passe par la scène (B3)."
+        )
+        XCTAssertFalse(
             src.contains("forcePlainPost:documentDestination.forcePlainPost"),
-            "Le publieur lit `documentDestination.forcePlainPost` — le type choisi gouverne la publication."
-        )
-    }
-
-    // 7 — STORY impose `.story` au socle (scène + publication STORY) ; POST/RÉEL
-    // gardent `.post` (la surface document). La loi qui rend « le type choisi
-    // gouverne la publication » vraie de bout en bout.
-    func test_laDestination_imposeSonFormatAuSocle() {
-        XCTAssertEqual(ComposerDocumentDestination.story.composerFormat, .story)
-        XCTAssertEqual(ComposerDocumentDestination.post.composerFormat, .post)
-        XCTAssertEqual(ComposerDocumentDestination.reel.composerFormat, .post,
-                       "RÉEL reste sur la surface document — le publieur l'élit via forcePlainPost, pas la scène.")
-    }
-
-    // 8 — le sélecteur POSE le format du socle au tap (sinon STORY monterait la
-    // scène mais publierait sous le format du fil, RÉEL — un type faux servi).
-    func test_leSelecteur_poseLeFormatDuSocle_auTap() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
-        XCTAssertTrue(
-            src.contains("formatSelection.wrappedValue=destination.composerFormat"),
-            "Taper une destination pose `currentFormat` — STORY route vers la scène ET publie STORY."
+            "Plus de forçage issu d'une destination stockée — l'ancien canal a disparu."
         )
     }
 }

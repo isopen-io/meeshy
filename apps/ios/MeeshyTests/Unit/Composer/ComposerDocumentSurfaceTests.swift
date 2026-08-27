@@ -458,8 +458,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         XCTAssertTrue(
             corpsDuMeuble.contains("paintsFormatFan"),
-            "Le plateau est monté SANS condition : le chip « Story » du composer du fil apparaîtrait sous le "
-                + "document, et le choisir y monterait l'atelier en laissant `documentText` derrière."
+            "Le plateau est monté sous la RÈGLE `paintsFormatFan` (ancrée sur `ComposerFormatFanPlacement`) — "
+                + "depuis B3 il coiffe aussi le document du composer du fil, où choisir « Story » emporte le "
+                + "contenu dans la scène (B1). La règle nommée reste le seul juge du montage."
         )
         XCTAssertFalse(
             mood.contains("plateauTools") || mood.contains("ComposerFormatFan("),
@@ -468,8 +469,9 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
         XCTAssertFalse(
             document.contains("plateauTools") || document.contains("ComposerFormatFan("),
-            "La surface document peint l'éventail elle-même : même défaut, et il contournerait la règle qui "
-                + "tient `.feedComposer` hors de l'éventail."
+            "La surface document peint l'éventail elle-même : deux montages pour un seul sélecteur. L'éventail "
+                + "coiffe le document depuis le PLATEAU (le `body`, sous `paintsFormatFan`), jamais depuis la "
+                + "surface — un seul site gouverné par la règle de placement."
         )
 
         // La question n'est pas « quel bloc le peint » mais « combien de fois le
@@ -488,81 +490,55 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
     }
 
-    // MARK: - Lot 4.7 — OÙ l'éventail se peint, et pourquoi
+    // MARK: - B3 (#3926) — OÙ l'éventail se peint, après la levée de la frontière
 
-    /// **La règle de PLACEMENT — écrite pour la première fois au lot 4.7.**
+    /// **La règle de PLACEMENT — posée au lot 4.7, LEVÉE au chantier B.**
     ///
-    /// Elle existait déjà, en prose, dans le doc-comment de
-    /// `MeeshyComposerHost.documentSurface` : « ce raisonnement vaut pour
-    /// `.feedComposer`, et pour lui SEUL ». Une phrase de doc-comment ne
-    /// gouverne rien ; celle-ci est désormais une fonction pure, et les cinq cas
-    /// ci-dessous sont ses porteurs.
+    /// Elle tenait l'éventail hors des surfaces où un format offert routait de
+    /// l'autre côté de la frontière « scène / pas de scène » : sous le document
+    /// de `.feedComposer`, choisir « Story » aurait laissé la saisie derrière,
+    /// rien ne faisant entrer du texte dans un canvas.
     ///
-    /// *L'éventail se peint là où TOUS les formats offerts atterrissent du MÊME
-    /// côté de la frontière « scène / pas de scène » que la surface montée.*
-    /// C'est cette frontière-là qui sépare deux ÉTATS : `documentText` et
-    /// `moodEmoji` sont l'état du MEUBLE et suivent toute bascule entre document
-    /// et mood, mais rien ne les fait entrer dans un canvas.
-    ///
-    /// Le cas `.feedComposer` est celui qui rend la règle nécessaire dans un
-    /// sens : son offre contient `.story`, que le routage envoie à la SCÈNE, et
-    /// un auteur qui y taperait son post puis choisirait « Story » verrait sa
-    /// saisie disparaître sans un mot — sur la porte la plus fréquentée de
-    /// l'app.
-    ///
-    /// **`.conversationMedia` est celui qui la rend nécessaire dans l'AUTRE
-    /// sens, et il est arrivé dans cette table le 2026-08-25.** Son profil
-    /// portait alors `opensWith: .keyboardOnContent` : la scène à l'ouverture
-    /// (format `.story`), le DOCUMENT au premier tap sur « Post ». La branche
-    /// `.scene` de la règle rendait `true` sans condition, au motif que les
-    /// trois ouvertures de capture / reprise collent à la scène quel que soit le
-    /// format — vrai de ces trois ouvertures, faux de la branche. L'éventail s'y
-    /// peignait donc, puis DISPARAISSAIT : une porte à sens unique.
-    ///
-    /// **Ces deux lignes ont changé de côté au lot 5, et il faut savoir
-    /// pourquoi : c'est l'OUVERTURE qui a changé, pas la règle.** La règle avait
-    /// tranché contre le profil ; câbler la porte telle quelle aurait livré un
-    /// composer qui DÉCLARE trois formats et n'en offre aucun contrôle — l'UI
-    /// morte que la loi 4 nomme. Des deux issues possibles — rétrécir l'offre
-    /// à `[.story]`, ou faire atterrir tous ses formats sur la scène — le lot a
-    /// retenu la seconde : `.keyboardOnContent` promettait ici un clavier qui
-    /// ne se lève jamais (l'atelier n'a aucun champ « contenu » à mettre au
-    /// foyer), et entre supprimer un mensonge et supprimer une capacité, on
-    /// supprime le mensonge. `.mediaSeeded` dit exactement ce que la porte fait
-    /// — le média est DÉJÀ posé — et route ses trois formats sur la scène.
-    ///
-    /// Remettre `opensWith: .keyboardOnContent` fait retomber ces deux lignes en
-    /// `false` : c'est la mutation qui les garde.
-    func test_lePlacementDeLEventail_suitLaSurfaceOuAtterrissentSesFormats() {
+    /// **La frontière que cette règle gardait est LEVÉE depuis B1/B2 (#3924/#3925).**
+    /// Elle bloquait l'éventail sous le document de `.feedComposer` parce que
+    /// choisir « Story » y aurait laissé la saisie derrière — rien ne faisait
+    /// entrer du texte dans un canvas. B1 (`applyContentText` + `applyContentMedia`)
+    /// et B2 (la description partagée) l'y font entrer, dans les DEUX sens ; le
+    /// média local reste de surcroît l'état du meuble. Le contenu partagé suivant
+    /// désormais la bascule, `paints` rend `true` PARTOUT : plus de porte à sens
+    /// unique à empêcher. La ligne `.feedComposer` est passée `false → true` dans
+    /// le même commit que la levée — un cas de table laissé sous une règle qui
+    /// l'a démenti devient le mensonge que lira la session suivante.
+    func test_lePlacementDeLEventail_estOuvertPartout_depuisLeTransfertDuContenu() {
         let repostDeMood = ComposerOrigin.repost(ofPostId: "mood-source", sourceFormat: .status)
         let mediaRecu = ComposerOrigin.conversationMedia(messageId: "msg-1", attachmentId: "att-1")
-        let cas: [(String, ComposerOrigin, ComposerFormat, Bool)] = [
-            ("tray de story · Story", .storyTray, .story, true),
-            ("tray de story · Post", .storyTray, .post, true),
-            ("puce de mood · Mood", .moodChip, .status, true),
-            ("repost d'un mood · Mood", repostDeMood, .status, true),
-            ("repost d'un mood · Post", repostDeMood, .post, true),
-            ("composer du fil · Post", .feedComposer, .post, false),
-            ("média de conversation · Story", mediaRecu, .story, true),
-            ("média de conversation · Post", mediaRecu, .post, true)
+        let cas: [(String, ComposerOrigin, ComposerFormat)] = [
+            ("tray de story · Story", .storyTray, .story),
+            ("tray de story · Post", .storyTray, .post),
+            ("puce de mood · Mood", .moodChip, .status),
+            ("repost d'un mood · Mood", repostDeMood, .status),
+            ("repost d'un mood · Post", repostDeMood, .post),
+            ("composer du fil · Post", .feedComposer, .post),
+            ("composer du fil · Story", .feedComposer, .story),
+            ("média de conversation · Story", mediaRecu, .story),
+            ("média de conversation · Post", mediaRecu, .post)
         ]
 
-        for (nom, origine, format, attendu) in cas {
+        for (nom, origine, format) in cas {
             let profil = ComposerProfile.profile(for: origine)
             XCTAssertTrue(
                 profil.offeredFormats.contains(format),
                 "\(nom) : le format mesuré n'est plus offert par cette porte — le cas ne mesurerait RIEN."
             )
             let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: format)
-            XCTAssertEqual(
+            XCTAssertTrue(
                 ComposerFormatFanPlacement.paints(
                     surface: surface,
                     opening: profil.opensWith,
                     offeredFormats: profil.offeredFormats
                 ),
-                attendu,
-                "\(nom) : le placement de l'éventail a changé. Attendu \(attendu) — un `true` de trop livre "
-                    + "une saisie qui disparaît, un `false` de trop livre une porte à sens unique."
+                "\(nom) : le contenu partagé suit désormais la bascule (B1/B2) — l'éventail se peint là où il "
+                    + "est visible, sur toute surface. Un `false` ici ferait renaître une porte à sens unique."
             )
         }
     }
@@ -579,15 +555,14 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// Sans ce test, une session lirait « le mood a un éventail » dans le seul
     /// placement, et retirerait le `count > 1` en croyant réparer un oubli.
     ///
-    /// **Ce test a changé d'objet le 2026-08-25, et il faut savoir pourquoi.**
-    /// Il n'assertait que les deux règles SÉPARÉMENT, pendant que le `&&` qui
-    /// les joint vivait dans une propriété privée du meuble. Mutation mesurée :
-    /// remplacer ce `&&` par un `||` laissait passer ce test ET les trois gardes
-    /// de source voisines — toutes cherchaient la PRÉSENCE des deux symboles,
-    /// aucune leur conjonction — et repeignait l'éventail sous le document de
-    /// `.feedComposer`. La composition est descendue dans
-    /// `ComposerFormatFanPlacement.mounts` ; la table ci-dessous est ce qui
-    /// l'exerce, et chacune de ses lignes tombe sous une mutation différente.
+    /// **Depuis B3 (#3926), `paints` rend `true` partout (la frontière est
+    /// levée, cf. le test voisin), si bien que `mounts` se réduit à la
+    /// VISIBILITÉ.** La conjonction reste écrite pour deux raisons : elle garde
+    /// la visibilité maîtresse aujourd'hui — la puce de mood est le SEUL cas à
+    /// `false`, et par son offre unique —, et elle laisse `paints` reprendre la
+    /// main si une frontière renaissait. Le composer du fil, lui, monte
+    /// désormais l'éventail sous son document : ce n'est plus une régression à
+    /// interdire mais le comportement VOULU.
     func test_lesDeuxReglesDeLEventail_seLisentENSEMBLE_dansUneSeuleRegle() {
         let profilDuMood = ComposerProfile.profile(for: .moodChip)
         XCTAssertEqual(
@@ -612,7 +587,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             ("puce de mood · mood", .moodChip, .mood, false),
             ("repost d'un mood · mood", repostDeMood, .mood, true),
             ("repost d'un mood · document", repostDeMood, .document, true),
-            ("composer du fil · document", .feedComposer, .document, false),
+            ("composer du fil · document", .feedComposer, .document, true),
             ("média de conversation · scène", mediaRecu, .scene, true)
         ]
 
@@ -625,11 +600,11 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
                     offeredFormats: profil.offeredFormats
                 ),
                 attendu,
-                "\(nom) : le MONTAGE de l'éventail a changé. Attendu \(attendu) — la puce de mood tombe si "
-                    + "la visibilité cesse de compter (rangée VIDE), le composer du fil tombe si le placement "
-                    + "cesse de compter (saisie perdue), le média de conversation tombe si son ouverture "
-                    + "recommence à envoyer « Post » sur un document (la photo disparaîtrait de l'écran ET de "
-                    + "la publication), et le tray tombe si la conjonction est niée."
+                "\(nom) : le MONTAGE de l'éventail a changé. Attendu \(attendu) — la puce de mood est le SEUL "
+                    + "cas à `false`, et par la VISIBILITÉ (offre unique = rangée vide, loi 4), jamais par le "
+                    + "placement : depuis B1/B2 le contenu suit la bascule, si bien que le composer du fil monte "
+                    + "l'éventail sous son document (B3). Si la puce de mood cesse de tomber, la visibilité a "
+                    + "cessé de compter ; si le composer du fil retombe, la frontière levée a été reposée."
             )
         }
     }

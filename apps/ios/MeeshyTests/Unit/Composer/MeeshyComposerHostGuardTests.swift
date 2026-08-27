@@ -1979,17 +1979,26 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
     }
 
-    // MARK: - T2.4 — l'interrupteur POST ↔ RÉEL, gaté sur la qualification
+    // MARK: - B3 (#3926) — un seul sélecteur de mode : l'éventail
 
-    /// **L'interrupteur n'est peint QUE si la composition qualifie (T2.4,
-    /// tests 1 & 2 — loi 4).** Un contrôle sans effet est absent : le retirer
-    /// du gate ferait apparaître un bouton « Réel » sur un texte seul, qui ne
-    /// changerait rien. La garde s'ancre sur le câblage compacté de l'overlay.
-    func test_host_lInterrupteurPostReel_estGateSurLaQualification() throws {
+    /// **Le choix de mode RESPIRE avec la composition, via l'ÉVENTAIL (B3).**
+    /// Le sélecteur de destination contextuel (F1) est RETIRÉ : c'est le gate du
+    /// réel de l'éventail qui lit `documentComposesReel`, si bien que RÉEL est
+    /// offert dès que le média du document qualifie — un seul contrôle, jamais
+    /// deux surfaces de choix. La garde vérifie que l'ancien sélecteur a bien
+    /// disparu ET que le gate respire sur la composition du document.
+    func test_host_leChoixDeMode_respireViaLEventail_pasUnSelecteurSepare() throws {
         let code = try hostCompact()
+        XCTAssertFalse(
+            code.contains(compact("documentDestinationSelector")),
+            "Le sélecteur de destination contextuel est retiré (B3) — l'éventail est le seul sélecteur de mode."
+        )
+        guard let corps = declarationBody(startingAt: "private var reelGate", in: try hostCode()) else {
+            return XCTFail("`reelGate` doit être une propriété calculée — la garde s'ancre sur son bloc.")
+        }
         XCTAssertTrue(
-            code.contains(compact("if documentComposesReel { documentDestinationSelector }")),
-            "L'interrupteur ne se monte que sous `documentComposesReel` — sinon il se peint sur une composition qui n'a rien à offrir."
+            compact(corps).contains(compact("documentComposesReel")),
+            "Le gate du réel respire sur la composition du DOCUMENT : l'éventail offre RÉEL à temps pour basculer."
         )
     }
 
@@ -2016,35 +2025,40 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         }
     }
 
-    /// **Retirer un média qui dé-qualifie fait retomber le drapeau à `false`
-    /// (T2.4, test 4).** Sans ce reset, un `forcePlainPost` posé pendant qu'un
-    /// RÉEL était composé survivrait, INVISIBLE (l'interrupteur ayant disparu
-    /// avec la qualification), et gouvernerait la publication SUIVANTE. La
-    /// garde s'ancre sur le fragment compacté unique du reset.
-    func test_host_lInterrupteurPostReel_reArmeLeDrapeau_quandLeMediaDequalifie() throws {
+    /// **L'offre RÉEL est SANS ÉTAT — donc rien à réarmer quand le média
+    /// dé-qualifie (B3).** F1 portait un `documentDestination` STOCKÉ qu'il
+    /// fallait remettre à `.reel` dès qu'une composition changeait, sans quoi un
+    /// choix survivait, invisible, à la publication suivante. L'éventail n'a pas
+    /// cet écueil : `reelGate` est une FONCTION PURE de la composition du moment,
+    /// et `resolvedSelection` ramène toute sélection retirée au premier format
+    /// offert. Il n'y a donc plus ni état de destination, ni reset à garder — et
+    /// la garde le VÉRIFIE (l'état retiré ne doit pas revenir en silence).
+    func test_host_lOffreReel_estSansEtat_rienARearmer() throws {
         let code = try hostCompact()
-        XCTAssertTrue(
-            code.contains(compact(".adaptiveOnChange(of: documentLocalMedia)")),
-            "Le reset doit s'accrocher au CHANGEMENT du média local — la seule chose qui peut dé-qualifier."
+        XCTAssertFalse(
+            code.contains(compact("documentDestination")),
+            "Plus aucun état `documentDestination` (B3) : l'offre RÉEL est une fonction pure de la composition."
         )
-        XCTAssertTrue(
-            code.contains(compact("guard !documentComposesReel else { return } documentDestination = .reel")),
-            "…et remettre le drapeau à `false` dès que la composition ne qualifie plus."
+        XCTAssertFalse(
+            code.contains(compact("documentDestination = .reel")),
+            "Plus de reset de destination : sans état stocké, il n'y a rien à réarmer."
         )
     }
 
-    /// **L'interrupteur vit dans le SOCLE, pas dans le plateau (T2.4, test
-    /// 5).** Le plateau porte l'éventail de FORMAT (`ComposerFormatFan`, gardé
-    /// une fois ci-dessus) ; l'interrupteur POST ↔ RÉEL est un contrôle du
-    /// socle, gaté sur la composition. Le monter dans le plateau ferait deux
-    /// contrôles pour un même format. Garde NÉGATIVE sur le bloc du plateau.
-    func test_host_lInterrupteurPostReel_nEstPasDansLePlateau() throws {
-        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
-            return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus.")
-        }
+    /// **UN seul sélecteur de mode, et c'est l'éventail (B3).** Le plateau porte
+    /// l'éventail de FORMAT (`ComposerFormatFan`, gardé une fois ailleurs) ; il
+    /// est désormais le SEUL contrôle de choix de mode — le sélecteur de
+    /// destination contextuel a disparu de tout le meuble. Garde NÉGATIVE sur
+    /// tout le fichier : deux surfaces de choix ne doivent pas renaître.
+    func test_host_unSeulSelecteurDeMode_lEventail() throws {
+        let code = try hostCompact()
         XCTAssertFalse(
-            compact(corps).contains(compact("documentDestinationSelector")),
-            "L'interrupteur POST ↔ RÉEL n'est pas un outil de plateau — il vit dans le socle, sous `documentComposesReel`."
+            code.contains(compact("documentDestinationSelector")),
+            "Le sélecteur de destination est retiré partout : l'éventail est le seul sélecteur de mode (B3)."
+        )
+        XCTAssertEqual(
+            occurrences(of: compact("ComposerFormatFan("), in: code), 1,
+            "L'éventail est monté à UN seul endroit — deux montages seraient deux sélecteurs pour un même format."
         )
     }
 

@@ -957,72 +957,19 @@ nonisolated enum ComposerDocumentMediaFactory {
 /// est entendu par le serveur comme un EFFACEMENT), et la liste nominative
 /// écartée quand l'audience ne l'exige pas. Les laisser aux quatre sites de
 /// montage du lot 4.6, ce serait écrire la loi 3 quatre fois.
-/// **F1 (#3884) — la DESTINATION d'un média qui qualifie.**
+/// **Ce qui fait naître la scène 9:16 depuis la surface document (F2, #3885).**
 ///
-/// Remplace le booléen POST↔RÉEL (`documentForcePlainPost`) par un type SOMME à
-/// trois valeurs : dès qu'un audio ≥ 3 s, une vidéo ≥ 3 s ou ≥ 2 images
-/// qualifient (`ReelComposition.qualifiesAsReel`), l'auteur choisit d'un geste.
-/// `.post`/`.reel` gouvernent la publication de bout en bout via `forcePlainPost`
-/// (le serveur n'accepte que `POST`/`REEL` sur le chemin document) ; `.story`
-/// monte la scène 9:16 (F2, `mountsScene`) — la surface plate devient une toile.
-nonisolated enum ComposerDocumentDestination: String, CaseIterable, Equatable {
-    case post, reel, story
-
-    /// Le `PostType` publié — la loi « le type choisi gouverne la publication ».
-    var postType: PostType {
-        switch self {
-        case .post: return .post
-        case .reel: return .reel
-        case .story: return .story
-        }
-    }
-
-    /// `true` pour `.post` seul : retenir un post simple malgré la
-    /// qualification, exactement ce que l'ancien `forcePlainPost` exprimait.
-    var forcePlainPost: Bool { self == .post }
-
-    /// `.story` monte la scène 9:16 (F2) ; `.post`/`.reel` restent sur la
-    /// surface plate. Lu par le meuble pour basculer `mountedSurface`.
-    var mountsScene: Bool { self == .story }
-
-    /// Le `ComposerFormat` que la destination impose au SOCLE — `.story` pour
-    /// STORY (le fan monte alors la scène et publie `STORY`, EXACTEMENT le chip
-    /// STORY du fan), `.post` sinon (POST/RÉEL restent la surface document, dont
-    /// le publieur élit RÉEL/POST via `forcePlainPost`). C'est ce qui fait « le
-    /// type choisi gouverne la publication » de bout en bout.
-    var composerFormat: ComposerFormat { self == .story ? .story : .post }
-
-    /// Le glyphe du segment — famille ligne (jeu moderne C, #3882), zéro `.fill`
-    /// daté sauf le réel, conservé identique à l'interrupteur absorbé.
-    var symbolName: String {
-        switch self {
-        case .post: return "doc.text"
-        case .reel: return "play.rectangle.on.rectangle.fill"
-        case .story: return "rectangle.stack"
-        }
-    }
-
-    /* Le libellé du segment — MÊMES clés que l'interrupteur POST↔RÉEL absorbé
-       (`feed.composer.type.post`/`.reel`) plus `content.type.story`, toutes
-       déjà traduites dans les sept locales. Zéro clé neuve. */
-    var label: String {
-        switch self {
-        case .post: return String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
-        case .reel: return String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main)
-        case .story: return String(localized: "content.type.story", defaultValue: "Story", bundle: .main)
-        }
-    }
-}
-
-/// **F2 (#3885) — quand la scène 9:16 naît.**
+/// Une couleur de FOND suffit : « un post sans visuel devient une toile ».
 ///
-/// Décision PURE, testable off-main : la scène s'active dès qu'une couleur de
-/// FOND est choisie (« un post sans visuel devient une toile ») OU que la
-/// destination est STORY (F1, `mountsScene`). Sinon, la surface reste celle du
-/// routage. `mountedSurface` la consulte — jamais une condition recopiée.
+/// **B3 (#3926) — la destination STORY/RÉEL ne passe plus par ici.** Elle
+/// passe par le FORMAT que l'éventail écrit (`selectedFormat`), que
+/// `ComposerSurfaceRouting` envoie sur `.scene`. `ComposerSceneActivation` ne
+/// garde donc que l'activation par le fond — la seule qui ne s'exprime pas déjà
+/// par un format. Réduire le prédicat à sa cause unique évite deux chemins vers
+/// la même bascule.
 nonisolated enum ComposerSceneActivation {
-    static func activatesScene(background: String?, destination: ComposerDocumentDestination) -> Bool {
-        background != nil || destination.mountsScene
+    static func activatesScene(background: String?) -> Bool {
+        background != nil
     }
 }
 

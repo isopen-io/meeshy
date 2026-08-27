@@ -68,13 +68,17 @@ final class ComposerPlateauTests: XCTestCase {
     ///
     /// **Cette liste est celle des jetons que le host peint RÉELLEMENT**, et
     /// `test_theMeasuredListCoversEveryForegroundTheHostActuallyPaints`
-    /// ci-dessous l'y arrime. La première version de ce fichier mesurait aussi
-    /// `textPrimary` et `textMuted`, que le socle n'utilise nulle part : la
-    /// mesure portait sur des premiers plans que rien ne pose — le symétrique
-    /// exact du défaut que D-18 avait corrigé dans l'autre sens (mesurer un
-    /// FOND que plus rien ne peint).
+    /// ci-dessous l'y arrime. `textMuted`, que le socle n'utilise nulle part,
+    /// en reste ABSENT (mesurer un premier plan que rien ne pose est le
+    /// symétrique du défaut D-18). `textPrimary` y est REVENU au chantier B :
+    /// la section description repliable (B2, #3925) rend son contenu en
+    /// `textPrimary` — le texte le plus lisible sur le fond sombre de la scène —,
+    /// et son fond en `textPrimary.opacity(0.06)`. Un jeton PEINT doit être
+    /// mesuré ; c'est du texte de CONTENU, donc au seuil AA texte normal (4,5:1),
+    /// et le blanc du thème sombre le passe sur les trois teintes.
     private let socleForegrounds: [(String, Color)] = [
         ("textSecondary(isDark: true)", MeeshyColors.textSecondary(isDark: true)),
+        ("textPrimary(isDark: true)", MeeshyColors.textPrimary(isDark: true)),
     ]
 
     func test_socleForegrounds_meetAA_onEveryPlateauTint() {
@@ -103,9 +107,10 @@ final class ComposerPlateauTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
         XCTAssertTrue(code.contains("struct MeeshyComposerHost"), "Source du host introuvable — la garde ne mesurerait rien")
 
-        // Les seuls premiers plans autorisés : celui que cette suite mesure à
-        // 4,5:1, et l'accent, mesuré séparément au seuil composant de 3:1.
-        let measured = ["textSecondary(isDark: true)", "indigo400"]
+        // Les seuls premiers plans autorisés : ceux que cette suite mesure à
+        // 4,5:1 (`textSecondary`, et `textPrimary` depuis la section description
+        // B2), et l'accent, mesuré séparément au seuil composant de 3:1.
+        let measured = ["textSecondary(isDark: true)", "textPrimary(isDark: true)", "indigo400"]
         for line in code.split(separator: "\n") where line.contains("MeeshyColors.text") || line.contains("MeeshyColors.indigo") {
             XCTAssertTrue(
                 measured.contains(where: { line.contains($0) }),

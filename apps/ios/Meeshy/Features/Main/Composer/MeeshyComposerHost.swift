@@ -434,15 +434,6 @@ struct MeeshyComposerHost: View {
     /// ne repartait qu'à `[]` avant ce lot.
     @State private var documentLocalMedia: [ComposerDocumentMedia] = []
 
-    /// **F1 (#3884) — la DESTINATION d'un média qui qualifie.** Remplace le
-    /// booléen POST↔RÉEL : dès qu'une vidéo, un audio ≥ 3 s ou ≥ 2 images
-    /// qualifient, l'auteur choisit d'un geste entre POST, RÉEL et STORY.
-    /// `.reel` par défaut — la composition part RÉEL dès qu'elle qualifie,
-    /// exactement le comportement de T2.4, jusqu'à ce que l'auteur bascule.
-    /// `documentDestination.forcePlainPost` alimente le publieur ;
-    /// `documentDestination.mountsScene` fera basculer la scène (F2).
-    @State private var documentDestination: ComposerDocumentDestination = .reel
-
     /// **F2 (#3885) — la couleur de FOND choisie sur le document.** `nil` = pas
     /// de fond, la surface reste plate ; une couleur fait NAÎTRE la scène 9:16
     /// (`ComposerSceneActivation.activatesScene`) — « un post sans visuel
@@ -558,8 +549,18 @@ struct MeeshyComposerHost: View {
     /// L'éventail RESPIRE : il est recalculé à chaque passe de rendu sur la
     /// composition du moment. Poser deux images puis en retirer une retire le
     /// réel de l'offre — c'est ce que V1 avait écrit et débranché.
+    ///
+    /// **B3 (#3926) — il respire sur les DEUX compositions.** Le média peut
+    /// vivre dans le document (`documentLocalMedia`, avant la bascule) OU dans
+    /// l'atelier (`currentEffects`, après que B1 l'y a porté). L'éventail doit
+    /// offrir RÉEL dans les deux états — sur le document, c'est
+    /// `documentComposesReel` qui qualifie, exactement le gate que le sélecteur
+    /// de destination retiré lisait déjà. Sans le premier terme, le fan
+    /// n'offrirait jamais RÉEL tant qu'on n'a pas déjà basculé — l'offre
+    /// arriverait trop tard pour servir à basculer.
     private var reelGate: Bool {
-        ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
+        documentComposesReel
+            || ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
     }
 
     private var profile: ComposerProfile {
@@ -597,11 +598,15 @@ struct MeeshyComposerHost: View {
     /// qui peint la publication, le gate pour savoir ce qui fait matière. Trois
     /// lectures de la même expression auraient été trois occasions de diverger.
     private var mountedSurface: ComposerSurfaceKind {
-        // F2 — une couleur de fond OU la destination STORY (F1) fait naître la
-        // scène 9:16, quelle que soit la surface que le routage aurait montée.
-        // Décision PURE (`ComposerSceneActivation`), jamais recopiée ici. Le
-        // routage reste la source unique pour tout le reste.
-        if ComposerSceneActivation.activatesScene(background: documentBackground, destination: documentDestination) {
+        // F2 — une couleur de fond fait naître la scène 9:16 même sur un POST
+        // (« un post sans visuel devient une toile »). Décision PURE
+        // (`ComposerSceneActivation`), jamais recopiée ici.
+        //
+        // B3 (#3926) — STORY et RÉEL montent la scène par le ROUTAGE
+        // (`ComposerSurfaceRouting` envoie `.story`/`.reel` sur `.scene`), plus
+        // par une destination du socle : l'éventail écrit `selectedFormat`, et
+        // le routage tranche. C'est ce qui fait de l'éventail le seul sélecteur.
+        if ComposerSceneActivation.activatesScene(background: documentBackground) {
             return .scene
         }
         return ComposerSurfaceRouting.surface(opening: profile.opensWith, format: selectedFormat)
@@ -748,6 +753,15 @@ struct MeeshyComposerHost: View {
         // chemin pour les deux — deux adoptions se seraient corrigées à moitié.
         .adaptiveOnChange(of: moodSeed, initial: true) { _, graine in
             adoptMoodSeed(graine)
+        }
+        // B3 (#3926) — le report du contenu vers la scène, en UN seul site :
+        // dès que `mountedSurface` DEVIENT `.scene` (par l'éventail STORY/RÉEL
+        // ou par une couleur de fond), le texte et le média composés suivent.
+        // `mountedSurface` est calculée à chaque passe ; `initial: true` couvre
+        // les portes qui OUVRENT déjà sur la scène (storyTray, reprise, graine).
+        .adaptiveOnChange(of: mountedSurface, initial: true) { _, surface in
+            guard surface == .scene else { return }
+            carryContentIntoSceneIfNeeded()
         }
     }
 
@@ -946,15 +960,12 @@ struct MeeshyComposerHost: View {
             localMedia: documentLocalMedia,
             onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
             onPickBackground: { hex in
+                // Choisir un fond pose la couleur et fait naître la scène (F2) ;
+                // le REPORT du contenu (langue, texte, média) est branché en UN
+                // seul endroit sur `mountedSurface` (B3), et se déclenche dès que
+                // ce fond fait basculer la surface sur `.scene`.
                 documentBackground = hex
                 viewModel.applyBackground(hex: hex)
-                // E1 — la toile qui naît prend la langue DÉCLARÉE au composer
-                // comme défaut de tout objet posé (`declaredContentLanguage`).
-                viewModel.declaredContentLanguage = documentLanguage
-                // B1 — et elle GARDE le contenu déjà composé (loi 9 : changer de
-                // mode ne jette jamais le texte NI le média).
-                viewModel.applyContentText(documentText)
-                viewModel.applyContentMedia(documentContentMedia)
             }
         )
         // La capsule se superpose plutôt que d'être peinte PAR la surface :
@@ -963,13 +974,10 @@ struct MeeshyComposerHost: View {
         // possède déjà `documentText`. `.bottomTrailing` la pose au bord de la
         // rangée d'outils, seule ligne peinte au bas de la surface.
         .overlay(alignment: .bottomTrailing) { documentLanguageCapsule }
-        // **L'interrupteur POST ↔ RÉEL (T2.4)**, gaté sur la QUALIFICATION —
-        // loi 4, un contrôle sans effet est absent. `.topTrailing` : la
-        // capsule de langue occupe déjà l'angle bas, et ce contrôle n'a rien
-        // à voir avec la langue.
-        .overlay(alignment: .topTrailing) {
-            if documentComposesReel { documentDestinationSelector }
-        }
+        // B3 (#3926) — le choix POST/RÉEL/STORY n'est plus un overlay du
+        // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
+        // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
+        // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
         // **La tuile de lieu (T2.5)**, symétrique de la capsule de langue —
         // `.bottomLeading` face à `.bottomTrailing` : les deux occupent le bas
         // de la surface, sur les bords opposés de la rangée d'outils.
@@ -995,19 +1003,6 @@ struct MeeshyComposerHost: View {
         .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
         .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
-        // Retirer un média qui dé-qualifie fait DISPARAÎTRE le sélecteur — et
-        // doit réarmer la destination au défaut honnête (`.reel`). La
-        // destination n'est jamais invisible ET effective (elle ne pèse que
-        // quand ça qualifie, et le sélecteur est peint exactement alors) : le
-        // risque que ce reset ferme est plus subtil — un POST (ou une STORY)
-        // choisi pour UNE composition survivrait à son remplacement par une
-        // AUTRE qui re-qualifie, imposant en silence un choix fait pour un
-        // contenu différent. Le reset fait repartir toute re-qualification du
-        // défaut honnête (RÉEL).
-        .adaptiveOnChange(of: documentLocalMedia) { _, _ in
-            guard !documentComposesReel else { return }
-            documentDestination = .reel
-        }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3)** — trois sélecteurs montés
@@ -1064,16 +1059,21 @@ struct MeeshyComposerHost: View {
     /// donc câbler cette liste à chaque bascule ne duplique rien. Le média VISUEL
     /// est aussi, par construction, ce qui fait qu'une composition qualifie comme
     /// scène — le texte, lui, suit par `applyContentText`.
+    ///
+    /// **Le classement image/vidéo passe par `ComposerIngestRouter.route(mime:)`**,
+    /// le SEUL classeur MIME du dépôt (six sites de production) — jamais un
+    /// `hasPrefix` recopié, qui divergerait de la casse et des repli qu'il gère.
     private var documentContentMedia: [ComposerContentMedia] {
         documentLocalMedia.compactMap { media in
-            if media.mimeType.hasPrefix("image/") {
+            switch ComposerIngestRouter.route(mime: media.mimeType) {
+            case .image:
                 return ComposerContentMedia(sourceURL: media.url, kind: .image)
-            }
-            if media.mimeType.hasPrefix("video/") {
+            case .video:
                 return ComposerContentMedia(
                     sourceURL: media.url, kind: .video, durationMs: media.durationMs)
+            case .audio, .file:
+                return nil
             }
-            return nil
         }
     }
 
@@ -1161,57 +1161,28 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// **Le sélecteur de DESTINATION (F1, #3884)** — remplace l'interrupteur
-    /// binaire POST↔RÉEL par un choix à trois segments (POST · RÉEL · STORY),
-    /// peint exactement quand la composition qualifie (`documentComposesReel`,
-    /// loi 4). Il itère `ComposerDocumentDestination.allCases` : ajouter une
-    /// destination demain la peint sans toucher cette vue. **Mêmes clés i18n**
-    /// que l'interrupteur absorbé (`feed.composer.type.post` / `.reel`) plus
-    /// `content.type.story`, toutes déjà traduites — zéro clé neuve.
-    private var documentDestinationSelector: some View {
-        HStack(spacing: 2) {
-            ForEach(ComposerDocumentDestination.allCases, id: \.self) { destination in
-                let isOn = documentDestination == destination
-                Button {
-                    documentDestination = destination
-                    // Le type CHOISI gouverne la publication : STORY impose
-                    // `.story` au socle (scène + publication STORY, comme le
-                    // chip STORY du fan) ; POST/RÉEL gardent la surface document.
-                    // L'écriture passe par `formatSelection`, l'ÉCRIVAIN UNIQUE
-                    // du format (la liaison du fan) — jamais un second `currentFormat =`.
-                    formatSelection.wrappedValue = destination.composerFormat
-                    // E1 — STORY monte la scène : son contenu et ses objets
-                    // partent dans la langue DÉCLARÉE au composer (la capsule).
-                    viewModel.declaredContentLanguage = documentLanguage
-                    // B1 — le texte ET le média déjà composés SUIVENT dans la
-                    // scène (loi 9 : changer de mode ne jette jamais le contenu).
-                    viewModel.applyContentText(documentText)
-                    viewModel.applyContentMedia(documentContentMedia)
-                    HapticFeedback.light()
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: destination.symbolName)
-                            .font(MeeshyFont.relative(10))
-                        Text(destination.label)
-                            .font(MeeshyFont.relative(12))
-                    }
-                    .foregroundColor(isOn ? MeeshyColors.indigo400 : MeeshyColors.textSecondary(isDark: true))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(isOn ? MeeshyColors.indigo400.opacity(0.15) : Color.clear))
-                }
-                .accessibilityAddTraits(isOn ? [.isSelected] : [])
-            }
-        }
-        .padding(2)
-        .background(
-            Capsule()
-                .fill(MeeshyColors.indigo400.opacity(0.08))
-                .overlay(Capsule().stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 1))
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "feed.composer.type.hint", defaultValue: "Bascule entre réel et post", bundle: .main))
-        .padding(16)
+    /// **B3 (#3926) — le report du contenu vers la scène, en UN seul endroit.**
+    ///
+    /// Quand la surface montée devient la SCÈNE — que ce soit par l'éventail
+    /// (STORY/RÉEL) ou par une couleur de fond (F2) —, le contenu déjà composé
+    /// doit suivre (loi 9). Ce report vivait dans la closure du bouton du
+    /// sélecteur de destination (F1) ; l'éventail ayant remplacé ce sélecteur,
+    /// il n'y a plus de bouton où l'accrocher. Il devient donc une propriété de
+    /// « la scène vient d'être montée », branchée sur `mountedSurface` dans le
+    /// `body` — un site UNIQUE, quel que soit le contrôle qui a déclenché la
+    /// bascule, et qui ne peut plus diverger d'un chip à l'autre.
+    ///
+    /// Idempotent par construction : `applyContentText` ne dirty pas une slide
+    /// dont le contenu ne change pas, et `applyContentMedia` mémorise les
+    /// sources déjà portées — refaire le report à chaque entrée en scène ne
+    /// duplique rien.
+    private func carryContentIntoSceneIfNeeded() {
+        // E1 — la scène prend la langue DÉCLARÉE au composer comme défaut de
+        // tout objet posé.
+        viewModel.declaredContentLanguage = documentLanguage
+        // B1 — le texte ET le média déjà composés SUIVENT dans la scène.
+        viewModel.applyContentText(documentText)
+        viewModel.applyContentMedia(documentContentMedia)
     }
 
     /// **Le sélecteur de lieu (T2.5)**, monté ICI plutôt que dans
@@ -1282,10 +1253,9 @@ struct MeeshyComposerHost: View {
         )
     }
 
-    /// **La tuile de lieu (T2.5)** — même idiome capsule que
-    /// `documentDestinationSelector` juste au-dessus : un chip retirable,
-    /// jamais le pavé pin-drop du composer inline (`feedPlaceTile`), que ce
-    /// meuble n'a pas de rangée de vignettes pour accueillir.
+    /// **La tuile de lieu (T2.5)** — un chip retirable (l'idiome capsule du
+    /// meuble), jamais le pavé pin-drop du composer inline (`feedPlaceTile`),
+    /// que ce meuble n'a pas de rangée de vignettes pour accueillir.
     ///
     /// Retirer le lieu ne referme PAS le second opt-in — même comportement que
     /// `feedPlaceTile` (`FeedView+Attachments.swift`), dont le bouton de
@@ -1960,10 +1930,14 @@ struct MeeshyComposerHost: View {
             // non plus d'un littéral `nil` : c'est la capsule qui l'écrit, la
             // porte qui la poste telle quelle.
             //
-            // `forcePlainPost` vient de la DESTINATION du SOCLE (F1,
-            // `documentDestination.forcePlainPost`) — jamais d'un littéral
-            // `false` : un littéral ferait toujours élire `"REEL"` sur une
-            // composition qualifiante, et le type CHOISI ne gouvernerait plus.
+            // `forcePlainPost` vaut TOUJOURS `true` ici (B3, #3926) : la surface
+            // document ne publie plus qu'un POST simple — ses médias qualifiants
+            // forment un carrousel, jamais un réel promu en silence. RÉEL et
+            // STORY quittent le document par l'éventail (routage → scène) et
+            // partent par l'atelier avec leur propre `postType`. Ce publieur
+            // n'est d'ailleurs atteint que lorsque `mountedSurface == .document`,
+            // c'est-à-dire `selectedFormat == .post` : le forçage y est vrai par
+            // construction, on le pose en clair pour que la loi se lise.
             //
             // `location` vient du SOCLE (`documentLocation`, T2.5, écrit par
             // `LocationPickerView`) — jamais d'un littéral `nil` : un littéral
@@ -1984,7 +1958,7 @@ struct MeeshyComposerHost: View {
             // re-transcrirait ce travail en silence.
             return ComposerDocumentDraft.document(
                 format: selectedFormat,
-                forcePlainPost: documentDestination.forcePlainPost,
+                forcePlainPost: true,
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
