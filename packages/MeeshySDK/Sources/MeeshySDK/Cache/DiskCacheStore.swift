@@ -690,8 +690,19 @@ public actor DiskCacheStore: ReadableCacheStore {
               let image = UIImage(contentsOfFile: fileURL.path) else {
             return nil
         }
-        let key = Self.fileKey(for: urlString) as NSString
-        Self._imageCache.setObject(image, forKey: key)
+        // #3897 — `cacheIfWithinBudget`, pas une insertion `setObject`
+        // sans coût : celle-ci comptait comme `cost: 0` auprès de
+        // `_imageCache.totalCostLimit`, invisible à la comptabilité
+        // d'éviction. Sans conséquence tant que cette voie ne servait que de
+        // petites images ; le poster net (#3871) y fait désormais transiter
+        // des bitmaps ~8 Mo (feature « plein écran net ») via
+        // `CacheCoordinator.warmedImage`. Un poster oversize (> 50 Mo décodés)
+        // est encore RENDU (retourné à l'appelant pour un affichage ponctuel)
+        // mais plus jamais retenu — comportement déjà celui de tous les
+        // autres chemins d'insertion (`cacheImageForPreview`, `image(for:
+        // maxPixelSize:)`), dont le doc-comment de `cacheIfWithinBudget`
+        // affirmait à tort que `warmedImage` le partageait déjà.
+        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: urlString))
         return image
     }
 

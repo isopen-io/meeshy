@@ -1,4 +1,6 @@
 import XCTest
+import UIKit
+import MeeshySDK
 @testable import Meeshy
 
 /// Plein écran NET (feature 3) — « l'image de base doit être nette ; pour une
@@ -45,6 +47,38 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     func test_imageSource_withoutFullURL_isNil_neverFallsBackToAThumbnail() {
         XCTAssertNil(FullscreenImageSource.resolve(fullURL: nil, thumbHash: "abc", isFullResident: false))
         XCTAssertNil(FullscreenImageSource.resolve(fullURL: "", thumbHash: "abc", isFullResident: true))
+    }
+
+    // MARK: - Image : probe de résidence (#3897)
+
+    func test_isResident_withNothingCached_isFalse() {
+        let url = "https://cdn.meeshy.me/x-\(UUID().uuidString).webp"
+        XCTAssertFalse(FullscreenImageSource.isResident(url))
+    }
+
+    func test_isResident_withTheBareFullFormatSlotCached_isTrue() {
+        let url = "https://cdn.meeshy.me/x-\(UUID().uuidString).webp"
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 40), format: format).image { ctx in
+            UIColor.blue.setFill(); ctx.fill(CGRect(x: 0, y: 0, width: 40, height: 40))
+        }
+        DiskCacheStore.cacheImageForPreview(image, key: url)
+
+        XCTAssertTrue(FullscreenImageSource.isResident(url))
+    }
+
+    /// #3897 — LE défaut : `isResident` sondait `cachedImage(for:)`, le slot
+    /// PLEIN FORMAT (bare) seul, aveugle aux variantes dimensionnées
+    /// (128–1024px) qu'une bulle ou un aperçu ont pu décoder pour la MÊME
+    /// URL. `hasAnyCachedImageVariant` est la sonde JUSTE — un revert vers
+    /// `cachedImage(for: resolved)` (bare, sans bucket) fait rougir ce test.
+    func test_isResident_readsThroughHasAnyCachedImageVariant_notTheBareSlotAlone() throws {
+        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let fn = try block(from: "nonisolated static func isResident(_ url: String) -> Bool {", upTo: "}\n}", in: code)
+        XCTAssertTrue(fn.contains("DiskCacheStore.hasAnyCachedImageVariant(for: resolved)"))
+        XCTAssertFalse(fn.contains("DiskCacheStore.cachedImage(for: resolved) != nil"),
+                       "aveugle au bucket de variante — une bulle ayant décodé 512px ne comptait pas comme résidente")
     }
 
     // MARK: - Vidéo : plan du poster net
@@ -159,9 +193,15 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// n'est pas « fait-elle 1080 ? » mais « une ré-extraction ferait-elle
     /// MIEUX ? » : sur une source inconnue, non.
     func test_posterGrade_unknownSource_acceptsWhatOurOwnExtractionCanProduce() {
+        // #3897 (tautologie retirée) : une seconde assertion réinjectait
+        // `VideoPosterGrade.fullscreenMinDimension` (1080, le SEUIL de
+        // l'ANCIEN défaut) comme `posterMaxDimension` — mais ce code path
+        // (source inconnue) ne compare plus JAMAIS à `fullscreenMinDimension`,
+        // seulement à `bubbleGradeMaxDimension` (400). N'importe quelle valeur
+        // > 400 aurait rendu `true` de façon identique : l'assertion ne
+        // vérifiait rien de spécifique à cette constante, sur ce chemin.
         XCTAssertTrue(VideoPosterGrade.isFullscreenSharp(posterMaxDimension: 854, sourceMaxDimension: nil),
                       "480p extrait par la cascade : rien de plus net n'existe — l'exiger boucle sans fin")
-        XCTAssertTrue(VideoPosterGrade.isFullscreenSharp(posterMaxDimension: VideoPosterGrade.fullscreenMinDimension, sourceMaxDimension: nil))
     }
 
     /// … sans pour autant tout accepter : la clé `thumb:<url>` est PARTAGÉE
@@ -204,20 +244,50 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     private static let legacyPlayer = "Meeshy/Features/Main/Views/VideoLegacySupport.swift"
     private static let resolver = "Meeshy/Features/Main/Views/VideoPosterResolver.swift"
 
-    /// Dans la fenêtre de rendu, la page image monte le plein format FORCÉ et
-    /// ne passe plus `thumbnailUrl:` — la vignette pouvait rester l'image
-    /// affichée quand la politique réseau bloquait le plein format.
-    func test_imagePage_inWindow_mountsTheFullFormatForced_withoutAThumbnailStage() throws {
+    /// Dans la fenêtre de rendu, la page image monte le plein format FORCÉ.
+    /// Corrigé (#3895) : `mount == nil` doit rendre le glyphe d'état vide —
+    /// jamais un `ProgressiveCachedImage(fullUrl: nil)` qui tourne pour
+    /// toujours — et la vignette serveur redevient un ÉTAGE DE CHARGEMENT
+    /// (jamais l'étage final : `fullUrl` reste le plein format forcé) tant
+    /// que le plein format n'est pas résident, pour ne pas régresser vers un
+    /// thumbHash ~32px étiré plein écran sur lien lent.
+    func test_imagePage_inWindow_mountsTheFullFormatForced_withAThumbnailLoadingStage() throws {
         let code = AppSourceGuard.stripComments(try source(Self.gallery))
         let page = try block(from: "struct GalleryImagePage: View, Equatable", upTo: "struct GalleryVideoPage", in: code)
-        let inWindow = try block(from: "if rendersFullPixels {", upTo: "} else {", in: page)
+        // `upTo: "targetSize: Self.previewSize"` — pas `"} else {"` : la
+        // structure interne `if let mount { … } else { emptyStateGlyph }`
+        // contient SON PROPRE `} else {`, atteint par `block()` avant celui
+        // qui ferme réellement `if rendersFullPixels` — un marqueur unique à
+        // la branche hors-fenêtre (thumbnail preview) fixe la borne juste.
+        let inWindow = try block(from: "if rendersFullPixels {", upTo: "targetSize: Self.previewSize", in: page)
         XCTAssertTrue(inWindow.contains("FullscreenImageSource.resolve("),
                       "la source d'affichage passe par la décision pure")
-        XCTAssertTrue(inWindow.contains("thumbnailUrl: nil"),
-                      "aucun étage vignette dans la fenêtre de rendu")
+        XCTAssertTrue(inWindow.contains("if let mount {"),
+                      "mount == nil doit être géré explicitement — jamais monter ProgressiveCachedImage(fullUrl: nil)")
+        XCTAssertTrue(inWindow.contains("emptyStateGlyph"),
+                      "sans plein format à charger, la page rend le glyphe d'état vide, jamais un spinner infini")
+        XCTAssertTrue(inWindow.contains("thumbnailUrl: mount.isResident ? nil : thumbnailURL"),
+                      "vignette serveur en étage de CHARGEMENT (pas la vignette blur ~32px) tant que non résident")
         XCTAssertTrue(inWindow.contains("autoLoad: true"),
                       "l'ouverture plein écran est un geste manuel : le plein format se charge toujours (§14.1)")
-        XCTAssertFalse(inWindow.contains("thumbnailUrl: thumbnailURL"))
+    }
+
+    /// `FullscreenImageSource.resolve` rend `nil` (aucune URL plein format
+    /// exploitable) : la page ne doit JAMAIS monter `ProgressiveCachedImage`
+    /// avec `fullUrl: nil` — ce qui produit un spinner qui tourne pour
+    /// toujours puisque `fullUrl` ne se peuplera jamais. Le doc-comment de
+    /// `FullscreenImageSource` promet un glyphe d'état vide ; ce test verrouille
+    /// que le code ne jette plus le cas `nil` via l'optional-chaining qui
+    /// produisait le défaut (`mount?.fullURL` toujours atteignable même quand
+    /// `mount == nil`, au lieu d'un branchement explicite).
+    func test_imagePage_withoutMount_neverOptionalChainsIntoAnInfiniteSpinner() throws {
+        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let page = try block(from: "struct GalleryImagePage: View, Equatable", upTo: "struct GalleryVideoPage", in: code)
+        let inWindow = try block(from: "if rendersFullPixels {", upTo: "targetSize: Self.previewSize", in: page)
+        XCTAssertFalse(inWindow.contains("fullUrl: mount?.fullURL"),
+                      "l'optional-chaining sur mount jette le cas nil au lieu de le traiter explicitement")
+        XCTAssertFalse(inWindow.contains("thumbHash: mount?.backdropThumbHash"),
+                      "idem pour le thumbHash — jeté silencieusement quand mount == nil")
     }
 
     /// Le poster net reste monté tant que la couche vidéo n'a pas COMPOSÉ sa
@@ -241,13 +311,25 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
                       "le poster net se résout après la disponibilité, dans la même tâche fenêtrée")
     }
 
+    /// #3896 — cette garde ciblait `"thumbnailUrl: thumbUrl"` : cet identifiant
+    /// (`thumbUrl`) n'existe nulle part dans `ConversationMediaGalleryView.swift`
+    /// — la liaison vivante est `serverThumbnailURL` (déclarée juste après ce
+    /// bloc). La garde ne pouvait donc JAMAIS rougir, quel que soit le
+    /// contenu réel de `thumbnailLayer`. Corrigée pour cibler l'identifiant
+    /// vivant : `serverThumbnailURL` ne doit jamais être passé comme
+    /// `thumbnailUrl:` (étage intermédiaire) — seulement comme `fullUrl:`
+    /// (dernier recours forcé), sinon la vignette pourrait rester affichée
+    /// indéfiniment au lieu d'un plein format net.
     func test_videoPage_thumbnailLayer_servesThePoster_thenTheServerThumbnailForced_neverAsAStage() throws {
         let code = AppSourceGuard.stripComments(try source(Self.gallery))
         let layer = try block(from: "private var thumbnailLayer: some View {", upTo: "private var playOrDownloadButton", in: code)
         XCTAssertTrue(layer.contains("if let poster {"))
         XCTAssertTrue(layer.contains("thumbnailUrl: nil"), "la vignette serveur n'est montée qu'en DERNIER recours, comme source plein format forcée")
+        XCTAssertTrue(layer.contains("fullUrl: serverThumbnailURL"),
+                      "la vignette serveur — l'identifiant VIVANT — est la source plein format forcée")
         XCTAssertTrue(layer.contains("autoLoad: true"))
-        XCTAssertFalse(layer.contains("thumbnailUrl: thumbUrl"))
+        XCTAssertFalse(layer.contains("thumbnailUrl: serverThumbnailURL"),
+                       "jamais comme étage intermédiaire — elle pourrait alors rester affichée indéfiniment")
     }
 
     /// Préchauffage : image → la variante AFFICHÉE ; vidéo → le poster net

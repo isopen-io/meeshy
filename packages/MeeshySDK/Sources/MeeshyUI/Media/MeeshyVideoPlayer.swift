@@ -181,6 +181,15 @@ public struct MeeshyVideoPlayer: View {
     public let caption: String?
     public let fileName: String?
     public let mentionDisplayNames: [String: String]?
+    /// #3897 — honoré UNIQUEMENT par `.fullscreen` (`_FullscreenRenderer`).
+    /// Pas un oubli dans les trois autres styles : `.inline`/`.mini`
+    /// (`_InlineRenderer`/`_MiniRenderer`) résolvent DÉJÀ leur propre poster
+    /// net via `MeeshyVideoThumbnail` (cascade équivalente, grade bulle
+    /// 300px) — passer CE `poster` là-bas serait un second chemin concurrent
+    /// pour le même résultat. `.flat` (`_FlatRenderer`) n'a aucun concept de
+    /// poster : usage restreint aux previews SwiftUI du canvas story. Un
+    /// futur appelant passant `poster:` avec un style autre que `.fullscreen`
+    /// ne doit pas s'attendre à un effet.
     public let poster: Poster?
     public let onDownload: (() -> Void)?
     public let onExpand: (() -> Void)?

@@ -291,6 +291,46 @@ final class DiskCacheStoreTests: XCTestCase {
             "an oversized bitmap must not blow the shared NSCache budget")
     }
 
+    // MARK: - warmedImage (#3897: cost-aware promotion, not a bare setObject)
+
+    /// `warmedImage`'s disk→NSCache promotion used a BARE `setObject` (cost
+    /// `0`), invisible to `_imageCache.totalCostLimit`'s eviction accounting
+    /// — `cacheIfWithinBudget`'s own doc-comment claimed `warmedImage`
+    /// "already" shared this budget guard, but it never did. Poster images
+    /// (~8 MB decoded, feature "plein écran net" #3871) flow through
+    /// EXACTLY this path via `CacheCoordinator.warmedImage`. Fixed to route
+    /// through `cacheIfWithinBudget`, the same cost-aware insertion every
+    /// other writer already uses — an oversized bitmap is still RETURNED
+    /// (the caller displays it once) but never retained.
+    func test_warmedImage_oversizedFile_isReturnedOnceButNeverPromotedIntoTheCache() async {
+        let store = makeStore()
+        let image = makeSolidImage(width: 4000, height: 4000) // ~61 MB decoded
+        let key = "https://example.com/warmed-oversized-\(UUID().uuidString).jpg"
+        await store.save(image.pngData()!, for: key)
+
+        let warmed = store.warmedImage(for: key)
+
+        XCTAssertNotNil(warmed, "the caller still gets the image once, for a single display")
+        XCTAssertNil(DiskCacheStore.cachedImage(for: key),
+                     "an oversized bitmap must not have been promoted into the shared NSCache")
+    }
+
+    /// Symmetric: a reasonably-sized disk hit IS promoted, so the next
+    /// synchronous `cachedImage(for:)` (e.g. a reused list cell) hits memory
+    /// instead of re-decoding from disk.
+    func test_warmedImage_reasonableFile_isPromotedIntoTheCache_forTheNextSynchronousRead() async {
+        let store = makeStore()
+        let image = makeSolidImage(width: 40, height: 40)
+        let key = "https://example.com/warmed-\(UUID().uuidString).jpg"
+        await store.save(image.pngData()!, for: key)
+
+        let warmed = store.warmedImage(for: key)
+
+        XCTAssertNotNil(warmed)
+        XCTAssertNotNil(DiskCacheStore.cachedImage(for: key),
+                        "a reasonable bitmap should be promoted for the next synchronous read")
+    }
+
     private func makeSolidImage(width: CGFloat, height: CGFloat) -> UIImage {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1.0

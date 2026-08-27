@@ -476,6 +476,14 @@ internal struct _FullscreenRenderer: View {
     /// Without this flag its `.onAppear` would RELOAD + REPLAY the just-watched
     /// video from 0. We only auto-load on the very first mount.
     @State private var didInitialLoad = false
+    /// #3895 (défaut 3) : `SharedAVPlayerManager.load` peut retomber dans son
+    /// repli réseau supprimé (spec §4.10) — l'appelant n'avait pas gaté sur
+    /// `availability == .ready` — et laisser `player` `nil` pour toujours.
+    /// Sans ce drapeau, cet état était indiscernable d'une fin de flux
+    /// légitime : même poster figé, même absence de spinner, mais aucune
+    /// vidéo n'avait jamais joué. `attemptLoad()` le pose de façon SYNCHRONE
+    /// (`load()` ne fait rien d'asynchrone dans ce cas — repli supprimé).
+    @State private var loadFailed = false
     @ObservedObject private var manager = SharedAVPlayerManager.shared
     /// Poster NET (opaque, résolu par l'app) : lu au montage, résolu sinon.
     @State private var poster: UIImage?
@@ -525,7 +533,17 @@ internal struct _FullscreenRenderer: View {
                 // pendant la phase load (1–2 s sur cold cache), et croit que
                 // les contrôles ont disparu. Les boutons centre + speed +
                 // seekbar sont rendus disabled tant que `duration == 0`.
-                playerContent
+                //
+                // #3895 : `loadFailed` bascule sur l'overlay de reprise — le
+                // chargement synchrone n'a produit aucun player malgré
+                // `.ready` (repli réseau supprimé) ; sans ce branchement,
+                // `playerContent` restait figé sur son poster pour toujours,
+                // sans spinner ni erreur.
+                if loadFailed {
+                    downloadOverlay
+                } else {
+                    playerContent
+                }
             case .needsDownload, .downloading:
                 downloadOverlay
             }
@@ -533,6 +551,19 @@ internal struct _FullscreenRenderer: View {
         .offset(y: dismissOffset)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dismissOffset)
         .task(id: player.attachment.id) { await resolvePosterIfNeeded() }
+        // #3897 — sans ce relais, un poster non résolu au premier montage
+        // (fichier pas encore local, ex. politique réseau restrictive) ne
+        // l'était plus JAMAIS : `.task(id: player.attachment.id)` ne rejoue
+        // qu'au changement d'ATTACHMENT, jamais quand ce même attachment
+        // devient disponible après un téléchargement déclenché par
+        // `downloadOverlay`. Miroir de la page galerie app
+        // (`GalleryVideoPage.task(id: downloader.isCached)`). La comparaison
+        // `== .ready` (pas `player.availability` brut) évite de rejouer à
+        // chaque tick de `.downloading(progress:)`.
+        .task(id: player.availability == .ready) {
+            guard poster == nil, player.availability == .ready else { return }
+            await resolvePosterIfNeeded()
+        }
         .task(id: manager.player != nil) { await armSurfaceReadyFailsafe() }
         .onAppear {
             watchStartTime = Date()
@@ -575,12 +606,7 @@ internal struct _FullscreenRenderer: View {
                         // replay of the just-watched video.
                         guard !didInitialLoad else { return }
                         didInitialLoad = true
-                        // See `startPlayback()` above — `attachmentId` must be
-                        // passed as the `load()` argument, applied AFTER the
-                        // internal `cleanup()`, or it is silently wiped and
-                        // watch-progress tracking never fires.
-                        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
-                        manager.play()
+                        attemptLoad()
                     }
             }
             // Le poster NET reste AU-DESSUS de la surface tant qu'elle n'a pas
@@ -720,6 +746,37 @@ internal struct _FullscreenRenderer: View {
         }
     }
 
+    // MARK: Load attempt (#3895)
+
+    /// See `startPlayback()` above — `attachmentId` must be passed as the
+    /// `load()` argument, applied AFTER the internal `cleanup()`, or it is
+    /// silently wiped and watch-progress tracking never fires.
+    ///
+    /// `load()` is SYNCHRONOUS for every branch that can populate `player`
+    /// (prerolled cache, local disk file) — the network fallback that would
+    /// have made a later branch resolve asynchronously was removed (spec
+    /// §4.10). So `manager.player == nil` read right after the call is a
+    /// DEFINITIVE failure, never an "in flight" state: nothing is coming.
+    /// Shared by the initial mount and the retry button so they can never
+    /// diverge into two different failure behaviours.
+    private func attemptLoad() {
+        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
+        if manager.player == nil {
+            loadFailed = true
+        } else {
+            loadFailed = false
+            manager.play()
+        }
+    }
+
+    /// `manager.stop()` first: `load()` no-ops when `urlString == activeURL`,
+    /// which the failed attempt already set — without releasing it, tapping
+    /// retry would silently do nothing.
+    private func retryLoad() {
+        manager.stop()
+        attemptLoad()
+    }
+
     // MARK: Download overlay (availability != ready)
 
     @ViewBuilder
@@ -752,8 +809,18 @@ internal struct _FullscreenRenderer: View {
 
             VStack(spacing: 16) {
                 Button {
-                    player.onDownload?()
                     HapticFeedback.light()
+                    // #3895 : `.ready` + `loadFailed` retries the SAME
+                    // synchronous checks (prerolled cache, local disk file)
+                    // rather than `onDownload` — the availability was never
+                    // actually `.needsDownload`, so `onDownload` may not be
+                    // wired for it at all. A genuine `.needsDownload` /
+                    // `.downloading` state keeps its normal action below.
+                    if loadFailed {
+                        retryLoad()
+                    } else {
+                        player.onDownload?()
+                    }
                 } label: {
                     ZStack {
                         Circle().fill(.ultraThinMaterial).frame(width: 88, height: 88)
@@ -791,28 +858,43 @@ internal struct _FullscreenRenderer: View {
 
     @ViewBuilder
     private var downloadOverlayIcon: some View {
-        switch player.availability {
-        case .ready:
-            EmptyView()
-        case .needsDownload:
-            Image(systemName: "arrow.down.to.line")
+        // #3895 : `loadFailed` overrides the `.ready` branch below — reached
+        // only when the synchronous load found nothing playable despite the
+        // claimed availability. `EmptyView()` there was correct for the
+        // ordinary `.ready` (this overlay isn't shown at all in that case,
+        // see `body`) but would silently blank a retry affordance the user
+        // actually needs.
+        if loadFailed {
+            Image(systemName: "arrow.clockwise")
                 .font(.system(size: 30, weight: .bold))
                 .foregroundColor(.white)
-        case .downloading(let progress):
-            if progress > 0 {
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 44, height: 44)
-                    .animation(.linear(duration: 0.2), value: progress)
-            } else {
-                ProgressView().tint(.white).scaleEffect(1.2)
+        } else {
+            switch player.availability {
+            case .ready:
+                EmptyView()
+            case .needsDownload:
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 30, weight: .bold))
+                    .foregroundColor(.white)
+            case .downloading(let progress):
+                if progress > 0 {
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 44, height: 44)
+                        .animation(.linear(duration: 0.2), value: progress)
+                } else {
+                    ProgressView().tint(.white).scaleEffect(1.2)
+                }
             }
         }
     }
 
     private var downloadOverlayMessage: String {
+        if loadFailed {
+            return String(localized: "media.video.unavailableRetry", defaultValue: "Video indisponible. Reessayer.", bundle: .module)
+        }
         switch player.availability {
         case .ready:         return ""
         case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Telechargez pour lire la video", bundle: .module)
