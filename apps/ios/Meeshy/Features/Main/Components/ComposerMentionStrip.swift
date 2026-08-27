@@ -26,18 +26,32 @@ struct ComposerMentionStrip: View {
                         let updated = controller.insertMention(candidate, into: currentText)
                         onSelect(updated)
                     } label: {
-                        VStack(spacing: 4) {
+                        // Chaque entrée : avatar + nom d'affichage (au-dessus)
+                        // + @pseudo (en dessous) — retour porteur 2026-08-27.
+                        HStack(spacing: 8) {
                             MeeshyAvatar(
                                 name: candidate.displayName,
                                 context: .userListItem,
                                 accentColor: accentColor,
                                 avatarURL: candidate.avatarURL
                             )
-                            Text("@\(candidate.username)")
-                                .font(MeeshyFont.relative(11, weight: .medium))
-                                .lineLimit(1)
-                                .frame(maxWidth: 64)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(candidate.displayName)
+                                    .font(MeeshyFont.relative(13, weight: .semibold))
+                                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                                    .lineLimit(1)
+                                Text("@\(candidate.username)")
+                                    .font(MeeshyFont.relative(11, weight: .medium))
+                                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: 140, alignment: .leading)
                         }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 10)
+                        .background(
+                            Capsule().fill(MeeshyColors.textPrimary(isDark: true).opacity(0.06))
+                        )
                     }
                     .accessibilityLabel(
                         "\(String(localized: "composer.mention.label", defaultValue: "Mention", bundle: .main)) \(candidate.displayName)"
