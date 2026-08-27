@@ -1084,6 +1084,11 @@ struct MeeshyComposerHost: View {
             formatFan: mountsFormatFan
                 && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
                 ? AnyView(formatChip) : nil,
+            // #4047 — le `⋯` au bout de la barre. Le meuble décide des ENTRÉES
+            // par la règle, jamais par un `if` écrit dans un `body` ; aucune
+            // entrée ⇒ `nil` ⇒ aucun bouton (loi 4).
+            overflowMenu: documentOverflowEntries.isEmpty
+                ? nil : AnyView(overflowMenu),
             selectedMediaURL: selectedSlideMediaURL,
             // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
             // contrôles la zone sert est la décision du SDK, portée par l'`init?`
@@ -1356,6 +1361,80 @@ struct MeeshyComposerHost: View {
                 viewModel.removeSlide(at: index)
             }
             slideIdByMediaURL.removeValue(forKey: url)
+        }
+    }
+
+    /// Les entrées du `⋯`, lues à UN endroit. La règle est PURE
+    /// (`ComposerOverflowPolicy`) et se lit ici ; le `body` ne fait que
+    /// consommer, et ne peut donc pas en écrire une seconde version.
+    private var documentOverflowEntries: [ComposerOverflowEntry] {
+        ComposerOverflowPolicy.entries(
+            hasBackground: documentBackground != nil,
+            hasMedia: !documentLocalMedia.isEmpty,
+            hasText: !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            hasLocation: documentLocation != nil
+        )
+    }
+
+    /// **Le `⋯` de la barre haute (#4047).** Il ne peint QUE les entrées que la
+    /// règle sert — une entrée absente, jamais grisée.
+    ///
+    /// Le verre est le même que celui du `✕` et du chip de format, et pour la
+    /// même raison qu'eux le premier plan reste `textPrimary(isDark: true)` :
+    /// `glassControlForeground()` rendrait `indigo950` en thème clair, sur un
+    /// plateau qui est sombre en permanence.
+    private var overflowMenu: some View {
+        Menu {
+            ForEach(Array(documentOverflowEntries.enumerated()), id: \.offset) { entry in
+                let item = entry.element
+                Button(role: item == .clearAll ? .destructive : nil) {
+                    perform(item)
+                } label: {
+                    Label(ComposerOverflowCopy.label(item),
+                          systemImage: ComposerOverflowCopy.icon(item))
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
+                .adaptiveGlass(in: Circle())
+        }
+        .accessibilityLabel(Text(ComposerOverflowCopy.menu))
+    }
+
+    /// **Ce que chaque entrée FAIT.** Séparé de ce qui les OFFRE : la règle dit
+    /// lesquelles servir, cette fonction ce qu'elles emportent — et les deux se
+    /// lisent sans monter une vue.
+    private func perform(_ entry: ComposerOverflowEntry) {
+        switch entry {
+        case .removeBackground:
+            // L'INTENTION de l'auteur est `documentBackground` : c'est elle qui
+            // fait naître la scène (`documentHasScene`). Le canvas, lui, garde
+            // toujours une couleur — `background` n'est pas optionnel dans
+            // `StoryEffects`, et y poser du vide donnerait un canvas NOIR.
+            documentBackground = nil
+            viewModel.clearBackground()
+
+        case .clearAll:
+            // **`viewModel.reset()` d'ABORD, l'état du meuble ensuite.** Le
+            // reset vide `carriedContentSources`, le cache d'idempotence
+            // d'`applyContentMedia` ; sans lui, re-choisir la MÊME photo après
+            // un effacement serait silencieusement sauté et n'atteindrait
+            // jamais la scène.
+            viewModel.reset()
+            documentText = ""
+            documentLocalMedia = []
+            documentBackground = nil
+            documentLocation = nil
+            documentDiscoverability.reset()
+            documentTranscription = nil
+            // La carte média→slide est un INDEX du meuble : la laisser pleine
+            // ferait retirer, au prochain sync, des slides qui n'existent plus.
+            slideIdByMediaURL = [:]
+            selectedSceneItemKind = nil
         }
     }
 

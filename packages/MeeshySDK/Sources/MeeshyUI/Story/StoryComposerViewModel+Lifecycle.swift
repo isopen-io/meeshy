@@ -66,7 +66,22 @@ extension StoryComposerViewModel {
         }
     }
 
-    func reset() {
+    /// **`public` depuis le 2026-08-27** : un meuble app qui incruste la scène
+    /// doit pouvoir offrir « tout effacer » sans monter l'atelier. Point
+    /// d'entrée de BUILDING BLOCK — il remet la composition à zéro et rien
+    /// d'autre ; quand l'effacer et ce qu'il faut effacer À CÔTÉ (le média du
+    /// document, le lieu, la transcription) reste une décision app.
+    public func reset() {
+        // **`carriedContentSources` DOIT tomber ici, et ne tombait pas.**
+        // C'est le cache d'idempotence d'`applyContentMedia` : « cette URL a
+        // déjà été portée dans CETTE composition ». Une composition remise à
+        // zéro n'a plus rien porté — le garder faisait qu'après un reset, la
+        // MÊME photo re-choisie était silencieusement sautée et n'atteignait
+        // jamais la scène. Défaut latent depuis B1 : personne ne l'avait vu
+        // parce que le seul appelant de `reset()` était « supprimer tous les
+        // slides » dans l'atelier, dont le chemin de reprise passe par le
+        // picker de l'atelier et non par `applyContentMedia`.
+        carriedContentSources = []
         slides = [StorySlide()]
         currentSlideIndex = 0
         slideImages = [:]

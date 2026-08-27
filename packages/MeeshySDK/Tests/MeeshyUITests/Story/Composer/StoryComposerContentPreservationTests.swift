@@ -196,4 +196,71 @@ final class StoryComposerContentPreservationTests: XCTestCase {
         XCTAssertNotNil(objet.mediaURL,
                         "L'objet porte son URL — sans elle, rien ne part à la publication.")
     }
+
+    // MARK: - Effacer une composition la rend RE-COMPOSABLE (#4047)
+
+    /// **`reset()` doit vider `carriedContentSources`, et ne le faisait pas.**
+    ///
+    /// Ce set est le cache d'idempotence d'`applyContentMedia` : « cette URL a
+    /// déjà été portée dans CETTE composition ». Il existe pour qu'un
+    /// aller-retour Post↔Story ne double pas les médias. Mais une composition
+    /// remise à zéro n'a plus rien porté : le garder faisait qu'après un
+    /// effacement, la MÊME photo re-choisie était sautée en silence et
+    /// n'atteignait JAMAIS la scène.
+    ///
+    /// Le symptôme est le pire de sa famille — rien ne casse, rien ne loggue,
+    /// l'écran reste simplement vide là où l'auteur vient de poser une image.
+    ///
+    /// Défaut LATENT depuis B1 : le seul appelant de `reset()` était « supprimer
+    /// tous les slides » dans l'atelier, dont le chemin de reprise passe par le
+    /// picker de l'atelier — jamais par `applyContentMedia`. Il devient
+    /// atteignable avec le « Tout effacer » du `⋯` du composer document.
+    func test_reset_oublieLesSourcesPortees_doncLaMemePhotoRepasse() throws {
+        let vm = StoryComposerViewModel()
+        let url = try makeTempImage()
+
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: url, kind: .image)])
+        XCTAssertEqual(vm.currentSlide.effects.mediaObjects?.count, 1,
+                       "Prémisse : le média est bien porté une première fois.")
+
+        vm.reset()
+        XCTAssertTrue((vm.currentSlide.effects.mediaObjects ?? []).isEmpty,
+                      "Prémisse : le reset a bien vidé la slide.")
+
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: url, kind: .image)])
+        XCTAssertEqual(
+            vm.currentSlide.effects.mediaObjects?.count, 1,
+            "Après un effacement, re-choisir la MÊME photo doit la reposer sur la scène. Si ce compte "
+                + "est 0, le cache d'idempotence a survécu au reset et le média est sauté EN SILENCE."
+        )
+    }
+
+    /// La jumelle qui dit pourquoi le cache existe : SANS reset, la même URL ne
+    /// se porte qu'UNE fois. Sans ce témoin, on pourrait « corriger » le
+    /// précédent en supprimant le cache — et rouvrir le doublement que B1 ferme.
+    func test_sansReset_leCacheTientTOUJOURS_pasDeDoublon() throws {
+        let vm = StoryComposerViewModel()
+        let url = try makeTempImage()
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: url, kind: .image)])
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: url, kind: .image)])
+        XCTAssertEqual(vm.currentSlide.effects.mediaObjects?.count, 1,
+                       "Hors reset, une même source ne se porte qu'UNE fois — c'est tout l'objet du cache.")
+    }
+
+    /// **Retirer le fond est la jumelle d'`applyBackground`.** Sans elle, poser
+    /// une couleur est une porte à SENS UNIQUE côté hôte. Le canvas, lui, garde
+    /// TOUJOURS une couleur : `background` n'est pas optionnel dans
+    /// `StoryEffects`, et y poser du vide donnerait un canvas noir.
+    func test_clearBackground_rendUnFondValide_jamaisDuVide() {
+        let vm = StoryComposerViewModel()
+        vm.applyBackground(hex: "112233")
+        XCTAssertEqual(vm.currentSlide.effects.background, "112233")
+
+        vm.clearBackground()
+        let apres = vm.currentSlide.effects.background
+        XCTAssertFalse((apres ?? "").isEmpty,
+                       "Le canvas doit garder une couleur — du vide y peindrait du NOIR.")
+        XCTAssertNotEqual(apres, "112233",
+                          "…et ce n'est plus celle que l'auteur avait choisie.")
+    }
 }

@@ -503,6 +503,21 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         applyBackgroundColorToCurrentSlide()
     }
 
+    /// **Retirer le fond de couleur (#4047).** Jumelle d'`applyBackground` —
+    /// sans elle, poser une couleur est une porte à SENS UNIQUE : l'hôte peut
+    /// l'écrire et jamais l'effacer, si bien qu'un post devenu toile ne pouvait
+    /// plus redevenir un post sans toile.
+    ///
+    /// Le fond RETOMBE sur une couleur de palette tirée au sort, comme à la
+    /// naissance du composer (`reset()`), plutôt que sur du vide : `background`
+    /// n'est pas optionnel dans `StoryEffects`, et y poser une chaîne vide
+    /// donnerait un canvas NOIR — le défaut de 2026-07-20, dans l'autre sens.
+    /// Ce qui disparaît est l'INTENTION de l'auteur, portée côté hôte
+    /// (`documentBackground`), qui cesse alors de faire naître la scène.
+    public func clearBackground() {
+        applyBackground(hex: StoryBackgroundPalette.randomBackgroundColor())
+    }
+
     /// **Semer le CONTENU depuis un hôte app (B1, #3924).** Point d'entrée
     /// PUBLIC : le composer garde UN seul contenu (`documentText`) quand il
     /// change de mode — la scène qui naît le reçoit sur la slide courante

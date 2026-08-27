@@ -65,6 +65,15 @@ valeur unique, et déjà celle des deux autres sélecteurs de l'écran (audience
 l'atelier). Il n'y figure **que ce que le contexte permet** : l'itération porte sur `offeredFormats`
 et sur rien d'autre, donc un format non offert y est ABSENT, jamais grisé (loi 4).
 
+**Le `⋯` porte ce que le document sait faire et que rien d'autre à l'écran ne fait** — pas les
+entrées de l'atelier reprises par ressemblance de nom. Transitions et Timeline outillent une scène
+COMPOSÉE, que cette surface n'édite pas ; « supprimer les slides » a déjà son geste (le ✕ de chaque
+chip) ; « sauvegarder le brouillon » n'a aucun chemin ici. Restent **Retirer le fond** — poser une
+couleur était une porte à sens unique, aucun contrôle ne l'effaçait — et **Tout effacer**, qui porte
+plus loin que le rail : texte, fond, lieu et transcription en plus des médias. Aucune entrée
+servie ⇒ **aucun `⋯`** : un menu vide est la forme la plus sournoise de l'UI morte, il a l'air de
+marcher jusqu'au tap.
+
 **Le ✕ de retrait ne se peint que sur la slide SÉLECTIONNÉE.** À 40 pt il occupe le quart du chip :
 viser une vignette pour naviguer la supprimait. Sélectionner reste à un geste sur tout chip,
 supprimer en demande deux — l'ordre juste pour une action irréversible.

@@ -219,6 +219,86 @@ nonisolated enum ComposerChromeOwnership {
     }
 }
 
+/// **Ce que le `⋯` de la barre haute a le droit d'offrir (#4047).**
+///
+/// Une RÈGLE pure, du même patron que `ComposerChromeOwnership` : ce qui décide
+/// des entrées d'un menu est éprouvable sans monter une vue, et l'écrire dans
+/// un `body` en ferait une condition qu'aucune assertion ne peut atteindre.
+///
+/// **Le menu ne reprend PAS les entrées de l'atelier**, et il faut dire
+/// pourquoi : Transitions et Timeline outillent une SCÈNE COMPOSÉE, que la
+/// surface document n'édite pas ; « Supprimer tous les slides » a déjà son
+/// geste — le ✕ de chaque chip du rail ; et « Sauvegarder le brouillon » n'a
+/// aucun chemin ici (le magasin de brouillons est celui des STORIES, et un
+/// brouillon de post n'a ni la même forme ni le même publieur). Reprendre une
+/// entrée par ressemblance de nom aurait donné un menu qui promet quatre
+/// choses et n'en fait aucune.
+///
+/// Restent les gestes que le document sait faire et que RIEN d'autre à l'écran
+/// ne fait :
+///
+/// - **retirer le fond** — poser une couleur était une porte à SENS UNIQUE :
+///   la bande de pastilles l'écrit, et aucun contrôle ne l'effaçait. Un post
+///   devenu toile ne pouvait plus redevenir un post sans toile.
+/// - **tout effacer** — le jumeau document de « Supprimer tous les slides ».
+///   Il porte plus loin que le rail : le rail retire les MÉDIAS un à un, celui-ci
+///   emporte aussi le texte, le fond, le lieu et la transcription.
+nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
+    case removeBackground
+    case clearAll
+}
+
+nonisolated enum ComposerOverflowPolicy {
+
+    /// Les entrées SERVIES, dans l'ordre où elles se peignent. Vide ⇒ **aucun
+    /// `⋯`** : un menu à zéro entrée est un bouton qui n'ouvre rien, et la loi 4
+    /// ne fait pas d'exception pour les menus.
+    ///
+    /// `clearAll` ne se sert PAS sur un composer vierge — « tout effacer »
+    /// n'aurait rien à effacer, et l'offrir dirait à l'auteur qu'il a composé
+    /// quelque chose qu'il ne retrouve pas.
+    static func entries(
+        hasBackground: Bool,
+        hasMedia: Bool,
+        hasText: Bool,
+        hasLocation: Bool
+    ) -> [ComposerOverflowEntry] {
+        var served: [ComposerOverflowEntry] = []
+        if hasBackground { served.append(.removeBackground) }
+        if hasBackground || hasMedia || hasText || hasLocation { served.append(.clearAll) }
+        return served
+    }
+}
+
+/// Libellés du `⋯`, résolus par le catalogue `.main` — même idiome que
+/// `ComposerFormatCopy`. Écrits ici plutôt qu'en littéraux dans la vue : un
+/// libellé posé en ligne échappe au cliquet de complétude et n'est jamais
+/// traduit.
+nonisolated enum ComposerOverflowCopy {
+    static func label(_ entry: ComposerOverflowEntry) -> String {
+        switch entry {
+        case .removeBackground:
+            return String(localized: "composer.overflow.removeBackground",
+                          defaultValue: "Retirer le fond", bundle: .main)
+        case .clearAll:
+            return String(localized: "composer.overflow.clearAll",
+                          defaultValue: "Tout effacer", bundle: .main)
+        }
+    }
+
+    static func icon(_ entry: ComposerOverflowEntry) -> String {
+        switch entry {
+        case .removeBackground: return "paintpalette"
+        case .clearAll: return "trash"
+        }
+    }
+
+    static var menu: String {
+        String(localized: "composer.a11y.moreOptions",
+               defaultValue: "Plus d'options", bundle: .main)
+    }
+}
+
 /// **La mémoire d'audience — une par FORMAT (loi 10), et sa relecture.**
 ///
 /// Deux choses que rien ne doit séparer : sous QUELLE clé une audience se
@@ -1402,6 +1482,17 @@ struct ComposerDocumentSurface: View {
     /// sa rangée `plateauTools` ; ailleurs, la barre garde sa forme courte.
     var formatFan: AnyView? = nil
 
+    /// **Le menu `⋯` de la barre haute (#4047).**
+    ///
+    /// Slot OPAQUE, comme `formatFan` : la surface lui donne sa PLACE — au bout
+    /// de la barre, après le rail — et ignore ce qu'il ouvre. Ce qui a du sens
+    /// dans ce menu dépend de ce que le DOCUMENT porte (un fond posé, une
+    /// composition non vide), et cet état vit chez le meuble.
+    ///
+    /// `nil` ⇒ ABSENT, jamais un `⋯` qui n'ouvre rien (loi 4). C'est le cas
+    /// nominal d'un composer vierge : aucune de ses entrées n'aurait d'objet.
+    var overflowMenu: AnyView? = nil
+
     /// **Le média dont la slide est à l'écran (#4047).** Le rail le cercle.
     /// L'hôte le RÉSOUT (il seul tient la carte `média → slide` et la slide
     /// courante) ; la surface ne fait que le peindre — sans quoi elle aurait
@@ -1535,12 +1626,12 @@ struct ComposerDocumentSurface: View {
     /// zones y sont : la fermeture, le TYPE DE PUBLICATION (descendu de sa
     /// rangée propre, où il flottait seul au-dessus de la surface) et le RAIL.
     ///
-    /// **Le `⋯` est ABSENT, et c'est une réponse, pas un oubli.** Il n'a aucun
-    /// menu sur cette surface : l'atelier y range ses transitions, sa timeline
-    /// et sa purge de slides, dont rien n'existe ici. Peindre un `⋯` qui
-    /// n'ouvre rien serait exactement l'UI morte que la loi 4 interdit — et
-    /// c'est le motif que ce chantier RETIRE, pas celui qu'il installe. Il
-    /// arrive avec son premier contenu, pas avant.
+    /// **Le `⋯` est arrivé avec son premier contenu**, exactement comme cette
+    /// note l'annonçait quand il était encore absent. Il ne reprend PAS les
+    /// entrées de l'atelier (transitions, timeline, purge de slides), dont
+    /// aucune n'a d'équivalent atteignable ici : il porte ce que le DOCUMENT
+    /// sait faire et que rien d'autre à l'écran ne fait — et il disparaît
+    /// entièrement quand aucune de ses entrées n'a d'objet.
     ///
     /// **Le rail REMPLACE la bande basse, il ne s'y ajoute pas.** Deux bandes
     /// montrant les mêmes vignettes auraient été deux inventaires à faire
@@ -1570,6 +1661,7 @@ struct ComposerDocumentSurface: View {
             if let formatFan { formatFan.fixedSize() }
             slideRail
             Spacer(minLength: 0)
+            if let overflowMenu { overflowMenu.fixedSize() }
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)

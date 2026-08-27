@@ -133,4 +133,84 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
             "La barre haute doit monter le rail. Ailleurs, il redevient la bande basse que #4047 remplace."
         )
     }
+
+    // MARK: - Le `⋯` de la barre haute (#4047)
+
+    /// **La règle, par COMPORTEMENT.** Ce qu'un menu offre est une décision
+    /// produit : elle s'éprouve sur la règle pure, jamais en lisant une vue.
+    func test_theOverflow_servesOnlyEntriesThatHaveSomethingToDo() {
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: false, hasMedia: false, hasText: false, hasLocation: false),
+            [],
+            "Un composer VIERGE n'offre aucune entrée — donc aucun `⋯`. Un bouton qui n'ouvre rien est "
+                + "l'UI morte que la loi 4 interdit, et un menu vide en est la forme la plus sournoise : "
+                + "il a l'air de marcher jusqu'au tap."
+        )
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: false, hasMedia: true, hasText: false, hasLocation: false),
+            [.clearAll],
+            "Sans fond, « retirer le fond » n'a rien à retirer — elle est ABSENTE, jamais grisée."
+        )
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: true, hasMedia: false, hasText: false, hasLocation: false),
+            [.removeBackground, .clearAll],
+            "Un fond posé sert les deux, et dans cet ORDRE : le geste ciblé avant le geste destructeur."
+        )
+        XCTAssertEqual(
+            ComposerOverflowPolicy.entries(
+                hasBackground: false, hasMedia: false, hasText: false, hasLocation: true),
+            [.clearAll],
+            "Un LIEU seul suffit à rendre « tout effacer » utile — l'oublier laisserait un lieu posé "
+                + "qu'aucun geste du menu ne retire."
+        )
+    }
+
+    /// **Le meuble ne réécrit pas la règle.** Une condition posée dans un `body`
+    /// est invisible aux tests — c'est la faute que ce dossier a déjà commise
+    /// deux fois (la conjonction de l'éventail, puis le gate du plateau).
+    func test_theOverflow_isGatedOnTheRule_notOnAnInlineCondition() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("ComposerOverflowPolicy.entries("),
+            "Les entrées doivent venir de la RÈGLE, lue une seule fois.")
+        XCTAssertTrue(
+            compacted.contains("overflowMenu:documentOverflowEntries.isEmpty?nil:AnyView(overflowMenu)"),
+            "Aucune entrée ⇒ AUCUN bouton. Monter le menu quand même donnerait un `⋯` qui s'ouvre sur "
+                + "le vide."
+        )
+    }
+
+    /// **« Tout effacer » doit passer par `viewModel.reset()`.**
+    ///
+    /// Vider le seul état du MEUBLE laisserait `carriedContentSources` intact
+    /// dans le ViewModel — le cache d'idempotence d'`applyContentMedia`. La
+    /// MÊME photo re-choisie après un effacement serait alors sautée EN
+    /// SILENCE : rien ne casse, rien ne loggue, l'écran reste vide là où
+    /// l'auteur vient de poser une image. C'est le défaut que ce lot corrige
+    /// dans le SDK, et cette garde interdit de le rouvrir depuis l'app.
+    func test_clearAll_goesThroughTheViewModelReset_notOnlyTheHostState() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(compacted.contains("case.clearAll:viewModel.reset()"),
+            "L'effacement doit COMMENCER par `viewModel.reset()` — lui seul oublie les sources portées.")
+        for efface in ["documentText=\"\"", "documentLocalMedia=[]", "documentBackground=nil",
+                       "documentLocation=nil", "slideIdByMediaURL=[:]"] {
+            XCTAssertTrue(compacted.contains(efface),
+                "« Tout effacer » laisse `\(efface)` derrière lui — un effacement partiel est pire "
+                    + "qu'aucun : l'auteur croit être reparti de zéro.")
+        }
+    }
+
+    /// Retirer le fond touche les DEUX niveaux, et pour deux raisons distinctes :
+    /// l'INTENTION de l'auteur (`documentBackground`, qui fait naître la scène)
+    /// et la couleur du CANVAS, qui doit rester valide — `background` n'est pas
+    /// optionnel dans `StoryEffects`, et du vide y peindrait du NOIR.
+    func test_removeBackground_clearsTheIntentAndKeepsTheCanvasPaintable() throws {
+        let compacted = compact(try hostSource())
+        XCTAssertTrue(
+            compacted.contains("case.removeBackground:documentBackground=nilviewModel.clearBackground()"),
+            "Retirer le fond doit effacer l'INTENTION et remettre le canvas sur une couleur valide."
+        )
+    }
 }
