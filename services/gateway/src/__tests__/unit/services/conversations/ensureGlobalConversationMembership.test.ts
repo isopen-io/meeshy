@@ -74,7 +74,7 @@ describe('ensureGlobalConversationMembership', () => {
   });
 
   it('rend "already-member" et ne crée rien si la participation existe déjà', async () => {
-    h = harness({ existingMember: { id: 'part-existing' } });
+    h = harness({ existingMember: { id: 'part-existing', isActive: true } });
 
     const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
 
@@ -89,7 +89,7 @@ describe('ensureGlobalConversationMembership', () => {
   // pour la même paire (conversationId, userId) — violation de l'index unique,
   // qui laissait BIGBOSS/ADMIN coincés à "member" dans leur propre salon.
   it('met À NIVEAU le rôle d\'une participation existante quand un rôle EXPLICITE est demandé (seed)', async () => {
-    h = harness({ existingMember: { id: 'part-existing', role: 'member' } });
+    h = harness({ existingMember: { id: 'part-existing', role: 'member', isActive: true } });
 
     const result = await ensureGlobalConversationMembership(
       { prisma: h.prisma as never },
@@ -104,7 +104,7 @@ describe('ensureGlobalConversationMembership', () => {
   });
 
   it('ne met PAS à niveau quand la participation existante a DÉJÀ le rôle demandé', async () => {
-    h = harness({ existingMember: { id: 'part-existing', role: 'creator' } });
+    h = harness({ existingMember: { id: 'part-existing', role: 'creator', isActive: true } });
 
     await ensureGlobalConversationMembership({ prisma: h.prisma as never }, { ...baseInput, role: 'creator' });
 
@@ -112,7 +112,7 @@ describe('ensureGlobalConversationMembership', () => {
   });
 
   it('ne met JAMAIS à niveau sans rôle explicite — l\'inscription et la création admin ne rétrogradent/promeuvent personne', async () => {
-    h = harness({ existingMember: { id: 'part-existing', role: 'admin' } });
+    h = harness({ existingMember: { id: 'part-existing', role: 'admin', isActive: true } });
 
     const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
 
@@ -277,5 +277,63 @@ describe('ensureGlobalConversationMembership', () => {
     );
 
     expect(result.outcome).toBe('joined');
+  });
+});
+
+/**
+ * **Un départ du salon global est RESPECTÉ** (issue #4010, décision porteur du
+ * 2026-08-27).
+ *
+ * La recherche de participation existante ne filtrait pas `isActive` : une
+ * personne qui avait QUITTÉ le salon global était rendue `already-member` et
+ * n'était jamais réactivée. Comportement identique à avant #3876 — donc pas une
+ * régression — mais jamais assumé : l'état « a quitté » n'était tout simplement
+ * pas un cas géré, et rien ne distinguait « membre actif » de « ligne morte ».
+ *
+ * La décision porteur retient le respect du départ. Ce que la fonction gagne
+ * n'est donc pas un comportement neuf : c'est un **état nommé**, un test qui
+ * l'ancre, et l'impossibilité qu'un futur lot le change par inadvertance.
+ *
+ * `left` couvre toute ligne INACTIVE — départ volontaire, retrait par un hôte,
+ * bannissement. Aucune n'est ressuscitée : ressusciter un banni serait pire
+ * encore que ramener quelqu'un qui est parti de lui-même.
+ */
+describe('ensureGlobalConversationMembership — un départ est respecté (#4010)', () => {
+  it('rend "left" pour une ligne inactive, et ne la réactive pas', async () => {
+    const h = harness({ existingMember: { id: 'part-gone', isActive: false } });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'left', participantId: 'part-gone' });
+    expect(h.prisma.participant.update).not.toHaveBeenCalled();
+    expect(h.prisma.participant.create).not.toHaveBeenCalled();
+  });
+
+  it('ne reposte AUCUN avis d’arrivée pour quelqu’un qui est parti', async () => {
+    const h = harness({ existingMember: { id: 'part-gone', isActive: false } });
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(h.prisma.message.create).not.toHaveBeenCalled();
+  });
+
+  it('ne met PAS à niveau le rang d’une ligne inactive, même quand le seed en demande un', async () => {
+    const h = harness({ existingMember: { id: 'part-gone', role: 'member', isActive: false } });
+
+    const result = await ensureGlobalConversationMembership(
+      { prisma: h.prisma as never },
+      { ...baseInput, role: 'creator' },
+    );
+
+    expect(result.outcome).toBe('left');
+    expect(h.prisma.participant.update).not.toHaveBeenCalled();
+  });
+
+  it('une ligne ACTIVE reste "already-member" — le nouvel état ne mord que sur l’inactif', async () => {
+    const h = harness({ existingMember: { id: 'part-here', isActive: true } });
+
+    const result = await ensureGlobalConversationMembership({ prisma: h.prisma as never }, baseInput);
+
+    expect(result).toEqual({ outcome: 'already-member', participantId: 'part-here' });
   });
 });

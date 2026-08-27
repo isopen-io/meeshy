@@ -220,9 +220,12 @@ struct ParticipantProfileSheet: View {
             if canEditRights {
                 // En lecture, la feuille n'énonce que les refus. En ÉDITION il
                 // faut les huit : on n'accorde pas un droit qu'on ne montre pas.
-                ForEach(ParticipantEntryCapabilities.Capability.allCases, id: \.rawValue) { capability in
+                // `disclosed` et non `allCases` : un droit que la charge ne DIT
+                // pas (#4009) n'a pas d'interrupteur — il mentirait dans les
+                // deux positions.
+                ForEach(capabilities.disclosed, id: \.rawValue) { capability in
                     Toggle(isOn: Binding(
-                        get: { capabilities.isAllowed(capability) },
+                        get: { capabilities.isAllowed(capability) == true },
                         set: { newValue in Task { await setRight(capability, to: newValue) } }
                     )) {
                         Text(allowedLabel(capability))

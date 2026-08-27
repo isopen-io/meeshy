@@ -163,3 +163,71 @@ describe('useParticipantRightsSync — octroi d’historique', () => {
     expect(cached?.historyVisibleFrom).toBe('2026-01-15T00:00:00.000Z');
   });
 });
+
+/**
+ * **`canViewHistory` peut MANQUER de la charge** (#4009, décision porteur du
+ * 2026-08-27) : le gateway le retire de l'événement diffusé à la ROOM de
+ * conversation — « qui a le droit de voir l'historique » est un fait de
+ * modération, comme `historyVisibleFrom` que #3898 avait déjà retiré du même
+ * payload.
+ *
+ * Or un HÔTE qui a la conversation ouverte reçoit **les deux** événements — la
+ * charge réduite par la room, la charge complète par sa room personnelle — et
+ * **leur ordre ne se suppose pas**. Ce handler recopiait `rights` EN BLOC :
+ * la charge réduite effaçait donc `canViewHistory` de la fiche affichée, au
+ * hasard de l'ordre d'arrivée.
+ *
+ * Même discriminant que pour `historyVisibleFrom` : la PRÉSENCE de la clé,
+ * jamais sa valeur. Absente ⇒ on garde ce qu'on a.
+ */
+describe('useParticipantRightsSync — une capacité NON DITE ne s’efface pas (#4009)', () => {
+  const { canViewHistory: _omitted, ...reducedRights } = rights;
+
+  function syncWith(payload: Partial<ParticipantRightsUpdatedEventData>, seeded: ParticipantProfile) {
+    const { queryClient, wrapper } = createWrapper();
+    queryClient.setQueryData(
+      queryKeys.conversations.participantProfile(CONVERSATION_ID, PARTICIPANT_ID),
+      seeded
+    );
+    renderHook(() => useParticipantRightsSync(CONVERSATION_ID), { wrapper });
+
+    act(() => {
+      capturedHandler?.({
+        conversationId: CONVERSATION_ID,
+        participantId: PARTICIPANT_ID,
+        updatedBy: 'admin-1',
+        rights: reducedRights,
+        ...payload,
+      } as ParticipantRightsUpdatedEventData);
+    });
+
+    return queryClient.getQueryData<ParticipantProfile>(
+      queryKeys.conversations.participantProfile(CONVERSATION_ID, PARTICIPANT_ID)
+    );
+  }
+
+  it('garde le `canViewHistory` déjà connu quand la charge ne le porte pas', () => {
+    const seeded = baseProfile({ entryCapabilities: { ...rights, canViewHistory: true } });
+
+    const cached = syncWith({}, seeded);
+
+    expect(cached?.entryCapabilities?.canViewHistory).toBe(true);
+  });
+
+  it('applique bien les AUTRES droits de la charge réduite', () => {
+    const seeded = baseProfile({ entryCapabilities: { ...rights, canViewHistory: true } });
+
+    const cached = syncWith({ rights: { ...reducedRights, canSendFiles: true } as never }, seeded);
+
+    expect(cached?.entryCapabilities?.canSendFiles).toBe(true);
+    expect(cached?.entryCapabilities?.canViewHistory).toBe(true);
+  });
+
+  it('applique la valeur quand la charge la PORTE — la clé présente fait autorité', () => {
+    const seeded = baseProfile({ entryCapabilities: { ...rights, canViewHistory: true } });
+
+    const cached = syncWith({ rights: { ...reducedRights, canViewHistory: false } }, seeded);
+
+    expect(cached?.entryCapabilities?.canViewHistory).toBe(false);
+  });
+});

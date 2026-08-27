@@ -1014,7 +1014,15 @@ export function registerParticipantsRoutes(
           };
           // La clé est ABSENTE, jamais `null` : `null` dirait « octroi
           // retiré », ce que la room de conversation n'a pas à savoir.
-          const { historyVisibleFrom: _omitted, ...roomPayload } = fullPayload;
+          //
+          // `rights.canViewHistory` part avec lui (#4009, décision porteur
+          // 2026-08-27) : c'est le MÊME fait de modération — « qui a le droit
+          // de voir l'historique » — dit sous une autre forme. #3898 n'avait
+          // nommé que la date, et le booléen voisin, dans le même objet, avait
+          // continué son chemin vers la room entière.
+          const { historyVisibleFrom: _omitted, rights: fullRights, ...rest } = fullPayload;
+          const { canViewHistory: _alsoOmitted, ...roomRights } = fullRights;
+          const roomPayload = { ...rest, rights: roomRights };
 
           io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, roomPayload);
 

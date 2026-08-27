@@ -330,4 +330,61 @@ final class ConversationParticipantProfileTests: XCTestCase {
         XCTAssertFalse(event.carriesHistoryGrant, "an absent key asserts nothing — the reader keeps what it has")
         XCTAssertNil(event.historyVisibleFrom)
     }
+
+    // MARK: - `canViewHistory` absent — la room n'apprend pas ce fait (#4009)
+
+    /// **Le fil sait dire « je ne te le dis pas ».**
+    ///
+    /// #4009 retire `rights.canViewHistory` de la charge diffusée à la ROOM de
+    /// conversation : « qui a le droit de voir l'historique » est un fait de
+    /// modération, comme `historyVisibleFrom` que #3898 avait déjà retiré du
+    /// même payload. Seuls les autres HÔTES et l'INTÉRESSÉ le reçoivent, sur
+    /// leur room personnelle.
+    ///
+    /// Sans ce test, la conséquence serait invisible et brutale : le champ était
+    /// `Bool` NON optionnel, donc le décodage LÈVE sur la charge réduite et
+    /// l'événement entier est perdu. Un simple membre cesserait de voir TOUT
+    /// changement de droits — pas seulement celui qu'on lui cache.
+    private let rightsBlockWithoutHistory = """
+    "rights": {
+        "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+        "canSendVideos": true, "canSendAudios": false, "canSendLocations": true,
+        "canSendLinks": true
+    }
+    """
+
+    func test_rightsUpdated_decodes_whenCanViewHistoryIsAbsent() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1", \(rightsBlockWithoutHistory) }
+        """)
+
+        XCTAssertNil(event.rights.canViewHistory, "la clé absente ne s'invente pas en `false` — elle n'est pas dite")
+        XCTAssertEqual(event.rights.canSendAudios, false, "les autres droits continuent d'arriver")
+    }
+
+    /// Un droit NON DIT n'est pas un droit REFUSÉ. La carte n'énonce que les
+    /// refus : y ranger l'indicible ferait afficher « Ne voit pas les messages
+    /// antérieurs » à toute la salle — exactement le fait que #4009 retire.
+    func test_deniedCapabilities_omitTheUndisclosedOne() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1", \(rightsBlockWithoutHistory) }
+        """)
+
+        XCTAssertFalse(event.rights.denied.contains(.canViewHistory),
+                       "non dit n'est pas refusé")
+        XCTAssertTrue(event.rights.denied.contains(.canSendAudios),
+                      "un refus RÉELLEMENT dit reste énoncé")
+    }
+
+    func test_deniedCapabilities_stillReportTheDisclosedRefusal() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1",
+          "rights": { "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+                      "canSendVideos": true, "canSendAudios": true, "canSendLocations": true,
+                      "canSendLinks": true, "canViewHistory": false } }
+        """)
+
+        XCTAssertTrue(event.rights.denied.contains(.canViewHistory),
+                      "servi à un hôte, le refus s'énonce comme avant")
+    }
 }

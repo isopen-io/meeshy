@@ -31,7 +31,14 @@ export type ParticipantEntryCapabilities = {
   readonly canSendAudios: boolean;
   readonly canSendLocations: boolean;
   readonly canSendLinks: boolean;
-  readonly canViewHistory: boolean;
+  /**
+   * **Peut MANQUER — `undefined` veut dire « on ne te le dit pas ».**
+   * #4009 retire ce droit de l'événement diffusé à la room de conversation :
+   * « qui a le droit de voir l'historique » est un fait de modération, comme
+   * `historyVisibleFrom` que #3898 avait déjà retiré du même payload.
+   * Distinct de `false`, qui le REFUSE : non dit n'est pas refusé.
+   */
+  readonly canViewHistory?: boolean;
 };
 
 /**

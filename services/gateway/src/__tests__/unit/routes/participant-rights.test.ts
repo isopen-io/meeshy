@@ -266,14 +266,19 @@ describe('PATCH …/rights — la surcharge est un DELTA', () => {
 });
 
 describe('PATCH …/rights — ce que la salle apprend', () => {
+  // Le premier événement émis est celui de la ROOM, dont `canViewHistory` est
+  // désormais retiré (#4009) : la charge complète part sur les rooms
+  // PERSONNELLES des hôtes et de l'intéressé. Le témoin lit donc l'une d'elles
+  // pour vérifier que ce sont bien les droits RÉSOLUS qui voyagent.
   it('diffuse les droits RÉSOLUS, pas le delta — le client affiche un état, pas une différence', async () => {
     const ctx = setup('admin');
 
     await patchRights(ctx, { canSendFiles: true });
 
-    const event = ctx.emitted.find((e) => e.event === 'participant:rights-updated');
-    expect(event).toBeTruthy();
-    expect(event?.payload.rights).toMatchObject({
+    const events = ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+    const personal = events.find((e) => e.room.startsWith('user:'));
+    expect(personal).toBeTruthy();
+    expect(personal?.payload.rights).toMatchObject({
       canSendFiles: true,
       canSendMessages: true,
       canViewHistory: false,
@@ -726,5 +731,65 @@ describe('PATCH …/rights — l’administrateur de plateforme agit avec les dr
 
     expect(ctx.reply._status).toBe(403);
     expect(ctx.prisma.participant.update).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * **`canViewHistory` suit `historyVisibleFrom` hors de la diffusion large**
+ * (issue #4009, décision porteur du 2026-08-27).
+ *
+ * #3898 a retiré `historyVisibleFrom` de la room de conversation en le traitant
+ * comme un fait de MODÉRATION — « l'hôte a octroyé l'historique à X ». Mais
+ * `rights.canViewHistory`, un autre champ du MÊME payload, répondait à la même
+ * question (« qui a le droit de voir l'historique ») et partait toujours vers la
+ * room entière. Deux champs de même sensibilité, deux traitements.
+ *
+ * Même doctrine de forme que #3898 : la clé est **ABSENTE**, jamais `false`.
+ * `false` dirait « droit retiré », ce que la room n'a pas à savoir — et un
+ * client qui recopie inconditionnellement effacerait le droit.
+ */
+describe('PATCH …/rights — `canViewHistory` quitte la diffusion large (#4009)', () => {
+  const OTHER_HOST_USER_ID = '507f1f77bcf86cd799439077';
+  const otherHost = { id: 'other-host-part', userId: OTHER_HOST_USER_ID, role: 'moderator' };
+
+  const rightsEvents = (ctx: Ctx) =>
+    ctx.emitted.filter((e) => e.event === 'participant:rights-updated');
+
+  it('la room de CONVERSATION ne porte PLUS `canViewHistory` — la clé est ABSENTE, pas `false`', async () => {
+    const ctx = setup('admin', undefined, [otherHost]);
+
+    await patchRights(ctx, { canViewHistory: true });
+
+    const roomEvent = rightsEvents(ctx).find((e) => e.room === `conversation:${CONV_ID}`);
+    expect(roomEvent).toBeTruthy();
+    expect('canViewHistory' in roomEvent!.payload.rights).toBe(false);
+  });
+
+  it('la room de conversation garde les AUTRES droits — seul celui-ci est un fait de modération', async () => {
+    const ctx = setup('admin', undefined, [otherHost]);
+
+    await patchRights(ctx, { canSendFiles: true });
+
+    const roomEvent = rightsEvents(ctx).find((e) => e.room === `conversation:${CONV_ID}`);
+    expect(roomEvent!.payload.rights.canSendFiles).toBe(true);
+    expect('canViewHistory' in roomEvent!.payload.rights).toBe(false);
+  });
+
+  it('les AUTRES hôtes le reçoivent sur leur room personnelle', async () => {
+    const ctx = setup('admin', undefined, [otherHost]);
+
+    await patchRights(ctx, { canViewHistory: true });
+
+    const hostEvent = rightsEvents(ctx).find((e) => e.room === `user:${OTHER_HOST_USER_ID}`);
+    expect(hostEvent!.payload.rights.canViewHistory).toBe(true);
+  });
+
+  it('l’INTÉRESSÉ le reçoit — c’est SON droit', async () => {
+    const ctx = setup('admin', undefined, [otherHost]);
+
+    await patchRights(ctx, { canViewHistory: true });
+
+    const ownEvent = rightsEvents(ctx).find((e) => e.room.startsWith('user:') && e.room !== `user:${OTHER_HOST_USER_ID}`);
+    expect(ownEvent!.payload.rights.canViewHistory).toBe(true);
   });
 });

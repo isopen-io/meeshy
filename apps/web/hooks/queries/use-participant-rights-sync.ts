@@ -39,7 +39,16 @@ export function useParticipantRightsSync(conversationId: string) {
           current
             ? {
                 ...current,
-                entryCapabilities: data.rights,
+                // FUSION, jamais remplacement (#4009). Un HÔTE reçoit les
+                // DEUX charges — réduite par la room, complète par sa room
+                // personnelle — et leur ordre ne se suppose pas. Recopier
+                // `rights` en bloc effaçait `canViewHistory` de la fiche
+                // affichée, au hasard de l'ordre d'arrivée. Même
+                // discriminant que pour `historyVisibleFrom` ci-dessous :
+                // la PRÉSENCE de la clé, jamais sa valeur.
+                entryCapabilities: current.entryCapabilities
+                  ? { ...current.entryCapabilities, ...data.rights }
+                  : data.rights,
                 // Le discriminant est la PRÉSENCE de la clé, jamais sa valeur.
                 // Le gateway la pose TOUJOURS — `historyVisibleFrom: grantedFrom
                 // ? … : null` sur CHAQUE émission, que l'écriture l'ait touchée

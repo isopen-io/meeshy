@@ -1537,7 +1537,18 @@ export interface ParticipantRightsUpdatedEventData {
     readonly canSendAudios: boolean;
     readonly canSendLocations: boolean;
     readonly canSendLinks: boolean;
-    readonly canViewHistory: boolean;
+    /**
+     * **Absent pour la room de conversation** (#4009, décision porteur
+     * 2026-08-27) : « qui a le droit de voir l'historique » est un fait de
+     * MODÉRATION, au même titre que `historyVisibleFrom` que #3898 a retiré de
+     * la diffusion large. Seuls les autres HÔTES et l'INTÉRESSÉ le reçoivent.
+     *
+     * La clé est **absente**, jamais `false` — `false` dirait « droit retiré »,
+     * ce que la room n'a pas à savoir. Un client discrimine donc sur la
+     * PRÉSENCE de la clé et ne recopie jamais inconditionnellement, exactement
+     * comme pour `historyVisibleFrom`.
+     */
+    readonly canViewHistory?: boolean;
   };
   /** Instant ISO 8601 depuis lequel ce participant lit l'historique ; `null` = aucun octroi. */
   readonly historyVisibleFrom?: string | null;

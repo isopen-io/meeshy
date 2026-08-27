@@ -189,8 +189,19 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
     : null;
 
   const capabilities = profile.entryCapabilities;
+  // `=== false`, jamais `!` : une capacité NON DITE (#4009) ne se range pas
+  // parmi les refus. L'y mettre ferait afficher « Ne voit pas les messages
+  // antérieurs » à toute la salle — exactement le fait que la charge réduite
+  // vient de taire. Jumeau iOS : `ParticipantEntryCapabilities.denied`.
   const deniedCapabilities = capabilities
-    ? CAPABILITY_ORDER.filter((capability) => !capabilities[capability])
+    ? CAPABILITY_ORDER.filter((capability) => capabilities[capability] === false)
+    : [];
+  // Un interrupteur ne se dessine pas pour un droit non dit : il mentirait
+  // dans les deux positions. En pratique l'édition est réservée aux hôtes,
+  // qui reçoivent toujours la charge complète — la garde tient le cas où
+  // cela cesserait d'être vrai.
+  const editableCapabilities = capabilities
+    ? CAPABILITY_ORDER.filter((capability) => capabilities[capability] !== undefined)
     : [];
 
   const entryLinkExpiry = profile.entryLink?.expiresAt
@@ -305,8 +316,8 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
             // En lecture, la carte n'énonce que les refus. En ÉDITION il faut
             // les huit : on ne peut pas accorder un droit qu'on ne montre pas.
             <ul className="space-y-1">
-              {CAPABILITY_ORDER.map((capability) => {
-                const allowed = capabilities[capability];
+              {editableCapabilities.map((capability) => {
+                const allowed = capabilities[capability] === true;
                 return (
                   <li key={capability} className="flex items-center gap-2 text-sm">
                     <button

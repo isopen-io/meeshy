@@ -40,6 +40,19 @@ export type GlobalMembershipInput = {
 
 export type GlobalMembershipResult =
   | { readonly outcome: 'already-member'; readonly participantId: string }
+  /**
+   * Une ligne existe mais elle est INACTIVE — départ volontaire, retrait par
+   * un hôte, bannissement. **Elle n'est jamais ressuscitée** (#4010, décision
+   * porteur du 2026-08-27) : un départ du salon global se respecte, et
+   * ramener un banni serait pire encore que ramener quelqu'un parti de
+   * lui-même.
+   *
+   * L'état existait déjà dans les faits — la recherche ne filtrait pas
+   * `isActive` et rendait `already-member` pour une ligne morte. Ce que ce
+   * variant apporte n'est donc pas un comportement neuf : c'est le NOM de
+   * l'état, et l'impossibilité qu'un futur lot le change sans le voir.
+   */
+  | { readonly outcome: 'left'; readonly participantId: string }
   | { readonly outcome: 'joined'; readonly participantId: string }
   | { readonly outcome: 'no-global-conversation' };
 
@@ -100,6 +113,12 @@ export async function ensureGlobalConversationMembership(
     where: { conversationId: globalConversation.id, userId: input.userId },
   });
   if (existing) {
+    // Une ligne morte ne se réveille pas, et surtout : on n'écrit RIEN dessus
+    // — pas même la mise à niveau de rang du seed. Respecter un départ, c'est
+    // ne pas y toucher du tout (#4010).
+    if (!existing.isActive) {
+      return { outcome: 'left', participantId: existing.id };
+    }
     if (input.role && input.role !== existing.role) {
       await deps.prisma.participant.update({
         where: { id: existing.id },

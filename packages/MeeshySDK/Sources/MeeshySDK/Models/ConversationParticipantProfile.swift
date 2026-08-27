@@ -15,7 +15,19 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
     public let canSendLocations: Bool
     public let canSendLinks: Bool
     /// Voit les messages écrits AVANT son arrivée.
-    public let canViewHistory: Bool
+    ///
+    /// **Optionnel, et pas par confort : `nil` veut dire « on ne te le dit
+    /// pas ».** #4009 retire ce droit de la charge diffusée à la ROOM de
+    /// conversation — « qui a le droit de voir l'historique » est un fait de
+    /// MODÉRATION, comme `historyVisibleFrom` que #3898 avait déjà retiré du
+    /// même payload. Seuls les autres HÔTES et l'INTÉRESSÉ le reçoivent.
+    ///
+    /// Le laisser `Bool` non optionnel ne l'aurait pas protégé : le décodage
+    /// aurait LEVÉ sur la charge réduite, et un simple membre aurait cessé de
+    /// recevoir TOUT changement de droits — pas seulement celui qu'on lui
+    /// cache. Un champ qu'un client lit autoritativement n'est plus optionnel
+    /// pour l'émetteur ; la réciproque vaut aussi.
+    public let canViewHistory: Bool?
 
     public init(
         canSendMessages: Bool,
@@ -25,7 +37,7 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
         canSendAudios: Bool,
         canSendLocations: Bool,
         canSendLinks: Bool,
-        canViewHistory: Bool
+        canViewHistory: Bool?
     ) {
         self.canSendMessages = canSendMessages
         self.canSendFiles = canSendFiles
@@ -53,7 +65,9 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
         case canSendLocations
     }
 
-    public func isAllowed(_ capability: Capability) -> Bool {
+    /// `nil` — la charge ne DIT rien de cette capacité. Distinct de `false`,
+    /// qui la refuse : non dit n'est pas refusé (#4009).
+    public func isAllowed(_ capability: Capability) -> Bool? {
         switch capability {
         case .canViewHistory: return canViewHistory
         case .canSendMessages: return canSendMessages
@@ -73,7 +87,24 @@ public struct ParticipantEntryCapabilities: Decodable, Sendable, Equatable {
     /// une fiche qui récite des autorisations se lit comme un formulaire. Web et
     /// iOS doivent dire la même chose sans réécrire la règle chacun de son côté.
     public var denied: [Capability] {
-        Capability.allCases.filter { !isAllowed($0) }
+        // `== false`, jamais `!` : une capacité NON DITE ne se range pas
+        // parmi les refus (#4009). L'y mettre ferait afficher « Ne voit pas
+        // les messages antérieurs » à toute la salle — exactement le fait
+        // que la charge réduite vient de taire.
+        Capability.allCases.filter { isAllowed($0) == false }
+    }
+
+    /// Ce que la charge DIT, dans l'ordre d'affichage.
+    ///
+    /// L'édition a besoin des huit — on n'accorde pas un droit qu'on ne montre
+    /// pas — mais elle ne peut dessiner un interrupteur pour un droit NON DIT
+    /// (#4009) : il mentirait dans les deux positions. En pratique l'édition est
+    /// réservée aux hôtes, qui reçoivent toujours la charge complète ; cette
+    /// règle tient le cas où cela cesserait d'être vrai.
+    ///
+    /// Jumelle web : `editableCapabilities` (`ParticipantProfileCard.tsx`).
+    public var disclosed: [Capability] {
+        Capability.allCases.filter { isAllowed($0) != nil }
     }
 }
 
