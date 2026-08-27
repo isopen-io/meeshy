@@ -582,3 +582,45 @@ describe('GET …/profile — l’octroi d’historique par date', () => {
     expect(data).toHaveProperty('historyVisibleFrom', null);
   });
 });
+
+/**
+ * `canGrantHistory` répond à une question DIFFÉRENTE de `historyVisibleFrom` :
+ * pas « quel est l'octroi ? » (fait de modération, second cercle) mais « CE
+ * LECTEUR peut-il en poser un ? ». Sans elle, un client ne peut pas distinguer
+ * « je ne suis pas hôte » de « je suis hôte, aucun octroi posé » — les deux
+ * rendent `historyVisibleFrom: null`. Un modérateur LIT l'octroi (ligne
+ * au-dessus) mais ne peut pas l'ÉCRIRE : `PATCH …/rights` réserve ce champ à
+ * `admin`/`creator` (`HISTORY_GRANT_REQUIRES_ADMIN`) — la garde ici doit donc
+ * matcher exactement cette même liste, jamais `viewerHostsTheRoom`.
+ */
+describe('GET …/profile — qui peut poser l’octroi d’historique', () => {
+  it('refuse à un membre ordinaire', async () => {
+    const data = await fetchProfile(setup('member'));
+
+    expect(data.canGrantHistory).toBe(false);
+  });
+
+  it('refuse à un modérateur — il LIT l’octroi mais ne peut pas l’écrire', async () => {
+    const data = await fetchProfile(setup('moderator'));
+
+    expect(data.canGrantHistory).toBe(false);
+  });
+
+  it('autorise un administrateur de la conversation', async () => {
+    const data = await fetchProfile(setup('admin'));
+
+    expect(data.canGrantHistory).toBe(true);
+  });
+
+  it('autorise un creator', async () => {
+    const data = await fetchProfile(setup('creator'));
+
+    expect(data.canGrantHistory).toBe(true);
+  });
+
+  it('vaut pour un participant CIBLE inscrit, pas seulement anonyme', async () => {
+    const data = await fetchProfile(setup('admin', registeredRow), REGISTERED_ID);
+
+    expect(data.canGrantHistory).toBe(true);
+  });
+});

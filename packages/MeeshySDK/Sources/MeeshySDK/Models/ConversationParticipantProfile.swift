@@ -85,16 +85,35 @@ public struct ParticipantRightsUpdateResult: Decodable, Sendable, Equatable {
     public let rights: ParticipantEntryCapabilities
 }
 
+/// Ce que rend la MÊME route `PATCH …/rights` quand l'écriture porte
+/// `historyVisibleFrom` — un appel séparé de `updateParticipantRights` :
+/// l'octroi par date vaut pour TOUT participant (inscrit compris), pas
+/// seulement les visiteurs sans compte, et sa permission d'écriture est plus
+/// étroite côté gateway (admin/creator, pas modérateur).
+public struct ParticipantHistoryGrantUpdateResult: Decodable, Sendable, Equatable {
+    public let participantId: String
+    public let conversationId: String
+    /// `nil` = octroi retiré.
+    public let historyVisibleFrom: Date?
+}
+
 /// Un hôte a modifié les droits d'un visiteur — charge utile de
 /// `participant:rights-updated`.
 ///
 /// Le sujet est nommé par `participantId` et non par `userId` : il n'a
-/// précisément pas de compte. `rights` porte l'état RÉSOLU.
+/// précisément pas de compte, SAUF pour l'octroi d'historique par DATE
+/// (`historyVisibleFrom`), qui vaut pour tout participant, inscrit compris.
+/// `rights` porte l'état RÉSOLU.
 public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
     public let conversationId: String
     public let participantId: String
     public let updatedBy: String
     public let rights: ParticipantEntryCapabilities
+    /// Instant depuis lequel ce participant lit l'historique ; `nil` = aucun
+    /// octroi. Le gateway le pose TOUJOURS dans cette charge, que ce
+    /// changement l'ait touché ou non — optionnel ici pour tolérer un
+    /// producteur plus ancien qui ne le portait pas encore.
+    public let historyVisibleFrom: Date?
 }
 
 /// Les réglages du lien emprunté — second cercle, réservé aux administrateurs
@@ -173,14 +192,30 @@ public struct ConversationParticipantProfile: Decodable, Sendable, Equatable {
     /// compte : elle n'est entrée par aucun lien, donc aucune condition
     /// d'entrée ne la régit.
     ///
-    /// `var` parce que c'est le SEUL champ que la fiche repose sans recharger :
-    /// après une écriture de l'hôte, ou à réception de `participant:rights-updated`,
-    /// le serveur rend l'état résolu et il n'y a rien d'autre à rafraîchir.
+    /// `var` : après une écriture de l'hôte, ou à réception de
+    /// `participant:rights-updated`, le serveur rend l'état résolu et il n'y a
+    /// rien d'autre à rafraîchir. `historyVisibleFrom` ci-dessous suit la même
+    /// règle, pour la même raison.
     public var entryCapabilities: ParticipantEntryCapabilities?
 
     /// Les réglages du lien emprunté. `nil` hors du cercle des hôtes — c'est le
     /// gateway qui tranche, jamais la vue.
     public let entryLink: ParticipantEntryLink?
+
+    /// Octroi d'historique par DATE posé par un administrateur — vaut pour
+    /// TOUT participant, inscrit compris, pas seulement les visiteurs sans
+    /// compte. `nil` pour un membre ordinaire, que l'octroi existe ou non :
+    /// c'est un fait de modération, pas un attribut de la personne. Servi aux
+    /// hôtes (admin/modérateur/creator). `var` : voir `entryCapabilities`.
+    public var historyVisibleFrom: Date?
+
+    /// Ce lecteur peut-il POSER ou RETIRER l'octroi ci-dessus ? Question
+    /// distincte de `historyVisibleFrom` : un modérateur LIT l'octroi mais ne
+    /// peut pas l'écrire (réservé admin/creator côté gateway) — sans ce
+    /// signal, `historyVisibleFrom == nil` ne distingue pas « pas hôte » de
+    /// « hôte, aucun octroi posé ». Optionnel pour tolérer un gateway plus
+    /// ancien qui ne le portait pas encore ; `nil` se lit comme `false`.
+    public let canGrantHistory: Bool?
 
     /// Nom lisible : ce que la personne a écrit en entrant, à défaut son pseudo.
     public var resolvedFullName: String {

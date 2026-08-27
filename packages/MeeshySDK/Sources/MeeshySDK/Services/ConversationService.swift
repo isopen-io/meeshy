@@ -48,6 +48,26 @@ struct ConversationListResponseBody: Decodable {
     let error: String?
 }
 
+/// Corps de `PATCH …/rights` quand seul `historyVisibleFrom` est écrit.
+///
+/// L'encodage synthétisé de Swift pour un `String?` appelle
+/// `encodeIfPresent`, qui OMET la clé quand la valeur est `nil` — exactement
+/// l'inverse de ce qu'il faut ici : retirer l'octroi doit envoyer `null`
+/// explicite, pas absenter la clé (le gateway distingue les deux). D'où
+/// l'`encode(to:)` manuel, qui passe par `encode(_:forKey:)` — l'overload
+/// générique sur `Optional<String>: Encodable`, qui écrit `null` via
+/// `encodeNil()` quand la valeur est `nil`.
+private struct HistoryGrantBody: Encodable {
+    let historyVisibleFrom: String?
+
+    enum CodingKeys: String, CodingKey { case historyVisibleFrom }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(historyVisibleFrom, forKey: .historyVisibleFrom)
+    }
+}
+
 // MARK: - Protocol
 
 public protocol ConversationServiceProviding: Sendable {
@@ -240,6 +260,30 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
             body: rights
         )
         return response.data.rights
+    }
+
+    /// Pose ou retire l'octroi d'historique par DATE sur un participant.
+    ///
+    /// Distinct de `updateParticipantRights` : ce levier vaut pour TOUT
+    /// participant (inscrit compris), pas seulement les visiteurs sans compte,
+    /// et sa permission d'écriture est plus étroite côté gateway (admin/creator,
+    /// jamais modérateur) — le gateway le vérifie, il ne se prévient pas.
+    ///
+    /// `historyVisibleFrom: nil` retire l'octroi et DOIT voyager comme un
+    /// `null` JSON explicite, jamais comme une clé absente : le corps distingue
+    /// les deux (absente = ne touche à rien, `null` = retire), et le body
+    /// encodé ici écrit toujours la clé.
+    public func updateHistoryGrant(
+        conversationId: String,
+        participantId: String,
+        historyVisibleFrom: Date?
+    ) async throws -> Date? {
+        let iso = historyVisibleFrom.map { ISO8601DateFormatter().string(from: $0) }
+        let response: APIResponse<ParticipantHistoryGrantUpdateResult> = try await api.patch(
+            endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
+            body: HistoryGrantBody(historyVisibleFrom: iso)
+        )
+        return response.data.historyVisibleFrom
     }
 
     public func deleteForMe(conversationId: String) async throws {

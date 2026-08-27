@@ -1,7 +1,7 @@
 'use client';
 
 import { memo } from 'react';
-import { Ghost, Mail, Cake, Globe, MapPin, Link2, CalendarClock, Ban, ShieldCheck, Settings2 } from 'lucide-react';
+import { Ghost, Mail, Cake, Globe, MapPin, Link2, CalendarClock, Ban, ShieldCheck, Settings2, History, X } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { cn } from '@/lib/utils';
 import type {
@@ -76,6 +76,28 @@ interface ParticipantProfileCardProps {
    * qui trancherait elle-même rejouerait côté client une règle d'autorisation.
    */
   readonly onToggleCapability?: (capability: keyof ParticipantEntryCapabilities, value: boolean) => void;
+  /**
+   * Fourni quand le lecteur peut poser/retirer l'octroi d'historique par date
+   * sur CE participant. `null` retire l'octroi. Même règle que
+   * `onToggleCapability` : la carte ne décide pas de ce droit —
+   * `profile.canGrantHistory` en est la réponse sûre, et seul le conteneur la
+   * consulte pour brancher ce callback ou non.
+   */
+  readonly onSetHistoryGrant?: (historyVisibleFrom: string | null) => void;
+  /** Écriture de l'octroi en cours — désactive le contrôle. */
+  readonly historyGrantPending?: boolean;
+  /** Message à afficher après un échec d'écriture (le rollback est déjà fait). */
+  readonly historyGrantError?: string | null;
+}
+
+/** `historyVisibleFrom` (ISO 8601) → valeur d'un `<input type="date">`. */
+function toDateInputValue(iso: string): string {
+  return iso.slice(0, 10);
+}
+
+/** Aucune date future : un plancher futur masquerait tout, y compris au participant lui-même. */
+function todayDateInputValue(): string {
+  return new Date().toISOString().slice(0, 10);
 }
 
 interface ProfileRowProps {
@@ -134,6 +156,9 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
   profile,
   className,
   onToggleCapability,
+  onSetHistoryGrant,
+  historyGrantPending,
+  historyGrantError,
 }: ParticipantProfileCardProps) {
   const { t } = useI18n('conversations');
 
@@ -316,6 +341,72 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
                 </li>
               ))}
             </ul>
+          )}
+        </div>
+      )}
+
+      {/*
+        L'octroi d'historique par DATE — vaut pour TOUT participant, pas
+        seulement les visiteurs sans compte, d'où une section séparée de
+        `entryCapabilities` ci-dessus (réservée aux anonymes). Muette pour un
+        membre ordinaire : `historyVisibleFrom` et `onSetHistoryGrant` sont
+        alors tous deux absents, et il n'existe volontairement aucun signal
+        « un octroi existe » à qui n'a pas le droit de le savoir.
+      */}
+      {(onSetHistoryGrant || profile.historyVisibleFrom) && (
+        <div className="space-y-1.5" data-testid="participant-profile-history-grant">
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-400 dark:text-gray-500">
+            {t('participantProfile.historyGrant.title', 'Historique')}
+          </div>
+          {onSetHistoryGrant ? (
+            <div className="flex items-center gap-2 text-sm">
+              <History className="h-3.5 w-3.5 flex-shrink-0 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+              <span className="text-gray-500 dark:text-gray-400">
+                {t('participantProfile.historyGrant.label', 'Voit l’historique depuis')}
+              </span>
+              <input
+                type="date"
+                data-testid="participant-profile-history-grant-input"
+                className="ml-auto rounded border border-gray-200 bg-transparent px-1.5 py-0.5 text-sm text-gray-800 disabled:opacity-50 dark:border-gray-700 dark:text-gray-100"
+                max={todayDateInputValue()}
+                value={profile.historyVisibleFrom ? toDateInputValue(profile.historyVisibleFrom) : ''}
+                disabled={historyGrantPending}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (!value) return;
+                  onSetHistoryGrant(new Date(`${value}T00:00:00.000Z`).toISOString());
+                }}
+              />
+              {profile.historyVisibleFrom && (
+                <button
+                  type="button"
+                  data-testid="participant-profile-history-grant-clear"
+                  aria-label={t('participantProfile.historyGrant.clear', 'Retirer')}
+                  className="flex-shrink-0 text-gray-400 hover:text-gray-600 disabled:opacity-50 dark:hover:text-gray-200"
+                  disabled={historyGrantPending}
+                  onClick={() => onSetHistoryGrant(null)}
+                >
+                  <X className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          ) : (
+            profile.historyVisibleFrom && (
+              <ProfileRow
+                testId="participant-profile-history-grant-readonly"
+                icon={<History className="h-3.5 w-3.5" />}
+                label={t('participantProfile.historyGrant.label', 'Voit l’historique depuis')}
+                value={new Date(profile.historyVisibleFrom).toLocaleDateString()}
+              />
+            )
+          )}
+          {historyGrantError && (
+            <div
+              data-testid="participant-profile-history-grant-error"
+              className="text-xs text-red-500 dark:text-red-400"
+            >
+              {historyGrantError}
+            </div>
           )}
         </div>
       )}

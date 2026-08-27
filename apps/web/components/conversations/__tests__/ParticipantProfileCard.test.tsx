@@ -58,6 +58,8 @@ const profile = (overrides: Partial<ParticipantProfile> = {}): ParticipantProfil
     canViewHistory: false,
   },
   entryLink: null,
+  historyVisibleFrom: null,
+  canGrantHistory: false,
   ...overrides,
 });
 
@@ -301,5 +303,113 @@ describe('ParticipantProfileCard — édition par l’hôte', () => {
     fireEvent.click(screen.getByTestId('participant-profile-toggle-canSendMessages'));
 
     expect(onToggle).toHaveBeenCalledWith('canSendMessages', false);
+  });
+});
+
+/**
+ * L'OCTROI D'HISTORIQUE PAR DATE — vaut pour TOUT participant, inscrit
+ * compris, pas seulement les visiteurs sans compte : section séparée des
+ * capacités ci-dessus, réservées aux anonymes.
+ *
+ * Même règle d'édition que les capacités : la carte ne décide jamais du
+ * droit. Ici pourtant `entryLink` n'est PAS le bon signal (il n'existe que
+ * pour un anonyme) — c'est la présence du callback `onSetHistoryGrant` qui
+ * gouverne, le conteneur ne le branchant que si `profile.canGrantHistory`.
+ */
+describe('ParticipantProfileCard — octroi d’historique par date', () => {
+  it('reste muette sans octroi ni droit d’édition — un membre ordinaire', () => {
+    render(<ParticipantProfileCard profile={profile({ historyVisibleFrom: null })} />);
+
+    expect(screen.queryByTestId('participant-profile-history-grant')).toBeNull();
+  });
+
+  it('affiche l’octroi en lecture seule à un hôte qui ne peut pas l’écrire', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: '2026-01-15T00:00:00Z' })}
+      />
+    );
+
+    expect(screen.getByTestId('participant-profile-history-grant-readonly')).toBeTruthy();
+    expect(screen.queryByTestId('participant-profile-history-grant-input')).toBeNull();
+  });
+
+  it('affiche un contrôle éditable quand l’écriture est possible', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: null })}
+        onSetHistoryGrant={jest.fn()}
+      />
+    );
+
+    expect(screen.getByTestId('participant-profile-history-grant-input')).toBeTruthy();
+  });
+
+  it('pose l’octroi au choix d’une date', () => {
+    const onSetHistoryGrant = jest.fn();
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: null })}
+        onSetHistoryGrant={onSetHistoryGrant}
+      />
+    );
+
+    fireEvent.change(screen.getByTestId('participant-profile-history-grant-input'), {
+      target: { value: '2026-01-15' },
+    });
+
+    expect(onSetHistoryGrant).toHaveBeenCalledWith('2026-01-15T00:00:00.000Z');
+  });
+
+  it('propose de retirer un octroi déjà posé', () => {
+    const onSetHistoryGrant = jest.fn();
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: '2026-01-15T00:00:00Z' })}
+        onSetHistoryGrant={onSetHistoryGrant}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('participant-profile-history-grant-clear'));
+
+    expect(onSetHistoryGrant).toHaveBeenCalledWith(null);
+  });
+
+  it('ne propose pas de retirer quand rien n’est posé', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: null })}
+        onSetHistoryGrant={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('participant-profile-history-grant-clear')).toBeNull();
+  });
+
+  it('désactive le contrôle pendant l’écriture', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: '2026-01-15T00:00:00Z' })}
+        onSetHistoryGrant={jest.fn()}
+        historyGrantPending
+      />
+    );
+
+    expect(screen.getByTestId('participant-profile-history-grant-input')).toBeDisabled();
+    expect(screen.getByTestId('participant-profile-history-grant-clear')).toBeDisabled();
+  });
+
+  it('affiche l’erreur après un échec d’écriture', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: null })}
+        onSetHistoryGrant={jest.fn()}
+        historyGrantError="Échec de la mise à jour"
+      />
+    );
+
+    expect(screen.getByTestId('participant-profile-history-grant-error').textContent).toContain(
+      'Échec de la mise à jour'
+    );
   });
 });

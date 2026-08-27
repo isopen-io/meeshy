@@ -52,12 +52,21 @@ struct ParticipantProfileSheet: View {
     @State private var loadFailed = false
     @State private var hasLeft = false
     @State private var rightsWriteInFlight = false
+    @State private var historyGrantWriteInFlight = false
+    @State private var historyGrantErrorMessage: String?
 
     /// `entryLink` n'est servi qu'aux administrateurs et modérateurs : sa
     /// PRÉSENCE est la réponse du gateway à « ce lecteur peut-il écrire ». La
     /// vue ne refait pas cet arbitrage — un droit recalculé côté client n'est
     /// pas un droit.
     private var canEditRights: Bool { profile?.entryLink != nil }
+
+    /// Distinct de `canEditRights` : l'octroi d'historique par date vaut pour
+    /// TOUT participant (inscrit compris), pas seulement les visiteurs sans
+    /// compte, et sa permission d'écriture est plus étroite côté gateway
+    /// (admin/creator, pas modérateur). `profile.canGrantHistory` en est la
+    /// réponse sûre — la vue ne recalcule jamais ce droit.
+    private var canGrantHistory: Bool { profile?.canGrantHistory ?? false }
 
     var body: some View {
         NavigationStack {
@@ -131,6 +140,7 @@ struct ParticipantProfileSheet: View {
             guard event.participantId == participantId,
                   event.conversationId == conversationId else { return }
             profile?.entryCapabilities = event.rights
+            profile?.historyVisibleFrom = event.historyVisibleFrom
         }
     }
 
@@ -170,6 +180,16 @@ struct ParticipantProfileSheet: View {
 
             if let capabilities = profile.entryCapabilities {
                 capabilitiesSection(capabilities)
+            }
+
+            // Vaut pour TOUT participant, contrairement à `entryCapabilities`
+            // ci-dessus (réservée aux anonymes) — d'où une condition séparée.
+            // Muette pour un membre ordinaire : `historyVisibleFrom` et
+            // `canGrantHistory` sont alors tous deux `nil`/`false`, et il
+            // n'existe volontairement aucun signal « un octroi existe » à qui
+            // n'a pas le droit de le savoir.
+            if canGrantHistory || profile.historyVisibleFrom != nil {
+                historyGrantSection(profile)
             }
 
             if let link = profile.entryLink {
@@ -239,6 +259,68 @@ struct ParticipantProfileSheet: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityIdentifier("participant-profile-capabilities")
+    }
+
+    /// L'octroi d'historique par DATE — vaut pour TOUT participant, inscrit
+    /// compris, pas seulement les visiteurs sans compte : distincte de
+    /// `capabilitiesSection`, réservée aux anonymes. Éditable seulement quand
+    /// `canGrantHistory` répond vrai, sinon lecture seule (un modérateur LIT
+    /// l'octroi mais ne peut pas l'écrire).
+    @ViewBuilder
+    private func historyGrantSection(_ profile: ConversationParticipantProfile) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionTitle(historyGrantTitleLabel)
+
+            if canGrantHistory {
+                HStack(spacing: 8) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.system(size: 13))
+                        .foregroundColor(theme.textMuted)
+                        .frame(width: 18)
+                    Text(seesHistorySinceLabel)
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
+                        .foregroundColor(theme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    DatePicker(
+                        "",
+                        selection: Binding(
+                            get: { profile.historyVisibleFrom ?? Date() },
+                            set: { newValue in Task { await setHistoryGrant(newValue) } }
+                        ),
+                        in: ...Date(),
+                        displayedComponents: [.date]
+                    )
+                    .labelsHidden()
+                    .disabled(historyGrantWriteInFlight)
+                    .accessibilityIdentifier("participant-profile-history-grant-input")
+
+                    if profile.historyVisibleFrom != nil {
+                        Button {
+                            Task { await setHistoryGrant(nil) }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(theme.textMuted)
+                        }
+                        .disabled(historyGrantWriteInFlight)
+                        .accessibilityLabel(historyGrantClearLabel)
+                        .accessibilityIdentifier("participant-profile-history-grant-clear")
+                    }
+                }
+            } else if let historyVisibleFrom = profile.historyVisibleFrom {
+                row(icon: "clock.arrow.circlepath", label: seesHistorySinceLabel, value: historyVisibleFrom.formatted(date: .abbreviated, time: .omitted))
+                    .accessibilityIdentifier("participant-profile-history-grant-readonly")
+            }
+
+            if let historyGrantErrorMessage {
+                Text(historyGrantErrorMessage)
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
+                    .foregroundColor(MeeshyColors.warning)
+                    .accessibilityIdentifier("participant-profile-history-grant-error")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityIdentifier("participant-profile-history-grant")
     }
 
     /// Les réglages du lien — second cercle. Cette section n'existe que si le
@@ -398,6 +480,44 @@ struct ParticipantProfileSheet: View {
             // L'échec laisse l'état serveur intact ; le rendu suivant réaligne
             // l'interrupteur sur `profile`.
         }
+    }
+
+    /// Pose ou retire l'octroi d'historique par date. `nil` retire.
+    ///
+    /// Réponse RÉSOLUE reposée telle quelle, comme `setRight` ci-dessus. En cas
+    /// d'échec, l'état serveur reste intact — le contrôle revient de lui-même à
+    /// ce que `profile` dit — et un message d'erreur bref s'affiche sous le
+    /// contrôle (dimension 8 : état d'erreur dessiné, pas silencieux).
+    private func setHistoryGrant(_ date: Date?) async {
+        guard !historyGrantWriteInFlight else { return }
+        historyGrantWriteInFlight = true
+        historyGrantErrorMessage = nil
+        defer { historyGrantWriteInFlight = false }
+
+        do {
+            let updated = try await ConversationService.shared.updateHistoryGrant(
+                conversationId: conversationId,
+                participantId: participantId,
+                historyVisibleFrom: date
+            )
+            profile?.historyVisibleFrom = updated
+        } catch {
+            historyGrantErrorMessage = String(
+                localized: "participantProfile.historyGrant.error",
+                defaultValue: "Échec de la mise à jour",
+                bundle: .main
+            )
+        }
+    }
+
+    private var historyGrantTitleLabel: String {
+        String(localized: "participantProfile.historyGrant.title", defaultValue: "Historique", bundle: .main)
+    }
+    private var seesHistorySinceLabel: String {
+        String(localized: "participantProfile.historyGrant.label", defaultValue: "Voit l’historique depuis", bundle: .main)
+    }
+    private var historyGrantClearLabel: String {
+        String(localized: "participantProfile.historyGrant.clear", defaultValue: "Retirer", bundle: .main)
     }
 
     private func allowedLabel(_ capability: ParticipantEntryCapabilities.Capability) -> String {
