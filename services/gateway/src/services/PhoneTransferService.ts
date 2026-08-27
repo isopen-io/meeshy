@@ -18,6 +18,7 @@
  */
 
 import crypto from 'crypto';
+import { generateNumericCode } from '../utils/verification-code';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { SmsService } from './SmsService';
@@ -792,7 +793,8 @@ export class PhoneTransferService {
   // ============================================================================
 
   private generateCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    // Cryptographically secure 6-digit code (CWE-338) — single source of truth.
+    return generateNumericCode();
   }
 
   private hashForLog(value: string): string {
