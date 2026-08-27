@@ -16945,3 +16945,32 @@ Sites : `apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift` (la
 source unique), `apps/ios/MeeshyTests/Unit/Guards/MediaLabelSourceGuardTests.swift`
 (la garde de forme, qui nomme les copies SDK plutôt que de les taire),
 `docs/analyses/uiux/2026-08-27-iteration-248i-media-kind-label.md` § 3.3.
+
+**Addendum 248i — deux corollaires d'inventaire, mesurés par la CI du même lot.**
+
+**(a) Un inventaire d'HÔTES suit l'hôte, il ne se raccourcit pas.** Ce lot a
+supprimé `ComposerModels.formatDur` (son dernier appelant avait disparu) et
+déplacé la composition de la durée dans `MediaKindLabel.voiceRecording(duration:)`.
+`NumericAccessibilityValueGuardTests.test_convertedDurationHostsNameTheSingleSource`
+a rougi : il exige que chacun des onze hôtes convertis par 247i NOMME
+`LocalizedNumber`. Son message écrivait l'alternative en entier — « soit la
+minuterie a disparu (mettre la liste à jour), soit la règle a été réécrite sur
+place ». La minuterie avait DÉMÉNAGÉ : la liste suit l'hôte, onze entrées avant,
+onze après. Retirer l'entrée au lieu de la remplacer aurait rendu la garde verte
+d'un cran de couverture en moins — le mode d'échec silencieux que son propre
+doc-comment décrit. Avant de supprimer un helper de formatage, chercher les
+gardes qui **nomment son fichier**, pas seulement celles qui testent son
+comportement.
+
+**(b) Sur ce dépôt, un check iOS vert sur une PR ne prouve QUE la compile, sauf
+si son NOM dit le contraire.** Le premier run de la PR affichait
+`Build app (app + cibles de test)`, vert — le nom que `.github/workflows/ios.yml:250`
+donne au job quand `scope.run_tests` est faux. La suite ne tourne, sur une
+branche ou une PR, que si le SUJET du commit de tête porte `smoke test`,
+`run test` ou `to test`, ou sur `workflow_dispatch`. Quinze checks verts, dont
+un dont le nom commence par les trois mêmes mots que le vrai gate, ne disaient
+rien des deux suites neuves du lot. C'est la leçon 240i (c) qui se referme une
+fois de plus : **le nom du check n'est pas décoratif, il EST le discriminant.**
+Corollaire opérationnel : mettre le mot-clé dans le sujet du commit qui LIVRE —
+et se souvenir du piège que le workflow documente lui-même, qu'un commit de docs
+poussé par-dessus remplace silencieusement le run demandé par une compile.

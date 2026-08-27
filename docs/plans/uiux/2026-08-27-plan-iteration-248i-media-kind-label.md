@@ -133,16 +133,37 @@ qui fait foi, pas la compile seule.
 
 ---
 
-## 6. Doutes assumés, à solder au retour de CI
+## 6. Doutes assumés — TOUS LEVÉS par la CI
 
-1. **Surcharge `kind(for:)`** sur `AttachmentType` / `MessageType` avec des
-   retours différents (`Kind` / `Kind?`). Légal, et tous les appels sont
-   appliqués et typés — mais c'est la compile qui tranche.
-2. **Défaut d'argument** `name: String = MediaKindLabel.name(.photo)` sur une
-   fabrique d'un type isolé `MainActor`. `MediaKindLabel` est `nonisolated`,
-   donc l'expression est évaluable depuis n'importe quelle isolation — à
-   confirmer par la compile.
-3. **`@MainActor` sur `MediaKindLabelTests`** : nécessaire pour atteindre
-   `ComposerAttachment` (cible app isolée `MainActor`, bundle de tests
-   `nonisolated`). Si la classe devait rester `nonisolated`, les deux derniers
-   tests seraient à déplacer, pas à supprimer.
+1. ~~**Surcharge `kind(for:)`**~~ → compile. Tous les appels sont appliqués.
+2. ~~**Défaut d'argument** `name: String = MediaKindLabel.name(.photo)`~~ →
+   compile ; `MediaKindLabel` étant `nonisolated`, l'expression est évaluable
+   depuis n'importe quelle isolation.
+3. ~~**`@MainActor` sur `MediaKindLabelTests`**~~ → correct, les deux tests qui
+   touchent `ComposerAttachment` passent.
+
+**Verdict : 8685 passés / 0 échec / 5 sautés sur 8690**, `"result": "Passed"`,
+run [33042166760](https://github.com/isopen-io/meeshy/actions/runs/33042166760),
+job `Build app + tests unitaires`, `COMPILE_ONLY: false`, tête `3667ad3e`.
+
+## 7. Ce que l'étape 6 avait sous-estimé — et le piège de nommage du gate
+
+Deux choses n'étaient pas au plan, et méritent d'y entrer pour la prochaine :
+
+**(a) Le check iOS d'une PR est COMPILE SEULE par défaut.** Le premier run
+affichait `Build app (app + cibles de test)`, vert — le nom que
+`ios.yml:250` donne au job quand `scope.run_tests` est faux. La suite ne tourne
+que si le SUJET du commit de tête porte `smoke test`, `run test` ou `to test`,
+ou sur `workflow_dispatch`. **Écrire le mot-clé dans le sujet du commit qui
+livre**, ou dispatcher à la main ; et ne jamais lire la couleur d'un check iOS
+sans lire son nom d'abord (leçon 240i (c), le piège qui s'est refermé une fois
+de plus ici).
+
+**(b) Supprimer un helper peut rougir une garde d'INVENTAIRE.** Retirer
+`ComposerModels.formatDur` a fait tomber
+`test_convertedDurationHostsNameTheSingleSource`, qui exige que chacun des onze
+hôtes convertis par 247i NOMME `LocalizedNumber`. La minuterie n'avait pas
+disparu, elle avait déménagé dans `MediaKindLabel` : **la liste suit l'hôte,
+elle ne se raccourcit pas** — onze entrées avant, onze après. Avant de
+supprimer un helper de formatage, chercher les gardes qui NOMMENT son fichier,
+pas seulement celles qui testent son comportement.

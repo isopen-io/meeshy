@@ -253,6 +253,64 @@ soit d'un diff de catalogue).
 
 **Gate réel = CI `iOS Tests`** (compile Xcode 26.1.1, run simulateur iOS 18.2).
 
+### 4.1 Verdict CI — suite COMPLÈTE, VERTE
+
+**8685 passés / 0 échec / 5 sautés sur 8690**, `"result": "Passed"`,
+`testFailures: []` — run [33042166760](https://github.com/isopen-io/meeshy/actions/runs/33042166760),
+job **`Build app + tests unitaires`**, `COMPILE_ONLY: false`, tête `3667ad3e`,
+simulateur iPhone 16 Pro / iOS 18.2.
+
+**Le NOM du check a été relu AVANT sa couleur** (leçon 240i (c)) — et c'est ce
+qui a évité de conclure trop tôt. Le premier run de la PR affichait
+**`Build app (app + cibles de test)`**, vert : c'est le nom que
+`.github/workflows/ios.yml:250` donne au job quand `scope.run_tests` est faux,
+c'est-à-dire **compile seule**. La suite iOS ne tourne, sur une branche ou une
+PR, que si le SUJET du commit de tête porte `smoke test`, `run test` ou
+`to test`, ou sur `workflow_dispatch`. Quinze checks verts, dont un dont le nom
+commence par les trois mêmes mots que le vrai gate, ne disaient rien des deux
+suites neuves de ce lot.
+
+> **Sur ce dépôt, un check iOS vert sur une PR ne prouve QUE la compile, sauf
+> si son nom dit le contraire.** Le nom n'est pas décoratif : il EST le
+> discriminant.
+
+### 4.2 Les trois doutes assumés sont LEVÉS
+
+Publiés au § 6 du plan faute de toolchain Swift ; la compile les tranche, et il
+faut les inscrire résolus pour qu'une itération suivante ne les re-porte pas
+comme risques (leçon 247i) :
+
+1. **Surcharge `kind(for:)`** sur `AttachmentType` / `MessageType` avec retours
+   `Kind` / `Kind?` — compile. Tous les appels sont APPLIQUÉS ; le commentaire
+   qui interdit la référence non appliquée reste la borne.
+2. **Défaut d'argument `name: String = MediaKindLabel.name(.photo)`** sur la
+   fabrique d'un type isolé `MainActor` — compile, `MediaKindLabel` étant
+   `nonisolated`.
+3. **`@MainActor` sur `MediaKindLabelTests`** — correct : les deux tests qui
+   touchent `ComposerAttachment` passent.
+
+### 4.3 Le seul échec du lot, et ce qu'il enseigne
+
+Le run précédent (33040533414, tête `c71aa2af`) rendait **8684 / 1 / 5**.
+L'unique échec était
+`NumericAccessibilityValueGuardTests.test_convertedDurationHostsNameTheSingleSource` :
+la garde de 247i liste les onze hôtes convertis, qui doivent NOMMER
+`LocalizedNumber`. Ce lot a supprimé `ComposerModels.formatDur` — son dernier
+appelant avait disparu — et déplacé la composition de la durée dans
+`MediaKindLabel.voiceRecording(duration:)`.
+
+Le message d'échec nomme lui-même les deux branches : « soit la minuterie a
+disparu (mettre la liste à jour), soit la règle a été réécrite sur place ».
+C'est la première — **la minuterie a DÉMÉNAGÉ**. La liste suit l'hôte : onze
+entrées avant, onze après.
+
+> **Un inventaire d'hôtes SUIT l'hôte, il ne se raccourcit pas.** Retirer
+> l'entrée au lieu de la remplacer aurait rendu la garde verte d'un cran de
+> couverture en moins — exactement le mode d'échec silencieux que son propre
+> doc-comment décrit. Le réflexe « le test est rouge, la liste est périmée,
+> j'enlève la ligne » est ici la mauvaise moitié d'une alternative que le test
+> avait pris soin d'écrire en entier.
+
 ---
 
 ## 5. Ce qui change à l'écran
