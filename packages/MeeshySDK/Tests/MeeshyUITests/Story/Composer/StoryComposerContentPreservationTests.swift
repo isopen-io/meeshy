@@ -124,4 +124,76 @@ final class StoryComposerContentPreservationTests: XCTestCase {
         XCTAssertEqual(vm.slides.first(where: { $0.id == second })?.effects.mediaObjects?.count, 1,
                        "Sans cible explicite, le média reste sur la slide courante.")
     }
+
+    // MARK: - Un post à médias DIVERS (#4038)
+
+    /// Écrit un fichier `.mov` minuscule et rend son URL. Le chemin vidéo ne
+    /// DÉCODE rien — `copyForComposer` teste l'existence puis copie des octets,
+    /// `insertForegroundVideo` ne lit jamais le fichier — si bien qu'un test
+    /// unitaire peut l'exercer pour de vrai sans encoder quoi que ce soit.
+    private func makeTempVideo() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("b1-\(UUID().uuidString).mov")
+        try Data([0x00, 0x00, 0x00, 0x18]).write(to: url)
+        return url
+    }
+
+    /// **Le carrousel MIXTE — une image ET une vidéo (#4038).**
+    ///
+    /// La branche `.video` d'`applyContentMedia` passe par `copyForComposer` +
+    /// `insertForegroundVideo`, un chemin ENTIÈREMENT distinct de celui de
+    /// l'image (copie sous `{objectId}.{ext}`, vignette, durée, extension de la
+    /// fenêtre de slide). Les cinq tests qui précèdent n'utilisent que `.image`
+    /// : ils prouvent le carrousel, jamais sa MIXITÉ — qui est pourtant le cas
+    /// nominal d'un post.
+    func test_applyContentMedia_carrouselMIXTE_imageEtVideo_chacuneEstLeFondDeSaSlide() throws {
+        let vm = StoryComposerViewModel()
+        let premiere = vm.currentSlide.id
+        vm.addSlide()
+        let seconde = vm.currentSlide.id
+
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: try makeTempImage(), kind: .image)],
+                             intoSlideId: premiere)
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: try makeTempVideo(),
+                                                   kind: .video, durationMs: 4200)],
+                             intoSlideId: seconde)
+
+        let surImage = try XCTUnwrap(vm.slides.first(where: { $0.id == premiere })?
+            .effects.mediaObjects)
+        let surVideo = try XCTUnwrap(vm.slides.first(where: { $0.id == seconde })?
+            .effects.mediaObjects)
+
+        XCTAssertEqual(surImage.count, 1, "La slide de l'image porte UN média.")
+        XCTAssertEqual(surVideo.count, 1, "La slide de la vidéo porte UN média.")
+        XCTAssertEqual(surImage.first?.isBackground, true,
+                       "L'image est le FOND de sa slide (règle de placement § 4).")
+        XCTAssertEqual(surVideo.first?.isBackground, true,
+                       "La vidéo l'est de la sienne — `insertForegroundVideo` porte "
+                           + "« foreground » dans son NOM, mais c'est `addMediaObject` qui "
+                           + "tranche, et sur une slide vierge il tranche FOND.")
+        XCTAssertNotEqual(surImage.first?.mediaType, surVideo.first?.mediaType,
+                          "Les deux slides ne portent pas le même type — c'est ce que "
+                              + "« plusieurs médias DIVERS » veut dire.")
+    }
+
+    /// **Suivre la donnée jusqu'au PIXEL, pas jusqu'à son consommateur.** Un
+    /// objet vidéo posé dont l'actif n'est pas enregistré sous l'id RETENU est
+    /// sauté par `runStoryUpload` avec son log « layer will be invisible to
+    /// viewers » : une couche déclarée que personne ne verrait jamais. Le
+    /// modèle tient, la scène est vide.
+    func test_applyContentMedia_video_enregistreSonActifSousLIdRETENU() throws {
+        let vm = StoryComposerViewModel()
+        vm.applyContentMedia([ComposerContentMedia(sourceURL: try makeTempVideo(),
+                                                   kind: .video, durationMs: 4200)])
+
+        let objet = try XCTUnwrap(vm.currentSlide.effects.mediaObjects?.first)
+        let piste = try XCTUnwrap(vm.loadedVideoURLs[objet.id],
+                                  "L'actif vidéo doit être enregistré sous l'id que "
+                                      + "`addMediaObject` a RETENU — pas sous l'id provisoire.")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: piste.path),
+                      "…et pointer un fichier qui EXISTE : la copie sous `{objectId}.{ext}` "
+                          + "est ce qui relie le bitmap au `composerKey` du canvas.")
+        XCTAssertNotNil(objet.mediaURL,
+                        "L'objet porte son URL — sans elle, rien ne part à la publication.")
+    }
 }
