@@ -8,6 +8,22 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import '@testing-library/jest-dom';
 import { VideoLightbox } from '../../../components/video/VideoLightbox';
 import type { Attachment } from '@meeshy/shared/types/attachment';
+import { extractVideoFirstFrame, fullscreenVideoPosterCache } from '@/lib/images/video-poster';
+
+// `extractVideoFirstFrame` is the impure DOM boundary (canvas `<video>` +
+// seek) — its decision counterpart `resolveFullscreenVideoPoster` stays
+// REAL (pure, cheap, already covered by its own unit tests in
+// `__tests__/lib/images/video-poster.test.ts`). Mocking only the extraction
+// keeps this suite from spawning real hidden `<video>` elements / timers
+// per render (jsdom cannot decode media), while still exercising the
+// component's wiring of whatever the extraction resolves to.
+jest.mock('@/lib/images/video-poster', () => {
+  const actual = jest.requireActual('@/lib/images/video-poster');
+  return {
+    ...actual,
+    extractVideoFirstFrame: jest.fn().mockResolvedValue(null),
+  };
+});
 
 // Mock createPortal
 jest.mock('react-dom', () => ({
@@ -160,6 +176,7 @@ describe('VideoLightbox', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     document.body.style.overflow = '';
+    fullscreenVideoPosterCache.reset();
   });
 
   describe('Rendering', () => {
@@ -1070,6 +1087,82 @@ describe('VideoLightbox', () => {
       );
 
       expect(screen.getByText('video2.mp4')).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * #3878 — le poster plein écran est la première image NETTE de la vidéo
+   * (extraction canvas), jamais la vignette basse résolution. Ces tests
+   * couvrent le CÂBLAGE du composant sur `resolveFullscreenVideoPoster` /
+   * `extractVideoFirstFrame` / `fullscreenVideoPosterCache` — la décision
+   * pure elle-même est verrouillée par sa propre suite
+   * (`__tests__/lib/images/video-poster.test.ts`).
+   */
+  describe('Sharp fullscreen poster (#3878)', () => {
+    it('applies no poster and no blurred backdrop when there is neither an extracted frame nor a thumbnail', () => {
+      const { container } = render(<VideoLightbox {...defaultProps} />);
+
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.getAttribute('poster')).toBeNull();
+      expect(container.querySelector('img[aria-hidden="true"]')).not.toBeInTheDocument();
+    });
+
+    it('shows the thumbnail as a blurred backdrop only — never as the poster — while extraction is pending', () => {
+      const videos = [createMockVideo({ thumbnailUrl: 'https://cdn.example/thumb.jpg' })];
+      const { container } = render(<VideoLightbox {...defaultProps} videos={videos} />);
+
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.getAttribute('poster')).toBeNull();
+
+      const backdrop = container.querySelector('img[aria-hidden="true"]') as HTMLImageElement;
+      expect(backdrop).toBeInTheDocument();
+      expect(backdrop.src).toBe('https://cdn.example/thumb.jpg');
+      expect(backdrop.className).toEqual(expect.stringContaining('blur'));
+    });
+
+    it('applies the extracted sharp frame as the native poster once extraction resolves, and drops the backdrop', async () => {
+      (extractVideoFirstFrame as jest.Mock).mockResolvedValueOnce('blob:sharp-frame');
+      const videos = [createMockVideo({ thumbnailUrl: 'https://cdn.example/thumb.jpg' })];
+      const { container } = render(<VideoLightbox {...defaultProps} videos={videos} />);
+
+      await waitFor(() => {
+        const video = container.querySelector('video') as HTMLVideoElement;
+        expect(video.getAttribute('poster')).toBe('blob:sharp-frame');
+      });
+
+      expect(container.querySelector('img[aria-hidden="true"]')).not.toBeInTheDocument();
+    });
+
+    it('Cache-First: a poster already extracted this session applies immediately, without a new extraction call', () => {
+      const fileUrl = 'https://cdn.example/cached-video.mp4';
+      fullscreenVideoPosterCache.set(fileUrl, 'blob:cached-sharp-frame');
+      const videos = [createMockVideo({ fileUrl })];
+
+      const { container } = render(<VideoLightbox {...defaultProps} videos={videos} />);
+
+      const video = container.querySelector('video') as HTMLVideoElement;
+      expect(video.getAttribute('poster')).toBe('blob:cached-sharp-frame');
+      expect(extractVideoFirstFrame).not.toHaveBeenCalled();
+    });
+
+    it('re-extracts for a different video when navigating — no stale poster carried over', async () => {
+      (extractVideoFirstFrame as jest.Mock).mockResolvedValue(null);
+      const videos = [
+        createMockVideo({ originalName: 'video1.mp4', fileUrl: 'https://cdn.example/v1.mp4' }),
+        createMockVideo({ originalName: 'video2.mp4', fileUrl: 'https://cdn.example/v2.mp4' }),
+      ];
+      fullscreenVideoPosterCache.set('https://cdn.example/v1.mp4', 'blob:v1-sharp-frame');
+
+      const { container } = render(<VideoLightbox {...defaultProps} videos={videos} initialIndex={0} />);
+      expect((container.querySelector('video') as HTMLVideoElement).getAttribute('poster')).toBe(
+        'blob:v1-sharp-frame'
+      );
+
+      fireEvent.keyDown(window, { key: 'ArrowRight' });
+
+      await waitFor(() => {
+        expect((container.querySelector('video') as HTMLVideoElement).getAttribute('poster')).toBeNull();
+      });
     });
   });
 });

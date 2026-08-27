@@ -7,7 +7,8 @@ import org.junit.Test
 
 class ConversationMediaGalleryTest {
 
-    private fun img(id: String, url: String) = BubbleImage(attachmentId = id, url = url)
+    private fun img(id: String, url: String, thumbnailUrl: String? = null) =
+        BubbleImage(attachmentId = id, url = url, thumbnailUrl = thumbnailUrl)
 
     private fun bubble(
         id: String,
@@ -491,5 +492,65 @@ class ConversationMediaGalleryTest {
 
         assertThat(gallery.senderNames).isEmpty()
         assertThat(gallery.createdAtIsos).isEmpty()
+    }
+
+    // #3878 — the thumbnail travels alongside the full-resolution URL, never
+    // replacing it: the viewer uses it only as a blurred backdrop while the
+    // sharp image loads.
+
+    @Test
+    fun an_images_thumbnail_travels_alongside_its_full_resolution_url() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", thumbnailUrl = "t1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1")
+        assertThat(gallery.thumbnailUrls).containsExactly("t1")
+    }
+
+    @Test
+    fun an_image_without_a_thumbnail_yields_null_never_a_fabricated_fallback() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.thumbnailUrls).containsExactly(null as String?)
+    }
+
+    @Test
+    fun thumbnail_urls_align_positionally_with_image_urls_across_messages() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(
+                bubble("m1", listOf(img("a1", "u1", thumbnailUrl = "t1"), img("a2", "u2"))),
+                bubble("m2", listOf(img("a3", "u3", thumbnailUrl = "t3"))),
+            ),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.imageUrls).containsExactly("u1", "u2", "u3").inOrder()
+        assertThat(gallery.thumbnailUrls).containsExactly("t1", null, "t3").inOrder()
+    }
+
+    @Test
+    fun the_thumbnail_urls_list_is_always_the_same_length_as_the_image_urls() {
+        val gallery = ConversationMediaGallery.of(
+            listOf(bubble("m1", listOf(img("a1", "u1", thumbnailUrl = "t1"), img("a2", "u2")))),
+            messageId = "m1",
+            imageIndex = 0,
+        )
+
+        assertThat(gallery.thumbnailUrls).hasSize(gallery.imageUrls.size)
+    }
+
+    @Test
+    fun an_empty_gallery_has_no_thumbnail_urls() {
+        val gallery = ConversationMediaGallery.of(emptyList(), messageId = "m1", imageIndex = 0)
+
+        assertThat(gallery.thumbnailUrls).isEmpty()
     }
 }

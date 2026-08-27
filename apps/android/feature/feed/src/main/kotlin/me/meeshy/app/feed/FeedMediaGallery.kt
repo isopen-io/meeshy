@@ -13,6 +13,12 @@ import androidx.compose.runtime.Immutable
 @Immutable
 data class FeedGalleryPage(
     val url: String,
+    /**
+     * Vignette basse résolution, portée séparément du plein format ([url]) — le
+     * fond flou assumé pendant que le plein format charge (#3878), jamais
+     * l'image affichée nette elle-même.
+     */
+    val thumbnailUrl: String? = null,
     val caption: String? = null,
     val authorName: String? = null,
     val createdAtIso: String? = null,
@@ -32,6 +38,12 @@ data class FeedGallery(
 ) {
     /** The full-resolution image URLs, one per page, in post order. */
     val imageUrls: List<String> get() = pages.map { it.url }
+
+    /**
+     * The per-page thumbnail URLs, positionally aligned with [imageUrls]; a page
+     * with no thumbnail holds `null`.
+     */
+    val thumbnailUrls: List<String?> get() = pages.map { it.thumbnailUrl }
 
     /**
      * The per-page captions, positionally aligned with [imageUrls]; a page with no
@@ -80,6 +92,7 @@ object FeedMediaGallery {
         val pages = images.map { image ->
             FeedGalleryPage(
                 url = image.url,
+                thumbnailUrl = image.thumbnailUrl,
                 caption = caption,
                 authorName = authorName,
                 createdAtIso = createdAtIso,

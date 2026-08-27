@@ -31,6 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -39,14 +40,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import coil.imageLoader
+import coil.memory.MemoryCache
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshySpacing
+
+/** Radius of the blurred backdrop shown behind a video/image poster that has not resolved to a sharp frame yet (#3878). */
+private val BACKDROP_BLUR_RADIUS = 24.dp
 
 /**
  * Fullscreen swipeable image viewer (charte graphique: fond noir immersif).
@@ -61,6 +67,13 @@ public fun MeeshyImageViewer(
     captions: List<String?> = emptyList(),
     authors: List<String?> = emptyList(),
     timestamps: List<String?> = emptyList(),
+    /**
+     * Per-page low-res thumbnail, positionally aligned with [imageUrls]
+     * (#3878) — used ONLY as a blurred backdrop while the full-resolution
+     * image is still loading, never as the displayed sharp image itself. A
+     * page past the end of this list, or holding `null`, shows no backdrop.
+     */
+    thumbnailUrls: List<String?> = emptyList(),
     onImageSaved: ((Result<Unit>) -> Unit)? = null,
 ) {
     if (imageUrls.isEmpty()) return
@@ -97,6 +110,7 @@ public fun MeeshyImageViewer(
             ) { page ->
                 ZoomableImage(
                     url = imageUrls[page],
+                    thumbnailUrl = thumbnailUrls.getOrNull(page),
                     onZoomChanged = { zoomed ->
                         if (page == pagerState.settledPage) currentPageZoomed = zoomed
                     },
@@ -202,9 +216,23 @@ public fun MeeshyImageViewer(
 @Composable
 private fun ZoomableImage(
     url: String,
+    thumbnailUrl: String?,
     onZoomChanged: (Boolean) -> Unit,
     onTap: () -> Unit,
 ) {
+    // Feature 3 (#3878, miroir du patron iOS #3871 / web `resolveFullscreenImageSource`) :
+    // le plein écran s'ouvre sur le plein format NET — résident (déjà décodé
+    // dans le cache mémoire Coil, lecture SYNCHRONE) ⇒ affiché tel quel, sans
+    // spinner ; sinon chargé, avec la vignette pour SEUL fond flou assumé
+    // pendant l'attente, jamais l'image affichée nette elle-même.
+    val context = LocalContext.current
+    val isFullResident = remember(url) {
+        context.imageLoader.memoryCache?.get(MemoryCache.Key(url)) != null
+    }
+    val mount = remember(url, thumbnailUrl, isFullResident) {
+        ImageViewerSource.resolve(fullUrl = url, thumbnailUrl = thumbnailUrl, isFullResident = isFullResident)
+    }
+
     var scale by remember { mutableFloatStateOf(ImageViewerTransform.MIN_SCALE) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
@@ -254,8 +282,21 @@ private fun ZoomableImage(
             },
         contentAlignment = Alignment.Center,
     ) {
+        // Fond flou assumé pendant le chargement du plein format — jamais
+        // l'image affichée nette elle-même. Absent dès que le plein format
+        // est résident (rien à couvrir, aucune transition).
+        mount?.backdropUrl?.let { backdropUrl ->
+            AsyncImage(
+                model = backdropUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(BACKDROP_BLUR_RADIUS),
+            )
+        }
         AsyncImage(
-            model = url,
+            model = mount?.fullUrl ?: url,
             contentDescription = stringResource(R.string.bubble_image_description),
             contentScale = ContentScale.Fit,
             modifier = Modifier

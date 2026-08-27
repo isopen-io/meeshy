@@ -782,6 +782,7 @@ fun ChatScreen(
             captions = gallery.captions,
             authors = gallery.senderNames,
             timestamps = galleryTimestamps,
+            thumbnailUrls = gallery.thumbnailUrls,
             onImageSaved = { result ->
                 val message = if (result.isSuccess) savedMessage else saveFailedMessage
                 Toast.makeText(galleryContext, message, Toast.LENGTH_SHORT).show()

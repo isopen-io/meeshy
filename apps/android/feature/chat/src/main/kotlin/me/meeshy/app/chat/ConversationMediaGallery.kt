@@ -13,6 +13,13 @@ import me.meeshy.ui.component.bubble.BubbleContent
  */
 public data class GalleryPage(
     val url: String,
+    /**
+     * Vignette basse résolution, portée séparément du plein format ([url]) — le
+     * fond flou assumé pendant que le plein format charge (#3878), jamais
+     * l'image affichée nette elle-même. `null` sans vignette disponible (média
+     * chiffré, ancien format sans variantes).
+     */
+    val thumbnailUrl: String? = null,
     val caption: String? = null,
     val senderName: String? = null,
     val createdAtIso: String? = null,
@@ -34,6 +41,13 @@ public data class ConversationGallery(
 ) {
     /** The flat image URLs, one per page, in conversation order. */
     val imageUrls: List<String> get() = pages.map { it.url }
+
+    /**
+     * The per-page thumbnail URLs, positionally aligned with [imageUrls]; a page
+     * with no thumbnail holds `null` (the viewer shows no blurred backdrop for
+     * it — the sharp [imageUrls] entry is the only thing it ever renders).
+     */
+    val thumbnailUrls: List<String?> get() = pages.map { it.thumbnailUrl }
 
     /**
      * The per-page captions, positionally aligned with [imageUrls]; a page with
@@ -100,6 +114,7 @@ public object ConversationMediaGallery {
                 pages.add(
                     GalleryPage(
                         url = it.url,
+                        thumbnailUrl = it.thumbnailUrl,
                         caption = caption,
                         senderName = senderName,
                         createdAtIso = createdAtIso,
