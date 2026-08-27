@@ -8,6 +8,7 @@ import { emailSchema } from '@meeshy/shared/types/validation';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
+import { generateNumericCode } from '../../utils/verification-code';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -62,7 +63,8 @@ function hashToken(token: string): string {
  * Génère un code SMS à 6 chiffres
  */
 function generatePhoneCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  // Cryptographically secure 6-digit code (CWE-338) — single source of truth.
+  return generateNumericCode();
 }
 
 /**

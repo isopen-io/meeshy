@@ -20,9 +20,23 @@ function parseTypes(raw: string | undefined): ExportType[] {
     .filter((t) => valid.includes(t));
 }
 
-function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
+/**
+ * Serialize rows to CSV.
+ *
+ * Cells carry text set by other users (conversation titles, other
+ * participants' display names). Any cell whose first character is a
+ * spreadsheet formula trigger (`=`, `+`, `-`, `@`, tab, CR) is neutralized by
+ * prefixing a single quote, so opening the export in Excel / Sheets /
+ * LibreOffice cannot execute a smuggled formula (CWE-1236 — CSV injection).
+ * Structural quoting (comma / quote / newline) is applied on top, unchanged.
+ *
+ * Exported for direct behavioural testing of the neutralization.
+ */
+export function toCsv(headers: string[], rows: Record<string, unknown>[]): string {
+  const FORMULA_TRIGGERS = /^[=+\-@\t\r]/;
   const escape = (val: unknown): string => {
-    const str = val === null || val === undefined ? '' : String(val);
+    const raw = val === null || val === undefined ? '' : String(val);
+    const str = FORMULA_TRIGGERS.test(raw) ? `'${raw}` : raw;
     return str.includes(',') || str.includes('"') || str.includes('\n')
       ? `"${str.replace(/"/g, '""')}"`
       : str;
