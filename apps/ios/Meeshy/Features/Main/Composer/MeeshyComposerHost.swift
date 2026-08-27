@@ -1281,7 +1281,7 @@ struct MeeshyComposerHost: View {
             Image(systemName: "mappin.circle.fill")
                 .font(MeeshyFont.relative(12))
                 .foregroundColor(MeeshyColors.indigo400)
-            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+            Text(MediaKindLabel.placeLabel(place.name))
                 .font(MeeshyFont.relative(12, weight: .medium))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: true))
                 .lineLimit(1)

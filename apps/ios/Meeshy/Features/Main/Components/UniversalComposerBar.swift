@@ -1011,10 +1011,30 @@ struct UniversalComposerBar: View {
     /// ramification : les hôtes réels (ex. `ConversationView`) câblent
     /// toujours `onCustomSend`, qui lit l'état courant du champ — le
     /// contourner enverrait le champ VIDE au lieu de l'emoji.
+    ///
+    /// `text = emoji` seul ne suffit PAS (retour porteur 2026-08-27, bug
+    /// vécu : le tap laissait l'emoji DANS le champ au lieu d'envoyer) :
+    /// `text` est un `@State` LOCAL, synchronisé vers `textBinding` (source
+    /// lue par `onCustomSend` chez l'hôte, ex. `composerText.text`) par un
+    /// `.adaptiveOnChange(of: text)` — donc APRÈS ce tour de run loop.
+    /// `handleSend()` appelle `onCustomSend()` SYNCHRONEMENT, avant que ce
+    /// sync différé n'ait tourné : l'hôte lisait encore l'ancien texte (vide).
+    /// Pousser `textBinding` ICI, à la MÊME frappe, ferme cet écart.
+    ///
+    /// Vider `text` (local) APRÈS `handleSend()` est tout aussi nécessaire :
+    /// sans ça, `text` reste à `emoji` pour ce tour de run loop, et le MÊME
+    /// `.adaptiveOnChange(of: text)` — désormais différé — re-pousse `emoji`
+    /// dans `textBinding` APRÈS que l'hôte l'a vidé (`composerText.text =
+    /// ""` dans `sendMessageWithAttachments()`), ressuscitant l'emoji dans
+    /// le champ juste après l'envoi. `text` transite `"" → emoji → ""` dans
+    /// la MÊME passe synchrone : SwiftUI ne diffuse que le changement NET
+    /// au prochain rendu, donc ce second `onChange` ne se déclenche jamais.
     private func sendQuickEmoji(_ emoji: String) {
         EmojiUsageTracker.recordUsage(emoji: emoji)
         text = emoji
+        textBinding?.wrappedValue = emoji
         handleSend()
+        text = ""
     }
 
     // See UniversalComposerBar+Recording.swift for textInputField

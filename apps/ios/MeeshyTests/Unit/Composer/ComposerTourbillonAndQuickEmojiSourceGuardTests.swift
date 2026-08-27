@@ -118,6 +118,59 @@ final class ComposerTourbillonAndQuickEmojiSourceGuardTests: XCTestCase {
         )
     }
 
+    /// Retour porteur (2026-08-27) : le tap laissait l'emoji DANS le champ au
+    /// lieu d'envoyer. `text` est un `@State` LOCAL — sa synchronisation vers
+    /// `textBinding` (source lue par `onCustomSend` chez l'hôte, ex.
+    /// `composerText.text`) passe par un `.adaptiveOnChange(of: text)`, donc
+    /// APRÈS ce tour de run loop. `handleSend()` appelle `onCustomSend()`
+    /// SYNCHRONEMENT : sans pousser `textBinding` ICI, l'hôte lit encore
+    /// l'ancien texte (vide) et n'envoie rien.
+    func test_sendQuickEmoji_syncsTextBindingBeforeHandleSend() throws {
+        let source = try Self.strippedSource()
+        guard let funcRange = source.range(of: "func sendQuickEmoji(") else {
+            return XCTFail("`sendQuickEmoji(_:)` introuvable")
+        }
+        var depth = 0
+        var index = funcRange.lowerBound
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = source.index(after: index)
+        }
+        let block = String(source[funcRange.lowerBound...index])
+        guard let bindingRange = block.range(of: "textBinding?.wrappedValue = emoji") else {
+            return XCTFail("`sendQuickEmoji` doit pousser `emoji` dans `textBinding` — sinon l'hôte lit un texte vide au moment d'envoyer")
+        }
+        guard let sendRange = block.range(of: "handleSend()") else {
+            return XCTFail("`handleSend()` introuvable")
+        }
+        XCTAssertTrue(
+            bindingRange.lowerBound < sendRange.lowerBound,
+            "le binding doit être synchronisé AVANT `handleSend()` — sinon `onCustomSend` lit encore l'ancienne valeur"
+        )
+    }
+
+    /// Sans ce vidage, le MÊME `.adaptiveOnChange(of: text)` — différé —
+    /// re-pousse `emoji` dans `textBinding` APRÈS que l'hôte l'a vidé au
+    /// moment d'envoyer, ressuscitant l'emoji dans le champ juste après
+    /// l'envoi (retour porteur 2026-08-27, bug vécu en second tour).
+    func test_sendQuickEmoji_clearsLocalTextAfterHandleSend() throws {
+        let block = try Self.propertyBlock(anchor: "func sendQuickEmoji(")
+        guard let sendRange = block.range(of: "handleSend()") else {
+            return XCTFail("`handleSend()` introuvable")
+        }
+        guard let clearRange = block.range(of: "text = \"\"") else {
+            return XCTFail("`sendQuickEmoji` doit vider `text` (local) après l'envoi — sinon l'onChange différé ressuscite l'emoji dans le champ")
+        }
+        XCTAssertTrue(
+            sendRange.upperBound <= clearRange.lowerBound,
+            "`text` doit être vidé APRÈS `handleSend()` — le vider avant enverrait un champ vide"
+        )
+    }
+
     // MARK: - Extraction
 
     private struct GuardIsBlind: Error, CustomStringConvertible {

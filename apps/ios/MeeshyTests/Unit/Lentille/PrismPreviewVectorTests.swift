@@ -90,11 +90,11 @@ final class PrismPreviewVectorTests: XCTestCase {
         XCTAssertFalse(Self.loadCases().isEmpty, "prism-preview.vectors.json a chargé ZÉRO cas — leçon 257, jamais de vert silencieux")
     }
 
-    func test_vectors_totalCaseCount_isThirty() {
-        XCTAssertEqual(Self.loadCases().count, 30, "prism-preview.vectors.json ne contient plus 30 cas — vérifier si des vecteurs ont été ajoutés/retirés avant d'ajuster ce nombre.")
+    func test_vectors_totalCaseCount_isThirtyThree() {
+        XCTAssertEqual(Self.loadCases().count, 33, "prism-preview.vectors.json ne contient plus 33 cas — vérifier si des vecteurs ont été ajoutés/retirés avant d'ajuster ce nombre.")
     }
 
-    // MARK: - Rejeu des 22 vecteurs contre l'API RÉELLE (jamais de loi réimplémentée)
+    // MARK: - Rejeu de tous les vecteurs contre l'API RÉELLE (jamais de loi réimplémentée)
 
     private func makeConversation(_ input: VectorInputJSON) -> MeeshyConversation {
         var conversation = MeeshyConversation(

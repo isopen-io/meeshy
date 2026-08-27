@@ -219,10 +219,18 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
 
     /// L'interdiction ci-dessus resterait verte si les minuteries disparaissaient.
     /// Ces hôtes sont ceux que 247i a convertis.
+    ///
+    /// **248i — une minuterie a DÉMÉNAGÉ, elle n'a pas disparu.** La durée de la
+    /// puce d'un vocal ne se compose plus dans `ComposerModels` (dont le
+    /// `formatDur` privé n'avait plus d'appelant) mais dans
+    /// `MediaKindLabel.voiceRecording(duration:)`, avec le libellé qu'elle
+    /// accompagne. La liste SUIT l'hôte : la retirer sans la remplacer aurait
+    /// rendu la garde verte d'un cran de couverture en moins — exactement le
+    /// mode d'échec silencieux que son doc-comment décrit.
     func test_convertedDurationHostsNameTheSingleSource() {
         let hosts = [
             "Features/Main/Components/CameraView.swift",
-            "Features/Main/Components/ComposerModels.swift",
+            "Features/Main/Components/MediaKindLabel.swift",
             "Features/Main/Components/MessageOverlayMenu.swift",
             "Features/Main/Components/RecentMediaStrip.swift",
             "Features/Main/Components/UniversalComposerBar+Recording.swift",

@@ -774,7 +774,7 @@ extension FeedView {
                 }
                 .frame(width: 56, height: 56)
 
-                Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+                Text(MediaKindLabel.placeLabel(place.name))
                     .font(MeeshyFont.relative(10, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textSecondary)
                     .lineLimit(1)
@@ -813,17 +813,10 @@ extension FeedView {
         }
     }
 
-    // Attachment tile labels reuse the shared `attachment.label.*` keys — the same
-    // SSOT `ConversationView.attachmentLabel` uses — so a pending post attachment
-    // reads identically to a message one across the app.
+    // Une pièce jointe de publication en attente se lit EXACTEMENT comme celle
+    // d'un message : même source, `MediaKindLabel.attachmentLabel(for:)`.
     func feedLabelForAttachment(_ attachment: MessageAttachment) -> String {
-        switch attachment.type {
-        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
-        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
-        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
-        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
-        }
+        MediaKindLabel.attachmentLabel(for: attachment)
     }
 }
 
@@ -1512,7 +1505,7 @@ struct FeedComposerSheet: View {
                 .offset(x: 6, y: -6)
             }
 
-            Text(place.name ?? String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main))
+            Text(MediaKindLabel.placeLabel(place.name))
                 .font(MeeshyFont.relative(10, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
@@ -1939,13 +1932,7 @@ struct FeedComposerSheet: View {
     }
 
     private func sheetLabelForAttachment(_ attachment: MessageAttachment) -> String {
-        switch attachment.type {
-        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
-        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
-        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
-        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
-        }
+        MediaKindLabel.attachmentLabel(for: attachment)
     }
 }
 

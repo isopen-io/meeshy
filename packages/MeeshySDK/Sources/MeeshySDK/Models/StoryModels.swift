@@ -619,10 +619,15 @@ enum StoryPrismeMatch {
     /// Base language code (lowercased ISO 639-1) for tolerant comparison. Falls
     /// back to a lowercased region-stripped split when the normalizer rejects an
     /// unknown code, so casing/region is still collapsed.
+    ///
+    /// Delegates to the SSOT `MeeshyUser.normalizeLanguageForDedup` — the same
+    /// case-fold + region-strip (with primary-subtag fallback) used by the
+    /// last-message-preview resolver and mirrored on TS/Kotlin. Kept as a thin
+    /// alias rather than a second hand-rolled split: this used to inline its own
+    /// `.split(...).first ?? code.lowercased()`, a divergent twin of the
+    /// preview resolver's canon that the Prisme forbids (one rule, one site).
     static func base(_ code: String) -> String {
-        if let normalized = MeeshyUser.normalizeLanguageCode(code) { return normalized }
-        return code.split(whereSeparator: { $0 == "-" || $0 == "_" })
-            .first.map { $0.lowercased() } ?? code.lowercased()
+        MeeshyUser.normalizeLanguageForDedup(code)
     }
 }
 

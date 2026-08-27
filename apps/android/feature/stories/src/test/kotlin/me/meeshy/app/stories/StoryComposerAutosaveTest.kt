@@ -2,6 +2,7 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
+import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.model.StoryFilter
@@ -133,7 +134,8 @@ class StoryComposerAutosaveTest {
     @Test
     fun `a draft that gained rich content purges its stale stored draft`() {
         val previous = textDeck("simple before").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
-        val deck = textDeck("simple before").setSelectedFilter(StoryFilter.VINTAGE)
+        val deck = textDeck("simple before")
+            .addStickerToSelected(StoryStickerElement(id = "k1", emoji = "🎉"))
 
         val action = StoryComposerAutosave.resolve(
             deck = deck,
@@ -353,6 +355,107 @@ class StoryComposerAutosaveTest {
 
         val action = StoryComposerAutosave.resolve(
             deck = deck.updateSelectedTransform(pannedTransform()),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    // ---- photo filter persistence ----
+
+    @Test
+    fun `deckHasRichContent is false for a filtered slide now that it is persistable`() {
+        val deck = blankDeck().setSelectedFilter(StoryFilter.VINTAGE)
+        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
+    }
+
+    @Test
+    fun `a single blank slide with a filter is not pristine`() {
+        val filtered = blankDeck().setSelectedFilter(StoryFilter.BW)
+        assertThat(StoryComposerAutosave.deckIsPristine(filtered)).isFalse()
+    }
+
+    @Test
+    fun `toDraftSnapshot carries a filter and its intensity and maps no-filter to null`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedFilter(StoryFilter.DRAMATIC)
+            .setSelectedFilterIntensity(0.4f)
+            .addSlide("s2")
+            .updateSelectedText("plain")
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+
+        assertThat(snap.slides.first().filter)
+            .isEqualTo(StoryDraftFilterSnapshot(filter = StoryFilter.DRAMATIC, intensity = 0.4f))
+        assertThat(snap.slides[1].filter).isNull()
+    }
+
+    @Test
+    fun `toDeck restores a persisted filter and a null filter to no filter at default intensity`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    mediaIds = listOf("m1"),
+                    filter = StoryDraftFilterSnapshot(filter = StoryFilter.WARM, intensity = 0.3f),
+                ),
+                StoryDraftSlideSnapshot(id = "s2", text = "plain"),
+            ),
+            selectedId = "s1",
+        )
+
+        val deck = snap.toDeck()
+
+        assertThat(deck).isNotNull()
+        assertThat(deck!!.slides.first().filter).isEqualTo(StoryFilter.WARM)
+        assertThat(deck.slides.first().filterIntensity).isEqualTo(0.3f)
+        assertThat(deck.slides[1].filter).isNull()
+        assertThat(deck.slides[1].filterIntensity).isEqualTo(StoryFilterMatrix.DEFAULT_INTENSITY)
+    }
+
+    @Test
+    fun `a filter and its intensity survive the deck-snapshot-deck round-trip`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedFilter(StoryFilter.COOL)
+            .setSelectedFilterIntensity(0.65f)
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().filter).isEqualTo(StoryFilter.COOL)
+        assertThat(rebuilt.slides.single().filterIntensity).isEqualTo(0.65f)
+    }
+
+    @Test
+    fun `a media slide with a filter resolves to Save carrying that filter`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedFilter(StoryFilter.CHROME)
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().filter?.filter).isEqualTo(StoryFilter.CHROME)
+    }
+
+    @Test
+    fun `applying a filter to an already-saved draft resolves to Save, not None`() {
+        val deck = StorySlideDeck.single("s1").addMediaToSelected("m1")
+        val previous = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck.setSelectedFilter(StoryFilter.FADE),
             visibility = StoryVisibility.PUBLIC,
             repostOfId = null,
             nowIso = now,
