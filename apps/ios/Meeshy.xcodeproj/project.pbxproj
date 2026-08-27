@@ -3925,8 +3925,8 @@
 			isa = PBXGroup;
 			children = (
 				B347333BA664294DF2C9212F /* MainActorDeinitSourceGuardTests.swift */,
-				C502C6825CBC2A134554BF5C /* TickedRepeatForeverAnimationSourceGuardTests.swift */,
 				749CAB0464E40A4FF16DF600 /* MediaLabelSourceGuardTests.swift */,
+				C502C6825CBC2A134554BF5C /* TickedRepeatForeverAnimationSourceGuardTests.swift */,
 			);
 			path = Guards;
 			sourceTree = "<group>";
