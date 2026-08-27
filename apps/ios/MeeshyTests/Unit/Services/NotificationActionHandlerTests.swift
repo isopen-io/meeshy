@@ -1046,6 +1046,89 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertEqual(spy.reads, 1)
     }
 
+    // MARK: - #3896 : la fermeture PAR DÉFAUT (`.system()`), pas seulement la couture injectée
+
+    /// `SpyBannerCenter` ci-dessus double `DeliveredBannerCenter` ENTIER — les
+    /// tests au-dessus n'ont donc jamais exercé `DeliveredBannerCenter.system()`,
+    /// les closures RÉELLEMENT utilisées en production. `MockUNUserNotificationCenter`
+    /// double le cran plus bas, `UNUserNotificationCenterProviding` — le
+    /// protocole que `.system()` appelle — pour que ces tests observent le
+    /// câblage par défaut. `UNNotification` n'a aucun initialiseur public : le
+    /// protocole s'arrête donc à `DeliveredBanner` (un type à nous, librement
+    /// constructible), jamais à `UNNotification` lui-même.
+    /// `@unchecked Sendable` : même patron que `SpyBannerCenter`, la synchronisation
+    /// est portée par le lock, pas par le compilateur.
+    private final class MockUNUserNotificationCenter: UNUserNotificationCenterProviding, @unchecked Sendable {
+        private let lock = NSLock()
+        private var storedDelivered: [DeliveredBanner]
+        private var storedReads = 0
+        private var storedRemoved: [[String]] = []
+
+        init(delivered: [DeliveredBanner]) {
+            self.storedDelivered = delivered
+        }
+
+        var reads: Int { lock.withLock { storedReads } }
+        var removed: [[String]] { lock.withLock { storedRemoved } }
+
+        func getDeliveredBanners(completionHandler: @escaping @Sendable ([DeliveredBanner]) -> Void) {
+            let snapshot = lock.withLock { () -> [DeliveredBanner] in
+                storedReads += 1
+                return storedDelivered
+            }
+            completionHandler(snapshot)
+        }
+
+        func removeDeliveredNotifications(withIdentifiers identifiers: [String]) {
+            lock.withLock {
+                storedRemoved.append(identifiers)
+                storedDelivered.removeAll { identifiers.contains($0.identifier) }
+            }
+        }
+    }
+
+    /// La fermeture par défaut doit réellement LIER la charge reçue du centre
+    /// au prédicat de révocation, et appeler `removeDeliveredNotifications`
+    /// avec les SEULS identifiants qui matchent — jamais tout retirer, jamais
+    /// rien retirer. Un revert de `UNUserNotificationCenter.getDeliveredBanners`
+    /// (ex. mapping `identifier`/`userInfo` cassé) ou de `.system()`
+    /// (ex. appel à `notificationCenter().removeDeliveredNotifications`
+    /// oublié) fait rougir ce test — aucun des tests `SpyBannerCenter`
+    /// au-dessus n'aurait bougé, puisqu'ils remplacent `DeliveredBannerCenter`
+    /// dans son ENTIER.
+    func test_deliveredBannerCenter_system_wiresThePredicateToTheDefaultNotificationCenterSeam() async {
+        let mock = MockUNUserNotificationCenter(delivered: [
+            DeliveredBanner(identifier: "d1", userInfo: ["notificationId": "n1"]),
+            DeliveredBanner(identifier: "d2", userInfo: ["notificationId": "other"])
+        ])
+
+        await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+            matching: { ($0["notificationId"] as? String) == "n1" },
+            center: .system(notificationCenter: { mock })
+        )
+
+        XCTAssertEqual(mock.removed, [["d1"]],
+                       "seul l'identifiant dont le userInfo matche le prédicat doit être retiré")
+        XCTAssertEqual(mock.reads, 2,
+                       "lecture initiale + relecture de confirmation, comme pour le centre système réel")
+    }
+
+    /// Aucun identifiant ne matche : rien ne doit être retiré, le mapping
+    /// identifier/userInfo doit tout de même avoir été lu une fois.
+    func test_deliveredBannerCenter_system_withNoMatch_removesNothing() async {
+        let mock = MockUNUserNotificationCenter(delivered: [
+            DeliveredBanner(identifier: "d1", userInfo: ["notificationId": "n1"])
+        ])
+
+        await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+            matching: { _ in false },
+            center: .system(notificationCenter: { mock })
+        )
+
+        XCTAssertEqual(mock.removed, [])
+        XCTAssertEqual(mock.reads, 1)
+    }
+
     // MARK: Câblage (gardes de source — AppDelegate et la racine ne s'instancient pas en test)
 
     private func appSource(_ relativePath: String) throws -> String {

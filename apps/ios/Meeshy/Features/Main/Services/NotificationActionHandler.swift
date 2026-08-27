@@ -615,7 +615,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// relecture du centre — voir `removeDeliveredNotificationsAwaiting`.
     nonisolated static func removeDeliveredNotifications(
         matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool,
-        center: DeliveredBannerCenter = .system,
+        center: DeliveredBannerCenter = .system(),
         confirmationTimeout: Duration = defaultRemovalConfirmationTimeout,
         completion: (@Sendable () -> Void)? = nil
     ) {
@@ -647,7 +647,7 @@ final class NotificationActionHandler: NotificationActionHandling {
     /// le processus peut être suspendu la bannière encore affichée.
     nonisolated static func removeDeliveredNotificationsAwaiting(
         matching predicate: @escaping @Sendable ([AnyHashable: Any]) -> Bool,
-        center: DeliveredBannerCenter = .system,
+        center: DeliveredBannerCenter = .system(),
         confirmationTimeout: Duration = defaultRemovalConfirmationTimeout
     ) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -703,6 +703,36 @@ nonisolated struct DeliveredBanner: @unchecked Sendable {
     let userInfo: [AnyHashable: Any]
 }
 
+/// #3896 — seam over `UNUserNotificationCenter`'s two delivered-banner
+/// operations, abstracted at the `DeliveredBanner` boundary rather than raw
+/// `UNNotification` : `UNNotification` has no public initializer, so a test
+/// spy could never construct one to stand in for a delivered banner.
+/// `UNUserNotificationCenter` conforms via the extension below (its native
+/// `getDeliveredNotifications`/`removeDeliveredNotifications` do the real
+/// work) ; `MockUNUserNotificationCenter` (tests) is the spy that lets a test
+/// exercise `DeliveredBannerCenter.system()` — the DEFAULT closures, not just
+/// an injected substitute — without touching the real system center.
+/// `nonisolated` on every requirement AND on the conformance below — this
+/// app target compiles under `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
+/// (`apps/ios/CLAUDE.md`, App Extensions §), so an unmarked declaration here
+/// would silently become `@MainActor`-isolated and fail to compile from the
+/// genuinely `@Sendable`, actor-agnostic closures of `DeliveredBannerCenter`
+/// below (some of which run inside `Task.detached`).
+protocol UNUserNotificationCenterProviding {
+    nonisolated func getDeliveredBanners(completionHandler: @escaping @Sendable ([DeliveredBanner]) -> Void)
+    nonisolated func removeDeliveredNotifications(withIdentifiers identifiers: [String])
+}
+
+extension UNUserNotificationCenter: UNUserNotificationCenterProviding {
+    nonisolated func getDeliveredBanners(completionHandler: @escaping @Sendable ([DeliveredBanner]) -> Void) {
+        getDeliveredNotifications { notifications in
+            completionHandler(notifications.map {
+                DeliveredBanner(identifier: $0.request.identifier, userInfo: $0.request.content.userInfo)
+            })
+        }
+    }
+}
+
 /// Les trois gestes que le retrait de bannières fait sur `UNUserNotificationCenter` :
 /// LIRE les livrées, en RETIRER — et RELIRE pour prouver que le retrait a pris.
 ///
@@ -713,21 +743,33 @@ nonisolated struct DeliveredBannerCenter: Sendable {
     let delivered: @Sendable (@escaping @Sendable ([DeliveredBanner]) -> Void) -> Void
     let remove: @Sendable ([String]) -> Void
 
-    /// `.current()` rend la même instance partagée à chaque appel — relue de
-    /// chaque côté plutôt que capturée, pour ne pas faire traverser un
-    /// `UNUserNotificationCenter` (non Sendable) à la frontière @Sendable.
-    static let system = DeliveredBannerCenter(
-        delivered: { completion in
-            UNUserNotificationCenter.current().getDeliveredNotifications { notifications in
-                completion(notifications.map {
-                    DeliveredBanner(identifier: $0.request.identifier, userInfo: $0.request.content.userInfo)
-                })
+    /// `notificationCenter` is a FACTORY, not a stored value — called fresh
+    /// inside each closure, exactly like the previous `UNUserNotificationCenter
+    /// .current()` call it replaces. Preserving that shape (rather than taking
+    /// an instance parameter and capturing it) is what keeps `delivered`/
+    /// `remove` genuinely `@Sendable`: the factory closure's own capture list
+    /// is empty for the default (`UNUserNotificationCenter.current` is a type
+    /// reference, not a captured value), and a test's `{ mock }` only needs
+    /// its `MockUNUserNotificationCenter` to itself be `@unchecked Sendable`
+    /// (same pattern as `SpyBannerCenter` below) — never `UNUserNotificationCenter`
+    /// (non-Sendable) crossing the boundary.
+    ///
+    /// A function (not a stored `static let`) so a test can pass a
+    /// `MockUNUserNotificationCenter` and exercise these exact closures — the
+    /// DEFAULT wiring, not a hand-rolled substitute that could silently drift
+    /// from what production actually calls.
+    static func system(
+        notificationCenter: @escaping @Sendable () -> UNUserNotificationCenterProviding = { UNUserNotificationCenter.current() }
+    ) -> DeliveredBannerCenter {
+        DeliveredBannerCenter(
+            delivered: { completion in
+                notificationCenter().getDeliveredBanners(completionHandler: completion)
+            },
+            remove: { identifiers in
+                notificationCenter().removeDeliveredNotifications(withIdentifiers: identifiers)
             }
-        },
-        remove: { identifiers in
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
-        }
-    )
+        )
+    }
 
     func deliveredIdentifiers() async -> Set<String> {
         await withCheckedContinuation { (continuation: CheckedContinuation<Set<String>, Never>) in

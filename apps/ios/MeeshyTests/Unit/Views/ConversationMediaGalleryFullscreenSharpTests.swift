@@ -271,13 +271,25 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
                       "le poster net se résout après la disponibilité, dans la même tâche fenêtrée")
     }
 
+    /// #3896 — cette garde ciblait `"thumbnailUrl: thumbUrl"` : cet identifiant
+    /// (`thumbUrl`) n'existe nulle part dans `ConversationMediaGalleryView.swift`
+    /// — la liaison vivante est `serverThumbnailURL` (déclarée juste après ce
+    /// bloc). La garde ne pouvait donc JAMAIS rougir, quel que soit le
+    /// contenu réel de `thumbnailLayer`. Corrigée pour cibler l'identifiant
+    /// vivant : `serverThumbnailURL` ne doit jamais être passé comme
+    /// `thumbnailUrl:` (étage intermédiaire) — seulement comme `fullUrl:`
+    /// (dernier recours forcé), sinon la vignette pourrait rester affichée
+    /// indéfiniment au lieu d'un plein format net.
     func test_videoPage_thumbnailLayer_servesThePoster_thenTheServerThumbnailForced_neverAsAStage() throws {
         let code = AppSourceGuard.stripComments(try source(Self.gallery))
         let layer = try block(from: "private var thumbnailLayer: some View {", upTo: "private var playOrDownloadButton", in: code)
         XCTAssertTrue(layer.contains("if let poster {"))
         XCTAssertTrue(layer.contains("thumbnailUrl: nil"), "la vignette serveur n'est montée qu'en DERNIER recours, comme source plein format forcée")
+        XCTAssertTrue(layer.contains("fullUrl: serverThumbnailURL"),
+                      "la vignette serveur — l'identifiant VIVANT — est la source plein format forcée")
         XCTAssertTrue(layer.contains("autoLoad: true"))
-        XCTAssertFalse(layer.contains("thumbnailUrl: thumbUrl"))
+        XCTAssertFalse(layer.contains("thumbnailUrl: serverThumbnailURL"),
+                       "jamais comme étage intermédiaire — elle pourrait alors rester affichée indéfiniment")
     }
 
     /// Préchauffage : image → la variante AFFICHÉE ; vidéo → le poster net
