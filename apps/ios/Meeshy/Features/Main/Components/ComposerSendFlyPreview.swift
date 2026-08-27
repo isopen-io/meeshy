@@ -1,24 +1,23 @@
 import SwiftUI
 import MeeshyUI
 
-/// #3918, refonte #3928/#3935bis — au tap d'envoi, une copie visuelle du
-/// texte vient du BAS DE L'ÉCRAN, hors champ visuel (sous le clavier s'il est
-/// ouvert), DERRIÈRE la barre du composer (retour porteur 2026-08-27 : la
-/// course ne doit jamais se dessiner par-dessus la barre — voir l'hôte,
-/// `ConversationView.swift`, qui la pose en PREMIER calque d'un `ZStack`),
-/// puis MONTE en ralentissant jusqu'à son emplacement naturel — juste
-/// au-dessus du composer, là où atterrit une bulle neuve — pour s'y poser en
-/// douceur. Overlay TOTALEMENT séparé de la liste de messages : la directive
-/// ROULEAU (2026-08-18) interdit toute animation d'insertion/suppression dans
-/// `MessageListLayout`/le data source diffable (un chantier de crashs SIGTRAP
-/// a été fermé sur cette base) — cette vue ne touche ni l'un ni l'autre, elle
-/// vit uniquement dans `ConversationView`.
+/// #3918, refonte #3928/#3935bis, retrait #3938 — au tap d'envoi, une copie
+/// visuelle du texte apparaît EN PLACE, à son emplacement final — juste
+/// au-dessus du composer, là où atterrit une bulle neuve — par un simple
+/// FONDU (apparition puis disparition), DERRIÈRE la barre du composer (voir
+/// l'hôte, `ConversationView.swift`, qui la pose en PREMIER calque d'un
+/// `ZStack`). Retour porteur (2026-08-27) : la remontée depuis hors écran
+/// introduite en #3928/affinée en #3935 était mal rendue — retirée sans
+/// retour ; seul le fondu reste. Overlay TOTALEMENT séparé de la liste de
+/// messages : la directive ROULEAU (2026-08-18) interdit toute animation
+/// d'insertion/suppression dans `MessageListLayout`/le data source diffable
+/// (un chantier de crashs SIGTRAP a été fermé sur cette base) — cette vue ne
+/// touche ni l'un ni l'autre, elle vit uniquement dans `ConversationView`.
 ///
 /// La liste étant INVERSÉE (le message le plus récent apparaît juste
-/// AU-DESSUS du composer), l'emplacement d'ARRIVÉE est déjà celui où l'hôte
-/// ancre cette vue (`.padding(.bottom, composerHeight)`) — pas de géométrie
-/// inter-vues complexe à calculer. Seul le DÉPART change : `startOffset`
-/// pousse la position initiale sous le bord bas visible (+ le clavier).
+/// AU-DESSUS du composer), l'emplacement d'apparition est déjà celui où
+/// l'hôte ancre cette vue (`.padding(.bottom, composerHeight)`) — aucune
+/// géométrie de départ à calculer : plus de position animée du tout.
 struct ComposerSendFlyPreview: View {
     let text: String
     /// Mode de lecture RÉEL de la conversation — décide de la FORME (voir
@@ -26,42 +25,23 @@ struct ComposerSendFlyPreview: View {
     /// jamais recalculé ici : une seule source de vérité pour le mode.
     let readingMode: ConversationReadingMode
     let isDark: Bool
-    /// Hauteur du composer telle que mesurée par l'hôte — distance entre
-    /// l'emplacement d'arrivée (ancré par l'hôte) et le bord bas de l'écran.
-    let composerHeight: CGFloat
-    /// Hauteur du clavier système si ouvert, 0 sinon (`ConversationView`).
-    let keyboardHeight: CGFloat
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    /// Position (montée, effet ressort) — séparé de `faded` : un spring avec
-    /// overshoot dépasserait momentanément [0, 1] s'il pilotait aussi le
-    /// fondu, et un fondu qui suit LA MÊME courbe que la montée s'étale sur
-    /// toute la trajectoire au lieu de s'effacer une fois arrivé.
-    @State private var risen = false
-    @State private var faded = false
+    @State private var opacityValue: Double = 0
 
     /// Durée totale — le point où `sendFlyPayload` est effacé par l'hôte
-    /// (`triggerSendFlyAnimation`), donc ≥ fin du fondu.
-    static let duration: TimeInterval = 0.5
-    /// Le fondu n'entame qu'après que le ressort a eu le temps de se
-    /// stabiliser — sinon la capsule s'efface avant même d'avoir fini de
-    /// « coller » à sa place, et le rebond devient invisible.
-    private static let fadeDelay: TimeInterval = 0.32
-    private static let fadeDuration: TimeInterval = Self.duration - Self.fadeDelay
-    /// Marge sous le bord bas visible : le départ se lit comme venant de
-    /// HORS ÉCRAN plutôt que d'un bord pile aligné.
-    private static let offscreenMargin: CGFloat = 40
+    /// (`triggerSendFlyAnimation`), donc ≥ fin du fondu de sortie.
+    static let duration: TimeInterval = 0.35
+    /// Fondu d'entrée — rapide, une apparition, pas un ralenti.
+    private static let fadeInDuration: TimeInterval = 0.10
+    /// Tenue à pleine opacité avant de s'effacer, pour rester lisible.
+    private static let fadeOutDelay: TimeInterval = 0.20
+    private static let fadeOutDuration: TimeInterval = Self.duration - Self.fadeOutDelay
     /// Même rayon que la bulle réelle (`BubbleBackground.swift`,
-    /// `cornerRadius: 18`) — la forme ne doit JAMAIS différer, ni au départ
-    /// (retour porteur 2026-08-27) ni à l'arrivée.
+    /// `cornerRadius: 18`) — la forme ne doit JAMAIS différer de la bulle
+    /// qui vient d'être postée.
     private static let bubbleCornerRadius: CGFloat = 18
-
-    /// Distance parcourue depuis le départ (hors écran, sous le clavier s'il
-    /// est ouvert) jusqu'à l'emplacement naturel ancré par l'hôte.
-    private var startOffset: CGFloat {
-        composerHeight + keyboardHeight + Self.offscreenMargin
-    }
 
     /// #3935bis (retour porteur 2026-08-27) : Focal/Script rendent une
     /// rangée PLATE, SANS fond teinté (`FocalRow.textBlock`, `isMe: false`
@@ -71,8 +51,8 @@ struct ComposerSendFlyPreview: View {
     /// rendu conversationnel courant) rendent la bulle pleine
     /// (`BubbleBackground.swift` : `RoundedRectangle(cornerRadius: 18)`,
     /// fond plat `MeeshyColors.brandPrimary`, texte blanc). Le survol doit
-    /// DÉJÀ porter cette forme en émergeant de derrière le composer — jamais
-    /// une capsule générique qui changerait de forme à l'atterrissage.
+    /// DÉJÀ porter cette forme dès son apparition — jamais une capsule
+    /// générique.
     private var usesBubbleShape: Bool {
         switch readingMode {
         case .focal, .script:
@@ -105,19 +85,14 @@ struct ComposerSendFlyPreview: View {
         }
         .frame(maxWidth: .infinity, alignment: usesBubbleShape ? .trailing : .leading)
         .padding(.horizontal, 12)
-        .opacity(faded ? 0 : 1)
-        .offset(y: risen ? 0 : startOffset)
+        .opacity(opacityValue)
         .allowsHitTesting(false)
         .onAppear {
-            // #3935bis : un damping plus élevé qu'avant (`0.68` → `0.86`)
-            // ralentit nettement l'approche et réduit le rebond — un posé
-            // « en douceur », jamais un `.easeOut` linéaire qui ne
-            // décélérerait pas VRAIMENT au contact.
-            withAnimation(.spring(response: 0.42, dampingFraction: 0.86)) {
-                risen = true
+            withAnimation(.easeOut(duration: Self.fadeInDuration)) {
+                opacityValue = 1
             }
-            withAnimation(.easeIn(duration: Self.fadeDuration).delay(Self.fadeDelay)) {
-                faded = true
+            withAnimation(.easeIn(duration: Self.fadeOutDuration).delay(Self.fadeOutDelay)) {
+                opacityValue = 0
             }
         }
     }
@@ -125,9 +100,9 @@ struct ComposerSendFlyPreview: View {
 
 /// Une émission = un envoi de texte. `id` change à chaque envoi (même texte
 /// répété inclus) pour que SwiftUI monte une INSTANCE neuve de
-/// `ComposerSendFlyPreview` à chaque fois — un `id` stable rejouerait
-/// l'animation sur une vue déjà à son état final (`risen = true`, `faded =
-/// true`) sans jamais retraverser `onAppear`.
+/// `ComposerSendFlyPreview` à chaque fois — un `id` stable rejouerait le
+/// fondu sur une vue déjà à son état final (`opacityValue = 0`) sans jamais
+/// retraverser `onAppear`.
 struct ComposerSendFlyPayload: Identifiable, Equatable {
     let id = UUID()
     let text: String

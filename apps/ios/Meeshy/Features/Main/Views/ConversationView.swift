@@ -2010,23 +2010,20 @@ struct ConversationView: View {
             VStack {
                 Spacer()
                 ZStack(alignment: .bottom) {
-                    // #3918, refonte #3935 — le texte envoyé survole depuis le
-                    // composer. Posé en PREMIER calque du ZStack (donc DERRIÈRE
-                    // le composer qui suit) : tant que la capsule n'a pas
-                    // dépassé le bord haut de `themedComposer`, le fond opaque
-                    // de la barre (`composerBackground`) l'occulte — la course
-                    // se lit comme venant DE DERRIÈRE la barre, jamais
-                    // par-dessus ses boutons/champ de texte (retour porteur
-                    // 2026-08-27 : un `.overlay()` posé APRÈS le composer la
-                    // dessinait au-dessus). Pur calque de rendu : ne pousse ni
-                    // ne redimensionne rien autour de lui.
+                    // #3918, refonte #3935, retrait de la remontée #3938 — le
+                    // texte envoyé apparaît EN FONDU (plus de remontée : mal
+                    // rendue, retirée sans retour sur demande porteur
+                    // 2026-08-27) à son emplacement final. Posé en PREMIER
+                    // calque du ZStack (donc DERRIÈRE le composer qui suit,
+                    // occulté par son fond opaque `composerBackground` — un
+                    // `.overlay()` posé APRÈS le composer le dessinerait
+                    // au-dessus). Pur calque de rendu : ne pousse ni ne
+                    // redimensionne rien autour de lui.
                     if let payload = sendFlyPayload {
                         ComposerSendFlyPreview(
                             text: payload.text,
                             readingMode: readingModeController.mode,
-                            isDark: isDark,
-                            composerHeight: composerHeight,
-                            keyboardHeight: keyboardHeight
+                            isDark: isDark
                         )
                         .padding(.bottom, composerHeight)
                         .allowsHitTesting(false)
