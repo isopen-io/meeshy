@@ -1169,7 +1169,7 @@ struct ConversationView: View {
                     onToggleStar: {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
                     },
-                    onDeleteMessage: { overlayState.deleteConfirmMessageId = msg.id },
+                    onDeleteMessage: { requestDeleteMessage(msg.id) },
                     onEdit: { beginEdit(msg) },
                     onCopy: {
                         UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
@@ -2759,9 +2759,10 @@ struct ConversationView: View {
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                 },
                 onDelete: {
-                    // Show the confirmation dialog so the user can pick
-                    // between local-only and server-broadcast deletion.
-                    overlayState.deleteConfirmMessageId = msg.id
+                    // #4043 — un message jamais envoyé (.failed) se supprime
+                    // sans confirmation ; sinon la boîte de dialogue habituelle
+                    // (local-only vs pour tous) reste inchangée.
+                    requestDeleteMessage(msg.id)
                 },
                 onSaveMedia: {
                     // Composant unifié « Enregistrer » — l'action n'apparaît
@@ -2994,7 +2995,7 @@ struct ConversationView: View {
             }
         case .delete:
             Button(role: .destructive) {
-                overlayState.deleteConfirmMessageId = msg.id
+                requestDeleteMessage(msg.id)
             } label: {
                 Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }

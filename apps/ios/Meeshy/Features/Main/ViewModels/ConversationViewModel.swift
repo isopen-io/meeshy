@@ -3093,7 +3093,17 @@ class ConversationViewModel: ObservableObject {
         // non-French message's language on every retry (Prisme violation).
         let originalLanguage = failedMsg.originalLanguage
         _ = try? await messagePersistence.applyEvent(localId: messageId, event: .retry)
-        await sendMessage(content: content, replyToId: replyToId, originalLanguage: originalLanguage, existingTempId: messageId)
+        let succeeded = await sendMessage(content: content, replyToId: replyToId, originalLanguage: originalLanguage, existingTempId: messageId)
+        // #4042 — un retry RÉUSSI doit faire disparaître la ligne outbox
+        // D'ORIGINE (créée par le PREMIER échec) : `sendMessage` réutilise
+        // le MÊME clientMessageId (Phase 4 §6.2), donc c'est la même ligne
+        // que `SyncPillViewModel` continue de surfacer tant qu'elle reste
+        // `.failed`/`.exhausted` en base — ce chemin texte-seul ne la
+        // touchait jamais jusqu'ici (repro : retry réussi, entrée SyncPill
+        // qui persiste indéfiniment).
+        if succeeded {
+            await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
+        }
     }
 
     func removeFailedMessage(messageId: String) {
@@ -3523,6 +3533,14 @@ class ConversationViewModel: ObservableObject {
                 // sender believes the message is gone. No-op when there is no
                 // pending row (the common case).
                 await offlineQueue.cancelPendingSend(clientMessageId: messageId)
+                // #4043 — `cancelPendingSend` only ever touches a `.pending`
+                // row (the narrow in-flight-reset case above). The COMMON
+                // case is a row already `.failed`/`.exhausted` (the original
+                // send never succeeded, e.g. a location-only message,
+                // #4039) — `cancelPendingSend` is a no-op for it, leaving it
+                // to linger in the SyncPill forever even after the bubble
+                // itself is gone. `clearSendMessageRow` reaches it too.
+                await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
                 removeFailedMessage(messageId: messageId)
                 return
             }

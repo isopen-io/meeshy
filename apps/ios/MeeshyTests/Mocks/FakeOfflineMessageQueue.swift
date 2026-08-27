@@ -16,6 +16,7 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
     private(set) var enqueuedDeletes: [OfflineDeletePayload] = []
     private(set) var retriedClientMessageIds: [String] = []
     private(set) var cancelledPendingSendClientMessageIds: [String] = []
+    private(set) var clearedSendMessageRowClientMessageIds: [String] = []
     private(set) var enqueuedMediaCalls: [EnqueuedMedia] = []
 
     struct EnqueuedMedia: Equatable {
@@ -88,6 +89,11 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
     func cancelPendingSend(clientMessageId cmid: String) async {
         if let delay { try? await Task.sleep(for: delay) }
         cancelledPendingSendClientMessageIds.append(cmid)
+    }
+
+    func clearSendMessageRow(clientMessageId cmid: String) async {
+        if let delay { try? await Task.sleep(for: delay) }
+        clearedSendMessageRowClientMessageIds.append(cmid)
     }
 
     @discardableResult

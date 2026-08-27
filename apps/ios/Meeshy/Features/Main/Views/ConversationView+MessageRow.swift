@@ -8,6 +8,23 @@ nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
 
+    /// **Point d'entrée UNIQUE pour demander la suppression d'un message**
+    /// (#4043) — les 4 sites qui posaient `overlayState.deleteConfirmMessageId`
+    /// directement (bulle, barre de réaction rapide, menu long-press, menu
+    /// natif) appellent désormais celui-ci. Un message JAMAIS envoyé
+    /// (`.failed`) n'a rien à confirmer — « pour tous » n'a aucun sens
+    /// (rien n'a atteint le serveur) et « pour moi » ne présente aucun
+    /// risque puisqu'aucune donnée n'est en jeu côté destinataires : la
+    /// suppression locale part IMMÉDIATEMENT, sans `confirmationDialog`.
+    /// Tout autre message garde la confirmation habituelle.
+    func requestDeleteMessage(_ messageId: String) {
+        if let idx = viewModel.messageIndex(for: messageId),
+           viewModel.messages[idx].deliveryStatus == .failed {
+            Task { await viewModel.deleteMessage(messageId: messageId, mode: .everyone) }
+            return
+        }
+        overlayState.deleteConfirmMessageId = messageId
+    }
 
     func triggerReply(for msg: Message) {
         // Le média REPRÉSENTATIF (premier hors localisation) — la MÊME règle
@@ -330,7 +347,7 @@ extension ConversationView {
                 }
             }
             messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: MeeshyColors.errorHex) {
-                overlayState.deleteConfirmMessageId = messageId
+                requestDeleteMessage(messageId)
                 closeReactionBar()
             }
         }

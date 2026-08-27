@@ -441,6 +441,28 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             "a .failed message never reached the server — must never hit REST delete")
     }
 
+    /// #4043 — `cancelPendingSend` only ever reaches a `.pending` row (the
+    /// narrow "retry just reset it" window covered by the test above). The
+    /// COMMON case for a `.failed` bubble is a row already `.failed`/
+    /// `.exhausted` — the original send simply never succeeded (e.g. a
+    /// location-only message, #4039) — which `cancelPendingSend` is a no-op
+    /// for. `deleteMessage` must ALSO reach it via `clearSendMessageRow`, or
+    /// the row (and its SyncPill entry) survives the message's own deletion.
+    func test_deleteMessage_failedMessage_alsoClearsAnExhaustedOutboxRow() async throws {
+        let fx = try await makeFixture()
+        try await seedFailedMediaMessage(localId: "m_del_exhausted", fixture: fx)
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_del_exhausted", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed message must be visible")
+
+        await fx.sut.deleteMessage(messageId: "m_del_exhausted", mode: .everyone)
+
+        let cleared = await fx.offlineQueue.clearedSendMessageRowClientMessageIds
+        XCTAssertEqual(cleared, ["m_del_exhausted"],
+            "deleting a .failed message must clear its outbox row regardless of status (except .inflight)")
+    }
+
     // MARK: - S3 — rollback exhausted offline edit/delete
 
     /// An offline delete that exhausts its retry budget never reached the
@@ -593,6 +615,30 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
 
         XCTAssertEqual(fx.messageService.lastSendRequest?.originalLanguage, "es",
             "retrying must resend with the message's ORIGINAL language, not fall back to a hardcoded 'fr'")
+    }
+
+    /// #4042 — a manual retry that SUCCEEDS must clear the ORIGINAL outbox
+    /// row (same `clientMessageId`, reused by `sendMessage`, Phase 4 §6.2):
+    /// without this, `SyncPillViewModel`/`OfflineQueue.refreshPendingUIItems()`
+    /// keeps surfacing a `.failed`/`.exhausted` row forever even though the
+    /// message it describes has actually been sent — the exact bug reported
+    /// live (a location-only message retried successfully, its SyncPill
+    /// entry never disappearing).
+    func test_retryMessage_failedTextOnlyMessage_success_clearsTheOriginalOutboxRow() async throws {
+        let fx = try await makeFixture(isOnline: true)
+        try await seedFailedTextMessage(
+            localId: "m_retry_clears_outbox", content: "hello", originalLanguage: "fr", fixture: fx
+        )
+        let seeded = await MessageStoreObservationHelper.awaitMessageProperty(
+            id: "m_retry_clears_outbox", in: fx.sut
+        ) { $0.deliveryStatus == .failed }
+        XCTAssertTrue(seeded, "precondition: the failed text message must be visible")
+
+        await fx.sut.retryMessage(messageId: "m_retry_clears_outbox")
+
+        let cleared = await fx.offlineQueue.clearedSendMessageRowClientMessageIds
+        XCTAssertEqual(cleared, ["m_retry_clears_outbox"],
+            "a successful retry must clear the original outbox row by clientMessageId")
     }
 
     private func seedFailedTextMessage(

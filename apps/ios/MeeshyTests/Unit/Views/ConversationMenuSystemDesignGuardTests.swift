@@ -416,9 +416,12 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         let btnBlock = String(vSource[btnRange.lowerBound ..< btnEnd])
         XCTAssertTrue(
             btnBlock.contains("Button(role: .destructive)") &&
-            btnBlock.contains("overlayState.deleteConfirmMessageId = msg.id"),
-            "La suppression du menu natif doit être destructive ET armer " +
-            "deleteConfirmMessageId (confirmation) — jamais de suppression directe."
+            btnBlock.contains("requestDeleteMessage(msg.id)"),
+            "La suppression du menu natif doit être destructive ET passer par " +
+            "requestDeleteMessage (#4043) — point d'entrée UNIQUE qui arme la " +
+            "confirmation pour un message normal, et supprime directement (sans " +
+            "confirmation) un message jamais envoyé — jamais une suppression " +
+            "ad hoc qui court-circuiterait cette règle."
         )
     }
 

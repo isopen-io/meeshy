@@ -637,6 +637,19 @@ public protocol OfflineMessageQueueing: Sendable {
     /// `.failed` short-circuit exists specifically to avoid. No-op (not an
     /// error) when there is nothing pending to cancel.
     func cancelPendingSend(clientMessageId: String) async
+    /// Deletes the `.sendMessage` outbox row for `cmid` in ANY status
+    /// EXCEPT `.inflight` (never race a dispatch actually in progress) —
+    /// broader than `cancelPendingSend`, which only ever touches `.pending`.
+    /// Two callers: (1) a manual retry that just SUCCEEDED — the original
+    /// row (same `clientMessageId`, Phase 4 §6.2) must stop being surfaced
+    /// by the SyncPill, which otherwise keeps showing a `.failed`/
+    /// `.exhausted` row forever even after the message actually sent
+    /// (`ConversationViewModel.retryMessage`, #4042); (2) deleting a
+    /// `.failed` message — `cancelPendingSend` alone left `.failed`/
+    /// `.exhausted` rows behind because they are never `.pending`
+    /// (`ConversationViewModel.deleteMessage`'s `.failed` short-circuit,
+    /// #4043). No-op (not an error) when nothing matches.
+    func clearSendMessageRow(clientMessageId: String) async
     /// Enfilage durable d'un message média (photo/vidéo/document) hors ligne,
     /// ou repris d'un partage. Sur le PROTOCOLE, et non seulement sur
     /// l'implémentation : `SharePendingSendConsumer` appelle à travers ce
@@ -998,6 +1011,26 @@ public actor OfflineQueue {
             }
         } catch {
             logger.error("cancelPendingSend failed: \(error.localizedDescription, privacy: .public)")
+        }
+        await refreshPendingCount()
+    }
+
+    /// See `OfflineMessageQueueing.clearSendMessageRow(clientMessageId:)`.
+    /// Deletes in ANY status except `.inflight` — the whole point being to
+    /// also reach `.failed`/`.exhausted` rows that `cancelPendingSend`
+    /// (deliberately `.pending`-only) cannot.
+    public func clearSendMessageRow(clientMessageId cmid: String) async {
+        guard let pool = outboxPool else { return }
+        do {
+            try await pool.write { db in
+                try OutboxRecord
+                    .filter(Column("clientMessageId") == cmid)
+                    .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+                    .filter(Column("status") != OutboxStatus.inflight.rawValue)
+                    .deleteAll(db)
+            }
+        } catch {
+            logger.error("clearSendMessageRow failed: \(error.localizedDescription, privacy: .public)")
         }
         await refreshPendingCount()
     }

@@ -141,6 +141,12 @@ struct SyncPill: View {
     /// entrée NEUVE (un nouveau typing, un nouvel envoi) pour déclencher
     /// l'accentuation.
     @State private var seenEntryIDs: Set<String> = []
+    /// Ids des signaux EN COURS (`isOngoingSignal`) actuellement responsables
+    /// de l'accent — directive porteur 2026-08-27 (précision #4026) : frappe
+    /// et reconnexion tiennent l'accent tant que leur id reste dans
+    /// `entries`, jamais un délai fixe. Vide ⇒ l'accent (s'il y en a un) suit
+    /// le pulse court existant (#4018).
+    @State private var accentedOngoingIDs: Set<String> = []
     /// La pastille est-elle visible ? Pilotée par l'activité récente : une
     /// nouvelle entrée l'affiche, un silence de `idleHideDelay` l'efface —
     /// sauf état PERSISTANT (hors-ligne, échec), qui la garde affichée.
@@ -225,22 +231,59 @@ struct SyncPill: View {
         entries.contains { $0.dotStyle == .warning || $0.dotStyle == .error }
     }
 
+    /// Un signal EN COURS (frappe, reconnexion) tient l'accent tant que son
+    /// id reste présent dans `entries` — jamais un délai fixe (directive
+    /// porteur 2026-08-27, précision #4026). Toute autre entrée (envoi/
+    /// mutation en échec) garde le pulse ×1.5 bref existant (#4018).
+    static func isOngoingSignal(_ entry: SyncPillEntry) -> Bool {
+        entry.dotStyle == .warning || entry.id.hasPrefix("typing.")
+    }
+
     private func handleEntriesChange() {
         let currentIDs = Set(entries.map(\.id))
-        let hasNew = !currentIDs.subtracting(seenEntryIDs).isEmpty
+        let newIDs = currentIDs.subtracting(seenEntryIDs)
         seenEntryIDs = currentIDs
 
         if entries.isEmpty {
             hideWorkItem?.cancel(); hideWorkItem = nil
+            accentResetWorkItem?.cancel(); accentResetWorkItem = nil
+            accentedOngoingIDs.removeAll()
             isVisible = false
             return
         }
-        if hasNew { surfaceWithAccent() }
+
+        // Les signaux en cours DÉJÀ accentués dont l'id a disparu (frappe
+        // stoppée, reconnexion terminée) sortent du suivi ; ceux tout juste
+        // arrivés y entrent. Tant qu'il en reste au moins un, l'accent est
+        // maintenu SANS minuteur — recalculé à chaque changement de `entries`
+        // (déjà observé via `.adaptiveOnChange(of: entries.map(\.id))`).
+        let currentOngoingIDs = Set(entries.filter(Self.isOngoingSignal).map(\.id))
+        accentedOngoingIDs.formIntersection(currentOngoingIDs)
+        accentedOngoingIDs.formUnion(newIDs.intersection(currentOngoingIDs))
+
+        if !accentedOngoingIDs.isEmpty {
+            isVisible = true
+            accentResetWorkItem?.cancel(); accentResetWorkItem = nil
+            if !isAccented {
+                withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55)) {
+                    isAccented = true
+                }
+            }
+        } else if !newIDs.isEmpty {
+            surfaceWithAccent()
+        } else if isAccented {
+            // Le dernier signal en cours vient de se terminer : retour au
+            // repos IMMÉDIAT — « puis redevient normale pour les autres
+            // messages » (directive porteur), pas après un délai périmé.
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isAccented = false }
+        }
         scheduleAutoHide()
     }
 
     /// Affiche la pastille et joue l'accent transitoire (×1.5 + fond primaire
-    /// + rebond), puis programme le retour au repos (#4018).
+    /// + rebond), puis programme le retour au repos (#4018). Seulement pour
+    /// les entrées HORS signal en cours — celles-ci sont gérées par
+    /// `accentedOngoingIDs` dans `handleEntriesChange`, sans minuteur.
     private func surfaceWithAccent() {
         isVisible = true
         withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55)) {

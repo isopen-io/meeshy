@@ -950,6 +950,74 @@ final class OfflineQueueTests: XCTestCase {
         XCTAssertEqual(item.content, "hi")
     }
 
+    // MARK: - #4042/#4043 — clearSendMessageRow reaches .failed/.exhausted rows
+
+    /// `cancelPendingSend` is deliberately `.pending`-only. A row that already
+    /// gave up (`.failed`/`.exhausted` — a retry that never succeeded, or one
+    /// that just succeeded via a fresh send reusing the same clientMessageId,
+    /// #4042) is the COMMON case a stuck SyncPill entry is made of, and
+    /// `clearSendMessageRow` must delete it.
+    func test_clearSendMessageRow_deletesAnExhaustedRow() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let cid = "cid_exhausted_\(UUID().uuidString.lowercased())"
+        try await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "géolocalisation", clientMessageId: cid))
+        try await pool.write { db in
+            _ = try db.execute(sql: "UPDATE outbox SET status = ? WHERE clientMessageId = ?",
+                               arguments: [OutboxStatus.exhausted.rawValue, cid])
+        }
+
+        await queue.clearSendMessageRow(clientMessageId: cid)
+
+        let remaining = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchCount(db)
+        }
+        XCTAssertEqual(remaining, 0, "an exhausted row must be deleted — this is the row a stuck SyncPill entry is made of")
+    }
+
+    func test_clearSendMessageRow_deletesAFailedRow() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let cid = "cid_failed_\(UUID().uuidString.lowercased())"
+        try await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "x", clientMessageId: cid))
+        try await pool.write { db in
+            _ = try db.execute(sql: "UPDATE outbox SET status = ? WHERE clientMessageId = ?",
+                               arguments: [OutboxStatus.failed.rawValue, cid])
+        }
+
+        await queue.clearSendMessageRow(clientMessageId: cid)
+
+        let remaining = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchCount(db)
+        }
+        XCTAssertEqual(remaining, 0)
+    }
+
+    /// Never race a dispatch actually in progress — an `.inflight` row must
+    /// survive `clearSendMessageRow` untouched.
+    func test_clearSendMessageRow_neverDeletesAnInflightRow() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let cid = "cid_inflight_\(UUID().uuidString.lowercased())"
+        try await queue.enqueue(OfflineQueueItem(conversationId: "conv-1", content: "x", clientMessageId: cid))
+        try await pool.write { db in
+            _ = try db.execute(sql: "UPDATE outbox SET status = ? WHERE clientMessageId = ?",
+                               arguments: [OutboxStatus.inflight.rawValue, cid])
+        }
+
+        await queue.clearSendMessageRow(clientMessageId: cid)
+
+        let remaining = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchCount(db)
+        }
+        XCTAssertEqual(remaining, 1, "a row mid-dispatch must never be deleted out from under the flusher")
+    }
+
+    func test_clearSendMessageRow_isANoOp_whenNoRowMatches() async throws {
+        // Must not throw / must not affect unrelated rows.
+        await queue.clearSendMessageRow(clientMessageId: "cid_does_not_exist")
+    }
+
     // MARK: - Near-capacity publisher
 
     func test_nearCapacityPublisher_notFiredBelowThreshold() async throws {
