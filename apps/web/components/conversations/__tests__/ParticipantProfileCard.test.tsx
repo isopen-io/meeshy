@@ -334,6 +334,35 @@ describe('ParticipantProfileCard — octroi d’historique par date', () => {
     expect(screen.queryByTestId('participant-profile-history-grant-input')).toBeNull();
   });
 
+  /**
+   * Le JOUR affiché est celui de l'octroi, pas celui du fuseau du lecteur.
+   *
+   * L'octroi est composé en minuit UTC du jour choisi, et le contrôle éditable
+   * le réaffiche par `iso.slice(0, 10)` — donc en jour UTC. Un
+   * `toLocaleDateString()` nu sur la ligne en LECTURE SEULE lisait le même
+   * instant dans le fuseau du lecteur : à l'ouest de Greenwich il rendait la
+   * VEILLE, et la même valeur s'affichait sous deux jours différents selon que
+   * le lecteur peut l'écrire ou seulement la lire.
+   *
+   * L'instant est choisi À 23h30 UTC, et pas à minuit, pour que le témoin
+   * PUISSE tomber : réassigner `process.env.TZ` ne prend pas (le worker jest a
+   * déjà figé son fuseau), donc le seul levier est l'instant. À 23h30 UTC le
+   * jour LOCAL est déjà le suivant pour tout fuseau à l'est de Greenwich —
+   * celui de la machine de dev — et l'ancien rendu affichait « 16 ».
+   * Un runner exactement en UTC ne peut pas l'exercer : c'est aussi le seul
+   * fuseau où le défaut ne se produit pas.
+   */
+  it('affiche le JOUR de l’octroi, pas le jour du fuseau du lecteur', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: '2026-01-15T23:30:00.000Z' })}
+      />
+    );
+
+    const shown = screen.getByTestId('participant-profile-history-grant-readonly').textContent ?? '';
+    expect(shown).toContain('15');
+  });
+
   it('affiche un contrôle éditable quand l’écriture est possible', () => {
     render(
       <ParticipantProfileCard

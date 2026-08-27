@@ -273,17 +273,55 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     /// `null` JSON explicite, jamais comme une clé absente : le corps distingue
     /// les deux (absente = ne touche à rien, `null` = retire), et le body
     /// encodé ici écrit toujours la clé.
+    ///
+    /// La date posée est NORMALISÉE au jour (`historyGrantFloor`) : ce levier
+    /// est un octroi par DATE, et l'instant brut d'un sélecteur de date masque
+    /// la matinée du jour choisi. Voir le doc-comment de `historyGrantFloor`.
     public func updateHistoryGrant(
         conversationId: String,
         participantId: String,
         historyVisibleFrom: Date?
     ) async throws -> Date? {
-        let iso = historyVisibleFrom.map { ISO8601DateFormatter().string(from: $0) }
+        let iso = historyVisibleFrom
+            .map { Self.historyGrantFloor(for: $0) }
+            .map { ISO8601DateFormatter().string(from: $0) }
         let response: APIResponse<ParticipantHistoryGrantUpdateResult> = try await api.patch(
             endpoint: "/conversations/\(conversationId)/participants/\(participantId)/rights",
             body: HistoryGrantBody(historyVisibleFrom: iso)
         )
         return response.data.historyVisibleFrom
+    }
+
+    /// L'instant que porte un octroi « voit l'historique depuis le <jour> ».
+    ///
+    /// Le gateway applique le plancher en `createdAt >= instant`. Envoyer
+    /// l'instant BRUT rendu par un sélecteur de DATE poserait donc le plancher
+    /// en MILIEU de journée : SwiftUI conserve l'heure de la valeur précédente
+    /// sous `displayedComponents: [.date]`, si bien que « depuis le 15 » choisi
+    /// à 14h32 masquait toute la matinée du 15 — un octroi qui ne tient pas la
+    /// phrase qu'il affiche.
+    ///
+    /// Le jour retenu est celui que l'utilisateur a VU (calendrier LOCAL) ;
+    /// l'instant envoyé est son minuit UTC. C'est exactement ce que le web
+    /// compose depuis `<input type="date">`
+    /// (`new Date(\`${value}T00:00:00.000Z\`)`, `ParticipantProfileCard.tsx`) —
+    /// même geste, même plancher, dimension 6. Tronquer en UTC l'instant brut
+    /// ne marcherait PAS : le soir, sur un fuseau à l'ouest, le jour UTC est
+    /// déjà le suivant, et le plancher sauterait d'un jour entier.
+    ///
+    /// Borné au présent, parce que le gateway refuse un plancher futur
+    /// (`historyVisibleFrom must not be in the future`) et que minuit UTC du
+    /// jour local est à venir sur un fuseau très à l'est.
+    public static func historyGrantFloor(
+        for selection: Date,
+        calendar: Calendar = .current,
+        now: Date = Date()
+    ) -> Date {
+        let day = calendar.dateComponents([.year, .month, .day], from: selection)
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0) ?? calendar.timeZone
+        guard let midnight = utc.date(from: day) else { return min(selection, now) }
+        return min(midnight, now)
     }
 
     public func deleteForMe(conversationId: String) async throws {

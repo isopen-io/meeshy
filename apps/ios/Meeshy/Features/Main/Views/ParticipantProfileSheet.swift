@@ -140,7 +140,13 @@ struct ParticipantProfileSheet: View {
             guard event.participantId == participantId,
                   event.conversationId == conversationId else { return }
             profile?.entryCapabilities = event.rights
-            profile?.historyVisibleFrom = event.historyVisibleFrom
+            // La PRÉSENCE de la clé, jamais sa valeur : `null` efface (le
+            // serveur affirme qu'il n'y a pas d'octroi), une clé ABSENTE
+            // n'affirme rien — un gateway antérieur au champ — et ne doit pas
+            // faire disparaître un octroi affiché. Même règle que le web.
+            if event.carriesHistoryGrant {
+                profile?.historyVisibleFrom = event.historyVisibleFrom
+            }
         }
     }
 
@@ -315,7 +321,7 @@ struct ParticipantProfileSheet: View {
             if let historyGrantErrorMessage {
                 Text(historyGrantErrorMessage)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundColor(MeeshyColors.error)
                     .accessibilityIdentifier("participant-profile-history-grant-error")
             }
         }

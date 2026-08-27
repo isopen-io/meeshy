@@ -113,7 +113,40 @@ public struct ParticipantRightsUpdatedEvent: Decodable, Sendable, Equatable {
     /// octroi. Le gateway le pose TOUJOURS dans cette charge, que ce
     /// changement l'ait touché ou non — optionnel ici pour tolérer un
     /// producteur plus ancien qui ne le portait pas encore.
+    ///
+    /// **Ne se lit JAMAIS seul** : voir `carriesHistoryGrant`.
     public let historyVisibleFrom: Date?
+
+    /// La charge PORTAIT-elle la clé ?
+    ///
+    /// `Date?` seul ne distingue pas les deux phrases que le fil sait dire :
+    /// `null` — « j'ai calculé, il n'y a pas d'octroi », qui EFFACE — et clé
+    /// ABSENTE — « ce producteur ne connaît pas encore ce champ », qui n'affirme
+    /// rien et doit laisser en place ce que le lecteur a déjà. Sans ce
+    /// discriminant, la tolérance annoncée ci-dessus n'existe pas : un
+    /// consommateur qui recopie `historyVisibleFrom` inconditionnellement
+    /// EFFACE l'octroi affiché au premier basculement de capacité servi par un
+    /// gateway antérieur au champ.
+    ///
+    /// Même règle et même discriminant — la PRÉSENCE de la clé, jamais sa
+    /// valeur — que le pont ✦ de `conversation:unread-updated`, et que le
+    /// `data.historyVisibleFrom !== undefined` du web
+    /// (`apps/web/hooks/queries/use-participant-rights-sync.ts`).
+    public let carriesHistoryGrant: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case conversationId, participantId, updatedBy, rights, historyVisibleFrom
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        participantId = try container.decode(String.self, forKey: .participantId)
+        updatedBy = try container.decode(String.self, forKey: .updatedBy)
+        rights = try container.decode(ParticipantEntryCapabilities.self, forKey: .rights)
+        historyVisibleFrom = try container.decodeIfPresent(Date.self, forKey: .historyVisibleFrom)
+        carriesHistoryGrant = container.contains(.historyVisibleFrom)
+    }
 }
 
 /// Les réglages du lien emprunté — second cercle, réservé aux administrateurs

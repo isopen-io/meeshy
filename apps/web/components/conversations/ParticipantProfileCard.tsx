@@ -100,6 +100,20 @@ function todayDateInputValue(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * Le JOUR de l'octroi, lisible — et c'est le jour UTC, jamais le jour local.
+ *
+ * L'octroi est composé en minuit UTC du jour choisi (`onChange` ci-dessous),
+ * et c'est ce même jour UTC que `toDateInputValue` réaffiche dans le contrôle
+ * éditable. Un `toLocaleDateString()` nu lirait l'instant dans le fuseau du
+ * lecteur : à l'ouest de Greenwich il rend la VEILLE, si bien que la même
+ * valeur s'affichait sous deux jours différents selon que le lecteur peut
+ * l'écrire ou seulement la lire.
+ */
+function toReadableGrantDay(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { timeZone: 'UTC' });
+}
+
 interface ProfileRowProps {
   readonly testId: string;
   readonly icon: React.ReactNode;
@@ -396,7 +410,7 @@ export const ParticipantProfileCard = memo(function ParticipantProfileCard({
                 testId="participant-profile-history-grant-readonly"
                 icon={<History className="h-3.5 w-3.5" />}
                 label={t('participantProfile.historyGrant.label', 'Voit l’historique depuis')}
-                value={new Date(profile.historyVisibleFrom).toLocaleDateString()}
+                value={toReadableGrantDay(profile.historyVisibleFrom)}
               />
             )
           )}

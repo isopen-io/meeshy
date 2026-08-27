@@ -392,6 +392,77 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertTrue(body?["historyVisibleFrom"] is NSNull, "the value must be explicit JSON null")
     }
 
+    // MARK: - historyGrantFloor — un octroi par DATE se pose au JOUR
+
+    /// Le témoin qui tombe sur l'instant BRUT. Un sélecteur `[.date]` rend le
+    /// jour choisi À L'HEURE de la valeur précédente ; le plancher gateway étant
+    /// `createdAt >= instant`, « voit l'historique depuis le 15 » posé à 14h32
+    /// masquait toute la matinée du 15.
+    func test_updateHistoryGrant_sendsTheDayFloor_notTheRawPickerInstant() async throws {
+        // 2026-01-15T14:32:11Z — le jour choisi, à l'heure qui traînait.
+        let picked = Date(timeIntervalSince1970: 1_768_487_531)
+        let response = APIResponse(
+            success: true,
+            data: ParticipantHistoryGrantUpdateResult(participantId: "p1", conversationId: "c1", historyVisibleFrom: picked),
+            error: nil
+        )
+        mock.stub("/conversations/c1/participants/p1/rights", result: response)
+
+        _ = try await service.updateHistoryGrant(conversationId: "c1", participantId: "p1", historyVisibleFrom: picked)
+
+        let sent = mock.lastRequest?.bodyJSON?["historyVisibleFrom"] as? String
+        XCTAssertNotNil(sent)
+        XCTAssertTrue(
+            sent?.hasSuffix("T00:00:00Z") ?? false,
+            "the grant must floor to midnight, got \(sent ?? "nil") — a mid-day floor hides the morning of the chosen day"
+        )
+    }
+
+    /// Le jour retenu est celui que l'utilisateur a VU (calendrier local), et
+    /// l'instant envoyé son minuit UTC — la composition exacte du web depuis
+    /// `<input type="date">`. Tronquer en UTC l'instant brut sauterait d'un jour
+    /// le soir sur un fuseau à l'ouest : c'est ce que ce témoin interdit.
+    func test_historyGrantFloor_keepsTheDayTheUserSaw_acrossTheUTCBoundary() {
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = TimeZone(secondsFromGMT: -5 * 3600) ?? .current
+
+        // 15 janvier 20h00 heure locale (UTC−5) = 16 janvier 01h00 UTC.
+        var parts = DateComponents()
+        parts.year = 2026; parts.month = 1; parts.day = 15; parts.hour = 20
+        let selection = local.date(from: parts)!
+
+        let floor = ConversationService.historyGrantFloor(
+            for: selection,
+            calendar: local,
+            now: Date(timeIntervalSince1970: 4_000_000_000)
+        )
+
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = utc.dateComponents([.year, .month, .day, .hour], from: floor)
+        XCTAssertEqual(day.day, 15, "the floor must stay on the day the user saw, not roll to the UTC day")
+        XCTAssertEqual(day.month, 1)
+        XCTAssertEqual(day.hour, 0)
+    }
+
+    /// Le gateway refuse un plancher FUTUR (`historyVisibleFrom must not be in
+    /// the future`), et minuit UTC du jour local est à venir sur un fuseau très
+    /// à l'est : la borne évite un 400 sur un geste parfaitement légitime.
+    func test_historyGrantFloor_neverReturnsAFutureInstant() {
+        var farEast = Calendar(identifier: .gregorian)
+        farEast.timeZone = TimeZone(secondsFromGMT: 13 * 3600) ?? .current
+
+        let now = Date(timeIntervalSince1970: 1_768_435_800) // 2026-01-15T00:10:00Z
+        // Il est déjà le 15 à 13h10 pour ce lecteur : son « aujourd'hui » a un
+        // minuit UTC (15 janvier 00h00Z) situé… avant maintenant. On vise donc
+        // le lendemain local, dont le minuit UTC est franchement à venir.
+        let tomorrowLocal = now.addingTimeInterval(24 * 3600)
+
+        let floor = ConversationService.historyGrantFloor(for: tomorrowLocal, calendar: farEast, now: now)
+
+        XCTAssertLessThanOrEqual(floor, now, "a future floor hides every message, including the participant's own")
+    }
+
     func test_listPage_missingAllMeta_inferHasMoreFromPageFill() async throws {
         let body = ConversationListResponseBody(
             success: true,

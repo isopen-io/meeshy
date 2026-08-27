@@ -277,4 +277,57 @@ final class ConversationParticipantProfileTests: XCTestCase {
         XCTAssertNil(profile.historyVisibleFrom)
         XCTAssertEqual(profile.canGrantHistory, true)
     }
+
+    // MARK: - `participant:rights-updated` — `null` EFFACE, une clé ABSENTE non
+
+    /// `Date?` seul ne sait dire qu'une chose ; le fil en dit DEUX. Le
+    /// consommateur (`ParticipantProfileSheet`) recopie l'octroi seulement quand
+    /// la charge le PORTE — sans ce discriminant, un producteur antérieur au
+    /// champ ferait disparaître un octroi affiché à chaque basculement de
+    /// capacité ordinaire, alors qu'il n'affirme rien à son sujet.
+    private func rightsUpdatedEvent(_ json: String) throws -> ParticipantRightsUpdatedEvent {
+        try makeDecoder().decode(ParticipantRightsUpdatedEvent.self, from: Data(json.utf8))
+    }
+
+    private let rightsBlock = """
+    "rights": {
+        "canSendMessages": true, "canSendFiles": true, "canSendImages": true,
+        "canSendVideos": true, "canSendAudios": true, "canSendLocations": true,
+        "canSendLinks": true, "canViewHistory": true
+    }
+    """
+
+    func test_rightsUpdated_carriesTheGrant_whenTheKeyHoldsADate() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1",
+          \(rightsBlock), "historyVisibleFrom": "2026-01-15T00:00:00.000Z" }
+        """)
+
+        XCTAssertTrue(event.carriesHistoryGrant)
+        XCTAssertNotNil(event.historyVisibleFrom)
+    }
+
+    /// `null` est une AFFIRMATION — « j'ai calculé, il n'y a pas d'octroi ».
+    /// Le consommateur doit donc effacer, et non garder : la charge la PORTE.
+    func test_rightsUpdated_carriesTheGrant_whenTheKeyIsExplicitNull() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1",
+          \(rightsBlock), "historyVisibleFrom": null }
+        """)
+
+        XCTAssertTrue(event.carriesHistoryGrant, "an explicit null is an assertion, not a silence — it must erase")
+        XCTAssertNil(event.historyVisibleFrom)
+    }
+
+    /// La clé ABSENTE est un SILENCE — un producteur plus ancien. Elle rend la
+    /// même valeur que `null` (`nil`), et c'est exactement pourquoi le
+    /// discriminant ne peut pas être cette valeur.
+    func test_rightsUpdated_doesNotCarryTheGrant_whenTheKeyIsAbsent() throws {
+        let event = try rightsUpdatedEvent("""
+        { "conversationId": "c1", "participantId": "p1", "updatedBy": "u1", \(rightsBlock) }
+        """)
+
+        XCTAssertFalse(event.carriesHistoryGrant, "an absent key asserts nothing — the reader keeps what it has")
+        XCTAssertNil(event.historyVisibleFrom)
+    }
 }

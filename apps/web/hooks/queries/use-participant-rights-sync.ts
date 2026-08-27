@@ -40,9 +40,17 @@ export function useParticipantRightsSync(conversationId: string) {
             ? {
                 ...current,
                 entryCapabilities: data.rights,
-                // Présent seulement quand CE changement portait sur l'octroi
-                // d'historique — absent (`undefined`) sur un basculement de
-                // capacité ordinaire, qu'il ne faut alors pas écraser.
+                // Le discriminant est la PRÉSENCE de la clé, jamais sa valeur.
+                // Le gateway la pose TOUJOURS — `historyVisibleFrom: grantedFrom
+                // ? … : null` sur CHAQUE émission, que l'écriture l'ait touchée
+                // ou non (`routes/conversations/participants.ts`) : le cas
+                // nominal est donc toujours « le serveur réaffirme l'octroi »,
+                // et `null` EFFACE. La clé n'est absente que d'un producteur
+                // ANTÉRIEUR au champ, qui n'affirme rien — on garde alors ce
+                // qu'on a plutôt que d'effacer sur la foi d'un silence.
+                // (`undefined` est indiscernable de l'absence à la lecture d'une
+                // propriété, et Socket.IO sérialise en JSON où il ne voyage pas.)
+                // Jumeau iOS : `ParticipantRightsUpdatedEvent.carriesHistoryGrant`.
                 ...(data.historyVisibleFrom !== undefined
                   ? { historyVisibleFrom: data.historyVisibleFrom }
                   : {}),
