@@ -23,7 +23,7 @@ défaut bloquant. **La rév. 24 rend cette règle mécanique** : chaque ligne de
 matrice porte `data-task` / `data-kind` / `data-state`, et un script recompte
 depuis le DOM ; si l'arc diverge, un bandeau rouge s'affiche dans la page.
 **Et la page publiée suit le fichier (26/08)** : chaque commit `docs(p0)` republie
-l'artifact « Planches MeeshyComposer » (https://claude.ai/code/artifact/95de2699-a55c-4ba8-ab00-508594c239ce)
+l'artifact « Planches MeeshyComposer » (https://claude.ai/code/artifact/d97246fa-df52-42c3-9f82-42d3d7151590)
 depuis `docs/product/planche-meeshy-composer.html` — la page publiée le 20/08
 est restée cinq révisions derrière le dépôt ; aucune page « progress » parallèle.
 
