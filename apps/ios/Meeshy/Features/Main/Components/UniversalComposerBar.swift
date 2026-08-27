@@ -902,22 +902,119 @@ struct UniversalComposerBar: View {
     // MARK: - Action Button: Mic / Send
     // ========================================================================
 
-    /// Always MOUNTS `sendButton` — the right-side HStack slot never
-    /// collapses, so nothing reflows the moment content lands (bug
-    /// 2026-05-28: « on ne voit pas le bouton envoyer », caused by the slot
-    /// disappearing entirely when empty). But directive porteur 2026-08-26
-    /// (#3920) wants the button itself gone from view until there is
-    /// something to send — so idle state now fades to fully INVISIBLE
-    /// (opacity 0), not merely dimmed (0.4): the affordance reserves its
-    /// space without ever catching the eye when the composer is empty.
+    /// Always MOUNTS the same 44×44 slot — it never collapses, so nothing
+    /// reflows the moment content lands (bug 2026-05-28: « on ne voit pas le
+    /// bouton envoyer », caused by the slot disappearing entirely when
+    /// empty). Directive porteur 2026-08-26 (#3920) wants the button itself
+    /// gone from view until there is something to send — so idle state fades
+    /// the button to fully INVISIBLE (opacity 0), not merely dimmed.
+    ///
+    /// #3927 — tant qu'il n'y a rien à envoyer (et hors édition), le slot
+    /// affiche plutôt deux emojis rapides (`quickEmojiButtons`) au lieu du
+    /// bouton invisible : l'espace réservé sert désormais à quelque chose.
+    /// La bascule entre les deux contenus, et l'apparition/disparition du
+    /// bouton d'envoi lui-même, passent par `tourbillonTransition` — un
+    /// grossissement/rotation à l'arrivée, l'inverse au départ.
     @ViewBuilder
     var actionButton: some View {
         let isReady = (effectiveIsRecording || hasContent) && !externalIsSending
-        sendButton
-            .opacity(isReady ? 1.0 : 0)
-            .allowsHitTesting(isReady)
-            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
-            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+        let showsQuickEmoji = !isReady && !isEditMode && showEmoji
+
+        ZStack {
+            if showsQuickEmoji {
+                quickEmojiButtons
+                    .transition(tourbillonTransition)
+            } else {
+                sendButton
+                    .opacity(isReady ? 1.0 : 0)
+                    .allowsHitTesting(isReady)
+                    .transition(tourbillonTransition)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .animation(.spring(response: 0.35, dampingFraction: 0.62), value: showsQuickEmoji)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
+        .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
+    }
+
+    // ========================================================================
+    // MARK: - Tourbillon Transition
+    // ========================================================================
+
+    /// #3927 — apparition/disparition en tourbillon : grossit en tournant à
+    /// l'arrivée, rétrécit en tournant en SENS INVERSE au départ. Remplace le
+    /// simple fondu pour le contenu de `actionButton` (bouton d'envoi ET
+    /// emojis rapides, quel que soit celui qui entre/sort).
+    private var tourbillonTransition: AnyTransition {
+        .asymmetric(
+            insertion: .modifier(
+                active: TourbillonEffect(scale: 0.05, rotation: .degrees(-250), opacity: 0),
+                identity: TourbillonEffect(scale: 1, rotation: .zero, opacity: 1)
+            ),
+            removal: .modifier(
+                active: TourbillonEffect(scale: 0.05, rotation: .degrees(250), opacity: 0),
+                identity: TourbillonEffect(scale: 1, rotation: .zero, opacity: 1)
+            )
+        )
+    }
+
+    private struct TourbillonEffect: ViewModifier {
+        let scale: CGFloat
+        let rotation: Angle
+        let opacity: Double
+
+        func body(content: Content) -> some View {
+            content
+                .scaleEffect(scale)
+                .rotationEffect(rotation)
+                .opacity(opacity)
+        }
+    }
+
+    // ========================================================================
+    // MARK: - Quick-Send Emoji (idle-state replacement for the send button)
+    // ========================================================================
+
+    /// #3927 — deux emojis rapides occupent l'emplacement du bouton d'envoi
+    /// tant qu'il n'y a rien à envoyer, sourcés par le même tracker que les
+    /// réactions rapides (`EmojiUsageTracker`, `MessageOverlayMenu.swift`) —
+    /// source unique du « plus utilisé », jamais une seconde liste divergente.
+    private static let quickSendDefaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥"]
+
+    private var quickSendEmojis: [String] {
+        EmojiUsageTracker.topEmojis(count: 2, defaults: Self.quickSendDefaultEmojis)
+    }
+
+    @ViewBuilder
+    private var quickEmojiButtons: some View {
+        HStack(spacing: 4) {
+            ForEach(quickSendEmojis, id: \.self) { emoji in
+                Button {
+                    sendQuickEmoji(emoji)
+                } label: {
+                    Text(emoji)
+                        .font(.system(size: 16))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(mutedColor.opacity(0.12)))
+                }
+                .accessibilityLabel(
+                    String(localized: "composer.quickEmoji.label", defaultValue: "Envoyer directement", bundle: .main) + " " + emoji
+                )
+                .accessibilityIdentifier(MeeshyA11yID.composerQuickEmoji)
+            }
+        }
+    }
+
+    /// Envoi direct d'un emoji : pose `text` puis réutilise `handleSend()` —
+    /// SOURCE UNIQUE du dispatch (`onCustomSend`/`onSendMessage`/`onSend`),
+    /// identique au bouton d'envoi. Ne réimplémente jamais cette
+    /// ramification : les hôtes réels (ex. `ConversationView`) câblent
+    /// toujours `onCustomSend`, qui lit l'état courant du champ — le
+    /// contourner enverrait le champ VIDE au lieu de l'emoji.
+    private func sendQuickEmoji(_ emoji: String) {
+        EmojiUsageTracker.recordUsage(emoji: emoji)
+        text = emoji
+        handleSend()
     }
 
     // See UniversalComposerBar+Recording.swift for textInputField
