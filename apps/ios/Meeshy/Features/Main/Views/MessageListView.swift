@@ -61,6 +61,14 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// pression. `true` (< iOS 26) garde le long-press → overlay custom.
     /// Les deux ne coexistent jamais (double déclenchement).
     var enableLongPress: Bool = true
+    /// **Mode sélection multiple (#4005).** `true` : un tap sur la cellule
+    /// bascule la sélection au lieu de son geste habituel — un capteur
+    /// transparent se pose PAR-DESSUS `content()` (fonctionne quel que soit
+    /// ce que fait la bulle en dessous : traduction, carrousel média, etc.),
+    /// et swipe/longpress s'effacent (une seule intention à la fois).
+    var isSelectionModeActive: Bool = false
+    var isSelected: Bool = false
+    var onToggleSelection: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
 
     @State private var offset: CGFloat = 0
@@ -89,6 +97,40 @@ struct BubbleSwipeContainer<Content: View>: View {
         }
     }
 
+    /// **Retour porteur 2026-08-27 (#4005 bis, puis ter).** En mode
+    /// sélection, une bulle se décalait à droite pour loger son cercle
+    /// SEULEMENT si elle était REÇUE (`!isMine`) — la bulle ENVOYÉE gardait
+    /// son cercle au coin haut-droit. Deuxième retour porteur, explicite :
+    /// **toujours à gauche, qu'importe `isMine` ET qu'importe le mode de
+    /// lecture** — colonne de cases à cocher unique, façon Mail/Fichiers,
+    /// jamais un coin qui dépend du sens de la bulle.
+    ///
+    /// Diamètre du glyphe SF Symbol (`.font(.system(size: 20))` ci-dessous,
+    /// halo de fond exclu) — l'unité que le porteur nomme « taille du
+    /// cercle ».
+    private static var selectionCircleDiameter: CGFloat { 20 }
+
+    /// Bulle (River/Résumé compris, `uniformFlatDirection == false`) : 3×.
+    /// Plat (Focal/Script, `uniformFlatDirection == true`) : 2×.
+    private var selectionShiftMultiplier: CGFloat {
+        uniformFlatDirection ? 2 : 3
+    }
+
+    /// Largeur de la marge ouverte à GAUCHE de la bulle en mode sélection —
+    /// 0 hors sélection, pour laisser le repos existant strictement
+    /// inchangé. S'applique à TOUTE bulle, envoyée ou reçue (retour porteur
+    /// 2026-08-27 ter : « qu'importe le mode »).
+    private var selectionShift: CGFloat {
+        guard isSelectionModeActive else { return 0 }
+        return Self.selectionCircleDiameter * selectionShiftMultiplier
+    }
+
+    /// Centre le cercle DANS `selectionShift` (bord ← [marge] → bulle),
+    /// plutôt que collé à l'un ou l'autre.
+    private var selectionLeadingCircleInset: CGFloat {
+        max(0, (selectionShift - Self.selectionCircleDiameter) / 2)
+    }
+
     // Pre-formatted on `messageCreatedAt` (a `let`) so the indicator's body
     // re-evaluation during drag doesn't re-run `Date.formatted` 60 times per
     // second. SwiftUI doesn't track these as dependencies (they're computed
@@ -113,6 +155,7 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .padding(.horizontal, 8)
 
             content()
+                .padding(.leading, selectionShift)
                 .offset(x: offset)
                 .accessibilityAction(named: String(localized: "a11y.message.actions.reply", bundle: .main)) { onSwipeReply() }
                 .accessibilityAction(named: String(localized: "a11y.message.actions.forward", bundle: .main)) { onSwipeForward() }
@@ -127,7 +170,10 @@ struct BubbleSwipeContainer<Content: View>: View {
                 .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .onPreferenceChange(BubbleInlinePagingPreferenceKey.self) { isInlinePagingActive = $0 }
                 .onPreferenceChange(MediaScrubbingPreferenceKey.self) { isMediaScrubbing = $0 }
-                .simultaneousGesture(dragGesture)
+                // Mode sélection (#4005) : swipe/longpress s'effacent — une
+                // seule intention à la fois, même patron que le carrousel
+                // média (`isInlinePagingActive`) et le scrubbing.
+                .simultaneousGesture(dragGesture, including: isSelectionModeActive ? .none : .all)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
                 // (ConversationView) renders a custom overlay that keeps
@@ -149,7 +195,37 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // un `.contextMenu` NATIF (Liquid Glass) qui possède la
                 // pression ; ce geste custom est retiré pour éviter le
                 // double déclenchement (overlay custom + menu natif).
-                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress, action: onLongPress))
+                .modifier(ConditionalBubbleLongPress(enabled: enableLongPress && !isSelectionModeActive, action: onLongPress))
+
+            // **Capteur de sélection (#4005).** Par-dessus TOUT — fonctionne
+            // quel que soit ce que fait la bulle en dessous (traduction,
+            // carrousel média…). Un tap qui aurait ouvert une action dans la
+            // bulle est INTERCEPTÉ pendant la sélection — comportement voulu,
+            // pas un défaut.
+            if isSelectionModeActive {
+                Rectangle()
+                    .fill(Color.clear)
+                    .contentShape(Rectangle())
+                    .onTapGesture { onToggleSelection?() }
+                    .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityLabel(Text(
+                        String(localized: "conversation.selection.toggleMessage", defaultValue: "Message", bundle: .main)
+                    ))
+            }
+        }
+        // Toujours coin haut-GAUCHE, centré dans `selectionShift` par
+        // `selectionLeadingCircleInset` — qu'importe `isMine`, qu'importe le
+        // mode de lecture (retour porteur 2026-08-27 ter).
+        .overlay(alignment: .topLeading) {
+            if isSelectionModeActive {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
+                    .background(Circle().fill(.background).frame(width: 18, height: 18))
+                    .padding(.top, 6)
+                    .padding(.leading, selectionLeadingCircleInset)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -443,7 +519,12 @@ struct MessageListView: UIViewControllerRepresentable {
     /// en deux l'identité et la barre de méta que le mode Focal fait tenir à
     /// cheval sur son cadre. L'overlay rend désormais le message NORMAL, dans
     /// tous les modes de lecture.
-    var onLongPress: ((String) -> Void)?
+    ///
+    /// Le SECOND paramètre du tuple porte désormais le frame RÉEL de la
+    /// cellule (`cellFrameInWindow`, résolu côté UIKit) — #4004 (2026-08-27) :
+    /// `MessageFramePreferenceKey` ne traverse la frontière UIKit qu'en mode
+    /// Rivière (`RiverBubbleView`), jamais pour la liste standard.
+    var onLongPress: ((String, CGRect?) -> Void)?
     /// iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) d'une bulle,
     /// construit par `ConversationView` (là où toutes les actions sont déjà
     /// résolues) — mêmes callbacks que l'overlay custom. `nil` < iOS 26 (le
@@ -456,6 +537,11 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a call-summary notice → request the shared call-detail
     /// sheet for that message, distinct from `onLongPress`'s regular-message menu.
     var onCallDetailRequest: ((String) -> Void)?
+    /// **Mode sélection multiple (#4005).** `false`/`[]` par défaut — sans
+    /// effet sur les écrans qui ne câblent pas ces trois paramètres.
+    var isSelectionModeActive: Bool = false
+    var selectedMessageIds: Set<String> = []
+    var onToggleSelection: ((String) -> Void)?
     /// User-initiated reaction add. Carries the message id and the tapped
     /// bubble cell's on-screen frame (window coords, `nil` when the cell is
     /// not realized) so the quick-reaction bar can anchor to the bubble.
@@ -540,6 +626,10 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
+        // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
+        vc.isSelectionModeActive = isSelectionModeActive
+        vc.selectedMessageIds = selectedMessageIds
+        vc.onToggleSelection = onToggleSelection
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment
@@ -612,6 +702,10 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onLongPress = onLongPress
         vc.nativeMessageMenu = nativeMessageMenu
         vc.overlaidMessageId = overlaidMessageId
+        // #4005 — `didSet` gardés côté VC (même patron que `readingMode`).
+        vc.isSelectionModeActive = isSelectionModeActive
+        vc.selectedMessageIds = selectedMessageIds
+        vc.onToggleSelection = onToggleSelection
         vc.onAddReaction = onAddReaction
         vc.onToggleReaction = onToggleReaction
         vc.onReactToAttachment = onReactToAttachment

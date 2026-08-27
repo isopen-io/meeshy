@@ -17,6 +17,12 @@ enum PrimaryAction: String, Equatable {
     /// 2026-08-24 ; l'appui long étant rendu au menu du message, la
     /// destination entre ICI plutôt que d'être perdue.
     case callDetail
+    /// **Entrée en mode sélection multiple (#4005, promue en primaire
+    /// 2026-08-27).** Aucune condition sur le contexte du message — toujours
+    /// offerte, comme `.compose`/`.edit` dont le porteur la veut voisine :
+    /// « parmi les premiers éléments ». Vivait dans `MoreItem` (« Plus… »),
+    /// enterrée derrière un geste supplémentaire — retour porteur explicite.
+    case select
 }
 
 /// Item d'une section de la feuille « Plus… ».
@@ -171,6 +177,9 @@ enum MessageActionResolver {
         var out: [PrimaryAction] = []
         if ctx.hasCallSummary { out.append(.callDetail) }
         if ctx.isMine && ctx.canEdit && ctx.hasText { out.append(.edit) }
+        // « Sélectionner » — retour porteur 2026-08-27 : juste À CÔTÉ
+        // d'Éditer, parmi les premiers éléments (jamais dans « Plus… »).
+        out.append(.select)
         if ctx.hasText { out.append(.translate) }
         if ctx.hasText { out.append(.copy) }
         if ctx.saveableAttachmentCount == 1 { out.append(.saveMedia) }
@@ -180,9 +189,9 @@ enum MessageActionResolver {
         // vit dans `ComposableAttachment.offers`, que les trois lecteurs de ce
         // geste partagent. Le résolveur n'en tient qu'un fait.
         if ctx.canComposeMedia { out.append(.compose) }
-        // Repli : jamais de menu réduit à « Plus… » seul (média-seul non
-        // enregistrable, localisation…) → épingler comme action visible.
-        if out.isEmpty { out.append(ctx.isPinned ? .unpin : .pin) }
+        // Le repli « jamais de menu réduit à Plus… seul » (média-seul non
+        // enregistrable, localisation…) est devenu SANS OBJET : `.select`,
+        // toujours ajouté ci-dessus, garantit déjà `out` non vide.
         out.append(.more)
         return out
     }

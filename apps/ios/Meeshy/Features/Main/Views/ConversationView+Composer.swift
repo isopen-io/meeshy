@@ -642,6 +642,28 @@ extension ConversationView {
         .accessibilityLabel(String(localized: "conversation.view.composer.editing_in_progress", defaultValue: "Modification du message en cours", bundle: .main))
     }
 
+    /// **Le point d'entrée UNIQUE en mode édition (#4003).** Trois sites
+    /// entraient en édition en écrivant `editingMessageId`/
+    /// `editingOriginalContent`/`composerText.text` chacun de son côté — l'un
+    /// d'eux oubliait `composerText.text`, laissant le bandeau d'édition
+    /// s'afficher sur un champ VIDE. `beginEdit` sauvegarde aussi le brouillon
+    /// en cours AVANT de l'écraser (`draftBeforeEdit`), restitué par
+    /// `cancelEdit`/`submitEdit` — sans quoi éditer un ancien message perdait
+    /// ce que l'auteur était en train de composer.
+    ///
+    /// Idempotent en cascade : si une édition est déjà en cours (l'auteur
+    /// tape « Éditer » sur un AUTRE message sans annuler), `draftBeforeEdit`
+    /// n'est PAS réécrit — il porterait alors le contenu du premier message
+    /// édité au lieu du vrai brouillon d'origine.
+    func beginEdit(_ message: Message) {
+        if composerState.editingMessageId == nil {
+            composerState.draftBeforeEdit = composerText.text
+        }
+        composerState.editingMessageId = message.id
+        composerState.editingOriginalContent = message.content
+        composerText.text = message.content
+    }
+
     func submitEdit() {
         guard let messageId = composerState.editingMessageId else { return }
         let newContent = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -664,7 +686,11 @@ extension ConversationView {
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             composerState.editingMessageId = nil
             composerState.editingOriginalContent = nil
-            composerText.text = ""
+            // Restitue le brouillon sauvegardé par `beginEdit` — ne le vide
+            // plus inconditionnellement (#4003) : un brouillon en cours de
+            // composition survit désormais à un aller-retour en édition.
+            composerText.text = composerState.draftBeforeEdit ?? ""
+            composerState.draftBeforeEdit = nil
         }
     }
 

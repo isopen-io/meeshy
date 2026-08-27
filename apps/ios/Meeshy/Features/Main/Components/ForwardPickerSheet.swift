@@ -20,6 +20,16 @@ import MeeshyUI
 /// — la conversation directe d'un contact, à l'envoi et jamais à la sélection.
 struct ForwardPickerSheet: View {
     let message: Message
+    /// **Transfert groupé (#4005).** `[]` par défaut — le comportement
+    /// EXISTANT (un seul message) est inchangé pour les deux sites de
+    /// montage historiques. Non vide quand la feuille s'ouvre depuis le mode
+    /// sélection multiple : `message` reste le PREMIER message sélectionné
+    /// (aperçu affiché), les autres suivent dans cette liste. `perform(_:)`
+    /// envoie TOUS les messages ([message] + additionalMessages) à chaque
+    /// cible ; le statut par cible reste binaire (tous envoyés, ou échec) —
+    /// simplification assumée pour ce lot, pas un défaut de granularité par
+    /// message à corriger sans qu'on le demande.
+    var additionalMessages: [Message] = []
     let sourceConversationId: String
     let accentColor: String
     var onOpenConversation: ((Conversation) -> Void)? = nil
@@ -173,20 +183,33 @@ struct ForwardPickerSheet: View {
                 .fill(Color(hex: accentColor))
                 .frame(width: 3, height: 28)
 
-            if let firstAttachment = message.attachments.first {
+            if additionalMessages.isEmpty, let firstAttachment = message.attachments.first {
                 attachmentThumbnail(firstAttachment)
             }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(message.senderName ?? "?")
+                if additionalMessages.isEmpty {
+                    Text(message.senderName ?? "?")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                        .lineLimit(1)
+
+                    Text(previewText)
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(theme.textMuted)
+                        .lineLimit(1)
+                } else {
+                    Text(
+                        String(
+                            localized: "forward.preview.multipleMessages",
+                            defaultValue: "\(additionalMessages.count + 1) messages",
+                            bundle: .main
+                        )
+                    )
                     .font(MeeshyFont.relative(11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .lineLimit(1)
-
-                Text(previewText)
-                    .font(MeeshyFont.relative(11))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(1)
+                }
             }
             .accessibilityElement(children: .combine)
 
@@ -611,12 +634,25 @@ struct ForwardPickerSheet: View {
     /// TOUJOURS à partir de cet id renvoyé, jamais de `target.conversationId`
     /// (`nil` pour un contact) : sans ça, le toast n'aurait jamais été
     /// actionnable pour une conversation tout juste créée.
+    /// **Un ou plusieurs messages vers UNE cible (#4005).** Envoie
+    /// séquentiellement chaque message de `[message] + additionalMessages` —
+    /// le service existant, appelé une fois par message, jamais une nouvelle
+    /// API groupée. Le statut agrégé reste BINAIRE : la cible n'est marquée
+    /// « envoyée » que si TOUS les messages sont partis ; le premier échec
+    /// interrompt la séquence pour cette cible et la marque en échec (sa
+    /// raison est celle du message qui a échoué).
     private func perform(_ target: ForwardTarget) async {
-        let outcome = await forwardService.forward(
-            message: message,
-            sourceConversationId: sourceConversationId,
-            to: target
-        )
+        var lastOutcome: ForwardOutcome?
+        for messageToSend in [message] + additionalMessages {
+            let outcome = await forwardService.forward(
+                message: messageToSend,
+                sourceConversationId: sourceConversationId,
+                to: target
+            )
+            lastOutcome = outcome
+            guard outcome.succeeded else { break }
+        }
+        guard let outcome = lastOutcome else { return }
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             sendState.finishSend(target.id, succeeded: outcome.succeeded, reason: outcome.failureReason)
         }

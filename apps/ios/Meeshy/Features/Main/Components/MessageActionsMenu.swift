@@ -107,6 +107,7 @@ struct MessageActionsMenu: View {
         case .more: return "ellipsis"
         case .delete: return "trash"
         case .callDetail: return "info.circle"
+        case .select: return "checkmark.circle"
         }
     }
 
@@ -124,6 +125,7 @@ struct MessageActionsMenu: View {
         case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
         case .callDetail: return String(localized: "bubble.call.details.action", defaultValue: "Détails de l'appel", bundle: .main)
+        case .select: return String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main)
         }
     }
 }

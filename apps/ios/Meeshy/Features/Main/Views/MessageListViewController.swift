@@ -161,8 +161,12 @@ final class MessageListViewController: UIViewController {
     /// Long press on a bubble — opens the contextual options menu. L'aperçu
     /// élevé est le message NORMAL, dans tous les modes de lecture
     /// (directive 2026-08-23) : voir la note à l'emplacement de l'ancien
-    /// `focalOverlayPreview`.
-    var onLongPress: ((String) -> Void)?
+    /// `focalOverlayPreview`. Carries the message id and the tapped bubble
+    /// cell's on-screen frame (window coords; `nil` when the cell is not
+    /// realized), même patron qu'`onAddReaction` — #4004 (2026-08-27) : le
+    /// menu longpress ferme le clavier et remonte le message vers le centre
+    /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
+    var onLongPress: ((String, CGRect?) -> Void)?
     /// iOS 26+ : builder du contenu `.contextMenu` NATIF (Liquid Glass) d'une
     /// bulle, fourni par `ConversationView`. Quand présent (donc iOS 26+), la
     /// cellule attache le menu natif et DÉSACTIVE le long-press custom.
@@ -198,6 +202,33 @@ final class MessageListViewController: UIViewController {
             }
         }
     }
+    /// **Mode sélection multiple (#4005).** `didSet` gardé (`oldValue !=
+    /// newValue`), même patron que `readingMode` : une réaffectation
+    /// identique à chaque tick SwiftUI (`updateUIViewController` s'exécute à
+    /// chaque re-render) est un no-op — sans la garde, `applySnapshot`
+    /// rejouerait à chaque frappe dans le composer, par exemple.
+    var isSelectionModeActive: Bool = false {
+        didSet {
+            guard oldValue != isSelectionModeActive, isViewLoaded else { return }
+            applySnapshot(reconfigure: .allItems)
+        }
+    }
+    var selectedMessageIds: Set<String> = [] {
+        didSet {
+            guard oldValue != selectedMessageIds, isViewLoaded else { return }
+            // Retour porteur 2026-08-27 (#515) : `.allItems` reconfigurait
+            // TOUTE rangée visible pour une coche qui ne change QUE sur UN
+            // message — contraire au gate `.equatable()` (#515) que ce coût
+            // existe précisément pour éviter. La différence symétrique des
+            // deux `Set` est exactement l'ensemble des id dont l'état de
+            // coche a changé.
+            applySnapshot(reconfigure: .items(oldValue.symmetricDifference(selectedMessageIds)))
+        }
+    }
+    /// Bascule la sélection d'UN message — `ConversationView` décide de la
+    /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
+    /// ce contrôleur ne fait que relayer l'id tapé.
+    var onToggleSelection: ((String) -> Void)?
     /// Add reaction. Carries the message id and the tapped bubble cell's
     /// on-screen frame (window coords; `nil` when the cell is not realized)
     /// so the quick-reaction bar can anchor to the bubble.
@@ -1221,15 +1252,26 @@ final class MessageListViewController: UIViewController {
             let storyReplyHandler = self.onStoryReplyTap
             let swipeReplyHandler = self.onSwipeReply
             let swipeForwardHandler = self.onSwipeForward
-            let longPressHandler = self.onLongPress
             // Wrap the raw handler so each tap also carries the bubble cell's
             // on-screen frame — the quick-reaction bar anchors to it.
             let addReactionHandler: ((String) -> Void) = { [weak self] tappedId in
                 guard let self else { return }
                 self.onAddReaction?(tappedId, self.cellFrameInWindow(messageId: tappedId))
             }
+            // Même patron qu'`addReactionHandler` : le frame de la cellule est
+            // résolu ICI (UIKit, `cellFrameInWindow`) et voyage AVEC l'appel —
+            // `MessageFramePreferenceKey` (mode Rivière uniquement) ne
+            // traverse pas la frontière UIKit pour ce mode-ci (#4004, revue
+            // 2026-08-27).
+            let longPressHandler: ((String) -> Void) = { [weak self] tappedId in
+                guard let self else { return }
+                self.onLongPress?(tappedId, self.cellFrameInWindow(messageId: tappedId))
+            }
             let toggleReactionHandler = self.onToggleReaction
             let attachmentReactionHandler = self.onReactToAttachment
+            let selectionModeActive = self.isSelectionModeActive
+            let selectedIds = self.selectedMessageIds
+            let toggleSelectionHandler = self.onToggleSelection
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
             let showReadStatusHandler = self.onShowReadStatus
@@ -1582,7 +1624,7 @@ final class MessageListViewController: UIViewController {
                 // de l'appui long — même gestionnaire, donc même liste
                 // d'actions (édition, suppression, signalement, traduction),
                 // sans qu'aucune seconde liste n'existe à maintenir.
-                focalActions.onMore = { _ in longPressHandler?(messageId) }
+                focalActions.onMore = { _ in longPressHandler(messageId) }
                 focalActions.onViewStory = (senderRingState != .none) ? { _ in viewSenderStoryHandler?(senderId) } : nil
                 focalActions.onCallBack = { _ in
                     guard let summary = message.callSummary else { return }
@@ -1616,10 +1658,13 @@ final class MessageListViewController: UIViewController {
                     uniformFlatDirection: self.readingMode.usesFlatRow,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
-                    onLongPress: { longPressHandler?(messageId) },
+                    onLongPress: { longPressHandler(messageId) },
                     // iOS 26+ (menu natif présent) : couper le long-press
                     // custom — le `.contextMenu` natif possède la pression.
-                    enableLongPress: nativeMenu == nil
+                    enableLongPress: nativeMenu == nil,
+                    isSelectionModeActive: selectionModeActive,
+                    isSelected: selectedIds.contains(messageId),
+                    onToggleSelection: { toggleSelectionHandler?(messageId) }
                 ) {
                     if let focalRow {
                         focalRow.equatable()
@@ -1707,9 +1752,15 @@ final class MessageListViewController: UIViewController {
     /// `.allItems` : bascules GLOBALES qui changent le rendu de toutes les
     /// rangées sans toucher aux records — thème, terme de recherche,
     /// révision de langue préférée, consentement voix.
-    enum SnapshotReconfigureScope {
+    enum SnapshotReconfigureScope: Equatable {
         case changedRecords
         case allItems
+        /// Reconfigure UNIQUEMENT ces `localId` — retour porteur 2026-08-27
+        /// (#515) : la sélection multiple (#4005) posait `.allItems` sur
+        /// CHAQUE coche, reconfigurant toute rangée visible pour un état qui
+        /// ne change QUE sur UN message. Contraire au gate `.equatable()`
+        /// (#515) que ce coût existe précisément pour éviter.
+        case items(Set<String>)
     }
 
     /// Versions posées à la DERNIÈRE pose non différée — la base du diff
@@ -1808,6 +1859,11 @@ final class MessageListViewController: UIViewController {
         switch reconfigure {
         case .allItems:
             itemsToReconfigure = items.filter { previousItems.contains($0) }
+        case .items(let targetLocalIds):
+            itemsToReconfigure = targetLocalIds.compactMap { localId in
+                let item = MessageListItem.message(localId: localId)
+                return previousItems.contains(item) ? item : nil
+            }
         case .changedRecords:
             // Seuls les records dont la VERSION a bougé depuis la base — les
             // séparateurs de jour ne se reconfigurent jamais ici (leur libellé

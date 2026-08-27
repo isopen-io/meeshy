@@ -41,6 +41,9 @@ struct MessageOverlayMenu: View {
     /// le même état de présentation que le second déclencheur (la feuille de
     /// transfert). Un montage ici en ferait un second contrat d'envoi.
     var onCompose: (() -> Void)? = nil
+    /// **Sélectionner** (#4005, primaire depuis le 2026-08-27) — entre en mode
+    /// sélection multiple, sème le message qui a déclenché le longpress.
+    var onSelect: (() -> Void)? = nil
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
     // overlay renders a REAL `ThemedMessageBubble` at the source position
@@ -207,6 +210,8 @@ struct MessageOverlayMenu: View {
             onSaveMedia?()
         case .compose:
             onCompose?()
+        case .select:
+            onSelect?()
         case .pin, .unpin:
             onPin?()
         case .star, .unstar:

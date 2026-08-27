@@ -70,6 +70,22 @@ struct ConversationOverlayState {
     /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
     var showOverlayMenu = false
     var longPressEnabled = false
+    /// **L'état à restituer à la fermeture du menu longpress (#4004).**
+    /// `presentLongPressMenu` désactive le clavier/le panneau d'options AVANT
+    /// de présenter le menu — sans cette mémoire, ils resteraient fermés une
+    /// fois le menu refermé, même si l'auteur était en train de taper.
+    /// `nil` tant qu'aucun longpress n'a capturé d'état à restituer.
+    var restoreAfterLongPress: (isTyping: Bool, showOptions: Bool)? = nil
+    /// **Mode sélection multiple (#4005).** `true` pendant que la liste bascule
+    /// en sélection ; chaque bulle devient tappable pour ajouter/retirer de
+    /// `selectedMessageIds`, plafonné à `ConversationOverlayState.
+    /// selectionCap`. Quitter le mode (bouton Annuler) vide la sélection —
+    /// jamais de sélection résiduelle qui réapparaît au prochain appui long.
+    var isSelectionModeActive = false
+    var selectedMessageIds: Set<String> = []
+    /// Maximum de messages ET pièces jointes sélectionnables au total
+    /// (retour porteur 2026-08-27, #4005).
+    static let selectionCap = 100
     var detailSheetMessage: Message? = nil
     /// Message whose call-detail sheet (transcript-aware, `CallSummaryDetailSheet`)
     /// is presented — separate from `detailSheetMessage`, which stays wired to
@@ -180,6 +196,12 @@ struct ConversationComposerState {
     var showOptions = false
     var actionAlert: String? = nil
     var forwardMessage: Message? = nil
+    /// **Transfert groupé (#4005).** Vide pour les DEUX sites d'ouverture
+    /// historiques (longpress simple, swipe) — `forwardMessage` seul porte
+    /// alors tout. Non vide UNIQUEMENT depuis le mode sélection multiple :
+    /// `endSelectionMode()`-adjacent, posée puis effacée avec
+    /// `forwardMessage` par le MÊME `onDismiss` de la feuille.
+    var forwardAdditionalMessages: [Message] = []
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
     var composeMediaTarget: ComposableMediaTarget? = nil
@@ -243,6 +265,12 @@ struct ConversationComposerState {
     var pendingReplyReference: ReplyReference? = nil
     var editingMessageId: String? = nil
     var editingOriginalContent: String? = nil
+    /// **Le brouillon en cours au moment d'entrer en édition (#4003).** Sans
+    /// lui, `beginEdit` écrase silencieusement ce que l'auteur était en train
+    /// de composer, et `cancelEdit`/`submitEdit` ne pouvaient rien restituer.
+    /// Posé UNE fois par `beginEdit` (jamais réécrit tant qu'une édition est
+    /// en cours), consommé et effacé par `cancelEdit`.
+    var draftBeforeEdit: String? = nil
 
     // Reply attachment preview
     var previewMedia: PreviewMedia? = nil
@@ -936,6 +964,8 @@ struct ConversationView: View {
                     .presentationDetents([.medium, .large])
             }
             .sheet(item: $composerState.forwardMessage, onDismiss: {
+                // #4005 — le transfert groupé se referme AVEC le simple.
+                composerState.forwardAdditionalMessages = []
                 // La feuille est DÉMONTÉE : le plein écran peut prendre sa
                 // place. Promouvoir plus tôt présenterait deux modaux à la fois.
                 guard let attendue = composerState.pendingComposeTarget else { return }
@@ -944,6 +974,7 @@ struct ConversationView: View {
             }) { msgToForward in
                 ForwardPickerSheet(
                     message: msgToForward,
+                    additionalMessages: composerState.forwardAdditionalMessages,
                     sourceConversationId: conversation?.id ?? "",
                     accentColor: accentColor,
                     onOpenConversation: { router.navigateToConversation($0) },
@@ -968,6 +999,12 @@ struct ConversationView: View {
             .blur(radius: overlayState.showOverlayMenu ? 12 : 0)
             .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
             .overlay { overlayMenuContent }
+            // #4004 — restitue le clavier/panneau d'options désactivés par
+            // `presentLongPressMenu` à l'ouverture, quand le menu se referme
+            // (tap ailleurs, swipe, action choisie).
+            .adaptiveOnChange(of: overlayState.showOverlayMenu) { _, isShowing in
+                if !isShowing { restoreStateAfterLongPressIfNeeded() }
+            }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
                 frameTracker.update(frames)
             }
@@ -1104,7 +1141,7 @@ struct ConversationView: View {
                         _ = viewModel.toggleStar(messageId: msg.id, conversationName: conversation?.name, conversationAccentColor: accentColor)
                     },
                     onDeleteMessage: { overlayState.deleteConfirmMessageId = msg.id },
-                    onEdit: { composerState.editingMessageId = msg.id },
+                    onEdit: { beginEdit(msg) },
                     onCopy: {
                         UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                         HapticFeedback.success()
@@ -1776,11 +1813,7 @@ struct ConversationView: View {
                           msg.isForwardable else { return }
                     composerState.forwardMessage = msg
                 },
-                onLongPress: { messageId in
-                    // Preserve l'overlay menu existant (MessageOverlayMenu panel).
-                    // L'infrastructure frame-tracking + LayoutEngine reste en place
-                    // et sera utilisée ensuite pour lifter la bulle dans le flow
-                    // du menu existant (sans remplacer le menu lui-même).
+                onLongPress: { messageId, cellFrame in
                     guard overlayState.longPressEnabled else { return }
                     // Exclusivité mutuelle : si la barre de quick-reaction est
                     // déjà ouverte, l'appui-long ne fait rien (une seule feature
@@ -1800,8 +1833,13 @@ struct ConversationView: View {
                     // La feuille de détail d'un appel n'est pas perdue pour
                     // autant : elle est devenue une ACTION du menu
                     // (`PrimaryAction.callDetail`, cf. `onShowCallDetail`).
-                    overlayState.overlayMessage = msg
-                    overlayState.showOverlayMenu = true
+                    //
+                    // Le clavier + le repositionnement vers le centre (#4004)
+                    // passent tous les deux par `presentLongPressMenu`. Le
+                    // menu NATIF iOS 26+ est présenté par le système, sans
+                    // point d'interception avant ouverture — ce site est le
+                    // SEUL point d'entrée (menu custom, < iOS 26).
+                    presentLongPressMenu(for: msg, cellFrame: cellFrame)
                 },
                 // iOS 26+ : contenu du `.contextMenu` NATIF (Liquid Glass) des
                 // bulles — mêmes actions que l'overlay custom (SSOT). `nil`
@@ -1812,6 +1850,9 @@ struct ConversationView: View {
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.callDetailMessage = msg
                 },
+                isSelectionModeActive: overlayState.isSelectionModeActive,
+                selectedMessageIds: overlayState.selectedMessageIds,
+                onToggleSelection: { messageId in toggleMessageSelection(messageId) },
                 onAddReaction: { messageId, bubbleFrame in
                     // Exclusivité mutuelle : ouvrir la barre de quick-reaction
                     // ferme d'abord l'overlay d'appui-long s'il est visible.
@@ -2036,7 +2077,14 @@ struct ConversationView: View {
                             mentionSuggestionPanel
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        if let blockedId = blockedDirectParticipantId {
+                        if overlayState.isSelectionModeActive {
+                            // #4005 — remplace le composer, jamais un
+                            // troisième bandeau au-dessus : composer un
+                            // nouveau message et sélectionner des anciens
+                            // messages sont deux intentions qui ne
+                            // coexistent pas.
+                            selectionToolbar
+                        } else if let blockedId = blockedDirectParticipantId {
                             blockedComposerZone(userId: blockedId)
                         } else if viewModel.isConversationClosed {
                             closedConversationBanner
@@ -2663,11 +2711,7 @@ struct ConversationView: View {
                     UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                     HapticFeedback.success()
                 },
-                onEdit: {
-                    composerState.editingMessageId = msg.id
-                    composerState.editingOriginalContent = msg.content
-                    composerText.text = msg.content
-                },
+                onEdit: { beginEdit(msg) },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onToggleStar: {
                     _ = viewModel.toggleStar(
@@ -2706,6 +2750,7 @@ struct ConversationView: View {
                     // que le second déclencheur, un seul chemin de présentation.
                     composerState.composeMediaTarget = ComposableMediaTarget(message: msg)
                 },
+                onSelect: { beginSelectionMode(seedingWith: msg.id) },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),
                 mentionDisplayNames: viewModel.mentionDisplayNames,
@@ -2833,11 +2878,18 @@ struct ConversationView: View {
     @ViewBuilder
     private func nativeMenuButton(_ action: PrimaryAction, msg: Message) -> some View {
         switch action {
+        case .select:
+            Button {
+                beginSelectionMode(seedingWith: msg.id)
+            } label: {
+                Label(
+                    String(localized: "action.select", defaultValue: "Sélectionner", bundle: .main),
+                    systemImage: "checkmark.circle"
+                )
+            }
         case .edit:
             Button {
-                composerState.editingMessageId = msg.id
-                composerState.editingOriginalContent = msg.content
-                composerText.text = msg.content
+                beginEdit(msg)
             } label: {
                 Label(String(localized: "action.edit", defaultValue: "Éditer", bundle: .main), systemImage: "pencil")
             }
