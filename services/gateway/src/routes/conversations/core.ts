@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { hasMinimumMemberRole, isMemberCreator, memberRoleCasings } from '@meeshy/shared/types/role-types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
@@ -1470,7 +1471,7 @@ export function registerCoreRoutes(
         });
         if (existingDirect) {
           const callerParticipant = existingDirect.participants.find((p: any) => p.userId === userId);
-          const creatorParticipant = existingDirect.participants.find((p: any) => p.role === 'creator');
+          const creatorParticipant = existingDirect.participants.find((p: any) => isMemberCreator(p.role ?? 'member'));
           // `!firstMessageSentAt` est ambigu (absent ET null donnent `null`
           // côté client JS) mais sans risque ici : le flip ci-dessous est
           // gardé par un `updateMany({ where: { firstMessageSentAt: null } })`
@@ -1478,7 +1479,7 @@ export function registerCoreRoutes(
           // Ne jamais retirer ce garde sans revoir cette ambiguïté.
           const isEmptyDirect = existingDirect.type === 'direct' && !existingDirect.firstMessageSentAt;
 
-          if (isEmptyDirect && creatorParticipant && callerParticipant?.role !== 'creator') {
+          if (isEmptyDirect && creatorParticipant && !isMemberCreator(callerParticipant?.role ?? 'member')) {
             // Le destinataire silencieux réinitie lui-même la conversation —
             // intention mutuelle aussi explicite qu'un message. On la rend
             // visible désormais des deux côtés (Prisme design doc 2026-08-04).
@@ -1807,7 +1808,8 @@ export function registerCoreRoutes(
         where: {
           conversationId: conversationId,
           userId: userId,
-          role: { in: ['creator', 'admin', 'moderator'] },
+          // Un `where` Prisma ne replie pas la casse (#4008).
+          role: { in: memberRoleCasings(['creator', 'admin', 'moderator']) },
           isActive: true
         },
         select: {
@@ -1825,7 +1827,12 @@ export function registerCoreRoutes(
         return sendForbidden(reply, 'The global conversation cannot be modified');
       }
 
-      if (membership?.role === 'moderator') {
+      // À corriger AVEC le `in` ci-dessus, jamais après : élargir la requête
+      // sans élargir cette restriction rendrait atteignable un modérateur
+      // écrit `MODERATOR` que l'égalité stricte laisserait modifier les
+      // permissions (#4008). Une garde qui ACCORDE et une garde qui
+      // RESTREINT lisent la même colonne en sens inverse.
+      if (membership?.role != null && !hasMinimumMemberRole(membership.role, 'admin')) {
         if (defaultWriteRole !== undefined || isAnnouncementChannel !== undefined ||
             slowModeSeconds !== undefined || autoTranslateEnabled !== undefined) {
           return sendForbidden(reply, 'Les modérateurs ne peuvent pas modifier les permissions');
@@ -2062,7 +2069,7 @@ export function registerCoreRoutes(
         where: {
           conversationId: conversationId,
           userId: userId,
-          role: { in: ['creator', 'admin'] },
+          role: { in: memberRoleCasings(['creator', 'admin']) },
           isActive: true
         }
       });

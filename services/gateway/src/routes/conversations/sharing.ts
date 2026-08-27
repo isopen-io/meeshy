@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { hasMinimumMemberRole, isGlobalAdmin, memberRoleCasings } from '@meeshy/shared/types/role-types';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
@@ -357,7 +358,7 @@ export function registerSharingRoutes(
       }
 
       // Vérifier si l'utilisateur est modérateur/admin de la conversation
-      const isModerator = ['creator', 'admin', 'moderator'].includes(membership.role as string);
+      const isModerator = hasMinimumMemberRole(membership.role ?? 'member', 'moderator');
 
       // Filtrer les liens selon les droits:
       // - Modérateurs: voient TOUS les liens
@@ -623,7 +624,11 @@ export function registerSharingRoutes(
             const adminsAndCreators = await prisma.participant.findMany({
               where: {
                 conversationId: shareLink.conversationId,
-                role: { in: ['admin', 'creator'] },
+                // Un `where` Prisma ne replie pas la casse (#4008) : sans les
+                // deux graphies, les admins du salon global — écrits en
+                // majuscules par l'ancien `InitService` — n'étaient prévenus
+                // d'aucune arrivée.
+                role: { in: memberRoleCasings(['admin', 'creator']) },
                 isActive: true,
                 userId: { not: userToken.userId } // Ne pas notifier l'utilisateur lui-même
               },
@@ -753,11 +758,9 @@ export function registerSharingRoutes(
       }
 
       // Vérifier que l'inviteur a les permissions pour inviter
-      const canInvite = 
-        inviterMember.role === 'admin' ||
-        inviterMember.role === 'creator' ||
-        authContext.registeredUser.role === 'ADMIN' ||
-        authContext.registeredUser.role === 'BIGBOSS';
+      const canInvite =
+        hasMinimumMemberRole(inviterMember.role ?? 'member', 'admin') ||
+        isGlobalAdmin(authContext.registeredUser.role ?? '');
 
       if (!canInvite) {
         return sendForbidden(reply, 'Vous n\'avez pas les permissions pour inviter des utilisateurs');

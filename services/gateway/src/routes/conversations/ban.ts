@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify'
+import { memberRoleLevel, hasMinimumMemberRole } from '@meeshy/shared/types/role-types'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
@@ -13,12 +14,7 @@ import { endConversationMembership } from '../../socketio/endConversationMembers
 
 const logger = enhancedLogger.child({ module: 'ConversationBanRoutes' })
 
-const ROLE_LEVELS: Record<string, number> = {
-  creator: 40,
-  admin: 30,
-  moderator: 20,
-  member: 10,
-}
+
 
 export function registerBanRoutes(
   fastify: FastifyInstance,
@@ -80,8 +76,8 @@ export function registerBanRoutes(
         return sendBadRequest(reply, 'Ce participant est déjà banni')
       }
 
-      const currentLevel = ROLE_LEVELS[currentParticipant.role as string] ?? 0
-      const targetLevel = ROLE_LEVELS[targetParticipant.role as string] ?? 0
+      const currentLevel = memberRoleLevel(currentParticipant.role ?? 'member')
+      const targetLevel = memberRoleLevel(targetParticipant.role ?? 'member')
 
       if (currentLevel <= targetLevel) {
         return sendForbidden(reply, 'Vous ne pouvez pas bannir un participant de rang égal ou supérieur')
@@ -232,8 +228,7 @@ export function registerBanRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
-      const currentLevel = ROLE_LEVELS[currentParticipant.role as string] ?? 0
-      if (currentLevel < ROLE_LEVELS['admin']) {
+      if (!hasMinimumMemberRole(currentParticipant.role ?? 'member', 'admin')) {
         return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
       }
 

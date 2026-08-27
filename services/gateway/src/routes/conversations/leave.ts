@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify'
+import { isMemberCreator } from '@meeshy/shared/types/role-types'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
@@ -62,7 +63,12 @@ export function registerLeaveRoutes(
       // suivante).
       let closedAudience: Array<{ id: string; userId: string | null }> = []
 
-      if (participant.role === 'creator') {
+      // La casse ne décide pas d'une PROTECTION (#4008). Cette garde ne
+      // sert pas à accorder un pouvoir mais à refuser un départ : sur une
+      // ligne écrite `CREATOR` — la casse que l'ancien `InitService` posait
+      // pour le salon global — l'égalité stricte ne tirait pas, et le
+      // créateur partait en y laissant tous ses membres.
+      if (isMemberCreator(participant.role ?? 'member')) {
         const otherActiveCount = await prisma.participant.count({
           where: { conversationId: id, isActive: true, userId: { not: userId } },
         })

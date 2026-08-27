@@ -283,3 +283,57 @@ describe('POST /conversations/:id/leave — participant lookup cache invalidatio
     await app.close();
   });
 });
+
+/**
+ * **Le rang du créateur se lit quelle que soit sa casse** (issue #4008).
+ *
+ * `Participant.role` s'écrit en minuscules depuis #3875, mais la migration des
+ * lignes historiques (`normalize-participant-role-casing.ts`) n'a pas encore
+ * été passée en production. Les seules lignes privilégiées écrites en
+ * MAJUSCULES sont celles des comptes `meeshy`/`admin` du salon global, que
+ * l'ancien `InitService` posait en `CREATOR`/`ADMIN`.
+ *
+ * #4008 range ces lecteurs parmi les défauts « fail-closed » — un droit refusé,
+ * jamais accordé à tort. **Ce site-ci est l'inverse** : la comparaison stricte
+ * ne sert pas à ACCORDER un pouvoir, elle sert à REFUSER un départ. Sur une
+ * ligne `CREATOR`, la garde ne tire pas, et le créateur du salon global quitte
+ * en y laissant tous ses membres — sans transfert d'ownership ni clôture.
+ *
+ * > Une comparaison de rôle qui échoue « fermé » quand elle autorise échoue
+ * > « ouvert » quand elle interdit. Le sens de la garde décide du sens de la
+ * > panne : ranger une famille entière d'un seul côté rate exactement les sites
+ * > où elle est dangereuse.
+ */
+describe('POST /conversations/:id/leave — le créateur reste protégé quelle que soit la casse (#4008)', () => {
+  it('refuse le départ d’un créateur dont la ligne est écrite CREATOR', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
+        count: jest.fn<any>().mockResolvedValue(3),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it('laisse partir un créateur écrit CREATOR resté seul — la garde protège les membres, pas le rang', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
+        count: jest.fn<any>().mockResolvedValue(0),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+});

@@ -36,7 +36,7 @@ import {
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getPresenceVisibilityService, type PresenceViewer } from '../../services/PresenceVisibilityService';
 import { presenceFor, viewerFromRequest } from '../users/presence-gate';
-import { isGlobalAdmin, hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
+import { isGlobalAdmin, hasMinimumMemberRole, isMemberCreator, memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { sliceByIdCursor, validatePagination } from '../../utils/pagination';
 import { z } from 'zod';
@@ -60,9 +60,9 @@ const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' }
  * (`viewerRole.toLowerCase()`) : le filtre de base ne doit pas être le seul
  * endroit du fichier qui l'ignore.
  */
-const CONVERSATION_HOST_ROLE_MATCHES: readonly string[] = Object.values(MemberRole)
-  .filter((role) => hasMinimumMemberRole(role, MemberRole.MODERATOR))
-  .flatMap((role) => [role, role.toUpperCase()]);
+const CONVERSATION_HOST_ROLE_MATCHES: readonly string[] = memberRoleCasings(
+  Object.values(MemberRole).filter((role) => hasMinimumMemberRole(role, MemberRole.MODERATOR)),
+);
 
 /**
  * `PATCH …/rights` : un instant ISO 8601 (décalage admis), `null` pour retirer,
@@ -230,7 +230,7 @@ async function loadMostActiveParticipants(options: {
   const filtered = ordered.filter(
     (p) =>
       (!filters.onlineOnly || (p.isOnline && withinOnlineOnlyScope(filters.onlineOnly, p.userId))) &&
-      (!filters.role || p.role === filters.role.toLowerCase()) &&
+      (!filters.role || (p.role ?? '').toLowerCase() === filters.role.toLowerCase()) &&
       (!searchTerm || (p.displayName ?? '').toLowerCase().includes(searchTerm))
   );
 
@@ -1122,8 +1122,7 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const addMemberRoles = ['creator', 'admin', 'moderator'];
-      if (!addMemberRoles.includes(currentUserParticipant.role)) {
+      if (!hasMinimumMemberRole(currentUserParticipant.role ?? 'member', 'moderator')) {
         return sendForbidden(reply, 'Only admins and moderators can add participants');
       }
 
@@ -1432,12 +1431,10 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const isPlatformAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
-      const isCreator = currentUserParticipant.role === 'creator';
-      const isConversationAdmin = currentUserParticipant.role === 'admin';
-      const isConversationModerator = currentUserParticipant.role === 'moderator';
+      const isPlatformAdmin = isGlobalAdmin(currentUserParticipant.user?.role ?? '');
+      const isConversationHost = hasMinimumMemberRole(currentUserParticipant.role ?? 'member', 'moderator');
 
-      if (!isPlatformAdmin && !isCreator && !isConversationAdmin && !isConversationModerator) {
+      if (!isPlatformAdmin && !isConversationHost) {
         return sendForbidden(reply, 'Vous n\'avez pas les droits pour supprimer des participants');
       }
 
@@ -1576,7 +1573,7 @@ export function registerParticipantsRoutes(
           where: {
             conversationId,
             isActive: true,
-            role: { in: ['creator', 'admin', 'moderator'] },
+            role: { in: memberRoleCasings(['creator', 'admin', 'moderator']) },
             userId: { not: currentUserId },
           },
           select: { userId: true },
@@ -1685,11 +1682,10 @@ export function registerParticipantsRoutes(
         return sendForbidden(reply, 'Unauthorized access to this conversation');
       }
 
-      const isPlatformAdmin = currentUserParticipant.user?.role === 'ADMIN' || currentUserParticipant.user?.role === 'BIGBOSS';
-      const isCreator = currentUserParticipant.role === 'creator';
-      const isConversationAdmin = currentUserParticipant.role === 'admin';
+      const isPlatformAdmin = isGlobalAdmin(currentUserParticipant.user?.role ?? '');
+      const isConversationAdmin = hasMinimumMemberRole(currentUserParticipant.role ?? 'member', 'admin');
 
-      if (!isPlatformAdmin && !isCreator && !isConversationAdmin) {
+      if (!isPlatformAdmin && !isConversationAdmin) {
         return sendForbidden(reply, 'Vous n\'avez pas les droits pour modifier les rôles des participants');
       }
 
@@ -1709,7 +1705,9 @@ export function registerParticipantsRoutes(
         return sendNotFound(reply, 'Participant not found or inactive');
       }
 
-      if (targetParticipant.role === 'creator') {
+      // Protection, pas permission : sur une ligne `CREATOR` l'égalité
+      // stricte ne tirait pas et le créateur devenait rétrogradable (#4008).
+      if (isMemberCreator(targetParticipant.role ?? 'member')) {
         return sendForbidden(reply, 'Cannot modify the conversation creator\'s role');
       }
 

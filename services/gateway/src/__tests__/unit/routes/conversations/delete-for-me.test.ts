@@ -504,3 +504,41 @@ describe('DELETE /conversations/:id/delete-for-me — participant lookup cache i
     await app.close();
   });
 });
+
+/**
+ * **Le transfert d'ownership se déclenche quelle que soit la casse du rang**
+ * (issue #4008).
+ *
+ * `participant.role === 'creator'` gouverne ici une CONSÉQUENCE, pas une
+ * permission : c'est la branche qui promeut un successeur avant que le créateur
+ * ne se retire. Sur une ligne écrite `CREATOR`, l'égalité stricte ne tire pas,
+ * la branche est sautée — et la conversation se retrouve **sans créateur**,
+ * silencieusement : aucune erreur, un 200, et plus personne pour la gouverner.
+ *
+ * > Une comparaison de rôle ne garde pas toujours une porte. Celle-ci ne
+ * > refuse rien : elle DOIT quelque chose. Sa panne ne se voit ni dans un code
+ * > d'erreur ni dans un log — seulement dans l'état laissé derrière.
+ */
+describe('DELETE /conversations/:id/delete-for-me — le créateur écrit CREATOR transmet quand même (#4008)', () => {
+  it('promeut un successeur au lieu de laisser la conversation sans créateur', async () => {
+    const creatorParticipant = { ...mockParticipant, role: 'CREATOR' };
+    const successor = { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' };
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>()
+          .mockResolvedValueOnce(creatorParticipant)
+          .mockResolvedValueOnce(successor),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: SUCCESSOR_ID }, data: { role: 'creator' } })
+    );
+    await app.close();
+  });
+});

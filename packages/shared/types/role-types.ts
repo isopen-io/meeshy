@@ -336,6 +336,35 @@ export function isMemberModerator(role: MemberRole | MemberRoleType | string): b
 /**
  * Vérifie si un membre est créateur
  */
+/**
+ * Les deux casses d'un rang de participant, pour un filtre Prisma `in`.
+ *
+ * `hasMinimumMemberRole` et ses sœurs replient la casse en JavaScript — un
+ * `where` Prisma, lui, part tel quel vers la base et ne peut appeler aucune
+ * fonction. Tant que la migration des lignes historiques
+ * (`normalize-participant-role-casing.ts`, #3875) n'est pas passée en
+ * production, une requête `role: { in: ['admin', 'creator'] }` ne ramène AUCUNE
+ * des lignes que l'ancien `InitService` a écrites en majuscules — et le défaut
+ * ne se voit pas : il rend un ensemble plus PETIT, jamais une erreur (#4008).
+ */
+/**
+ * Le NIVEAU d'un rang de participant, casse repliée — la primitive dont
+ * `hasMinimumMemberRole` n'est qu'une comparaison.
+ *
+ * Existe pour les sites qui doivent COMPARER DEUX rangs entre eux (bannir
+ * exige un rang strictement supérieur à celui de la cible) et qu'un prédicat
+ * « au moins X » ne sait pas dire. Ils redéclaraient la hiérarchie en local,
+ * en minuscules strictes : sur une ligne écrite `CREATOR`, le repli `?? 0`
+ * faisait du créateur le rang le plus BAS de la conversation (#4008).
+ */
+export function memberRoleLevel(role: MemberRole | MemberRoleType | string): number {
+  return MEMBER_ROLE_HIERARCHY[role.toLowerCase() as MemberRole] || 0;
+}
+
+export function memberRoleCasings(roles: readonly MemberRoleType[]): string[] {
+  return roles.flatMap(role => [role.toLowerCase(), role.toUpperCase()]);
+}
+
 export function isMemberCreator(role: MemberRole | MemberRoleType | string): boolean {
   /* v8 ignore next -- string enum values are always typeof 'string' at runtime; else branch unreachable */
   const normalized = typeof role === 'string' ? role.toLowerCase() : role;

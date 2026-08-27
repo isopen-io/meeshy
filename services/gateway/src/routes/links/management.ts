@@ -114,10 +114,9 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
 
       const isCreator = shareLink.createdBy === userId;
       const member = shareLink.conversation.participants[0];
-      const isConversationAdmin = member && (
-        member.role === 'admin' ||
-        member.role === 'creator'
-      );
+      // Même repli de casse que son jumeau `PATCH /links/:linkId` douze lignes
+      // plus bas, qui l'applique déjà depuis #3875 (#4008).
+      const isConversationAdmin = member != null && hasMinimumMemberRole(member.role ?? 'member', 'admin');
 
       if (!isCreator && !isConversationAdmin) {
         return sendForbidden(reply, 'Seuls les créateurs du lien ou les administrateurs de la conversation peuvent le modifier');

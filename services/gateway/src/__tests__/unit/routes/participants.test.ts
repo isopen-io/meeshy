@@ -54,6 +54,7 @@ jest.mock('@meeshy/shared/types', () => ({
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceViewer, PresenceTarget } from '../../../services/PresenceVisibilityService';
 import { canAccessConversation } from '../../../routes/conversations/utils/access-control';
+import { memberRoleCasings } from '@meeshy/shared/types/role-types';
 import { registerParticipantsRoutes } from '../../../routes/conversations/participants';
 import { cacheParticipant, getCachedParticipant } from '../../../utils/participant-lookup-cache';
 
@@ -2184,6 +2185,10 @@ describe('registerParticipantsRoutes', () => {
       });
     });
 
+    // La requête porte les DEUX graphies de chaque rang (#4008) : un `where`
+    // Prisma ne replie pas la casse, et les hôtes du salon global — écrits en
+    // majuscules par l'ancien `InitService` — n'étaient prévenus d'aucun
+    // retrait. `memberRoleCasings` est le site unique de cette énumération.
     it('should query admin participants excluding current user', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       const ns = createMockNotificationService();
@@ -2199,7 +2204,7 @@ describe('registerParticipantsRoutes', () => {
         where: {
           conversationId: VALID_CONV_ID,
           isActive: true,
-          role: { in: ['creator', 'admin', 'moderator'] },
+          role: { in: memberRoleCasings(['creator', 'admin', 'moderator']) },
           userId: { not: VALID_USER_ID },
         },
         select: { userId: true },
@@ -2818,6 +2823,114 @@ describe('registerParticipantsRoutes', () => {
         expect.objectContaining({ error: 'Error updating participant role' })
       );
       consoleSpy.mockRestore();
+    });
+  });
+  // =========================================================================
+  // #4008 — la casse du rang de conversation ne décide de rien
+  // =========================================================================
+  //
+  // `Participant.role` s'écrit en minuscules depuis #3875, mais la migration
+  // des lignes historiques n'est pas passée en production. Les seules lignes
+  // privilégiées écrites en MAJUSCULES sont celles des comptes `meeshy`/`admin`
+  // du salon global, que l'ancien `InitService` posait en `CREATOR`/`ADMIN`.
+  //
+  // #4008 range ces lecteurs parmi les défauts « fail-closed ». **La famille se
+  // sépare en deux selon le SENS de la garde** : celle qui ACCORDE un pouvoir
+  // échoue fermée (l'admin perd ses droits) ; celle qui REFUSE une action
+  // échoue OUVERTE (la protection du créateur ne tire pas). Les deux sont ici.
+  describe('Le rang de conversation se lit quelle que soit sa casse (#4008)', () => {
+    const conversationAdmin = () =>
+      createParticipant({ role: 'admin', user: { ...createParticipant().user, role: 'USER' } });
+
+    describe('PATCH /conversations/:id/participants/:userId/role', () => {
+      function patchRequest() {
+        const request = {
+          params: { id: VALID_CONV_ID, userId: TARGET_USER_ID },
+          body: { role: 'ADMIN' },
+          authContext: viewerAuthContext({ role: 'USER' }),
+          server: { io: createMockIO(), notificationService: createMockNotificationService() },
+        };
+        wireServerToFastify(mockFastify, request.server as any);
+        return request;
+      }
+
+      it('protège le créateur dont la ligne est écrite CREATOR', async () => {
+        const route = getRoute(mockFastify, 'PATCH', '/role');
+        mockPrisma.participant.findFirst
+          .mockResolvedValueOnce(conversationAdmin())
+          .mockResolvedValueOnce(createParticipant({
+            id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'CREATOR',
+          }));
+        const reply = createMockReply();
+
+        await route.handler(patchRequest(), reply);
+
+        expect(reply.status).toHaveBeenCalledWith(403);
+        expect(mockPrisma.participant.update).not.toHaveBeenCalled();
+      });
+
+      it('laisse agir un admin de conversation dont la ligne est écrite ADMIN', async () => {
+        const route = getRoute(mockFastify, 'PATCH', '/role');
+        mockPrisma.participant.findFirst
+          .mockResolvedValueOnce(createParticipant({
+            role: 'ADMIN', user: { ...createParticipant().user, role: 'USER' },
+          }))
+          .mockResolvedValueOnce(null);
+        const reply = createMockReply();
+
+        await route.handler(patchRequest(), reply);
+
+        // 404 (cible absente) et non 403 : la porte d'autorisation est franchie.
+        expect(reply.status).toHaveBeenCalledWith(404);
+        expect(reply.status).not.toHaveBeenCalledWith(403);
+      });
+    });
+
+    describe('DELETE /conversations/:id/participants/:userId', () => {
+      it('laisse retirer un participant à un admin dont la ligne est écrite ADMIN', async () => {
+        const route = getRoute(mockFastify, 'DELETE', '/participants');
+        mockPrisma.participant.findFirst
+          .mockResolvedValueOnce(createParticipant({
+            role: 'ADMIN', user: { ...createParticipant().user, role: 'USER' },
+          }))
+          .mockResolvedValue(null);
+        const reply = createMockReply();
+
+        await route.handler(
+          {
+            params: { id: VALID_CONV_ID, userId: TARGET_USER_ID },
+            authContext: viewerAuthContext({ role: 'USER' }),
+            server: { io: createMockIO(), notificationService: createMockNotificationService() },
+          },
+          reply,
+        );
+
+        expect(reply.status).toHaveBeenCalledWith(404);
+        expect(reply.status).not.toHaveBeenCalledWith(403);
+      });
+    });
+
+    describe('POST /conversations/:id/participants', () => {
+      it('laisse ajouter un membre à un modérateur dont la ligne est écrite MODERATOR', async () => {
+        const route = getRoute(mockFastify, 'POST', '/participants');
+        mockPrisma.participant.findFirst.mockResolvedValueOnce(
+          createParticipant({ role: 'MODERATOR', user: { ...createParticipant().user, role: 'USER' } }),
+        );
+        mockPrisma.user.findFirst.mockResolvedValue(null);
+        const reply = createMockReply();
+
+        await route.handler(
+          {
+            params: { id: VALID_CONV_ID },
+            body: { userId: TARGET_USER_ID },
+            authContext: viewerAuthContext({ role: 'USER' }),
+            server: { io: createMockIO(), notificationService: createMockNotificationService() },
+          },
+          reply,
+        );
+
+        expect(reply.status).not.toHaveBeenCalledWith(403);
+      });
     });
   });
 });

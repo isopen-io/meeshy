@@ -377,3 +377,62 @@ describe('PATCH unban — restores live room membership', () => {
     await app.close();
   });
 });
+
+/**
+ * **Le rang du participant décide quelle que soit sa casse** (issue #4008).
+ *
+ * `ROLE_LEVELS`, local à ce fichier, est une COPIE de
+ * `MEMBER_ROLE_HIERARCHY` (`@meeshy/shared/types/role-types`) — clés en
+ * minuscules, indexation directe, `?? 0` en repli. Sur une ligne écrite
+ * `CREATOR` — la casse que l'ancien `InitService` posait pour le salon global —
+ * l'indexation rend `undefined`, le repli vaut **0**, et le créateur devient le
+ * rang le plus BAS de la conversation : n'importe quel admin peut le bannir.
+ *
+ * > Un repli « fail-closed » sur un rang INCONNU protège l'appelant, jamais la
+ * > CIBLE. Le même `?? 0` qui refuse un pouvoir à qui n'en a pas retire toute
+ * > protection à qui en a le plus.
+ */
+describe('PATCH ban — le créateur reste protégé quelle que soit la casse (#4008)', () => {
+  it('refuse à un admin de bannir un créateur dont la ligne est écrite CREATOR', async () => {
+    const app = await buildApp({ prisma: makePrisma({ currentRole: 'admin', targetRole: 'CREATOR' }) });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('laisse un créateur écrit CREATOR bannir un membre', async () => {
+    const app = await buildApp({ prisma: makePrisma({ currentRole: 'CREATOR', targetRole: 'member' }) });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('laisse débannir un admin dont la ligne est écrite ADMIN', async () => {
+    const prisma = makePrisma({ currentRole: 'ADMIN' });
+    prisma.participant.findFirst = jest.fn<any>()
+      .mockResolvedValueOnce({ id: 'part-curr', role: 'ADMIN' })
+      .mockResolvedValueOnce({ id: 'part-tgt', userId: TARGET_ID, role: 'member', bannedAt: new Date(), leftAt: null });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/unban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).not.toBe(403);
+    await app.close();
+  });
+});

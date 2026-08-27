@@ -265,11 +265,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       const { linkId } = request.params as { linkId: string };
       const { isActive } = request.body as { isActive: boolean };
 
+      // Charger par l'identifiant PUBLIC seul. Y ajouter `createdBy: userId`
+      // rendrait `isCreator` tautologique et le `isConversationAdmin` calculé
+      // plus bas ne déciderait plus rien : un hôte non-créateur recevrait un
+      // 404 « introuvable » là où la route promet un verdict (#4007).
       const link = await fastify.prisma.conversationShareLink.findFirst({
-        where: {
-          linkId,
-          createdBy: userId
-        },
+        where: { linkId },
         include: {
           conversation: {
             include: {
@@ -401,11 +402,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       const { linkId } = request.params as { linkId: string };
       const { expiresAt } = request.body as { expiresAt: string };
 
+      // Charger par l'identifiant PUBLIC seul. Y ajouter `createdBy: userId`
+      // rendrait `isCreator` tautologique et le `isConversationAdmin` calculé
+      // plus bas ne déciderait plus rien : un hôte non-créateur recevrait un
+      // 404 « introuvable » là où la route promet un verdict (#4007).
       const link = await fastify.prisma.conversationShareLink.findFirst({
-        where: {
-          linkId,
-          createdBy: userId
-        },
+        where: { linkId },
         include: {
           conversation: {
             include: {
@@ -528,11 +530,12 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       const userId = request.authContext.registeredUser!.id;
       const { linkId } = request.params as { linkId: string };
 
+      // Charger par l'identifiant PUBLIC seul. Y ajouter `createdBy: userId`
+      // rendrait `isCreator` tautologique et le `isConversationAdmin` calculé
+      // plus bas ne déciderait plus rien : un hôte non-créateur recevrait un
+      // 404 « introuvable » là où la route promet un verdict (#4007).
       const link = await fastify.prisma.conversationShareLink.findFirst({
-        where: {
-          linkId,
-          createdBy: userId
-        },
+        where: { linkId },
         include: {
           conversation: {
             include: {

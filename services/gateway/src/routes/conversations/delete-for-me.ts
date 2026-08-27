@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify'
+import { isMemberCreator, memberRoleCasings } from '@meeshy/shared/types/role-types'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
@@ -84,8 +85,11 @@ export function registerDeleteForMeRoutes(
         data: { deletedForMe: now, isActive: false },
       }
 
-      // If caller is CREATOR, transfer ownership
-      if (participant.role === 'creator') {
+      // If caller is CREATOR, transfer ownership.
+      // La casse ne décide pas d'une CONSÉQUENCE (#4008) : sur une ligne
+      // écrite `CREATOR`, l'égalité stricte sautait cette branche et la
+      // conversation restait sans créateur — sans erreur ni log.
+      if (isMemberCreator(participant.role ?? 'member')) {
         // Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien
         // quand le champ est present-et-null que quand il est ABSENT (legacy,
         // jamais backfillé) — impossible de distinguer les deux cas côté JS
@@ -123,7 +127,7 @@ export function registerDeleteForMeRoutes(
               conversationId,
               isActive: true,
               userId: { not: userId },
-              role: 'moderator',
+              role: { in: memberRoleCasings(['moderator']) },
             },
             orderBy: { joinedAt: 'asc' },
           })
