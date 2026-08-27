@@ -2265,3 +2265,27 @@ routine forbids. Rule: a realtime-fold slice is only thin when the merged data a
 a surface that displays it. When it doesn't, the fold is blocked on a UI slice (here: add `ApiPostComment.media`
 + a comment audio player), and the cheaper sibling is the next in the same family — `comment:updated` (a full
 in-place row replace, no new model field, existing thread host).
+
+## 2026-08-27 — every NEW per-account store must be enumerated against the teardown seam the same run it ships (slice `story-composer-draft-wipe-on-teardown`)
+`SessionTeardown.wipe()` is the single account-teardown seam (clears Room + category snapshot + chat drafts
++ conversation locks). The `story-composer-draft-autosave` slice added a NEW per-account, non-namespaced
+on-device store (`StoryComposerDraftStore`, a Preferences DataStore) and did NOT add it to `wipe()`, so a
+second account on a shared device inherited the previous account's half-written story (caption + attached
+media + audience). A privacy leak identical in kind to the one `wipe()` was built to prevent — reintroduced
+by a store the seam predates.
+- **Rule: a slice that adds a durable per-account store owes the teardown wire in the SAME slice.** The
+  teardown seam is not "done" — it is an inventory that every new store must join. When adding a DataStore/DAO
+  that holds per-account content (not device-level UX prefs like theme/language/notification), the checklist
+  is: does `SessionTeardown.wipe()` clear it? If not, wiring it is part of that slice, not a follow-up.
+  Device-level UX preference stores stay deliberately un-wiped (mirrors iOS `CacheCoordinator.reset()`).
+- **The mutation witness must SEED the store.** `wipe_removesTheStoryComposerDraft` seeds a real draft then
+  asserts `load()` is null post-wipe — dropping `clear()` reddens it (6 run, 1 failed). The idempotent test's
+  added story assertion seeds NOTHING (empty store => `load()` already null), so it is a regression-completeness
+  check, not a mutation witness — honest to record which of the two actually catches the mutation.
+- **Maven Central 429s can make the full local gate unavailable, exactly like the `dl.google.com` denial.**
+  This run, `repo.maven.apache.org` throttled the container proxy (`429 Too Many Requests`) across many backoff
+  attempts, blocking `:sdk-ui`/`:app` dependency downloads (my diff was `:sdk-core`-only, which compiled and
+  tested GREEN before the wider wave). Handle it the ROUTINE CI-reality way: the targeted module test is the
+  local evidence, and the **Android** CI check (clean ubuntu Maven cache, not this proxy) is the authoritative
+  full gate. A retry-with-backoff loop that greps for `429` and re-runs is the right local tool; do not read a
+  429-truncated `compileKotlin FAILED` (no `e:`/error text, daemon vanished) as a code failure.

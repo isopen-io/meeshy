@@ -1381,6 +1381,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       resulting store state, not literals the test itself set; no coverage floor lowered, no existing
       test weakened — the two adapted tests keep their original assertions, only their execution
       mechanics catch up with the new suspend/async signature).
+      **Follow-up shipped (slice `story-composer-draft-wipe-on-teardown`, 2026-08-27):** the story
+      composer draft store — a per-account, non-namespaced on-device store added later by
+      `story-composer-draft-autosave` — was NOT covered by `wipe()`, so a second account on a shared
+      device inherited the previous account's half-written story (caption + attached media +
+      audience). `DefaultSessionTeardown` now takes `StoryComposerDraftStore` and calls `clear()` in
+      `wipe()` (same rule as the chat draft store; injected via `SdkModule.providesSessionTeardown`).
+      **+1 behavioural test** `SessionTeardownTest.wipe_removesTheStoryComposerDraft` (seeds a real
+      draft, asserts `load()` is null post-wipe) + a story-draft assertion added to the idempotent
+      test. **Mutation (RED proof):** dropping `storyComposerDraftStore.clear()` fails **exactly**
+      `wipe_removesTheStoryComposerDraft` (6 run, 1 failed); every other teardown test stays green.
+      This closes the last of the three story-draft follow-ups (rich-content serialization + in-canvas
+      re-capture affordance remain, tracked on the E. Stories draft line).
 - [x] Splash screen with brand animation + minimum display duration — **shipped** (slice
       `splash-screen`, 2026-08-10). System pre-Compose splash (`androidx.core:core-splashscreen`,
       `Theme.Meeshy.Starting` → `postSplashScreenTheme` → `Theme.Meeshy`) bridges the truly-first
