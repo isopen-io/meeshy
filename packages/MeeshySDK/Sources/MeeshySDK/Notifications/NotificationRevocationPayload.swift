@@ -48,8 +48,16 @@ public struct NotificationRevocationPayload: Equatable, Sendable {
     }
 
     /// Le contrat joint les ids par virgule ; un tableau JSON est accepté
-    /// aussi (charge FCM/APNs sérialisée telle quelle). Les entrées vides
-    /// sont ignorées, les espaces rognés.
+    /// aussi (charge FCM/APNs sérialisée telle quelle). Chaque entrée est
+    /// rognée des espaces, mais AUCUNE n'est filtrée : `notificationIds` et
+    /// `conversationIds` partagent le même RANG (doc du type ci-dessus,
+    /// « même ordre, entrée vide possible »), et filtrer les vides
+    /// SÉPARÉMENT sur les deux tableaux désynchronise ce rang — une entrée
+    /// vide de `conversationIds` au rang i affirme « pas de conversation pour
+    /// `notificationIds[i]` », ce n'est pas du bruit à retirer (#3894). Une
+    /// bannière livrée n'a de toute façon jamais un `notificationId` vide
+    /// (`covers(_:)` l'exclut explicitement), donc une entrée vide résiduelle
+    /// dans `notificationIds` n'y fait correspondre aucune bannière.
     static func ids(from value: Any?) -> [String] {
         let raw: [String]
         switch value {
@@ -58,8 +66,6 @@ public struct NotificationRevocationPayload: Equatable, Sendable {
         case let array as [Any]: raw = array.compactMap { $0 as? String }
         default: raw = []
         }
-        return raw
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+        return raw.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
     }
 }

@@ -183,17 +183,31 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
         // Révocation (features 4/5) : le gateway retire une notification déjà
         // poussée (message supprimé, demande d'ami annulée, effacée depuis un
-        // autre appareil) par un push de contrôle silencieux. On retire les
-        // bannières livrées AVANT toute logique de sync — ce push ne porte
-        // aucun compteur ni messageId — et on termine en `.noData` une fois le
-        // retrait effectué (le centre de notifications répond en asynchrone :
-        // compléter avant, c'est laisser iOS suspendre le processus avec la
-        // bannière encore affichée). Même atome que le socket
-        // `notification:deleted` : `NotificationActionHandler`.
+        // autre appareil) par un push de contrôle silencieux. Ce canal est
+        // précisément celui qu'emprunte l'app quand le socket n'est PAS là
+        // (arrière-plan) : il doit donc faire les QUATRE choses que fait le
+        // socket `notification:deleted` app ouverte — bannière, cache,
+        // compteur ET badge de la cloche — pas seulement la bannière (#3894).
+        // Mêmes atomes que le socket : `NotificationActionHandler.revokeDeliveredBanners`
+        // (bannière) et `NotificationToastManager.applyServerRevocation`
+        // (cache + compteur/badge — ce push ne porte aucun compteur, donc
+        // cette méthode le redemande elle-même, comme `delete()` le fait déjà
+        // pour le geste local équivalent). On termine en `.noData` une fois
+        // les DEUX retraits effectués (le centre de notifications répond en
+        // asynchrone : compléter avant, c'est laisser iOS suspendre le
+        // processus avec la bannière encore affichée).
         if let revocation = NotificationRevocationPayload(userInfo: userInfo) {
             Logger.network.info("notification_revoked silent push received (count=\(revocation.notificationIds.count, privacy: .public))")
             Task { @MainActor in
+                // Même amorce que `NotificationActionHandler.handle()` : un
+                // cold-launch en arrière-plan ne passe jamais par
+                // `checkExistingSession`, donc `APIClient.shared.authToken`
+                // reste nil malgré un jeton Keychain valide — et
+                // `applyServerRevocation` en a besoin pour son GET
+                // `/notifications/unread-count`.
+                APIClient.shared.authToken = AuthManager.shared.authToken
                 await NotificationActionHandler.shared.revokeDeliveredBanners(notificationIds: revocation.notificationIds)
+                await NotificationToastManager.shared.applyServerRevocation(notificationIds: revocation.notificationIds)
                 completionHandler(.noData)
             }
             return
