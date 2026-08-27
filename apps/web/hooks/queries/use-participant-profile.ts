@@ -77,6 +77,22 @@ export type ParticipantProfile = {
   readonly entryCapabilities: ParticipantEntryCapabilities | null;
   /** `null` hors du cercle des administrateurs et modérateurs. */
   readonly entryLink: ParticipantEntryLink | null;
+  /**
+   * Octroi d'historique par DATE posé par un administrateur — vaut pour TOUT
+   * participant, inscrit compris, pas seulement les visiteurs sans compte.
+   * `null` pour un membre ordinaire, que l'octroi existe ou non : c'est un fait
+   * de modération, pas un attribut de la personne. Servi aux hôtes
+   * (admin/modérateur/creator).
+   */
+  readonly historyVisibleFrom: string | null;
+  /**
+   * Ce lecteur peut-il POSER ou RETIRER l'octroi ci-dessus ? Répond à une
+   * question différente de `historyVisibleFrom` : un modérateur LIT l'octroi
+   * mais ne peut pas l'écrire (réservé admin/creator côté gateway) — sans ce
+   * signal, `historyVisibleFrom: null` ne distingue pas « pas hôte » de
+   * « hôte, aucun octroi posé ».
+   */
+  readonly canGrantHistory: boolean;
 };
 
 export function useParticipantProfile(

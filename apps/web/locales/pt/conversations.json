@@ -837,7 +837,13 @@
         "canSendLocations": "Partilhar a sua localização"
       },
       "unavailable": "Ficha indisponível",
-      "hasLeft": "Esta pessoa saiu da conversa"
+      "hasLeft": "Esta pessoa saiu da conversa",
+      "historyGrant": {
+        "title": "Histórico",
+        "label": "Vê o histórico desde",
+        "clear": "Remover",
+        "error": "Falha ao atualizar"
+      }
     },
     "forward": {
       "title": "Encaminhar mensagem",

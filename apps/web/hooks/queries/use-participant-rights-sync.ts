@@ -35,7 +35,19 @@ export function useParticipantRightsSync(conversationId: string) {
 
       queryClient.setQueryData<ParticipantProfile>(
         queryKeys.conversations.participantProfile(conversationId, data.participantId),
-        (current) => (current ? { ...current, entryCapabilities: data.rights } : current)
+        (current) =>
+          current
+            ? {
+                ...current,
+                entryCapabilities: data.rights,
+                // Présent seulement quand CE changement portait sur l'octroi
+                // d'historique — absent (`undefined`) sur un basculement de
+                // capacité ordinaire, qu'il ne faut alors pas écraser.
+                ...(data.historyVisibleFrom !== undefined
+                  ? { historyVisibleFrom: data.historyVisibleFrom }
+                  : {}),
+              }
+            : current
       );
     };
 

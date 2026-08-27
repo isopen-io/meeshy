@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { useI18n } from '@/hooks/useI18n';
 import { useParticipantProfile } from '@/hooks/queries/use-participant-profile';
 import { useUpdateParticipantRights } from '@/hooks/queries/use-update-participant-rights';
+import { useUpdateHistoryGrant } from '@/hooks/queries/use-update-history-grant';
 import { ParticipantProfileCard } from './ParticipantProfileCard';
 
 interface ParticipantProfileDialogProps {
@@ -30,6 +31,7 @@ export function ParticipantProfileDialog({
   const { data, isLoading, isError, error } = useParticipantProfile(conversationId, participantId);
   const hasLeft = (error as (Error & { code?: string }) | null)?.code === 'PARTICIPANT_LEFT';
   const updateRights = useUpdateParticipantRights(conversationId, participantId);
+  const updateHistoryGrant = useUpdateHistoryGrant(conversationId, participantId);
 
   return (
     <Dialog open={!!participantId} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -65,6 +67,21 @@ export function ParticipantProfileDialog({
               data.entryLink
                 ? (capability, value) => updateRights.mutate({ [capability]: value })
                 : undefined
+            }
+            // `canGrantHistory` répond à « ce lecteur peut-il écrire ? » —
+            // question distincte d'`entryLink` : l'octroi par date vaut pour
+            // tout participant, inscrit compris, là où `entryLink` n'existe
+            // que pour un visiteur sans compte.
+            onSetHistoryGrant={
+              data.canGrantHistory
+                ? (historyVisibleFrom) => updateHistoryGrant.mutate(historyVisibleFrom)
+                : undefined
+            }
+            historyGrantPending={updateHistoryGrant.isPending}
+            historyGrantError={
+              updateHistoryGrant.isError
+                ? t('participantProfile.historyGrant.error', 'Échec de la mise à jour')
+                : null
             }
           />
         )}

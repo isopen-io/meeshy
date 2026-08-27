@@ -835,7 +835,13 @@
         "canSendLocations": "Share their location"
       },
       "unavailable": "Profile unavailable",
-      "hasLeft": "This person has left the conversation"
+      "hasLeft": "This person has left the conversation",
+      "historyGrant": {
+        "title": "History",
+        "label": "Sees history from",
+        "clear": "Remove",
+        "error": "Update failed"
+      }
     },
     "forward": {
       "title": "Forward message",
