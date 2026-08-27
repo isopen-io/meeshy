@@ -67,10 +67,14 @@ extension ConversationView {
 
             Spacer(minLength: 0)
 
-            Text(selectionCountLabel)
-                .font(MeeshyFont.relative(13))
-                .foregroundColor(ThemeManager.shared.textSecondary)
-                .accessibilityIdentifier("conversation.selection.count")
+            // #4023 — « N sélectionnés » tout court, et affiché SEULEMENT au-delà
+            // d'un élément (un seul sélectionné ⇒ pas de compteur).
+            if overlayState.selectedMessageIds.count >= 2 {
+                Text(selectionCountLabel)
+                    .font(MeeshyFont.relative(13))
+                    .foregroundColor(ThemeManager.shared.textSecondary)
+                    .accessibilityIdentifier("conversation.selection.count")
+            }
 
             Spacer(minLength: 0)
 
@@ -95,16 +99,12 @@ extension ConversationView {
         .background(.regularMaterial)
     }
 
-    /// « 1 message sélectionné » / « N messages sélectionnés » — accord
-    /// manuel (pas d'AGA `inflect:true` : connu pour fuir sur iOS 18.x), le
-    /// compte ne dépasse jamais `selectionCap` donc un simple `%d` suffit au
-    /// pluriel.
+    /// « N sélectionnés » (#4023) — libellé court, sans le mot « message », le
+    /// compteur n'étant montré qu'à partir de 2 éléments (voir `selectionToolbar`).
+    /// Un simple `%d` suffit : le compte ne dépasse jamais `selectionCap`.
     private var selectionCountLabel: String {
         let n = overlayState.selectedMessageIds.count
-        if n == 1 {
-            return String(localized: "conversation.selection.countSingular", defaultValue: "1 message sélectionné", bundle: .main)
-        }
-        let format = String(localized: "conversation.selection.countPlural", defaultValue: "%d messages sélectionnés", bundle: .main)
+        let format = String(localized: "conversation.selection.count", defaultValue: "%d sélectionnés", bundle: .main)
         return String(format: format, n)
     }
 }

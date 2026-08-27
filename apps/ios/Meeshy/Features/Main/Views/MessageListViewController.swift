@@ -222,7 +222,17 @@ final class MessageListViewController: UIViewController {
             // existe précisément pour éviter. La différence symétrique des
             // deux `Set` est exactement l'ensemble des id dont l'état de
             // coche a changé.
-            applySnapshot(reconfigure: .items(oldValue.symmetricDifference(selectedMessageIds)))
+            //
+            // #4022 : la sélection stocke `message.id` (= `serverId ?? localId`,
+            // cf. MessageRecord+ToMessage:107), mais les items de la data source
+            // sont keyés sur le LOCAL id. Pour un message CONFIRMÉ (serverId ≠
+            // localId), `.items(serverId)` ne matchait AUCUNE cellule → la coche
+            // s'incrémentait au compteur sans jamais s'afficher. On traduit donc
+            // chaque id changé vers son localId (`serverIdToLocalId`, sinon l'id
+            // est déjà un localId — message optimiste).
+            let changedIds = oldValue.symmetricDifference(selectedMessageIds)
+            let changedLocalIds = Set(changedIds.map { serverIdToLocalId[$0] ?? $0 })
+            applySnapshot(reconfigure: .items(changedLocalIds))
         }
     }
     /// Bascule la sélection d'UN message — `ConversationView` décide de la
