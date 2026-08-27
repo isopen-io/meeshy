@@ -940,6 +940,10 @@ struct MeeshyComposerHost: View {
                 // E1 — la toile qui naît prend la langue DÉCLARÉE au composer
                 // comme défaut de tout objet posé (`declaredContentLanguage`).
                 viewModel.declaredContentLanguage = documentLanguage
+                // B1 — et elle GARDE le contenu déjà composé (loi 9 : changer de
+                // mode ne jette jamais le texte NI le média).
+                viewModel.applyContentText(documentText)
+                viewModel.applyContentMedia(documentContentMedia)
             }
         )
         // La capsule se superpose plutôt que d'être peinte PAR la surface :
@@ -1043,6 +1047,25 @@ struct MeeshyComposerHost: View {
         )
     }
 
+    /// **B1 (#3924) — le média du document, traduit pour la scène.** Ne porte
+    /// que l'IMAGE et la VIDÉO : un son ou un document joint n'a pas de place de
+    /// fond sur un canvas. `applyContentMedia` est idempotent (clé = `sourceURL`),
+    /// donc câbler cette liste à chaque bascule ne duplique rien. Le média VISUEL
+    /// est aussi, par construction, ce qui fait qu'une composition qualifie comme
+    /// scène — le texte, lui, suit par `applyContentText`.
+    private var documentContentMedia: [ComposerContentMedia] {
+        documentLocalMedia.compactMap { media in
+            if media.mimeType.hasPrefix("image/") {
+                return ComposerContentMedia(sourceURL: media.url, kind: .image)
+            }
+            if media.mimeType.hasPrefix("video/") {
+                return ComposerContentMedia(
+                    sourceURL: media.url, kind: .video, durationMs: media.durationMs)
+            }
+            return nil
+        }
+    }
+
     /// **Le sélecteur de DESTINATION (F1, #3884)** — remplace l'interrupteur
     /// binaire POST↔RÉEL par un choix à trois segments (POST · RÉEL · STORY),
     /// peint exactement quand la composition qualifie (`documentComposesReel`,
@@ -1065,6 +1088,10 @@ struct MeeshyComposerHost: View {
                     // E1 — STORY monte la scène : son contenu et ses objets
                     // partent dans la langue DÉCLARÉE au composer (la capsule).
                     viewModel.declaredContentLanguage = documentLanguage
+                    // B1 — le texte ET le média déjà composés SUIVENT dans la
+                    // scène (loi 9 : changer de mode ne jette jamais le contenu).
+                    viewModel.applyContentText(documentText)
+                    viewModel.applyContentMedia(documentContentMedia)
                     HapticFeedback.light()
                 } label: {
                     HStack(spacing: 4) {

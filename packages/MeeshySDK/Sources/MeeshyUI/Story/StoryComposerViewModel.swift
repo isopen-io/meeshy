@@ -304,6 +304,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
 
+    /// **Les sources déjà PORTÉES dans la scène (B1, #3924).** Clé
+    /// d'idempotence d'`applyContentMedia` : les closures de bascule de mode
+    /// refirent à chaque changement (Post↔Story↔Réel), et sans cette mémoire un
+    /// simple aller-retour dupliquerait chaque média du document. La source est
+    /// l'URL LOCALE que l'hôte passe — jamais l'`obj.id` généré, qui change à
+    /// chaque pose.
+    var carriedContentSources: Set<URL> = []
+
     /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
     /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
     /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
@@ -477,6 +485,20 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// qui normalise le préfixe `#`. Le `didSet` propage à la slide courante.
     public func applyBackground(hex: String) {
         backgroundColor = hex.hasPrefix("#") ? hex : "#\(hex)"
+    }
+
+    /// **Semer le CONTENU depuis un hôte app (B1, #3924).** Point d'entrée
+    /// PUBLIC : le composer garde UN seul contenu (`documentText`) quand il
+    /// change de mode — la scène qui naît le reçoit sur la slide courante
+    /// (`StorySlide.content`), d'où il partira à la publication et où B2 le
+    /// rendra dans une section description repliable. Idempotent : re-semer le
+    /// même texte ne dirty pas la slide.
+    public func applyContentText(_ text: String) {
+        let value = text.isEmpty ? nil : text
+        var slide = currentSlide
+        guard slide.content != value else { return }
+        slide.content = value
+        currentSlide = slide
     }
 
     /// **E1/E3 (#3886/#3888) — la langue DÉCLARÉE au bas du composer, défaut de

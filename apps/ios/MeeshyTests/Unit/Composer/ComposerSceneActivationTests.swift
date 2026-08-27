@@ -123,4 +123,33 @@ final class ComposerSceneActivationTests: XCTestCase {
                 + "(`documentLanguage`) comme défaut de tout objet — jamais « fr » codé en dur."
         )
     }
+
+    // 7 — B1 (#3924) : quand la scène naît (fond OU STORY), le TEXTE **et** le
+    // MÉDIA déjà composés SUIVENT — loi 9, changer de mode ne jette rien.
+    func test_laNaissanceDeLaScene_porteLeTexteEtLeMedia() throws {
+        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        XCTAssertTrue(
+            src.contains("viewModel.applyContentText(documentText)"),
+            "Le texte du document SUIT dans la scène (`applyContentText`) — loi 9."
+        )
+        XCTAssertTrue(
+            src.contains("viewModel.applyContentMedia(documentContentMedia)"),
+            "Le média du document SUIT dans la scène (`applyContentMedia`) — loi 9. "
+                + "Le porter est aussi ce qui LÈVE le blocage de l'éventail sous le document (B3)."
+        )
+    }
+
+    // 8 — B1 : la liste portée à la scène ne contient que l'IMAGE et la VIDÉO
+    // (un son ou un document joint n'a pas de place de fond sur un canvas).
+    func test_leMediaPorte_neContientQueImageEtVideo() throws {
+        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        XCTAssertTrue(raw.contains("private var documentContentMedia"),
+                      "documentContentMedia introuvable ou source vide")
+        let src = compact(raw)
+        XCTAssertTrue(
+            src.contains("media.mimeType.hasPrefix(\"image/\")")
+                && src.contains("media.mimeType.hasPrefix(\"video/\")"),
+            "Seuls l'image et la vidéo sont portées dans la scène — filtrées par leur mime."
+        )
+    }
 }

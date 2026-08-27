@@ -1089,9 +1089,12 @@ extension StoryComposerView {
     @ViewBuilder
     func canvasOutlineOverlay(cornerRadius: CGFloat) -> some View {
         if !viewModel.backgroundFillsCanvas && !viewModel.drawingEditingMode.isActive {
+            // Contour ARRONDI et SOLIDE (directive 2026-08-27) — le canvas se
+            // travaille dans une carte franche, plus de trait pointillé. Les
+            // seules lignes discontinues qui restent sont les guides MAGNET
+            // (zones de vue/vie), portés par le snap UIKit.
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.7),
-                              style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+                .strokeBorder(Color.white.opacity(0.55), lineWidth: 1.5)
                 .shadow(color: .black.opacity(0.3), radius: 1)
                 .allowsHitTesting(false)
                 .transition(.opacity)

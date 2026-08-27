@@ -15,12 +15,26 @@ enum NearbyDiscoveryMode: String, CaseIterable, Sendable {
     case density
     case pins
     case list
-    /// **Les publications du fil sur la carte** — l'ancienne carte « Posts sur
-    /// la carte » du header du feed, fusionnée ici (directive du 2026-08-26).
-    /// Elle plante le LIEU AFFICHÉ de chaque publication, pas le point
-    /// consenti : c'est pourquoi elle est réservée au staff de la plateforme
-    /// (`NearbyDiscoverAccess`).
+    /// **La chaleur par POPULARITÉ** (directive 2026-08-27) — dans la section
+    /// Discover, chauffe les points selon les vues et impressions des
+    /// publications, distincte de la densité (« le plus de posts »).
+    case popular
+}
+
+/// **Les deux SECTIONS de l'écran (switch du haut, directive 2026-08-27).**
+/// `nearby` = autour de moi (Densité · Points · Liste) ; `discover` = la
+/// plateforme (Densité · Populaire), réservée au staff (`NearbyDiscoverAccess`).
+enum NearbyDiscoverySection: String, CaseIterable, Sendable {
+    case nearby
     case discover
+
+    /// Les sous-modes offerts par la section — l'ordre est celui du picker.
+    var modes: [NearbyDiscoveryMode] {
+        switch self {
+        case .nearby: return [.density, .pins, .list]
+        case .discover: return [.density, .popular]
+        }
+    }
 }
 
 // MARK: - Qui peut voir Discover
@@ -322,13 +336,17 @@ final class NearbyDiscoveryViewModel: ObservableObject {
 
     private static let pageLimit = 30
 
-    /// Le mode Discover ne se pose que si le rôle le permet : un état
-    /// restauré ou un geste hors picker retombe sur la densité.
-    @Published var mode: NearbyDiscoveryMode = .density {
+    /// **La SECTION courante (switch du haut).** Discover ne se pose que si le
+    /// rôle le permet ; changer de section ramène le sous-mode au premier
+    /// offert par la nouvelle section (jamais un mode d'une autre section).
+    @Published var section: NearbyDiscoverySection = .nearby {
         didSet {
-            if mode == .discover, !canDiscover { mode = .density }
+            if section == .discover, !canDiscover { section = .nearby; return }
+            if !section.modes.contains(mode) { mode = section.modes.first ?? .density }
         }
     }
+    /// Le sous-mode courant, TOUJOURS dans `section.modes`.
+    @Published var mode: NearbyDiscoveryMode = .density
     @Published private(set) var posts: [FeedPost] = []
     /// **Discover** : les publications du fil qui portent un lieu affiché,
     /// servies depuis le cache `main-feed` — la source même de l'ancienne
@@ -339,14 +357,19 @@ final class NearbyDiscoveryViewModel: ObservableObject {
 
     static let discoverSourceKey = "main-feed"
 
-    var availableModes: [NearbyDiscoveryMode] {
-        NearbyDiscoveryMode.allCases.filter { $0 != .discover || canDiscover }
+    /// Les SECTIONS offertes — le SEUL site où le rôle décide si Discover
+    /// existe. Nearby pour tous ; Discover pour le staff.
+    var availableSections: [NearbyDiscoverySection] {
+        canDiscover ? NearbyDiscoverySection.allCases : [.nearby]
     }
+
+    /// Les sous-modes de la section courante (pour le picker contextuel).
+    var availableModes: [NearbyDiscoveryMode] { section.modes }
 
     /// L'écran vide du mode Discover, distinct des raisons de proximité : une
     /// position refusée n'empêche pas de voir le fil sur la carte.
     var discoverEmptyReason: NearbyEmptyReason? {
-        guard canDiscover, mode == .discover, discoverPosts.isEmpty else { return nil }
+        guard canDiscover, section == .discover, discoverPosts.isEmpty else { return nil }
         return .nothingOnTheMap
     }
     @Published private(set) var cells: [NearbyDensityCell] = []
