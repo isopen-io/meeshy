@@ -463,16 +463,15 @@ fileprivate struct BubbleGridCell: View {
         }
         .clipped()
         .contentShape(Rectangle())
-        // Un DOUBLE-TAP sur la vignette ouvre le PLEIN ÉCRAN (et y lance la
-        // lecture) ; le SIMPLE tap reste réservé au bouton play (lecture
-        // inline), qui vit sur sa propre couche. Un simple `.onTapGesture`
-        // parent NE FAISAIT RIEN (le player interne captait la couche — retour
-        // porteur 2026-08-27). `.simultaneousGesture` s'enregistre même sous
-        // une couche interne ET n'intercepte jamais le simple tap du bouton
-        // play (gestes concurrents, pas de délai de désambiguïsation, pas de
-        // vol de tap). `handleTap` ouvre le carousel si débordement, sinon
-        // pose `fullscreenAttachment` (→ galerie plein écran, autoplay).
-        .simultaneousGesture(TapGesture(count: 2).onEnded { handleTap() })
+        // Un SIMPLE tap sur la vignette ouvre le PLEIN ÉCRAN (et y lance la
+        // lecture). Le double-tap est désormais RÉSERVÉ à la barre de réaction
+        // rapide (#4020) — le simple tap redevient donc le geste d'ouverture,
+        // comme sur l'image. Un `.onTapGesture` parent nu NE FAISAIT RIEN (le
+        // player interne capte la couche) ; `.simultaneousGesture` s'enregistre
+        // même sous cette couche. `handleTap` ouvre le carousel si débordement,
+        // sinon pose `fullscreenAttachment` (→ galerie plein écran, autoplay).
+        // Retour porteur 2026-08-27 : « réutilise le simple tap ».
+        .simultaneousGesture(TapGesture(count: 1).onEnded { handleTap() })
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
