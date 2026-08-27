@@ -45,11 +45,31 @@ export interface VideoPosterCache {
 }
 
 /**
+ * Une Object URL retient son Blob VIVANT jusqu'à révocation explicite : borner
+ * la Map borne le nombre d'entrées, pas la MÉMOIRE. Sans ceci, chaque poster
+ * évincé (ou remplacé, ou effacé par `reset`) laissait derrière lui une image
+ * JPEG plein format que rien ne pouvait plus libérer avant un rechargement de
+ * page — une fuite d'autant plus silencieuse qu'elle ne se voit ni dans le
+ * cache ni dans le tas JS. Les valeurs non-`blob:` (fixtures de test, posters
+ * distants) ne sont pas concernées.
+ */
+function releasePosterUrl(posterUrl: string): void {
+  if (!posterUrl.startsWith('blob:')) return;
+  if (typeof URL === 'undefined' || typeof URL.revokeObjectURL !== 'function') return;
+  try {
+    URL.revokeObjectURL(posterUrl);
+  } catch {
+    // Best-effort — une révocation refusée ne doit jamais casser le cache.
+  }
+}
+
+/**
  * Cache borné en mémoire des posters vidéo (première image nette) déjà
  * extraits pendant cette session — contrairement à `residency-cache.ts`
  * (un simple Set de résidence), celui-ci retient la VALEUR pour qu'une page
  * qui rouvre la même vidéo affiche son poster net immédiatement, sans
- * relancer d'extraction (Cache-First, § Instant App Principles).
+ * relancer d'extraction (Cache-First, § Instant App Principles). Toute valeur
+ * qui SORT du cache est révoquée (cf. `releasePosterUrl`).
  */
 export function createVideoPosterCache(maxEntries: number): VideoPosterCache {
   if (maxEntries <= 0) {
@@ -64,14 +84,21 @@ export function createVideoPosterCache(maxEntries: number): VideoPosterCache {
     },
     set(url, posterUrl) {
       if (!url) return;
+      const previous = entries.get(url);
+      if (previous !== undefined && previous !== posterUrl) releasePosterUrl(previous);
       entries.delete(url);
       entries.set(url, posterUrl);
       if (entries.size > maxEntries) {
         const oldestKey = entries.keys().next().value;
-        if (oldestKey !== undefined) entries.delete(oldestKey);
+        if (oldestKey !== undefined) {
+          const evicted = entries.get(oldestKey);
+          entries.delete(oldestKey);
+          if (evicted !== undefined) releasePosterUrl(evicted);
+        }
       }
     },
     reset() {
+      entries.forEach(releasePosterUrl);
       entries = new Map();
     },
   };
@@ -114,7 +141,13 @@ export async function extractVideoFirstFrame(
   return new Promise<string | null>((resolve) => {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
-    video.preload = 'auto';
+    // `metadata`, jamais `auto` : cet élément vit À CÔTÉ du `<video>` que
+    // l'utilisateur s'apprête à LIRE, sur la même URL. En `auto`, le
+    // navigateur télécharge le fichier une seconde fois EN ENTIER pour une
+    // seule image — doublant la bande passante de chaque ouverture plein
+    // écran, et en concurrence directe avec la lecture. `metadata` + un
+    // `currentTime` fait chercher les seuls octets nécessaires à `seekTime`.
+    video.preload = 'metadata';
     video.muted = true;
     video.playsInline = true;
     video.style.position = 'fixed';

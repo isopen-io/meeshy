@@ -50,6 +50,72 @@ describe('createVideoPosterCache', () => {
   it('rejects a non-positive maxEntries', () => {
     expect(() => createVideoPosterCache(0)).toThrow();
   });
+
+  /**
+   * Borner la Map borne le NOMBRE d'entrées, pas la mémoire : une Object URL
+   * retient son Blob (une image JPEG plein format) vivant jusqu'à révocation
+   * explicite. Toute valeur qui SORT du cache doit donc être révoquée, sans
+   * quoi la session accumule des blobs que plus rien ne référence ni ne peut
+   * libérer.
+   */
+  describe('object URL lifetime', () => {
+    const originalRevoke = URL.revokeObjectURL;
+    let revoked: string[];
+
+    beforeEach(() => {
+      revoked = [];
+      URL.revokeObjectURL = jest.fn((url: string) => {
+        revoked.push(url);
+      });
+    });
+
+    afterEach(() => {
+      URL.revokeObjectURL = originalRevoke;
+    });
+
+    it('revokes the object URL of an evicted poster — a bounded Map is not a bounded memory', () => {
+      const cache = createVideoPosterCache(1);
+      cache.set('a', 'blob:poster-a');
+      cache.set('b', 'blob:poster-b');
+
+      expect(revoked).toEqual(['blob:poster-a']);
+    });
+
+    it('revokes the previous object URL when a video gets a new poster', () => {
+      const cache = createVideoPosterCache(10);
+      cache.set('a', 'blob:poster-a');
+      cache.set('a', 'blob:poster-a2');
+
+      expect(revoked).toEqual(['blob:poster-a']);
+      expect(cache.get('a')).toBe('blob:poster-a2');
+    });
+
+    it('re-setting the identical object URL does not revoke the URL still in use', () => {
+      const cache = createVideoPosterCache(10);
+      cache.set('a', 'blob:poster-a');
+      cache.set('a', 'blob:poster-a');
+
+      expect(revoked).toEqual([]);
+      expect(cache.get('a')).toBe('blob:poster-a');
+    });
+
+    it('revokes every object URL still held when the cache is reset', () => {
+      const cache = createVideoPosterCache(10);
+      cache.set('a', 'blob:poster-a');
+      cache.set('b', 'blob:poster-b');
+      cache.reset();
+
+      expect(revoked.sort()).toEqual(['blob:poster-a', 'blob:poster-b']);
+    });
+
+    it('never revokes a remote poster URL — only object URLs own a blob', () => {
+      const cache = createVideoPosterCache(1);
+      cache.set('a', 'https://cdn.example/poster-a.jpg');
+      cache.set('b', 'https://cdn.example/poster-b.jpg');
+
+      expect(revoked).toEqual([]);
+    });
+  });
 });
 
 describe('resolveFullscreenVideoPoster', () => {
@@ -101,7 +167,18 @@ describe('resolveFullscreenVideoPoster', () => {
 describe('extractVideoFirstFrame', () => {
   const originalCreateObjectURL = URL.createObjectURL;
 
+  // `extractVideoFirstFrame` monte son `<video>` sur `document.body` et le
+  // retire à la résolution. Un test qui échoue AVANT d'avoir fait résoudre sa
+  // promesse laisserait le sien derrière lui, et `lastVideo()` du test suivant
+  // ramasserait cet orphelin — un échec en cascaderait quatre. Le ménage est
+  // donc explicite, et la sélection prend TOUJOURS le dernier élément monté.
+  const lastVideo = (): HTMLVideoElement => {
+    const videos = document.querySelectorAll('video');
+    return videos[videos.length - 1] as HTMLVideoElement;
+  };
+
   afterEach(() => {
+    document.querySelectorAll('video').forEach((node) => node.remove());
     URL.createObjectURL = originalCreateObjectURL;
     jest.restoreAllMocks();
     jest.useRealTimers();
@@ -119,9 +196,30 @@ describe('extractVideoFirstFrame', () => {
     await expect(extractVideoFirstFrame('')).resolves.toBeNull();
   });
 
+  it('asks the network for metadata only — never a second full download of the video being played', async () => {
+    const promise = extractVideoFirstFrame('https://cdn.example/video.mp4');
+    const video = lastVideo();
+
+    expect(video.preload).toBe('metadata');
+
+    video.dispatchEvent(new Event('error'));
+    await promise;
+  });
+
+  it('detaches the hidden video element once extraction settles — no orphan node accumulates', async () => {
+    const promise = extractVideoFirstFrame('https://cdn.example/video.mp4');
+    expect(document.querySelector('video')).not.toBeNull();
+
+    const video = lastVideo();
+    video.dispatchEvent(new Event('error'));
+    await promise;
+
+    expect(document.querySelector('video')).toBeNull();
+  });
+
   it('resolves null when the video element reports an error', async () => {
     const promise = extractVideoFirstFrame('https://cdn.example/broken.mp4');
-    const video = document.querySelector('video') as HTMLVideoElement;
+    const video = lastVideo();
     video.dispatchEvent(new Event('error'));
     await expect(promise).resolves.toBeNull();
   });
@@ -145,7 +243,7 @@ describe('extractVideoFirstFrame', () => {
     });
 
     const promise = extractVideoFirstFrame('https://cdn.example/video.mp4');
-    const video = document.querySelector('video') as HTMLVideoElement;
+    const video = lastVideo();
     Object.defineProperty(video, 'duration', { value: 10, configurable: true });
     Object.defineProperty(video, 'videoWidth', { value: 1920, configurable: true });
     Object.defineProperty(video, 'videoHeight', { value: 1080, configurable: true });
@@ -160,7 +258,7 @@ describe('extractVideoFirstFrame', () => {
     jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
 
     const promise = extractVideoFirstFrame('https://cdn.example/video.mp4');
-    const video = document.querySelector('video') as HTMLVideoElement;
+    const video = lastVideo();
     Object.defineProperty(video, 'duration', { value: 10, configurable: true });
     Object.defineProperty(video, 'videoWidth', { value: 640, configurable: true });
     Object.defineProperty(video, 'videoHeight', { value: 360, configurable: true });

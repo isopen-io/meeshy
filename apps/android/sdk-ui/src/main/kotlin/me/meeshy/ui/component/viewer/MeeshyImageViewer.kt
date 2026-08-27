@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.viewer
 
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -44,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
+import coil.compose.AsyncImagePainter
 import coil.imageLoader
 import coil.memory.MemoryCache
 import coil.request.ImageRequest
@@ -222,15 +224,31 @@ private fun ZoomableImage(
 ) {
     // Feature 3 (#3878, miroir du patron iOS #3871 / web `resolveFullscreenImageSource`) :
     // le plein écran s'ouvre sur le plein format NET — résident (déjà décodé
-    // dans le cache mémoire Coil, lecture SYNCHRONE) ⇒ affiché tel quel, sans
-    // spinner ; sinon chargé, avec la vignette pour SEUL fond flou assumé
-    // pendant l'attente, jamais l'image affichée nette elle-même.
+    // dans le cache mémoire Coil) ⇒ affiché tel quel, sans spinner ; sinon
+    // chargé, avec la vignette pour SEUL fond flou assumé pendant l'attente,
+    // jamais l'image affichée nette elle-même.
+    //
+    // La sonde Coil est une AMORCE, pas un verdict : `memoryCache.get(Key(url))`
+    // dit qu'une entrée existe sous cette clé, pas que Coil la SERVIRA pour
+    // cette taille. La bulle charge le même `url` à 252.dp ; Coil y écrit un
+    // bitmap sous-échantillonné que `MemoryCacheService.isCacheValueValid`
+    // REFUSE ensuite pour une requête plein écran (`EXTRA_IS_SAMPLED`), et
+    // relance un décodage. C'est donc l'état RÉEL de l'`AsyncImage` qui fait
+    // foi : la sonde évite au cas résident de composer un fond ne serait-ce
+    // qu'une image, et `onState` corrige un faux positif (Loading ⇒ le fond
+    // revient) comme il retire le fond une fois le net à l'écran (Success).
     val context = LocalContext.current
-    val isFullResident = remember(url) {
-        context.imageLoader.memoryCache?.get(MemoryCache.Key(url)) != null
+    var isFullDisplayed by remember(url) {
+        mutableStateOf(context.imageLoader.memoryCache?.get(MemoryCache.Key(url)) != null)
     }
-    val mount = remember(url, thumbnailUrl, isFullResident) {
-        ImageViewerSource.resolve(fullUrl = url, thumbnailUrl = thumbnailUrl, isFullResident = isFullResident)
+    val canRenderBlurredBackdrop = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val mount = remember(url, thumbnailUrl, isFullDisplayed, canRenderBlurredBackdrop) {
+        ImageViewerSource.resolve(
+            fullUrl = url,
+            thumbnailUrl = thumbnailUrl,
+            isFullResident = isFullDisplayed,
+            canRenderBlurredBackdrop = canRenderBlurredBackdrop,
+        )
     }
 
     var scale by remember { mutableFloatStateOf(ImageViewerTransform.MIN_SCALE) }
@@ -284,7 +302,7 @@ private fun ZoomableImage(
     ) {
         // Fond flou assumé pendant le chargement du plein format — jamais
         // l'image affichée nette elle-même. Absent dès que le plein format
-        // est résident (rien à couvrir, aucune transition).
+        // est à l'écran (rien à couvrir, aucune transition).
         mount?.backdropUrl?.let { backdropUrl ->
             AsyncImage(
                 model = backdropUrl,
@@ -299,6 +317,18 @@ private fun ZoomableImage(
             model = mount?.fullUrl ?: url,
             contentDescription = stringResource(R.string.bubble_image_description),
             contentScale = ContentScale.Fit,
+            onState = { state ->
+                when (state) {
+                    is AsyncImagePainter.State.Success -> isFullDisplayed = true
+                    // Coil a rejeté l'entrée mémoire (taille invalide) ou
+                    // recharge : le fond doit revenir tant que rien de net
+                    // n'est à l'écran. Un succès depuis le cache mémoire
+                    // enchaîne Loading→Success dans la MÊME image, donc sans
+                    // fond visible.
+                    is AsyncImagePainter.State.Loading -> isFullDisplayed = false
+                    else -> Unit
+                }
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer {

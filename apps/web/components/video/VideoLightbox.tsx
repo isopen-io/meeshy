@@ -138,8 +138,14 @@ export function VideoLightbox({
 
     let cancelled = false;
     extractVideoFirstFrame(fileUrl).then((frame) => {
-      if (cancelled || !frame) return;
+      if (!frame) return;
+      // La mise en cache précède la garde d'annulation À DESSEIN : l'image
+      // extraite est une Object URL déjà créée, indexée par `fileUrl` — la
+      // jeter parce que l'utilisateur a changé de vidéo entre-temps
+      // l'abandonnerait sans jamais la révoquer (fuite) ET obligerait à
+      // ré-extraire au retour. Seul l'AFFICHAGE est annulable.
       fullscreenVideoPosterCache.set(fileUrl, frame);
+      if (cancelled) return;
       setExtractedPosterUrl(frame);
     });
 
