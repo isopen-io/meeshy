@@ -22,6 +22,7 @@ class StoryComposerDraftSnapshotTest {
                 mediaIds = listOf("m1", "m2"),
                 transform = StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f),
                 filter = StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f),
+                durationSecondsPin = 15.0,
             ),
             StoryDraftSlideSnapshot(id = "s2", text = "two"),
         ),
@@ -45,8 +46,10 @@ class StoryComposerDraftSnapshotTest {
             .isEqualTo(StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f))
         assertThat(restored.slides.first().filter)
             .isEqualTo(StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f))
+        assertThat(restored.slides.first().durationSecondsPin).isEqualTo(15.0)
         assertThat(restored.slides[1].transform).isNull()
         assertThat(restored.slides[1].filter).isNull()
+        assertThat(restored.slides[1].durationSecondsPin).isNull()
     }
 
     @Test
@@ -65,6 +68,15 @@ class StoryComposerDraftSnapshotTest {
         val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
 
         assertThat(decoded.slides.single().filter).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a pinned duration decodes to a null pin`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().durationSecondsPin).isNull()
     }
 
     @Test
@@ -152,6 +164,17 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a pinned duration alone never makes a snapshot worth restoring`() {
+        val durationOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", durationSecondsPin = 12.0),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(durationOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
     fun `a structurally invalid snapshot is never worth restoring even with content`() {
         val invalid = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "content")),
@@ -226,6 +249,20 @@ class StoryComposerDraftSnapshotTest {
     fun `clearing a photo filter is different content`() {
         val a = sample()
         val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(filter = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed pinned duration is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(durationSecondsPin = 42.0) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a pinned duration is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(durationSecondsPin = null) else s })
         assertThat(a.sameContentAs(b)).isFalse()
     }
 }

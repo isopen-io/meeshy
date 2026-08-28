@@ -2,6 +2,70 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-28 **a story draft's pinned on-screen duration survives leaving the composer** (slice
+> `story-draft-persist-duration`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> THIRD dimension of the fidelity gate, after the canvas transform and the photo filter). Before this, a
+> slide's author-pinned `durationSecondsPin` (`Double?`, `effects.timelineDuration` on the wire) counted
+> as unrepresentable "rich content": a user who pinned a slide's timeline duration and left came back to
+> the pin gone — or, if that pin was the only non-primitive touch, saw the whole draft purged rather than
+> restored lossily. A duration pin is one nullable scalar — trivially serialisable — so it never needed
+> gating; the earlier slices simply hadn't reached it yet. The cheapest remaining scalar, mirrors the
+> transform/filter slices' pattern one-to-one.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4226 (`claude/keen-hamilton-p95vxq`,
+> a web offline-hydration slice) — not a `claude/apps/android/<slice-id>` routine slice, no `apps/android`
+> collision, nothing of mine to merge. Prior slice (`story-draft-persist-filter`) is on `main` (HEAD
+> `a3b9fbba`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before branching
+> (`git rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — one nullable primitive field + two mapper lines + a decoupled gate** (mirrors the filter
+> slice exactly, but even thinner — no nested snapshot type, the field is already a scalar). (1)
+> `core:model`: `StoryDraftSlideSnapshot.durationSecondsPin: Double? = null` (`null` = derived from
+> content, not pinned; legacy blob and fresh slide both decode to null). `hasContent` unchanged — a
+> duration is fidelity, not restore-triggering content. (2) `:feature:stories` `StoryComposerAutosave`:
+> `toDraftSnapshot` carries `it.durationSecondsPin`; `toDeck` restores it verbatim (already clamped to
+> `[2,600]` by `StoryDurationPin.clamp` at the only setter, `setSelectedDuration`). (3) The gate is
+> DECOUPLED: `deckHasRichContent` drops `slide.durationSecondsPin != null` (now representable), and
+> `deckIsPristine` gains `it.durationSecondsPin == null` so a silently pinned duration on an empty canvas
+> still counts as touched (old pristine semantics preserved exactly).
+>
+> **Tests: +13.** 5 `StoryComposerDraftSnapshotTest` (duration survives JSON round-trip; legacy blob →
+> null; duration-alone never worth restoring; changed / cleared duration are different content), 6
+> `StoryComposerAutosaveTest` (gate now false for a pinned duration; pinned blank slide not pristine;
+> `toDraftSnapshot` carries duration/no-pin→null; `toDeck` restores/null→no-pin; deck↔snapshot↔deck
+> round-trip; a media slide with a pin resolves to **Save** carrying it; pinning a saved draft resolves to
+> **Save** not None), 2 `StoryComposerViewModelTest` end-to-end (`persistDraft` saves the pin;
+> `onEnterComposer` restores it). The pre-existing `deckHasRichContent is true for a pinned duration` test
+> was flipped to assert the new persistable behaviour (a genuine behaviour change, not a weakening).
+> Non-tautological: each drives a real deck/snapshot through the mapper/gate and asserts the transformed
+> result. **Mutation-RED-proven TWICE**: re-adding `slide.durationSecondsPin != null` to
+> `deckHasRichContent` reddens EXACTLY the 4 duration gate/save tests (3 autosave + 1 VM persist); removing
+> `&& it.durationSecondsPin == null` from `deckIsPristine` reddens EXACTLY `a single blank slide with a
+> pinned duration is not pristine` (1 failed); every other test stays green in both. Restored after each.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then `sdkmanager --channel=3 "platforms;android-37.0"` (preview compileSdk 37). **Pristine android-37.0
+> alone worked** this container — AGP mapped compileSdk 37 → android-37.0 on first `./gradlew`, no hash
+> error, no copy→patch needed.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest`
+> (ALL modules) **BUILD SUCCESSFUL in 3m 52s**; plus the touched suites in isolation green
+> (StoryComposerDraftSnapshotTest 24/24, StoryComposerAutosaveTest 40/40, StoryComposerViewModelTest
+> 196/196) and both mutation proofs (4 RED then 1 RED, restored). Reviewer **PASS** (diff `apps/android`
+> only — 2 main + 3 test; SDK purity — the field is a `:core:model` primitive nullable Double, the mapper/
+> gate are `:feature:stories` orchestration; SSOT — one field, `StorySlide.durationSecondsPin` stays the
+> deck's duration-pin SSOT; no tautological tests; no coverage floor lowered; the one flipped test asserts
+> the NEW correct behaviour, a genuine behaviour change).
+>
+> **Next**: the remaining fidelity-gate dimensions are the two object-list ones — text elements
+> (`StoryTextElement`) and stickers (`StoryStickerElement`) → their own `@Serializable` mirror snapshots,
+> largest, one slice each — and the background (`StoryBackgroundValue` sealed → closed-polymorphic or a
+> wire-string projection; + `backgroundMediaId` String? / `backgroundLoop` Boolean). The scalars
+> (transform, filter, duration) are now all done; what's left are the object graphs and the sealed
+> background, which want their own slices. The background scalars (`backgroundMediaId`/`backgroundLoop`)
+> ride WITH the background value — persist them in the same background slice, not alone. Scout
+> `feature-parity.md` E. Stories read-only before branching.
+
 > On 2026-08-27 **a story draft's photo filter (and its intensity) survives leaving the composer** (slice
 > `story-draft-persist-filter`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
 > SECOND dimension of the fidelity gate, after the canvas transform). Before this, a slide's `StoryFilter`

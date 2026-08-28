@@ -2625,6 +2625,35 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `persistDraft saves the selected slide's pinned duration`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("timed")
+        vm.onSlideDurationChange(22.0)
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.slides.single().durationSecondsPin).isEqualTo(22.0)
+    }
+
+    @Test
+    fun `onEnterComposer restores a persisted pinned duration`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "resume", durationSecondsPin = 30.0),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.selectedSlide.durationSecondsPin).isEqualTo(30.0)
+    }
+
+    @Test
     fun `persistDraft does not save a draft carrying rich on-canvas content`() = runTest {
         val store = InMemoryStoryComposerDraftStore()
         val vm = viewModel(draftStore = store)
