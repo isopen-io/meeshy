@@ -1771,9 +1771,21 @@ export class CallService {
     });
     const isDirectCall = conversation?.type === 'direct';
 
-    // Check if this is the last active participant
-    const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
-    const isLastParticipant = activeParticipants.length === 0 || isDirectCall;
+    // Vague 183 — `isLastParticipant` is decided FRESH inside the
+    // transaction (see below), never from `call.participants` here. That
+    // snapshot was read via the `findUnique` above, itself several awaits
+    // before the transaction even starts (this very `conversation.findUnique`
+    // sits in between) — a window wide enough that a GROUP call's last two
+    // participants leaving within milliseconds of each other BOTH see the
+    // OTHER as still active off their own stale snapshot, BOTH compute
+    // `isLastParticipant=false`, and NEITHER attempts the version-guarded
+    // terminal write (there is nothing for the two writers to conflict on).
+    // Result: an `active` CallSession with zero live `CallParticipant` rows —
+    // invisible to CallCleanupService's heartbeat tier (which requires
+    // `staleParticipants.length > 0`, never true against zero rows) and
+    // reaped only by its 2h wall-clock cap, during which the conversation's
+    // `activeCallId` claim also stays locked, blocking any new call.
+    let isLastParticipant = isDirectCall;
 
     // Audit P1-29 — distinguish "leave before the call was ever answered"
     // (callee declined or initiator cancelled before media negotiation
@@ -1803,6 +1815,20 @@ export class CallService {
         where: { id: callParticipant.id },
         data: { leftAt }
       });
+
+      // Vague 183 — fresh, in-transaction read: does any OTHER participant
+      // still show `!leftAt` right now, not several awaits ago? This is what
+      // closes (narrows — see the doc comment above `isLastParticipant`'s
+      // declaration) the TOCTOU race: the outer `call.participants` snapshot
+      // can no longer be the sole basis for "does this leave end the call".
+      const remainingActive = await tx.callParticipant.count({
+        where: {
+          callSessionId: callId,
+          id: { not: callParticipant.id },
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+        }
+      });
+      isLastParticipant = isDirectCall || remainingActive === 0;
 
       // If last participant, end the call (status depends on pre/post-answer).
       if (isLastParticipant) {
