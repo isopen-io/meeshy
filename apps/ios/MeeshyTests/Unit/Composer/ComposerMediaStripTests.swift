@@ -115,4 +115,39 @@ final class ComposerMediaStripTests: XCTestCase {
             XCTAssertNotNil(locs[loc], "Clé du ruban : locale « \(loc) » manquante (cliquet i18n)")
         }
     }
+
+    // MARK: - #4052 — un chip qu'aucune slide ne sélectionne garde sa croix
+
+    /// **Le correctif de pixel du #4047 était TOTAL tant que tout média était
+    /// une slide.** Le #4052 a rompu l'équivalence : un audio devient la
+    /// bande-son de la scène, pas une page du carrousel — il n'a donc aucune
+    /// slide à sélectionner, son chip ne porte jamais l'anneau, et son ✕ ne
+    /// s'affichait PLUS JAMAIS. Le vocal devenait irretirable.
+    func test_unChipSansSlide_gardeSaCroix_sinonSonMediaSeraitIrretirable() {
+        XCTAssertTrue(
+            ComposerMediaChipAffordance.showsRemove(isSelected: false, isSelectable: false),
+            "Un chip qu'aucune slide ne peut sélectionner n'a QUE sa croix : la lui retirer laisse un "
+                + "média posé pour toujours."
+        )
+    }
+
+    /// L'ordre « deux gestes pour supprimer » reste tenu partout où un PREMIER
+    /// geste existe — c'est-à-dire sur les chips qui mènent à une slide.
+    func test_unChipSelectionnable_neMontreSaCroix_queSelectionne() {
+        XCTAssertFalse(
+            ComposerMediaChipAffordance.showsRemove(isSelected: false, isSelectable: true),
+            "Viser une vignette pour NAVIGUER ne doit pas la supprimer — le défaut mesuré au #4047."
+        )
+        XCTAssertTrue(
+            ComposerMediaChipAffordance.showsRemove(isSelected: true, isSelectable: true)
+        )
+    }
+
+    /// Le cas dégénéré, écrit pour qu'il ne surprenne personne : un chip
+    /// sélectionné garde sa croix même si la carte le dit non sélectionnable.
+    func test_unChipSelectionne_gardeSaCroix_quoiQuenDiseLaCarte() {
+        XCTAssertTrue(
+            ComposerMediaChipAffordance.showsRemove(isSelected: true, isSelectable: false)
+        )
+    }
 }

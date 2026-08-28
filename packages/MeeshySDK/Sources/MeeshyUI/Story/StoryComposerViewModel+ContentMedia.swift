@@ -15,7 +15,15 @@ import MeeshySDK
 /// naît (loi 9 — changer de mode ne jette jamais ce qui est composé).
 public struct ComposerContentMedia: Equatable, Sendable {
 
-    public enum Kind: Sendable, Equatable { case image, video }
+    /// **`audio` a rejoint les deux autres au #4052.** Le modèle (§ 4) donne au
+    /// son un TROISIÈME emplacement, à côté du fond visuel et des objets de
+    /// premier plan : « une scène peut avoir un média de fond ET un audio en
+    /// fond ». Le refus du SDK — « un son n'a pas de place de FOND sur un
+    /// canvas » — était juste d'un fond VISUEL, et faux du son.
+    ///
+    /// `file` n'y est PAS, et ce n'est pas un oubli : un document n'a de place
+    /// ni visuelle ni sonore sur une scène. Il reste une pièce jointe du post.
+    public enum Kind: Sendable, Equatable { case image, video, audio }
 
     /// L'URL LOCALE du média — la CLÉ d'idempotence. L'hôte la garde stable
     /// (elle nomme le fichier temp du document), si bien qu'un aller-retour de
@@ -45,6 +53,28 @@ public struct ComposerContentMedia: Equatable, Sendable {
         self.kind = kind
         self.durationMs = durationMs
         self.mimeType = mimeType
+    }
+}
+
+/// **Où se range un audio posé sur une scène (#4052) — règle §4-3 du modèle.**
+///
+/// « Un audio devient le son de fond **s'il n'y en a pas** ». Le second n'écrase
+/// donc pas le premier : il se pose en premier plan, où il reste audible et
+/// déplaçable, plutôt que de faire disparaître en silence la bande-son que
+/// l'auteur venait de choisir.
+///
+/// **Extraite, pas dupliquée.** Elle vivait en clair dans `addAudioObject()`,
+/// le chemin de l'atelier ; le chemin du document en avait besoin à son tour.
+/// Deux copies auraient divergé au premier ajustement de l'une — et c'est
+/// précisément ce que l'issue interdisait.
+///
+/// Rend `Bool?` et non `Bool` parce que c'est le type du champ : `nil` et
+/// `false` disent tous deux « pas en fond » sur `StoryAudioPlayerObject`, et
+/// l'existant écrit `nil`. Le normaliser ici changerait ce que la persistance
+/// voit, sans qu'aucun test ne le demande.
+public nonisolated enum ComposerAudioPlacement {
+    public static func isBackground(sceneAlreadyHasBackgroundAudio: Bool) -> Bool? {
+        sceneAlreadyHasBackgroundAudio ? nil : true
     }
 }
 
@@ -139,7 +169,72 @@ public extension StoryComposerViewModel {
                         duration: duration, intoSlideId: slideId, objectId: objectId) != nil
                 else { continue }
                 carriedContentSources.insert(item.sourceURL)
+
+            case .audio:
+                // Le son ne passe PAS par ce canal : il n'a pas de place de fond
+                // VISUEL, et `insertForegroundImage`/`insertForegroundVideo` ne
+                // savent poser que des médias visuels. Son emplacement est le
+                // TROISIÈME (#4052) — `applyContentAudio` ci-dessous. Écrit en
+                // toutes lettres plutôt qu'avalé par un `default` : le jour où un
+                // quatrième `Kind` naîtra, la compilation le dira ici.
+                continue
             }
         }
+    }
+
+    /// **Porter un SON sur la scène (#4052) — le troisième emplacement.**
+    ///
+    /// Jumeau d'`applyContentMedia`, et séparé de lui pour la raison que le SDK
+    /// donnait déjà en refusant l'audio : un son n'a pas de place de fond
+    /// VISUEL. Il en a une TROISIÈME, à côté du fond et des premiers plans, et
+    /// c'est celle-là que ce canal sert.
+    ///
+    /// **Il pose sur la slide COURANTE**, sans jamais en créer une. C'est ce qui
+    /// le distingue du média en profil Post, où chaque fichier ouvre sa propre
+    /// slide : un son n'est pas une page du carrousel, c'est la bande-son de la
+    /// scène que l'auteur regarde.
+    ///
+    /// **Il ne COPIE pas le fichier**, à la différence du média : la convention
+    /// « `obj.id` == nom du fichier temp » sert à relier un BITMAP à son
+    /// `composerKey`, et un son n'a pas de bitmap — `loadedAudioURLs[obj.id]`
+    /// l'indexe directement. C'est exactement ce que fait déjà le chemin de
+    /// l'atelier (`addVocalToForeground`).
+    ///
+    /// IDEMPOTENT par la même mémoire que son jumeau : une bascule de mode
+    /// aller-retour ne pose pas deux fois le même vocal.
+    func applyContentAudio(_ items: [ComposerContentMedia]) {
+        for item in items where item.kind == .audio && !carriedContentSources.contains(item.sourceURL) {
+            guard FileManager.default.fileExists(atPath: item.sourceURL.path),
+                  let obj = addAudioObject() else { continue }
+            loadedAudioURLs[obj.id] = item.sourceURL
+            carriedContentSources.insert(item.sourceURL)
+
+            if let durationMs = item.durationMs, durationMs > 0 {
+                applyAudioDuration(Float(durationMs) / 1000, to: obj.id)
+            }
+            // La forme d'onde est COSMÉTIQUE et son analyse est asynchrone — la
+            // pose ne l'attend pas, exactement comme le chemin de l'atelier, qui
+            // retombe sur des barres plates quand elle échoue.
+            let url = item.sourceURL
+            let objectId = obj.id
+            Task { @MainActor [weak self] in
+                guard let samples = try? await WaveformCache.shared.samples(from: url) else { return }
+                self?.applyAudioWaveform(samples, to: objectId)
+            }
+        }
+    }
+
+    private func applyAudioDuration(_ seconds: Float, to objectId: String) {
+        var effects = currentEffects
+        guard let index = effects.audioPlayerObjects?.firstIndex(where: { $0.id == objectId }) else { return }
+        effects.audioPlayerObjects?[index].duration = seconds
+        currentEffects = effects
+    }
+
+    private func applyAudioWaveform(_ samples: [Float], to objectId: String) {
+        var effects = currentEffects
+        guard let index = effects.audioPlayerObjects?.firstIndex(where: { $0.id == objectId }) else { return }
+        effects.audioPlayerObjects?[index].waveformSamples = samples
+        currentEffects = effects
     }
 }

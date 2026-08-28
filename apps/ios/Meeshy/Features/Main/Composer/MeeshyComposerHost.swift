@@ -1213,6 +1213,10 @@ struct MeeshyComposerHost: View {
             overflowMenu: documentOverflowEntries.isEmpty
                 ? nil : AnyView(overflowMenu),
             selectedMediaURL: selectedSlideMediaURL,
+            // #4052 — la carte média → slide est ICI, et elle est la seule
+            // vérité sur « ce chip mène-t-il quelque part ? ». Un son n'y entre
+            // pas : il est la bande-son, pas une page.
+            selectableMediaURLs: Set(slideIdByMediaURL.keys),
             // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
             // contrôles la zone sert est la décision du SDK, portée par l'`init?`
             // de `EmbeddedSceneInspector` (il échoue pour tout kind qu'aucun
@@ -1368,7 +1372,17 @@ struct MeeshyComposerHost: View {
                 return ComposerContentMedia(
                     sourceURL: media.url, kind: .video,
                     durationMs: media.durationMs, mimeType: media.mimeType)
-            case .audio, .file:
+            // **Le son rejoint la scène au #4052.** Il ne devient PAS une slide
+            // (voir `syncPostMediaIntoSlides`) : le modèle § 4 lui donne un
+            // TROISIÈME emplacement, la bande-son de la scène — pas une page du
+            // carrousel.
+            case .audio:
+                return ComposerContentMedia(
+                    sourceURL: media.url, kind: .audio,
+                    durationMs: media.durationMs, mimeType: media.mimeType)
+            // Un DOCUMENT reste hors scène, et ce n'est pas un oubli : il n'a de
+            // place ni visuelle ni sonore. Il part comme pièce jointe du post.
+            case .file:
                 return nil
             }
         }
@@ -1494,7 +1508,15 @@ struct MeeshyComposerHost: View {
     private func syncPostMediaIntoSlides() {
         guard selectedFormat == .post else { return }
 
-        for media in documentContentMedia where slideIdByMediaURL[media.sourceURL] == nil {
+        // **Le SON ne fait pas de slide (#4052).** Il se pose sur la scène
+        // COURANTE comme bande-son — pas une page du carrousel. Traité AVANT la
+        // boucle des visuels : il n'entre jamais dans `slideIdByMediaURL`, dont
+        // l'invariant est « une entrée = une slide », et l'y mettre ferait
+        // supprimer une slide au retrait du vocal.
+        viewModel.applyContentAudio(documentContentMedia.filter { $0.kind == .audio })
+
+        for media in documentContentMedia where media.kind != .audio
+            && slideIdByMediaURL[media.sourceURL] == nil {
             let target: String
             if slideIdByMediaURL.isEmpty,
                (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
@@ -1507,7 +1529,7 @@ struct MeeshyComposerHost: View {
             slideIdByMediaURL[media.sourceURL] = target
         }
 
-        let present = Set(documentContentMedia.map(\.sourceURL))
+        let present = Set(documentContentMedia.filter { $0.kind != .audio }.map(\.sourceURL))
         for (url, slideId) in slideIdByMediaURL where !present.contains(url) {
             if let index = viewModel.slides.firstIndex(where: { $0.id == slideId }) {
                 viewModel.removeSlide(at: index)

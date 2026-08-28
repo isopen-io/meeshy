@@ -1500,6 +1500,14 @@ struct ComposerDocumentSurface: View {
     /// état. `nil` ⇒ aucun anneau : c'est l'état d'un document sans scène.
     var selectedMediaURL: URL? = nil
 
+    /// **Les médias qu'une slide peut ramener à l'écran (#4052).** Depuis que le
+    /// son se pose en BANDE-SON plutôt qu'en page du carrousel, « être dans le
+    /// rail » n'implique plus « avoir une slide ». Le meuble le sait — c'est lui
+    /// qui tient la carte média → slide —, la surface ne le devine pas : une
+    /// règle re-dérivée du mime ici divergerait le jour où un autre type
+    /// gagnerait sa slide.
+    var selectableMediaURLs: Set<URL> = []
+
     /// **La zone contextuelle de l'état INSPECTEUR (lot 3A, #4035 — planche
     /// P4 §3).** Rendue DIRECTEMENT au-dessus de `toolRow` — seulement quand
     /// l'hôte retient une sélection sur la scène. `nil` ⇒ ABSENTE (loi 4 :
@@ -1689,7 +1697,10 @@ struct ComposerDocumentSurface: View {
                             media: media,
                             side: 40,
                             isSelected: media.url == selectedMediaURL,
-                            showsRemove: media.url == selectedMediaURL
+                            showsRemove: ComposerMediaChipAffordance.showsRemove(
+                                isSelected: media.url == selectedMediaURL,
+                                isSelectable: selectableMediaURLs.contains(media.url)
+                            )
                         ) {
                             onRemoveMedia?(media)
                         }
@@ -1949,6 +1960,28 @@ extension View {
 /// document, un badge : « voir qu'un média est joint » sans générer de frame
 /// (une image d'AVAsset est asynchrone et lourde — « un début », cf. décision
 /// produit). La croix ôte l'élément, ce qui re-juge le format côté meuble.
+/// **Quand un chip du rail porte sa croix (#4052).**
+///
+/// Le ✕ ne se peignait que sur le chip SÉLECTIONNÉ — correctif de pixel du
+/// #4047 : à 40 pt il mange le quart du chip, et viser une vignette pour
+/// NAVIGUER la supprimait.
+///
+/// Cette règle était TOTALE tant que tout média était une slide. Le #4052 a
+/// rompu cette équivalence : un audio devient la bande-son de la scène, pas une
+/// page du carrousel — il n'a donc aucune slide à sélectionner, son chip ne peut
+/// jamais porter l'anneau, et **son ✕ ne s'affichait plus jamais**. Le vocal
+/// devenait IRRETIRABLE : mesuré au simulateur le 2026-08-28.
+///
+/// Un chip qu'aucune slide ne peut sélectionner porte donc toujours sa croix —
+/// c'est sa seule action, et un contrôle sans effet est ce que la loi 4
+/// interdit. L'ordre « deux gestes pour supprimer » reste tenu partout où un
+/// premier geste EXISTE.
+nonisolated enum ComposerMediaChipAffordance {
+    static func showsRemove(isSelected: Bool, isSelectable: Bool) -> Bool {
+        isSelected || !isSelectable
+    }
+}
+
 private struct ComposerMediaThumbnail: View {
     let media: ComposerDocumentMedia
     /// **Le rail de la barre haute est PLUS PETIT que la bande d'origine.** Une
@@ -1979,6 +2012,14 @@ private struct ComposerMediaThumbnail: View {
 
     private var isImage: Bool { media.mimeType.hasPrefix("image") }
     private var isVideo: Bool { media.mimeType.hasPrefix("video") }
+    private var isAudio: Bool { media.mimeType.hasPrefix("audio") }
+
+    private var symbole: String {
+        if isVideo { return "play.rectangle.fill" }
+        if isImage { return "photo" }
+        if isAudio { return "waveform" }
+        return "doc.fill"
+    }
 
     private var corner: CGFloat { side >= 56 ? 12 : 8 }
 
@@ -2024,7 +2065,12 @@ private struct ComposerMediaThumbnail: View {
             ZStack {
                 RoundedRectangle(cornerRadius: corner, style: .continuous)
                     .fill(.ultraThinMaterial)
-                Image(systemName: isVideo ? "play.rectangle.fill" : (isImage ? "photo" : "doc.fill"))
+                // **Le son a son icône (#4052)** : il devient la BANDE-SON de la
+                // scène, et un fond audio ne peint aucune pastille sur le canvas
+                // (par construction — « pas de UI pill draggable »). Ce chip est
+                // donc le SEUL témoin à l'écran qu'un post a une bande-son ;
+                // `doc.fill` n'en disait rien.
+                Image(systemName: symbole)
                     .font(side >= 56 ? .title3 : .footnote)
                     .symbolRenderingMode(.hierarchical)
                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))

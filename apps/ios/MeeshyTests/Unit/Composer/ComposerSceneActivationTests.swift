@@ -146,7 +146,18 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 8 — B1 : la liste portée à la scène ne contient que l'IMAGE et la VIDÉO
     // (un son ou un document joint n'a pas de place de fond sur un canvas), et
     // le classement passe par le SEUL classeur MIME du dépôt.
-    func test_leMediaPorte_neContientQueImageEtVideo() throws {
+    /// **Renommée au #4052 — la moitié « audio » de son verdict est TOMBÉE.**
+    ///
+    /// Elle exigeait `case .audio, .file: return nil`, sur le motif « un son n'a
+    /// pas de place de fond sur un canvas ». C'était juste d'un fond VISUEL, et
+    /// faux du son : le modèle (§ 4) lui donne un TROISIÈME emplacement, la
+    /// bande-son de la scène. La garde disait donc, en croyant protéger,
+    /// « n'implémente jamais le § 4 ».
+    ///
+    /// Ce qu'elle protégeait de VRAI est conservé et RENFORCÉ : le classement
+    /// passe toujours par l'unique classeur MIME du dépôt, et le DOCUMENT reste
+    /// hors scène — lui n'a de place ni visuelle ni sonore.
+    func test_leMediaPorte_prendImageVideoEtSon_maisJamaisUnDocument() throws {
         let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
         XCTAssertTrue(raw.contains("private var documentContentMedia"),
                       "documentContentMedia introuvable ou source vide")
@@ -157,8 +168,19 @@ final class ComposerSceneActivationTests: XCTestCase {
                 + "du dépôt, jamais un `hasPrefix` recopié."
         )
         XCTAssertTrue(
-            src.contains("case.audio,.file:") && src.contains("returnnil"),
-            "Le son et le document générique ne sont PAS portés (pas de place de fond sur un canvas)."
+            src.contains("case.audio:") && src.contains("kind:.audio"),
+            "Le SON doit être porté (#4052) — il devient la bande-son de la scène, le troisième "
+                + "emplacement du modèle § 4."
+        )
+        XCTAssertTrue(
+            src.contains("case.file:returnnil"),
+            "Le DOCUMENT reste hors scène : il n'a de place ni visuelle ni sonore. C'est la moitié de "
+                + "l'ancien verdict qui tient toujours."
+        )
+        XCTAssertFalse(
+            src.contains("case.audio,.file:"),
+            "Le son et le document ne se décident plus ENSEMBLE : les traiter d'un seul cas est ce qui "
+                + "avait fait rejeter le son avec le document."
         )
     }
 

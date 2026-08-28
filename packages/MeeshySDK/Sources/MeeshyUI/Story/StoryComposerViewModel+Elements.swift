@@ -643,7 +643,6 @@ extension StoryComposerViewModel {
         let center = CGPoint(x: 0.5, y: 0.5)
         // Auto-bascule en background si aucun audio n'est déjà en background
         // (ni via isBackground=true, ni via le champ legacy backgroundAudioId).
-        let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
         let obj = StoryAudioPlayerObject(
             postMediaId: "",
             placement: "overlay",
@@ -651,7 +650,14 @@ extension StoryComposerViewModel {
             y: min(0.9, center.y + 0.15),
             volume: 1.0,
             waveformSamples: [],
-            isBackground: hasExistingBackgroundAudio ? nil : true,
+            // Règle EXTRAITE au #4052 : elle vivait ici en clair, et le second
+            // site qui en avait besoin (le son porté depuis l'écran document)
+            // l'aurait recopiée. Un `enum` pur la rend éprouvable sans monter
+            // de vue, et interdit qu'un jour les deux divergent sur « un audio
+            // écrase-t-il celui qui est déjà en fond ? ».
+            isBackground: ComposerAudioPlacement.isBackground(
+                sceneAlreadyHasBackgroundAudio: currentEffects.resolvedBackgroundAudio != nil
+            ),
             sourceLanguage: declaredContentLanguage
         )
         var effects = currentEffects

@@ -68,6 +68,20 @@ La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « to
 changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
 qui a été touché, l'app décide ce que cela sélectionne.**
 
+**Un son posé sur une scène en devient la BANDE-SON — le troisième emplacement (#4052).** Le fond
+visuel, les objets de premier plan, et le son de fond : trois places, pas une file unique. Le refus
+du SDK — « un son n'a pas de place de fond sur un canvas » — était juste d'un fond VISUEL, et faux
+du son. Un second vocal ne remplace pas le premier en silence : il se pose en premier plan, où il
+reste audible, plutôt que de faire disparaître la bande-son que l'auteur venait de choisir.
+
+**Le son n'est PAS une page du carrousel.** En Post chaque média ouvre sa slide ; un vocal, non — il
+appartient à la scène qu'on regarde. Deux conséquences se paient au pixel, et les deux étaient des
+régressions muettes : la vignette du vocal affichait une icône de DOCUMENT (or un fond audio ne peint
+aucune pastille sur le canvas — ce chip est le seul témoin à l'écran qu'un post a une bande-son), et
+son ✕ ne s'affichait **plus jamais**, la croix étant réservée au chip sélectionné et un son n'ayant
+aucune slide à sélectionner : **le vocal devenait irretirable**. Un chip qu'aucune slide ne mène
+porte donc toujours sa croix — c'est sa seule action.
+
 **Le mime DÉCLARÉ voyage avec le média posé (#4038).** Poser un média sur une scène le COPIE sous
 `{objectId}.{ext}`, et c'est ce NOM que tout l'aval relit pour étiqueter le téléversement. Le choix
 de l'extension EST donc le transport du mime — et il était guessé : une URL source sans extension
