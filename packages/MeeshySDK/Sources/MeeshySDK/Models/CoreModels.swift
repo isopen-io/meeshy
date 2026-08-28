@@ -2026,7 +2026,7 @@ public struct MeeshyFeedItem: Identifiable, Sendable {
 
 // MARK: - Conversation Filter
 
-public enum MeeshyConversationFilter: String, CaseIterable, Identifiable {
+public enum MeeshyConversationFilter: String, CaseIterable, Identifiable, Sendable {
     case all = "Tous"
     case unread = "Non lus"
     case personnel = "Personnel"

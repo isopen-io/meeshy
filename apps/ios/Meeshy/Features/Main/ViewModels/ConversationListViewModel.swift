@@ -68,7 +68,13 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Reactive Filters & Prepared Data
     @Published var searchText: String = ""
-    @Published var selectedFilter: ConversationFilter = .all
+    /// **Les filtres RETENUS** — un ensemble, plus une valeur (#4069).
+    ///
+    /// Le filtrage utile est le CROISÉ (« non lus, parmi les directs ») et il
+    /// était impossible : choisir un filtre remplaçait le précédent. Le sens de
+    /// la combinaison ne vit pas ici mais dans `ConversationFilterComposition`,
+    /// qui sait que deux TYPES s'additionnent et que deux ÉTATS se croisent.
+    @Published var selectedFilters: Set<ConversationFilter> = ConversationFilterComposition.neutral
     /// Filtre par ÉTIQUETTE (2026-08-21, carte de focus Lentille : toucher un
     /// tag ⇒ « toutes les conversations avec ce tag ») — `nil` = aucun filtre.
     @Published var activeTagFilter: String? = nil
@@ -549,12 +555,12 @@ class ConversationListViewModel: ObservableObject {
         // Single unified pipeline: conversations, search, filter, or categories change
         // → filter + group in one pass → single @Published update (groupedConversations).
         // Eliminates the old 3-broadcast chain ($conversations → $filteredConversations → $groupedConversations).
-        Publishers.CombineLatest4($conversations, $searchText, Publishers.CombineLatest($selectedFilter, $activeTagFilter), $userCategories)
+        Publishers.CombineLatest4($conversations, $searchText, Publishers.CombineLatest($selectedFilters, $activeTagFilter), $userCategories)
             .debounce(for: .milliseconds(16), scheduler: DispatchQueue.main)
             .sink { [weak self] (convs, text, filters, categories) in
                 guard let self else { return }
                 let (filter, tag) = filters
-                let filtered = Self.filterConversations(convs, searchText: text, filter: filter, tag: tag)
+                let filtered = Self.filterConversations(convs, searchText: text, filters: filter, tag: tag)
                 self.filteredConversations = filtered
                 let drafts = self.draftSummaries
                 self.groupingTask?.cancel()
@@ -577,7 +583,7 @@ class ConversationListViewModel: ObservableObject {
     nonisolated static func filterConversations(
         _ conversations: [Conversation],
         searchText: String,
-        filter: ConversationFilter,
+        filters: Set<ConversationFilter>,
         tag: String? = nil
     ) -> [Conversation] {
         return conversations.filter { c in
@@ -588,20 +594,39 @@ class ConversationListViewModel: ObservableObject {
             // list must hide it from EVERY filter (incl. .archived). Matches
             // `ConversationUserState.isVisible`.
             guard c.userState.deletedForUserAt == nil else { return false }
-            let filterMatch: Bool
-            // Hide user-archived conversations from all filters except .archived
-            let userArchiveOk = filter == .archived ? c.userState.isArchived : !c.userState.isArchived
-            switch filter {
-            case .all: filterMatch = c.isActive && userArchiveOk
-            case .unread: filterMatch = c.userState.unreadCount > 0 && userArchiveOk
-            case .personnel: filterMatch = c.type == .direct && c.isActive && userArchiveOk
-            case .privee: filterMatch = c.type == .group && c.isActive && userArchiveOk
-            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive && userArchiveOk
-            case .globales: filterMatch = c.type == .global && c.isActive && userArchiveOk
-            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive && userArchiveOk
-            case .favoris: filterMatch = c.userState.reaction != nil && c.isActive && userArchiveOk
-            case .archived: filterMatch = c.userState.isArchived
+            // Les ARCHIVES changent de corpus, elles ne restreignent pas : sans
+            // ce gate, une archivée reparaîtrait dans « Non lus » parce qu'elle
+            // porte encore des messages non lus.
+            let wantsArchived = ConversationFilterComposition.includesArchived(filters)
+            guard wantsArchived == c.userState.isArchived else { return false }
+            // Une archivée n'a pas à être encore ACTIVE pour se montrer : c'est
+            // le seul corpus où l'inactivité est attendue.
+            guard wantsArchived || c.isActive else { return false }
+
+            // TYPES : un OU. Vide ⇒ aucun type n'est exigé.
+            let types = ConversationFilterComposition.selectedTypes(filters)
+            let typeMatch = types.isEmpty || types.contains { type in
+                switch type {
+                case .personnel: return c.type == .direct
+                case .privee: return c.type == .group
+                case .ouvertes: return c.type == .public || c.type == .community
+                case .globales: return c.type == .global
+                case .channels: return c.isAnnouncementChannel
+                default: return false
+                }
             }
+
+            // ÉTATS : un ET. Vide ⇒ aucune restriction.
+            let states = ConversationFilterComposition.selectedStates(filters)
+            let stateMatch = states.allSatisfy { state in
+                switch state {
+                case .unread: return c.userState.unreadCount > 0
+                case .favoris: return c.userState.reaction != nil
+                default: return true
+                }
+            }
+
+            let filterMatch = typeMatch && stateMatch
             // `displayName` (not `name`): a conversation renamed locally via
             // `userState.customName` must remain findable by the name the
             // row actually shows, not just the server-side title/identifier.

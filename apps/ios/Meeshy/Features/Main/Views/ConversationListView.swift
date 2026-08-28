@@ -1144,7 +1144,7 @@ struct ConversationListView: View {
                     withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
-            .adaptiveOnChange(of: conversationViewModel.selectedFilter) { _, _ in
+            .adaptiveOnChange(of: conversationViewModel.selectedFilters) { _, _ in
                 withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
@@ -1259,6 +1259,38 @@ struct ConversationListView: View {
     /// composeur de story par `storyViewModel.showStoryComposer` (cover monté
     /// aux racines) et le composeur de statut par la sheet que CETTE vue
     /// héberge déjà (`showStatusComposer`).
+    /// La rangée de filtres COMPOSÉS, sous le rail (#4069).
+    ///
+    /// Un appui pose, un second retire — `ConversationFilterComposition`
+    /// porte la règle, la vue ne fait que la relayer. La rangée disparaît si
+    /// l'énumération n'a rien à proposer, plutôt que de laisser une bande vide
+    /// entre le rail et la première conversation.
+    @ViewBuilder
+    private var composedFilterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(ConversationFilter.allCases) { filter in
+                    ThemedFilterChip(
+                        title: filter.rawValue,
+                        color: filter.color,
+                        isSelected: conversationViewModel.selectedFilters.contains(filter),
+                        isCompact: true
+                    ) {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            conversationViewModel.selectedFilters = ConversationFilterComposition.toggling(
+                                filter, in: conversationViewModel.selectedFilters
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+        }
+        .accessibilityLabel(String(localized: "conversation.filter.row",
+                                   defaultValue: "Filtres de conversations", bundle: .main))
+    }
+
     @ViewBuilder
     private var lentilleRailOrStoryTray: some View {
         if LentilleFeatureFlag.isLentilleListEnabled {
@@ -1611,6 +1643,12 @@ struct ConversationListView: View {
                     // Le ROUTAGE du tap est le même des deux côtés :
                     // `onStoryViewRequest?(userId, true)`.
                     lentilleRailOrStoryTray
+
+                    // Les filtres, SOUS le rail et en petit (#4069). Ils
+                    // vivaient dans le panneau de l'overlay de recherche, donc
+                    // derrière un tap sur la loupe : le filtrage utile — le
+                    // croisé — était à la fois invisible et impossible.
+                    composedFilterChips
 
                     // Sectioned conversation list (skeleton -> content -> empty/error).
                     // Skeleton ONLY when cold-start with no cached groups —

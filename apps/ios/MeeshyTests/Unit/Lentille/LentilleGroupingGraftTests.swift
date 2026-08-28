@@ -148,7 +148,7 @@ final class LentilleGroupingGraftTests: XCTestCase {
         XCTAssertEqual(conversations.count, 30, "fixture mal formée — 30 conversations attendues")
 
         sut.conversations = conversations
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.count == 4 }
 

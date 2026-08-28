@@ -1282,10 +1282,15 @@ struct ConversationListBottomBar: View {
                     ThemedFilterChip(
                         title: filter.rawValue,
                         color: filter.color,
-                        isSelected: conversationViewModel.selectedFilter == filter
+                        isSelected: conversationViewModel.selectedFilters.contains(filter)
                     ) {
+                        // Même loi que la rangée sous le rail (#4069) : deux
+                        // sites qui poseraient la sélection différemment
+                        // seraient deux vérités sur « ce qui filtre ».
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            conversationViewModel.selectedFilter = filter
+                            conversationViewModel.selectedFilters = ConversationFilterComposition.toggling(
+                                filter, in: conversationViewModel.selectedFilters
+                            )
                         }
                     }
                 }

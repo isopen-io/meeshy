@@ -635,12 +635,12 @@ final class ConversationListViewModelTests: XCTestCase {
         let untagged = makeConversation(id: "conv2")
 
         let filtered = ConversationListViewModel.filterConversations(
-            [tagged, untagged], searchText: "", filter: .all, tag: "Travail"
+            [tagged, untagged], searchText: "", filters: [.all], tag: "Travail"
         )
         XCTAssertEqual(filtered.map(\.id), ["conv1"], "seules les conversations portant l'étiquette restent")
 
         let cleared = ConversationListViewModel.filterConversations(
-            [tagged, untagged], searchText: "", filter: .all, tag: nil
+            [tagged, untagged], searchText: "", filters: [.all], tag: nil
         )
         XCTAssertEqual(cleared.map(\.id), ["conv1", "conv2"], "retirer le filtre rend toute la liste")
     }
@@ -654,7 +654,7 @@ final class ConversationListViewModelTests: XCTestCase {
 
         for filter in [ConversationFilter.all, .unread, .archived, .personnel] {
             let result = ConversationListViewModel.filterConversations(
-                [deleted, visible], searchText: "", filter: filter
+                [deleted, visible], searchText: "", filters: [filter]
             )
             XCTAssertFalse(result.contains(where: { $0.id == "conv1" }),
                            "Soft-deleted conv must be hidden from filter \(filter)")
@@ -672,13 +672,13 @@ final class ConversationListViewModelTests: XCTestCase {
         let untouched = makeConversation(id: "conv2", name: "Team Beta")
 
         let byCustomName = ConversationListViewModel.filterConversations(
-            [renamed, untouched], searchText: "Préféré", filter: .all
+            [renamed, untouched], searchText: "Préféré", filters: [.all]
         )
         XCTAssertEqual(byCustomName.map(\.id), ["conv1"],
                        "search must match the locally-renamed displayName, not just the server title")
 
         let byOldServerTitle = ConversationListViewModel.filterConversations(
-            [renamed, untouched], searchText: "Alpha", filter: .all
+            [renamed, untouched], searchText: "Alpha", filters: [.all]
         )
         XCTAssertTrue(byOldServerTitle.isEmpty,
                       "once renamed locally, the row is found by its displayed name — not the superseded server title")
@@ -692,7 +692,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "active1", isActive: true),
             makeConversation(id: "archived1", isActive: false)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         // Deterministic wait on the debounced filter pipeline instead of a
         // fixed sleep (#1869): `filteredConversations` isn't itself @Published
@@ -711,7 +711,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "read", unreadCount: 0),
             makeConversation(id: "unread", unreadCount: 3)
         ]
-        sut.selectedFilter = .unread
+        sut.selectedFilters = [.unread]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -725,7 +725,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "grp", type: .group)
         ]
-        sut.selectedFilter = .personnel
+        sut.selectedFilters = [.personnel]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -739,7 +739,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "grp", type: .group)
         ]
-        sut.selectedFilter = .privee
+        sut.selectedFilters = [.privee]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -755,7 +755,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "active", isActive: true),
             archivedConv
         ]
-        sut.selectedFilter = .archived
+        sut.selectedFilters = [.archived]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -770,7 +770,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c2", name: "Bob"),
             makeConversation(id: "c3", name: "Alice and Bob")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
         sut.searchText = "Alice"
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -787,7 +787,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "fav", reaction: "heart"),
             makeConversation(id: "nofav", reaction: nil)
         ]
-        sut.selectedFilter = .favoris
+        sut.selectedFilters = [.favoris]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -801,7 +801,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "ch1", isAnnouncementChannel: true),
             makeConversation(id: "notch", isAnnouncementChannel: false)
         ]
-        sut.selectedFilter = .channels
+        sut.selectedFilters = [.channels]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1450,7 +1450,7 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoading)
         XCTAssertFalse(sut.isLoadingMore)
         XCTAssertEqual(sut.searchText, "")
-        XCTAssertEqual(sut.selectedFilter, .all)
+        XCTAssertEqual(sut.selectedFilters, [.all])
         XCTAssertTrue(sut.typingUsernames.isEmpty)
         XCTAssertEqual(sut.totalUnreadCount, 0)
     }
@@ -1465,7 +1465,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "grp", type: .group)
         ]
-        sut.selectedFilter = .ouvertes
+        sut.selectedFilters = [.ouvertes]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1484,7 +1484,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dm", type: .direct),
             makeConversation(id: "pub", type: .public)
         ]
-        sut.selectedFilter = .globales
+        sut.selectedFilters = [.globales]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1501,7 +1501,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "active2", isActive: true),
             makeConversation(id: "archived", isActive: false)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await Task.sleep(nanoseconds: 200_000_000)
 
@@ -1518,7 +1518,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c2", name: "Alice Group", unreadCount: 0),
             makeConversation(id: "c3", name: "Bob DM", unreadCount: 2)
         ]
-        sut.selectedFilter = .unread
+        sut.selectedFilters = [.unread]
         sut.searchText = "Alice"
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -1535,7 +1535,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c1", name: "ALICE"),
             makeConversation(id: "c2", name: "Bob")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
         sut.searchText = "alice"
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -1552,7 +1552,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c1", name: "Alice"),
             makeConversation(id: "c2", name: "Bob")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
         sut.searchText = ""
 
         try await Task.sleep(nanoseconds: 200_000_000)
@@ -1588,7 +1588,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "newest", lastMessageAt: newest),
             makeConversation(id: "recent", lastMessageAt: recent)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { !sut.groupedConversations.isEmpty }
 
@@ -1608,7 +1608,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "pinned1", isPinned: true),
             makeConversation(id: "pinned2", isPinned: true)
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "pinned" } }
 
@@ -1633,7 +1633,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c2", sectionId: "cat-family"),
             makeConversation(id: "c3")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping {
             sut.groupedConversations.contains { $0.section.id == "cat-work" }
@@ -1658,7 +1658,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "c1"),
             makeConversation(id: "c2")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "other" } }
 
@@ -1675,7 +1675,7 @@ final class ConversationListViewModelTests: XCTestCase {
         sut.conversations = [
             makeConversation(id: "c1", sectionId: "deleted-category-id")
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping { sut.groupedConversations.contains { $0.section.id == "other" } }
 
@@ -1974,7 +1974,7 @@ final class ConversationListViewModelTests: XCTestCase {
         ]
 
         // Switch to unread filter: should show only dm1 and grp1
-        sut.selectedFilter = .unread
+        sut.selectedFilters = [.unread]
         try await Task.sleep(nanoseconds: 200_000_000)
 
         XCTAssertEqual(sut.filteredConversations.count, 2)
@@ -1993,7 +1993,7 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "dev2", sectionId: "cat-dev"),
             makeConversation(id: "other1"),
         ]
-        sut.selectedFilter = .all
+        sut.selectedFilters = [.all]
 
         try await waitForGrouping {
             sut.groupedConversations.contains { $0.section.id == "cat-dev" }

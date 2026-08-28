@@ -498,9 +498,30 @@ struct ThemedFilterChip: View {
     let title: String
     let color: String
     let isSelected: Bool
+    /// Rangée COMPACTE — celle qui vit sous le rail de stories (#4069). Elle
+    /// cohabite avec le rail, elle ne le concurrence pas : sans cette
+    /// réduction, deux bandes de même poids se disputeraient la tête de liste.
+    var isCompact: Bool = false
     let action: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+
+    private var horizontalPadding: CGFloat { isCompact ? 11 : 16 }
+    private var verticalPadding: CGFloat { isCompact ? 5 : 9 }
+    private var font: Font { isCompact ? .caption2.weight(.semibold) : .footnote.weight(.semibold) }
+
+    /// **Mat et épais quand c'est POSÉ** (#4069).
+    ///
+    /// Le sélectionné portait un DÉGRADÉ et perdait son contour (`opacity: 0`).
+    /// Un dégradé se lit comme une invite — il brille, il attire — là où un
+    /// filtre actif doit se lire comme un état : posé, stable, retirable. Un
+    /// aplat opaque et un trait plus large disent cela sans un mot, et se
+    /// distinguent au premier coup d'œil de la chip simplement proposée.
+    ///
+    /// C'est ce qui rend la composition LISIBLE : avec plusieurs filtres à la
+    /// fois, la question n'est plus « lequel est actif » mais « lesquels le
+    /// sont », et il faut pouvoir répondre sans lire.
+    private var borderWidth: CGFloat { isSelected ? 2.5 : 1 }
 
     var body: some View {
         Button(action: {
@@ -508,26 +529,32 @@ struct ThemedFilterChip: View {
             action()
         }) {
             Text(title)
-                .font(.footnote.weight(.semibold))
+                .font(font)
                 .foregroundColor(isSelected ? .white : Color(hex: color))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.vertical, verticalPadding)
                 .background(
                     Capsule()
                         .fill(
-                            isSelected ?
-                            AnyShapeStyle(LinearGradient(colors: [Color(hex: color), Color(hex: color).opacity(0.85)], startPoint: .leading, endPoint: .trailing)) :
-                            AnyShapeStyle(Color(hex: color).opacity(colorScheme == .dark ? 0.4 : 0.3))
+                            isSelected
+                            ? AnyShapeStyle(Color(hex: color))
+                            : AnyShapeStyle(Color(hex: color).opacity(colorScheme == .dark ? 0.4 : 0.3))
                         )
                         .overlay(
                             Capsule()
-                                .stroke(Color(hex: color).opacity(isSelected ? 0 : 0.7), lineWidth: 1)
+                                .stroke(
+                                    Color(hex: color).opacity(isSelected ? 1 : 0.7),
+                                    lineWidth: borderWidth
+                                )
                         )
                 )
         }
-        .scaleEffect(isSelected ? 1.05 : 1)
+        // Plus d'agrandissement : la composition peut poser plusieurs chips à
+        // la fois, et autant de voisines gonflées feraient sauter la rangée.
+        // Le mat et l'épaisseur portent seuls l'état.
         .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityHint(ConversationFilterComposition.accessibilityHint(isSelected: isSelected))
     }
 }
 
