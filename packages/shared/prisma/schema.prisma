@@ -3622,12 +3622,28 @@ enum DeletionRequestStatus {
 
 /// Demande de suppression de compte avec flow email + période de grâce
 model AccountDeletionRequest {
-  id                String                @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String                @db.ObjectId
-  user              User                  @relation(fields: [userId], references: [id])
-  status            DeletionRequestStatus @default(PENDING_EMAIL_CONFIRMATION)
-  confirmTokenHash  String                @unique
-  cancelTokenHash   String                @unique
+  id     String                @id @default(auto()) @map("_id") @db.ObjectId
+  userId String                @db.ObjectId
+  user   User                  @relation(fields: [userId], references: [id])
+  status DeletionRequestStatus @default(PENDING_EMAIL_CONFIRMATION)
+
+  /// Hash du jeton de confirmation. `@unique` est un PIÈGE tant que le code y
+  /// écrit une constante (`'used'`, `'revoked'`) : deux demandes résolues
+  /// entreraient en collision sur l'index. Un jeton consommé se marque
+  /// désormais par `resolvedAt`, et le hash est remplacé par une valeur
+  /// UNIQUE dérivée de l'identifiant de la ligne (#4183).
+  confirmTokenHash String @unique
+  cancelTokenHash  String @unique
+
+  /// Un lien de courriel MEURT. Sans cette date, le jeton reçu il y a six mois
+  /// ouvrait encore la suppression du compte (#4183). Vérifiée dans les DEUX
+  /// recherches — celle de confirmation et celle d'annulation.
+  tokenExpiresAt DateTime?
+
+  /// Nombre d'essais de résolution ratés. Au-delà du plafond, la demande est
+  /// invalidée plutôt que laissée ouverte à la devinette.
+  resolveAttempts Int @default(0)
+
   confirmedAt       DateTime?
   cancelledAt       DateTime?
   gracePeriodEndsAt DateTime?

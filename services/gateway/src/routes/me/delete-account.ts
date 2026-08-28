@@ -14,13 +14,25 @@ const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
 const GRACE_PERIOD_DAYS = 90;
 
+/** 72 h — la durée de vie d'un lien de confirmation (#4183). */
+export const TOKEN_TTL_MS = 72 * 60 * 60 * 1000;
+
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-function buildGatewayUrl(path: string): string {
-  const base = process.env.GATEWAY_URL || process.env.API_URL || 'https://gate.meeshy.me';
-  return `${base}/api/v1/me${path}`;
+/**
+ * L'adresse de la PAGE qui explique la conséquence avant de l'appliquer.
+ *
+ * Les liens de courriel visaient auparavant des `GET` du gateway qui MUTAIENT
+ * — un pré-chargeur de liens (antivirus de messagerie, Safe Links, prefetch du
+ * navigateur) confirmait donc la suppression d'un compte sans qu'aucun humain
+ * ne clique. Ils visent désormais une page : c'est le CLIC qui devient le
+ * consentement, et la page fait le `POST` (#4183).
+ */
+export function buildDeletionPageUrl(action: 'confirm' | 'cancel' | 'purge', token: string): string {
+  const base = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://meeshy.me';
+  return `${base.replace(/\/+$/, '')}/account/deletion?token=${encodeURIComponent(token)}&action=${action}`;
 }
 
 function htmlPage(title: string, emoji: string, message: string, detail: string, color: string): string {
@@ -115,6 +127,9 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
             status: 'PENDING_EMAIL_CONFIRMATION',
             confirmTokenHash,
             cancelTokenHash,
+            // Un lien de courriel MEURT. Sans cette date, le jeton reçu il y a
+            // six mois ouvrait encore la suppression du compte (#4183).
+            tokenExpiresAt: new Date(Date.now() + TOKEN_TTL_MS),
           }
         });
 
@@ -126,8 +141,8 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
         if (user?.email) {
           const emailService = new EmailService();
           const name = user.displayName || user.firstName || 'Utilisateur';
-          const confirmLink = buildGatewayUrl(`/delete-account/confirm?token=${confirmToken}`);
-          const cancelLink = buildGatewayUrl(`/delete-account/cancel?token=${cancelToken}`);
+          const confirmLink = buildDeletionPageUrl('confirm', confirmToken);
+          const cancelLink = buildDeletionPageUrl('cancel', cancelToken);
 
           await emailService.sendAccountDeletionConfirmEmail({
             to: user.email,
@@ -149,184 +164,46 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================================
-  // GET /delete-account/confirm — Confirm deletion (public)
+  // Les trois anciens liens de courriel — désormais INERTES (#4183)
   // ============================================================
-  fastify.get(
-    '/delete-account/confirm',
-    {
-      preHandler: [validateQuery(TokenQuerySchema)],
-      schema: {
-        description: 'Confirm account deletion via email link',
-        tags: ['me', 'account'],
-      }
-    },
-    async (request, reply) => {
-      const { token } = request.query as { token: string };
-      const tokenHash = hashToken(token);
+  //
+  // `GET /delete-account/confirm` écrivait `status: 'CONFIRMED'` et
+  // `gracePeriodEndsAt` à J+90. Une MUTATION destructrice déclenchée par une
+  // requête que n'importe quoi peut émettre : antivirus de messagerie, Safe
+  // Links, pré-chargeur du navigateur. Qui lançait la suppression puis se
+  // ravisait et ne cliquait rien croyait avoir tout arrêté — et aucun courriel
+  // n'est émis entre la confirmation et l'expiration, donc rien ne l'aurait
+  // prévenu. Quatre-vingt-dix jours plus tard, son compte était désactivé.
+  //
+  // Le tirage n'était pas un coup de dé unique : le rappel hebdomadaire porte
+  // LES DEUX liens, et l'ordre de visite du scanner décidait de l'issue,
+  // toutes les semaines.
+  //
+  // Elles sont CONSERVÉES, et non supprimées : les courriels déjà envoyés
+  // portent ces adresses, et une période de grâce dure quatre-vingt-dix jours.
+  // Elles ne font plus que rediriger vers la page qui DIT la conséquence et
+  // fait le `POST` au clic — c'est le clic humain qui devient le consentement.
+  const REDIRECTIONS: ReadonlyArray<{ chemin: string; action: 'confirm' | 'cancel' | 'purge' }> = [
+    { chemin: '/delete-account/confirm', action: 'confirm' },
+    { chemin: '/delete-account/cancel', action: 'cancel' },
+    { chemin: '/delete-account/delete-now', action: 'purge' },
+  ];
 
-      try {
-        const deletionRequest = await fastify.prisma.accountDeletionRequest.findFirst({
-          where: { confirmTokenHash: tokenHash, status: 'PENDING_EMAIL_CONFIRMATION' }
-        });
-
-        if (!deletionRequest) {
-          return reply.type('text/html').send(
-            htmlPage('Lien invalide', '\u274c', 'Ce lien de confirmation est invalide ou a deja ete utilise.', 'Veuillez refaire une demande de suppression depuis l\'application.', '#ef4444')
-          );
+  for (const { chemin, action } of REDIRECTIONS) {
+    fastify.get(
+      chemin,
+      {
+        preHandler: [validateQuery(TokenQuerySchema)],
+        schema: {
+          description: 'Legacy email link — redirects to the confirmation page. Performs NO mutation (see #4183).',
+          tags: ['me', 'account'],
+          deprecated: true,
         }
-
-        const gracePeriodEndsAt = new Date();
-        gracePeriodEndsAt.setDate(gracePeriodEndsAt.getDate() + GRACE_PERIOD_DAYS);
-
-        await fastify.prisma.accountDeletionRequest.update({
-          where: { id: deletionRequest.id },
-          data: {
-            status: 'CONFIRMED',
-            confirmedAt: new Date(),
-            gracePeriodEndsAt,
-            confirmTokenHash: 'used',
-          }
-        });
-
-        logger.info(`[DeleteAccount] Deletion confirmed for user=${deletionRequest.userId}, grace period ends=${gracePeriodEndsAt.toISOString()}`);
-
-        const dateStr = gracePeriodEndsAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-        return reply.type('text/html').send(
-          htmlPage('Suppression confirmee', '\u2705', `Votre demande de suppression a ete confirmee. Votre compte sera supprime apres le ${dateStr}.`, 'Vous pouvez annuler cette demande a tout moment via le lien dans l\'email ou depuis l\'application.', '#22c55e')
-        );
-      } catch (error) {
-        logger.error('[DeleteAccount] Confirm error:', error);
-        return reply.type('text/html').send(
-          htmlPage('Erreur', '\u26a0\ufe0f', 'Une erreur est survenue lors de la confirmation.', 'Veuillez reessayer plus tard.', '#f59e0b')
-        );
+      },
+      async (request, reply) => {
+        const { token } = request.query as { token: string };
+        return reply.redirect(buildDeletionPageUrl(action, token), 302);
       }
-    }
-  );
-
-  // ============================================================
-  // GET /delete-account/cancel — Cancel deletion (public)
-  // ============================================================
-  fastify.get(
-    '/delete-account/cancel',
-    {
-      preHandler: [validateQuery(TokenQuerySchema)],
-      schema: {
-        description: 'Cancel account deletion via email link',
-        tags: ['me', 'account'],
-      }
-    },
-    async (request, reply) => {
-      const { token } = request.query as { token: string };
-      const tokenHash = hashToken(token);
-
-      try {
-        const deletionRequest = await fastify.prisma.accountDeletionRequest.findFirst({
-          where: {
-            cancelTokenHash: tokenHash,
-            status: { in: ['PENDING_EMAIL_CONFIRMATION', 'CONFIRMED', 'GRACE_PERIOD_EXPIRED'] }
-          }
-        });
-
-        if (!deletionRequest) {
-          return reply.type('text/html').send(
-            htmlPage('Lien invalide', '\u274c', 'Ce lien d\'annulation est invalide ou a deja ete utilise.', 'Votre compte n\'a peut-etre pas de demande de suppression active.', '#ef4444')
-          );
-        }
-
-        await fastify.prisma.accountDeletionRequest.update({
-          where: { id: deletionRequest.id },
-          data: { status: 'CANCELLED', cancelledAt: new Date(), cancelTokenHash: 'used' }
-        });
-
-        const user = await fastify.prisma.user.findUnique({
-          where: { id: deletionRequest.userId },
-          select: { isActive: true }
-        });
-
-        if (user && !user.isActive) {
-          await fastify.prisma.user.update({
-            where: { id: deletionRequest.userId },
-            data: { isActive: true, deletedAt: null }
-          });
-        }
-
-        logger.info(`[DeleteAccount] Deletion cancelled for user=${deletionRequest.userId}`);
-
-        return reply.type('text/html').send(
-          htmlPage('Suppression annulee', '\ud83c\udf89', 'La suppression de votre compte a ete annulee avec succes.', 'Votre compte reste actif et toutes vos donnees sont preservees. Vous pouvez fermer cette page.', '#6366f1')
-        );
-      } catch (error) {
-        logger.error('[DeleteAccount] Cancel error:', error);
-        return reply.type('text/html').send(
-          htmlPage('Erreur', '\u26a0\ufe0f', 'Une erreur est survenue lors de l\'annulation.', 'Veuillez reessayer plus tard.', '#f59e0b')
-        );
-      }
-    }
-  );
-
-  // ============================================================
-  // GET /delete-account/delete-now — Immediate deletion (public)
-  // ============================================================
-  fastify.get(
-    '/delete-account/delete-now',
-    {
-      preHandler: [validateQuery(TokenQuerySchema)],
-      schema: {
-        description: 'Immediately delete account after grace period (via email link)',
-        tags: ['me', 'account'],
-      }
-    },
-    async (request, reply) => {
-      const { token } = request.query as { token: string };
-      const tokenHash = hashToken(token);
-
-      try {
-        const deletionRequest = await fastify.prisma.accountDeletionRequest.findFirst({
-          where: { confirmTokenHash: tokenHash, status: 'GRACE_PERIOD_EXPIRED' }
-        });
-
-        if (!deletionRequest) {
-          return reply.type('text/html').send(
-            htmlPage('Lien invalide', '\u274c', 'Ce lien de suppression est invalide ou la demande n\'est plus active.', 'La suppression immediate n\'est disponible qu\'apres expiration de la periode de grace.', '#ef4444')
-          );
-        }
-
-        await fastify.prisma.user.update({
-          where: { id: deletionRequest.userId },
-          data: { isActive: false, deletedAt: new Date() }
-        });
-
-        await fastify.prisma.accountDeletionRequest.update({
-          where: { id: deletionRequest.id },
-          data: { status: 'COMPLETED' }
-        });
-
-        // Le compte n'existe plus : ses sockets tombent, APRÈS l'écriture —
-        // un socket resté ouvert recevrait encore les fils temps réel d'un
-        // compte supprimé. Best-effort par construction (`disconnectRevokedSessions`
-        // ne lève jamais). L'énumération partagée n'a pas d'`account_deleted` ;
-        // `logout_all_devices` est le seul terme vrai — chaque appareil est
-        // signé dehors — et le message porte la cause.
-        await disconnectRevokedSessions({
-          io: fastify.socketIOHandler?.getManager?.()?.getIO(),
-          userId: deletionRequest.userId,
-          reason: 'logout_all_devices',
-          message: 'Your account was deleted — every session was signed out.',
-          onError: (err) => logger.warn(`[DeleteAccount] socket fanout failed on account deletion user=${deletionRequest.userId}`, err),
-        });
-
-        logger.info(`[DeleteAccount] Account deleted immediately for user=${deletionRequest.userId}`);
-
-        return reply.type('text/html').send(
-          htmlPage('Compte supprime', '\ud83d\udc4b', 'Votre compte Meeshy a ete supprime definitivement.', 'Merci d\'avoir utilise Meeshy. Vous pouvez fermer cette page.', '#6b7280')
-        );
-      } catch (error) {
-        logger.error('[DeleteAccount] Delete-now error:', error);
-        return reply.type('text/html').send(
-          htmlPage('Erreur', '\u26a0\ufe0f', 'Une erreur est survenue lors de la suppression.', 'Veuillez reessayer plus tard.', '#f59e0b')
-        );
-      }
-    }
-  );
+    );
+  }
 }

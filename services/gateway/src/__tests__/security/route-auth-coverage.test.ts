@@ -352,6 +352,18 @@ function synthesizeQueryString(schema: any): string {
 // lisibilité ; la justification vaut pour tout le groupe qu'elle chapeaute.
 // ---------------------------------------------------------------------------
 const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
+  // --- Récupération de compte ---
+  {
+    method: 'POST',
+    url: '/api/v1/account/deletion/resolve',
+    why:
+      "résolution d'un lien de suppression reçu par courriel — publique PAR NATURE : " +
+      "la personne qui ANNULE sa suppression peut avoir perdu l'accès à son compte, " +
+      "c'est même le cas nominal. Le secret est le jeton, qui périme en 72 h, dont les " +
+      "essais sont comptés (5 avant invalidation de la demande) et dont la cadence est " +
+      "bornée par un limiteur (10/h par IP). Elle remplace trois GET MUTANTS qu'un " +
+      'pré-chargeur de lien pouvait déclencher (#4183).',
+  },
   // --- Santé / méta ---
   { method: 'GET', url: '/health', why: 'sonde de santé infra' },
   { method: 'GET', url: '/info', why: "métadonnées statiques du service, aucune donnée d'utilisateur" },

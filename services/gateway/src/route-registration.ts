@@ -36,6 +36,7 @@ import { syncRoutes } from './routes/sync';
 import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
+import { accountDeletionRoutes } from './routes/account-deletion';
 import { communityRoutes } from './routes/communities';
 // import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
 import { dashboardRoutes } from './routes/admin/dashboard';
@@ -267,6 +268,11 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
 
     // Register /me routes (NEW unified preferences API)
     await server.register(meRoutes, { prefix: `${API_PREFIX}/me` });
+
+    // La résolution d'un lien de suppression vit HORS de `/me` : elle n'est
+    // pas authentifiée par nature — la personne qui annule sa suppression peut
+    // avoir perdu l'accès à son compte, c'est même le cas nominal (#4183).
+    await server.register(accountDeletionRoutes, { prefix: `${API_PREFIX}/account/deletion` });
 
     // Register push notification token routes (device registration for APNS/FCM/VoIP)
     await server.register(pushTokenRoutes, { prefix: API_PREFIX });
