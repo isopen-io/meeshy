@@ -20,6 +20,12 @@ final class StoryCanvasUIView_ReaderAccessibilityTests: XCTestCase {
     private func makeView(slide: StorySlide, mode: RenderMode) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: mode)
         view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        // **La fixture CÂBLE l'éditeur (#4046)**, comme l'atelier de production
+        // (`StoryComposerView+Canvas.swift:1131`). Sans lui, « Modifier » n'a
+        // personne derrière elle et la règle la retire — à juste titre : ces
+        // témoins vérifient que VoiceOver annonce l'action, pas qu'elle est
+        // annoncée dans le vide.
+        view.onItemDoubleTapped = { _, _ in }
         return view
     }
 

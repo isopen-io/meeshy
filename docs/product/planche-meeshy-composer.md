@@ -68,6 +68,20 @@ La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « to
 changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
 qui a été touché, l'app décide ce que cela sélectionne.**
 
+**L'appui long sur un objet ouvre SES actions, et elles seules (#4046).** Le menu servait ses cinq
+entrées à tout objet non verrouillé, et deux n'avaient alors aucun effet : « Mettre au premier plan »
+un objet **seul de son plan** ne déplace rien — le menu proposait un geste dont le résultat est
+l'écran d'avant —, et « Modifier » délègue à un rappel que l'**hôte** fournit, que la scène incrustée
+de l'écran document ne transmet pas : l'entrée s'y peignait au-dessus d'un `nil`. Un fond n'empile
+pas non plus : il n'est pas dans le plan.
+
+**Le frère de plan se compte tous types confondus.** L'empilement raisonne sur les `zIndex` de TOUS
+les éléments — c'est ce que le rendu trie. Ne compter que les médias dirait « seul » d'un objet posé
+sous un texte, et retirerait une action qui a bel et bien un effet.
+
+**VoiceOver lit la MÊME règle.** Annoncer à l'oreille une action que le menu visuel ne sert pas
+rouvrirait le cul-de-sac par l'autre porte, et en pire : rien ne le dirait.
+
 **Un son posé sur une scène en devient la BANDE-SON — le troisième emplacement (#4052).** Le fond
 visuel, les objets de premier plan, et le son de fond : trois places, pas une file unique. Le refus
 du SDK — « un son n'a pas de place de fond sur un canvas » — était juste d'un fond VISUEL, et faux

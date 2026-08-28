@@ -34,7 +34,39 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
                                order: 0)
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
         view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        // **La fixture CÂBLE l'éditeur (#4046)**, comme le fait l'atelier de
+        // production (`StoryComposerView+Canvas.swift:1131`). Elle ne le faisait
+        // pas, et affirmait pourtant « Modifier est offerte » — sur un canvas
+        // qui n'avait AUCUN éditeur derrière. Une fixture plus pauvre que la
+        // production fait passer au vert une entrée qui, chez l'utilisateur,
+        // pourrait ne rien faire.
+        view.onItemDoubleTapped = { _, _ in }
         return view
+    }
+
+    /// Le canvas SANS éditeur — celui de la scène incrustée, qui ne transmet pas
+    /// `onItemDoubleTapped`. C'est là que « Modifier » peignait au-dessus d'un
+    /// `nil`.
+    private func makeCanvasSansEditeur() -> StoryCanvasUIView {
+        let slide = StorySlide(id: "s",
+                               effects: StoryEffects(textObjects: [lockedText(), freeText()]),
+                               duration: 6,
+                               order: 0)
+        let view = StoryCanvasUIView(slide: slide, mode: .edit)
+        view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        return view
+    }
+
+    /// **Le témoin du cas RÉEL** : la scène incrustée de l'écran document ne
+    /// câble aucun éditeur, et son menu ne doit donc pas proposer « Modifier ».
+    func test_contextMenu_sansEditeurCable_neProposePasModifier() {
+        let vue = makeCanvasSansEditeur()
+        let titres = vue.contextMenu(for: freeText().id, kind: .text)
+            .children.compactMap { ($0 as? UIAction)?.title }
+        XCTAssertFalse(titres.contains("Modifier"),
+                       "Sans `onItemDoubleTapped`, « Modifier » n'a personne derrière elle.")
+        XCTAssertTrue(titres.contains("Dupliquer"),
+                      "…et les entrées qui ne dépendent d'aucun hôte restent servies.")
     }
 
     private func textIds(_ view: StoryCanvasUIView) -> [String] {
@@ -128,12 +160,79 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
 
     // MARK: - Menu long-press
 
+    /// Le verrou n'a pas bougé au #4046 — il retire toujours contenu et
+    /// duplication, et laisse l'empilement. Ce qui a bougé, c'est que
+    /// l'empilement est désormais lui aussi soumis à « a-t-il un effet ? ».
     func test_offered_lockedItem_keepsOnlyStackingActions() {
-        XCTAssertEqual(StoryCanvasContextAction.offered(isLocked: true), [.bringForward, .sendBackward])
+        XCTAssertEqual(
+            StoryCanvasContextAction.offered(
+                isLocked: true, isBackground: false,
+                sharesPlaneWithAnother: true, hasEditor: true),
+            [.bringForward, .sendBackward]
+        )
     }
 
     func test_offered_unlockedItem_keepsEveryAction() {
-        XCTAssertEqual(StoryCanvasContextAction.offered(isLocked: false), StoryCanvasContextAction.allCases)
+        XCTAssertEqual(
+            StoryCanvasContextAction.offered(
+                isLocked: false, isBackground: false,
+                sharesPlaneWithAnother: true, hasEditor: true),
+            StoryCanvasContextAction.allCases
+        )
+    }
+
+    // MARK: - #4046 — loi 4 : une action absente, jamais grisée
+
+    /// **Le défaut principal.** « Mettre au premier plan » un objet qui y est
+    /// déjà, faute de frère, ne déplace RIEN : le menu proposait un geste dont
+    /// le résultat est l'écran d'avant.
+    func test_offered_unObjetSeulDeSonPlan_nOffreAucunEmpilement() {
+        let servies = StoryCanvasContextAction.offered(
+            isLocked: false, isBackground: false,
+            sharesPlaneWithAnother: false, hasEditor: true)
+        XCTAssertFalse(servies.contains(.bringForward))
+        XCTAssertFalse(servies.contains(.sendBackward))
+        XCTAssertEqual(servies, [.edit, .duplicate, .delete],
+                       "…et les trois autres restent : elles ont un effet.")
+    }
+
+    /// Un FOND n'est pas dans le plan : l'empiler ne veut rien dire.
+    func test_offered_unFond_nOffreAucunEmpilement_memeAvecDesFreres() {
+        let servies = StoryCanvasContextAction.offered(
+            isLocked: false, isBackground: true,
+            sharesPlaneWithAnother: true, hasEditor: true)
+        XCTAssertFalse(servies.contains(.bringForward))
+        XCTAssertFalse(servies.contains(.sendBackward))
+    }
+
+    /// **« Modifier » délègue à `onItemDoubleTapped`, que l'HÔTE fournit.** La
+    /// scène incrustée de l'écran document ne la transmet pas : le menu y
+    /// peignait « Modifier » au-dessus d'un `nil`.
+    func test_offered_sansEditeur_nOffrePasModifier() {
+        let servies = StoryCanvasContextAction.offered(
+            isLocked: false, isBackground: false,
+            sharesPlaneWithAnother: true, hasEditor: false)
+        XCTAssertFalse(servies.contains(.edit))
+        XCTAssertTrue(servies.contains(.duplicate), "Dupliquer, lui, n'a besoin d'aucun hôte.")
+    }
+
+    /// Le cas dégénéré : un objet verrouillé, seul de son plan, n'offre RIEN —
+    /// et le menu ne doit alors pas s'ouvrir sur une liste vide.
+    func test_offered_verrouilleEtSeul_nOffreRien() {
+        XCTAssertTrue(
+            StoryCanvasContextAction.offered(
+                isLocked: true, isBackground: false,
+                sharesPlaneWithAnother: false, hasEditor: true).isEmpty
+        )
+    }
+
+    /// L'ORDRE d'affichage ne bouge pas quand une entrée disparaît : le menu
+    /// reste lisible d'un objet à l'autre.
+    func test_offered_gardeLOrdreDAffichage() {
+        let servies = StoryCanvasContextAction.offered(
+            isLocked: false, isBackground: false,
+            sharesPlaneWithAnother: true, hasEditor: true)
+        XCTAssertEqual(servies, [.edit, .duplicate, .bringForward, .sendBackward, .delete])
     }
 
     func test_contextMenu_lockedText_hidesEditDuplicateAndDelete() {

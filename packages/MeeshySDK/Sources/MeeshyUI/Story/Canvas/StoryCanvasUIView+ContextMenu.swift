@@ -22,12 +22,39 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
     case sendBackward
     case delete
 
-    /// Un élément verrouillé — le badge d'attribution d'une republication,
-    /// seul porteur de `StoryTextObject.isLocked` — n'offre ni édition, ni
+    /// **Ce qu'un objet offre VRAIMENT (#4046) — loi 4, sans exception : une
+    /// action absente, jamais grisée.**
+    ///
+    /// Elle rendait `allCases` pour tout objet non verrouillé, et deux de ces
+    /// cinq entrées n'avaient alors AUCUN effet :
+    ///
+    /// - **l'empilement sur un objet SEUL de son plan.** « Mettre au premier
+    ///   plan » un objet qui y est déjà, faute de frère, ne déplace rien : le
+    ///   menu proposait un geste dont le résultat était l'écran d'avant. Un
+    ///   objet de FOND non plus n'empile pas — il n'est pas dans le plan.
+    /// - **« Modifier » sans éditeur.** L'entrée délègue à `onItemDoubleTapped`,
+    ///   une closure que l'HÔTE fournit. La scène incrustée de l'écran document
+    ///   ne la transmet pas : le menu y peignait « Modifier » au-dessus d'un
+    ///   `nil`. Mesuré, pas supposé.
+    ///
+    /// Un élément verrouillé — le badge d'attribution d'une republication, seul
+    /// porteur de `StoryTextObject.isLocked` — n'offre ni édition, ni
     /// duplication, ni suppression : les trois retirent ou dénaturent
-    /// l'attribution. L'empilement reste : il ne touche pas au contenu.
-    static func offered(isLocked: Bool) -> [StoryCanvasContextAction] {
-        isLocked ? [.bringForward, .sendBackward] : allCases
+    /// l'attribution. L'empilement lui reste, s'il a un effet : il ne touche pas
+    /// au contenu.
+    static func offered(
+        isLocked: Bool,
+        isBackground: Bool,
+        sharesPlaneWithAnother: Bool,
+        hasEditor: Bool
+    ) -> [StoryCanvasContextAction] {
+        let empile = !isBackground && sharesPlaneWithAnother
+        var servies: [StoryCanvasContextAction] = []
+        if !isLocked, hasEditor { servies.append(.edit) }
+        if !isLocked { servies.append(.duplicate) }
+        if empile { servies.append(contentsOf: [.bringForward, .sendBackward]) }
+        if !isLocked { servies.append(.delete) }
+        return servies
     }
 
     var title: String {
@@ -79,7 +106,12 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// que le menu offre.
     func contextMenu(for id: String, kind: CanvasItemKind) -> UIMenu {
         let children = StoryCanvasContextAction
-            .offered(isLocked: isLockedItem(id: id))
+            .offered(
+                isLocked: isLockedItem(id: id),
+                isBackground: isBackgroundItem(id: id),
+                sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
+                hasEditor: onItemDoubleTapped != nil
+            )
             .map { action in
                 UIAction(title: action.title,
                          image: UIImage(systemName: action.systemImage),
@@ -88,6 +120,33 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 }
             }
         return UIMenu(children: children)
+    }
+
+    /// Le FOND n'est pas dans le plan : l'empiler ne veut rien dire. Lu sur
+    /// l'objet lui-même plutôt que sur `hitTestItem`, qui l'exclut déjà — la
+    /// règle doit rester vraie même si un appelant futur vise un fond.
+    func isBackgroundItem(id: String) -> Bool {
+        slide.effects.mediaObjects?.first(where: { $0.id == id })?.isBackground == true
+            || slide.effects.audioPlayerObjects?.first(where: { $0.id == id })?.isBackground == true
+    }
+
+    /// **Un FRÈRE de plan, tous types confondus.** L'empilement raisonne sur les
+    /// `zIndex` de TOUS les éléments (c'est ce que `bringForward` fait, et ce
+    /// que le rendu trie) : compter les seuls médias dirait « seul » d'un objet
+    /// posé sous un texte, et retirerait une action qui a bel et bien un effet.
+    func foregroundSiblingExists(besides id: String) -> Bool {
+        let effets = slide.effects
+        var voisins = 0
+        for objet in effets.mediaObjects ?? [] where objet.id != id && objet.isBackground != true {
+            voisins += 1
+        }
+        for objet in effets.audioPlayerObjects ?? [] where objet.id != id && objet.isBackground != true {
+            voisins += 1
+        }
+        voisins += effets.textObjects.filter { $0.id != id }.count
+        voisins += (effets.stickerObjects ?? []).filter { $0.id != id }.count
+        voisins += slide.locationObjects.filter { $0.id != id }.count
+        return voisins > 0
     }
 
     /// Point de passage UNIQUE entre une entrée du menu et la primitive qui

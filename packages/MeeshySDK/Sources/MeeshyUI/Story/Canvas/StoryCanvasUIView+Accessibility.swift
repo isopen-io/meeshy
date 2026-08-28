@@ -301,7 +301,17 @@ extension StoryCanvasUIView {
     /// celle du menu long-press (`StoryCanvasContextAction.offered`) : les
     /// annoncer sur un élément qui les refuse serait le même cul-de-sac.
     func makeCustomActions(forId id: String, kind: CanvasItemKind) -> [UIAccessibilityCustomAction] {
-        let offered = StoryCanvasContextAction.offered(isLocked: isLockedItem(id: id))
+        // **La MÊME règle que le menu long-press (#4046)** — annoncer à
+        // VoiceOver une action que le menu visuel ne sert pas rouvrirait le
+        // cul-de-sac par l'autre porte : « Mettre au premier plan » sur un objet
+        // seul de son plan ne déplace rien, et l'annoncer serait pire que de
+        // l'omettre, puisque rien ne le dit à l'oreille.
+        let offered = StoryCanvasContextAction.offered(
+            isLocked: isLockedItem(id: id),
+            isBackground: isBackgroundItem(id: id),
+            sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
+            hasEditor: onItemDoubleTapped != nil
+        )
         var actions: [UIAccessibilityCustomAction] = []
         if offered.contains(.edit), kind == .text || kind == .media {
             actions.append(UIAccessibilityCustomAction(
