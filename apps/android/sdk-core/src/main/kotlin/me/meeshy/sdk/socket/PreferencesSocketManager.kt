@@ -39,15 +39,13 @@ import javax.inject.Singleton
  * - **community** (`{ userId, communityId, ... }`) has no Android reader at all —
  *   measured, zero occurrence of `UserCommunityPreferences` anywhere under
  *   `apps/android`. Nothing is cached, so nothing can go stale.
- * - **category** (`{ userId, category }`) DOES have one, and it is a real gap
- *   rather than an absent feature: `NotificationPreferencesStore` and
- *   `PrivacyPreferencesStore` are DataStore-backed and documented as the UI source
- *   of truth, written locally and PATCHed to `me/preferences/{notification,privacy}`
- *   through the outbox. A block changed on the web or on the iPhone therefore
- *   leaves this device's store stale — the same defect this class fixes for
- *   conversations, one arm over. Left out deliberately: it invalidates a different
- *   store on a different lane, and folding it in would widen the lot past what its
- *   witnesses cover. Tracked as issue #4133.
+ * - **category** (`{ userId, category }`) is served by [categoryPreferencesUpdated],
+ *   added for issue #4133. `NotificationPreferencesStore` and
+ *   `PrivacyPreferencesStore` are DataStore-backed and documented as the UI source of
+ *   truth, written locally and PATCHed to `me/preferences/{notification,privacy}`
+ *   through the outbox; before that flow, a block changed on the web or on the iPhone
+ *   left this device's store stale for good. The broadcast carries only the category
+ *   NAME, so the consumer re-reads it — see `PreferencesSyncCoordinator`.
  *
  * ## What is NOT listened to, and why
  *
@@ -70,18 +68,37 @@ class PreferencesSocketManager @Inject constructor(
     val conversationPreferencesUpdated: SharedFlow<UserPreferencesConversationUpdatedSocketData> =
         _conversationPreferencesUpdated.asSharedFlow()
 
+    private val _categoryPreferencesUpdated =
+        MutableSharedFlow<String>(replay = 0, extraBufferCapacity = 64)
+
+    /**
+     * User-level preference categories that changed elsewhere — the NAME only
+     * (`privacy`, `notification`, …), which is all the broadcast carries.
+     */
+    val categoryPreferencesUpdated: SharedFlow<String> = _categoryPreferencesUpdated.asSharedFlow()
+
     fun attach() {
         socketManager.on(EVENT) { args ->
             val raw = args.firstOrNull() as? JSONObject ?: return@on
-            if (raw.optString(CONVERSATION_SCOPE_KEY).isEmpty()) return@on
-            runCatching { json.decodeFromString<UserPreferencesConversationUpdatedSocketData>(raw.toString()) }
-                .onSuccess { _conversationPreferencesUpdated.tryEmit(it) }
-                .onFailure { Timber.e(it, "Socket decode error [$EVENT]") }
+            if (raw.optString(CONVERSATION_SCOPE_KEY).isNotEmpty()) {
+                runCatching {
+                    json.decodeFromString<UserPreferencesConversationUpdatedSocketData>(raw.toString())
+                }
+                    .onSuccess { _conversationPreferencesUpdated.tryEmit(it) }
+                    .onFailure { Timber.e(it, "Socket decode error [$EVENT]") }
+                return@on
+            }
+            // The category arm carries no object worth decoding — just the name. Reading
+            // it straight off the payload keeps the community arm (which has neither key)
+            // silently ignored, as it has no Android reader to go stale.
+            val category = raw.optString(CATEGORY_SCOPE_KEY)
+            if (category.isNotEmpty()) _categoryPreferencesUpdated.tryEmit(category)
         }
     }
 
     private companion object {
         const val EVENT = "user:preferences-updated"
         const val CONVERSATION_SCOPE_KEY = "conversationId"
+        const val CATEGORY_SCOPE_KEY = "category"
     }
 }

@@ -12,6 +12,8 @@ class RealtimeSessionCoordinatorTest {
     private val socialSocketManager: SocialSocketManager = mockk(relaxed = true)
     private val categorySocketManager: CategorySocketManager = mockk(relaxed = true)
     private val preferencesSocketManager: PreferencesSocketManager = mockk(relaxed = true)
+    private val preferencesSyncCoordinator: me.meeshy.sdk.preferences.PreferencesSyncCoordinator =
+        mockk(relaxed = true)
     private val callSignalManager: CallSignalManager = mockk(relaxed = true)
 
     private fun coordinator() = RealtimeSessionCoordinator(
@@ -20,6 +22,7 @@ class RealtimeSessionCoordinatorTest {
         socialSocketManager = socialSocketManager,
         categorySocketManager = categorySocketManager,
         preferencesSocketManager = preferencesSocketManager,
+        preferencesSyncCoordinator = preferencesSyncCoordinator,
         callSignalManager = callSignalManager,
     )
 
@@ -34,6 +37,7 @@ class RealtimeSessionCoordinatorTest {
             categorySocketManager.attach()
             preferencesSocketManager.attach()
             callSignalManager.attach()
+            preferencesSyncCoordinator.start()
         }
     }
 
@@ -49,6 +53,7 @@ class RealtimeSessionCoordinatorTest {
         verify(exactly = 1) { socialSocketManager.attach() }
         verify(exactly = 1) { categorySocketManager.attach() }
         verify(exactly = 1) { preferencesSocketManager.attach() }
+        verify(exactly = 1) { preferencesSyncCoordinator.start() }
         verify(exactly = 1) { callSignalManager.attach() }
     }
 
@@ -60,6 +65,21 @@ class RealtimeSessionCoordinatorTest {
         coordinator.onAuthenticatedChanged(isAuthenticated = false)
 
         verify(exactly = 1) { socketManager.disconnect() }
+    }
+
+    /**
+     * Le collecteur de preferences vit pour la SESSION, pas pour le socket : sans cet
+     * arret, il resterait abonne apres une deconnexion et rejouerait une relecture sur
+     * le compte suivant.
+     */
+    @Test
+    fun `signing out stops the preferences collector`() {
+        val coordinator = coordinator()
+
+        coordinator.onAuthenticatedChanged(isAuthenticated = true)
+        coordinator.onAuthenticatedChanged(isAuthenticated = false)
+
+        verify(exactly = 1) { preferencesSyncCoordinator.stop() }
     }
 
     @Test
@@ -95,6 +115,7 @@ class RealtimeSessionCoordinatorTest {
         verify(exactly = 2) { socialSocketManager.attach() }
         verify(exactly = 2) { categorySocketManager.attach() }
         verify(exactly = 2) { preferencesSocketManager.attach() }
+        verify(exactly = 2) { preferencesSyncCoordinator.start() }
         verify(exactly = 2) { callSignalManager.attach() }
         verify(exactly = 1) { socketManager.disconnect() }
     }

@@ -1758,7 +1758,7 @@ De plus, `GET /users/presence` laissait sortir BRUTS les ids de participants ano
 
 ---
 
-## Retirer un lien de partage retire l'accès à ses invités (2026-08-28, cycle 131)
+## Retirer un lien de partage retire l'accès à ses invités (2026-08-28, cycle 131 bis)
 
 **Contexte.** La porte d'entrée anonyme vérifie neuf propriétés du lien de
 partage. Deux d'entre elles — `ConversationShareLink.isActive` et `expiresAt` —
@@ -1813,5 +1813,5 @@ portes existantes honorent déjà sans changer d'une ligne.
   `ExpiredStoriesCleanupService`). L'unité de révocation est réutilisable telle
   quelle, il n'y manque que le déclencheur.
 
-Détail : `tasks/realtime-sync-audit-2026-08-28-cycle131.md`,
-`tasks/lessons.md` § Leçon 308, issue #4194.
+Détail : `tasks/realtime-sync-audit-2026-08-28-cycle131-bis.md`,
+`tasks/lessons.md` § Leçon 309, issue #4194.

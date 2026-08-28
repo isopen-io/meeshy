@@ -1,176 +1,149 @@
-# Cycle 131 — retirer un lien de partage ne retirait rien à ses invités
+# Cycle 131 — le second arm : un magasin local que rien ne venait jamais rafraîchir
 
-**Issue** : [#4194](https://github.com/isopen-io/meeshy/issues/4194)
-**Suivi ouvert** : [#4195](https://github.com/isopen-io/meeshy/issues/4195) (l'expiration)
-**Branche** : `claude/keen-hamilton-r1s4g6`
-**Base** : `9f50718c` (cycle 130 bis mergé)
+Date : 2026-08-28 · Issue : #4133 · Branche : `claude/keen-hamilton-funmhr`
 
-## 1. Ce qui a été cherché
+Leçon : `tasks/lessons.md` § **Leçon 308**. (Numérotée 308 et non 307 : le
+cycle 130 bis, mené en parallèle sur une branche sœur, a pris le 307 en arrivant
+sur `main` le premier — collision résolue à la fusion, les deux leçons gardées.)
 
-Une classe de défaut, pas un site. Point de départ : le point de convergence
-`endConversationMembership` (cycle 122), dont l'en-tête énumère **quatre**
-chemins qui mettent fin à une appartenance — quitter, être banni, être retiré,
-effacer pour soi. La question de la leçon 261 lui a été posée : *cette
-énumération dit-elle « ces sites appliquent la règle », ou « ce sont les sites
-où la règle s'applique » ?*
+## Le défaut
 
-Les quatre chemins énumérés retirent une PERSONNE. La cinquième famille retire
-une **PORTE** — et avec elle, en principe, tous ceux qui sont entrés par là.
+`user:preferences-updated` porte une **union de trois scopes** sous un seul nom. Le
+cycle 130 a livré l'arm CONVERSATION côté Android. L'arm **CATÉGORIE**
+(`{ userId, category }`) restait sans lecteur — et contrairement à l'arm
+communauté, ce n'était pas une feature absente mais un **vrai manque** :
 
-## 2. Ce qui a été mesuré
+- `NotificationPreferencesStore` et `PrivacyPreferencesStore` sont adossés à
+  **DataStore** et documentés en toutes lettres comme « the UI source of truth —
+  a toggle paints instantly from it » ;
+- ils sont écrits **localement**, puis propagés par l'outbox
+  (`PATCH /me/preferences/{notification,privacy}`) ;
+- côté passerelle, `preferences-broadcast.ts` diffuse
+  `USER_PREFERENCES_UPDATED { userId, category }` pour les quatre verbes écrivains
+  **et** pour la remise à zéro globale (une fois par catégorie effacée).
 
-La porte d'entrée anonyme (`POST /anonymous/join/:linkId`) vérifie **neuf**
-propriétés du lien avant de créer la ligne `Participant` : actif, expiration,
-usages, concurrence, pays, langue, plage IP, compte requis, identité requise.
-`conversationEntryAdmission.ts` les compte lui-même, dans une phrase écrite pour
-dire autre chose (« la porte anonyme vérifie NEUF propriétés du LIEN et zéro
-propriété de la conversation »).
+Conséquence : couper les notifications push depuis le web ou l'iPhone laissait le
+magasin local Android sur l'ancienne valeur, **indéfiniment**. Et le magasin de
+notifications ne gouverne pas qu'un écran de réglages : il gouverne ce que
+l'appareil AFFICHE et SONNE, longtemps après que l'écran a disparu.
 
-Deux de ces neuf ne sont pas des propriétés d'ADMISSION mais de **DURÉE** :
-`isActive` et `expiresAt` décrivent l'état du lien à tout instant, pas seulement
-au premier pas. **Rien ne les relit après ce premier pas.**
+## Ce que le lot a trouvé en chemin
 
-| porte | ce qu'elle lit du lien |
+**Android ne pouvait pas RELIRE ces blocs.** `PreferencesApi` ne déclarait que les
+deux `PATCH` — aucun `GET`. Le client pouvait écrire ses préférences et jamais les
+lire : il n'existait donc, avant ce lot, aucun chemin par lequel une valeur écrite
+ailleurs pouvait atteindre l'appareil, ni par socket ni par relecture.
+
+> **Un écrivain sans lecteur ne se voit pas dans un balayage de « qui écoute quoi »** —
+> il n'y a rien à écouter. C'est la forme inverse du cycle 130 (un événement sans
+> consommateur) : ici, un consommateur sans source.
+
+## Ce qui change
+
+| site | ce qui change |
 |---|---|
-| REST — `middleware/auth.ts:395` | rien (`Participant.sessionTokenHash` + `isActive`) |
-| Socket — `AuthHandler._authenticateAnonymousUser` | rien (la même requête, puis `socket.join`) |
-| `POST /anonymous/session/refresh` | **tout** — `410 LINK_DEACTIVATED` / `410 LINK_EXPIRED`, `!shareLink ⇒ 410` |
+| `NotificationPreferenceSyncBody` / `PrivacyPreferenceSyncBody` | `toPreferences(current)` — la **moitié LECTURE** de `from()`, pure et testée en JVM |
+| `PreferencesApi` | `getNotification()` / `getPrivacy()` — les deux `GET` qui manquaient |
+| `PreferencesSocketManager` | l'arm CATÉGORIE rejoint le pont : `categoryPreferencesUpdated: SharedFlow<String>` |
+| `PreferencesSyncCoordinator` (neuf) | le collecteur de SESSION : relit la catégorie nommée, projette, écrit le magasin |
+| `RealtimeSessionCoordinator` | le démarre à l'attache, l'**arrête** à la déconnexion |
+| `SdkModule` | le construit (le graphe ne lie aucun `CoroutineScope` — convention du module) |
 
-Et les deux routes qui RETIRENT un lien le déclarent dans leur propre contrat
-OpenAPI :
+### La projection de lecture prend `current`, et c'est tout le sujet
 
-- `PATCH /links/:linkId/toggle` — *« When deactivated, the link becomes
-  inaccessible to new **and existing** anonymous users. »*
-- `DELETE /links/:linkId` — *« will **immediately invalidate all anonymous
-  participants** using this link. »*
+Les deux corps de fil portent **moins** que le bloc local, délibérément :
 
-Derrière la première moitié de chaque phrase, du code. Derrière la seconde,
-**rien** : le toggle écrit `{ isActive }` et rend 200 ; le DELETE fait un
-`conversationShareLink.delete()` nu, et `Participant.shareLinkId` est un
-`String?` **sans relation Prisma** — aucune cascade, aucune ligne touchée.
+- les deux laissent tomber `extras` (extension locale qui ne doit jamais partir au
+  serveur) ;
+- le corps privacy laisse EN PLUS tomber les quatre champs de chiffrement, pour
+  qu'une synchro d'appareil n'estampille jamais ses défauts par-dessus une valeur
+  posée sur le web ou iOS.
 
-Ce que gardait un invité déjà entré, après que son hôte a cru couper l'accès :
-sa socket dans `ROOMS.conversation(...)` — donc chaque message, chaque réaction,
-chaque frappe en temps réel —, son droit d'écriture, sa place dans l'appel en
-cours, et son partage de position vive. Indéfiniment, tant que son onglet reste
-ouvert.
+Une projection reconstruite depuis la seule réponse infligerait **exactement ce
+dégât dans l'autre sens** : remettre à zéro, à chaque diffusion, ce que le côté
+écriture s'était donné du mal à ne pas toucher. Et la réponse `GET` **porte** bien
+ces clés — rien d'autre que cette projection ne se tient entre elles et le bloc
+local. D'où `toPreferences(current)` : ce que la passerelle possède vient de la
+réponse, ce qu'elle ignore vient de `current`.
 
-## 3. La forme du défaut
+### Pourquoi un coordinateur, et pas un collecteur de ViewModel
 
-C'est la forme du **cycle 124**, avec l'inversion qui la rend chère : là, un
-champ de service DÉCLARAIT une restriction que l'hôte ne faisait pas respecter ;
-ici, c'est le **contrat public de la route** qui la déclare, et personne
-derrière.
+Le magasin de notifications gouverne le comportement de l'appareil, pas seulement
+un écran. Collecter dans `SettingsViewModel` synchroniserait les magasins
+uniquement pendant que l'utilisateur les REGARDE — la fenêtre où il en a le moins
+besoin. Le collecteur vit donc pour la session, démarré par
+`RealtimeSessionCoordinator` à côté des managers, et **arrêté à la déconnexion** :
+sans cet arrêt il resterait abonné et rejouerait une relecture sur le compte suivant.
 
-Et la règle n'était pas à inventer : elle est **écrite, une fois, sur une
-route** — `session/refresh`, avec la sémantique fail-closed voulue. Le sort d'un
-invité après révocation dépendait donc de si son client appelle, ou non, ce
-rafraîchissement. **La même question recevait deux réponses selon la porte
-empruntée.**
+### Pourquoi il RELIT au lieu d'appliquer la charge
 
-### Ce que ce n'est PAS
+`UserPreferencesCategoryUpdatedEventData` porte `{ userId, category }` — le NOM du
+bloc et rien d'autre. Pas d'instantané à replier, pas de version à arbitrer (à la
+différence de l'arm conversation) : la seule réponse correcte est une relecture
+ciblée. Fabriquer une valeur depuis l'événement n'est pas une option que la charge
+offre.
 
-Deux décisions voisines ont été instruites, et aucune n'est touchée :
+### Deux catégories sur sept
 
-1. **Le gel des permissions à l'entrée.** `routes/anonymous.ts:396` fige les sept
-   droits et l'assume — « on entre sous les conditions du MOMENT. Un hôte qui
-   décoche `allowViewHistory` ensuite ne referme rien à qui est déjà là. »
-   `isActive` et `expiresAt` ne sont pas des droits accordés à l'entrée : ils
-   SONT la révocation.
-2. **Le bannissement, qui ferme la porte sans vider la salle.** `ban.ts` désactive
-   lui aussi le lien du banni, et dit pourquoi il s'arrête là — « Ce qui est
-   fermé, c'est la PORTE, pas la salle ». C'est juste pour SON intention :
-   retirer UNE personne. L'intention de `toggle(false)` et de `DELETE` est de
-   retirer le LIEN. C'est la seule différence, et c'est toute la différence —
-   `ban.ts` n'appelle donc pas la nouvelle unité, et son comportement est
-   inchangé.
+La passerelle en a sept (`privacy`, `audio`, `message`, `notification`, `video`,
+`document`, `application`). Android en met **deux** en cache, donc deux seulement
+peuvent se périmer ; les cinq autres sont lues à la demande par les écrans qui s'en
+servent et n'ont aucun magasin à invalider. Un nom non géré est ignoré — pas
+journalisé en erreur : c'est le cas nominal pour cinq sur sept. Un témoin le tient,
+avec un double dont **toutes** les routes refusent par défaut, si bien qu'une
+relecture inutile ferait tomber le témoin au lieu de passer inaperçue.
 
-**Cette distinction a décidé la CONCEPTION**, pas seulement la prose. Une garde
-fail-closed dans les deux portes d'authentification (relire le lien à chaque
-requête anonyme) aurait couvert l'expiration en prime — et aurait évincé, au
-passage, tous les invités d'un lien fermé par un bannissement, cassant une
-décision produit écrite. La révocation est donc une **écriture au moment du
-geste** (`Participant.isActive = false`), que les deux portes existantes
-honorent déjà.
+### Un échec de relecture ne remet RIEN à zéro
 
-## 4. Le correctif
+Le bloc garde la valeur qu'il avait — même dégradation qu'être hors ligne. Remettre
+un bloc de notifications à ses défauts sur un incident réseau **rallumerait** les
+notifications de quelqu'un qui vient de les couper ailleurs : pire que de rester
+périmé. Témoin dédié.
 
-`socketio/revokeShareLinkGuests.ts` — jumelle PLURIELLE de
-`endConversationMembership`, qu'elle appelle plutôt que de recopier ses gestes.
+## Gates
 
-```
-1. findMany   { shareLinkId, type: 'anonymous', isActive: true }
-2. updateMany { isActive: false, leftAt }          ← la base d'abord
-3. par conversation : lire l'effectif restant, émettre un
-   `conversation:participant-left` par invité (memberCount ABSOLU)
-4. par invité : invalidateParticipantLookup → endConversationMembership
-   (position vive → appel en cours → sortie de room → cache socket)
-5. disconnect(true) sur ses sockets
-```
+| gate | résultat |
+|---|---|
+| `PreferenceSyncBodyReadProjectionTest` (neuf, `:core:model`) | 8 témoins — décodage clé par clé des deux blocs ; `extras` préservé des deux côtés ; **la jambe chiffrement ni adoptée depuis la réponse ni écrasée** (les deux sens) ; les deux allers-retours écriture→lecture |
+| `PreferencesSocketManagerTest` (+4) | l'arm catégorie émet son NOM ; la remise à zéro globale relaie un événement par catégorie, dans l'ordre ; aucun des deux arms ne fuit dans le flux de l'autre ; l'arm communauté n'atteint ni l'un ni l'autre |
+| `PreferencesSyncCoordinatorTest` (neuf, `:sdk-core`) | 9 témoins, sur **deux niveaux** — cinq pilotent `refreshCategory` DIRECTEMENT (les deux blocs relus et écrits, la jambe chiffrement intacte, une catégorie sans magasin **jamais demandée**, un échec qui ne touche à rien) ; quatre tiennent le câblage du collecteur (une diffusion le déclenche, `stop()` ferme, `start()` idempotent, un coordinateur non démarré ne lit rien) |
+| `RealtimeSessionCoordinatorTest` (+3) | le collecteur démarre à l'attache, une fois, se redémarre après reconnexion, et **s'arrête à la déconnexion** |
+| `:app:assembleDebug` + `testDebugUnitTest` | délégués au workflow `Android` (voir cycle 130 : `dl.google.com` est refusé par la politique de sortie de ce conteneur) |
+| gateway / web / iOS | **non modifiés** — aucun contrat de fil touché, ce lot n'ajoute qu'un lecteur et deux `GET` déjà servis |
 
-Trois points d'ordre, tous motivés dans l'en-tête du fichier :
+### Ce que le premier jet de témoins a coûté, et la règle qui en sort
 
-- **La base d'abord** — une annonce ne précède jamais la durabilité du fait
-  qu'elle annonce, et c'est ce qui rend la révocation résistante à une panne au
-  milieu : les deux portes d'authentification refusent la reconnexion dès cet
-  instant.
-- **L'extinction par le point de convergence existant** — c'est une CINQUIÈME
-  copie de ses trois gestes qu'on évite, pas trois lignes.
-- **La socket en dernier** — un invité de lien n'a qu'UNE identité, ce
-  participant. Sa ligne close, sa socket n'a plus d'identité valide du tout ;
-  `endConversationMembership` ne coupe rien, et c'est juste pour un membre
-  inscrit qui garde trente autres conversations.
+La première rédaction mettait CHAQUE règle derrière une émission de flux collectée
+dans une coroutine d'arrière-plan. La CI a rendu un tableau très lisible : les
+**trois** assertions qui exigeaient un CHANGEMENT tombaient, et **toutes** celles
+qui exigeaient l'ABSENCE de changement passaient. C'est exactement la signature
+d'un événement jamais délivré — et non celle d'une écriture manquante.
 
-**Cette unité ANNONCE, contrairement à sa jumelle**, et pour la raison exacte
-que la jumelle donne pour ne pas le faire : ses quatre appelants portent des
-faits DIFFÉRENTS, les deux appelants d'ici portent le MÊME fait — « ce lien ne
-donne plus accès » — avec la même charge.
+> **Un témoin dont le sujet est « ce que la synchro ÉCRIT » ne doit pas pouvoir
+> tomber pour « l'événement n'est jamais arrivé ».** Quand le harnais met un
+> transport entre l'assertion et son sujet, la moitié « négative » de la suite
+> devient verte pour la mauvaise raison, et c'est la moitié qui rassure.
 
-Câblage : `toggle` seulement quand `isActive === false` (réactiver ne rend rien
-à personne — une ligne close se rouvre par la porte d'entrée), et `DELETE`
-**avant** la suppression : la colonne étant nue, la ligne partie plus rien ne
-relie ses invités au lien retiré, et échouer dans cet ordre échoue FERMÉ.
+D'où les deux niveaux : `refreshCategory` est `internal` — la totalité du
+comportement, piloté en direct — et quatre témoins seulement portent le câblage,
+dont un (« un coordinateur non démarré ne lit rien ») existe pour que le trio de
+câblage ne puisse pas passer sans collecteur.
 
-## 5. Témoins
+Le premier échec, lui, était instructif dans l'autre sens : le harnais passait le
+`TestScope` comme portée, et `runTest` attendait un collecteur qui NE SE TERMINE
+JAMAIS. L'`UncompletedCoroutinesError` PROUVAIT que le collecteur est de longue
+durée ; le corriger en le faisant terminer aurait supprimé la propriété voulue.
+La portée à lui donner est `backgroundScope`.
 
-- `socketio/__tests__/revokeShareLinkGuests.test.ts` — 8 témoins : la requête
-  d'invités, le silence quand il n'y en a aucun, l'ordre base→vivant, l'ordre
-  extinction→éviction→coupure, le cache REST, la charge de l'annonce
-  (`participantId` présent, `userId: null`, effectif restant), la révocation
-  sans Socket.IO, et l'éviction de la conversation de CHAQUE invité.
-- `__tests__/unit/routes/links-admin-revocation.test.ts` — 4 témoins de
-  CÂBLAGE : désactiver révoque, réactiver ne révoque pas, supprimer révoque
-  AVANT de supprimer, une révocation qui lève laisse le lien en place.
-  **3 des 4 rouges** contre la version sans câblage (le quatrième garde le
-  chemin « réactiver », vert des deux côtés par construction).
+## Suivi MESURÉ
 
-Trois doubles Prisma de suites existantes ont reçu la surface
-`participant.findMany` / `updateMany` — un double partiel perd en silence ce que
-le module gagne (leçon des cycles 91/93).
-
-## 6. Ce qui reste — et pourquoi c'est une issue
-
-`expiresAt` n'est le geste de personne : aucune route ne la franchit, elle
-survient toute seule. La révoquer demande un balayage périodique
-(`ExpiredStoriesCleanupService` en est le patron), plus trois questions à
-instruire — le lien bascule-t-il `isActive` au passage, rattrapage au démarrage,
-période. C'est [#4195](https://github.com/isopen-io/meeshy/issues/4195), pas une
-ligne de ce lot : l'unité de révocation est déjà idempotente et réutilisable
-telle quelle, il n'y manque que le déclencheur.
-
-## 7. La leçon
-
-> **Une garde d'ENTRÉE ne garde que l'entrée.** Parmi les propriétés qu'une
-> porte vérifie, certaines décrivent l'instant de l'admission et d'autres
-> décrivent une DURÉE — et rien, dans le code de la porte, ne les distingue :
-> elles sont neuf `if` consécutifs. Les secondes n'ont de sens que si quelque
-> chose les relit, et ce quelque chose ne s'écrit jamais au moment où l'on écrit
-> la porte.
-
-Corollaire de méthode, et c'est lui qui a trouvé le site : **la description
-OpenAPI d'une route est une AFFIRMATION, au même titre qu'un commentaire, un
-compte ou un tri.** Elle est publiée, donc lue par des clients, donc plus chère
-qu'un commentaire quand elle est fausse — et elle est le seul endroit du dépôt
-où la seconde moitié de cette règle était écrite.
-
-Voir `tasks/lessons.md` § Leçon 308.
+- **Les cinq autres catégories n'ont pas de magasin local**, donc rien à
+  invalider — mais aussi rien qui hydrate leurs écrans en cache-first. Distinct de
+  ce lot ; c'est une question de cache, pas de synchronisation.
+- **Le bloc privacy gouverne des règles que le serveur applique déjà**
+  (`showOnlineStatus`, `showReadReceipts`…). Ce lot rend le magasin local fidèle ;
+  il ne change pas qui applique la règle.
+- **Aucune hydratation au démarrage à froid.** Les deux `GET` neufs ne sont
+  appelés que par une diffusion. Un appareil qui a raté l'événement (hors ligne au
+  moment du changement) reste périmé jusqu'à la diffusion suivante. Les câbler à
+  une relecture de démarrage est un lot à part, et il vaut la peine d'être posé.
