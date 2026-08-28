@@ -665,6 +665,74 @@ footer .mono{font-size:11.5px}
   </script>
 </div></section>
 
+<!-- ================================================================ PM -->
+<section id="pm"><div class="wrap">
+  <div class="prail"><span class="pnum">PM</span><h2>Le modèle — quatre noms pour le contenu <span class="tag tNew">normalisé 2026-08-27</span></h2></div>
+  <p class="lede">La doctrine ci-dessous se déduit du modèle : elle dit ce qui est vrai <i>de ces
+  objets-là</i>. Sémantique complète : <span class="mono">docs/product/meeshy-composer-modele.md</span> —
+  en cas d'écart sur un <b>nom</b> ou une <b>règle</b>, ce fichier-là a raison.</p>
+
+  <pre class="mono" style="line-height:1.6"><b>MeeshyPublication</b>  (profil S | R | P | M)
+└── slides: [<b>MeeshySlide</b>]                     1..10
+     └── MeeshySlide = <b>MeeshyScene</b> + description
+          └── MeeshyScene (ratio)
+               └── objects: [<b>MeeshyObject</b>]    plans: background · content · foreground</pre>
+
+  <div class="grid g4">
+    <div class="card"><h4><span class="mono">MeeshyObject</span></h4><p>L'unité posée sur une scène :
+      <span class="mono">kind</span> + <span class="mono">anchor</span> + <span class="mono">plane</span> +
+      <span class="mono">z</span> + <span class="mono">transform</span> + <span class="mono">timing?</span> +
+      <span class="mono">locale?</span> + <span class="mono">payload</span>. Sept kinds, ceux du contrat
+      partagé : <span class="mono">text · media · sticker · audio · place · drawing · mention</span>.
+      <b>Ce n'est pas</b> un fichier, ni une pièce jointe.</p></div>
+    <div class="card"><h4><span class="mono">MeeshyScene</span></h4><p>La surface qui restitue des objets,
+      à un ratio donné, sur <b>trois plans</b> : <span class="mono">background</span> (le fond — UN visuel
+      <i>et</i> UN son), <span class="mono">content</span> (le porteur),
+      <span class="mono">foreground</span> (ce qui se pose dessus, ordonné par <span class="mono">z</span>).
+      <b>Ce n'est pas</b> un écran, ni un éditeur.</p></div>
+    <div class="card"><h4><span class="mono">MeeshySlide</span></h4><p>UNE scène <b>+</b> UNE description.
+      Elle ne <i>contient</i> pas une scène à côté d'autre chose : elle <b>EST</b> une scène plus son
+      texte. Une slide qui ne porte qu'un média est une scène dont le seul objet occupe le plan
+      <span class="mono">background</span>.</p></div>
+    <div class="card"><h4><span class="mono">MeeshyPublication</span></h4><p>Un <b>profil</b>
+      (S · R · P · M) et ses slides. <b>Ce n'est pas</b> un brouillon, ni un post serveur. Elle porte
+      trois choses qu'aucun objet ne porte : son <b>lieu</b>, son <b>audience</b>, sa <b>langue
+      déclarée</b>.</p></div>
+  </div>
+
+  <h3>Ce que les quatre noms NE couvrent pas — le chrome</h3>
+  <p>Les quatre noms décrivent le <b>contenu</b>. La moitié des règles de cette planche parlent de ce
+  qui l'<b>entoure</b> : une barre, un rail, un socle, un inspecteur. Sans nom, ces pièces se
+  décrivaient par périphrase (« la zone en bas », « la rangée »), et deux sections voisines pouvaient
+  désigner la même chose autrement. La table ci-dessous est la <b>seconde moitié</b> du vocabulaire —
+  elle ne crée aucun type, elle NOMME ce qui existe déjà dans le code.</p>
+
+  <div class="scrollx"><table>
+    <caption>Le chrome — et le niveau du modèle sur lequel chaque pièce agit</caption>
+    <thead><tr><th>Nom</th><th>Ce que c'est</th><th>Agit sur</th><th>Dans le code</th></tr></thead>
+    <tbody>
+      <tr><td><b>la surface</b></td><td>l'écran monté : <span class="mono">document</span> · <span class="mono">scène</span> · <span class="mono">mood</span></td><td>rend une <span class="mono">MeeshyPublication</span></td><td class="mono">ComposerSurfaceKind</td></tr>
+      <tr><td><b>le plateau</b></td><td>le fond teinté qui porte tout — trois teintes, toujours sombre</td><td>aucun : c'est le support</td><td class="mono">PlateauTint</td></tr>
+      <tr><td><b>la barre haute</b></td><td><span class="mono">✕ · [type ▾] · rail · ⋯</span></td><td>la <span class="mono">MeeshyPublication</span> (profil, slides)</td><td class="mono">exitAffordance</td></tr>
+      <tr><td><b>l'éventail</b></td><td>le menu vertical de verre qui choisit le profil</td><td>le <b>profil</b> de la publication</td><td class="mono">ComposerFormatFan</td></tr>
+      <tr><td><b>le rail</b></td><td>la bande des slides du document</td><td>les <span class="mono">MeeshySlide</span></td><td class="mono">slideRail</td></tr>
+      <tr><td><b>le <span class="mono">⋯</span></b></td><td>ce que le document sait faire et que rien d'autre ne fait</td><td>la publication ENTIÈRE</td><td class="mono">overflowMenu</td></tr>
+      <tr><td><b>la scène incrustée</b></td><td>la scène de la slide courante, rendue dans l'écran document</td><td>une <span class="mono">MeeshyScene</span></td><td class="mono">EmbeddedSceneCanvas</td></tr>
+      <tr><td><b>l'inspecteur</b></td><td>les contrôles de l'objet sélectionné, au-dessus des outils</td><td>UN <span class="mono">MeeshyObject</span></td><td class="mono">EmbeddedSceneInspector</td></tr>
+      <tr><td><b>la rangée d'outils</b></td><td>les portes qui font ENTRER de la matière + la langue déclarée</td><td>crée des <span class="mono">MeeshyObject</span></td><td class="mono">toolRow</td></tr>
+      <tr><td><b>les amorces</b></td><td>sur une scène vide : caméra · dernière capture · « touchez pour écrire »</td><td>crée le PREMIER <span class="mono">MeeshyObject</span></td><td class="mono">blankCanvasStarter*</td></tr>
+      <tr><td><b>le socle</b></td><td>Audience · Aperçu · Publier — il ne bouge jamais (loi 5)</td><td>la publication (ce qui PART)</td><td class="mono">socle</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><b>Règle de lecture de cette planche.</b> Chaque section nomme le niveau sur
+  lequel elle agit — un <span class="mono">MeeshyObject</span>, une <span class="mono">MeeshyScene</span>,
+  une <span class="mono">MeeshySlide</span>, la <span class="mono">MeeshyPublication</span>, ou une
+  pièce de chrome de la table ci-dessus. Une règle qui n'en nomme aucun décrit un comportement dont on
+  ne sait pas ce qu'il touche : c'est la forme sous laquelle deux lots finissent par se contredire
+  sans qu'aucun des deux n'ait tort.</div>
+</div></section>
+
 <!-- ================================================================ P1 -->
 <section id="p1"><div class="wrap">
   <div class="prail"><span class="pnum">P1</span><h2>Doctrine — onze lois, aucune exception</h2></div>
@@ -882,54 +950,75 @@ flowchart TD
     </div>
     <figcaption><b>Le composer au repos</b> — profil Story, un média 16:9 posé.</figcaption></figure>
     <ul class="legendlist">
-      <li><span class="n">1</span><span><b>Plateau.</b> Fond sombre configurable (noir · indigo
-        profond · violet profond — jetons SDK, contraste AA testé sur les trois) dans les
-        réglages d'interface. Il porte la scène — il n'est jamais une surface de pose, et
-        <b>il n'existe que quand une scène existe</b> (rév. 2, U18) : un document sans scène
-        suit le thème de l'app. Chrome : matériaux du système (16-25 :
-        <span class="mono">ultraThinMaterial</span> teinté + MeeshyRadius/MeeshyShadow ;
-        26+ : Liquid Glass automatique).</span></li>
-      <li><span class="n">2</span><span><b>Scène 9:16, fixe.</b> Le porteur garde son ratio ; les
-        bandes hachurées sont des zones d'ancrage de premier ordre (P6). Le fond est un objet du
-        plan <span class="mono">.background</span>.</span></li>
-      <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3).
-        <b>AMORCE</b> (aucune sélection — CIBLE : en v1 la zone reste celle du composer SDK,
-        déscope §F/I7) : la rangée fixe des kinds que le profil autorise —
-        Aa · sticker · son · lieu (+ content pour S·P·R, rév. 26 — Story gagne l'écran document,
-        composer unifié #3939) ; la porte de création a toujours un
-        domicile. <b>INSPECTEUR</b> (sélection) : les contrôles de l'objet courant, eux seuls.
-        Jamais de vide-mystère, jamais de contrôle grisé — la loi 4 vaut pour les contrôles
-        d'objet.</span></li>
+      <li><span class="n">1</span><span><b>Plateau</b> — <i>agit sur aucun niveau du modèle : c'est
+        le support.</i> Fond sombre configurable (noir · indigo profond · violet profond — jetons
+        SDK, contraste AA testé sur les trois) dans les réglages d'interface. Il porte la
+        <span class="mono">MeeshyScene</span> ; <b>aucun MeeshyObject ne s'y pose</b>, et
+        <b>il n'existe que quand une scène existe</b> (rév. 2, U18) : une
+        <span class="mono">MeeshyPublication</span> sans scène suit le thème de l'app. Sa teinte
+        gouverne aussi l'occultation de la rangée d'outils qui défile (#4032). Chrome : matériaux du
+        système (16-25 : <span class="mono">ultraThinMaterial</span> teinté +
+        MeeshyRadius/MeeshyShadow ; 26+ : Liquid Glass automatique).</span></li>
+      <li><span class="n">2</span><span><b>Scène 9:16, fixe</b> — <i>c'est UNE
+        <span class="mono">MeeshyScene</span>, celle de la <span class="mono">MeeshySlide</span>
+        courante.</i> Le <span class="mono">MeeshyObject</span> porteur garde son ratio et occupe le
+        plan <span class="mono">content</span> ; les bandes hachurées sont les zones d'ancrage de
+        premier ordre du plan <span class="mono">foreground</span> (P6). Le fond est un objet du plan
+        <span class="mono">background</span> — qui porte <b>deux places</b>, un visuel <i>et</i> un
+        son (#4052).</span></li>
+      <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3),
+        <i>et ils n'agissent pas sur le même niveau.</i>
+        <b>AMORCE</b> — <i>CRÉE un <span class="mono">MeeshyObject</span></i> (aucune sélection ;
+        CIBLE : en v1 la zone reste celle du composer SDK, déscope §F/I7) : la rangée fixe des
+        <b>kinds</b> que le profil autorise — <span class="mono">text</span> ·
+        <span class="mono">sticker</span> · <span class="mono">audio</span> ·
+        <span class="mono">place</span> (+ <span class="mono">media</span> pour S·P·R, rév. 26 —
+        Story gagne l'écran document, composer unifié #3939) ; la porte de création a toujours un
+        domicile.
+        <b>INSPECTEUR</b> — <i>agit sur UN <span class="mono">MeeshyObject</span>, celui qui est
+        sélectionné</i> : ses contrôles, eux seuls. Jamais de vide-mystère, jamais de contrôle
+        grisé — la loi 4 vaut pour les contrôles d'objet. Aucune sélection ⇒ inspecteur ABSENT, et
+        le tap qui sélectionne est un va-et-vient : le même referme (#4035).</span></li>
       <li><span class="n">4</span><span><b>Socle permanent — trois membres, jamais plus</b>
-        (rév. 2, M13). Audience (chip, toujours lisible) · aperçu (l'œil ouvre le ScenePlayer en
-        preview) · Publier (part dans la file offline). Le sélecteur de format vit dans la barre
-        haute (M8 — la qualification réel est un badge de CE chip) ; la langue de publication vit
-        dans le panneau, surfacée seulement si la détection contredit la langue système.</span></li>
+        (rév. 2, M13), <i>et les trois agissent sur la <span class="mono">MeeshyPublication</span>
+        ENTIÈRE — sur ce qui PART, jamais sur un objet.</i> Audience (chip, toujours lisible) ·
+        aperçu (l'œil remet les <span class="mono">MeeshySlide</span> au lecteur, loi 6) · Publier
+        (part dans la file offline). Le <b>profil</b> se choisit dans l'éventail de la barre haute
+        (M8 — la qualification réel est un badge de CE chip) ; la langue déclarée vit dans la rangée
+        d'outils, où elle devient la <span class="mono">locale</span> de tout objet posé.
+        Aux paliers d'accessibilité les libellés cèdent la place à leur icône, <b>au même
+        endroit</b> : les zones ne se déplacent pas, elles rétrécissent (#4057).</span></li>
     </ul>
   </div>
-  <div class="callout"><b>Règle d'apparition.</b> Un contrôle existe à l'écran si l'objet courant
-  l'accepte <b>et</b> le profil l'autorise <b>et</b> l'action a un effet maintenant. Le piège
-  documenté du dépôt — de l'UI verte sur du code injoignable (<span class="mono">UnifiedPostComposer</span>,
-  revue 2026-08-19) — devient impossible : une capacité absente du profil n'est <b>pas montée</b>,
-  et une garde de source le vérifie.</div>
+  <div class="callout"><b>Règle d'apparition.</b> Un contrôle existe à l'écran si le
+  <span class="mono">MeeshyObject</span> courant l'accepte <b>et</b> le profil de la
+  <span class="mono">MeeshyPublication</span> l'autorise <b>et</b> l'action a un effet maintenant.
+  Le piège documenté du dépôt — de l'UI verte sur du code injoignable
+  (<span class="mono">UnifiedPostComposer</span>, revue 2026-08-19) — devient impossible : une
+  capacité absente du profil n'est <b>pas montée</b>, et une garde de source le vérifie.
+  <b>Mesuré deux fois depuis</b> : « Mettre au premier plan » sur un objet seul de son plan
+  <span class="mono">foreground</span> ne déplaçait rien (#4046), et « Modifier » se peignait
+  au-dessus d'un rappel nul sur la scène incrustée — les deux retirées, pas grisées.</div>
 </div></section>
 
 <!-- ================================================================ P5 -->
 <section id="p5"><div class="wrap">
   <div class="prail"><span class="pnum">P5</span><h2>Entrées &amp; profils — l'intention est connue d'avance</h2></div>
-  <p class="lede">Le composer ne s'ouvre jamais nu : chaque porte fixe le format initial, les
-  capacités montées, l'état d'ouverture et l'audience par défaut. L'utilisateur ne configure
-  rien — tout est préfait, et le format reste changeable après coup. <b>La porte ne fixe que
-  l'état INITIAL</b> (loi 9) : les capacités sont recalculées au format courant à chaque
-  bascule, mais le texte de BASE est PRÉSERVÉ (rév. 3, 2026-08-27 — porté par la description
-  repliable). « Dernière utilisée » = PAR FORMAT (loi 10).</p>
+  <p class="lede">Le composer ne s'ouvre jamais nu : chaque porte fixe le <b>profil</b> initial de la
+  <span class="mono">MeeshyPublication</span>, les capacités montées, l'état d'ouverture et l'audience
+  par défaut. L'utilisateur ne configure rien — tout est préfait, et le profil reste changeable après
+  coup par l'éventail. <b>La porte ne fixe que l'état INITIAL</b> (loi 9) : les capacités sont
+  recalculées au profil courant à chaque bascule, mais la <b>description</b> de la
+  <span class="mono">MeeshySlide</span> est PRÉSERVÉE (rév. 3, 2026-08-27 — portée par la description
+  repliable), et depuis #4030 le Mood n'est plus le profil qu'aucune bascule n'atteignait.
+  « Dernière utilisée » = PAR PROFIL (loi 10).</p>
   <div class="scrollx"><table>
     <thead><tr><th>Porte (origin)</th><th>Format</th><th>État d'ouverture</th><th>Capacités masquées</th><th>Audience</th></tr></thead>
     <tbody>
-      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td>Caméra prête ; amorces : galerie, dernière capture, « Touchez pour écrire », balayage bas depuis la SCÈNE = texte (depuis la barre haute = fermer — auto-brouillon, P10)</td><td>content long (le texte vit sur la scène)</td><td>dernière utilisée (format S)</td></tr>
-      <tr><td><b>Feed « Partagez quelque chose »</b> <span class="tag tNew">lots 2-3 · 2026-08-24 : la table ne route plus</span></td><td><span class="chip chP">P</span></td><td>Clavier levé sur content ; rangée photo·caméra·emoji·document·lieu·micro. <b>Lots 2-3 (2026-08-24)</b> : <span class="mono">routesToLegacy: nil</span> — la table de C1 désigne désormais le MEUBLE, et la surface « document sans scène » existe (<span class="mono">ComposerDocumentSurface</span>, que <span class="mono">ComposerSurfaceRouting</span> monte pour cette porte). <b>Les portes de PRÉSENTATION, elles, n'ont pas bougé</b> : aucun site de production ne construit <span class="mono">ComposerIntent(origin:&nbsp;.feedComposer)</span> — la sheet iPhone et l'overlay inline de l'iPad partent toujours de leurs propres booléens. <b>Dette NOMMÉE, jamais acquise</b> : des trois capacités que le DoD du lot 2 exige (spec v2 §E), <b>une seule est tenue</b>, le clavier. La rangée d'outils ne se peint pas (<span class="mono">servedDocumentTools</span> rend <span class="mono">[]</span> — le meuble n'a pas de chemin d'ingestion, loi 4) ; la saisie n'a aucune ISSUE (<span class="mono">ComposerDocumentSendRouting</span> est une MESURE de la feuille historique, sans appelant, et une garde négative l'exige) ; l'éventail des formats ne descend pas sous le document (aucun écrivain public de texte côté SDK) ; le socle n'est pas peint (<span class="mono">chromeOwner: .atelier</span>) et l'atelier n'est pas monté sous le document, donc <b>aucun bouton publier</b>. Câbler la porte avant ces capacités livrerait l'écran sans issue à l'endroit le plus fréquenté : <span class="mono">MeeshyComposerHostGuardTests.test_aucunSiteDeProduction_neMonteUnePorteDocument_tantQueLeDocumentEstUneImpasse</span> rougit le jour où un site de production le fait. Cible : vidéo qualifiante ⇒ chip format pré-basculé REEL (U3)</td><td>slides multiples (→ carrousel), timeline repliée</td><td>dernière utilisée (format P)</td></tr>
+      <tr><td><b>Tray stories « + »</b></td><td><span class="chip chS">S</span></td><td><b>Amorces</b> (elles créent le PREMIER <span class="mono">MeeshyObject</span>) : galerie, <b>dernière capture</b> — livrée le 2026-08-28, elle ne s'était jamais affichée (#4036) —, « Touchez pour écrire » ; balayage bas depuis la <span class="mono">MeeshyScene</span> = texte (depuis la barre haute = fermer — auto-brouillon, P10). <b>« Caméra prête » reste une CIBLE</b> : <span class="mono">.cameraReady</span> est déclaré par cette porte et armé par personne — mesuré le 2026-08-28, ses deux seuls lecteurs sont des règles pures (routage, clavier). Le viseur inline est #4037, non vérifiable au simulateur (aucun périphérique de capture)</td><td>description longue (le texte vit sur la scène)</td><td>dernière utilisée (profil S)</td></tr>
+      <tr><td><b>Feed « Partagez quelque chose »</b> <span class="tag tNew">dette LEVÉE · 2026-08-28</span></td><td><span class="chip chP">P</span></td><td>Clavier levé sur la <b>description</b> de la <span class="mono">MeeshySlide</span> ; la <b>rangée d'outils</b> peint ses sept portes (photo · caméra · emoji · couleur de fond · fichier · lieu · micro) plus le drapeau de langue déclarée. <b>Les quatre dettes du lot 2 sont levées</b>, chacune par son lot : la rangée se peint (T2.3→T2.6) ; la saisie a son ISSUE (<span class="mono">ComposerDocumentSendPlan</span> + le publieur de la porte, qui AIGUILLE désormais sur le profil — #4030) ; l'<b>éventail</b> descend sous le document, dans la <b>barre haute</b> (#4047) ; le <b>socle</b> est peint (<span class="mono">socleZones(for:&nbsp;.document)</span>), et il gagne l'ŒIL dès que la publication a une <span class="mono">MeeshyScene</span> (#4053). La garde qui interdisait de monter cette porte est <b>RETOURNÉE</b> : elle exige désormais un appelant unique, le fil. Vidéo qualifiante ⇒ le badge du chip de profil pré-bascule RÉEL (U3)</td><td>slides multiples (→ carrousel), timeline repliée</td><td>dernière utilisée (profil P)</td></tr>
       <tr><td><b>Onglet Réels « + »</b> <span class="tag tAb">hors v1</span></td><td><span class="chip chR">R</span></td><td>Profil DÉFINI, porte HORS v1 (aucun point d'entrée réels n'existe au dépôt — §F) : caméra vidéo prête ; qualification réel au badge du chip format</td><td>slides (une scène) ; audio premier plan (la vidéo porte le son)</td><td>Public à la première ouverture, puis mémorisée (loi 10)</td></tr>
-      <tr><td><b>Chip humeur</b> <span class="tag tEx">routé : StatusComposerView (S3)</span></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>pas de scène</b>. v1 ET cible : l'écran existant, inchangé — cette ligne documente le PROFIL, pas un écran neuf (M9)</td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
+      <tr><td><b>Chip humeur</b> <span class="tag tEx">routé : StatusComposerView (S3)</span></td><td><span class="chip chM">M</span></td><td>Grille d'emojis + « Comment tu vas ? » — <b>aucune <span class="mono">MeeshySlide</span></b>, donc ni scène ni objet. v1 ET cible : l'écran existant, inchangé — cette ligne documente le PROFIL, pas un écran neuf (M9). <b>Ce n'est plus la seule porte du profil M</b> (#4030) : l'éventail du fil l'offre quand la composition est du texte seul, et la loi 9 tient enfin sur les quatre profils</td><td>tout le visuel : média, dessin, sticker, lieu-pastille, timeline</td><td>6 niveaux (existant)</td></tr>
       <tr><td><b>Repost / citation</b></td><td><span class="chip chP">P</span></td><td>Citation posée, attribution verrouillée, SILENT auto vers l'auteur</td><td>capture caméra ; l'audience est <b>plafonnée</b> par la source</td><td>≤ source</td></tr>
       <tr><td><b>Éditer</b></td><td>celui du contenu</td><td>Scène rechargée ; références relues unitairement avant d'oser remplacer (tri-état)</td><td>changement de format (l'identité du contenu est publiée)</td><td>celle publiée</td></tr>
       <tr><td><b>Brouillon</b></td><td>celui du brouillon</td><td>Reprise exacte, curseur où on l'a laissé. Mécanique (I5, consignée avec C1) : <span class="mono">profile(for:)</span> ouvre en transitoire <span class="mono">.post/.resume</span>, le host REBASCULE au format du document chargé (loi 9) — le seed vit dans les valeurs associées de l'origine</td><td>—</td><td>celle du brouillon</td></tr>
@@ -992,20 +1081,31 @@ flowchart TD
       <div class="sc" style="flex:0 0 30%;align-items:flex-start;padding:8px"><span class="lbl">content seul — AUCUNE scène<br>(scenes: nil)</span></div>
       <div style="flex:1;display:flex;align-items:center;justify-content:center"><span class="lbl" style="color:var(--phmut)">PAS de plateau : sans scène, le composer<br>suit le thème de l'app (rév. 2, U18)</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>Document sans scène — CIBLE (v1 : <span class="mono">FeedComposerSheet</span>,
-    I6).</b> Un post texte n'invente pas de canvas ; la scène naît au premier objet visuel et
-    meurt avec le dernier (O3) — et le plateau sombre naît AVEC elle (U18) : avant, le composer
-    est aux couleurs du thème. En v1, les documents texte/URL (porte feed, brouillons de partage
-    sans média) restent servis par la sheet feed existante.</figcaption></figure>
+    </div><figcaption><b>Publication sans <span class="mono">MeeshyScene</span> — LIVRÉE</b>
+    (<span class="mono">ComposerDocumentSurface</span>, #3939 ; la sheet historique n'est plus sur ce
+    chemin). Un post texte n'invente pas de canvas : la scène naît au premier
+    <span class="mono">MeeshyObject</span> visuel et meurt avec le dernier (O3) — et le plateau naît
+    AVEC elle (U18) : avant, le composer est aux couleurs du thème. Poser une <b>couleur de fond</b>
+    la fait naître aussi, incrustée en haut de l'écran document et non en atelier plein écran
+    (#4033).</figcaption></figure>
   </div>
   <ul class="klist" style="max-width:76ch">
     <li><b>Pourquoi l'ancre et pas des coordonnées :</b> un objet posé « à y = 0,08 » saute dès
       qu'on remplace un 16:9 par un 4:3 — la bande change de hauteur. <span class="mono">.band(.top)</span>
       désigne une intention (« au-dessus du contenu ») et survit au changement de porteur. Même
       leçon que le Prisme : on stocke le rang, jamais le résultat.</li>
-    <li><b>Trois plans</b> — <span class="mono">.background</span> (fond, son de fond) ·
-      <span class="mono">.content</span> (porteur, chips audio) · <span class="mono">.foreground</span>
-      (texte, stickers, dessin, pastilles). Le z fin se règle dans le plan, à la timeline (P8).</li>
+    <li><b>Trois plans d'une <span class="mono">MeeshyScene</span></b> —
+      <span class="mono">background</span> · <span class="mono">content</span> (porteur, chips audio) ·
+      <span class="mono">foreground</span> (texte, stickers, dessin, pastilles). Le
+      <span class="mono">z</span> fin se règle dans le plan, à la timeline (P8).
+      <b>Le plan <span class="mono">background</span> porte DEUX places, pas une</b> : un visuel
+      <i>et</i> un son. C'est ce que le SDK a longtemps nié — « un son n'a pas de place de fond sur
+      un canvas », juste du visuel et faux du son (#4052).</li>
+    <li><b>Poser un média choisit un PLAN, jamais une file.</b> Pas de fond visuel ⇒ l'objet naît au
+      plan <span class="mono">background</span> ; un fond déjà là ⇒ il naît au plan
+      <span class="mono">foreground</span>. Un objet de kind <span class="mono">audio</span> prend la
+      seconde place du fond si elle est libre, et se pose au premier plan sinon — il n'écrase jamais
+      la bande-son que l'auteur venait de choisir. Aucune question n'est posée (#4038).</li>
     <li><b>Le fond reste déplaçable via son chip uniquement</b> (règle existante) : un fond
       saisissable au doigt volerait tous les gestes de pose.</li>
   </ul>
