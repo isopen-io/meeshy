@@ -29,6 +29,7 @@ import {
   initializeUserPreferences,
   resetUserPreferences,
 } from '@/stores/user-preferences-store';
+import { isPreferenceWriteInFlight } from '@/lib/preferences/preference-write-lock';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -758,6 +759,92 @@ describe('useUserPreferencesStore', () => {
           await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
         })
       ).rejects.toThrow('Failed to update privacy preferences');
+    });
+  });
+
+  // ─── déclaration des écritures en vol ────────────────────────────────────────
+
+  /**
+   * Les deux écritures appliquent OPTIMISTEMENT puis envoient. Pendant cette
+   * fenêtre, la valeur juste n'existe que localement : une relecture qui part
+   * là rend l'ancienne valeur du serveur et DÉFAIT le geste. Les écritures se
+   * déclarent donc, pour que la relecture puisse s'abstenir (leçon 310).
+   */
+  describe('déclaration des écritures en vol', () => {
+    function pendingFetch(): (response: Response) => void {
+      let release!: (response: Response) => void;
+      mockFetch.mockImplementation(
+        () => new Promise<Response>((resolve) => { release = resolve; })
+      );
+      return (response: Response) => release(response);
+    }
+
+    it('déclare updatePrivacy en vol pendant tout le PUT', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      const release = pendingFetch();
+
+      let write!: Promise<void>;
+      await act(async () => {
+        write = useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+        await Promise.resolve();
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(true);
+
+      await act(async () => {
+        release({ ok: true } as Response);
+        await write;
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+
+    it('déclare updateEncryption en vol pendant tout le PATCH', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      const release = pendingFetch();
+
+      let write!: Promise<void>;
+      await act(async () => {
+        write = useUserPreferencesStore.getState().updateEncryption({ warnOnUnencrypted: true });
+        await Promise.resolve();
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(true);
+
+      await act(async () => {
+        release({ ok: true } as Response);
+        await write;
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+
+    it('libère la déclaration quand le serveur refuse', async () => {
+      // Sans libération sur l'échec, le verrou resterait posé pour la vie de
+      // l'onglet et plus aucun rattrapage ne partirait.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch
+        .mockResolvedValueOnce(makeErrorResponse())
+        .mockResolvedValueOnce(makeOkResponse({}));
+
+      // On attend la promesse de l'ÉCRITURE, pas celle d'un `act` : `act`
+      // propage le rejet avant que le `finally` du verrou n'ait tourné, et
+      // c'est le verrou qu'on mesure ici.
+      await expect(
+        useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false })
+      ).rejects.toThrow('Failed to update privacy preferences');
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+
+    it('ne déclare rien quand il n\'y a pas de jeton', async () => {
+      mockGetAuthToken.mockReturnValue(null);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+      });
+
+      expect(isPreferenceWriteInFlight()).toBe(false);
     });
   });
 

@@ -1,4 +1,5 @@
 import { useUserPreferencesStore } from '@/stores/user-preferences-store';
+import { isPreferenceWriteInFlight } from '@/lib/preferences/preference-write-lock';
 
 /**
  * Ce qu'une annonce de catégorie user-level doit faire au DOUBLE Zustand, en un
@@ -53,10 +54,32 @@ type MirroredState = {
  * L'échec de la relecture est absorbé ici comme il l'est dans le store : la
  * dernière valeur connue reste affichée, une panne réseau n'étant pas la preuve
  * que l'utilisateur a changé d'avis.
+ *
+ * **Le veto vit ICI, sur la relecture, pas sur ses déclencheurs.** Les deux
+ * chemins — l'annonce et le rattrapage de reconnexion — le partagent donc d'un
+ * seul site ; voir `preference-write-lock`.
  */
 export function refreshMirroredPreferenceCategory(category: string): void {
   const refresh = MIRRORED_CATEGORIES[category];
   if (!refresh) return;
+  if (isPreferenceWriteInFlight()) return;
 
   void refresh(useUserPreferencesStore.getState()).catch(() => undefined);
+}
+
+/**
+ * Relit TOUS les blocs doublés — le rattrapage d'une fenêtre pendant laquelle
+ * une annonce a pu être manquée.
+ *
+ * Il ne sait pas laquelle a été manquée : une coupure de socket ne laisse
+ * aucune trace de ce qui n'est pas arrivé. Il relit donc tout ce qui est
+ * doublé, ce qui reste borné par la table ci-dessus.
+ *
+ * Le déclencheur est dans `preference-rehydration` ; le veto est celui de
+ * `refreshMirroredPreferenceCategory`, par construction.
+ */
+export function rehydrateMirroredPreferences(): void {
+  for (const category of Object.keys(MIRRORED_CATEGORIES)) {
+    refreshMirroredPreferenceCategory(category);
+  }
 }
