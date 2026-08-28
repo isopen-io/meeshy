@@ -349,7 +349,17 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// les zones cessaient d'être gouvernées par la règle — le cas où une
     /// condition ad hoc redeviendrait invisible aux tests.
     func test_socle_isNeverHiddenNorConditionallyRemoved() throws {
-        guard let socleBody = declarationBody(startingAt: "private var socle", in: try hostCode()) else {
+        // **Ancre RENDUE EXACTE au #4057.** Elle était `"private var socle"`, un
+        // PRÉFIXE : la première propriété nommée `socleQuelqueChose` déclarée
+        // au-dessus la détournait sur son corps. C'est arrivé — `socleShowsLabels`,
+        // trois lignes qui ne contiennent aucune zone — et la garde a rougi sur
+        // un bloc qui n'était pas le sien.
+        //
+        // Le piège est le même que celui de `StoryComposerView` / `…ViewModel` :
+        // une ancre qui est le préfixe d'un autre symbole ne garde pas ce qu'elle
+        // croit. Le type de retour la referme.
+        guard let socleBody = declarationBody(startingAt: "private var socle: some View",
+                                              in: try hostCode()) else {
             return XCTFail("Le socle doit être une propriété nommée `socle` — la garde s'ancre dessus")
         }
         let compacte = compact(socleBody)

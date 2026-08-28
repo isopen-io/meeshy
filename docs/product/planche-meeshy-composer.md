@@ -68,6 +68,19 @@ La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « to
 changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
 qui a été touché, l'app décide ce que cela sélectionne.**
 
+**Le socle RÉTRÉCIT aux grandes tailles de texte, il ne se casse pas (#4057).** Ses deux zones
+nommées portent un pictogramme et un mot ; aux paliers d'accessibilité, le mot ne tient plus. Mesuré
+en allemand à `accessibility-XXXL` : « Veröffentlichen » se cassait en syllabes **empilées** —
+« Ver- / öf- / fent- / li- » — et « Öffentlich » se tronquait en « Öffe… ». Les deux zones se
+retrouvaient à **104 pt d'écart vertical** : l'action terminale du composer était devenue une colonne
+de fragments. Au-delà du seuil, les libellés cèdent la place à leur icône, **au même endroit** — la
+loi 5 est préservée parce que les zones ne se déplacent pas, elles rétrécissent.
+
+**La loi 5 dit « le socle ne bouge jamais ». Elle ne dit rien de ce qui arrive quand il ne TIENT
+plus** — c'est une loi de position, pas de dimension. Deux choses ne rétrécissent jamais avec le mot :
+le **nom accessible** (un contrôle qui perd son nom en devenant compact est inatteignable à Voice
+Control) et la **cible de 44 pt**, qui est un plancher et non une conséquence du contenu.
+
 **La rangée d'outils DÉFILE, et le drapeau reste fixe (#4032).** Statique, elle sortait de l'écran
 dès les grandes tailles de texte : mesurée à `accessibility-XXXL`, elle occupait **630 pt sur un
 écran de 402, calée à x = −114** — coupée des DEUX côtés, avec des outils qu'aucun geste

@@ -72,6 +72,36 @@ nonisolated enum ComposerReelGate {
     }
 }
 
+/// **Ce que le socle MONTRE quand le texte grossit (#4057).**
+///
+/// Ses deux zones nommées portent un pictogramme ET un mot. Aux paliers
+/// d'ACCESSIBILITÉ, le mot ne tient plus : mesuré au simulateur le 2026-08-28,
+/// en allemand à `accessibility-XXXL`, « Veröffentlichen » se cassait en
+/// syllabes EMPILÉES — « Ver- / öf- / fent- / li- » — et « Öffentlich » se
+/// tronquait en « Öffe… ». Le socle, qui est une RANGÉE, devenait une colonne
+/// de fragments.
+///
+/// Au-delà de ce seuil, les libellés se réduisent donc à leur ICÔNE. C'est la
+/// forme qui préserve la loi 5 (« le socle ne bouge jamais ») : les zones ne se
+/// déplacent pas et ne passent pas à la ligne — elles RÉTRÉCISSENT, au même
+/// endroit.
+///
+/// **Ce que la réduction ne touche PAS** : le nom accessible. Un contrôle qui
+/// perd son nom en devenant compact est le défaut que `StatusComposerView` a dû
+/// corriger, et que la flèche de publication évite déjà en refusant d'échanger
+/// son libellé contre un `ProgressView`. VoiceOver et Voice Control lisent le
+/// même mot à toutes les tailles ; seul l'ŒIL en est privé, et seulement quand
+/// le montrer le rendrait illisible.
+///
+/// Le seuil est `isAccessibilitySize` et non un palier choisi à la main : c'est
+/// la frontière que le système lui-même trace entre « plus grand » et « conçu
+/// pour l'accessibilité », et la recopier en dur la ferait diverger.
+nonisolated enum ComposerSocleDensity {
+    static func showsLabels(_ size: DynamicTypeSize) -> Bool {
+        !size.isAccessibilitySize
+    }
+}
+
 /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne (#4035).**
 ///
 /// Règle PURE, hors de tout `body` : une condition posée dans une vue est
@@ -423,6 +453,10 @@ struct MeeshyComposerHost: View {
     /// Basculer Mood → Post dans l'éventail d'un repost (lot 4.7) doit garder
     /// la phrase déjà tapée ; deux `@State` jumeaux l'auraient perdue au
     /// premier tap, sans qu'aucun test ne le dise.
+    /// #4057 — le socle lit la taille de texte pour décider s'il MONTRE ses
+    /// libellés. Lue ici, sur le meuble, parce que c'est lui qui peint le socle.
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     @State private var documentText = ""
 
     /// L'emoji du mood — la seule matière SANS laquelle un mood ne part pas
@@ -2089,6 +2123,13 @@ struct MeeshyComposerHost: View {
     /// PURE et éprouvée. Aucun `if` sur `profile`, sur `origin` ni sur `intent`
     /// n'entre ici : ce serait la loi 5 défaite, et une condition écrite dans un
     /// `body` est invisible aux tests.
+    /// L'unique lecture de la règle de densité — la recopier au second site
+    /// donnerait deux seuils à faire diverger, et l'un des deux se casserait en
+    /// syllabes sans que rien ne le dise.
+    private var socleShowsLabels: Bool {
+        ComposerSocleDensity.showsLabels(dynamicTypeSize)
+    }
+
     private var socle: some View {
         HStack(spacing: 10) {
             if paintedSocleZones.contains(.audience) { audienceChip }
@@ -2178,11 +2219,17 @@ struct MeeshyComposerHost: View {
             HStack(spacing: 4) {
                 Image(systemName: composerVisibility.icon)
                     .accessibilityHidden(true)
-                Text(audienceTitle)
-                    .lineLimit(1)
+                // #4057 — le mot s'efface aux paliers d'accessibilité ; le nom
+                // accessible, lui, ne bouge pas (voir `ComposerSocleDensity`).
+                if socleShowsLabels {
+                    Text(audienceTitle)
+                        .lineLimit(1)
+                }
             }
             .font(.footnote.weight(.semibold))
             .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
         }
         // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom
@@ -2318,15 +2365,29 @@ struct MeeshyComposerHost: View {
         Button {
             publishDocument()
         } label: {
-            Label {
-                Text("composer.socle.publish", bundle: .main)
-            } icon: {
+            HStack(spacing: 4) {
                 Image(systemName: "arrow.up.circle")
+                    .accessibilityHidden(true)
+                // #4057 — même réduction que l'audience. Sans elle, en allemand
+                // à `accessibility-XXXL`, « Veröffentlichen » se cassait en
+                // syllabes empilées : l'action TERMINALE du composer devenait
+                // une colonne de fragments.
+                if socleShowsLabels {
+                    Text("composer.socle.publish", bundle: .main)
+                        .lineLimit(1)
+                }
             }
             .font(.footnote.weight(.bold))
             .foregroundColor(canPublishDocument ? MeeshyColors.indigo400 : MeeshyColors.textSecondary(isDark: true))
+            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
+            .contentShape(Rectangle())
         }
         .disabled(!canPublishDocument)
+        // Le nom accessible est posé EXPLICITEMENT : sans le `Text`, le `Label`
+        // n'en dérive plus aucun, et la flèche perdrait son nom à l'instant même
+        // où elle devient compacte — le défaut que `StatusComposerView` a dû
+        // corriger, dans l'autre sens.
+        .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
         .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
         .accessibilityHint(publishBlockedHint)
     }
