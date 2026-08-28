@@ -6,9 +6,6 @@
  *   POST   /users/friend-requests        — sendFriendRequest
  *   PATCH  /users/friend-requests/:id    — respondToFriendRequest (accept/reject/cancel)
  *   GET    /users/:userId/affiliate-token — getAffiliateToken
- *   GET    /users                        — getAllUsers (stub)
- *   PUT    /users/:id                    — updateUserById (stub)
- *   DELETE /users/:id                    — deleteUserById (stub)
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
@@ -115,9 +112,6 @@ import {
   sendFriendRequest,
   respondToFriendRequest,
   getAffiliateToken,
-  getAllUsers,
-  updateUserById,
-  deleteUserById,
 } from '../../../routes/users/devices';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -1444,80 +1438,14 @@ describe('getAffiliateToken — GET /users/:userId/affiliate-token', () => {
   });
 });
 
-// ─── GET /users (stub) ────────────────────────────────────────────────────────
-
-describe('getAllUsers — GET /users', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  function setup() {
-    const { fastify } = makeFastify();
-    getAllUsers(fastify);
-    const route = findRoute(fastify.routes, 'GET', '/users');
-    const reply = makeReply();
-    return { route, reply };
-  }
-
-  it('returns stub message', async () => {
-    const { route, reply } = setup();
-    const req = makeReq();
-
-    await route.handler(req, reply);
-
-    expect(mockSendSuccess).toHaveBeenCalledWith(
-      reply,
-      expect.objectContaining({ message: expect.stringContaining('to be implemented') })
-    );
-  });
-});
-
-// ─── PUT /users/:id (stub) ────────────────────────────────────────────────────
-
-describe('updateUserById — PUT /users/:id', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  function setup() {
-    const { fastify } = makeFastify();
-    updateUserById(fastify);
-    const route = findRoute(fastify.routes, 'PUT', '/users/:id');
-    const reply = makeReply();
-    return { route, reply };
-  }
-
-  it('returns stub message', async () => {
-    const { route, reply } = setup();
-    const req = makeReq({ params: { id: USER_ID } });
-
-    await route.handler(req, reply);
-
-    expect(mockSendSuccess).toHaveBeenCalledWith(
-      reply,
-      expect.objectContaining({ message: expect.stringContaining('to be implemented') })
-    );
-  });
-});
-
-// ─── DELETE /users/:id (stub) ─────────────────────────────────────────────────
-
-describe('deleteUserById — DELETE /users/:id', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  function setup() {
-    const { fastify } = makeFastify();
-    deleteUserById(fastify);
-    const route = findRoute(fastify.routes, 'DELETE', '/users/:id');
-    const reply = makeReply();
-    return { route, reply };
-  }
-
-  it('returns stub message', async () => {
-    const { route, reply } = setup();
-    const req = makeReq({ params: { id: USER_ID } });
-
-    await route.handler(req, reply);
-
-    expect(mockSendSuccess).toHaveBeenCalledWith(
-      reply,
-      expect.objectContaining({ message: expect.stringContaining('to be implemented') })
-    );
-  });
-});
+// Les trois stubs « to be implemented » ont été RETIRÉS (#4185).
+//
+// `GET /users`, `PUT /users/:id` et `DELETE /users/:id` rendaient un objet
+// `{ message: '… to be implemented' }` en 200 et SANS aucune garde, alors que
+// la description Swagger des deux dernières annonçait « Admin-only endpoint ».
+// Ces témoins asseyaient ce comportement — ils vérifiaient littéralement la
+// présence de « to be implemented » dans la réponse.
+//
+// Ce qui les remplace est une garde NÉGATIVE sur la table de routes réellement
+// montée (`route-auth-coverage.test.ts`), prouvée en remontant temporairement
+// l'une des routes et en vérifiant qu'elle rougit.

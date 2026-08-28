@@ -56,31 +56,14 @@ describe('UsersService', () => {
     ...overrides,
   });
 
-  describe('getAllUsers', () => {
-    it('should fetch all users', async () => {
-      const mockUsers = [
-        createMockUser({ id: 'user-1', username: 'user1' }),
-        createMockUser({ id: 'user-2', username: 'user2' }),
-      ];
-
-      mockApiService.get.mockResolvedValue({
-        success: true,
-        data: mockUsers,
-      });
-
-      const result = await usersService.getAllUsers();
-
-      expect(mockApiService.get).toHaveBeenCalledWith('/users');
-      expect(result.success).toBe(true);
-      expect(result.data).toHaveLength(2);
-    });
-
-    it('should throw error on failure', async () => {
-      mockApiService.get.mockRejectedValue(new Error('Network error'));
-
-      await expect(usersService.getAllUsers()).rejects.toThrow('Network error');
-    });
-  });
+  // `getAllUsers` a été RETIRÉE (#4185). Elle visait `GET /users`, une route qui
+  // rendait `{ message: 'Get all users - to be implemented' }` en 200 et sans
+  // authentification : ce témoin verrouillait donc l'URL d'un stub, et restait
+  // vert pendant que la liste de contacts n'affichait jamais personne.
+  //
+  // Servir l'annuaire entier de la plateforme comme carnet d'adresses serait de
+  // toute façon un défaut de confidentialité : les contacts sont désormais les
+  // amitiés ACCEPTÉES, servies par `useFriendRequestsV2`.
 
   describe('searchUsers', () => {
     it('should search users with valid query', async () => {

@@ -686,97 +686,17 @@ export async function getAffiliateToken(fastify: FastifyInstance) {
   });
 }
 
-/**
- * Stub routes for future implementation
- */
-export async function getAllUsers(fastify: FastifyInstance) {
-  fastify.get('/users', {
-    schema: {
-      description: 'Get all users (to be implemented). This endpoint will return a paginated list of all users in the system.',
-      tags: ['users'],
-      summary: 'Get all users',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string', example: 'Get all users - to be implemented' }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    return sendSuccess(reply, { message: 'Get all users - to be implemented' });
-  });
-}
 
-export async function updateUserById(fastify: FastifyInstance) {
-  fastify.put('/users/:id', {
-    schema: {
-      description: 'Update a specific user by ID (to be implemented). Admin-only endpoint for managing user accounts.',
-      tags: ['users'],
-      summary: 'Update user by ID',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'User MongoDB ID' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string', example: 'Update user - to be implemented' }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    return sendSuccess(reply, { message: 'Update user - to be implemented' });
-  });
-}
-
-export async function deleteUserById(fastify: FastifyInstance) {
-  fastify.delete('/users/:id', {
-    schema: {
-      description: 'Delete a specific user by ID (to be implemented). Admin-only endpoint for removing user accounts.',
-      tags: ['users'],
-      summary: 'Delete user by ID',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'User MongoDB ID' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string', example: 'Delete user - to be implemented' }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    return sendSuccess(reply, { message: 'Delete user - to be implemented' });
-  });
-}
+// Les trois routes « to be implemented » ont été RETIRÉES (#4185).
+//
+// `GET /users`, `PUT /users/:id` et `DELETE /users/:id` rendaient chacune
+// `{ message: '… - to be implemented' }` — en **200, sans aucune garde**
+// (mesuré en intégration). Leur description Swagger annonçait pourtant
+// « Admin-only endpoint » pour les deux dernières : le contrat publié
+// déclarait une restriction que le code n'appliquait pas, prête à devenir une
+// vraie fuite le jour où quelqu'un les implémenterait.
+//
+// Un stub qui répond 200 est pire qu'une route absente : il fait croire à un
+// contrat. Le seul appelant du dépôt — le repli de la liste de contacts du web
+// — recevait un objet là où il attendait un tableau, et n'a donc JAMAIS
+// affiché personne.

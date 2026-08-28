@@ -20,15 +20,79 @@ import type { User } from '@meeshy/shared/types';
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => jest.useRealTimers());
 
-// Mock users service
+// La source des contacts a CHANGÉ (#4185) : elle venait de
+// `usersService.getAllUsers()` → `GET /users`, une route qui rendait
+// `{ message: '… to be implemented' }` en 200 et sans authentification. La
+// liste n'a donc jamais affiché personne. Les contacts sont désormais les
+// amitiés ACCEPTÉES, servies par `useFriendRequestsV2` — servir l'annuaire
+// entier de la plateforme comme carnet d'adresses serait de toute façon un
+// défaut de confidentialité.
+//
+// `mockGetAllUsers` est conservé sous ce nom : il alimente maintenant la liste
+// d'AMIS, ce qui laisse les ~40 assertions de ce fichier porter sur ce qu'elles
+// ont toujours mesuré — transformation, tri, séparation en ligne/hors ligne,
+// recherche, rafraîchissement.
 const mockGetAllUsers = jest.fn();
 const mockSearchUsers = jest.fn();
 const mockIsUserOnline = jest.fn();
 const mockGetLastSeenFormatted = jest.fn();
 
+const IDENTITE_COURANTE = 'moi';
+
+jest.mock('@/stores', () => ({
+  useUser: () => ({ id: 'moi', username: 'moi' }),
+}));
+
+/**
+ * L'état des amitiés, tenu SYNCHRONEMENT par le double.
+ *
+ * Reconstruire le tableau `connected` à chaque rendu lui donnerait une identité
+ * neuve, donc `useMemo` recalculerait, donc le hook re-rendrait — une boucle
+ * sans fin qui épuise le tas. C'est le même piège que `preferredLanguages`
+ * construit en ligne chez son hôte (cf. `CLAUDE.md`, Prisme, cycle 123). D'où
+ * la mémoïsation sur l'identité de l'ENTRÉE.
+ */
+let amisConfigures: Array<{ id: string }> = [];
+let etatAmis: { chargement: boolean; erreur: string | null } = { chargement: false, erreur: null };
+let derniereEntree: unknown = null;
+let derniereSortie: unknown[] = [];
+/** Identité STABLE pour la liste vide — un `[]` littéral relance l'effet à chaque rendu. */
+const AUCUNE_RELATION: unknown[] = [];
+
+function relationsDepuis(utilisateurs: Array<{ id: string }>) {
+  if (utilisateurs === derniereEntree) return derniereSortie;
+  derniereEntree = utilisateurs;
+  derniereSortie = utilisateurs.map((autre) => ({
+    id: `rel-${autre.id}`,
+    senderId: IDENTITE_COURANTE,
+    receiverId: autre.id,
+    status: 'accepted',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    receiver: autre,
+  }));
+  return derniereSortie;
+}
+
+/** Ce que les témoins appellent pour poser la liste d'amis. */
+function poserAmis(utilisateurs: Array<{ id: string }> | null, options: { chargement?: boolean; erreur?: string | null } = {}) {
+  amisConfigures = utilisateurs ?? [];
+  etatAmis = { chargement: options.chargement ?? false, erreur: options.erreur ?? null };
+}
+
+jest.mock('@/hooks/v2/use-friend-requests-v2', () => ({
+  useFriendRequestsV2: (options: { enabled?: boolean } = {}) => ({
+    // `enabled: false` doit rendre une liste VIDE : c'est le contrat que
+    // `useContactsV2` relaie à sa source.
+    connected: options.enabled === false ? AUCUNE_RELATION : relationsDepuis(amisConfigures),
+    isLoading: etatAmis.chargement,
+    error: etatAmis.erreur,
+    refresh: async () => { mockGetAllUsers(); },
+  }),
+}));
+
 jest.mock('@/services/users.service', () => ({
   usersService: {
-    getAllUsers: () => mockGetAllUsers(),
     searchUsers: (...args: unknown[]) => mockSearchUsers(...args),
     isUserOnline: (...args: unknown[]) => mockIsUserOnline(...args),
     getLastSeenFormatted: (...args: unknown[]) => mockGetLastSeenFormatted(...args),
@@ -138,7 +202,7 @@ describe('useContactsV2', () => {
     mockWebSocketHandlers.onUserStatus = undefined;
 
     // Default mock implementations
-    mockGetAllUsers.mockResolvedValue({ data: mockUsers });
+    poserAmis(mockUsers);
     mockSearchUsers.mockResolvedValue({ data: [] });
     mockIsUserOnline.mockImplementation((user: User) => user.isOnline);
     mockGetLastSeenFormatted.mockImplementation((user: User) =>
@@ -148,7 +212,7 @@ describe('useContactsV2', () => {
 
   describe('Initial Loading', () => {
     it('should return isLoading true initially', () => {
-      mockGetAllUsers.mockImplementation(() => new Promise(() => {}));
+      poserAmis([], { chargement: true });
 
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),
@@ -167,7 +231,9 @@ describe('useContactsV2', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockGetAllUsers).toHaveBeenCalledTimes(1);
+      // Le hook ne charge plus lui-même : il consomme `useFriendRequestsV2`.
+      // Seul le RAFRAÎCHISSEMENT explicite passe encore par ce double.
+      expect(result.current.isLoading).toBe(false);
       expect(result.current.contacts).toHaveLength(4);
     });
 
@@ -177,7 +243,7 @@ describe('useContactsV2', () => {
       });
 
       expect(result.current.isLoading).toBe(false);
-      expect(mockGetAllUsers).not.toHaveBeenCalled();
+      expect(result.current.contacts).toEqual([]);
     });
   });
 
@@ -201,14 +267,12 @@ describe('useContactsV2', () => {
     });
 
     it('should resolve languageCode via the full prism — customDestinationLanguage counts, and codes are normalized', async () => {
-      mockGetAllUsers.mockResolvedValue({
-        data: [
+      poserAmis([
           { id: 'c-custom', username: 'custom', systemLanguage: '', regionalLanguage: '', customDestinationLanguage: 'de', isOnline: false, lastActiveAt: new Date() } as unknown as User,
           { id: 'c-upper', username: 'upper', systemLanguage: 'EN', isOnline: false, lastActiveAt: new Date() } as unknown as User,
           { id: 'c-region', username: 'region', systemLanguage: 'pt-BR', isOnline: false, lastActiveAt: new Date() } as unknown as User,
           { id: 'c-none', username: 'none', isOnline: false, lastActiveAt: new Date() } as unknown as User,
-        ],
-      });
+      ]);
 
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),
@@ -551,19 +615,21 @@ describe('useContactsV2', () => {
         expect(result.current.isLoading).toBe(false);
       });
 
-      expect(mockGetAllUsers).toHaveBeenCalledTimes(1);
+      // Le hook ne charge plus lui-même : il consomme `useFriendRequestsV2`.
+      // Seul le rafraîchissement EXPLICITE atteint encore la source.
+      expect(mockGetAllUsers).not.toHaveBeenCalled();
 
       await act(async () => {
         await result.current.refreshContacts();
       });
 
-      expect(mockGetAllUsers).toHaveBeenCalledTimes(2);
+      expect(mockGetAllUsers).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('Error Handling', () => {
     it('should return error when fetch fails', async () => {
-      mockGetAllUsers.mockRejectedValue(new Error('Network error'));
+      poserAmis([], { erreur: 'Network error' });
 
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),
@@ -578,7 +644,7 @@ describe('useContactsV2', () => {
     });
 
     it('should handle empty response', async () => {
-      mockGetAllUsers.mockResolvedValue({ data: [] });
+      poserAmis([]);
 
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),
@@ -595,7 +661,7 @@ describe('useContactsV2', () => {
     });
 
     it('should handle null data response', async () => {
-      mockGetAllUsers.mockResolvedValue({ data: null });
+      poserAmis(null);
 
       const { result } = renderHook(() => useContactsV2(), {
         wrapper: createWrapper(),

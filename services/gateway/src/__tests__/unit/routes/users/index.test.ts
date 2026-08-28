@@ -10,7 +10,6 @@ import { describe, it, expect, jest } from '@jest/globals';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockProfileFns = {
-  getUserTest: jest.fn<any>().mockResolvedValue(undefined),
   updateUserProfile: jest.fn<any>().mockResolvedValue(undefined),
   updateUserAvatar: jest.fn<any>().mockResolvedValue(undefined),
   updateUserBanner: jest.fn<any>().mockResolvedValue(undefined),
@@ -48,9 +47,6 @@ const mockDevicesFns = {
   sendFriendRequest: jest.fn<any>().mockResolvedValue(undefined),
   respondToFriendRequest: jest.fn<any>().mockResolvedValue(undefined),
   getAffiliateToken: jest.fn<any>().mockResolvedValue(undefined),
-  getAllUsers: jest.fn<any>().mockResolvedValue(undefined),
-  updateUserById: jest.fn<any>().mockResolvedValue(undefined),
-  deleteUserById: jest.fn<any>().mockResolvedValue(undefined),
 };
 
 jest.mock('../../../../routes/users/devices', () => mockDevicesFns);
@@ -96,7 +92,6 @@ describe('userRoutes — registers all route handler groups', () => {
     await userRoutes(mockFastify);
 
     // Profile routes
-    expect(mockProfileFns.getUserTest).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUserProfile).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUserAvatar).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUserBanner).toHaveBeenCalledWith(mockFastify);
@@ -125,9 +120,6 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockDevicesFns.sendFriendRequest).toHaveBeenCalledWith(mockFastify);
     expect(mockDevicesFns.respondToFriendRequest).toHaveBeenCalledWith(mockFastify);
     expect(mockDevicesFns.getAffiliateToken).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.getAllUsers).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.updateUserById).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.deleteUserById).toHaveBeenCalledWith(mockFastify);
 
     // Blocking routes
     expect(mockBlockingFns.blockUser).toHaveBeenCalledWith(mockFastify);

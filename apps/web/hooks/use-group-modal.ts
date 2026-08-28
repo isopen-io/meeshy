@@ -28,10 +28,19 @@ export function useGroupModal(currentUserId?: string) {
         if (!token) return;
 
         const trimmedQuery = searchQuery.trim();
-        const url =
-          trimmedQuery && trimmedQuery.length >= 2
-            ? `${buildApiUrl('/users/search')}?q=${encodeURIComponent(trimmedQuery)}`
-            : buildApiUrl('/users');
+
+        // En deçà de deux caractères, on ne demande RIEN. Le repli visait
+        // auparavant `GET /users`, une route qui rendait
+        // `{ message: '… to be implemented' }` : le `.filter(...)` ci-dessous
+        // levait sur un objet, et la modale affichait « Error loading users ».
+        // Ce repli n'a jamais montré personne (#4185).
+        if (trimmedQuery.length < 2) {
+          setAvailableUsers([]);
+          setIsLoadingUsers(false);
+          return;
+        }
+
+        const url = `${buildApiUrl('/users/search')}?q=${encodeURIComponent(trimmedQuery)}`;
 
         const response = await fetch(url, {
           headers: { Authorization: `Bearer ${token}` },

@@ -24,9 +24,6 @@ import {
   getFriendRequests,
   sendFriendRequest,
   respondToFriendRequest,
-  getAllUsers,
-  updateUserById,
-  deleteUserById,
 } from '../../../../routes/users/devices';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -79,9 +76,8 @@ async function buildApp(opts: {
   await getFriendRequests(app);
   await sendFriendRequest(app);
   await respondToFriendRequest(app);
-  await getAllUsers(app);
-  await updateUserById(app);
-  await deleteUserById(app);
+  // Les stubs « to be implemented » ont été retirés (#4185) — voir la garde
+  // négative de `route-auth-coverage.test.ts`.
   await app.ready();
   return { app, prisma };
 }
@@ -270,32 +266,7 @@ describe('PATCH /users/friend-requests/:id — reject success', () => {
   });
 });
 
-// ─── Stub routes ──────────────────────────────────────────────────────────────
-
-describe('GET /users — stub', () => {
-  it('returns 200 with placeholder message', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/users' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('PUT /users/:id — stub', () => {
-  it('returns 200 with placeholder message', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({ method: 'PUT', url: '/users/some-id' });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-describe('DELETE /users/:id — stub', () => {
-  it('returns 200 with placeholder message', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({ method: 'DELETE', url: '/users/some-id' });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
+// Les trois stubs ont été RETIRÉS (#4185) — ils rendaient 200 sans aucune
+// garde, avec une description Swagger qui annonçait « Admin-only endpoint ».
+// Garde négative sur la table de routes réellement montée :
+// `route-auth-coverage.test.ts`.

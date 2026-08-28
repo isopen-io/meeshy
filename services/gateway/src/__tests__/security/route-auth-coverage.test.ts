@@ -631,6 +631,38 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
   });
 
   // -------------------------------------------------------------------------
+  // Les routes « to be implemented » (#4185)
+  // -------------------------------------------------------------------------
+  // Quatre routes étaient montées, documentées dans Swagger, et ne faisaient
+  // RIEN. `GET /users`, `PUT /users/:id` et `DELETE /users/:id` rendaient
+  // `{ message: '… to be implemented' }` en 200 et **sans aucune garde** —
+  // alors que la description Swagger des deux dernières annonçait
+  // « Admin-only endpoint ». Le contrat publié déclarait une restriction que le
+  // code n'appliquait pas : aucune fuite tant que ce sont des stubs, une vraie
+  // fuite le jour où quelqu'un les implémente sur le contrat existant.
+  // `GET /users/me/test` n'avait, elle, aucun appelant sur les trois clients.
+  //
+  // GARDE NÉGATIVE — et une garde négative meurt en silence : elle passe au
+  // vert le jour où elle ne teste plus rien. Celle-ci a été PROUVÉE en
+  // remontant temporairement `getAllUsers` et en vérifiant qu'elle rougit.
+  // Le garde-fou du harnais (« au moins une centaine de routes ») la protège
+  // du cas où l'assemblage cesserait d'énumérer quoi que ce soit.
+  it('ne monte plus aucune route « to be implemented »', () => {
+    const RETIREES = [
+      { method: 'GET', url: '/api/v1/users' },
+      { method: 'PUT', url: '/api/v1/users/:id' },
+      { method: 'DELETE', url: '/api/v1/users/:id' },
+      { method: 'GET', url: '/api/v1/users/me/test' },
+    ];
+
+    const encoreMontees = RETIREES.filter((retiree) =>
+      routes.some((r) => r.method === retiree.method && r.url === retiree.url)
+    );
+
+    expect(encoreMontees.map((r) => `${r.method} ${r.url}`)).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
   // Le segment doublé (#4141)
   // -------------------------------------------------------------------------
   // `registerRevokeAllSessionsRoute` déclarait '/auth/revoke-all-sessions' sur

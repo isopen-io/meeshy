@@ -35,55 +35,12 @@ const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
 
 /**
- * Get authenticated user test endpoint
+ * `GET /users/me/test` a été RETIRÉE (#4185) : point de terminaison de test
+ * d'authentification, consommé par PERSONNE — ni iOS, ni le SDK, ni le web, ni
+ * Android (relevé sur les trois clients). Une route de test exposée en
+ * production est une surface d'API qu'il faut garder, documenter et faire
+ * évoluer, pour un usage qui n'existe pas.
  */
-export async function getUserTest(fastify: FastifyInstance) {
-  fastify.get('/users/me/test', {
-    onRequest: [fastify.authenticate],
-    schema: {
-      description: 'Test endpoint for authenticated users. Verifies authentication token and returns user ID with timestamp.',
-      tags: ['users'],
-      summary: 'Test authentication endpoint',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                userId: { type: 'string', description: 'Authenticated user ID' },
-                message: { type: 'string', example: 'Test endpoint working' },
-                timestamp: { type: 'string', format: 'date-time' }
-              }
-            }
-          }
-        },
-        401: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as AuthenticatedRequest).authContext;
-      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required');
-      }
-
-      const userId = authContext.userId;
-      fastify.log.info(`[TEST] Getting test data for user ${userId}`);
-
-      return sendSuccess(reply, {
-        userId,
-        message: "Test endpoint working",
-        timestamp: new Date()
-      });
-    } catch (error) /* istanbul ignore next */ {
-      fastify.log.error(`[TEST] Error: ${error instanceof Error ? error.message : String(error)}`);
-      return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
-    }
-  });
-}
 
 /**
  * Update authenticated user profile

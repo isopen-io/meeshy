@@ -1,6 +1,6 @@
 /**
  * Unit tests for users profile routes (profile.ts)
- * Tests GET /users/me/test, PATCH /users/me, PATCH /users/me/avatar,
+ * Tests PATCH /users/me, PATCH /users/me/avatar,
  * PATCH /users/me/banner, PATCH /users/me/password, PATCH /users/me/username,
  * GET /u/:username, GET /users/:id, GET /users/email/:email,
  * GET /users/id/:id, GET /users/phone/:phone.
@@ -117,7 +117,6 @@ jest.mock('../../../../utils/pagination', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import {
-  getUserTest,
   updateUserProfile,
   updateUserAvatar,
   updateUserBanner,
@@ -212,7 +211,7 @@ async function buildApp(opts: {
   const {
     authenticated = true,
     prisma = makePrisma(),
-    routes = [getUserTest, updateUserProfile, updateUserAvatar, updateUserBanner, updateUserPassword, updateUsername, getUserByUsername, getUserById, getUserByEmail, getUserByIdDedicated, getUserByPhone],
+    routes = [updateUserProfile, updateUserAvatar, updateUserBanner, updateUserPassword, updateUsername, getUserByUsername, getUserById, getUserByEmail, getUserByIdDedicated, getUserByPhone],
     withNotificationService = false,
     withSocketIOHandler = false,
   } = opts;
@@ -265,29 +264,10 @@ async function buildApp(opts: {
   return app;
 }
 
-// ─── GET /users/me/test ───────────────────────────────────────────────────────
-
-describe('GET /users/me/test — unauthenticated', () => {
-  it('returns 401 when no auth context', async () => {
-    const app = await buildApp({ authenticated: false, routes: [getUserTest] });
-    const res = await app.inject({ method: 'GET', url: '/users/me/test' });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('GET /users/me/test — success', () => {
-  it('returns 200 with userId and message', async () => {
-    const app = await buildApp({ routes: [getUserTest] });
-    const res = await app.inject({ method: 'GET', url: '/users/me/test' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.data.userId).toBe(USER_ID);
-    expect(body.data.message).toBe('Test endpoint working');
-    await app.close();
-  });
-});
+// `GET /users/me/test` a été RETIRÉE (#4185) : point de terminaison de test
+// d'authentification, consommé par personne sur les trois clients. Une route
+// de test exposée en production est une surface à garder pour un usage qui
+// n'existe pas. Garde négative : `route-auth-coverage.test.ts`.
 
 // ─── PATCH /users/me ──────────────────────────────────────────────────────────
 

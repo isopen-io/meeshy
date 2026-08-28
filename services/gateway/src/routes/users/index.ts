@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 
 // Profile routes
 import {
-  getUserTest,
   updateUserProfile,
   updateUserAvatar,
   updateUserBanner,
@@ -37,9 +36,6 @@ import {
   sendFriendRequest,
   respondToFriendRequest,
   getAffiliateToken,
-  getAllUsers,
-  updateUserById,
-  deleteUserById
 } from './devices';
 
 // Blocking routes
@@ -71,7 +67,6 @@ export async function userRoutes(fastify: FastifyInstance) {
   // which supports username, email, and phone number checks in a unified API
 
   // Profile routes
-  await getUserTest(fastify);
   await updateUserProfile(fastify);
   await updateUserAvatar(fastify);
   await updateUserBanner(fastify);
@@ -116,9 +111,4 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Presence routes
   await getUsersPresence(fastify);
-
-  // Stub routes
-  await getAllUsers(fastify);
-  await updateUserById(fastify);
-  await deleteUserById(fastify);
 }
