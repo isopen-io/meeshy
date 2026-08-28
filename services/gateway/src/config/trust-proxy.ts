@@ -21,9 +21,19 @@
  */
 
 /** Un déploiement sans mandataire (test, exécution directe) ne fait confiance à personne. */
-export const NO_PROXY = false as const;
+export const NO_PROXY = false;
 
-export type TrustProxySetting = number | typeof NO_PROXY;
+/**
+ * `boolean | number`, et non `number | false`.
+ *
+ * L'union avec le littéral `false` empêche TypeScript de choisir la surcharge
+ * de `fastify()` (TS2769), et fait ensuite échouer le cast `as FastifyInstance`
+ * que `server.ts` applique aux deux constructions (TS2352). Le type large est
+ * exactement celui que Fastify déclare pour cette option ; le fait que nous ne
+ * rendions jamais `true` est une propriété de `resolveTrustProxy`, garantie par
+ * ses témoins, pas quelque chose que le type doive porter.
+ */
+export type TrustProxySetting = boolean | number;
 
 const DEFAULT_HOPS = 1;
 const MAX_REASONABLE_HOPS = 4;
