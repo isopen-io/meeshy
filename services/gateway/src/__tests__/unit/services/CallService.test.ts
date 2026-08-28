@@ -1556,9 +1556,18 @@ describe('CallService', () => {
       );
     });
 
-    it('should return current state if call already ended', async () => {
+    // Issue #3581 — endCall() used to RETURN the current session on a
+    // terminal call instead of throwing, which left CallEventsHandler unable
+    // to tell "just ended" apart from "already ended" and re-broadcast
+    // call:ended/re-posted the summary/re-fired the missed-call notification
+    // on every retried call:end. It now throws CallAlreadyEndedError — same
+    // class joinCallAttempt already uses for the identical condition — so
+    // both callers (CallEventsHandler, routes/calls.ts) can special-case the
+    // no-op without touching those side effects a second time.
+    it('throws CallAlreadyEndedError if call already ended, without overwriting the session', async () => {
       const endedCall = createMockCallSession({
         status: CallStatus.ended,
+        endReason: CallEndReason.completed,
         participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1566,18 +1575,20 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(endedCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
-
-      expect(result.status).toBe(CallStatus.ended);
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('should return current state without overwriting when call already resolved to missed (duplicate call:end)', async () => {
+    it('throws CallAlreadyEndedError without overwriting when call already resolved to missed (duplicate call:end)', async () => {
       // Mirrors the real race: the ringing-timeout path (`markCallAsMissed`)
       // resolves the CallSession to `missed` WITHOUT touching participant
       // rows (see markCallAsMissed) — so a delayed/retried `call:end` from
       // the initiator still finds its own participant with `leftAt: null`.
       const missedCall = createMockCallSession({
         status: CallStatus.missed,
+        endReason: CallEndReason.connectionLost,
         participants: [createMockParticipant({ user: createMockUser() })],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1585,15 +1596,16 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(missedCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
-
-      expect(result.status).toBe(CallStatus.missed);
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.connectionLost });
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('should return current state without overwriting when call already rejected (duplicate call:end)', async () => {
+    it('throws CallAlreadyEndedError without overwriting when call already rejected (duplicate call:end)', async () => {
       const rejectedCall = createMockCallSession({
         status: CallStatus.rejected,
+        endReason: CallEndReason.rejected,
         participants: [createMockParticipant({ user: createMockUser() })],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1601,10 +1613,26 @@ describe('CallService', () => {
 
       mockPrisma.callSession.findUnique.mockResolvedValue(rejectedCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
-
-      expect(result.status).toBe(CallStatus.rejected);
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.rejected });
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('falls back to endReason=completed when the already-ended call predates the endReason column (legacy null)', async () => {
+      const endedCall = createMockCallSession({
+        status: CallStatus.ended,
+        endReason: null,
+        participants: [createMockParticipant({ leftAt: new Date(), user: createMockUser() })],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      });
+
+      mockPrisma.callSession.findUnique.mockResolvedValue(endedCall);
+
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should throw error when user not in call', async () => {
