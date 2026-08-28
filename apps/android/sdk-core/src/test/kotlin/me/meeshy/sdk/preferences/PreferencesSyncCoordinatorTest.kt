@@ -5,6 +5,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiCategory
@@ -29,6 +30,16 @@ import org.junit.Test
  * value has to land: `NotificationPreferencesStore` gates what this device shows and sounds
  * long after any settings screen is gone — which is exactly why the collector lives for the
  * session and not in a ViewModel.
+ *
+ * ## Two dispatchers, deliberately
+ *
+ * The direct-drive witnesses need none: they call a suspend function and read the store.
+ * The four wiring witnesses run on [UnconfinedTestDispatcher], where a launched coroutine
+ * starts EAGERLY — so `start()` has subscribed before it returns, and each emission is
+ * delivered as it is made. Under the default `StandardTestDispatcher` the collector only
+ * starts at the next `advanceUntilIdle()`, which turns "did the sync write?" into "did the
+ * scheduler happen to run the collector first?" — a question the assertions do not ask and
+ * should not be able to answer.
  *
  * ## Two levels, deliberately
  *
@@ -101,8 +112,7 @@ class PreferencesSyncCoordinatorTest {
         notification: UserNotificationPreferences = UserNotificationPreferences(),
         privacy: PrivacyPreferences = PrivacyPreferences(),
     ) {
-        /** `replay = 1` so a subscriber that starts after the emission still sees it. */
-        val events = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 8)
+        val events = MutableSharedFlow<String>(extraBufferCapacity = 8)
         val notificationStore = InMemoryNotificationPreferencesStore(notification)
         val privacyStore = InMemoryPrivacyPreferencesStore(privacy)
         val socket: PreferencesSocketManager = mockk {
@@ -212,7 +222,7 @@ class PreferencesSyncCoordinatorTest {
 
     /** A broadcast on the manager's flow reaches the same behaviour. */
     @Test
-    fun `a category broadcast drives the re-read`() = runTest {
+    fun `a category broadcast drives the re-read`() = runTest(UnconfinedTestDispatcher()) {
         val api = CountingApi(notification = notificationBody(pushEnabled = false))
         val harness = Harness(api = api)
         harness.coordinator(backgroundScope).start()
@@ -227,7 +237,7 @@ class PreferencesSyncCoordinatorTest {
 
     /** After logout the collector stops: a later broadcast reaches nothing. */
     @Test
-    fun `stop ends the collection`() = runTest {
+    fun `stop ends the collection`() = runTest(UnconfinedTestDispatcher()) {
         val api = CountingApi(notification = notificationBody(pushEnabled = false))
         val harness = Harness(api = api)
         val coordinator = harness.coordinator(backgroundScope)
@@ -245,7 +255,7 @@ class PreferencesSyncCoordinatorTest {
 
     /** Re-attaching after a reconnection must not stack a second collector. */
     @Test
-    fun `start is idempotent`() = runTest {
+    fun `start is idempotent`() = runTest(UnconfinedTestDispatcher()) {
         val api = CountingApi(notification = notificationBody(pushEnabled = false))
         val harness = Harness(api = api)
         val coordinator = harness.coordinator(backgroundScope)
@@ -262,7 +272,7 @@ class PreferencesSyncCoordinatorTest {
 
     /** The coordinator is inert until started — no collector, no read. */
     @Test
-    fun `an unstarted coordinator reads nothing`() = runTest {
+    fun `an unstarted coordinator reads nothing`() = runTest(UnconfinedTestDispatcher()) {
         val api = CountingApi(notification = notificationBody(pushEnabled = false))
         val harness = Harness(api = api)
         harness.coordinator(backgroundScope)
