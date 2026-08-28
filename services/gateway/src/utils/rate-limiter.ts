@@ -546,6 +546,55 @@ export function createPhoneResetIdentityRateLimiter(redis?: Redis): RateLimiter 
 }
 
 /**
+ * Le second facteur à la connexion — clé par COMPTE CIBLE, pas par IP.
+ *
+ * `twoFactorToken` est le jeton temporaire émis à ce compte-là par l'étape
+ * précédente : le prendre pour clé fait converger toutes les tentatives d'une
+ * attaque DISTRIBUÉE dans un seul seau. Une clé par IP les répartirait au
+ * contraire dans autant de seaux qu'il y a de machines, ce qui ne protège
+ * personne (#4138).
+ *
+ * Ce limiteur ne remplace PAS le compteur en base : rejouer `/login` rend un
+ * jeton neuf, donc une clé neuve. C'est `LoginAttemptService` qui borne
+ * réellement, en comptant sur le compte lui-même.
+ */
+export function createTwoFactorLoginRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 10 * 60 * 1000,
+      keyPrefix: 'auth:2fa-login',
+      message: 'Trop de tentatives de code à deux facteurs. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as { twoFactorToken?: string } | undefined;
+        return `token:${body?.twoFactorToken ?? ''}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Le second facteur sur une route AUTHENTIFIÉE (`/2fa/verify`,
+ * `/2fa/backup-codes`) — clé par compte connecté.
+ */
+export function createTwoFactorAccountRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 10,
+      windowMs: 10 * 60 * 1000,
+      keyPrefix: 'auth:2fa-account',
+      message: 'Trop de tentatives de code à deux facteurs. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const user = (request as { user?: { userId?: string } }).user;
+        return `user:${user?.userId ?? request.ip}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
  * Rate limiter for phone reset code verification
  * 5 attempts per 10 minutes per token
  */

@@ -26,6 +26,13 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { recipientLanguage } from '../utils/recipient-language';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
+  isAccountLocked,
+  recordFailedLoginAttempt,
+  clearFailedLoginAttempts,
+  lockIsVisibleTo
+} from './LoginAttemptService';
+import { UserLockedError } from '../errors/custom-errors';
+import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
 } from './conversations/ensureGlobalConversationMembership';
@@ -191,6 +198,10 @@ export class AuthService {
           pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true,
+          // L'état du verrou voyage avec l'utilisateur : le chemin de connexion
+          // l'a déjà lu, le relire serait une requête pour rien (#4138).
+          failedLoginAttempts: true,
+          lockedUntil: true,
           ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
@@ -204,8 +215,29 @@ export class AuthService {
       // Vérifier le mot de passe
       const passwordValid = await bcrypt.compare(credentials.password, user.password);
       if (!passwordValid) {
-        logger.warn(`[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}`);
+        // L'échec se COMPTE, et le seuil ferme le compte. Sans cette ligne, les
+        // trois colonnes du verrou, l'erreur 423 et le job de déverrouillage
+        // décrivaient une protection que rien n'armait (#4138).
+        const { lockedUntil } = await recordFailedLoginAttempt(this.prisma, user.id);
+        logger.warn(
+          `[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}` +
+          (lockedUntil ? ` — compte verrouillé jusqu'à ${lockedUntil.toISOString()}` : '')
+        );
         return null;
+      }
+
+      // Le verrou se lit APRÈS la vérification du mot de passe, et il ne se DIT
+      // qu'à qui vient de prouver qu'il connaît ce mot de passe. Le refuser plus
+      // tôt fabriquerait un oracle : cinq essais sur un compte inexistant
+      // rendent cinq « identifiants invalides », cinq essais sur un compte réel
+      // en rendraient un sixième DIFFÉRENT — de quoi énumérer les comptes.
+      if (isAccountLocked(user.lockedUntil) && lockIsVisibleTo(passwordValid)) {
+        logger.warn(`[AUTH_SERVICE] 🔒 Connexion refusée, compte verrouillé: ${user.username}`);
+        throw new UserLockedError(user.lockedUntil ?? undefined);
+      }
+
+      if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        await clearFailedLoginAttempts(this.prisma, user.id);
       }
 
       logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
@@ -303,6 +335,12 @@ export class AuthService {
       };
 
     } catch (error) {
+      // Un verrou n'est pas une PANNE : c'est une décision. L'avaler ici le
+      // rendrait indiscernable d'un mot de passe faux, et la personne
+      // légitime n'apprendrait jamais pourquoi on la refuse (#4138).
+      if (error instanceof UserLockedError) {
+        throw error;
+      }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
       if (error instanceof Error) {
         logger.error(`[AUTH_SERVICE] Détails`, error.message);
@@ -362,6 +400,8 @@ export class AuthService {
           pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true,
+          failedLoginAttempts: true,
+          lockedUntil: true,
           ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
@@ -369,6 +409,14 @@ export class AuthService {
       if (!user) {
         logger.warn('[AUTH_SERVICE] ❌ Token 2FA invalide ou expiré');
         return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
+      }
+
+      // Ici, le verrou se DIT : détenir un `twoFactorToken` valide prouve déjà
+      // qu'on a passé l'étape du mot de passe, donc l'annonce n'apprend rien
+      // qu'on ne sache — contrairement au chemin `/login` (voir `lockIsVisibleTo`).
+      if (isAccountLocked(user.lockedUntil)) {
+        logger.warn(`[AUTH_SERVICE] 🔒 Second facteur refusé, compte verrouillé: ${user.username}`);
+        return { success: false, error: 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.' };
       }
 
       // Verify 2FA code
@@ -409,8 +457,24 @@ export class AuthService {
       }
 
       if (!isValid) {
-        logger.warn(`[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}`);
-        return { success: false, error: 'Code 2FA invalide' };
+        // Le code TOTP tourne toutes les trente secondes ; les CODES DE SECOURS,
+        // eux, ne tournent pas et n'expirent jamais. Sans ce comptage, ils
+        // étaient attaquables indéfiniment (#4138).
+        const { lockedUntil } = await recordFailedLoginAttempt(this.prisma, user.id);
+        logger.warn(
+          `[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}` +
+          (lockedUntil ? ` — compte verrouillé jusqu'à ${lockedUntil.toISOString()}` : '')
+        );
+        return {
+          success: false,
+          error: lockedUntil
+            ? 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.'
+            : 'Code 2FA invalide'
+        };
+      }
+
+      if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        await clearFailedLoginAttempts(this.prisma, user.id);
       }
 
       logger.info(`[AUTH_SERVICE] ✅ Code 2FA valide pour user.username=${user.username}`);

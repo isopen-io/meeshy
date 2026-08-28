@@ -836,7 +836,9 @@ async function postConversationToCommunity(
       findFirst: jest.fn<any>().mockResolvedValue({
         id: CONVO_ID,
         communityId: null,
-        participants: [{ userId: VIEWER_ID, role: 'member' }],
+        // L'appelant administre la conversation : la route l'exige depuis
+        // #4191 (« admin/creator of BOTH »), ce que son Swagger promettait déjà.
+        participants: [{ userId: VIEWER_ID, role: 'admin', isActive: true }],
       }),
       update: jest.fn<any>().mockResolvedValue({
         id: CONVO_ID,

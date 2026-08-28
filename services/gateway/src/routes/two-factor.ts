@@ -18,6 +18,7 @@ import { EnableBodySchema, DisableBodySchema, VerifyBodySchema, BackupCodesBodyS
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { createTwoFactorAccountRateLimiter } from '../utils/rate-limiter.js';
 
 const logger = enhancedLogger.child({ module: 'TwoFactorRoutes' });
 
@@ -41,6 +42,9 @@ interface RegenerateBackupCodesBody {
 
 export async function twoFactorRoutes(fastify: FastifyInstance) {
   const twoFactorService = new TwoFactorService(fastify.prisma);
+  // Vérifier un code et régénérer les codes de secours étaient sans plafond :
+  // un jeton volé permettait de deviner un code TOTP sans limite (#4138).
+  const twoFactorAccountRateLimiter = createTwoFactorAccountRateLimiter(fastify.redis ?? undefined);
 
   // ==================== GET /auth/2fa/status ====================
   fastify.get('/status', {
@@ -272,7 +276,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     },
     preValidation: [fastify.authenticate],
-    preHandler: [validateBody(VerifyBodySchema)]
+    preHandler: [twoFactorAccountRateLimiter.middleware(), validateBody(VerifyBodySchema)]
   }, async (request: FastifyRequest<{ Body: VerifyBody }>, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;
@@ -324,7 +328,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     },
     preValidation: [fastify.authenticate],
-    preHandler: [validateBody(BackupCodesBodySchema)]
+    preHandler: [twoFactorAccountRateLimiter.middleware(), validateBody(BackupCodesBodySchema)]
   }, async (request: FastifyRequest<{ Body: RegenerateBackupCodesBody }>, reply: FastifyReply) => {
     try {
       const userId = request.user!.userId;

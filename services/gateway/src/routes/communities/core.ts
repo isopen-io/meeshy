@@ -22,6 +22,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { communityConversationSchema, flattenCommunityCounts } from './serialization';
+import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -696,12 +697,64 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         select: {
           id: true,
           communityId: true,
-          participants: { select: { userId: true, role: true } }
+          participants: { select: { userId: true, role: true, isActive: true } }
         }
       });
 
       if (!conversation) {
         return sendNotFound(reply, 'Conversation not found');
+      }
+
+      // Le Swagger de cette route promet « admin/creator of BOTH the community
+      // and the conversation ». La moitié « conversation » n'était appliquée
+      // nulle part : `participants` était chargé et jamais lu, `communityId`
+      // sélectionné et jamais vérifié — ce qui donnait à la lecture l'apparence
+      // d'un contrôle. N'importe quel administrateur de communauté pouvait donc
+      // rattacher à la sienne n'importe quelle conversation du système dont il
+      // connaissait l'identifiant, et en recevoir la liste des participants
+      // dans la réponse (#4191).
+      const participantAppelant = conversation.participants.find(
+        (p: { userId: string | null; isActive?: boolean }) => p.userId === userId && p.isActive !== false
+      );
+      const administreLaConversation = Boolean(
+        participantAppelant &&
+        hasMinimumMemberRole(participantAppelant.role ?? MemberRole.MEMBER, MemberRole.ADMIN)
+      );
+
+      if (!administreLaConversation) {
+        // 404 et non 403 : distinguer « elle existe mais tu n'y as pas droit »
+        // de « elle n'existe pas » ferait de cette route un oracle d'existence
+        // sur tout identifiant de conversation.
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
+      // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à
+      // une communauté tierce : celle-ci la perdrait sans que personne y
+      // consente. Le déplacement exige donc aussi un droit à la SOURCE.
+      if (conversation.communityId && conversation.communityId !== id) {
+        const source = await fastify.prisma.community.findFirst({
+          where: { id: conversation.communityId },
+          select: {
+            createdBy: true,
+            members: { select: { userId: true, role: true } }
+          }
+        });
+
+        const peutDetacher = Boolean(
+          source && (
+            source.createdBy === userId ||
+            source.members.some(
+              (m: { userId: string; role: string }) => m.userId === userId && m.role === CommunityRole.ADMIN
+            )
+          )
+        );
+
+        if (!peutDetacher) {
+          // 403 ici, et non 404 : l'appelant administre la conversation, donc
+          // il en connaît déjà l'existence — lui dire pourquoi on refuse ne
+          // divulgue rien qu'il ne sache.
+          return sendForbidden(reply, 'You must administer the community this conversation currently belongs to');
+        }
       }
 
       // Update conversation to belong to this community (allows moving between communities)

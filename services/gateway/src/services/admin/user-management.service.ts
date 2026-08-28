@@ -478,7 +478,17 @@ export class UserManagementService {
   }
 
   /**
-   * Désactive la 2FA pour un utilisateur
+   * Désactive la 2FA pour un utilisateur.
+   *
+   * `twoFactorBackupCodes` est déclaré `String[] @default([])` : une liste
+   * scalaire ne s'ANNULE pas, elle se VIDE. Y écrire `null` faisait échouer la
+   * requête Prisma, que le `catch` de la route rendait en « Internal server
+   * error » — le désarmement administrateur, seul chemin de récupération pour
+   * qui a PERDU son appareil, n'a donc jamais abouti (#4206).
+   *
+   * Les champs effacés sont ceux du chemin utilisateur (`TwoFactorService`),
+   * `twoFactorPendingSecret` compris : sans lui, un appairage entamé survivait
+   * au désarmement et pouvait être repris là où il s'était arrêté.
    */
   async disable2FA(userId: string, updaterId: string): Promise<FullUser> {
     const user = await this.prisma.user.update({
@@ -486,7 +496,8 @@ export class UserManagementService {
       data: {
         twoFactorEnabledAt: null,
         twoFactorSecret: null,
-        twoFactorBackupCodes: null,
+        twoFactorPendingSecret: null,
+        twoFactorBackupCodes: [],
         updatedAt: new Date()
       },
     });

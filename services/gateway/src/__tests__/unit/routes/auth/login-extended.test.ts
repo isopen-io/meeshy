@@ -26,6 +26,8 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 jest.mock('../../../../utils/rate-limiter.js', () => ({
   createLoginRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
   createAuthGlobalRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
+  // `/login/2fa` n'avait AUCUN preHandler ; elle en porte désormais un (#4138).
+  createTwoFactorLoginRateLimiter: jest.fn(() => ({ middleware: jest.fn(() => async () => {}) })),
 }));
 
 const mockGetRequestContext = jest.fn<any>().mockResolvedValue({

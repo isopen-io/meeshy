@@ -61,7 +61,7 @@ import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupSe
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
-import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
+import { AuthenticationError, ValidationError, TranslationError, UserLockedError } from './errors/custom-errors';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -644,6 +644,22 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
           error: 'Validation Error',
           message: err.message,
           statusCode: 400,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // 423 « Locked ». Sans cette branche, le repli générique rendait bien le
+      // code 423 (il lit `err.statusCode`) mais REMPLAÇAIT le corps par
+      // « An unexpected error occurred » et perdait `lockedUntil` : la personne
+      // verrouillée recevait un code juste et une explication fausse, sans
+      // jamais apprendre quand elle pourrait revenir (#4138).
+      if (error instanceof UserLockedError) {
+        return reply.code(error.statusCode).send({
+          error: 'Account Locked',
+          code: error.code,
+          message: error.message,
+          statusCode: error.statusCode,
+          ...(error.lockedUntil && { lockedUntil: error.lockedUntil.toISOString() }),
           timestamp: new Date().toISOString()
         });
       }

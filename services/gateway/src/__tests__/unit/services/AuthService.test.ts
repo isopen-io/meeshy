@@ -175,6 +175,12 @@ const mockPrisma = {
 const mockUser = {
   id: 'user-123',
   username: 'testuser',
+  // Colonnes du verrou de connexion (#4138) : toute ligne réelle les porte —
+  // `failedLoginAttempts` est un `Int @default(0)`. Les omettre du fixture
+  // faisait croire à un compte au seuil et verrouillait dès le premier essai.
+  failedLoginAttempts: 0,
+  lockedUntil: null,
+  lockedReason: null,
   password: '$2b$12$hashedpassword',
   firstName: 'Test',
   lastName: 'User',
@@ -337,11 +343,19 @@ describe('AuthService', () => {
     it('should return null for invalid password', async () => {
       mockPrisma.user.findFirst.mockResolvedValue(mockUser);
       mockBcryptCompare.mockResolvedValue(false);
+      mockPrisma.user.update.mockResolvedValue({ failedLoginAttempts: 1 });
 
       const result = await authService.authenticate(validCredentials);
 
       expect(result).toBeNull();
-      expect(mockPrisma.user.update).not.toHaveBeenCalled();
+      // Un échec n'ouvre AUCUNE session et ne touche aucun état de profil. La
+      // seule écriture permise est le comptage de la tentative (#4138) — ce
+      // témoin exigeait « zéro écriture », ce qui interdisait aussi de compter.
+      const champsEcrits = mockPrisma.user.update.mock.calls
+        .flatMap((appel: any[]) => Object.keys(appel[0].data));
+      expect(champsEcrits).not.toContain('isOnline');
+      expect(champsEcrits).not.toContain('lastActiveAt');
+      expect(champsEcrits).toContain('failedLoginAttempts');
     });
 
     it('should update lastActiveAt and isOnline on successful authentication', async () => {
@@ -1319,13 +1333,19 @@ describe('AuthService - Security Tests', () => {
   it('should not update lastActiveAt on failed authentication', async () => {
     mockPrisma.user.findFirst.mockResolvedValue(mockUser);
     mockBcryptCompare.mockResolvedValue(false);
+    mockPrisma.user.update.mockResolvedValue({ failedLoginAttempts: 1 });
 
     await authService.authenticate({
       username: 'testuser',
       password: 'wrongpassword'
     });
 
-    expect(mockPrisma.user.update).not.toHaveBeenCalled();
+    // Le NOM de ce témoin dit son sujet : l'horodatage d'activité. Il
+    // l'exprimait par « aucune écriture », ce qui interdisait du même coup de
+    // compter la tentative (#4138).
+    const champsEcrits = mockPrisma.user.update.mock.calls
+      .flatMap((appel: any[]) => Object.keys(appel[0].data));
+    expect(champsEcrits).not.toContain('lastActiveAt');
   });
 
   it('should generate unique tokens for different users', () => {
@@ -1503,6 +1523,9 @@ describe('AuthService - completeAuthWith2FA', () => {
   const userWith2FA = {
     id: 'user-2fa',
     username: 'testuser2fa',
+    failedLoginAttempts: 0,
+    lockedUntil: null,
+    lockedReason: null,
     email: 'test2fa@example.com',
     phoneNumber: '+33612345678',
     firstName: 'Test',

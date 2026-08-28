@@ -408,7 +408,9 @@ describe('POST /communities/:id/conversations/:conversationId', () => {
     });
     prisma.conversation.findFirst = jest.fn<any>().mockResolvedValue({
       id: CONVERSATION_ID, communityId: null,
-      participants: [{ userId: USER_ID, role: 'member' }],
+      // `admin` : administrer la COMMUNAUTÉ d'arrivée ne suffit plus, il faut
+      // aussi un droit sur la conversation déplacée (#4191).
+      participants: [{ userId: USER_ID, role: 'admin', isActive: true }],
     });
     prisma.conversation.update = jest.fn<any>().mockResolvedValue({
       id: CONVERSATION_ID, communityId: COMMUNITY_ID, participants: [], _count: {}

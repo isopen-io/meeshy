@@ -11,8 +11,10 @@ import { getRequestContext } from '../../services/GeoIPService';
 import { markSessionTrusted } from '../../services/SessionService';
 import {
   createLoginRateLimiter,
-  createAuthGlobalRateLimiter
+  createAuthGlobalRateLimiter,
+  createTwoFactorLoginRateLimiter
 } from '../../utils/rate-limiter.js';
+import { UserLockedError } from '../../errors/custom-errors.js';
 import {
   AuthRouteContext,
   TwoFactorRequestBody,
@@ -38,6 +40,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
   const loginRateLimiter = createLoginRateLimiter(redis);
   const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);
+  const twoFactorRateLimiter = createTwoFactorLoginRateLimiter(redis);
 
   // POST /login - Main login endpoint
   fastify.post('/login', {
@@ -186,6 +189,12 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
+      // 423 « Locked » : le handler global sait déjà rendre cette erreur, avec
+      // sa date de fin. La convertir en 500 ici priverait la personne
+      // légitime de la seule information qui l'aide (#4138).
+      if (error instanceof UserLockedError) {
+        throw error;
+      }
       logger.error('Erreur serveur lors de la connexion', error as Error);
       return sendInternalError(reply, 'Erreur lors de la connexion');
     }
@@ -228,7 +237,11 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         401: errorResponseSchema
       },
       security: []
-    }
+    },
+    // Cette route n'avait AUCUN preHandler : ni limiteur, ni compteur. Elle est
+    // pourtant la seule étape de connexion d'un compte protégé, et les codes de
+    // secours qu'elle accepte ne tournent jamais (#4138).
+    preHandler: [twoFactorRateLimiter.middleware(), authGlobalRateLimiter.middleware()]
   }, async (request, reply) => {
     try {
       const { twoFactorToken, code, rememberDevice } = request.body;
