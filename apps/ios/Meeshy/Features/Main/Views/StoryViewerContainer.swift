@@ -129,7 +129,9 @@ struct StoryViewerContainer: View {
             // Connection status banner (banner manages its own socket observation)
             VStack {
                 ConnectionBanner(conversationListViewModel: conversationListViewModel, isStoryViewerPresenting: isStoryViewerPresenting)
-                    .padding(.top, ConnectionBanner.liftedTopPadding(base: 8))
+                    // Hors conversation : pas de remontée (#4066). C'est
+                    // l'assise que ce viewer portait avant le 25 août.
+                    .padding(.top, MeeshySpacing.sm)
                 Spacer()
             }
             .allowsHitTesting(false)

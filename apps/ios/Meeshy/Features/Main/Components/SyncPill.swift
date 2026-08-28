@@ -141,38 +141,17 @@ struct SyncPill: View {
     /// entrée NEUVE (un nouveau typing, un nouvel envoi) pour déclencher
     /// l'accentuation.
     @State private var seenEntryIDs: Set<String> = []
-    /// Échéance de la fenêtre d'accent (`SyncPillAccentLaw`, #4050).
-    ///
-    /// **Amende #4026** : l'accent ne suit plus la DURÉE du signal (frappe,
-    /// reconnexion) mais une fenêtre de six secondes réarmée par chaque entrée
-    /// NEUVE — « rester bien visible avant de reprendre la forme normale au
-    /// bout d'au moins 6 secondes si l'utilisateur écrit encore ; si un nouvel
-    /// utilisateur écrit entre-temps […] qu'elle grossisse encore aussi pendant
-    /// 6 s, et ainsi de suite » (directive porteur 2026-08-27).
-    @State private var accentDeadline: Date?
     /// La pastille est-elle visible ? Pilotée par l'activité récente : une
     /// nouvelle entrée l'affiche, un silence de `idleHideDelay` l'efface —
     /// sauf état PERSISTANT (hors-ligne, échec), qui la garde affichée.
     @State private var isVisible: Bool = false
-    /// Phase d'accentuation transitoire (×1.5 + fond primaire + rebond) au
-    /// passage d'un nouveau contenu.
-    @State private var isAccented: Bool = false
     /// Effacement différé (one-shot, annulable) — réarmé à chaque nouvelle
     /// entrée. Borné, jamais `repeatForever` (cf. audit chauffe #3940).
     @State private var hideWorkItem: DispatchWorkItem?
-    /// Retour de l'accent à l'état de repos (one-shot, annulable).
-    @State private var accentResetWorkItem: DispatchWorkItem?
 
     /// Délai sans NOUVELLE entrée après lequel la pastille s'efface — évite
     /// l'affichage permanent au repos (#4017). Réarmé à chaque arrivée.
-    ///
-    /// Porte le même nombre que `SyncPillAccentLaw.accentWindow` sans être la
-    /// même durée : celle-ci décide de la DISPARITION, l'autre de la FORME.
-    /// Les deux sont nommées séparément pour qu'un réglage de l'une ne bouge
-    /// jamais l'autre (#4050).
     private static let idleHideDelay: TimeInterval = 6.0
-    /// Grossissement transitoire à l'arrivée d'un nouveau contenu (#4018).
-    private static let accentScale: CGFloat = 1.5
 
     init(
         entries: [SyncPillEntry],
@@ -244,63 +223,18 @@ struct SyncPill: View {
 
         if entries.isEmpty {
             hideWorkItem?.cancel(); hideWorkItem = nil
-            accentResetWorkItem?.cancel(); accentResetWorkItem = nil
-            accentDeadline = nil
-            setAccented(false)
             isVisible = false
             return
         }
 
-        // La fenêtre d'accent est gouvernée par le TEMPS, jamais par la durée
-        // du signal (`SyncPillAccentLaw`, #4050 — amende #4026). Une frappe qui
-        // continue garde le même id `typing.<conv>` : elle n'est pas neuve, donc
-        // elle ne réarme rien et la pastille reprend sa forme normale au bout de
-        // six secondes. Un DEUXIÈME typeur, lui, est une entrée neuve : fenêtre
-        // pleine à partir de son arrivée — « et ainsi de suite ».
-        let now = Date()
-        accentDeadline = SyncPillAccentLaw.deadline(
-            previous: accentDeadline,
-            hasNewEntries: !newIDs.isEmpty,
-            entriesAreEmpty: false,
-            now: now
-        )
+        // La pastille garde sa taille en toute circonstance (#4066, directive
+        // porteur 2026-08-28) : une capsule de STATUT n'est pas le porteur
+        // d'une annonce. Ce qui doit se voir « en gros » quand quelqu'un écrit
+        // paraît désormais par `IslandEmergingBanner`, monté par
+        // `ConnectionBanner`. Ne reste ici que ce que la pastille sait faire :
+        // se montrer sur une entrée neuve, s'effacer après un silence.
         if !newIDs.isEmpty { isVisible = true }
-        applyAccentWindow(now: now)
         scheduleAutoHide()
-    }
-
-    /// Aligne la forme sur la loi et programme le retour au repos À L'ÉCHÉANCE.
-    ///
-    /// Le minuteur est one-shot et systématiquement remplacé : un réarmement
-    /// annule le précédent, donc N arrivées successives ne laissent jamais
-    /// N retours au repos en vol (aucun empilement, aucune animation qui
-    /// saute). Borné, jamais `repeatForever` — cf. audit chauffe #3940.
-    private func applyAccentWindow(now: Date) {
-        accentResetWorkItem?.cancel()
-        accentResetWorkItem = nil
-
-        let shouldAccent = SyncPillAccentLaw.isAccented(deadline: accentDeadline, now: now)
-        setAccented(shouldAccent)
-
-        guard shouldAccent, let deadline = accentDeadline else { return }
-        let reset = DispatchWorkItem {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { isAccented = false }
-        }
-        accentResetWorkItem = reset
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + max(0, deadline.timeIntervalSince(now)),
-            execute: reset
-        )
-    }
-
-    /// Pose la forme, en n'animant que les vrais changements — réarmer pendant
-    /// que la pastille est DÉJÀ grosse ne doit pas rejouer le rebond.
-    private func setAccented(_ accented: Bool) {
-        guard accented != isAccented else { return }
-        let curve: Animation = accented
-            ? (reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.55))
-            : .spring(response: 0.3, dampingFraction: 0.7)
-        withAnimation(curve) { isAccented = accented }
     }
 
     /// Programme l'effacement au repos (#4017). Un état persistant l'annule et
@@ -316,18 +250,7 @@ struct SyncPill: View {
             withAnimation(.easeOut(duration: 0.3)) { isVisible = false }
         }
         hideWorkItem = work
-        // L'effacement se compte depuis la FIN de l'accent, pas depuis
-        // l'arrivée (#4050) : les deux durées valent six secondes, et les faire
-        // partir ensemble aurait fait rétrécir ET disparaître la pastille au
-        // même instant — la forme normale n'aurait jamais été visible.
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + SyncPillAccentLaw.hideDelay(
-                deadline: accentDeadline,
-                now: Date(),
-                idleHideDelay: Self.idleHideDelay
-            ),
-            execute: work
-        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleHideDelay, execute: work)
     }
 
     @ViewBuilder
@@ -353,7 +276,6 @@ struct SyncPill: View {
         )
         // Accent (#4018) : la pastille grossit ×1.5 vers le BAS (ancrage .top)
         // pour ne jamais empiéter sur la Dynamic Island au-dessus.
-        .scaleEffect(isAccented ? Self.accentScale : 1.0, anchor: .top)
         .contentShape(Capsule())
         .onTapGesture(perform: handleTap)
         .onLongPressGesture(minimumDuration: 0.5) {
@@ -399,10 +321,7 @@ struct SyncPill: View {
     private static let maxTextWidth: CGFloat = 160
 
     private var textColor: Color {
-        // Sur le fond primaire de l'accent, le texte passe en blanc pour rester
-        // lisible (#4018).
-        if isAccented { return .white }
-        return isDark ? .white.opacity(0.7) : .primary.opacity(0.6)
+        isDark ? .white.opacity(0.7) : .primary.opacity(0.6)
     }
 
     @ViewBuilder
@@ -522,24 +441,19 @@ struct SyncPill: View {
 
     @ViewBuilder
     private var dotShape: some View {
-        if isAccented {
-            Circle().fill(Color.white)
-        } else {
-            switch visibleEntry?.dotStyle ?? .brand {
-            case .brand:
-                Circle().fill(MeeshyColors.brandGradient)
-            case .warning:
-                Circle().fill(MeeshyColors.warning)
-            case .success:
-                Circle().fill(MeeshyColors.success)
-            case .error:
-                Circle().fill(MeeshyColors.error)
-            }
+        switch visibleEntry?.dotStyle ?? .brand {
+        case .brand:
+            Circle().fill(MeeshyColors.brandGradient)
+        case .warning:
+            Circle().fill(MeeshyColors.warning)
+        case .success:
+            Circle().fill(MeeshyColors.success)
+        case .error:
+            Circle().fill(MeeshyColors.error)
         }
     }
 
     private var dotForeground: AnyShapeStyle {
-        if isAccented { return AnyShapeStyle(Color.white) }
         switch visibleEntry?.dotStyle ?? .brand {
         case .brand:    return AnyShapeStyle(MeeshyColors.brandGradient)
         case .warning:  return AnyShapeStyle(MeeshyColors.warning)
@@ -549,13 +463,9 @@ struct SyncPill: View {
     }
 
     /// Fond de la capsule — OPAQUE (#4016 : plus de fond quasi transparent à
-    /// 0,05/0,08 d'opacité), et ACCENTUÉ en couleur primaire de l'app pendant
-    /// l'accent (#4018).
+    /// 0,05/0,08 d'opacité). Une seule forme, en toute circonstance (#4066).
     private var capsuleBackground: AnyShapeStyle {
-        if isAccented {
-            return AnyShapeStyle(MeeshyColors.brandPrimary)
-        }
-        return AnyShapeStyle(isDark ? Color(white: 0.17) : Color.white)
+        AnyShapeStyle(isDark ? Color(white: 0.17) : Color.white)
     }
 
     private func handleTap() {

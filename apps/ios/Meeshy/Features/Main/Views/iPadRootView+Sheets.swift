@@ -214,6 +214,10 @@ extension iPadRootView {
                     onItemTap: handleSyncPillTap,
                     activeConversationId: { activeConversation?.id ?? notificationPreviewConversation?.id }
                 )
+                // Même règle que sur iPhone (#4066) : hors conversation la
+                // pastille a une assise, elle ne se colle pas au bord. En
+                // conversation, iPad n'a jamais porté de remontée — inchangé.
+                .padding(.top, activeConversation != nil ? 0 : MeeshySpacing.sm)
             }
             // Présentation d'appel (cover + PiP + pastille + bulle + bannière
             // call-waiting) extraite dans `CallPresentationLayer` (partagé avec

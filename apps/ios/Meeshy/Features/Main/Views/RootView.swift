@@ -915,9 +915,16 @@ struct RootView: View {
                     onItemTap: handleSyncPillTap,
                     activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id }
                 )
-                .padding(.top, ConnectionBanner.liftedTopPadding(
-                    base: router.currentConversationId != nil ? 72 : 0
-                ))
+                // La remontée sous la Dynamic Island est RÉSERVÉE à la
+                // conversation (#4066). Hors conversation la pastille reprend
+                // une assise explicite : `liftedTopPadding` bornait déjà à `0`,
+                // si bien qu'elle se collait au bord haut sans que personne
+                // l'ait demandé — 8 pt est la valeur que le viewer de story
+                // portait avant la remontée du 25 août, et un jeton du dépôt
+                // plutôt qu'une constante de plus.
+                .padding(.top, router.currentConversationId != nil
+                    ? ConnectionBanner.liftedTopPadding(base: 72)
+                    : MeeshySpacing.sm)
             }
         }
         // Présentation d'appel (cover plein écran + PiP + pastille + bulle +
