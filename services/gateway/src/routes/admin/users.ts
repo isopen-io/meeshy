@@ -234,12 +234,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Valider les donnees
       const validatedData = createUserSchema.parse(request.body);
 
-      // Verifier si l'admin peut creer un utilisateur avec ce role
-      if (validatedData.role) {
-        if (!permissionsService.canManageUser(adminRole, validatedData.role as UserRoleEnum)) {
-          sendForbidden(reply, 'Insufficient permissions to create user with this role', { message: 'Access denied' });
-          return;
-        }
+      // La garde porte sur le role EFFECTIF, pas sur le role DEMANDE (#4144).
+      //
+      // Elle etait ecrite `if (validatedData.role) { … }` : une garde
+      // conditionnee a la PRESENCE de ce qu'elle garde ne s'applique pas quand
+      // le champ est omis. Rien ne fuyait — `UserManagementService.createUser`
+      // pose `data.role || 'USER'` et un administrateur a le droit de creer un
+      // USER — mais la garde ne le VERIFIAIT pas : elle dependait d'un defaut
+      // ecrit dans une autre unite, qu'aucun test ne relie a elle. Evaluer le
+      // role effectif rend la garde vraie par elle-meme, et la fait suivre si
+      // ce defaut change un jour.
+      const roleEffectif = (validatedData.role ?? 'USER') as UserRoleEnum;
+      if (!permissionsService.canManageUser(adminRole, roleEffectif)) {
+        sendForbidden(reply, 'Insufficient permissions to create user with this role', { message: 'Access denied' });
+        return;
       }
 
       // Creer l'utilisateur
@@ -512,7 +520,24 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
-      // Verifier les permissions
+      // Deux questions distinctes, et elles ont chacune leur permission (#4144).
+      //
+      // `canResetPasswords` — « ce ROLE a-t-il le droit de reinitialiser un mot
+      // de passe ? » — etait DECLAREE dans `AdminPermissions` et consultee par
+      // AUCUN site du depot (grep : sept occurrences, toutes dans la matrice
+      // elle-meme). La route gardait sur `canUpdateUsers`, qui vaut la meme
+      // chose pour BIGBOSS et ADMIN aujourd'hui : le defaut n'etait donc pas
+      // exploitable, c'etait un piege arme. Le jour ou un role recoit
+      // `canUpdateUsers` sans `canResetPasswords` — ce que la matrice permet
+      // d'exprimer, sinon elle n'aurait pas deux champs — il aurait pu
+      // reinitialiser des mots de passe. Une permission declaree que rien ne
+      // lit n'est pas une protection.
+      if (!permissionsService.hasPermission(adminRole, 'canResetPasswords')) {
+        sendForbidden(reply, 'Insufficient permissions to reset password', { message: 'Access denied' });
+        return;
+      }
+
+      // `canModifyUser` — « ce role a-t-il le RANG pour agir sur CETTE cible ? »
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
         sendForbidden(reply, 'Insufficient permissions to reset password', { message: 'Access denied' });
         return;
@@ -614,6 +639,19 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      // Garde de HIÉRARCHIE (#4144). `requireUserModifyAccess` vérifie que
+      // l'appelant a la permission `canUpdateUsers` — vraie pour ADMIN — jamais
+      // qu'il a le RANG pour agir sur cette cible. Sans elle, un ADMIN
+      // déverrouillait le compte d'un BIGBOSS. Les dix autres écritures de ce
+      // fichier portent cette garde ; ces trois-là l'avaient omise.
+      if (!permissionsService.canModifyUser(
+        authContext.registeredUser!.role as UserRoleEnum,
+        targetUser.role as UserRoleEnum
+      )) {
+        sendForbidden(reply, 'Insufficient permissions to modify this user', { message: 'Access denied' });
+        return;
+      }
+
       // Déverrouiller le compte
       const updatedUser = await userManagementService.unlockAccount(
         request.params.userId,
@@ -654,6 +692,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       if (!targetUser) {
         sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
+        return;
+      }
+
+      // Garde de HIÉRARCHIE (#4144) — cf. le commentaire de `unlock` ci-dessus.
+      if (!permissionsService.canModifyUser(
+        authContext.registeredUser!.role as UserRoleEnum,
+        targetUser.role as UserRoleEnum
+      )) {
+        sendForbidden(reply, 'Insufficient permissions to modify this user', { message: 'Access denied' });
         return;
       }
 
@@ -698,6 +745,17 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       if (!targetUser) {
         sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
+        return;
+      }
+
+      // Garde de HIÉRARCHIE (#4144). C'est le plus grave des trois : sans elle,
+      // un ADMIN RETIRAIT la double authentification d'un BIGBOSS, puis pouvait
+      // lui réinitialiser son mot de passe — une chaîne d'escalade complète.
+      if (!permissionsService.canModifyUser(
+        authContext.registeredUser!.role as UserRoleEnum,
+        targetUser.role as UserRoleEnum
+      )) {
+        sendForbidden(reply, 'Insufficient permissions to modify this user', { message: 'Access denied' });
         return;
       }
 
