@@ -63,9 +63,18 @@ gh issue list --repo isopen-io/meeshy --milestone "Les 31 vues mobiles du compos
   --state open --limit 40 --json number,title -q '.[] | "#\(.number) \(.title)"'
 ```
 
-Ordre : **les découpes hors budget d'abord si la vue les touche** (#4102–#4105), puis les vues dans
-l'ordre `1a…1h`, `2a…2l`, `3a…3h`, `4b`, `4c`, `4f` — le tour `t1` pose les fondations dont les
-autres dépendent.
+L'ordre suit le **graphe de navigation**, jamais l'alphabet : une vue se code après celle qui y
+mène. Six tours, précédés des découpes.
+
+| Tour | Ce qu'il pose | Vues | Issues |
+|---|---|---|---|
+| **t0** | Les découpes hors budget (loi 4) — préalable à toute addition | — | #4102 #4103 #4104 #4105 |
+| **t1** | **Le tronc** — sans lui rien n'est atteignable | `1a` → `1b` → `1c` → `1f` | #4071 #4062 #4064 · #4072 #4061 #4070 #4065 · #4073 #4063 · #4076 |
+| **t2** | Les branches d'édition, toutes ouvertes depuis `1c` | `1d` `1e` `1g` `2d` `2e` `3b` `3c` | #4074 #4075 #4077 #4082 #4083 #4092 #4093 |
+| **t3** | Les autres entrées vers le tronc | `3a` `2a` `2b` `2c` `4b` `4c` | #4091 #4079 #4080 #4081 #4099 #4100 |
+| **t4** | Ce qui décide de l'envoi | `2l` `2k` `3d` `4f` | #4090 #4089 #4094 #4101 |
+| **t5** | La lecture — ce que la publication devient | `1h` `2h` `2f` `2g` `3e` `3f` `3h` | #4078 #4086 #4084 #4085 #4095 #4096 #4098 |
+| **t6** | Continuité et ruptures | `2i` `2j` `3g` | #4087 #4088 #4097 |
 
 Poser `Status = In Progress` dans le projet org #1 avant d'écrire une ligne.
 
