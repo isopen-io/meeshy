@@ -1502,6 +1502,12 @@ struct ComposerDocumentSurface: View {
     /// Ratio de la scène incrustée — 9:16 par défaut, 16:9 si le fond est
     /// paysage (source de vérité partagée avec l'atelier et le reader).
     var sceneAspectRatio: CGFloat = CanvasGeometry.portraitRatio
+    /// Les deux rails sont-ils montés autour de la scène (#4061) ?
+    ///
+    /// **Défaut `false` : ce lot ne déplace aucune scène qui n'a pas de rails.**
+    /// Tant que les rails ne sont pas peints (#4062, #4063), l'encastrement
+    /// reste celui d'hier — la géométrie est prête, elle n'est pas imposée.
+    var showsRails: Bool = false
 
     /// **Relais du tap sur un objet de la scène incrustée (lot 3A du composer
     /// unifié, #4035).** L'hôte retient la sélection et décide de monter
@@ -1804,7 +1810,19 @@ struct ComposerDocumentSurface: View {
                     loadedImagesVersion: sceneImagesVersion
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.horizontal, 14)
+                // **#4061 — la scène s'ENCASTRE, elle n'est jamais recouverte.**
+                // L'encastrement n'est pas une marge choisie : c'est ce que les
+                // deux rails RÉSERVENT (cible tactile 44 pt + gouttière + marge
+                // de bord). Le nombre vit dans `ComposerRailGeometry`, avec la
+                // raison qui le produit — écrit ici en littéral, la raison
+                // disparaîtrait et la première personne qui trouve la scène
+                // étroite le rognerait sans savoir ce qu'elle casse.
+                //
+                // Poser les rails PAR-DESSUS était l'autre option : la loi 6 la
+                // refuse — un rail occupe exactement la place où un
+                // `MeeshyObject` peut vivre, donc l'aperçu mentirait sur le
+                // rendu final.
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: showsRails))
                 .padding(.top, 8)
                 sceneDescriptionField
             }
