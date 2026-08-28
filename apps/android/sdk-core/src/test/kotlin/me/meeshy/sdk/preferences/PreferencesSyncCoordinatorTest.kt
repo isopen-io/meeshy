@@ -78,13 +78,19 @@ class PreferencesSyncCoordinatorTest {
         }
     }
 
+    /**
+     * The collector never completes — that is the point of it — so it must run in
+     * [TestScope.backgroundScope], which `runTest` cancels when the body ends. Handing it
+     * the TestScope itself makes `runTest` wait for a job that will never finish, and the
+     * whole suite dies on `UncompletedCoroutinesError` rather than on any assertion.
+     */
     private fun TestScope.coordinatorFor(harness: Harness): PreferencesSyncCoordinator =
         PreferencesSyncCoordinator(
             socketManager = harness.socket,
             preferencesApi = harness.api,
             notificationStore = harness.notificationStore,
             privacyStore = harness.privacyStore,
-            scope = this,
+            scope = backgroundScope,
         ).also { it.start() }
 
     @Test
