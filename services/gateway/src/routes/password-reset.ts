@@ -140,6 +140,18 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
+            // `message` est declare aux DEUX niveaux parce que les deux chemins
+            // de ce handler repondent differemment, et que fast-json-stringify
+            // supprime ce qui n'est pas declare la ou il arrive :
+            //   nominal → sendSuccess(reply, undefined, { message })  ⇒ RACINE
+            //   erreur  → sendSuccess(reply, { message })             ⇒ data
+            // Seul le second etait declare : le chemin NOMINAL servait donc
+            // `{"success":true}` sans sa phrase, et le chemin d'ERREUR la
+            // servait — exactement l'inverse de l'utile (#4139).
+            message: {
+              type: 'string',
+              example: 'If an account exists with this email, a password reset link has been sent.'
+            },
             data: {
               type: 'object',
               properties: {
@@ -347,25 +359,35 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // Enveloppe `sendSuccess`. Declaree a plat, cette reponse partait
+        // litteralement a `{}` : le front ne pouvait pas distinguer un jeton
+        // valide d'un jeton perime, `valid` etant indiscernable de `undefined`
+        // (#4139).
         200: {
           description: 'Token verification result with validity status and additional information',
           type: 'object',
           properties: {
-            valid: {
-              type: 'boolean',
-              description: 'Whether the token is valid and can be used for password reset',
-              example: true
-            },
-            requires2FA: {
-              type: 'boolean',
-              description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
-              example: false
-            },
-            expiresAt: {
-              type: 'string',
-              format: 'date-time',
-              description: 'Token expiration timestamp (ISO 8601 format)',
-              example: '2026-01-11T15:30:00.000Z'
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                valid: {
+                  type: 'boolean',
+                  description: 'Whether the token is valid and can be used for password reset',
+                  example: true
+                },
+                requires2FA: {
+                  type: 'boolean',
+                  description: 'Whether the user has 2FA enabled and will need to provide a code during reset',
+                  example: false
+                },
+                expiresAt: {
+                  type: 'string',
+                  format: 'date-time',
+                  description: 'Token expiration timestamp (ISO 8601 format)',
+                  example: '2026-01-11T15:30:00.000Z'
+                }
+              }
             }
           }
         },
@@ -480,23 +502,34 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // L'ENVELOPPE est celle de `sendSuccess` — `{ success, data }` — et non
+        // les champs a plat. Declares a la racine, `tokenId` et `maskedUserInfo`
+        // ne matchaient rien, `data` n'etait pas declare donc SUPPRIME par
+        // fast-json-stringify, et la reponse partait a `{"success":true}` : le
+        // client n'avait pas le `tokenId` qui conditionne l'etape suivante
+        // (#4139).
         200: {
           description: 'Lookup result with masked user info',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            tokenId: { type: 'string', description: 'Token ID for next steps' },
-            maskedUserInfo: {
+            data: {
               type: 'object',
               properties: {
-                displayName: { type: 'string', description: 'Masked display name (e.g., J**n D*e)' },
-                username: { type: 'string', description: 'Masked username (e.g., t******5)' },
-                email: { type: 'string', description: 'Masked email (e.g., je....n@f*****om)' },
-                hasAvatar: { type: 'boolean' },
-                avatar: { type: 'string' }
+                tokenId: { type: 'string', description: 'Token ID for next steps' },
+                maskedUserInfo: {
+                  type: 'object',
+                  properties: {
+                    displayName: { type: 'string', description: 'Masked display name (e.g., J**n D*e)' },
+                    username: { type: 'string', description: 'Masked username (e.g., t******5)' },
+                    email: { type: 'string', description: 'Masked email (e.g., je....n@f*****om)' },
+                    hasAvatar: { type: 'boolean' },
+                    avatar: { type: 'string' }
+                  }
+                },
+                error: { type: 'string' }
               }
-            },
-            error: { type: 'string' }
+            }
           }
         },
         429: {
@@ -569,14 +602,20 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // Enveloppe `sendSuccess` — cf. le commentaire du lookup ci-dessus (#4139).
         200: {
           description: 'Identity verification result',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            codeSent: { type: 'boolean', description: 'Whether SMS code was sent' },
-            attemptsRemaining: { type: 'number', description: 'Remaining identity verification attempts' },
-            error: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                codeSent: { type: 'boolean', description: 'Whether SMS code was sent' },
+                attemptsRemaining: { type: 'number', description: 'Remaining identity verification attempts' },
+                error: { type: 'string' }
+              }
+            }
           }
         },
         429: {
@@ -643,16 +682,24 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
+        // Enveloppe `sendSuccess`. C'est l'etape la plus couteuse du parcours :
+        // sans `resetToken`, un code SMS a ete envoye, saisi et CONSOMME pour
+        // un jeton qui n'atteignait jamais l'appelant (#4139).
         200: {
           description: 'Code verification result',
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            resetToken: {
-              type: 'string',
-              description: 'Password reset token (use with /auth/reset-password)'
-            },
-            error: { type: 'string' }
+            data: {
+              type: 'object',
+              properties: {
+                resetToken: {
+                  type: 'string',
+                  description: 'Password reset token (use with /auth/reset-password)'
+                },
+                error: { type: 'string' }
+              }
+            }
           }
         },
         429: {
