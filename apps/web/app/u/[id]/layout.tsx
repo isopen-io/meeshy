@@ -30,7 +30,15 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
 
-    const response = await fetch(buildApiUrl(`/users/profile/${id}`), {
+    // `/users/:id` et non `/users/profile/:id` : cette seconde adresse n'a
+    // JAMAIS existé côté gateway, si bien que la génération de métadonnées de
+    // toute page de profil publique retombait silencieusement sur le libellé
+    // générique — le `if (response.ok)` ci-dessous avalant le 404 (#4189).
+    // La route réelle accepte indifféremment un ObjectId ou un nom
+    // d'utilisateur, ce qui couvre les deux formes que `[id]` peut prendre, et
+    // s'ouvre à un appelant NON authentifié (`getOptionalAuth`) — ce dont le
+    // rendu serveur a besoin, n'ayant pas de jeton.
+    const response = await fetch(buildApiUrl(`/users/${id}`), {
       next: { revalidate: 300 }, // Cache 5 minutes
       signal: controller.signal,
       headers: {

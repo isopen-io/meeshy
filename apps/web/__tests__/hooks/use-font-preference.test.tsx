@@ -279,7 +279,21 @@ describe('useFontPreference', () => {
       expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
     });
 
-    it('should save font to backend', async () => {
+    // Ce témoin exigeait auparavant un `POST /user-preferences`. Il verrouillait
+    // une URL qui n'existe pas côté gateway : il est resté VERT pendant que
+    // chaque changement de police partait en 404 avalé par un `console.warn`,
+    // et la préférence ne quittait jamais le navigateur (#4189).
+    //
+    // C'est la forme d'erreur que l'issue nommait : un test qui asserte sur un
+    // mock verrouille l'URL FAUSSE aussi bien que la juste — il ne peut pas
+    // tomber. La garde qui, elle, peut tomber vit côté gateway, où la table de
+    // routes du serveur assemblé fait foi.
+    //
+    // Ce que le témoin affirme désormais est ce qui est VRAI : le choix de
+    // police vit dans `localStorage`, et rien ne part vers une route
+    // d'écriture de préférence — il n'en existe aucune (`/me/preferences` ne
+    // sert que GET et DELETE). La persistance serveur se rebranchera avec #4181.
+    it('ne poste vers AUCUNE route de préférence — il n’en existe pas', async () => {
       const { result } = renderHook(() => useFontPreference());
 
       await waitFor(() => {
@@ -292,16 +306,9 @@ describe('useFontPreference', () => {
         await result.current.changeFontFamily('roboto');
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/user-preferences',
-        expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            key: 'font-family',
-            value: 'roboto',
-          }),
-        })
-      );
+      const urlsAppelées = mockFetch.mock.calls.map((appel: unknown[]) => String(appel[0]));
+      expect(urlsAppelées.filter((url) => url.includes('user-preferences'))).toEqual([]);
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
     });
 
     it('should set error for invalid font', async () => {

@@ -57,6 +57,8 @@
 
 import { describe, it, expect, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
+import fs from 'fs';
+import path from 'path';
 import { EventEmitter } from 'events';
 
 // `@tus/server`/`@tus/file-store` sont publiés en ESM pur — Jest ne peut pas
@@ -479,6 +481,141 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
   it('assemble le serveur réel et énumère au moins une centaine de routes (garde-fou anti-régression du harnais lui-même)', async () => {
     ({ app, routes } = await buildAssembledApp());
     expect(routes.length).toBeGreaterThan(100);
+  });
+
+  // -------------------------------------------------------------------------
+  // Les chemins que le WEB appelle existent (#4189)
+  // -------------------------------------------------------------------------
+  // Trois adresses appelées par le web ne correspondaient à AUCUNE route :
+  // `/auth/check-username`, `/users/profile/:id` et `/friend-requests` sans
+  // suffixe. Deux d'entre elles étaient avalées par un `if (response.ok)` — la
+  // page de profil publique retombait sur des métadonnées génériques, et les
+  // listes de demandes d'ami restaient DÉFINITIVEMENT vides, sans erreur.
+  //
+  // Pourquoi la garde vit ICI et pas côté web : un test web ne peut vérifier
+  // ses URL que contre un `apiService` MOQUÉ, et un mock verrouille l'URL
+  // FAUSSE aussi bien que la juste — il ne peut donc pas tomber. La seule
+  // source qui tranche est la table de routes du serveur ASSEMBLÉ, qui vit
+  // ici. Elle rougit dans les DEUX sens : chemin client erroné, et route
+  // serveur retirée sous un appelant qui existe encore.
+  //
+  // PÉRIMÈTRE, dit à voix haute : seuls les appels dont le chemin est une
+  // chaîne LITTÉRALE sont vus. Ceux composés par gabarit
+  // (`buildApiUrl(`/users/${id}`)`) ne le sont pas — les couvrir demanderait
+  // d'évaluer du TypeScript, et une garde qui prétendrait les couvrir sans le
+  // faire serait pire que celle-ci.
+  it('ne laisse aucun appel LITTÉRAL du web viser une route absente', () => {
+    const racineWeb = path.resolve(__dirname, '../../../../../apps/web');
+    if (!fs.existsSync(racineWeb)) {
+      throw new Error(`apps/web introuvable (${racineWeb}) — cette garde ne peut pas se prononcer, et se taire serait pire que rougir.`);
+    }
+
+    const IGNORÉS = ['node_modules', '.next', '.turbo', '__tests__', 'coverage'];
+    const fichiers: string[] = [];
+    const parcourir = (dossier: string) => {
+      for (const entrée of fs.readdirSync(dossier, { withFileTypes: true })) {
+        if (IGNORÉS.includes(entrée.name)) continue;
+        const complet = path.join(dossier, entrée.name);
+        if (entrée.isDirectory()) parcourir(complet);
+        else if (/\.(ts|tsx)$/.test(entrée.name)) fichiers.push(complet);
+      }
+    };
+    parcourir(racineWeb);
+
+    // `buildApiUrl('/x')` sert `<backend>/api/v1/x` ; un `/api/...` déjà présent
+    // n'est pas doublé (`lib/config.ts`).
+    const versUrlServeur = (litteral: string) => {
+      const sansApi = litteral.startsWith('/api/v')
+        ? litteral
+        : litteral.startsWith('/api/')
+          ? `/api/v1${litteral.slice(4)}`
+          : `/api/v1${litteral.startsWith('/') ? litteral : `/${litteral}`}`;
+      return sansApi.split('?')[0];
+    };
+
+    const déclarées = new Set(routes.map((r) => r.url));
+    /** Une route paramétrée matche un chemin concret segment à segment. */
+    const estServie = (url: string) =>
+      déclarées.has(url) ||
+      routes.some((r) => {
+        const attendus = r.url.split('/');
+        const reçus = url.split('/');
+        if (attendus.length !== reçus.length) return false;
+        return attendus.every((seg, i) => seg.startsWith(':') || seg === '*' || seg === reçus[i]);
+      });
+
+    // Le littéral n'est un chemin COMPLET que si rien ne lui est concaténé.
+    // `${buildApiUrl('/messages')}/${id}/translate` vise bien une route réelle,
+    // dont ce littéral n'est que le préfixe : le compter entier ferait rougir
+    // la garde sur trois appels parfaitement corrects. On l'écarte en regardant
+    // ce qui suit immédiatement la parenthèse fermante.
+    const motif = /(?:buildApiUrl|apiService\.(?:get|post|put|patch|delete))\(\s*['"]([^'"$]+)['"]\s*[,)]/g;
+    // Clé (url, site) et non url seule : deux fichiers visant la MÊME adresse
+    // absente s'écrasaient, et le rapport n'en nommait qu'un — c'est ainsi que
+    // `hooks/use-group-modal.ts` est resté caché derrière `lib/server-cache.ts`
+    // pendant deux tours.
+    const fantômes = new Map<string, { url: string; site: string }>();
+    let littéraux = 0;
+
+    for (const fichier of fichiers) {
+      const source = fs.readFileSync(fichier, 'utf8');
+      for (const m of source.matchAll(motif)) {
+        // Un appel `apiService.get('/x', …)` se termine par une virgule ; un
+        // `buildApiUrl('/x')` par la parenthèse, éventuellement suivie d'une
+        // concaténation qui en fait un simple PRÉFIXE — écartée ici.
+        // Un appel COMMENTÉ n'est pas un appel. `privacy-settings.tsx` garde
+        // ainsi, en commentaire, un `apiService.delete('/api/v1/me/account')`
+        // qui documente une intention — le compter ferait rougir la garde sur
+        // du texte.
+        const débutLigne = source.lastIndexOf('\n', m.index!) + 1;
+        const avant = source.slice(débutLigne, m.index!).trimStart();
+        if (avant.startsWith('//') || avant.startsWith('*')) continue;
+
+        const suite = source.slice(m.index! + m[0].length, m.index! + m[0].length + 3);
+        if (m[0].endsWith(')') && /^\}\s*[/`]/.test(suite)) continue;
+
+        littéraux++;
+        const url = versUrlServeur(m[1]);
+        if (!estServie(url)) {
+          const site = path.relative(racineWeb, fichier);
+          fantômes.set(`${url}\u0000${site}`, { url, site });
+        }
+      }
+    }
+
+    // Garde-fou du harnais lui-même : si l'extraction cesse de trouver des
+    // appels, la garde passerait au vert en ne mesurant plus rien.
+    expect(littéraux).toBeGreaterThan(40);
+
+    // Exception UNIQUE, datée et suivie. L'onglet santé de l'administration
+    // lit trois sondes qui n'existent pas — un défaut RÉEL, trouvé par cette
+    // garde, mais dont le correctif exige d'abord une décision : faut-il
+    // SERVIR ces sondes (une disponibilité distincte de `/health` a une valeur
+    // propre) ou replier l'écran sur `/health` et `/admin/analytics/*` ?
+    // Suivi en #4219. Cette liste doit rester vide ou décroître : elle n'est
+    // pas un endroit où ranger ce qu'on n'a pas eu le temps de faire.
+    const SUIVIS = new Set([
+      // #4219 — l'onglet santé de l'administration lit trois sondes absentes.
+      '/api/v1/health/ready',
+      '/api/v1/health/metrics',
+      '/api/v1/health/circuit-breakers',
+      // #4222 — la modale « créer un groupe » du tableau de bord poste vers
+      // une route qui n'a jamais existé ; corriger exige de décider d'abord ce
+      // qu'est un « groupe » (conversation de groupe ou communauté).
+      '/api/v1/groups',
+    ]);
+
+    const restants = [...fantômes.values()].filter(({ url }) => !SUIVIS.has(url));
+    expect(restants.map(({ url, site }) => `${url}  ← ${site}`)).toEqual([]);
+
+    // La liste de suivi ne survit pas à sa propre résolution : dès qu'une de
+    // ces issues est livrée, l'entrée cesse d'être trouvée et CE témoin rougit,
+    // forçant son retrait. Sans lui, une exception résolue resterait en place
+    // et couvrirait silencieusement la prochaine régression sur la même URL.
+    const suivisEncoreFantômes = new Set(
+      [...fantômes.values()].filter(({ url }) => SUIVIS.has(url)).map(({ url }) => url)
+    );
+    expect(suivisEncoreFantômes).toEqual(SUIVIS);
   });
 
   // -------------------------------------------------------------------------

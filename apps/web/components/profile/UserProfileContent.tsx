@@ -47,18 +47,9 @@ import { getUserStatus } from '@/lib/user-status';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { getUserDisplayName as resolveDisplayName } from '@/utils/user-display-name';
 import { formatPresenceLabel, presenceColorClass } from '@/utils/presence-format';
-import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { ConversationDropdown } from '@/components/contacts/ConversationDropdown';
-
-interface FriendRequest {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  status: 'pending' | 'accepted' | 'rejected';
-  sender: User;
-  receiver: User;
-}
+import { useFriendRequestsV2 } from '@/hooks/v2/use-friend-requests-v2';
 
 export interface UserProfileLoadState {
   readonly loading: boolean;
@@ -122,7 +113,24 @@ export function UserProfileContent({
   const [stats, setStats] = useState<UserStats | null>(null);
   const [loading, setLoading] = useState(true);
   const currentUser = useUser();
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+
+  // Les demandes d'ami passaient par un `fetch` local vers `/friend-requests`
+  // — une adresse qui n'existe pas : seules `/friend-requests/received` et
+  // `/friend-requests/sent` sont servies. Le `if (response.ok)` avalait le 404,
+  // si bien que `friendRequests` restait DÉFINITIVEMENT vide : le bouton
+  // « Ajouter en ami » ne savait jamais qu'une demande était déjà en cours et
+  // s'affichait comme si de rien n'était (#4189).
+  //
+  // `useFriendRequestsV2` interroge les deux vraies routes, tient les deux sens
+  // dans `allRequests`, applique des mises à jour optimistes et se réinvalide
+  // sur les événements Socket.IO. Réécrire ici une quatrième version de ce
+  // chargement était précisément ce qui a laissé le défaut passer.
+  const {
+    allRequests: friendRequests,
+    getPendingRequestWithUser,
+    sendRequest,
+    cancelRequest,
+  } = useFriendRequestsV2({ currentUserId: currentUser?.id });
 
   useEffect(() => {
     onStateChange?.({ loading, user });
@@ -156,33 +164,6 @@ export function UserProfileContent({
     }
   }, [userId]);
 
-  const loadFriendRequests = useCallback(async () => {
-    try {
-      const token = authManager.getAuthToken();
-      if (!token) return;
-
-      const response = await fetch(buildApiUrl('/friend-requests'), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setFriendRequests(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error loading friend requests:', error);
-    }
-  }, []);
-
-  const getPendingRequestWithUser = useCallback((targetUserId: string): FriendRequest | undefined => {
-    return friendRequests.find(
-      (req) =>
-        req.status === 'pending' &&
-        ((req.senderId === currentUser?.id && req.receiverId === targetUserId) ||
-          (req.senderId === targetUserId && req.receiverId === currentUser?.id))
-    );
-  }, [friendRequests, currentUser]);
-
   useEffect(() => {
     let cancelled = false;
     const loadData = async () => {
@@ -191,7 +172,6 @@ export function UserProfileContent({
         await Promise.all([
           loadUserProfile(),
           loadUserStats(),
-          loadFriendRequests(),
         ]);
       } finally {
         if (!cancelled) setLoading(false);
@@ -202,7 +182,7 @@ export function UserProfileContent({
     return () => {
       cancelled = true;
     };
-  }, [userId, loadUserProfile, loadUserStats, loadFriendRequests]);
+  }, [userId, loadUserProfile, loadUserStats]);
 
   const navigate = useCallback((path: string) => {
     onBeforeNavigate?.();
@@ -250,33 +230,22 @@ export function UserProfileContent({
     }
   };
 
+  // Les deux gestes passent par les mutations du hook : elles appliquent une
+  // mise à jour OPTIMISTE, la défont si le réseau refuse, et réinvalident les
+  // deux listes. La session expirée reste gérée ici parce qu'elle est une
+  // décision de NAVIGATION, qui n'appartient pas au hook de données.
   const handleSendFriendRequest = async () => {
     if (!user) return;
 
+    if (!authManager.getAuthToken()) {
+      toast.error(t('errors.sessionExpired'));
+      navigate('/login');
+      return;
+    }
+
     try {
-      const token = authManager.getAuthToken();
-      if (!token) {
-        toast.error(t('errors.sessionExpired'));
-        navigate('/login');
-        return;
-      }
-
-      const response = await fetch(buildApiUrl('/friend-requests'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ receiverId: user.id })
-      });
-
-      if (response.ok) {
-        toast.success(t('success.friendRequestSent'));
-        loadFriendRequests();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || t('errors.sendFriendRequestFailed'));
-      }
+      await sendRequest(user.id);
+      toast.success(t('success.friendRequestSent'));
     } catch (error) {
       console.error('Error sending friend request:', error);
       toast.error(t('errors.sendFriendRequestFailed'));
@@ -284,28 +253,15 @@ export function UserProfileContent({
   };
 
   const handleCancelFriendRequest = async (requestId: string) => {
+    if (!authManager.getAuthToken()) {
+      toast.error(t('errors.sessionExpired'));
+      navigate('/login');
+      return;
+    }
+
     try {
-      const token = authManager.getAuthToken();
-      if (!token) {
-        toast.error(t('errors.sessionExpired'));
-        navigate('/login');
-        return;
-      }
-
-      const response = await fetch(buildApiUrl(`/friend-requests/${requestId}`), {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        toast.success(t('success.friendRequestCancelled'));
-        loadFriendRequests();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || t('errors.cancelFriendRequestFailed'));
-      }
+      await cancelRequest(requestId);
+      toast.success(t('success.friendRequestCancelled'));
     } catch (error) {
       console.error('Error cancelling friend request:', error);
       toast.error(t('errors.cancelFriendRequestFailed'));

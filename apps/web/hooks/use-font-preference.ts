@@ -128,34 +128,19 @@ export function useFontPreference() {
         localStorage.setItem(FONT_PREFERENCE_KEY, newFont);
       }
 
-      // Sauvegarder sur le backend si connecté (seulement côté client)
-      if (typeof window !== 'undefined') {
-        const token = authManager.getAuthToken();
-        if (token) {
-          try {
-            // Utiliser le nouvel endpoint unifié POST /user-preferences/
-            const response = await fetch(buildApiUrl('/user-preferences'), {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                key: FONT_PREFERENCE_KEY,
-                value: newFont,
-              }),
-              signal: AbortSignal.timeout(5000), // Timeout de 5 secondes
-            });
-
-            if (!response.ok) {
-              console.warn('Could not save font preference to backend');
-            }
-          } catch (backendError) {
-            console.warn('Backend save failed:', backendError);
-            // L'erreur n'est pas critique car nous avons le localStorage
-          }
-        }
-      }
+      // Le choix de police vit dans `localStorage`, et là seulement.
+      //
+      // Ce bloc envoyait auparavant un `POST /user-preferences` — une adresse
+      // qui n'existe pas côté gateway : chaque changement de police partait en
+      // 404 avalé par un `console.warn`, la préférence ne quittait jamais le
+      // navigateur, et le code affirmait le contraire (#4189).
+      //
+      // Elle n'a PAS été recâblée sur `/me/preferences` parce que cette API
+      // n'expose aujourd'hui que GET et DELETE : il n'existe aucune route
+      // d'écriture de préférence dans le dépôt. C'est exactement le sujet de
+      // #4181 (« toutes les préférences se lisent ET s'écrivent par une seule
+      // route ») ; la persistance serveur se rebranchera là, sur une route qui
+      // existe.
 
     } catch (err) {
       console.error('Error changing font:', err);

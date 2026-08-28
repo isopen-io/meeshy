@@ -36,6 +36,7 @@ import { buildApiUrl } from '@/lib/config';
 import { useI18n } from '@/hooks/useI18n';
 import { User } from '@/types';
 import { authManager } from '@/services/auth-manager.service';
+import { useFriendRequestsV2 } from '@/hooks/v2/use-friend-requests-v2';
 import { ParticipantPresenceIndicator } from '@/components/conversations/conversation-item/ParticipantPresenceIndicator';
 import { PRESENCE_BADGE_CLASS } from '@/lib/user-status';
 import { getUserInitials } from '@/lib/avatar-utils';
@@ -65,14 +66,6 @@ interface Conversation {
   }>;
 }
 
-interface FriendRequest {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  status: 'pending' | 'accepted' | 'rejected';
-  createdAt: string;
-}
-
 export function SearchPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,7 +77,17 @@ export function SearchPageContent() {
   const [users, setUsers] = useState<User[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [communities, setCommunities] = useState<Community[]>([]);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  // Même défaut qu'ailleurs dans le web : `/friend-requests` sans suffixe
+  // n'existe pas côté gateway, et le `if (response.ok)` avalait le 404 — la
+  // liste restait définitivement vide, donc l'écran de recherche proposait
+  // « Ajouter en ami » à des personnes à qui une demande était déjà partie
+  // (#4189). `useFriendRequestsV2` interroge les deux vraies routes.
+  const {
+    allRequests: friendRequests,
+    getPendingRequestWithUser,
+    sendRequest,
+    cancelRequest,
+  } = useFriendRequestsV2({ currentUserId: currentUser?.id });
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'users' | 'conversations' | 'communities'>('users');
 
@@ -95,25 +98,6 @@ export function SearchPageContent() {
     communities: communities.length,
     total: users.length + conversations.length + communities.length
   }), [users, conversations, communities]);
-
-  // Charger les demandes d'amis
-  const loadFriendRequests = async () => {
-    try {
-      const token = authManager.getAuthToken();
-      if (!token) return;
-
-      const response = await fetch(buildApiUrl('/friend-requests'), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setFriendRequests(data.data || []);
-      }
-    } catch (error) {
-      console.error('Erreur chargement friend requests:', error);
-    }
-  };
 
   // Effectuer la recherche
   const handleSearch = useCallback(async (searchQuery: string) => {
@@ -196,7 +180,6 @@ export function SearchPageContent() {
   // Focus sur l'input au montage
   useEffect(() => {
     inputRef.current?.focus();
-    loadFriendRequests();
   }, []);
 
   // Gérer la soumission du formulaire
@@ -226,26 +209,12 @@ export function SearchPageContent() {
     return resolveDisplayName(user, user.username);
   };
 
-  // Envoyer une demande d'ami
+  // Envoyer une demande d'ami — mise à jour optimiste et réinvalidation par le
+  // hook ; l'écran ne garde que le message qu'il affiche.
   const sendFriendRequest = async (userId: string) => {
     try {
-      const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl('/friend-requests'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ receiverId: userId })
-      });
-
-      if (response.ok) {
-        toast.success(t('toasts.requestSent'));
-        loadFriendRequests();
-      } else {
-        const error = await response.json();
-        toast.error(error.error || t('toasts.requestError'));
-      }
+      await sendRequest(userId);
+      toast.success(t('toasts.requestSent'));
     } catch (error) {
       console.error('Erreur:', error);
       toast.error(t('toasts.requestError'));
@@ -255,20 +224,8 @@ export function SearchPageContent() {
   // Annuler une demande d'ami
   const cancelFriendRequest = async (requestId: string) => {
     try {
-      const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`/friend-requests/${requestId}`), {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (response.ok) {
-        toast.success(t('toasts.requestCancelled'));
-        loadFriendRequests();
-      } else {
-        toast.error(t('toasts.cancelError'));
-      }
+      await cancelRequest(requestId);
+      toast.success(t('toasts.requestCancelled'));
     } catch (error) {
       console.error('Erreur:', error);
       toast.error(t('toasts.cancelError'));
@@ -344,14 +301,7 @@ export function SearchPageContent() {
     }
   };
 
-  const getPendingRequestWithUser = (userId: string): FriendRequest | undefined => {
-    return friendRequests.find(
-      (req) =>
-        req.status === 'pending' &&
-        ((req.senderId === currentUser?.id && req.receiverId === userId) ||
-          (req.senderId === userId && req.receiverId === currentUser?.id))
-    );
-  };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">

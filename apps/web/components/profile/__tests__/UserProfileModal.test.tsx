@@ -16,6 +16,30 @@ import '@testing-library/jest-dom';
 const mockGetUserProfile = jest.fn();
 const mockGetUserStats = jest.fn();
 
+jest.mock('@/hooks/v2/use-friend-requests-v2', () => ({
+  // Le composant lit désormais les demandes d'ami par ce hook (#4189) — il
+  // interrogeait auparavant `/friend-requests`, une adresse qui n'existe pas.
+  // Ces témoins portent sur le squelette, l'erreur et la présence : le hook y
+  // est un décor, mais il tire React Query, qui exigerait un QueryClient.
+  useFriendRequestsV2: () => ({
+    allRequests: [],
+    received: [],
+    sent: [],
+    connected: [],
+    pending: [],
+    refused: [],
+    stats: { connected: 0, pending: 0, refused: 0 },
+    isLoading: false,
+    error: null,
+    sendRequest: jest.fn(),
+    acceptRequest: jest.fn(),
+    rejectRequest: jest.fn(),
+    cancelRequest: jest.fn(),
+    getPendingRequestWithUser: () => undefined,
+    refresh: jest.fn(),
+  }),
+}));
+
 jest.mock('@/services', () => ({
   usersService: {
     getUserProfile: (...args: unknown[]) => mockGetUserProfile(...args),
