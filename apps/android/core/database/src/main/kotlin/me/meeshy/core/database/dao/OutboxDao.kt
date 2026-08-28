@@ -31,6 +31,20 @@ public interface OutboxDao {
     )
     public suspend fun activeMessageLanes(): List<String>
 
+    /**
+     * Whether one lane still owes the server a row of [kind] — a value this device has
+     * changed locally and not yet managed to push.
+     *
+     * `EXISTS` rather than a row fetch because the only question asked of it is a boolean:
+     * a reader that must decide whether to overwrite the local copy with the server's has
+     * no use for the pending payload, only for the fact that one exists.
+     */
+    @Query(
+        "SELECT EXISTS(SELECT 1 FROM outbox WHERE lane = :lane AND kind = :kind " +
+            "AND state != 'EXHAUSTED')",
+    )
+    public suspend fun hasDeliverableOfKind(lane: String, kind: String): Boolean
+
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
