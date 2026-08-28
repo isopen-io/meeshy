@@ -103,6 +103,36 @@ Poser `Status = In Progress` dans le projet org #1 avant d'écrire une ligne.
 | `2i` | #3544 |
 | `3b` | #3904 #4034 #3548 |
 
+**Trente-trois issues composer restent OUVERTES ailleurs** et portent chacune une part qu'une vue
+doit ABSORBER — sans quoi la vue livre une surface sans sa chaîne. Elles ne changent pas de milestone :
+la vue les cite, les absorbe, puis elles se ferment.
+
+| Vue | Issues dont la part remonte ici |
+|---|---|
+| `1a` #4071 | #3998 (re-scoper la garde « absent vs grisé ») |
+| `1b` #4072 | #4036 (amorces galerie / dernière capture, loi 9) · #3557 (9:16 borné au NEUF) |
+| `1c` #4073 | #3990 (2 glyphes d'inspecteur) · #3557 |
+| `1e` #4075 | #3561 (projection des **7** kinds, dont `mention`) |
+| `1f` #4076 | #3995 (le lieu survit aux chemins inline) · #3992 (états in-flight et échec) · #3905 (communauté + découvrable à proximité) |
+| `1g` #4077 | #4055 (chaîne d'écriture de `caption`) · #3994 (`order` écrit à l'index) |
+| `1h` #4078 | #3980 (crédit par la FORME) · #3567 (recadré : carte de RÉEL et repost embarqué seuls) |
+| `2a` #4079 | #3565 (share extension — le plan écrit) |
+| `2b` #4080 | #3776 (moitié PROFIL de la garde) · #4037 (geste d'appui long, hors cadrage) |
+| `2c` #4081 | #3979 (boucle sur la timeline du DOCUMENT) · #3980 |
+| `2d` #4082 | #3970 (vocabulaire de geste transverse) · #3969 (vidéo) · #3968 (image) · #3967 (audio) |
+| `2e` #4083 | #3952 (animations de texte) · #3993 (5 gardes négatives) |
+| `2f` #4084 | #3566 (delta d'API `MeeshyScenePlayer(.reader)`) |
+| `2i` #4087 | #3966 (position d'aperçu) · #3988 (toast « Brouillon enregistré — Jeter ») |
+| `2k` #4089 | #3998 |
+| `2l` #4090 | #3977 (repost borné, VERROUILLÉ avec sa raison) · #3976 (six niveaux, effectif, liste modifiable) |
+| `3a` #4091 | #3783 (câblage des sites de présentation) · #3987 (dernier format présélectionné) |
+| `3b` #4092 | #3958 (collage 2·3·4) · #3956 (GIF animé) · #3955 (détourage) · #3953 (sticker interactif) · #3788 (presse-papier) |
+| `3c` #4093 | #3980 |
+| `3d` #4094 | #3568 (charge amputée) · #3564 (son emprunté enfilé) · #3556 (exclusion mutuelle prouvée) · #3562 (N envois) |
+| `3e` #4095 | #3891 (actions derrière `…` et `↑`) |
+| `3f` #4096 | #4055 · #3994 · #3979 |
+| `3g` #4097 | #3986 (vues après expiration) · #3985 (supprimer) · #3982 (section Publiées) · #3981 (l'Étagère devient Publiées + Archive) |
+
 **Quatorze vues ne sont couvertes par AUCUNE issue fermée** — elles partent de zéro, sans dette ni
 promesse antérieure : `1d` `1e` `1h` `2d` `2e` `2f` `2g` `2h` `2j` `3c` `3e` `3g` `3h` `4b`.
 
