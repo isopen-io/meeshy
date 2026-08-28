@@ -712,7 +712,15 @@ export class CallEventsHandler {
     });
     const timer = setTimeout(() => {
       this.disconnectGraceTimers.delete(key);
-      void this.onDisconnectGraceExpired(opts);
+      // `.catch` OBLIGATOIRE (leçon 230), et le raisonnement « le callee avale
+      // ses erreurs » est FAUX ici : `onDisconnectGraceExpired` porte trois
+      // instructions AVANT son propre `try`, dont un accès de propriété sur
+      // `opts.participation`. Un rappel de `setTimeout` n'a par ailleurs aucun
+      // `try/catch` englobant, donc le rejet n'aurait d'autre effet observable
+      // que l'arrêt du process.
+      void this.onDisconnectGraceExpired(opts).catch((error: unknown) =>
+        logger.error('📞 Disconnect grace expiry rejected', { callId, userId, error })
+      );
     }, graceMs);
     timer.unref?.();
     this.disconnectGraceTimers.set(key, timer);
@@ -773,7 +781,13 @@ export class CallEventsHandler {
           const key = this.graceKey(callId, userId);
           const timer = setTimeout(() => {
             this.disconnectGraceTimers.delete(key);
-            void this.onDisconnectGraceExpired({ ...opts, extensionCount: extensions + 1 });
+            // Même garde que l'armement initial, et pour la même raison : le
+            // `try` qui entoure CETTE ligne appartient à l'invocation courante,
+            // qui sera résolue depuis longtemps quand le timer se déclenchera.
+            void this.onDisconnectGraceExpired({ ...opts, extensionCount: extensions + 1 }).catch(
+              (error: unknown) =>
+                logger.error('📞 Extended disconnect grace expiry rejected', { callId, userId, error })
+            );
           }, CallEventsHandler.GRACE_EXTENSION_MS);
           timer.unref?.();
           this.disconnectGraceTimers.set(key, timer);

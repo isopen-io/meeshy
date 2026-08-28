@@ -3717,7 +3717,13 @@ export class MeeshySocketIOManager {
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
           payload: updateEvent,
-        });
+        }).catch((error: unknown) =>
+          logger.warn('[AGENT] offline reaction enqueue rejected', {
+            conversationId: normalizedConversationId,
+            messageId: reaction.targetMessageId,
+            error,
+          })
+        );
 
         const authorParticipant = message.senderId
           ? await this.prisma.participant.findUnique({
