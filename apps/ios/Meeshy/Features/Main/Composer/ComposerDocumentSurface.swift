@@ -1712,73 +1712,21 @@ struct ComposerDocumentSurface: View {
     ///
     /// Les slides sont la STRUCTURE du document : elles se lisent donc là où se
     /// lit le type de publication, pas au milieu des outils.
+    /// La barre haute vit désormais dans `ComposerTopBar` (#4070) — elle agit
+    /// sur la `MeeshyPublication`, pas sur le document, et la scène incrustée
+    /// en a le même besoin. La garder privée ici aurait obligé la surface de
+    /// scène à la recopier.
     private var exitAffordance: some View {
-        HStack(spacing: 12) {
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
-                    // **Pas `glassControlForeground()`, et c'est délibéré.** Le
-                    // helper du SDK rend `indigo950` en thème CLAIR — juste sur
-                    // une surface qui suit le thème, faux ici : le plateau du
-                    // composer est sombre EN PERMANENCE (tout ce fichier passe
-                    // `isDark: true` en dur). On y aurait peint du sombre sur du
-                    // sombre dès que l'appareil quitte le mode nuit.
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                    .frame(width: ComposerControlMetrics.visualDiameter,
-                           height: ComposerControlMetrics.visualDiameter)
-                    .adaptiveGlass(in: Circle())
-            }
-            .accessibilityLabel(Text(ComposerDocumentCopy.close))
-            if let formatFan { formatFan.fixedSize() }
-            slideRail
-            Spacer(minLength: 0)
-            if let overflowMenu { overflowMenu.fixedSize() }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-    }
-
-    /// **Le rail des slides (#4047).** Une vignette par slide, celle qu'on
-    /// regarde cerclée, chacune retirable. `localMedia` vide ⇒ RIEN — pas une
-    /// bande à hauteur nulle, pas un rail de zéro chip : un document sans média
-    /// n'a qu'une slide, et un rail d'un seul élément ne navigue vers rien
-    /// (loi 4).
-    ///
-    /// **Aucun `＋` en v1, et c'est une RÉPONSE.** La planche en dessine un,
-    /// mais en Post une slide EST un média : un `＋` y créerait une slide VIDE,
-    /// donc un média fantôme dans le carrousel — un post qu'on publierait avec
-    /// un trou. Le seul geste honnête pour ajouter une slide en Post est
-    /// l'outil photo, qui existe déjà. Le `＋` revient avec le profil où une
-    /// slide vide a un sens (Story), pas avant.
-    @ViewBuilder
-    private var slideRail: some View {
-        if !localMedia.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(localMedia, id: \.url) { media in
-                        ComposerMediaThumbnail(
-                            media: media,
-                            side: 40,
-                            isSelected: media.url == selectedMediaURL,
-                            showsRemove: ComposerMediaChipAffordance.showsRemove(
-                                isSelected: media.url == selectedMediaURL,
-                                isSelectable: selectableMediaURLs.contains(media.url)
-                            )
-                        ) {
-                            onRemoveMedia?(media)
-                        }
-                        // Loi 4 : la vignette n'est un CONTRÔLE que si l'hôte
-                        // sait quoi faire du tap. Sans relais, elle reste ce
-                        // qu'elle a toujours été.
-                        .onTapGesture { onSelectMedia?(media) }
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerDocumentCopy.mediaStrip))
-        }
+        ComposerTopBar(
+            localMedia: localMedia,
+            selectedMediaURL: selectedMediaURL,
+            selectableMediaURLs: selectableMediaURLs,
+            formatFan: formatFan,
+            overflowMenu: overflowMenu,
+            onClose: onClose,
+            onRemoveMedia: onRemoveMedia,
+            onSelectMedia: onSelectMedia
+        )
     }
 
     /// Le placeholder n'est PAS peint en `textMuted`, qui serait le réflexe.
@@ -2082,7 +2030,11 @@ nonisolated enum ComposerMediaChipAffordance {
     }
 }
 
-private struct ComposerMediaThumbnail: View {
+/// Interne depuis #4070 : la barre haute, qui la monte, vit désormais dans
+/// `ComposerTopBar`. Elle n'a pas été DÉPLACÉE avec elle — la bande de médias
+/// d'une slide la réemploie aussi, et la suivre l'aurait rendue privée à une
+/// barre plutôt que partagée par ce qui montre des médias.
+struct ComposerMediaThumbnail: View {
     let media: ComposerDocumentMedia
     /// **Le rail de la barre haute est PLUS PETIT que la bande d'origine.** Une
     /// vignette de 64 pt y volerait la moitié de la rangée qui porte aussi la

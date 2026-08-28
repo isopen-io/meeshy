@@ -590,6 +590,12 @@ struct MeeshyComposerHost: View {
     /// unique. Garder l'id en plus serait un état MORT, qui masquerait une
     /// lecture morte le jour où un lot suivant croirait s'en servir.
     @State private var selectedSceneItemKind: StoryCanvasUIView.CanvasItemKind?
+    /// **L'ID de l'objet sélectionné** — le relais le portait et l'hôte le
+    /// JETAIT (`{ _, kind in … }`). Le kind suffisait à l'inspecteur, qui ne
+    /// sert qu'un contrôle par famille ; le rail *trailing* offre des actions
+    /// qui dépendent de CET objet — verrouillé ? au fond ? seul de son plan ? —
+    /// et aucune ne se répond sans son id.
+    @State private var selectedSceneItemId: String?
 
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
@@ -1039,11 +1045,20 @@ struct MeeshyComposerHost: View {
     ///
     /// Le socle, lui, ne dépend d'aucune des trois : il reste sous toutes
     /// (loi 5 — le socle ne bouge jamais).
+    /// **Quatre vues, une par contexte** (#4070). La règle est PURE
+    /// (`ComposerMountedView`) et séparée du routage : celui-ci dit quelle
+    /// SURFACE le format appelle, celle-là quelle VUE cette surface monte une
+    /// fois qu'on sait s'il y a une scène.
+    ///
+    /// Le `switch` est exhaustif : une cinquième vue casse la compilation ici,
+    /// avant de pouvoir diverger en silence.
     @ViewBuilder
     private var surface: some View {
-        switch mountedSurface {
-        case .scene:
+        switch ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene) {
+        case .atelier:
             composerSurface
+        case .scene:
+            sceneSurface
         case .document:
             documentSurface
         case .mood:
@@ -1182,6 +1197,69 @@ struct MeeshyComposerHost: View {
     /// même où V3 devait la brancher sur la porte la plus utilisée de l'app.
     /// Le host ne fabrique pas une seconde fermeture : il passe la SIENNE, la
     /// même que reçoit l'atelier deux blocs plus haut.
+    /// **La surface de SCÈNE** (#4070) — montée quand le document a une scène.
+    ///
+    /// Elle réemploie les MÊMES expressions que `documentSurface` pour tout ce
+    /// qui appartient à la publication (barre haute, rail des slides, éventail,
+    /// `⋯`) : deux dérivations d'une même valeur auraient divergé au premier
+    /// ajustement. Ce qui diffère est ce qui n'a de sens QUE sur une scène —
+    /// les deux rails et la géométrie d'encastrement.
+    private var sceneSurface: some View {
+        ComposerSceneSurface(
+            localMedia: documentLocalMedia,
+            selectedMediaURL: selectedSlideMediaURL,
+            selectableMediaURLs: Set(slideIdByMediaURL.keys),
+            formatFan: mountsFormatFan
+                && ComposerFormatFanPlacement.place(for: mountedSurface) == .documentHeader
+                ? AnyView(formatChip) : nil,
+            overflowMenu: documentOverflowEntries.isEmpty
+                ? nil : AnyView(overflowMenu),
+            onClose: onDismiss,
+            onRemoveMedia: { media in documentLocalMedia.removeAll { $0 == media } },
+            onSelectMedia: { media in
+                guard let slideId = slideIdByMediaURL[media.url],
+                      let index = viewModel.slides.firstIndex(where: { $0.id == slideId })
+                else { return }
+                viewModel.selectSlide(at: index)
+            },
+            slide: Binding(
+                get: { viewModel.currentSlide },
+                set: { viewModel.currentSlide = $0 }
+            ),
+            aspectRatio: viewModel.currentCanvasRatio,
+            plateauTint: tint.color,
+            sceneImages: viewModel.loadedImages,
+            sceneImagesVersion: viewModel.loadedImagesVersion,
+            onItemTapped: { id, kind in
+                selectedSceneItemId = id
+                selectedSceneItemKind = kind
+            },
+            onBackgroundTapped: { handleSceneBackgroundTap() },
+            // Les portes que CE meuble sert. `sticker` en est absente : aucun
+            // chemin ne pose un objet de ce kind — `showsEmojiPicker` insère
+            // dans le TEXTE, ce qui n'est pas la même chose. `description` non
+            // plus : rien ne donne le focus au champ depuis l'extérieur (#4065).
+            railDoors: ComposerRailDoor.offered(
+                served: [.media, .sound, .place, .mention],
+                format: selectedFormat,
+                allowsCapture: profile.allowsCapture
+            ),
+            onRailDoor: { door in handleRailDoor(door) },
+            // Les contrôleurs que CE meuble sert. L'empilement ne vit que sur la
+            // `StoryCanvasUIView`, dont le meuble n'a aucune référence.
+            trailingActions: ComposerTrailingRailPolicy.actions(
+                slide: viewModel.currentSlide,
+                selectedId: selectedSceneItemId,
+                served: [.duplicate, .delete],
+                hasEditor: false,
+                canLeaveScene: selectedFormat != .story
+            ),
+            onTrailingAction: { action in handleTrailingRailAction(action) },
+            description: $documentText,
+            descriptionPlaceholder: ComposerDocumentCopy.placeholder
+        )
+    }
+
     private var documentSurface: some View {
         ComposerDocumentSurface(
             text: $documentText,
@@ -1853,6 +1931,42 @@ struct MeeshyComposerHost: View {
     /// cas distincts sur `tool.effect` — `.photoLibrary`/`.camera`/`.files`
     /// restent une question posée au SÉLECTEUR à ouvrir
     /// (`presentMediaIntake`), jamais une seconde question posée à l'outil.
+    /// Une porte du rail délègue au chemin d'ingestion EXISTANT — le rail est
+    /// une autre GÉOGRAPHIE, pas un second pipeline. Y écrire un chemin neuf
+    /// ferait diverger la porte de la rangée qui fait déjà la même chose.
+    private func handleRailDoor(_ door: ComposerRailDoor) {
+        switch door {
+        case .media:   handleDocumentTool(.photo)
+        case .sound:   handleDocumentTool(.microphone)
+        case .mention: handleDocumentTool(.mention)
+        case .place:   handleDocumentTool(.place)
+        case .description, .sticker:
+            // Injoignables : `railDoors` ne les sert pas, et la loi 4 veut
+            // qu'une porte sans effet ne soit pas peinte. Le `switch` reste
+            // exhaustif pour qu'ajouter leur chemin oblige à passer ici.
+            break
+        }
+    }
+
+    /// **Le rail délègue au VIEWMODEL, jamais au canvas.** Muter la slide par
+    /// le modèle est ce qui garde publication, reader et export d'accord ; le
+    /// meuble n'a d'ailleurs aucune référence à la vue UIKit.
+    private func handleTrailingRailAction(_ action: StoryCanvasContextAction) {
+        guard let id = selectedSceneItemId else { return }
+        switch action {
+        case .duplicate: viewModel.duplicateElement(id: id)
+        case .delete:
+            viewModel.deleteElement(id: id)
+            selectedSceneItemId = nil
+            selectedSceneItemKind = nil
+        case .edit, .leaveScene, .bringForward, .sendBackward:
+            // Injoignables : `served` ne les contient pas. L'empilement ne vit
+            // que sur la `StoryCanvasUIView` ; l'y router demanderait de porter
+            // la primitive sur le MODÈLE — un lot en soi.
+            break
+        }
+    }
+
     private func handleDocumentTool(_ tool: ComposerDocumentTool) {
         switch tool.effect {
         case .insertsEmojiIntoText:
