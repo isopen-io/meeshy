@@ -34,41 +34,74 @@ Quatre noms, et rien d'autre : **`MeeshyObject`** (l'unité posée) · **`Meeshy
 qui les restitue) · **`MeeshySlide`** (une scène + sa description) · **`MeeshyPublication`**
 (un profil + ses slides). Tout code neuf et toute issue parlent ce vocabulaire (#4048).
 
-**Une slide est TOUJOURS une scène.** Une slide qui ne porte qu'un média est une scène dont le seul
-objet est son fond — il n'existe pas deux formes de slide. C'est ce que la planche disait déjà
-(« chaque slide est une Scene du document », P8), et c'est ce qui rend vraie sans cas particulier
-la demande de départ : une scène doit pouvoir être **un seul média présentable** dans un réel ou un post.
+### Ce que les quatre noms NE couvrent pas — le chrome
 
-**Ce qu'une slide SIGNIFIE dépend du profil** — le point le plus facile à rater :
+Les quatre noms décrivent le **contenu**. La moitié des règles de cette planche parlent de ce qui
+l'**entoure** : une barre, un rail, un socle, un inspecteur. Sans nom, ces pièces se décrivaient par
+périphrase (« la zone en bas », « la rangée »), et deux règles voisines pouvaient désigner la même
+chose autrement. L'inventaire ci-dessous est donc la **seconde moitié** du vocabulaire — il ne crée
+aucun type, il NOMME ce qui existe déjà dans le code.
+
+| Nom | Ce que c'est | Sur quel niveau du modèle il agit | Dans le code |
+|---|---|---|---|
+| **la surface** | l'écran monté : `document` · `scène` · `mood` | rend une `MeeshyPublication` | `ComposerSurfaceKind` |
+| **le plateau** | le fond teinté qui porte tout, trois teintes, toujours sombre | aucun — c'est le support | `PlateauTint` |
+| **la barre haute** | `✕ · [type ▾] · rail · ⋯` | la `MeeshyPublication` (son profil, ses slides) | `exitAffordance` |
+| **l'éventail** | le menu vertical de verre qui choisit le profil | le **profil** de la `MeeshyPublication` | `ComposerFormatFan` |
+| **le rail** | la bande des slides du document | les `MeeshySlide` de la publication | `slideRail` |
+| **le `⋯`** | ce que le document sait faire et que rien d'autre ne fait | la `MeeshyPublication` entière | `overflowMenu` |
+| **la scène incrustée** | la `MeeshyScene` de la slide courante, rendue dans l'écran document | une `MeeshyScene` | `EmbeddedSceneCanvas` |
+| **l'inspecteur** | les contrôles de l'objet sélectionné, au-dessus des outils | UN `MeeshyObject` | `EmbeddedSceneInspector` |
+| **la rangée d'outils** | les portes qui font ENTRER de la matière + la langue déclarée | crée des `MeeshyObject` | `toolRow` |
+| **les amorces** | sur une scène vide : caméra · dernière capture · « touchez pour écrire » | crée le PREMIER `MeeshyObject` | `blankCanvasStarter*` |
+| **le socle** | Audience · Aperçu · Publier — il ne bouge jamais (loi 5) | la `MeeshyPublication` (ce qui part) | `socle` |
+
+**Règle de lecture de cette planche** : chaque règle nomme le niveau sur lequel elle agit — un
+`MeeshyObject`, une `MeeshyScene`, une `MeeshySlide`, la `MeeshyPublication`, ou une pièce de chrome
+de la table ci-dessus. Une règle qui n'en nomme aucun décrit un comportement dont on ne sait pas ce
+qu'il touche : c'est la forme sous laquelle deux lots finissent par se contredire.
+
+**Une `MeeshySlide` est TOUJOURS une `MeeshyScene`.** Une slide qui ne porte qu'un média est une
+scène dont le seul `MeeshyObject` occupe le plan `background` — il n'existe pas deux formes de slide.
+C'est ce que la planche disait déjà (« chaque slide est une Scene du document », P8), et c'est ce qui
+rend vraie sans cas particulier la demande de départ : une `MeeshyScene` doit pouvoir être **un seul
+média présentable** dans un réel ou un post.
+
+**Ce qu'une `MeeshySlide` SIGNIFIE dépend du profil de sa `MeeshyPublication`** — le point le plus
+facile à rater. Le même objet ne dit pas la même chose selon S · R · P · M :
 
 | | Story (S) | Réel (R) | Post (P) | Mood (M) |
 |---|---|---|---|---|
-| Une slide EST | une story entière | le réel entier (le réel EST la scène) | **UN média du post** | — |
-| Nombre de slides | plusieurs | 1 | plusieurs | 0 |
-| Le texte de la slide est | **le contenu** | **le contenu** | **la légende de ce média** | — |
-| `content` de la publication | = le texte de sa slide | = le texte de sa slide | **propre au post** | le contenu, seul |
-| Sortir un média de la scène | interdit | autorisé | autorisé | — |
+| Une `MeeshySlide` EST | une story entière | le réel entier (le réel EST la `MeeshyScene`) | **UN média du post** | — |
+| Nombre de `MeeshySlide` | plusieurs | 1 | plusieurs | 0 |
+| La **description** de la slide est | **le contenu** | **le contenu** | **la légende de ce média** | — |
+| `content` de la `MeeshyPublication` | = la description de sa slide | = la description de sa slide | **propre au post** | le contenu, seul |
+| Sortir un `MeeshyObject` de la scène | interdit | autorisé | autorisé | — |
 
-**Poser un média, une seule règle** : pas de fond ⇒ le média **devient le fond** ; un fond déjà là ⇒
-il devient un objet de **premier plan**. Un audio devient le **son de fond** s'il n'y en a pas.
-Aucune question n'est posée à l'utilisateur (#4038).
+**Poser un média sur une `MeeshyScene`, une seule règle — elle choisit un PLAN, jamais une file.**
+Pas de fond visuel ⇒ le `MeeshyObject` naît au plan `background` ; un fond déjà là ⇒ il naît au plan
+`foreground`. Un `MeeshyObject` de kind `audio` prend le **son de fond** — la seconde place du plan
+`background` — s'il est libre. Aucune question n'est posée à l'utilisateur (#4038).
 
-**Taper la scène ouvre le contrôleur de ce qu'elle contient, juste au-dessus de la rangée d'outils
-(#4035).** Aucune sélection ⇒ **zone absente**, jamais un panneau vide. Et le geste est un
-**va-et-vient** : le même tap referme, sinon une zone ouverte par le fond n'aurait aucune sortie.
+**Taper la scène incrustée sélectionne un `MeeshyObject`, et l'inspecteur paraît juste au-dessus de
+la rangée d'outils (#4035).** Aucun objet sélectionné ⇒ **inspecteur absent**, jamais un panneau
+vide. Et le geste est un **va-et-vient** : le même tap referme, sinon une sélection posée sur le
+plan `background` n'aurait aucune sortie.
 
 **Une chaîne dont chaque maillon est juste peut ne transporter personne.** L'inspecteur était câblé
-de bout en bout — la scène transmet la sélection, le meuble la retient, la surface monte la zone —
-et pourtant inatteignable : en Post une slide ne porte qu'UN média, la règle 4 en fait son FOND, et
-le hit-test du canvas n'itère que le conteneur des OBJETS, où un fond ne vit pas. Le tap retombait
-sur « fond touché », qui EFFAÇAIT la sélection. La question à poser à un câblage n'est donc pas
-« le rappel est-il branché ? » mais **« le geste réel de l'utilisateur atteint-il ce rappel ? »**.
+de bout en bout — la scène incrustée transmet la sélection, le meuble la retient, la surface le monte
+— et pourtant inatteignable : en Post une `MeeshySlide` ne porte qu'UN `MeeshyObject`, la règle de
+placement le met au plan `background`, et le hit-test du canvas n'itère que les plans `content` et
+`foreground`. Le tap retombait sur « fond touché », qui EFFAÇAIT la sélection. La question à poser à
+un câblage n'est donc pas « le rappel est-il branché ? » mais **« le geste réel de l'utilisateur
+atteint-il ce rappel ? »**.
 
-La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « touchable » côté canvas
-changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
-qui a été touché, l'app décide ce que cela sélectionne.**
+La correction vit côté APP, jamais dans le geste du SDK : rendre le plan `background` hit-testable
+côté canvas changerait la manipulation de la surface `scène`, que ce lot doit laisser intacte.
+**Le SDK dit quel `MeeshyObject` a été touché ; l'app décide ce que cela sélectionne.**
 
-**L'amorce « dernière capture » paraît enfin (#4036).** Elle est construite, câblée et documentée
+**L'amorce « dernière capture » paraît enfin (#4036).** Les amorces sont les portes qui créent le
+PREMIER `MeeshyObject` d'une `MeeshyScene` vide ; celle-ci est construite, câblée et documentée
 depuis S5 — l'ancre A4 promet « la dernière photo accessible en 1 geste » — et ne s'était **jamais
 affichée**, même autorisation complète accordée : l'auteur voyait la capsule « Galerie » à sa place.
 
@@ -83,7 +116,8 @@ réseau, deux lignes plus bas : une intention posée qu'aucun réglage n'honorai
 > l'air complet — ni en comptant les tests, mais en OUVRANT l'écran et en cherchant ce que la spec y
 > promet.
 
-**Le socle RÉTRÉCIT aux grandes tailles de texte, il ne se casse pas (#4057).** Ses deux zones
+**Le socle RÉTRÉCIT aux grandes tailles de texte, il ne se casse pas (#4057).** Le socle porte ce qui
+décide de la `MeeshyPublication` entière — son audience, son aperçu, son départ — et ses deux zones
 nommées portent un pictogramme et un mot ; aux paliers d'accessibilité, le mot ne tient plus. Mesuré
 en allemand à `accessibility-XXXL` : « Veröffentlichen » se cassait en syllabes **empilées** —
 « Ver- / öf- / fent- / li- » — et « Öffentlich » se tronquait en « Öffe… ». Les deux zones se
@@ -96,123 +130,139 @@ plus** — c'est une loi de position, pas de dimension. Deux choses ne rétréci
 le **nom accessible** (un contrôle qui perd son nom en devenant compact est inatteignable à Voice
 Control) et la **cible de 44 pt**, qui est un plancher et non une conséquence du contenu.
 
-**La rangée d'outils DÉFILE, et le drapeau reste fixe (#4032).** Statique, elle sortait de l'écran
-dès les grandes tailles de texte : mesurée à `accessibility-XXXL`, elle occupait **630 pt sur un
+**La rangée d'outils DÉFILE, et le drapeau de langue reste fixe (#4032).** Elle porte les portes qui
+font ENTRER de la matière — chacune crée un `MeeshyObject` — plus la langue déclarée, qui devient la
+`locale` de tout objet posé. Statique, elle sortait de l'écran dès les grandes tailles de texte :
+mesurée à `accessibility-XXXL`, elle occupait **630 pt sur un
 écran de 402, calée à x = −114** — coupée des DEUX côtés, avec des outils qu'aucun geste
 n'atteignait. Après : x = 16, largeur 370.
 
 **Un retour porteur qui annule un lot ne condamne pas toujours l'idée.** Celui du 2026-08-27
 condamnait le fond NOIR sous le drapeau, sur un plateau navy — pas le défilement —, et il posait sa
 condition de retour en toutes lettres : « un fond d'occultation ALIGNÉ sur la teinte du plateau ». Le
-dégradé va donc de la teinte transparente à la teinte pleine, prise du meuble qui peint déjà l'écran :
-invisible tant que rien ne passe dessous, il se fond dès qu'un outil y glisse. La condition est
-tenue par une garde, pas par une promesse.
+dégradé va donc de la teinte transparente à la teinte pleine du **plateau**, celle que le meuble peint
+déjà sur tout l'écran : invisible tant que rien ne passe dessous, il se fond dès qu'un outil y
+glisse. La condition est tenue par une garde, pas par une promesse.
 
-**L'appui long sur un objet ouvre SES actions, et elles seules (#4046).** Le menu servait ses cinq
-entrées à tout objet non verrouillé, et deux n'avaient alors aucun effet : « Mettre au premier plan »
-un objet **seul de son plan** ne déplace rien — le menu proposait un geste dont le résultat est
-l'écran d'avant —, et « Modifier » délègue à un rappel que l'**hôte** fournit, que la scène incrustée
-de l'écran document ne transmet pas : l'entrée s'y peignait au-dessus d'un `nil`. Un fond n'empile
-pas non plus : il n'est pas dans le plan.
+**L'appui long sur un `MeeshyObject` ouvre SES actions, et elles seules (#4046).** Le menu servait
+ses cinq entrées à tout objet non verrouillé, et deux n'avaient alors aucun effet : « Mettre au
+premier plan » un objet **seul de son plan** ne déplace rien — le menu proposait un geste dont le
+résultat est l'écran d'avant —, et « Modifier » délègue à un rappel que l'**hôte** fournit, que la
+scène incrustée ne transmet pas : l'entrée s'y peignait au-dessus d'un `nil`. Un objet du plan
+`background` n'empile pas non plus : l'empilement ordonne le plan `foreground`, où il ne vit pas.
 
-**Le frère de plan se compte tous types confondus.** L'empilement raisonne sur les `zIndex` de TOUS
-les éléments — c'est ce que le rendu trie. Ne compter que les médias dirait « seul » d'un objet posé
-sous un texte, et retirerait une action qui a bel et bien un effet.
+**Le frère de plan se compte sur les sept kinds, pas sur les médias.** L'empilement ordonne le `z` de
+TOUS les `MeeshyObject` du plan `foreground` — c'est ce que le rendu trie. Ne compter que les objets
+de kind `media` dirait « seul » d'un objet posé sous un `text`, et retirerait une action qui a bel et
+bien un effet.
 
-**VoiceOver lit la MÊME règle.** Annoncer à l'oreille une action que le menu visuel ne sert pas
-rouvrirait le cul-de-sac par l'autre porte, et en pire : rien ne le dirait.
+**VoiceOver lit la MÊME règle, sur le même `MeeshyObject`.** Annoncer à l'oreille une action que le
+menu visuel ne sert pas rouvrirait le cul-de-sac par l'autre porte, et en pire : rien ne le dirait.
 
-**Un son posé sur une scène en devient la BANDE-SON — le troisième emplacement (#4052).** Le fond
-visuel, les objets de premier plan, et le son de fond : trois places, pas une file unique. Le refus
-du SDK — « un son n'a pas de place de fond sur un canvas » — était juste d'un fond VISUEL, et faux
-du son. Un second vocal ne remplace pas le premier en silence : il se pose en premier plan, où il
-reste audible, plutôt que de faire disparaître la bande-son que l'auteur venait de choisir.
+**Un `MeeshyObject` de kind `audio` posé sur une `MeeshyScene` en devient la BANDE-SON (#4052).** Le
+plan `background` porte DEUX places, pas une : un visuel **et** un son. Avec le plan `foreground`,
+cela fait trois emplacements, pas une file unique. Le refus du SDK — « un son n'a pas de place de
+fond sur un canvas » — était juste du visuel, et faux du son. Un second objet `audio` ne remplace pas
+le premier en silence : il naît au plan `foreground`, où il reste audible, plutôt que de faire
+disparaître la bande-son que l'auteur venait de choisir.
 
-**Le son n'est PAS une page du carrousel.** En Post chaque média ouvre sa slide ; un vocal, non — il
-appartient à la scène qu'on regarde. Deux conséquences se paient au pixel, et les deux étaient des
-régressions muettes : la vignette du vocal affichait une icône de DOCUMENT (or un fond audio ne peint
-aucune pastille sur le canvas — ce chip est le seul témoin à l'écran qu'un post a une bande-son), et
-son ✕ ne s'affichait **plus jamais**, la croix étant réservée au chip sélectionné et un son n'ayant
-aucune slide à sélectionner : **le vocal devenait irretirable**. Un chip qu'aucune slide ne mène
-porte donc toujours sa croix — c'est sa seule action.
+**Un objet `audio` n'ouvre PAS de `MeeshySlide`.** En Post chaque `MeeshyObject` de kind `media`
+ouvre sa slide ; un `audio`, non — il appartient à la `MeeshyScene` qu'on regarde. Deux conséquences
+se paient sur le **rail**, et les deux étaient des régressions muettes : la vignette du vocal
+affichait une icône de DOCUMENT (or un son du plan `background` ne peint aucune pastille sur le
+canvas — ce chip est le seul témoin à l'écran qu'une publication a une bande-son), et son ✕ ne
+s'affichait **plus jamais**, la croix étant réservée au chip sélectionné et un `audio` n'ayant aucune
+`MeeshySlide` à sélectionner : **le vocal devenait irretirable**. Un chip du rail qui ne mène à
+aucune slide porte donc toujours sa croix — c'est sa seule action.
 
-**Le mime DÉCLARÉ voyage avec le média posé (#4038).** Poser un média sur une scène le COPIE sous
-`{objectId}.{ext}`, et c'est ce NOM que tout l'aval relit pour étiqueter le téléversement. Le choix
+**Le mime DÉCLARÉ voyage avec le `MeeshyObject` posé (#4038).** Poser un média sur une `MeeshyScene`
+COPIE son fichier sous `{objectId}.{ext}` — l'`id` de l'objet EST le nom du fichier —, et c'est ce
+NOM que tout l'aval relit pour étiqueter le téléversement. Le choix
 de l'extension EST donc le transport du mime — et il était guessé : une URL source sans extension
 faisait baptiser « jpg » un PNG, « mov » un MP4. Rien ne rougissait : le fichier existe, l'objet se
 pose, le canvas l'affiche ; seul le serveur reçoit un type faux. L'ordre est désormais
 **extension de la source → mime déclaré → repli**, et le repli n'a pas disparu : il a cessé d'être
 le premier choix.
 
-**La barre haute porte le rail des slides** — `✕ · [Post ▾] · ▭ ▭ ＋ · ⋯` : fermer, le type de
-publication, **les slides du document**, le menu. Le rail y remplace le bandeau de vignettes d'un
-seul tenant : les slides sont la STRUCTURE du document, elles se lisent donc là où se lit le type,
-pas au milieu des outils (#4047).
+**La barre haute porte tout ce qui décrit la `MeeshyPublication`** — `✕ · [Post ▾] · ▭ ▭ · ⋯` :
+fermer, le **profil** (l'éventail), le **rail** de ses `MeeshySlide`, le `⋯`. Le rail y remplace le
+bandeau de vignettes d'un seul tenant : les slides sont la STRUCTURE de la publication, elles se
+lisent donc là où se lit son profil, pas au milieu des outils, qui créent des `MeeshyObject`
+(#4047).
 
-**Le type de publication est un MENU VERTICAL en verre, pas une rangée de chips.** Une rangée
+**Le profil de la `MeeshyPublication` se choisit dans un MENU VERTICAL en verre — l'éventail —, pas
+dans une rangée de chips.** Une rangée
 grandit avec le nombre de formats et repousse les slides hors de l'écran ; surtout, elle ne DIT pas
 l'état courant, elle le teinte. Un menu le nomme sur son libellé — la forme juste pour un réglage à
 valeur unique, et déjà celle des deux autres sélecteurs de l'écran (audience du socle, visibilité de
 l'atelier). Il n'y figure **que ce que le contexte permet** : l'itération porte sur `offeredFormats`
 et sur rien d'autre, donc un format non offert y est ABSENT, jamais grisé (loi 4).
 
-**Le menu offre les QUATRE formats, filtrés par disponibilité — Mood compris (#4030).** Le fil
+**L'éventail offre les QUATRE profils, filtrés par disponibilité — Mood compris (#4030).** Le fil
 n'en offrait que deux (+ Réel quand la composition qualifie) : le Mood n'était atteignable que par sa
 propre porte, si bien qu'écrire deux lignes ici puis vouloir en faire une humeur obligeait à fermer,
 revenir et **retaper** — la loi 9 (« le contenu est préservé à travers les formats ») tombait sur le
-seul format qu'aucune bascule n'atteignait. Le Mood est offert **quand la composition est du texte
-seul, non vide** : une carte d'humeur n'a ni scène ni pièce jointe. Son gate est la JUMELLE de celui
-du Réel et lui est **exclusif par construction** — l'un exige un média, l'autre l'interdit.
+seul profil qu'aucune bascule n'atteignait. Le Mood est offert **quand la composition est du texte
+seul, non vide** : une `MeeshyPublication` de profil M n'a AUCUNE `MeeshySlide`, donc ni scène ni
+objet. Son gate est la JUMELLE de celui du Réel et lui est **exclusif par construction** — l'un exige
+un `MeeshyObject` de kind `media`, l'autre l'interdit.
 
 **Un gate qui se referme sous les doigts est un défaut, pas une rigueur.** Posé sur le seul texte,
-celui du Mood aurait retiré le format à l'auteur qui efface sa phrase pour la réécrire : l'offre se
-serait refermée, le repli l'aurait renvoyé au document **en pleine frappe**. Un emoji déjà posé est
-la preuve qu'une humeur est en cours — il tient le format ouvert le temps de la composition, sans
-pour autant racheter un média.
+celui du Mood aurait retiré le profil à l'auteur qui efface sa phrase pour la réécrire : l'éventail
+se serait refermé, le repli l'aurait renvoyé à la surface `document` **en pleine frappe**. Un emoji
+déjà posé est la preuve qu'une `MeeshyPublication` de profil M est en cours — il tient le profil
+ouvert le temps de la composition, sans pour autant racheter un `MeeshyObject` de kind `media`.
 
-**Et l'ordre n'est pas négociable : le publieur AVANT l'éventail.** Offrir `.status` sans donner à la
+**Et l'ordre n'est pas négociable : le publieur AVANT l'éventail.** Un profil offert par l'éventail
+sans publieur derrière est une publication qu'on peut composer et pas envoyer. Offrir `.status` sans donner à la
 porte du fil sa branche d'envoi aurait armé une flèche que le plan d'envoi refuse sur son premier
 `guard` — format offert, bonne surface, envoi qui ne part pas. Le pire des deux mondes, puisqu'il a
 l'air de marcher.
 
-**Le `⋯` porte ce que le document sait faire et que rien d'autre à l'écran ne fait** — pas les
-entrées de l'atelier reprises par ressemblance de nom. Transitions et Timeline outillent une scène
-COMPOSÉE, que cette surface n'édite pas ; « supprimer les slides » a déjà son geste (le ✕ de chaque
-chip) ; « sauvegarder le brouillon » n'a aucun chemin ici. Restent **Retirer le fond** — poser une
-couleur était une porte à sens unique, aucun contrôle ne l'effaçait — et **Tout effacer**, qui porte
-plus loin que le rail : texte, fond, lieu et transcription en plus des médias. Aucune entrée
-servie ⇒ **aucun `⋯`** : un menu vide est la forme la plus sournoise de l'UI morte, il a l'air de
-marcher jusqu'au tap.
+**Le `⋯` porte ce qui agit sur la `MeeshyPublication` ENTIÈRE, et que rien d'autre à l'écran ne
+fait** — pas les entrées de la surface `scène` reprises par ressemblance de nom. Transitions et
+Timeline outillent une `MeeshyScene` COMPOSÉE, que la surface `document` n'édite pas ; « supprimer
+les slides » a déjà son geste (le ✕ de chaque chip du rail) ; « sauvegarder le brouillon » n'a aucun
+chemin ici. Restent **Retirer le fond** — poser une couleur au plan `background` était une porte à
+sens unique, aucun contrôle ne l'effaçait — et **Tout effacer**, qui porte plus loin que le rail :
+il vide la publication, texte · fond · lieu · transcription en plus de ses `MeeshySlide`. Aucune
+entrée servie ⇒ **aucun `⋯`** : un menu vide est la forme la plus sournoise de l'UI morte, il a
+l'air de marcher jusqu'au tap.
 
-**Le composant Position porte le LIEU, pas la catégorie « position » (#4034).** Son titre était le
-mot « Position » ; le nom du lieu vivait ailleurs, dans un chip de la rangée d'outils, avec sa propre
-croix. Un réglage dont l'objet se lit à l'autre bout de l'écran n'est pas un réglage — c'est deux
-moitiés qu'on rapproche de tête. L'entête réunit les trois questions de l'auteur sur une ligne :
-*quel lieu ?* (le nom), *est-il trouvable ?* (la bascule), *comment l'enlever ?* (une croix en
-verre). Le chip de la rangée disparaît.
+**Le composant Position porte le LIEU, pas la catégorie « position » (#4034).** Il gouverne le lieu
+de la `MeeshyPublication` — à ne pas confondre avec un `MeeshyObject` de kind `place`, la pastille
+qu'on POSE sur une scène : celui-ci décrit d'où l'on publie, celui-là décore une image. Son titre
+était le mot « Position » ; le nom du lieu vivait ailleurs, dans un chip de la rangée d'outils, avec
+sa propre croix. Un réglage dont l'objet se lit à l'autre bout de l'écran n'est pas un réglage —
+c'est deux moitiés qu'on rapproche de tête. L'entête réunit les trois questions de l'auteur sur une
+ligne : *quel lieu ?* (le nom), *est-il trouvable ?* (la bascule), *comment l'enlever ?* (une croix
+en verre). Le chip de la rangée disparaît.
 
-**Et le titre descend jusqu'à l'adresse avant d'abandonner.** Un point posé à la main n'a pas de
-nom : l'entête affichait alors « Position » — le mot générique — pendant que l'adresse complète
-venait d'être montrée par le sélecteur, une seconde plus tôt. Une PUCE répond à « y a-t-il un
-lieu ? » et peut se contenter du mot ; un TITRE répond à « lequel ? » et doit descendre : nom, puis
-adresse, puis le mot en dernier recours.
+**Et le titre du composant descend jusqu'à l'adresse avant d'abandonner.** Un point posé à la main
+n'a pas de nom : l'entête affichait alors « Position » — le mot générique — pendant que l'adresse
+complète venait d'être montrée par le sélecteur, une seconde plus tôt. Une PUCE répond à « cette
+`MeeshyPublication` a-t-elle un lieu ? » et peut se contenter du mot ; un TITRE répond à
+« lequel ? » et doit descendre : nom, puis adresse, puis le mot en dernier recours.
 
-**Le composant se monte sur le LIEU, jamais sur l'opt-in.** La découvrabilité « à proximité » exige
-une audience publique ; le lieu, non. Garder l'ancienne garde après avoir retiré le chip aurait fait
-disparaître de l'écran le lieu d'un post privé — et avec lui le seul moyen de le retirer. La règle
-d'opt-in gouverne désormais l'INTÉRIEUR du composant : sans elle, ni bascule, ni chevron, ni détail
-(loi 4). Reste le nom et sa croix.
+**Le composant se monte sur le LIEU de la publication, jamais sur l'opt-in.** La découvrabilité « à
+proximité » exige une audience publique ; le lieu, non. Garder l'ancienne garde après avoir retiré le
+chip aurait fait disparaître de l'écran le lieu d'une `MeeshyPublication` privée — et avec lui le
+seul moyen de le retirer. La règle d'opt-in gouverne désormais l'INTÉRIEUR du composant : sans elle,
+ni bascule, ni chevron, ni détail (loi 4). Reste le nom et sa croix.
 
-**Le ✕ de retrait ne se peint que sur la slide SÉLECTIONNÉE.** À 40 pt il occupe le quart du chip :
-viser une vignette pour naviguer la supprimait. Sélectionner reste à un geste sur tout chip,
-supprimer en demande deux — l'ordre juste pour une action irréversible.
+**Dans le rail, le ✕ de retrait ne se peint que sur la `MeeshySlide` SÉLECTIONNÉE.** À 40 pt il
+occupe le quart du chip : viser une vignette pour amener sa slide à l'écran la supprimait.
+Sélectionner reste à un geste sur tout chip, supprimer en demande deux — l'ordre juste pour une
+action irréversible.
 
-**L'ŒIL d'aperçu revient au socle** dès que le document a une scène, et seulement là. Il ne rend
-rien lui-même : il remet les slides au LECTEUR (`StoryViewerView`), celui qui rendra la publication
-— loi 6, un aperçu maison serait un quatrième chemin de rendu.
+**L'ŒIL d'aperçu revient au socle** dès que la publication a une `MeeshyScene`, et seulement là. Il
+ne rend rien lui-même : il remet ses `MeeshySlide` au LECTEUR (`StoryViewerView`), celui qui rendra
+la `MeeshyPublication` — loi 6, un aperçu maison serait un quatrième chemin de rendu.
 
-**Un objet se manipule par appui long** : Monter · Reculer · Modifier · Sortir de la scène (sauf en
-Story) — chacune servie seulement si elle a un effet, jamais grisée (#4046).
+**Un `MeeshyObject` se manipule par appui long** : Monter · Reculer · Modifier · Sortir de la scène
+(sauf en profil S) — chacune servie seulement si elle a un effet, jamais grisée (#4046). « Sortir de
+la scène » promeut l'objet en `MeeshySlide` à lui seul ; c'est le geste inverse de « poser un
+média », et le seul qui fasse traverser à un objet la frontière DEDANS/DEHORS.
 
 ## Les onze lois (doctrine, P1)
 1. **Un seul document** rend les quatre formats ; le format est un habillage, pas un modèle séparé.

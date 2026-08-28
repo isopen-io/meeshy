@@ -31,6 +31,23 @@ la *contient* pas à côté d'autre chose. Une publication est un profil et ses 
 — exactement les `ACTIVE_KINDS` du contrat partagé (`packages/shared/types/canvas-v3.ts:5`).
 Aucun kind neuf ne s'invente ici ; en ouvrir un est une décision de contrat.
 
+### Ce qui appartient à la PUBLICATION et non à une scène
+
+Trois choses se posent sur une `MeeshyPublication` et ne sont **jamais** des `MeeshyObject` : son
+**lieu** (d'où l'on publie), son **audience**, sa **langue déclarée**. Elles gouvernent ce qui PART,
+pas ce qui se voit sur une scène.
+
+La confusion la plus facile est le lieu, parce que le mot est le même des deux côtés :
+
+| | ce que c'est | où ça vit |
+|---|---|---|
+| le **lieu** de la publication | d'où l'on publie ; gouverne `location` et la découvrabilité | `MeeshyPublication` |
+| un `MeeshyObject` de kind `place` | une pastille POSÉE sur une scène, qui décore une image | `MeeshyScene`, plan `foreground` |
+
+Les deux peuvent coexister sur une même publication sans se contredire — l'un décrit l'origine,
+l'autre est du contenu. Un composant qui gouverne le premier ne doit jamais être décrit comme
+« posant un lieu » : il n'en pose aucun.
+
 ### Les trois plans
 `background` (le fond : UN visuel, et UN son) · `content` (le porteur) · `foreground` (ce qui se pose dessus, ordonné par `z`).
 
@@ -130,6 +147,12 @@ Le vocabulaire est neuf ; les représentations ne le sont pas. Rien à migrer au
 Le pont existe déjà dans les deux sens : `CanvasV3Migration.swift`
 (`CanvasV3.init(migrating:)` / `StoryEffects.init(rendering:sceneIndex:)`), avec un
 golden PARTAGÉ comme oracle.
+
+**Le CHROME a son propre inventaire, et il vit dans la planche.** Les quatre noms ci-dessus décrivent
+le contenu ; la barre haute, l'éventail, le rail, la rangée d'outils, l'inspecteur, les amorces et le
+socle décrivent ce qui l'entoure. Leur table — avec, pour chacun, le niveau du modèle sur lequel il
+agit — est dans `planche-meeshy-composer.md` § « Ce que les quatre noms NE couvrent pas ». Ce
+fichier-ci reste l'autorité sur les noms du CONTENU ; la planche l'est sur ceux du CHROME.
 
 **Règle de nommage** : tout code NEUF, toute issue, toute chaîne d'UI parlent
 `MeeshyObject` / `MeeshyScene` / `MeeshySlide` / `MeeshyPublication`. Les types `Story*`
