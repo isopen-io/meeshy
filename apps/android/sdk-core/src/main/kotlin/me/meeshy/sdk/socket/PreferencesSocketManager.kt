@@ -37,8 +37,8 @@ import javax.inject.Singleton
  * The other two arms are outside THIS lot, and they are not equal:
  *
  * - **community** (`{ userId, communityId, ... }`) has no Android reader at all —
- *   measured, zero occurrence of `UserCommunityPreferences` under
- *   `apps/android/**`. Nothing is cached, so nothing can go stale.
+ *   measured, zero occurrence of `UserCommunityPreferences` anywhere under
+ *   `apps/android`. Nothing is cached, so nothing can go stale.
  * - **category** (`{ userId, category }`) DOES have one, and it is a real gap
  *   rather than an absent feature: `NotificationPreferencesStore` and
  *   `PrivacyPreferencesStore` are DataStore-backed and documented as the UI source
