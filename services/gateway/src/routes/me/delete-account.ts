@@ -4,7 +4,8 @@ import { EmailService } from '../../services/EmailService';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../validation/helpers.js';
-import { DeleteAccountBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
+import { DeleteAccountBodySchema, OpenAccountDeletionBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
+import bcrypt from 'bcryptjs';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -159,6 +160,217 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
       } catch (error) {
         logger.error('[DeleteAccount] Failed to initiate deletion:', error);
         return sendInternalError(reply, 'Erreur lors de la demande de suppression', { code: 'INTERNAL_ERROR' });
+      }
+    }
+  );
+
+
+  // ============================================================
+  // POST /account/deletion — ouvrir une demande (authentifié, S3)
+  // ============================================================
+  //
+  // Remplace `DELETE /delete-account`, qui portait trois défauts (#4183) :
+  //   · elle RÉACTIVAIT un compte désactivé avant d'ouvrir la demande — le
+  //     compte revenait à la vie à l'instant où son propriétaire demandait sa
+  //     suppression ;
+  //   · elle annonçait « un e-mail a été envoyé » à un compte SANS adresse, en
+  //     ouvrant tout de même la demande : celle-ci restait bloquée en
+  //     `PENDING_EMAIL_CONFIRMATION` pour toujours, et le 409 « déjà en cours »
+  //     interdisait d'en rouvrir une. Le compte devenait insupprimable, en
+  //     silence ;
+  //   · elle n'exigeait aucune ré-authentification : un jeton volé ouvrait la
+  //     suppression.
+  fastify.post(
+    '/account/deletion',
+    {
+      preValidation: [fastify.authenticate],
+      preHandler: [validateBody(OpenAccountDeletionBodySchema)],
+      schema: {
+        description: 'Open an account-deletion request. Requires the current password (#4183).',
+        tags: ['me', 'account'],
+        summary: 'Open an account deletion request',
+        body: {
+          type: 'object',
+          required: ['confirmationPhrase', 'currentPassword'],
+          properties: {
+            confirmationPhrase: { type: 'string' },
+            currentPassword: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  message: { type: 'string' },
+                  tokenExpiresAt: { type: 'string' },
+                },
+              },
+            },
+          },
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          409: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
+      if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      const { currentPassword } = request.body as { currentPassword: string };
+      const userId = authContext.userId;
+
+      try {
+        const compte = await fastify.prisma.user.findUnique({
+          where: { id: userId },
+          select: { email: true, password: true, displayName: true, firstName: true, ...RECIPIENT_LANG_SELECT },
+        });
+
+        if (!compte) {
+          return sendUnauthorized(reply, 'Compte introuvable', { code: 'UNAUTHORIZED' });
+        }
+
+        const motDePasseValide = await bcrypt.compare(currentPassword, compte.password ?? '');
+        if (!motDePasseValide) {
+          return sendUnauthorized(reply, 'Mot de passe incorrect', { code: 'INVALID_PASSWORD' });
+        }
+
+        // Le refus EXPLICITE, avant toute écriture. Ouvrir la demande sans
+        // pouvoir envoyer le courriel qui la confirme fabrique un compte
+        // insupprimable.
+        if (!compte.email) {
+          return sendConflict(
+            reply,
+            'Aucune adresse e-mail n’est associée à ce compte : la suppression ne peut pas être confirmée.',
+            { code: 'NO_EMAIL', message: 'Ajoutez et vérifiez une adresse e-mail avant de demander la suppression.' }
+          );
+        }
+
+        const demandeActive = await fastify.prisma.accountDeletionRequest.findFirst({
+          where: { userId, status: { in: ['PENDING_EMAIL_CONFIRMATION', 'CONFIRMED'] } },
+        });
+
+        if (demandeActive) {
+          return sendConflict(reply, 'Une demande de suppression est déjà en cours', { code: 'ALREADY_PENDING' });
+        }
+
+        const confirmToken = crypto.randomBytes(32).toString('base64url');
+        const cancelToken = crypto.randomBytes(32).toString('base64url');
+        const tokenExpiresAt = new Date(Date.now() + TOKEN_TTL_MS);
+
+        await fastify.prisma.accountDeletionRequest.create({
+          data: {
+            userId,
+            status: 'PENDING_EMAIL_CONFIRMATION',
+            confirmTokenHash: hashToken(confirmToken),
+            cancelTokenHash: hashToken(cancelToken),
+            tokenExpiresAt,
+          },
+        });
+
+        // Aucune réanimation ici, contrairement à la route remplacée : un
+        // compte désactivé qui demande sa suppression reste désactivé.
+
+        const emailService = new EmailService();
+        await emailService.sendAccountDeletionConfirmEmail({
+          to: compte.email,
+          name: compte.displayName || compte.firstName || 'Utilisateur',
+          confirmLink: buildDeletionPageUrl('confirm', confirmToken),
+          cancelLink: buildDeletionPageUrl('cancel', cancelToken),
+          language: recipientLanguage(compte, 'en'),
+        });
+
+        logger.info(`[Deletion] demande ouverte user=${userId}`);
+
+        return sendSuccess(reply, {
+          message: 'Un e-mail de confirmation a été envoyé à votre adresse',
+          tokenExpiresAt: tokenExpiresAt.toISOString(),
+        });
+      } catch (error) {
+        logger.error('[Deletion] ouverture impossible', error as Error);
+        return sendInternalError(reply, 'Erreur lors de la demande de suppression', { code: 'INTERNAL_ERROR' });
+      }
+    }
+  );
+
+  // ============================================================
+  // GET /account/deletion — l'état de la demande (authentifié)
+  // ============================================================
+  //
+  // iOS jetait ce message faute de route pour le lire : l'application ne
+  // pouvait pas dire « votre compte sera supprimé le … », ni offrir d'annuler
+  // depuis l'app (#4183).
+  fastify.get(
+    '/account/deletion',
+    {
+      preValidation: [fastify.authenticate],
+      schema: {
+        description: 'Read the current account-deletion request, if any.',
+        tags: ['me', 'account'],
+        summary: 'Get account deletion status',
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              data: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', nullable: true },
+                  confirmedAt: { type: 'string', nullable: true },
+                  gracePeriodEndsAt: { type: 'string', nullable: true },
+                  canCancelUntil: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request, reply) => {
+      const authContext = (request as unknown as UnifiedAuthRequest).authContext;
+      if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
+      }
+
+      try {
+        const demande = await fastify.prisma.accountDeletionRequest.findFirst({
+          where: {
+            userId: authContext.userId,
+            status: { in: ['PENDING_EMAIL_CONFIRMATION', 'CONFIRMED', 'GRACE_PERIOD_EXPIRED'] },
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        // Un état VIDE, jamais un 404 : « je n'ai pas de demande en cours » est
+        // une réponse, pas une absence de ressource.
+        if (!demande) {
+          return sendSuccess(reply, {
+            status: null,
+            confirmedAt: null,
+            gracePeriodEndsAt: null,
+            canCancelUntil: null,
+          });
+        }
+
+        return sendSuccess(reply, {
+          status: demande.status,
+          confirmedAt: demande.confirmedAt?.toISOString() ?? null,
+          gracePeriodEndsAt: demande.gracePeriodEndsAt?.toISOString() ?? null,
+          canCancelUntil: demande.gracePeriodEndsAt?.toISOString() ?? null,
+        });
+      } catch (error) {
+        logger.error('[Deletion] lecture de l’état impossible', error as Error);
+        return sendInternalError(reply, 'Erreur lors de la lecture de la demande', { code: 'INTERNAL_ERROR' });
       }
     }
   );
