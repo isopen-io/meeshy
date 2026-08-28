@@ -2220,6 +2220,38 @@ requête d'appartenance aurait levé en production. Le correctif est un double q
 REFUSE ce que le vrai client refuse (`strictMembership`), et des ids de fixture
 de la forme de production (`convId('kept')`).
 
+**Et la forme impossible peut être un MODÈLE, pas une valeur (cycle 129).**
+`DELETE /me/preferences/categories/:categoryId` détachait ses conversations en
+écrivant sur `ConversationPreference` — le magasin CLÉ/VALEUR générique
+(`key`/`value`/`valueType`), qui ne déclare ni `categoryId` ni aucun lien vers
+une catégorie ; la colonne vit sur `UserConversationPreferences`. Le client
+généré refuse l'appel AVANT tout aller-retour (`PrismaClientValidationError`,
+« Unknown argument `categoryId` »), donc le `$transaction` levait et **aucune
+catégorie de conversation n'a jamais pu être supprimée**.
+
+Ce qui l'a tenu en vie n'est pas l'ignorance. Le double d'une des trois suites
+portait, mot pour mot : *« categories.ts uses prisma.conversationPreference…
+(pre-existing) — keep the surface so the route doesn't crash »*, suivi d'un
+`userConversationPreferences` commenté *« real model name (in case Phase 1 fixes
+the surface) »*.
+
+> **Poser une surface de double pour empêcher une route de tomber, c'est
+> supprimer le seul signal qui la ferait réparer.** Devant tout commentaire de
+> double qui décrit une bizarrerie de production — « pre-existing », « keep the
+> surface », « in case X fixes it » — poser la question du cycle 91 bis : **et
+> c'est bien ?**
+
+Deux mesures qui accompagnent ce cas, et qui valent au-delà :
+
+- **`tsc --noEmit` ne voit pas cette erreur de modèle.** Sous le `tsconfig` réel
+  du gateway (`strict: false`), la ligne EXACTE de production rend `EXIT=0` —
+  alors que la même faute prise ISOLÉMENT (`where: { categoryId }` seul) tombe
+  en `TS2353`. **On ne conclut pas d'un site qu'un gate voit une classe.**
+- **Changer la méthode Prisma qu'un handler appelle oblige à repointer le témoin
+  d'erreur** : celui du DELETE rejetait `$transaction`, que la route n'appelle
+  plus, et passait au vert par le chemin nominal en croyant tenir le chemin
+  d'erreur.
+
 #### Gouverner ce que la file CONTIENT ne dit rien de la façon dont on l'ATTEINT
 
 Tout ce qui précède porte sur des entrées DÉJÀ ÉCRITES. L'écriture, elle, était

@@ -40,14 +40,10 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    CATEGORY_CREATED: 'category:created',
-    CATEGORY_UPDATED: 'category:updated',
-    CATEGORY_DELETED: 'category:deleted',
-    CATEGORIES_REORDERED: 'categories:reordered',
-  },
-}));
+// Pas de double de `@meeshy/shared/types/socketio-events` : le module n'expose
+// que des CONSTANTES pures, et une liste recopiée à la main rend `undefined`
+// tout nom d'événement qu'elle a oublié — dont `USER_PREFERENCES_UPDATED`, que
+// le détachement diffuse depuis le cycle 129.
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
@@ -86,7 +82,11 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       delete: jest.fn<any>().mockResolvedValue({}),
     },
-    conversationPreference: {
+    // `categoryId` est une colonne de `UserConversationPreferences` — le
+    // magasin clé/valeur `ConversationPreference` ne la porte pas, et le double
+    // qui l'acceptait cachait une route morte (cycle 129).
+    userConversationPreferences: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     $transaction: jest.fn<any>().mockResolvedValue([]),
@@ -370,9 +370,12 @@ describe('DELETE /:categoryId — delete category', () => {
     await notFoundApp.close();
   });
 
+  // Le témoin d'erreur vise la méthode que le handler appelle VRAIMENT : celui
+  // qui rejetait `$transaction` passait par le chemin nominal en croyant tenir
+  // le chemin d'erreur depuis que le détachement ne s'y fait plus.
   it('returns 500 on DB error', async () => {
     const prisma = makePrisma();
-    prisma.$transaction = jest.fn<any>().mockRejectedValue(new Error('tx error'));
+    prisma.userConversationCategory.delete = jest.fn<any>().mockRejectedValue(new Error('delete error'));
     const errApp = await buildApp({ prisma });
     const res = await errApp.inject({ method: 'DELETE', url: '/cat-1' });
     expect(res.statusCode).toBe(500);
