@@ -964,7 +964,7 @@ struct MeeshyComposerHost: View {
             // de la règle, invisible aux tests — exactement ce que la garde de
             // ce `body` interdit, et elle a rougi pour le dire.
             if paintsFormatFan { plateauTools }
-            surface
+            surfaceWithIntakePortals
             // B2 (#3925) — la description repliable vit SOUS le canvas, en mode
             // scène uniquement : c'est la surface d'édition, côté scène, du
             // CONTENU partagé que B1 préserve entre les modes. Le reader
@@ -1059,6 +1059,96 @@ struct MeeshyComposerHost: View {
     ///
     /// Le `switch` est exhaustif : une cinquième vue casse la compilation ici,
     /// avant de pouvoir diverger en silence.
+    /// **Les PORTAILS d'ingestion appartiennent au MEUBLE, jamais à une
+    /// surface** (#4120).
+    ///
+    /// Ils vécurent attachés à l'expression `documentSurface` — et le
+    /// doc-comment du bloc affirmait déjà la bonne règle sans que le code la
+    /// tienne : « trois sélecteurs montés ICI, **sur le meuble**, jamais dans
+    /// `ComposerDocumentSurface` ». « Ici » désignait la surface, pas le meuble,
+    /// et la différence n'a coûté RIEN tant qu'il n'y eut qu'une vue à monter.
+    ///
+    /// #4070 en a monté quatre. Les quatre portes du rail *leading* posaient
+    /// alors `showsPhotoPicker = true` / `showsLocationPicker` /
+    /// `showsAudioComposer` / `showsReferencePicker` **sans qu'aucune vue à
+    /// l'écran ne les lise** : chaque maillon correct, et la chaîne ne
+    /// transportait personne.
+    ///
+    /// La règle est donc géographique, et c'est ce qui la rend gardable : un
+    /// portail se monte **au-dessus de l'aiguillage**, là où les quatre vues
+    /// passent. `ComposerIntakePortalsTests` en tient l'INVENTAIRE — tout
+    /// `@State private var shows…` du meuble doit avoir son lecteur ici, sans
+    /// quoi le contrôle qui l'écrit est inerte sur trois surfaces sur quatre.
+    ///
+    /// Le contrôle de découvrabilité y est aussi, et pour la même raison : un
+    /// lieu posé depuis la scène doit pouvoir se retirer.
+    private var surfaceWithIntakePortals: some View {
+        surface
+        // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
+        // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
+        // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
+        // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
+        // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
+        // et des notices — bien plus large qu'une capsule, il ne doit
+        // recouvrir ni le texte ni la rangée d'outils. Gaté sur
+        // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
+        // != nil` seul : l'audience compte autant que le lieu.
+        .safeAreaInset(edge: .bottom) {
+            // **#4034 — le composant se monte sur le LIEU, plus sur l'opt-in.**
+            // Il était gaté par `documentOffersNearbyDiscoverability` (lieu ET
+            // audience publique) à l'époque où le nom du lieu vivait ailleurs,
+            // dans un chip de la rangée d'outils. Ce chip est retiré — l'info
+            // vit dans l'entête du composant —, si bien que garder l'ancienne
+            // garde aurait fait DISPARAÎTRE de l'écran le lieu d'un post privé,
+            // avec le seul moyen de le retirer. La découvrabilité, elle, reste
+            // gouvernée par sa règle : c'est `offersDiscoverability` qui la
+            // porte À L'INTÉRIEUR du composant.
+            if let place = documentLocation {
+                NearbyDiscoverabilityControl(
+                    choice: $documentDiscoverability,
+                    accentColor: MeeshyColors.brandPrimaryHex,
+                    placeName: MediaKindLabel.placeTitle(name: place.name, address: place.address),
+                    offersDiscoverability: documentOffersNearbyDiscoverability,
+                    onRemovePlace: { documentLocation = nil }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+            }
+        }
+        .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
+        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
+        .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
+        .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
+        .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
+        .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
+        // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait
+        // ici disait « montés ICI, sur le meuble, jamais dans
+        // `ComposerDocumentSurface` » — et « ici » désignait l'expression
+        // `documentSurface`. La phrase était juste, le placement ne l'était
+        // pas : c'est ce demi-pas qui a rendu les quatre portes du rail
+        // inertes (#4120). Ils sont désormais où la phrase les mettait.
+        .sheet(isPresented: $showsCamera) { documentCameraSheet }
+        .photosPicker(
+            isPresented: $showsPhotoPicker,
+            selection: $pickedPhotoLibraryItems,
+            maxSelectionCount: 10,
+            matching: .any(of: [.images, .videos])
+        )
+        .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
+            guard !items.isEmpty else { return }
+            let picked = items
+            pickedPhotoLibraryItems = []
+            Task { await ingestPhotoLibraryItems(picked) }
+        }
+        .fileImporter(
+            isPresented: $showsFileImporter,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: true
+        ) { result in
+            Task { await ingestFileImporterResult(result) }
+        }
+    }
+
     @ViewBuilder
     private var surface: some View {
         switch ComposerMountedView.mounted(surface: mountedSurface, hasScene: documentHasScene) {
@@ -1406,67 +1496,6 @@ struct MeeshyComposerHost: View {
             // chevauche jamais ce qui se peint plus bas dans le `VStack`.
             toolRowTrailingAccessory: AnyView(documentLanguageCapsule)
         )
-        // B3 (#3926) — le choix POST/RÉEL/STORY n'est plus un overlay du
-        // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
-        // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
-        // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
-        // **Le SECOND opt-in (T2.5)**, en `safeAreaInset` et non en overlay :
-        // `NearbyDiscoverabilityControl` porte un titre, un sélecteur de grain
-        // et des notices — bien plus large qu'une capsule, il ne doit
-        // recouvrir ni le texte ni la rangée d'outils. Gaté sur
-        // `documentOffersNearbyDiscoverability`, jamais sur `documentLocation
-        // != nil` seul : l'audience compte autant que le lieu.
-        .safeAreaInset(edge: .bottom) {
-            // **#4034 — le composant se monte sur le LIEU, plus sur l'opt-in.**
-            // Il était gaté par `documentOffersNearbyDiscoverability` (lieu ET
-            // audience publique) à l'époque où le nom du lieu vivait ailleurs,
-            // dans un chip de la rangée d'outils. Ce chip est retiré — l'info
-            // vit dans l'entête du composant —, si bien que garder l'ancienne
-            // garde aurait fait DISPARAÎTRE de l'écran le lieu d'un post privé,
-            // avec le seul moyen de le retirer. La découvrabilité, elle, reste
-            // gouvernée par sa règle : c'est `offersDiscoverability` qui la
-            // porte À L'INTÉRIEUR du composant.
-            if let place = documentLocation {
-                NearbyDiscoverabilityControl(
-                    choice: $documentDiscoverability,
-                    accentColor: MeeshyColors.brandPrimaryHex,
-                    placeName: MediaKindLabel.placeTitle(name: place.name, address: place.address),
-                    offersDiscoverability: documentOffersNearbyDiscoverability,
-                    onRemovePlace: { documentLocation = nil }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
-            }
-        }
-        .sheet(isPresented: $showsLocationPicker) { documentLocationPickerSheet }
-        // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
-        .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
-        .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
-        .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
-        .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
-        // **L'ingestion de fichiers LOCAUX (T2.3)** — trois sélecteurs montés
-        // ICI, sur le meuble, jamais dans `ComposerDocumentSurface` : la
-        // surface reste une présentation sans état, l'ingestion lui appartient.
-        .sheet(isPresented: $showsCamera) { documentCameraSheet }
-        .photosPicker(
-            isPresented: $showsPhotoPicker,
-            selection: $pickedPhotoLibraryItems,
-            maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
-        )
-        .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
-            guard !items.isEmpty else { return }
-            let picked = items
-            pickedPhotoLibraryItems = []
-            Task { await ingestPhotoLibraryItems(picked) }
-        }
-        .fileImporter(
-            isPresented: $showsFileImporter,
-            allowedContentTypes: [.item],
-            allowsMultipleSelection: true
-        ) { result in
-            Task { await ingestFileImporterResult(result) }
-        }
     }
 
     /// La capture caméra du document (T2.3), montée ICI plutôt que sous la

@@ -649,8 +649,14 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             "Le choix de surface passe par la règle — elle est éprouvée là, une seule fois."
         )
 
-        guard let corps = blockBody(startingAt: "private var surface", in: code) else {
-            throw AncreIntrouvable(quoi: "private var surface")
+        // **Ancre RENDUE EXACTE au #4120**, et c'est le piège que la garde du
+        // socle documente déjà : `"private var surface"` est un PRÉFIXE. Le
+        // meuble déclare désormais `surfaceWithIntakePortals` AVANT
+        // l'aiguillage — la garde lisait donc le corps des portails, où il n'y a
+        // ni `case .mood` ni `mountedSurface`, et rougissait sur un bloc qui
+        // n'était pas le sien. Le type de retour referme l'ancre.
+        guard let corps = blockBody(startingAt: "private var surface: some View", in: code) else {
+            throw AncreIntrouvable(quoi: "private var surface: some View")
         }
         XCTAssertTrue(corps.contains("mountedSurface"), "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
         XCTAssertTrue(corps.contains("case .mood"), "Et la troisième issue est servie.")
