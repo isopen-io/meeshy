@@ -762,6 +762,129 @@ describe('useUserPreferencesStore', () => {
     });
   });
 
+  // ─── une écriture n'envoie QUE ce qu'on lui a soumis ─────────────────────────
+
+  /**
+   * Les trois écritures envoyaient un instantané de DOCUMENT ENTIER construit
+   * depuis une tranche de store qui est un SOUS-ENSEMBLE STRICT de ce document,
+   * sur un `PUT` que la passerelle traite en REMPLACEMENT
+   * (`update: { [category]: validated }`) — Zod comblant les clés absentes par
+   * leurs `default()`.
+   *
+   * La tranche `privacy` ne peut structurellement pas porter le bloc
+   * CHIFFREMENT : `syncPrivacy` l'en retire, `EncryptionPreferences` en est le
+   * seul porteur. Basculer n'importe quel réglage de confidentialité remettait
+   * donc `encryptionPreference` / `autoEncryptNewConversations` /
+   * `showEncryptionStatus` / `warnOnUnencrypted` aux défauts — les
+   * conversations neuves cessant d'être chiffrées automatiquement, sans un
+   * signe.
+   *
+   * Les témoins portent sur la MÉTHODE et sur le CORPS : aucun des témoins
+   * d'écriture précédents n'assertait ni l'une ni l'autre, et c'est exactement
+   * l'espace où le défaut vivait (« un témoin d'écriture assert sur l'EFFET,
+   * jamais sur le statut »).
+   */
+  describe('une écriture ne nomme que les clés soumises', () => {
+    function lastRequest(): { url: string; init: RequestInit } {
+      const [url, init] = mockFetch.mock.calls[mockFetch.mock.calls.length - 1] as [
+        string,
+        RequestInit,
+      ];
+      return { url, init };
+    }
+
+    function lastBody(): Record<string, unknown> {
+      return JSON.parse(String(lastRequest().init.body)) as Record<string, unknown>;
+    }
+
+    const ENCRYPTION_KEYS = [
+      'encryptionPreference',
+      'autoEncryptNewConversations',
+      'showEncryptionStatus',
+      'warnOnUnencrypted',
+    ] as const;
+
+    it('updatePrivacy fusionne au lieu de remplacer', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+      });
+
+      expect(lastRequest().init.method).toBe('PATCH');
+    });
+
+    it('updatePrivacy ne nomme AUCUNE clé de chiffrement', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showOnlineStatus: false });
+      });
+
+      expect(Object.keys(lastBody())).toEqual(['showOnlineStatus']);
+      for (const key of ENCRYPTION_KEYS) {
+        expect(lastBody()).not.toHaveProperty(key);
+      }
+    });
+
+    it('updatePrivacy ne réaffirme pas les réglages voisins qu\'on n\'a pas touchés', async () => {
+      // Un voisin changé sur un AUTRE appareil serait annulé par la simple
+      // bascule d'un réglage sans rapport.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({ showReadReceipts: false });
+      });
+
+      expect(lastBody()).toEqual({ showReadReceipts: false });
+    });
+
+    it('updateEncryption ne nomme AUCUNE clé de confidentialité', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updateEncryption({ warnOnUnencrypted: true });
+      });
+
+      expect(lastRequest().init.method).toBe('PATCH');
+      expect(lastBody()).toEqual({ warnOnUnencrypted: true });
+    });
+
+    it('updateNotifications ne nomme que ce qu\'on lui a passé', async () => {
+      // `StoreNotificationPreferences` est un `Pick` de 14 des 33 champs du
+      // schéma : après une hydratation ÉCHOUÉE, un remplacement remettait les
+      // dix-neuf autres aux défauts — `callsEnabled`, `dndDays`,
+      // `dndUtcOffsetMinutes` et les sept bascules sociales comprises.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updateNotifications({ soundEnabled: false });
+      });
+
+      expect(lastRequest().init.method).toBe('PATCH');
+      expect(lastBody()).toEqual({ soundEnabled: false });
+    });
+
+    it('une écriture sans aucune clé ne part pas', async () => {
+      // Un `PATCH` au corps vide fait payer un aller-retour, un journal de
+      // mutation et une diffusion `preferences:updated` pour zéro changement.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue({ ok: true } as Response);
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().updatePrivacy({});
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(isPreferenceWriteInFlight()).toBe(false);
+    });
+  });
+
   // ─── déclaration des écritures en vol ────────────────────────────────────────
 
   /**
@@ -779,7 +902,7 @@ describe('useUserPreferencesStore', () => {
       return (response: Response) => release(response);
     }
 
-    it('déclare updatePrivacy en vol pendant tout le PUT', async () => {
+    it('déclare updatePrivacy en vol pendant tout le PATCH', async () => {
       mockGetAuthToken.mockReturnValue('tok');
       const release = pendingFetch();
 
