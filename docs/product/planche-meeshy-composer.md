@@ -264,24 +264,34 @@ la `MeeshyPublication` — loi 6, un aperçu maison serait un quatrième chemin 
 la scène » promeut l'objet en `MeeshySlide` à lui seul ; c'est le geste inverse de « poser un
 média », et le seul qui fasse traverser à un objet la frontière DEDANS/DEHORS.
 
-## Les onze lois (doctrine, P1)
-1. **Un seul document** rend les quatre formats ; le format est un habillage, pas un modèle séparé.
-2. **Réemploi total** : chaque brique existante (SDK, viewers, éditeurs) est câblée, jamais reconstruite.
-3. **Une seule scène** : Story ET Réel montent la même scène ; le média prend le canvas.
-4. **Un contrôle existe** ssi l'objet l'accepte ET le profil l'autorise ET l'action a un effet.
-5. **Le socle ne bouge jamais** (Audience · Aperçu · Publier) et se lit sur les trois teintes du plateau.
-6. **Même geste, même effet** sur les trois plateformes ; même mot, même icône, même couleur de contexte.
-7. **L'icône est le verbe** (`↻`, `♫〰`, `👁`) — jamais un texte, jamais un emoji.
+## Les douze lois (doctrine, P1)
+
+> **Alignées sur le HTML le 2026-08-28.** Cette liste et celle de la planche HTML avaient
+> DIVERGÉ sur cinq des onze entrées (1, 2, 3, 6 et 11) — deux doctrines pour un seul composer,
+> et rien ne le signalait. Le HTML fait foi ; ce qui suit en est la transcription.
+
+1. **Le format est un CHAMP**, jamais un écran : on entre dans le composer, déjà réglé.
+2. **Un objet, cinq familles en moins** — texte, média, sticker, son, lieu, dessin, mention deviennent un seul `MeeshyObject`.
+3. **La scène est 9:16, toujours** ; le porteur garde son ratio, le hors-champ devient deux bandes actives. Pas de visuel ⇒ pas de scène du tout.
+4. **Rien à l'écran sans raison** : un contrôle d'objet existe ssi l'objet l'accepte ET le profil l'autorise ET l'action a un effet — absent, jamais grisé.
+5. **Le socle ne bouge jamais** (Audience · Aperçu · Publier), lisible sur les trois teintes du plateau.
+6. **Le lecteur EST l'aperçu** : composer et viewers partagent un seul registre de rendu. WYSIWYG par construction.
+7. **L'icône est le verbe** (`↻`, `♫〰`, `👁`) — jamais doublée d'un texte.
 8. **Un seul temps, celui du contenu** : la lecture survit au changement de chrome (carte → détail → plein écran → PiP).
-9. **La porte fixe l'état INITIAL, le contenu est PRÉSERVÉ** entre modes (rév. 3, 2026-08-27).
+9. **La porte ne fixe que l'état INITIAL, le CONTENU est préservé** entre modes (rév. 3, 2026-08-27).
 10. **L'audience se souvient PAR FORMAT** ; « dernière utilisée » est indexée S/P/R/M.
-11. **La complexité se paie dans le CODE**, jamais chez l'utilisateur.
+11. **Personne ne lit du vide** : l'archive est toujours restituée, et un contenu illisible devient une sentinelle dans la langue du lecteur.
+12. **Le CÔTÉ dit la nature du geste** (rév. 27) : le rail *leading* fait ENTRER de la matière, le rail *trailing* AGIT sur ce qui est là. Un contrôle ne change jamais de rail — et jamais « gauche/droite », que l'arabe échange.
+
+Deux lois du .md n'étaient PAS dans le HTML et ne sont pas perdues : « réemploi total »
+est une règle de MÉTHODE (elle vit dans l'inventaire P2), et « la complexité se paie dans le
+CODE » est la **dimension 12** de la roadmap produit, pas une loi du composer.
 
 ## Les sections de la planche (P0→P24)
 | P | Sujet | Ce qu'on y trouve |
 |---|---|---|
 | P0 | Avancement | tableau de bord daté (matrice `data-state`, camembert) — DESIGN, l'issue fait foi |
-| P1 | Doctrine | les onze lois ci-dessus |
+| P1 | Doctrine | les douze lois ci-dessus |
 | P2 | Inventaire | les ~85 vues story + feed + mood + repost + 3 viewers, et leur portage vers le modèle d'objet |
 | P3 | Carte de navigation | dix portes → un composer → trois viewers |
 | P4 | Anatomie | le plateau (fond configurable), la scène 9:16, le socle 3 membres, les états AMORCE/INSPECTEUR |

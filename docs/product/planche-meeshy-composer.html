@@ -810,7 +810,7 @@ footer .mono{font-size:11.5px}
 
 <!-- ================================================================ P1 -->
 <section id="p1"><div class="wrap">
-  <div class="prail"><span class="pnum">P1</span><h2>Doctrine — onze lois, aucune exception</h2></div>
+  <div class="prail"><span class="pnum">P1</span><h2>Doctrine — douze lois, aucune exception</h2></div>
   <p class="lede">Tout le reste du document se déduit d'ici. Quand deux planches semblent se
   contredire, c'est la loi qui tranche. <b>Chaque loi porte sur UN niveau du modèle</b>, et le dire
   n'est pas une glose : deux lois qui semblent se contredire portent presque toujours sur deux
@@ -882,6 +882,16 @@ footer .mono{font-size:11.5px}
       restituée (v1 d'origine aux anciens clients, v3 converti aux clients à jour) ; un contenu
       v3-natif servi à un client qui ne sait pas le lire devient une SENTINELLE lisible qui
       invite à mettre à jour — dans la langue du lecteur (P20). Rév. 3 (O17).</p></div>
+    <div class="card"><h4>12 · Le CÔTÉ dit la nature du geste <span class="tag tNew">rév. 27</span></h4><p>
+      Le rail <i>leading</i> fait ENTRER de la matière ; le rail <i>trailing</i> AGIT sur ce qui est
+      déjà là. <b>Un contrôle ne change jamais de rail</b> — c'est ce qui rend la latéralité
+      apprenable plutôt que décorative. <b>Niveaux :</b> <i>leading</i> crée un
+      <span class="mono">MeeshyObject</span> (sauf « description », qui vise la
+      <span class="mono">MeeshySlide</span>) ; <i>trailing</i> agit sur UN
+      <span class="mono">MeeshyObject</span>, et son <span class="mono">✕</span> sur la
+      <span class="mono">MeeshyPublication</span>. Se dit en <i>leading</i>/<i>trailing</i>, jamais
+      en gauche/droite : en arabe les deux s'échangent, et un rail codé « à gauche » y retourne le
+      geste appris contre son utilisateur.</p></div>
   </div>
 </div></section>
 
@@ -1069,7 +1079,8 @@ flowchart TD
         premier ordre du plan <span class="mono">foreground</span> (P6). Le fond est un objet du plan
         <span class="mono">background</span> — qui porte <b>deux places</b>, un visuel <i>et</i> un
         son (#4052).</span></li>
-      <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3),
+      <li><span class="n">3</span><span><b>Zone contextuelle — DEUX états nommés</b> (rév. 2, C3 ;
+        <b>rév. 27 — elle n'est plus PERMANENTE</b>, voir « les deux rails » ci-dessous),
         <i>et ils n'agissent pas sur le même niveau.</i>
         <b>AMORCE</b> — <i>CRÉE un <span class="mono">MeeshyObject</span></i> (aucune sélection ;
         CIBLE : en v1 la zone reste celle du composer SDK, déscope §F/I7) : la rangée fixe des
@@ -1082,6 +1093,15 @@ flowchart TD
         sélectionné</i> : ses contrôles, eux seuls. Jamais de vide-mystère, jamais de contrôle
         grisé — la loi 4 vaut pour les contrôles d'objet. Aucune sélection ⇒ inspecteur ABSENT, et
         le tap qui sélectionne est un va-et-vient : le même referme (#4035).</span></li>
+      <li><span class="n">5</span><span><b>Rail <i>leading</i> — les PORTES</b> (rév. 27),
+        <i>ce qui fait ENTRER de la matière.</i> Description · média · son · sticker · mention ·
+        lieu. Cinq de ces six créent un <span class="mono">MeeshyObject</span> ; <b>la sixième
+        n'en crée pas</b> — « description » vise la <span class="mono">MeeshySlide</span>, et
+        confondre les deux niveaux ferait poser un objet texte là où l'on voulait décrire la
+        slide (P22, les trois niveaux).</span></li>
+      <li><span class="n">6</span><span><b>Rail <i>trailing</i> — les CONTRÔLEURS</b> (rév. 27),
+        <i>ce qui agit sur l'objet SÉLECTIONNÉ</i>, plus le <span class="mono">✕</span> de sortie,
+        <b>ancré en HAUT du rail et immobile</b> — ce qui ferme ne se cherche pas.</span></li>
       <li><span class="n">4</span><span><b>Socle permanent — trois membres, jamais plus</b>
         (rév. 2, M13), <i>et les trois agissent sur la <span class="mono">MeeshyPublication</span>
         ENTIÈRE — sur ce qui PART, jamais sur un objet.</i> Audience (chip, toujours lisible) ·
@@ -1093,6 +1113,72 @@ flowchart TD
         endroit</b> : les zones ne se déplacent pas, elles rétrécissent (#4057).</span></li>
     </ul>
   </div>
+  <h3>Les deux rails, et le bas qui respire <span class="tag tNew">rév. 27 · 2026-08-28</span></h3>
+  <p class="lede">Le chrome de la scène cesse d'être une bande EN BAS pour devenir deux rails
+  VERTICAUX posés sur le plateau. Ce n'est pas un déplacement de boutons : c'est la loi 4 rendue
+  SPATIALE — un côté fait entrer de la matière, l'autre agit sur ce qui est là, et un contrôle ne
+  change jamais de rail.</p>
+
+  <div class="scrollx"><table>
+    <caption>Ce que chaque rail porte, et sur quel niveau du modèle il agit</caption>
+    <thead><tr><th>Rail</th><th>Ce qu'il porte</th><th>Niveau</th><th>Présence</th></tr></thead>
+    <tbody>
+      <tr><td><b><i>leading</i></b></td><td>les PORTES — description · média · son · sticker · mention · lieu</td><td>crée un <span class="mono">MeeshyObject</span> — <b>sauf « description »</b>, qui vise la <span class="mono">MeeshySlide</span></td><td>une porte que le profil refuse n'est <b>pas là</b></td></tr>
+      <tr><td><b><i>trailing</i></b></td><td>les CONTRÔLEURS de l'objet sélectionné, + le <span class="mono">✕</span></td><td>UN <span class="mono">MeeshyObject</span> ; le <span class="mono">✕</span> vise la <span class="mono">MeeshyPublication</span></td><td>aucune sélection ⇒ <b>aucun contrôleur</b> ; le <span class="mono">✕</span>, lui, ne disparaît jamais</td></tr>
+      <tr><td><b>le bas</b></td><td>le socle, et <b>seulement lui</b> par défaut</td><td>la <span class="mono">MeeshyPublication</span></td><td>la rangée d'outils n'y revient que pour un contexte qui exige une BANDE horizontale — timeline, les 18 styles, une palette</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><b>Pourquoi la scène RÉTRÉCIT au lieu d'être recouverte — et c'est la loi 6
+  qui tranche.</b> Un FAB posé sur la scène occupe exactement la place où un
+  <span class="mono">MeeshyObject</span> peut vivre : l'aperçu mentirait sur le rendu final, or
+  « le lecteur EST l'aperçu ». Les rails vivent donc sur le PLATEAU et la scène s'encastre entre
+  eux. Aujourd'hui la scène ne laisse que <b>14 pt</b> de chaque côté — très en dessous des 44 pt
+  d'une cible tactile —, donc l'encastrement n'est pas un réglage, c'est la condition d'existence
+  des rails. Ce que ça donne sur un iPhone 16 Pro (402 × 874 pt) :
+  <div class="scrollx"><table>
+    <thead><tr><th></th><th>aujourd'hui</th><th>avec les rails</th></tr></thead>
+    <tbody>
+      <tr><td>largeur de scène</td><td>374 pt</td><td><b>278 pt</b></td></tr>
+      <tr><td>hauteur 9:16</td><td>665 pt</td><td><b>494 pt</b></td></tr>
+      <tr><td>libéré en bas</td><td>—</td><td><b>≈ 170 pt</b></td></tr>
+    </tbody>
+  </table></div>
+  <b>Ces 170 pt ne viennent pas d'un rognage : ils tombent de la géométrie.</b> C'est l'espace où
+  la description dépliée et les bandes contextuelles vivent sans rien recouvrir.</div>
+
+  <div class="callout"><b>Trois règles de tenue, et la première n'est pas cosmétique.</b>
+  <ul style="margin:8px 0 0;padding-left:18px">
+    <li><b>Jamais « gauche » ni « droite » — <i>leading</i> et <i>trailing</i>.</b> En arabe, l'une
+      des sept langues servies, les deux s'échangent : un rail codé « à gauche » y met les portes
+      du mauvais côté, et le geste appris se retourne contre son utilisateur.</li>
+    <li><b>Les deux rails s'ancrent EN BAS, jamais centrés verticalement.</b> Le rail
+      <i>leading</i> est le côté LOIN d'une prise à une main ; l'ancrage bas est ce qui le garde
+      atteignable au pouce (dimensions 5 et 7).</li>
+    <li><b>Le socle ne bouge JAMAIS</b> (loi 5, intacte). Ce qui devient conditionnel est la
+      RANGÉE D'OUTILS, pas le socle — et il faut l'écrire ainsi, sinon le premier lot qui « libère
+      le bas » emportera l'audience avec les outils.</li>
+  </ul></div>
+
+  <div class="callout"><b>La description est un calque de LECTURE, pas un champ.</b> Par défaut
+  elle se rend <b>comme le lecteur la verra</b> — typographie, troncature, et la traduction que le
+  Prisme sert ; un tap la déplie en édition. Elle n'occupe la place que quand on la regarde, et
+  c'est la loi 6 portée au TEXTE : jusqu'ici « le lecteur est l'aperçu » ne valait que pour la
+  scène. <b>Ce qu'elle rend dépend du profil</b> : en <b>S</b>/<b>R</b> c'est le
+  <span class="mono">content</span> de la <span class="mono">MeeshyPublication</span> ; en
+  <b>P</b> c'est la LÉGENDE de la <span class="mono">MeeshySlide</span> courante, la publication
+  gardant son contenu à elle (#4045, chaîne serveur #4055).</div>
+
+  <div class="callout"><b>Une porte que ce lot ne peut PAS ouvrir en l'état : « mention ».</b>
+  Le kind <span class="mono">mention</span> est déclaré au contrat
+  (<span class="mono">ACTIVE_KINDS</span>) et <b>produit par personne</b> ; à la relecture, iOS le
+  traite dans le MÊME <span class="mono">case</span> que les kinds RÉSERVÉS
+  (<span class="mono">case .mention, .reserved: continue</span>). Une porte qui poserait un objet
+  de ce kind serait donc un contrôle <b>sans effet sur le document</b> — la loi 4 violée à la
+  racine, et de la pire façon : le geste réussit à l'écran et le contenu disparaît au rechargement.
+  Deux issues, à trancher AVANT de peindre la porte : ou bien elle pose une mention <b>INLINE</b>
+  (du texte, ce que le dépôt fait déjà), ou bien le kind est rendu vivant d'abord.</div>
+
   <div class="callout"><b>Règle d'apparition.</b> Un contrôle existe à l'écran si le
   <span class="mono">MeeshyObject</span> courant l'accepte <b>et</b> le profil de la
   <span class="mono">MeeshyPublication</span> l'autorise <b>et</b> l'action a un effet maintenant.
@@ -1165,6 +1251,12 @@ flowchart TD
 <!-- ================================================================ P6 -->
 <section id="p6"><div class="wrap">
   <div class="prail"><span class="pnum">P6</span><h2>La scène — 9:16 fixe, bandes actives, ancrage sémantique</h2></div>
+  <div class="callout"><b>Rév. 27 — la scène s'ENCASTRE entre les deux rails</b> (P4). Sa largeur
+  n'est plus celle de l'écran moins 14 pt, mais celle qui reste une fois les rails posés sur le
+  plateau. <b>Le 9:16 ne bouge pas</b> — c'est la loi 3 — donc la scène RAPETISSE, et c'est
+  précisément ce qui libère le bas (≈ 170 pt sur un iPhone 16 Pro). Ce n'est pas un compromis
+  consenti à contrecœur : recouvrir la scène ferait mentir l'aperçu sur le rendu final (loi 6), et
+  un aperçu qui ment ne vaut pas l'espace qu'il économise.</div>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc"><div class="media169" style="flex:1;border:none"><span class="lbl">porteur 9:16 — plein cadre</span></div></div>
@@ -1217,7 +1309,12 @@ flowchart TD
 <!-- ================================================================ P7 -->
 <section id="p7"><div class="wrap">
   <div class="prail"><span class="pnum">P7</span><h2>Les outils — un par carte, la précision par format</h2></div>
-  <p class="lede">Les outils vivent dans la <b>rangée d'outils</b> : ce sont les portes qui font
+  <div class="callout"><b>Rév. 27 — les outils DÉMÉNAGENT dans le rail <i>leading</i></b> (P4).
+  Rien de ce que ce paragraphe dit du COMPORTEMENT de chaque porte ne change ; ce qui change est
+  <b>où elles vivent et quand on les voit</b>. La rangée horizontale n'est plus leur domicile
+  permanent : elle ne revient en bas que pour un contexte qui exige une BANDE — la timeline, les
+  18 styles, une palette. L'inventaire ci-dessous est donc inchangé, lu depuis le rail.</div>
+  <p class="lede">Les outils sont les <b>portes</b> : ce sont elles qui font
   ENTRER de la matière, et chacune <b>crée un <span class="mono">MeeshyObject</span></b> d'un kind
   donné. Chaque carte : le déclencheur, l'<b>inspecteur</b> qu'il ouvre, et <b>exactement</b> ce que
   l'outil fait sous chaque profil de la <span class="mono">MeeshyPublication</span>. Un profil sans
