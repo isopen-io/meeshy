@@ -176,6 +176,44 @@ export async function messageValidationHook(
  *   de scroll produit plusieurs lots (le client les regroupe sur 3 s) ; 10/min
  *   déclenchait des 429 en usage normal.
  */
+/**
+ * Limiteur des portes de RECHERCHE de personnes (#4145).
+ *
+ * Ces routes sont la surface d'énumération du produit : elles répondent, sur un
+ * fragment, par une liste de comptes. La clé est donc l'APPELANT (`userId`), et
+ * non l'adresse — une clé IP seule laisse un compte unique moissonner depuis
+ * autant d'adresses qu'il veut, et pénalise en prime les utilisateurs qui
+ * partagent une sortie NAT.
+ *
+ * Le seuil par minute n'est PAS la garde principale : une moisson patiente
+ * passe sous n'importe quel débit. Ce qui l'arrête est le plafond de lignes
+ * servies (`limit ≤ 100` déjà appliqué par `validatePagination`) combiné à un
+ * budget quotidien — ce dernier reste à poser, cf. #4158.
+ */
+export function createDirectoryRouteRateLimitConfig(
+  type: 'search' | 'resolve'
+): object {
+  const configs = {
+    search: { max: 30, label: 'search' },
+    resolve: { max: 20, label: 'resolve' },
+  };
+  const cfg = configs[type];
+  return {
+    max: cfg.max,
+    timeWindow: '1 minute',
+    keyGenerator: (request: FastifyRequest) => {
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const id = authContext?.userId ?? `ip:${request.ip}`;
+      return `directory:${cfg.label}:${id}`;
+    },
+    errorResponseBuilder: () => ({
+      success: false,
+      error: `Trop de recherches (directory/${cfg.label}). Veuillez patienter.`,
+      statusCode: 429,
+    }),
+  };
+}
+
 export function createPostRouteRateLimitConfig(
   type: 'create' | 'like' | 'view' | 'comment' | 'impression' | 'engagement'
 ): object {

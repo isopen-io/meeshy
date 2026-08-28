@@ -16,6 +16,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { createDirectoryRouteRateLimitConfig } from '../../middleware/rate-limiter';
 
 
 /**
@@ -515,14 +516,17 @@ export async function getUserStats(fastify: FastifyInstance) {
 export async function searchUsers(fastify: FastifyInstance) {
   fastify.get('/users/search', {
     onRequest: [fastify.authenticate],
+    // Porte d'ENUMERATION : elle rend une liste de comptes sur un fragment.
+    // Cle par appelant, jamais par adresse (#4145).
+    config: { rateLimit: createDirectoryRouteRateLimitConfig('search') },
     schema: {
-      description: 'Search for users by name, username, email, or display name. Returns paginated results with active users only. Minimum query length is 2 characters.',
+      description: 'Search for users by name, username or display name (substring), or by exact email / phone number. Returns paginated results with active users only. Minimum query length is 2 characters.',
       tags: ['users'],
       summary: 'Search users',
       querystring: {
         type: 'object',
         properties: {
-          q: { type: 'string', minLength: 2, description: 'Search query (name, username, email, displayName)' },
+          q: { type: 'string', minLength: 2, description: 'Search query — substring on names, EXACT match on email or phone number' },
           offset: { type: 'string', default: '0', description: 'Pagination offset' },
           limit: { type: 'string', default: '20', description: 'Results per page (max 100)' }
         }
@@ -542,7 +546,6 @@ export async function searchUsers(fastify: FastifyInstance) {
                   firstName: { type: 'string' },
                   lastName: { type: 'string' },
                   displayName: { type: 'string' },
-                  email: { type: 'string' },
                   isOnline: { type: 'boolean' },
                   lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
                   systemLanguage: { type: 'string' }
@@ -582,6 +585,26 @@ export async function searchUsers(fastify: FastifyInstance) {
 
       const searchTerm = q.trim();
 
+      // Deux régimes de correspondance, et la distinction est la garde (#4145).
+      //
+      // Les NOMS acceptent la sous-chaîne : c'est l'usage nominal, on cherche
+      // « mar » pour trouver « Martin ». L'ADRESSE et le NUMÉRO n'acceptent que
+      // l'égalité : ils servent à RETROUVER quelqu'un dont on possède déjà
+      // l'identifiant, jamais à en découvrir. `contains` sur `email`
+      // transformait la route en moissonneuse — `?q=gmail.com` rendait cent
+      // adresses par page, à tout compte authentifié.
+      const ressembleAUnEmail = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(searchTerm);
+      const ressembleAUnNumero = /^\+?[0-9][0-9\s.\-()]{5,}$/.test(searchTerm);
+
+      const correspondancesExactes = [
+        ...(ressembleAUnEmail
+          ? [{ email: { equals: searchTerm, mode: 'insensitive' as const } }]
+          : []),
+        ...(ressembleAUnNumero
+          ? [{ phoneNumber: { equals: searchTerm.replace(/[\s.\-()]/g, '') } }]
+          : [])
+      ];
+
       const whereClause = {
         AND: [
           {
@@ -612,17 +635,12 @@ export async function searchUsers(fastify: FastifyInstance) {
                 }
               },
               {
-                email: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
                 displayName: {
                   contains: searchTerm,
                   mode: 'insensitive' as const
                 }
-              }
+              },
+              ...correspondancesExactes
             ]
           }
         ]
@@ -639,13 +657,19 @@ export async function searchUsers(fastify: FastifyInstance) {
       const [users, totalCount] = await Promise.all([
         fastify.prisma.user.findMany({
           where: whereClause,
+          // `email` n'est PAS chargé (#4145). Ce qui ne sort pas de la base ne
+          // peut pas fuir par une omission de schéma — compter sur
+          // fast-json-stringify pour retenir une donnée personnelle est un
+          // piège armé, pas une garde : la première personne qui ajoute le
+          // champ au schéma publie la fuite sans qu'un témoin tombe.
+          // `phoneNumber` non plus, pour la même raison : la route accepte de
+          // chercher PAR le numéro, jamais de le rendre.
           select: {
             id: true,
             username: true,
             firstName: true,
             lastName: true,
             displayName: true,
-            email: true,
             isOnline: true,
             lastActiveAt: true,
             systemLanguage: true
