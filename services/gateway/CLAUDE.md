@@ -285,6 +285,16 @@ GET /api/v1/static/:filename   (JWT-protected)
   avale ses erreurs » : c'est une propriété du collaborateur, pas une garantie du site
   d'appel — et elle est fausse dès que le callee a UNE instruction non gardée avant son
   propre `.catch`. Cf. `tasks/lessons.md` § Leçon 230.
+  **En CLIQUET depuis le cycle 130** : `src/__tests__/detached-promise-catch-sweep.ts`,
+  inventaire VIDE. La règle était écrite, motivée, et commentée sur place partout où
+  elle était appliquée — et le balayage a rendu **quatorze** contre-exemples de
+  production, dont deux à cinquante lignes d'un de ces commentaires. Une règle ne se
+  propage pas depuis son énoncé : elle vaut là où quelqu'un l'a récitée. Quand le
+  cliquet tombe, la réparation est le `.catch`, jamais une ligne d'inventaire — il n'y
+  a pas de promesse détachée non gardée légitime à porter. Cinq des quatorze vivaient
+  dans un `setTimeout`, la forme la plus chère : aucun `try/catch` englobant à
+  invoquer, et un rappel qui se déclenche longtemps après la requête qui l'a armé.
+  Cf. `tasks/lessons.md` § Leçon 306.
 - Audio pipeline only via WS `message:send-with-attachments` (not REST)
 - MessageTranslationService emits `translatedAudio` (singular) - check data shape
 - Anonymous users have NO encryption

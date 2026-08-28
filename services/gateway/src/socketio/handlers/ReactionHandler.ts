@@ -181,15 +181,26 @@ export class ReactionHandler {
           // emoji précédent — aucun retrait compensatoire à diffuser.
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_ADDED)
             .catch(err => logger.error('reaction:add broadcast failed', { error: err, conversationId: message.conversationId }));
-          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent);
+          // `.catch` OBLIGATOIRE, comme sur la diffusion deux lignes plus haut
+          // (leçon 230). Le `try` englobant n'attrape qu'un `throw` SYNCHRONE :
+          // ce site-ci et ses trois voisins vivaient sans garde de promesse
+          // alors que le site du dessus l'avait — la règle était appliquée à
+          // l'appel qu'on venait d'écrire, pas à la famille.
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-added', validated.messageId, validated.emoji, updateEvent)
+            .catch(err => logger.error('reaction:add offline enqueue rejected', { error: err, conversationId: message.conversationId }));
         }
       } catch (sideEffectError) {
         // Reaction is persisted and the client already ACKed; the broadcast is
         // best-effort. Peers reconcile on the next reaction:sync.
         logger.error('reaction:add post-success side-effects failed', { error: sideEffectError });
       }
-      // _createReactionNotification handles errors internally; void to be explicit.
-      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id);
+      // `_createReactionNotification` avale ses erreurs — mais c'est une
+      // propriété du COLLABORATEUR, jamais une garantie du site d'appel
+      // (leçon 230), et ce commentaire l'énonçait comme si c'en était une. Cet
+      // appel est HORS du try/catch ci-dessus : rien d'autre que le `.catch`
+      // ne se tient entre un rejet et l'arrêt du process sous Node 22.
+      void this._createReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous, reaction.id)
+        .catch(err => logger.error('reaction:add notification rejected', { error: err, messageId: validated.messageId }));
     } catch (error: unknown) {
       logger.error('reaction:add failed', { error });
       const errorResponse: AckResponseOf<'reaction:add'> = {
@@ -295,7 +306,8 @@ export class ReactionHandler {
           );
           this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED)
             .catch(err => logger.error('reaction:remove broadcast failed', { error: err, conversationId: message.conversationId }));
-          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent);
+          void this._enqueueOfflineReactionEvent(message.conversationId, participantId, 'reaction-removed', validated.messageId, validated.emoji, updateEvent)
+            .catch(err => logger.error('reaction:remove offline enqueue rejected', { error: err, conversationId: message.conversationId }));
         }
       } catch (sideEffectError) {
         // Removal is persisted and the client already ACKed; the broadcast is
@@ -306,7 +318,8 @@ export class ReactionHandler {
       // chemin d'ajout : la réaction défaite emporte la notification qu'elle
       // avait produite. HORS du try/catch ci-dessus, comme l'ajout — un échec
       // du broadcast ne doit pas sauter le retrait, ni l'inverse.
-      void this._retractReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous);
+      void this._retractReactionNotification(validated.messageId, validated.emoji, participantId, isAnonymous)
+        .catch(err => logger.error('reaction:remove notification retraction rejected', { error: err, messageId: validated.messageId }));
     } catch (error: unknown) {
       logger.error('reaction:remove failed', { error });
       const errorResponse: AckResponseOf<'reaction:remove'> = {

@@ -598,7 +598,12 @@ export class CallService {
     if (!this.heartbeatDbWriteTimers.has(key)) {
       const timer = setTimeout(() => {
         this.heartbeatDbWriteTimers.delete(key);
-        void this.persistHeartbeatToDb(callId, participantId);
+        // Détachée DANS un `setTimeout` : il n'y a aucun `try/catch` englobant à
+        // invoquer, et le rappel se déclenche longtemps après le heartbeat qui
+        // l'a armé. Un rejet n'aurait donc nulle part où être vu, et son seul
+        // effet observable serait l'arrêt du process (leçon 230).
+        void this.persistHeartbeatToDb(callId, participantId)
+          .catch(err => logger.warn('Failed to persist heartbeat to DB', { callId, participantId, err }));
       }, this.HEARTBEAT_DB_DEBOUNCE_MS);
       timer.unref?.();
       this.heartbeatDbWriteTimers.set(key, timer);

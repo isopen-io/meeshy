@@ -1,5 +1,9 @@
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
-import type { MessageDeletedEventData } from '@meeshy/shared/types/socketio-events';
+import type {
+  MessageDeletedEventData,
+  MessagePinnedEventData,
+  MessageUnpinnedEventData,
+} from '@meeshy/shared/types/socketio-events';
 import type { buildMessageEditedCore } from './messageEditedPayload';
 import {
   emitConversationPreviewUpdate,
@@ -25,7 +29,7 @@ export interface MessageMutationManager {
     conversationId: string;
     actorUserId: string | null | undefined;
     messageId: string;
-  } & QueuedVariantFor<'edited' | 'deleted'>): Promise<void>;
+  } & QueuedVariantFor<'edited' | 'deleted' | 'pinned' | 'unpinned'>): Promise<void>;
   emitUnreadCountsToRecipients?(params: {
     conversationId: string;
     senderId: string | null | undefined;
@@ -54,9 +58,10 @@ export interface MessageMutationManager {
  */
 export type MessageEditedMutationPayload = ReturnType<typeof buildMessageEditedCore>;
 export type MessageDeletedMutationPayload = Anonymized<MessageDeletedEventData>;
+export type MessagePinnedMutationPayload = Anonymized<MessagePinnedEventData>;
+export type MessageUnpinnedMutationPayload = Anonymized<MessageUnpinnedEventData>;
 
 type MessageMutationBase<TPayload> = {
-  prisma: MutationPrisma;
   manager: MessageMutationManager | null | undefined;
   conversationId: string;
   actorUserId: string;
@@ -74,13 +79,31 @@ type MessageMutationBase<TPayload> = {
  *
  * Absent de l'édition, parce qu'éditer ne change aucun compte : redemander le
  * badge y coûterait deux requêtes par frappe validée, pour zéro delta.
+ *
+ * **`prisma` n'existe QUE sur les deux mutations qui déplacent l'APERÇU**, et
+ * c'est la même façon de parler : le type dit quelles audiences chaque mutation
+ * doit atteindre, plutôt que de laisser un drapeau le décider au corps de la
+ * fonction. Éditer change le texte du dernier message, supprimer change quel
+ * message est le dernier — les deux se voient depuis la liste des
+ * conversations. Épingler n'y change RIEN : ni l'aperçu, ni son ordre, ni son
+ * compteur. Exiger le client Prisma pour l'épingle aurait fait payer à chaque
+ * épinglage la passe d'aperçu (`emitConversationPreviewUpdate` relit la
+ * conversation et son dernier message) pour zéro delta observable, et — pire —
+ * aurait donné la passe pour obligatoire au prochain transport qui recopierait
+ * la forme.
  */
 export type MessageMutationParams =
-  | (MessageMutationBase<MessageEditedMutationPayload> & { eventType: 'edited' })
+  | (MessageMutationBase<MessageEditedMutationPayload> & {
+      eventType: 'edited';
+      prisma: MutationPrisma;
+    })
   | (MessageMutationBase<MessageDeletedMutationPayload> & {
       eventType: 'deleted';
+      prisma: MutationPrisma;
       authorId: string | null | undefined;
-    });
+    })
+  | (MessageMutationBase<MessagePinnedMutationPayload> & { eventType: 'pinned' })
+  | (MessageMutationBase<MessageUnpinnedMutationPayload> & { eventType: 'unpinned' });
 
 /**
  * L'émission de la room, discriminée sur `eventType`.
@@ -100,15 +123,24 @@ function emitToConversationRoom(
   params: MessageMutationParams,
 ): void {
   if (!target) return;
-  if (params.eventType === 'edited') {
-    target.emit(SERVER_EVENTS.MESSAGE_EDITED, params.payload);
-    return;
+  switch (params.eventType) {
+    case 'edited':
+      target.emit(SERVER_EVENTS.MESSAGE_EDITED, params.payload);
+      return;
+    case 'deleted':
+      target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
+      return;
+    case 'pinned':
+      target.emit(SERVER_EVENTS.MESSAGE_PINNED, params.payload);
+      return;
+    case 'unpinned':
+      target.emit(SERVER_EVENTS.MESSAGE_UNPINNED, params.payload);
+      return;
   }
-  target.emit(SERVER_EVENTS.MESSAGE_DELETED, params.payload);
 }
 
 /**
- * The single REST-side broadcaster for a message edit or delete.
+ * The single REST-side broadcaster for a message edit, delete, pin or unpin.
  *
  * A message mutation has to reach THREE audiences, and every one of them is a
  * separate channel:
@@ -137,6 +169,27 @@ function emitToConversationRoom(
  * committed by the time this runs; a broadcast failure must not turn a
  * successful edit into a 500. `onError` lets callers log against the
  * originating request.
+ *
+ * ── L'ÉPINGLE, sixième transport, arrivée au cycle 130 ──────────────────────
+ *
+ * « Collapsing them here means a sixth transport cannot silently reopen it »,
+ * dit le paragraphe ci-dessus. Le sixième transport est arrivé — les deux
+ * entrées d'épingle REST — et il a re-codé (1) et (3) à la main plutôt que
+ * d'appeler. La phrase disait vrai de ce qu'elle GARDAIT et faux de ce qu'elle
+ * PRÉDISAIT : rien n'oblige un nouvel écrivain à passer par ici, et le seul
+ * effet d'un helper à peu d'appelants est de documenter que quelques sites
+ * appliquent la règle.
+ *
+ * Ce que la copie manuscrite avait perdu, mesuré :
+ *
+ *  - **l'émission de room n'était pas gardée.** `io.to(room).emit(...)` LÈVE
+ *    quand l'adaptateur ou l'encodeur est en défaut, et l'épingle était déjà
+ *    COMMISE en base : la levée remontait au `catch` de la route, qui rendait
+ *    500 pour une écriture réussie — puis, la levée ayant sauté la suite,
+ *    l'entrée de file hors ligne n'était jamais posée. Un incident cosmétique
+ *    emportait la seule garantie DURABLE du chemin (règle du cycle 116) ;
+ *  - **la mise en file était détachée sans `.catch`** — la forme que la leçon
+ *    230 interdit, et que ce fichier commente à deux endroits.
  */
 /**
  * Le couple `(eventType, payload)` de la FILE, narrowé une fois.
@@ -147,14 +200,23 @@ function emitToConversationRoom(
  * cycle 104 a corrigé sur l'ÉMISSION, une couche plus bas et pour la même
  * raison.
  */
-function queuedVariant(params: MessageMutationParams): QueuedVariantFor<'edited' | 'deleted'> {
-  return params.eventType === 'edited'
-    ? { eventType: 'edited', payload: params.payload }
-    : { eventType: 'deleted', payload: params.payload };
+function queuedVariant(
+  params: MessageMutationParams,
+): QueuedVariantFor<'edited' | 'deleted' | 'pinned' | 'unpinned'> {
+  switch (params.eventType) {
+    case 'edited':
+      return { eventType: 'edited', payload: params.payload };
+    case 'deleted':
+      return { eventType: 'deleted', payload: params.payload };
+    case 'pinned':
+      return { eventType: 'pinned', payload: params.payload };
+    case 'unpinned':
+      return { eventType: 'unpinned', payload: params.payload };
+  }
 }
 
 export async function broadcastMessageMutation(params: MessageMutationParams): Promise<void> {
-  const { prisma, manager, conversationId, actorUserId, eventType, messageId, payload, onError } = params;
+  const { manager, conversationId, actorUserId, eventType, messageId, onError } = params;
   if (!manager) return;
 
   try {
@@ -163,7 +225,13 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
     onError?.(error);
   }
 
-  await emitConversationPreviewUpdate(prisma, manager.getIO(), conversationId, actorUserId, onError);
+  // (2) La liste des conversations, sur les deux mutations qui la DÉPLACENT.
+  // L'épingle n'en est pas une (cf. `MessageMutationParams`) : elle ne touche ni
+  // l'aperçu, ni son ordre, ni son compteur, et le type est ce qui la dispense —
+  // aucun drapeau à lire ici, aucun `prisma` à fournir là-bas.
+  if (params.eventType === 'edited' || params.eventType === 'deleted') {
+    await emitConversationPreviewUpdate(params.prisma, manager.getIO(), conversationId, actorUserId, onError);
+  }
 
   // (4) La pastille de non-lus, sur une SUPPRESSION seulement : le message ne
   // compte plus, et sans cette poussée la liste web (`staleTime: Infinity`) le
@@ -204,8 +272,16 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   // Ne PAS raisonner « l'implémentation actuelle avale ses erreurs » :
   // `MessageMutationManager` est une interface structurelle, la garantie
   // appartient donc à ce fichier, pas au collaborateur. Le jumeau
-  // `broadcastReactionMutation` garde l'appel identique de cette manière ;
-  // c'était ici la dernière exception de la famille.
+  // `broadcastReactionMutation` garde l'appel identique de cette manière.
+  //
+  // Cette ligne portait « c'était ici la dernière exception de la famille ».
+  // C'était une AFFIRMATION, et le balayage du cycle 130 l'a mesurée fausse :
+  // il en restait QUATORZE dans `services/gateway/src/`, dont deux à cinquante
+  // lignes d'ici, sur les deux entrées d'épingle. Une famille se COMPTE, elle
+  // ne se conclut pas depuis le site qu'on vient de corriger — c'est la règle
+  // du cycle 93 (« un compte est une affirmation ») appliquée à un inventaire
+  // de sites. Le cliquet qui la tient désormais :
+  // `src/__tests__/detached-promise-catch-sweep.ts`.
   try {
     void Promise.resolve(
       manager.enqueueOfflineMessageMutation({
