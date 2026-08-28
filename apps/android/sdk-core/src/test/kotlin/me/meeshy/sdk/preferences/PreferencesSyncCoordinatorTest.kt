@@ -21,6 +21,7 @@ import me.meeshy.sdk.model.UserNotificationPreferences
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.notification.InMemoryNotificationPreferencesStore
 import me.meeshy.sdk.outbox.OutboxKind
+import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.privacy.InMemoryPrivacyPreferencesStore
 import me.meeshy.sdk.socket.PreferencesSocketManager
 import me.meeshy.sdk.socket.SocketConnectionState
