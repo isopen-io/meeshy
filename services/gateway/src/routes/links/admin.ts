@@ -18,6 +18,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { shareLinkSchema } from './types';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
+import { revokeShareLinkGuests } from '../../socketio/revokeShareLinkGuests';
 
 export async function registerAdminRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -331,6 +332,21 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         }
       });
 
+      // La seconde moitié de la promesse de cette route : « the link becomes
+      // inaccessible to new AND EXISTING anonymous users ». Fermer la porte ne
+      // vide pas la salle — les invités déjà entrés gardaient leur socket dans
+      // la room du fil, donc chaque message, indéfiniment. Réactiver, en
+      // revanche, ne rend rien à personne : une ligne `Participant` close ne se
+      // rouvre que par la porte d'entrée.
+      if (!isActive) {
+        await revokeShareLinkGuests({
+          prisma: fastify.prisma,
+          io: fastify.socketIOHandler?.getManager()?.getIO(),
+          manager: fastify.socketIOHandler?.getManager(),
+          shareLinkId: link.id,
+        });
+      }
+
       return sendSuccess(reply, updatedLink, { message: isActive ? 'Lien activé avec succès' : 'Lien désactivé avec succès' });
 
     } catch (error) {
@@ -575,6 +591,18 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       if (!isCreator && !isConversationAdmin) {
         return sendForbidden(reply, 'Permissions insuffisantes pour supprimer ce lien');
       }
+
+      // AVANT la suppression, et pas après : `Participant.shareLinkId` est une
+      // colonne NUE — aucune relation Prisma, donc aucune cascade — et une fois
+      // la ligne du lien partie, plus rien ne relie ses invités à ce qu'on
+      // vient de retirer. Révoquer d'abord fait échouer FERMÉ : si la
+      // révocation lève, le lien existe encore et la reprise est idempotente.
+      await revokeShareLinkGuests({
+        prisma: fastify.prisma,
+        io: fastify.socketIOHandler?.getManager()?.getIO(),
+        manager: fastify.socketIOHandler?.getManager(),
+        shareLinkId: link.id,
+      });
 
       await fastify.prisma.conversationShareLink.delete({
         where: { id: link.id }

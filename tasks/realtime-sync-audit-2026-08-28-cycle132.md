@@ -2,7 +2,7 @@
 
 Date : 2026-08-28 · Issue : #4197 · Branche : `claude/keen-hamilton-4syegh`
 
-Leçon : `tasks/lessons.md` § **Leçon 309**. Base : cycle 131 (#4133, PR #4143),
+Leçon : `tasks/lessons.md` § **Leçon 310**. Base : cycle 131 (#4133, PR #4143),
 dont c'est le suivi MESURÉ, écrit et chiffré à sa clôture.
 
 ## Le défaut

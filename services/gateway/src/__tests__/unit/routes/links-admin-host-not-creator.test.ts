@@ -79,7 +79,12 @@ function makePrisma(overrides: Record<string, any> = {}) {
       update: jest.fn<any>().mockResolvedValue({}),
       delete: jest.fn<any>().mockResolvedValue({}),
     },
-    participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    participant: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      // Retirer un lien révoque ses invités (`revokeShareLinkGuests`).
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   } as any;
 }
