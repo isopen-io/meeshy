@@ -12368,3 +12368,128 @@ par design — identique au profil #4203), aucun commentaire de revue, `mergeabl
 Aucun nouveau suivi ouvert par cette Vague : les deux branches jumelles « déjà terminé » d'`endCall()` et
 `leaveCall()` sont désormais alignées sur le même contrat, sur les sept appelants au total (deux pour
 `endCall()`, cinq pour `leaveCall()`).
+
+## Vague 183 — `leaveCall()` décidait « suis-je le dernier ? » sur un instantané périmé : les deux derniers participants d'un appel de groupe qui raccrochent ensemble laissaient l'appel « actif » 2h (2026-08-28)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling). Branche redémarrée
+depuis `origin/main`, à jour (Vague 182, PR #4224, mergée). Audit délégué (lecture seule) sur
+`services/gateway/src/{routes/calls.ts, services/CallService.ts, services/CallCleanupService.ts,
+services/call-push-mirroring.ts, services/callAnalyticsAggregate.ts, services/callHistory.ts,
+socketio/CallEventsHandler.ts, socketio/utils/call-error-parsing.ts, utils/call-session-response.ts,
+utils/callEndedFanout.ts, validation/call-schemas.ts}`, cadré pour ne pas rouvrir les zones déjà fermées
+par les Vagues 176-182 (`call:missed`/`call:check-active` rejoin, garde d'époque de négociation Android,
+dilution de `qualityDistribution`, idempotence `endCall()`/`leaveCall()` sur la branche « conflit de
+version »). Les petits fichiers (`call-push-mirroring.ts`, `callAnalyticsAggregate.ts`,
+`callHistory.ts`, `call-error-parsing.ts`, `call-session-response.ts`, `callEndedFanout.ts`,
+`call-schemas.ts`) et `routes/calls.ts` se sont révélés déjà très densément audités (chaque décision
+délicate porte un commentaire nommant l'audit ou la Vague qui l'a posée) sans bug résiduel net et borné
+— l'effort s'est concentré sur `CallService.leaveCall()`.
+
+### Root cause
+
+`leaveCall()` décide si le départ d'un participant termine l'appel via `isLastParticipant`, calculé
+jusqu'ici à partir d'un instantané **périmé** :
+
+```ts
+const call = await this.prisma.callSession.findUnique({ where: { id: callId }, include: { participants: true } });
+// … plusieurs `await` plus loin, dont une requête `conversation.findUnique` intercalée …
+const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
+const isLastParticipant = activeParticipants.length === 0 || isDirectCall;
+```
+
+Cet instantané est lu par un `findUnique` à part, PLUSIEURS `await` avant le début de la transaction —
+une requête `conversation.findUnique` (résolution `isDirectCall`) s'intercale entre les deux. **Scénario
+de défaillance concret** : un appel de GROUPE où il ne reste plus que deux participants actifs A et B —
+la fin nominale d'une conversation à trois, où les deux derniers raccrochent à quelques millisecondes
+d'écart (pas un cas exotique : c'est la façon dont un appel de groupe se termine naturellement). Chacun
+lit l'instantané `call.participants` AVANT que l'autre n'ait committé sa propre transaction : A voit B
+encore actif (`leftAt: null`) → `isLastParticipant = false` ; B voit A encore actif → `isLastParticipant
+= false`. **Aucun des deux writers ne tente donc l'écriture terminale version-guardée** — il n'y a rien
+pour les deux writers de concurrencer, puisque ni l'un ni l'autre ne se croit être le dernier. Résultat :
+les DEUX lignes `CallParticipant` sont marquées `leftAt`, mais `CallSession.status` reste `active`
+indéfiniment.
+
+Ce défaut est INVISIBLE au palier heartbeat de `CallCleanupService.runCleanup()`
+(`CallCleanupService.ts:291-355`) : la condition `staleParticipants.length > 0 && staleParticipants.length
+>= call.participants.length` ne peut JAMAIS être vraie quand `call.participants` (déjà filtré `!leftAt`
+par l'`include`) est de longueur 0 — `0 > 0` est faux. Le seul filet qui reste est le plafond
+horloge-murale de 2h (`CallCleanupService.MAX_ACTIVE_MS`, palier 2). Pendant ces 2h,
+`Conversation.activeCallId` reste verrouillé sur cet appel mort (`releaseActiveCallClaim` n'est appelé
+que dans la branche `isLastParticipant`/le garde terminal, jamais atteinte ici) — **tout nouvel appel
+dans cette conversation échoue avec `CALL_ALREADY_ACTIVE`** pendant toute la fenêtre. `endCall()` délègue
+à `leaveCall()` exactement la même logique quand un raccroché de groupe trouve d'autres participants
+actifs (`CallService.ts:2174-2192`), donc le défaut est atteignable par les DEUX chemins (`call:leave` et
+`call:end`/bouton raccrocher — le seul chemin que tous les clients câblent).
+
+### Fix
+
+`isLastParticipant` est désormais recalculé FRAÎCHEMENT, à l'INTÉRIEUR de la transaction, juste après
+avoir stampé le `leftAt` du partant :
+
+```ts
+const remainingActive = await tx.callParticipant.count({
+  where: { callSessionId: callId, id: { not: callParticipant.id }, OR: [{ leftAt: null }, { leftAt: { isSet: false } }] }
+});
+isLastParticipant = isDirectCall || remainingActive === 0;
+```
+
+Cela ne rend pas la décision parfaitement atomique sous isolation snapshot MongoDB (deux transactions
+strictement simultanées peuvent, en théorie, encore ne pas se voir), mais ferme la fenêtre RÉELLE et
+dominante — celle des plusieurs `await` (dont la relecture de la conversation) qui séparait jusqu'ici la
+lecture de la décision du début de la transaction. `isLastParticipant` est déclarée `let`, initialisée à
+`isDirectCall` (repli sûr si la transaction rejette avant d'atteindre le calcul), et réaffectée dans le
+callback — le reste de la méthode (nettoyage des heartbeats, `releaseActiveCallClaim`) lit la même
+variable après coup, sans changement de forme.
+
+### Tests (TDD, RED confirmé)
+
+Nouveau test (`CallService.test.ts`, describe `leaveCall`) encodant le scénario de course : l'instantané
+externe montre encore `otherParticipant` actif, mais la lecture FRAÎCHE dans la transaction (mockée)
+prouve `0` participant restant — la production doit alors terminer l'appel. RED confirmé sur le code non
+patché : `expect(mockTx.callSession.updateMany).toHaveBeenCalledWith(…status: ended…)` échouait avec
+`Number of calls: 0` (l'ancien code ne tentait jamais l'écriture terminale sur cette branche). GREEN après
+le correctif.
+
+Le correctif ajoute un appel `tx.callParticipant.count(...)` à l'intérieur de la transaction — huit
+témoins existants construisaient leur propre double de `tx` sans cette méthode et sont tombés en
+`TypeError: tx.callParticipant.count is not a function` : chacun a reçu un `count` mocké à la valeur
+RÉELLE que son scénario implique (0 quand le partant est seul/l'appel est direct, 1 ou 2 quand d'autres
+participants restent authentiquement actifs) — jamais une valeur arbitraire, pour que chaque témoin
+continue d'exercer le VRAI comportement qu'il nommait. Fichiers touchés : `CallService.test.ts` (7
+témoins + le nouveau), `callService-leaveCall.test.ts` (8 témoins, dont `setupTransactionPassthrough`
+paramétré par un `remainingActive` explicite).
+
+- `CallService.test.ts` : **229/229** verts.
+- `callService-leaveCall.test.ts` : **12/12** verts.
+- Sweep calling gateway complet (`--testPathPatterns="[Cc]all"`) : **63 suites / 1305 tests**, 0 échec.
+- Suite gateway complète (`bun run test:coverage`) : **904/904 suites, 20559/20559 tests** verts — un test
+  de plus que la dernière mesure connue (Vague 182 : 20558), cohérent avec l'unique test ajouté ici, 0
+  régression.
+- `npx tsc --noEmit` (services/gateway) : **0 erreur**.
+- `bun install --ignore-scripts` (le `bun install` nu échoue derrière le proxy sortant, documenté au
+  CLAUDE.md racine), puis `packages/shared`: `npx prisma generate --generator client` + `bun run build`,
+  avant les gates gateway — conformément à la note de parité du CLAUDE.md racine.
+
+### Risk assessment
+
+Minimal et strictement additif : une lecture supplémentaire à l'intérieur d'une transaction déjà
+existante, aucun changement de schéma, aucun changement de contrat de fil (le comportement observable ne
+change QUE sur la branche de course elle-même — jamais exercée sur le chemin nominal à un seul leaver).
+`isDirectCall` continue de court-circuiter `isLastParticipant` à `true` pour un appel direct, comme avant
+— seule la branche GROUPE, à l'exact moment où il ne reste plus qu'un participant, change de verdict, et
+uniquement pour le rendre CORRECT.
+
+### Non fait volontairement / reste ouvert
+
+La correction n'est pas une garantie d'atomicité absolue sous isolation snapshot MongoDB : deux
+transactions strictement simultanées (à la microseconde près) pourraient en théorie encore toutes deux
+lire `remainingActive > 0` avant que l'autre n'ait committé. Fermer complètement cette fenêtre exigerait
+un compteur de participants actifs porté par `CallSession` elle-même, incrémenté/décrémenté
+atomiquement par la même écriture que celle qui stampe `leftAt` (`$inc` Mongo) — un changement de schéma
+hors du périmètre d'un correctif minimal et non demandé par cette Vague ; à instruire comme issue séparée
+si la fenêtre résiduelle (de l'ordre de la microseconde, contre les plusieurs millisecondes/dizaines de
+millisecondes fermées ici) s'avère un jour mesurable en production. Reconduits (inchangés, ré-vérifiés
+cette Vague par lecture des fichiers ci-dessus) : dead code / god-object `CallManager.swift` ; ADR `actor
+CallEventQueue` non implémenté ; iOS single-peer côté groupe ; gap de hiérarchie de rôle sur
+`conversations/participants.ts` (hors périmètre calling) ; `bun run lint` reste documenté cassé dans ce
+conteneur.

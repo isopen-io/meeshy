@@ -120,7 +120,12 @@ const createMockPrisma = () => {
       findFirst: jest.fn() as MockFn,
       findMany: jest.fn() as MockFn,
       update: jest.fn() as MockFn,
-      updateMany: jest.fn() as MockFn
+      updateMany: jest.fn() as MockFn,
+      // Vague 183 — leaveCall()'s fresh in-transaction remaining-active
+      // count (see CallService.leaveCall). No default resolved value: every
+      // test that reaches it must state the participant count it means to
+      // exercise.
+      count: jest.fn() as MockFn
     },
     message: {
       create: jest.fn() as MockFn,
@@ -1086,7 +1091,12 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithOneParticipant);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            // Sole participant — the fresh in-transaction count confirms it.
+            count: jest.fn().mockResolvedValue(0)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1140,7 +1150,14 @@ describe('CallService', () => {
       mockPrisma.conversation.findUnique.mockResolvedValueOnce(createMockConversation({ type: 'direct' }));
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            // The other party is still active — irrelevant to the outcome
+            // here (isDirectCall short-circuits `isLastParticipant`), but the
+            // fresh in-transaction read always runs.
+            count: jest.fn().mockResolvedValue(1)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1228,7 +1245,12 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn() },
+          callParticipant: {
+            update: jest.fn(),
+            // The other participant genuinely remains active — confirmed
+            // fresh, inside the transaction — so the call must not end.
+            count: jest.fn().mockResolvedValue(1)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1240,6 +1262,77 @@ describe('CallService', () => {
       const result = await callService.leaveCall(validLeaveData);
 
       expect(result.status).toBe(CallStatus.active);
+    });
+
+    // Vague 183 — TOCTOU race between two concurrent leaves of the LAST two
+    // participants of a group call. `isLastParticipant` was computed from
+    // `call.participants`, a snapshot read via `callSession.findUnique`
+    // several awaits before the transaction even starts (an intervening
+    // `conversation.findUnique` call sits in between). If the OTHER
+    // participant's own concurrent `leaveCall()` commits in that window, this
+    // leaver's stale snapshot still shows them active — `isLastParticipant`
+    // evaluates false, the version-guarded terminal write is never attempted
+    // (nothing to conflict against), and BOTH leaves "succeed" as ordinary
+    // mid-call leaves. The result: an `active` CallSession with zero live
+    // `CallParticipant` rows, invisible to CallCleanupService's heartbeat
+    // tier (`staleParticipants.length > 0` never holds against zero rows) and
+    // reaped only by the 2h wall-clock cap — during which the conversation's
+    // `activeCallId` claim also stays locked, blocking any new call.
+    it('ends the call when the other participant already left concurrently, even though the outer snapshot still shows them active', async () => {
+      const participant = createMockParticipant();
+      const otherParticipant = createMockParticipant({
+        id: 'participant-456',
+        userId: 'user-456'
+      });
+      // The snapshot read BEFORE the transaction is STALE: it still shows
+      // `otherParticipant` active (no `leftAt`), even though — by the time
+      // the transaction runs — their own concurrent leave has already
+      // committed `leftAt` in the database.
+      const callWithTwoParticipants = createMockCallSession({
+        status: CallStatus.active,
+        answeredAt: new Date(Date.now() - 30_000),
+        participants: [participant, otherParticipant]
+      });
+      const endedCall = {
+        ...callWithTwoParticipants,
+        status: CallStatus.ended,
+        endedAt: new Date(),
+        participants: [
+          { ...participant, leftAt: new Date(), user: createMockUser() },
+          { ...otherParticipant, leftAt: new Date(), user: createMockUser({ id: 'user-456' }) }
+        ],
+        initiator: createMockUser(),
+        conversation: createMockConversation()
+      };
+
+      mockPrisma.callParticipant.findFirst.mockResolvedValue(participant);
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
+      mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
+        const mockTx = {
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            // The FRESH, in-transaction read: `otherParticipant` has ALREADY
+            // left by the time this transaction runs — zero others remain.
+            count: jest.fn().mockResolvedValue(0)
+          },
+          callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
+        };
+        await callback(mockTx);
+        // The call MUST end — the fresh in-transaction count proves no other
+        // participant is still active, regardless of what the stale outer
+        // snapshot said.
+        expect(mockTx.callSession.updateMany).toHaveBeenCalledWith(
+          expect.objectContaining({
+            data: expect.objectContaining({ status: CallStatus.ended })
+          })
+        );
+      });
+      mockPrisma.callSession.findUnique.mockResolvedValueOnce(endedCall);
+
+      const result = await callService.leaveCall(validLeaveData);
+
+      expect(result.status).toBe(CallStatus.ended);
     });
 
     it('should clear the leaving participant heartbeat from in-memory tracking when others remain', async () => {
@@ -1269,7 +1362,12 @@ describe('CallService', () => {
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(callWithTwoParticipants);
       mockPrisma.$transaction.mockImplementation(async (callback: (tx: any) => Promise<void>) => {
         const mockTx = {
-          callParticipant: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+          callParticipant: {
+            update: jest.fn(),
+            updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            // The other participant is still active — the call continues.
+            count: jest.fn().mockResolvedValue(1)
+          },
           callSession: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) }
         };
         await callback(mockTx);
@@ -1426,6 +1524,10 @@ describe('CallService', () => {
         mockPrisma.callParticipant.findFirst.mockResolvedValue(ender);
         mockPrisma.$transaction.mockImplementation(async (fn: any) => fn(mockPrisma));
         mockPrisma.callParticipant.update.mockResolvedValue(undefined);
+        // The two other participants genuinely remain active — confirmed
+        // fresh, inside leaveCall()'s own transaction (Vague 183) — so the
+        // hang-up must not end the CallSession.
+        mockPrisma.callParticipant.count.mockResolvedValue(2);
 
         await callService.endCall('call-123', 'user-123', 'participant-123');
 
@@ -5093,7 +5195,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
-          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0)
         },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
@@ -5140,7 +5244,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
-          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0)
         },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {
@@ -5186,7 +5292,9 @@ describe('CallService - leaveCall wasPreAnswered=false branch (active call)', ()
       const tx = {
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
-          updateMany: jest.fn().mockResolvedValue({ count: 0 })
+          updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0)
         },
         callSession: {
           updateMany: jest.fn().mockImplementation(({ data }: any) => {

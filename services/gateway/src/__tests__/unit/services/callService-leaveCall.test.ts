@@ -48,6 +48,10 @@ const buildMockPrisma = () => ({
     findFirst: jest.fn() as MockFn,
     update: jest.fn() as MockFn,
     updateMany: jest.fn() as MockFn,
+    // Vague 183 — leaveCall()'s fresh in-transaction remaining-active count
+    // (see CallService.leaveCall). No default: every test that reaches it
+    // states the participant count it means to exercise.
+    count: jest.fn() as MockFn,
   },
   callSession: {
     findUnique: jest.fn() as MockFn,
@@ -60,12 +64,22 @@ const buildMockPrisma = () => ({
   $transaction: jest.fn() as MockFn,
 });
 
-const setupTransactionPassthrough = (prisma: ReturnType<typeof buildMockPrisma>) => {
+/**
+ * `remainingActive` mirrors what leaveCall()'s fresh in-transaction
+ * `callParticipant.count` would read for the OTHER active participants —
+ * defaults to 0 (the leaver is the last one), the common case among this
+ * file's callers.
+ */
+const setupTransactionPassthrough = (
+  prisma: ReturnType<typeof buildMockPrisma>,
+  remainingActive = 0
+) => {
   prisma.$transaction.mockImplementation(async (cb: (tx: any) => Promise<any>) => {
     const tx = {
       callParticipant: {
         update: jest.fn().mockResolvedValue({}),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(remainingActive),
       },
       callSession: {
         update: jest.fn().mockResolvedValue({ id: 'call-1', status: CallStatus.ended }),
@@ -123,6 +137,8 @@ describe('CallService.leaveCall() — never-answered reconnecting call resolves 
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // Direct call, sole participant — the fresh in-transaction count confirms it.
+          count: jest.fn().mockResolvedValue(0),
         },
         callSession: {
           update: jest.fn().mockResolvedValue({}),
@@ -242,7 +258,9 @@ describe('CallService.leaveCall() — clearHeartbeats memory leak regression', (
       .mockResolvedValueOnce(callRow)
       .mockResolvedValue({ ...callRow, participants: [otherParticipant] });
     prisma.conversation.findUnique.mockResolvedValue({ type: 'group' });
-    setupTransactionPassthrough(prisma);
+    // `otherParticipant` genuinely remains active — confirmed fresh, inside
+    // leaveCall()'s own transaction (Vague 183).
+    setupTransactionPassthrough(prisma, 1);
 
     const clearSpy = jest.spyOn(service as any, 'clearHeartbeats');
 
@@ -348,6 +366,10 @@ describe('CallService.leaveCall() — endedBy stampé sur les DEUX branches term
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // Direct call in every test using this helper — irrelevant to the
+          // outcome (isDirectCall short-circuits), but the fresh
+          // in-transaction read always runs.
+          count: jest.fn().mockResolvedValue(0),
         },
         callSession: {
           update: jest.fn().mockResolvedValue({}),
@@ -453,6 +475,10 @@ describe('CallService.leaveCall() — endReasonHint (disconnect-grace vs explici
         callParticipant: {
           update: jest.fn().mockResolvedValue({}),
           updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+          // Direct call in every test using this helper — irrelevant to the
+          // outcome (isDirectCall short-circuits), but the fresh
+          // in-transaction read always runs.
+          count: jest.fn().mockResolvedValue(0),
         },
         callSession: {
           update: jest.fn().mockResolvedValue({}),
