@@ -137,6 +137,8 @@ export class PostService {
     mediaIds?: string[];
     /** Texte alternatif par média — clé = un id de `mediaIds`, ignoré sinon. */
     mediaAlt?: Record<string, string>;
+    /** LÉGENDE par média (`PostMedia.caption`) — même contrat que `mediaAlt` (#4055). */
+    mediaCaption?: Record<string, string>;
     mobileTranscription?: MobileTranscription;
     repostOfId?: string;
     /** Opt-in auteur : extraction de la bande-son des VIDÉOS vers la bibliothèque de sons. */
@@ -320,6 +322,7 @@ export class PostService {
       }
 
       await this.applyMediaAlt(post.id, data.mediaIds, data.mediaAlt);
+      await this.applyMediaCaption(post.id, data.mediaIds, data.mediaCaption);
       // L'ordre de `mediaIds` EST l'ordre de sélection de l'utilisateur : le
       // seul site qui le connaisse. Voir `posts/mediaOrder.ts`.
       await applyMediaOrder(this.prisma, post.id, data.mediaIds);
@@ -934,14 +937,59 @@ export class PostService {
     mediaAlt: Record<string, string> | undefined,
     client: Pick<PrismaClient, 'postMedia'> = this.prisma,
   ): Promise<void> {
-    if (!mediaAlt || !requestedMediaIds?.length) return;
+    await this.applyMediaText('alt', postId, requestedMediaIds, mediaAlt, client);
+  }
+
+  /**
+   * LÉGENDE par média (`PostMedia.caption`) — jumelle exacte d'`applyMediaAlt`,
+   * et c'est pour cela qu'elles partagent leur corps (#4055).
+   *
+   * La colonne existait, était SERVIE (`postIncludes.ts`) et n'était écrite par
+   * PERSONNE : ni les routes, ni iOS, ni le web. Un champ rendu que rien ne
+   * remplit — donc une promesse de contrat qu'aucun client ne peut tenir.
+   *
+   * Elle porte, en profil Post, la légende de CE média — distincte du `content`
+   * du post, qui reste celui de la publication (modèle § 3). Les deux textes ont
+   * des sujets différents : le premier décrit une image, le second dit ce que
+   * l'auteur publie.
+   */
+  private async applyMediaCaption(
+    postId: string,
+    requestedMediaIds: string[] | undefined,
+    mediaCaption: Record<string, string> | undefined,
+    client: Pick<PrismaClient, 'postMedia'> = this.prisma,
+  ): Promise<void> {
+    await this.applyMediaText('caption', postId, requestedMediaIds, mediaCaption, client);
+  }
+
+  /**
+   * Le corps PARTAGÉ des deux appliqueurs de texte par média.
+   *
+   * EXTRAIT plutôt que recopié : `alt` et `caption` portent exactement les mêmes
+   * deux gardes, la même normalisation du vide et la même borne. Deux copies
+   * auraient divergé au premier ajustement de l'une — et c'est le genre de
+   * divergence qu'aucun témoin ne voit, puisque chaque copie reste cohérente
+   * avec elle-même.
+   *
+   * La colonne est un paramètre LITTÉRAL, pas une chaîne : le compilateur refuse
+   * tout nom qui n'est pas l'un des deux, si bien qu'aucun appelant ne peut
+   * écrire dans une colonne voisine par faute de frappe.
+   */
+  private async applyMediaText(
+    column: 'alt' | 'caption',
+    postId: string,
+    requestedMediaIds: string[] | undefined,
+    texts: Record<string, string> | undefined,
+    client: Pick<PrismaClient, 'postMedia'>,
+  ): Promise<void> {
+    if (!texts || !requestedMediaIds?.length) return;
     const requested = new Set(requestedMediaIds);
-    const entries = Object.entries(mediaAlt).filter(([id]) => requested.has(id));
+    const entries = Object.entries(texts).filter(([id]) => requested.has(id));
     if (entries.length === 0) return;
-    await Promise.all(entries.map(([id, alt]) =>
+    await Promise.all(entries.map(([id, text]) =>
       client.postMedia.updateMany({
         where: { id, postId },
-        data: { alt: alt.trim().length > 0 ? alt : null },
+        data: { [column]: text.trim().length > 0 ? text : null },
       }),
     ));
   }
@@ -1015,6 +1063,8 @@ export class PostService {
     mediaIds?: string[];
     /** Texte alternatif par média — clé = un id de `mediaIds`, ignoré sinon. */
     mediaAlt?: Record<string, string>;
+    /** LÉGENDE par média — même contrat que `mediaAlt` (#4055). */
+    mediaCaption?: Record<string, string>;
     /** Opt-in extraction bande-son vidéo — `undefined` = inchangé. */
     allowSoundExtraction?: boolean;
     /// Tri-état : `undefined` = inchangé, `null` = retirer, objet = remplacer.
@@ -1051,7 +1101,7 @@ export class PostService {
 
     // The edit-only fields are handled explicitly below; keep them out of the
     // blind spread so they are never written unconditionally.
-    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, mediaAlt, location: locationUpdate, ...rest } = data;
+    const { type: requestedType, originalLanguage: requestedLanguage, removeMediaIds, mediaIds, mediaAlt, mediaCaption, location: locationUpdate, ...rest } = data;
 
     const updateData: any = {
       ...rest,
@@ -1216,6 +1266,7 @@ export class PostService {
           enhancedLogger.warn(`[PostService] updatePost: ${shortfall}`, { postId, authorId: userId });
         }
         await this.applyMediaAlt(postId, mediaIdsToAttach, mediaAlt, tx);
+        await this.applyMediaCaption(postId, mediaIdsToAttach, mediaCaption, tx);
         await applyMediaOrder(tx, postId, mediaIdsToAttach);
       }
       if (storyContentEdit) {

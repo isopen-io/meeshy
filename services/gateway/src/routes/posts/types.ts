@@ -250,6 +250,15 @@ export const CreatePostSchema = z.object({
   // service ne l'applique qu'aux lignes qu'il vient réellement de rattacher
   // à CE post, jamais à un média tiers glissé dans la carte).
   mediaAlt: z.record(z.string(), z.string().max(1000)).optional(),
+  // LÉGENDE par média (`PostMedia.caption`) — même contrat, même garde et même
+  // borne que `mediaAlt` ci-dessus : clé = un id de `mediaIds`, IGNORÉ pour tout
+  // id absent.
+  //
+  // La colonne existait, était SERVIE (`postIncludes.ts`) et n'était écrite par
+  // PERSONNE : ni les routes, ni iOS, ni le web. Un champ rendu que rien ne
+  // remplit (#4055). Il porte, en profil Post, la légende de CE média — distincte
+  // du `content` du post, qui reste celui de la publication (modèle § 3).
+  mediaCaption: z.record(z.string(), z.string().max(1000)).optional(),
   // Références DÉCLARÉES — celles que le texte ne porte pas (badge sur le
   // canevas d'une story, note sous le contenu, métadonnée silencieuse). Chacune
   // porte son mode d'exposition, que l'édition relit pour savoir lesquelles
@@ -366,6 +375,8 @@ export const UpdatePostSchema = z.object({
   // d'un média qui vient d'être rattaché ; les médias déjà attachés au post ne
   // se réécrivent pas par ce canal (pas de renvoi d'`id` déjà lié).
   mediaAlt: z.record(z.string(), z.string().max(1000)).optional(),
+  // Légende par média — même contrat que `CreatePostSchema.mediaCaption`.
+  mediaCaption: z.record(z.string(), z.string().max(1000)).optional(),
   // Lieu partagé — tri-état : clé ABSENTE = inchangé, `null` = retrait,
   // objet = remplacement (validé par parseSharedPlace côté route, comme à
   // la création). Écrit/effacé dans metadata.location par le service.

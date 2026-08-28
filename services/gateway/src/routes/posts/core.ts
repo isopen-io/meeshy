@@ -160,6 +160,22 @@ function rejectUnclaimedCanvasMedia(
   return true;
 }
 
+/**
+ * Assainit chaque légende d'une carte `mediaId → texte` (#4055).
+ *
+ * `undefined` reste `undefined` — la clé absente veut dire « je ne dis rien des
+ * légendes », et fabriquer une carte vide dirait « aucune », ce qui n'est pas la
+ * même phrase.
+ */
+function sanitizeMediaCaptions(
+  captions: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+  if (!captions) return undefined;
+  return Object.fromEntries(
+    Object.entries(captions).map(([id, text]) => [id, SecuritySanitizer.sanitizeText(text)]),
+  );
+}
+
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,

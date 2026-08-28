@@ -350,6 +350,94 @@ describe('PostService', () => {
       });
     });
 
+    // ── #4055 — la LÉGENDE par média, jumelle exacte de `alt` ──────────────
+    //
+    // `PostMedia.caption` existait, était SERVIE (`postIncludes.ts`) et n'était
+    // écrite par PERSONNE : ni les routes, ni iOS, ni le web. Ces témoins
+    // gardent les deux moitiés du contrat — ce qui s'écrit, et ce qui ne
+    // s'écrit PAS.
+
+    it('writes the caption only for media ids present in mediaIds', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        {
+          ...basePostData,
+          mediaIds: ['media-1', 'media-2'],
+          mediaCaption: { 'media-1': 'Coucher de soleil à Dakar', 'media-foreign': 'jamais demandé' },
+        },
+        'user-1',
+      );
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+        where: { id: 'media-1', postId: 'post-1' },
+        data: { caption: 'Coucher de soleil à Dakar' },
+      });
+      // Un id absent de `mediaIds` n'est pas une permission d'écrire ailleurs.
+      const foreign = prisma.postMedia.updateMany.mock.calls
+        .map((call: any[]) => call[0])
+        .filter((args: any) => args.where?.id === 'media-foreign');
+      expect(foreign).toEqual([]);
+    });
+
+    it('clears the caption (null) when the client sends blank', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        { ...basePostData, mediaIds: ['media-1'], mediaCaption: { 'media-1': '   ' } },
+        'user-1',
+      );
+
+      expect(prisma.postMedia.updateMany).toHaveBeenCalledWith({
+        where: { id: 'media-1', postId: 'post-1' },
+        data: { caption: null },
+      });
+    });
+
+    it('never touches postMedia for caption when mediaCaption is omitted', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost({ ...basePostData, mediaIds: ['media-1'] }, 'user-1');
+
+      const captionWrites = prisma.postMedia.updateMany.mock.calls
+        .map((call: any[]) => call[0])
+        .filter((args: any) => args.data && 'caption' in args.data);
+      expect(captionWrites).toEqual([]);
+    });
+
+    // **La légende et l'alt sont deux SUJETS, pas deux noms du même texte.**
+    // L'une décrit une image à qui ne la voit pas ; l'autre dit ce que l'auteur
+    // publie sous elle. Un applicateur partagé rend l'écriture croisée facile —
+    // ce témoin l'interdit.
+    it('writes alt and caption to their OWN column, never across', async () => {
+      prisma.post.create.mockResolvedValue(makePost());
+      prisma.postMedia.findFirst.mockResolvedValue(null);
+
+      await service.createPost(
+        {
+          ...basePostData,
+          mediaIds: ['media-1'],
+          mediaAlt: { 'media-1': 'texte alternatif' },
+          mediaCaption: { 'media-1': 'légende' },
+        },
+        'user-1',
+      );
+
+      const writes = prisma.postMedia.updateMany.mock.calls
+        .map((call: any[]) => call[0])
+        .filter((args: any) => args.data && ('alt' in args.data || 'caption' in args.data));
+      expect(writes).toEqual(
+        expect.arrayContaining([
+          { where: { id: 'media-1', postId: 'post-1' }, data: { alt: 'texte alternatif' } },
+          { where: { id: 'media-1', postId: 'post-1' }, data: { caption: 'légende' } },
+        ]),
+      );
+      expect(writes).toHaveLength(2);
+    });
+
     it('never touches postMedia for alt when mediaAlt is omitted', async () => {
       prisma.post.create.mockResolvedValue(makePost());
       prisma.postMedia.findFirst.mockResolvedValue(null);
