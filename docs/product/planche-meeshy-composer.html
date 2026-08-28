@@ -1854,7 +1854,12 @@ flowchart TD
   <div class="prail"><span class="pnum">P15</span><h2>Revue système — optimisation, performance, compatibilité iOS 16→27 (2026-08-20)</h2></div>
   <p class="lede">La revue couvre TOUT le système — composer, ScenePlayer, timeline, collage,
   stickers, audio — pas un aspect isolé. Chaque risque est ancré à un piège DOCUMENTÉ de ce dépôt,
-  chaque garde est nommée. <b>Le plancher produit est iOS 16.0 — rien en dessous n'est supporté,
+  chaque garde est nommée. <b>Un budget se lie à un NIVEAU du modèle</b>, et c'est ce qui le rend
+  vérifiable : un <span class="mono">MeeshyObject</span> a un coût (pixels décodés, calque), une
+  <span class="mono">MeeshyScene</span> a un cap (60 objets, 1 vidéo de fond), une
+  <span class="mono">MeeshyPublication</span> en a un aussi — <b>10 scènes</b>, donc 10
+  <span class="mono">MeeshySlide</span>, borne du contrat que rien dans l'interface ne dit encore.
+  <b>Le plancher produit est iOS 16.0 — rien en dessous n'est supporté,
   ni testé, ni visé</b> (cible de déploiement du projet). Quand la table des portes affiche un
   plancher d'API INFÉRIEUR à 16, cela dit une seule chose : l'API couvre TOUTE notre plage — jamais
   que la plage descend. Appareil plancher : A11 (iPhone 8 / SE 2) sous iOS 16, 2-3 Go de RAM.</p>
@@ -1864,14 +1869,27 @@ flowchart TD
     <thead><tr><th>Surface</th><th>Budget</th><th>Garde</th></tr></thead>
     <tbody>
       <tr><td><b>Fil avec CanvasPlayer</b></td><td>1 lecteur ACTIF maximum ; « autoplay muet » vaut pour les cartes vidéo/réel EXISTANTES — la carte de POST à scène naît en pause (lot E) ; les autres cartes servent leur vignette (thumbHash existant) ; pause hors écran, pool de réutilisation</td><td>le piège « réels qui chauffent » est documenté ici — le fil ne devient jamais N décodeurs</td></tr>
-      <tr><td><b>Scène (composer &amp; lecture)</b></td><td>1 vidéo de fond 1080p + ≤ 20 layers actifs ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
-      <tr><td><b>Image collée / importée</b></td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
-      <tr><td><b>« Mes stickers » (local)</b></td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
-      <tr><td><b>Timeline plan 2D</b></td><td>≤ 60 objets/scène (cap du schéma v3) dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom ; la virtualisation ne vient que si le banc D4 la réclame — jamais par principe (rév. 2)</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
-      <tr><td><b>Audio de fond (S·P·R)</b></td><td>boucle liée à la timeline du contenu (AVPlayerLooper), pas à la page du carrousel ; un seul canal audio</td><td>PlaybackCoordinator existant — la règle « qui claim le canal » ne change pas</td></tr>
+      <tr><td><b>Une <span class="mono">MeeshyScene</span></b> (composer &amp; lecture)</td><td>1 vidéo de fond 1080p + ≤ 20 <span class="mono">MeeshyObject</span> ACTIFS ; chaque objet est un CALayer, jamais une vue SwiftUI par objet</td><td>le canvas RESTE UIKit/CALayer (StoryTextLayer et son mécanisme d'encre par métriques sont conservés tels quels)</td></tr>
+      <tr><td><b>Un <span class="mono">MeeshyObject</span> de kind <span class="mono">media</span></b> (collé / importé)</td><td>downsample ImageIO ≤ 2 048 px AVANT toute UIImage (une 48 Mpx décodée ≈ 190 Mo BGRA — interdit) ; HDR/gain map normalisé SDR à l'import</td><td>l'export (AVAssetWriter) reste déterministe — même pipeline que le compositor existant</td></tr>
+      <tr><td><b>Les <span class="mono">MeeshyObject</span> de kind <span class="mono">sticker</span></b> (« Mes stickers », local)</td><td>store disque dédié, LRU 64 Mo, PNG ≤ 512 px par sticker</td><td>DiskCacheStore existant (SHA256 + éviction budget) — une policy de plus, zéro code neuf de stockage</td></tr>
+      <tr><td><b>Timeline plan 2D</b> — une <span class="mono">MeeshyScene</span></td><td>≤ 60 <span class="mono">MeeshyObject</span> par scène (cap du contrat v3) dessinés en UN passe (Canvas/CALayer), jamais une vue par keyframe ; deux échelles de zoom ; la virtualisation ne vient que si le banc D4 la réclame — jamais par principe (rév. 2)</td><td>lanes 52 pt et graduation dérivée des libellés : harnais et invariants existants réutilisés</td></tr>
+      <tr><td><b>Audio de fond (S·P·R)</b> — porté par la <span class="mono">MeeshyPublication</span></td><td>boucle liée à la timeline du contenu (AVPlayerLooper), pas à la page du carrousel ; un seul canal audio</td><td>PlaybackCoordinator existant — la règle « qui claim le canal » ne change pas</td></tr>
       <tr><td><b>Polices (18 familles)</b></td><td>0 octet embarqué, matérialisation CoreText au premier usage, cache process</td><td>disponibilité sous test — vérifiée fichiers + exécution sur 18.2 ET 26.1</td></tr>
     </tbody>
   </table></div>
+
+  <div class="callout"><b>Le cap de <span class="mono">MeeshyPublication</span> est posé — et son
+  APPELANT ne le lit pas.</b> Les dix <span class="mono">MeeshyScene</span> du contrat sont bien
+  gardées côté client : <span class="mono">canAddSlide</span> masque le <span class="mono">+</span>
+  du rail story, et <span class="mono">addSlide()</span> porte la même garde en défense — deux
+  niveaux, testés. Mais en profil <b>P</b>, la synchronisation qui fabrique une slide par média
+  appelle <span class="mono">addSlide()</span> <b>sans le consulter</b>, puis lit
+  <span class="mono">currentSlide.id</span> comme si l'ajout avait eu lieu. Au cap, l'ajout est un
+  <b>no-op silencieux</b> : le onzième média se pose sur la <b>dixième</b> slide, et la carte
+  <span class="mono">média → slide</span> perd l'invariant que son propre doc-comment énonce —
+  « une entrée = une slide ». Retirer l'un des deux emporte alors la slide de l'autre.
+  <b>Une garde qui rend un no-op protège l'état et pas l'appelant</b> : elle n'est complète que si
+  le site qui l'ignore ne peut pas continuer comme si de rien n'était. Suivi : <span class="mono">#4059</span>.</div>
 
   <h3>Portes API — toute la plage 16→27, sans branche morte</h3>
   <div class="scrollx"><table>
@@ -2092,7 +2110,11 @@ flowchart TD
   <p class="lede">La position de lecture et l'état de piste SURVIVENT au changement de chrome —
   carte → détail → plein écran → PiP. Le contenu ne rembobine jamais parce que l'écran a changé.
   Ce n'est pas un vœu : <b>le moteur existe et le handoff est prouvé en prod</b> — cette planche
-  nomme le contrat que le ScenePlayer formalise (O16).</p>
+  nomme le contrat que le ScenePlayer formalise (O16). <b>Le niveau du modèle sur lequel cette
+  continuité porte est le <span class="mono">MeeshyObject</span></b>, jamais la
+  <span class="mono">MeeshySlide</span> qui le contient : c'est UN objet de kind
+  <span class="mono">media</span> ou <span class="mono">audio</span> qui a une position de lecture,
+  et il la garde quand le chrome change AUTOUR de lui.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
@@ -2128,7 +2150,15 @@ flowchart TD
     <li><b>La clé de continuité est l'IDENTITÉ du média</b> (attachmentId/postMediaId), jamais la
       chaîne d'URL — l'URL résolue varie (cache local vs distante), l'identité non. Position vive
       dans le moteur unique ; position froide persistée par média
-      (<span class="mono">VideoPlaybackPositionStore</span>, zone morte de reprise).</li>
+      (<span class="mono">VideoPlaybackPositionStore</span>, zone morte de reprise).
+      <b>Cette clé est déjà celle du modèle</b> : le <span class="mono">payload</span> d'un
+      <span class="mono">MeeshyObject</span> de kind <span class="mono">media</span>,
+      <span class="mono">audio</span> ou <span class="mono">sticker</span> porte
+      <span class="mono">postMediaId</span> — les deux contrats désignent donc la MÊME identité,
+      sans convention à inventer. Le corollaire est ce qui rend la règle vérifiable : deux
+      <span class="mono">MeeshyObject</span> distincts qui pointent le même
+      <span class="mono">postMediaId</span> — le même clip posé sur deux slides — partagent une
+      position, parce que la position appartient au MÉDIA et non à sa pose.</li>
     <li><b>Prouvé en prod, pas promis</b> : feed → Réels (même URL ⇒ la vidéo continue, seul le
       son se rallume), inline → fullscreen (le fullscreen affiche le player courant sans
       recharger), fullscreen → PiP au swipe-down. Le ScenePlayer FORMALISE ce contrat — il ne le
@@ -2139,6 +2169,13 @@ flowchart TD
       <span class="mono">stopAll()</span> ⇒ le PiP vidéo meurt ; tout <span class="mono">play()</span>
       média est gaté sur « pas d'appel actif ». Deux contrôleurs, un seul vivant — le flux
       événementiel existant.</li>
+    <li><b>Ce que la continuité ne couvre PAS : le temps de la SCÈNE.</b> Un
+      <span class="mono">MeeshyObject</span> garde sa position de lecture ; une
+      <span class="mono">MeeshyScene</span>, elle, a son propre temps
+      (<span class="mono">timelineDuration</span>) et les <span class="mono">timing</span> de ses
+      objets sont RELATIFS à lui. Changer de chrome préserve donc le premier et rejoue le second —
+      c'est voulu : le temps de la scène est une propriété de l'ŒUVRE, pas de la session de
+      lecture, et le persister ferait reprendre une story au milieu d'une animation.</li>
     <li><b>Le mute a deux portées</b> : SURFACE sur les cartes (l'autoplay du fil reste muet),
       CONTENU en immersif (détail, plein écran, PiP — dé-muter suit le contenu).</li>
     <li><b>Dette nommée (§F)</b> : la preview du composer garde ses players privés (canvas
@@ -2156,6 +2193,16 @@ flowchart TD
   Mais cette longue traîne est faite de vraies personnes : voici EXACTEMENT ce qu'elles voient
   — à l'écriture ET à la lecture (O17) — et les deux garanties qui commandent tout :
   <b>aucun contenu composé n'est jamais perdu, et personne ne lit du vide</b>.</p>
+
+  <div class="callout"><b>Ce que la rupture v1 → v3 EST, en une phrase : l'arrivée du modèle.</b>
+  v1 range le contenu d'une scène en <b>familles SÉPARÉES</b> — un tableau de textes, un de
+  stickers, un de médias, un de dessins, un de lieux, un de mentions — chacune avec ses propres
+  champs de pose. v3 n'en a plus qu'un : <span class="mono">objects</span>, une liste de
+  <span class="mono">MeeshyObject</span> qui portent tous les mêmes neuf champs. La migration
+  one-shot du lot B est donc, littéralement, <b>six boucles qui deviennent une liste</b> — c'est le
+  compte exact des conversions par famille dans <span class="mono">CanvasV3Migration</span>. Tout
+  ce que la planche appelle « unification » se paie ici, une fois, et jamais plus chez
+  l'utilisateur (dimension 12).</div>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:26px 12px 8px">
@@ -2205,7 +2252,11 @@ flowchart TD
     </div><figcaption><b>4 · Le vieux binaire lit une story v3-native.</b> Il ne reçoit JAMAIS un
     canvas vide : le gateway génère une <b>sentinelle v1</b> (fond sobre + un objet texte) — dans
     la LANGUE DU LECTEUR (<span class="mono">resolveUserLanguage</span> : le Prisme s'applique
-    même à l'invite). Générée à la lecture, jamais stockée, active dès le merge du lot A.</figcaption></figure>
+    même à l'invite). Générée à la lecture, jamais stockée, active dès le merge du lot A.
+    <b>Elle est exprimable parce qu'un <span class="mono">MeeshyObject</span> de kind
+    <span class="mono">text</span> est la SEULE forme que les deux versions savent dire</b> : c'est
+    le plus petit dénominateur du modèle, et c'est ce qui permet de parler à un binaire qui ne
+    connaît pas le modèle.</figcaption></figure>
     <div style="flex:1;min-width:300px">
       <div class="scrollx"><table>
         <caption>La table de négociation (spec §C3 rév. 5) — <span class="mono">X-Canvas-Caps: 3</span> posé par tout client v3-capable (iOS lot C · Android lot H · fetch web lot F)</caption>
