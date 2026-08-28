@@ -262,16 +262,27 @@ nonisolated enum ComposerAnchorComment {
 /// `ComposerDocumentCopy`. Un libellé posé en littéral dans la vue échappe au
 /// cliquet de complétude et n'est jamais traduit.
 ///
-/// **Zéro clé neuve.** Les cinq ci-dessous sont celles de `StatusComposerView`,
-/// vérifiées présentes et TRADUITES dans les sept locales livrées (`ar`, `de`,
-/// `en`, `es`, `fr`, `it`, `pt-BR`) le 2026-08-24 ; `common.close` l'est aussi
-/// et `ComposerDocumentCopy` la réutilise déjà. Le cliquet français est à ZÉRO
-/// tolérance et le catalogue est épinglé à un plafond : une clé de plus pour
-/// une phrase déjà traduite l'en rapproche pour rien.
+/// **Zéro clé neuve.** Les quatre ci-dessous sont celles de
+/// `StatusComposerView`, vérifiées présentes et TRADUITES dans les sept
+/// locales livrées (`ar`, `de`, `en`, `es`, `fr`, `it`, `pt-BR`) le 2026-08-24 ;
+/// `common.close` l'est aussi et `ComposerDocumentCopy` la réutilise déjà. Le
+/// cliquet français est à ZÉRO tolérance et le catalogue est épinglé à un
+/// plafond : une clé de plus pour une phrase déjà traduite l'en rapproche pour
+/// rien.
+///
+/// **`status.composer.title` (« Status ») est RETIRÉE ici.** Le titre de
+/// l'en-tête affiche désormais directement `moodQuestion` — la consolidation
+/// qui laisse la place, sous le champ de saisie, pour voir les mentions sans
+/// scroller. Une clé qui ne dit plus rien à l'écran est orpheline, exactement
+/// le sort de `status.composer.publish` au lot 4.8 : elle est retirée du
+/// catalogue dans le MÊME commit, pas laissée traîner. `repostTitle` seul
+/// garde son propre titre — la republication continue de nommer sa source.
 ///
 /// **Trois des huit clés du mood ne sont pas ici, et il faut lire au mot près
 /// ce qu'il en reste.** Elles appartiennent au PUBLIEUR, que cette surface n'a
-/// pas : le socle le porte depuis le lot 4.5.
+/// pas : le socle le portait depuis le lot 4.5, et sous le mood c'est
+/// désormais l'EN-TÊTE — toujours le site de montage, jamais cette vue (voir
+/// `header` et `headerPublishButton` plus bas).
 ///
 /// - `a11y.status.publish.in-progress` et `a11y.status.publish.disabled.hint`
 ///   ont MIGRÉ — `ComposerSocleCopy` (`MeeshyComposerHost.swift`) les lit. Elles
@@ -287,10 +298,6 @@ nonisolated enum ComposerAnchorComment {
 ///   .test_everyAppCatalogIdentifierKeyIsReferencedInCode` a rougi sur cette
 ///   seule clé au retrait du fichier, et pas sur les sept autres.
 nonisolated enum ComposerMoodCopy {
-
-    static var title: String {
-        String(localized: "status.composer.title", defaultValue: "Status", bundle: .main)
-    }
 
     static var repostTitle: String {
         String(localized: "status.composer.title.repost",
@@ -401,6 +408,23 @@ struct ComposerMoodSurface: View {
     /// cette surface, donc personne d'autre ne peint la croix.
     let onClose: () -> Void
 
+    /// **Le bouton PUBLIER de l'en-tête** — composé par le site de montage,
+    /// jamais ici. `AnyView`, comme `ComposerTopBar.formatFan` /
+    /// `.overflowMenu` : ce sont les TROIS chromes que le meuble injecte tout
+    /// fait dans une surface, et une surface qui construirait elle-même son
+    /// bouton publier rouvrirait le second chemin d'envoi que
+    /// `test_laSurface_nOuvreAucunCheminDePublication` interdit — geste,
+    /// gate de matière et état « en vol » restent la propriété du socle
+    /// (`MeeshyComposerHost.canPublishDocument` / `.publishDocument()`).
+    ///
+    /// **Elle a quitté le socle pour l'en-tête au 2026-08-28** :
+    /// `ComposerChromeOwnership.socleZones(for: .mood)` ne peint plus
+    /// `.publish`, et `ComposerChromeOwnership.headerPaintsPublish(.mood)`
+    /// dit désormais où elle vit. Sans valeur par défaut, à dessein : un
+    /// défaut ferait disparaître la flèche d'un site de montage sans casser
+    /// la moindre compilation, et le mood deviendrait un écran sans issue.
+    let headerPublishButton: AnyView
+
     /// **La mémoire d'audience du FORMAT status** (loi 10), et c'est la MÊME
     /// clé que l'écran historique. Une clé neuve en ferait une seconde mémoire,
     /// donc deux réglages à faire diverger pour un seul geste d'auteur.
@@ -446,31 +470,55 @@ struct ComposerMoodSurface: View {
         }
     }
 
-    // MARK: - L'issue et le titre
+    // MARK: - L'issue, le titre et la flèche
 
     /// La croix en tête, à la même place que celle de l'atelier et de la
     /// surface document — pour que les trois surfaces du meuble se quittent du
     /// même geste. Elle n'est PAS dans le socle : le socle a ses zones et ne
     /// bouge jamais (loi 5).
     ///
-    /// Le titre l'accompagne parce que le meuble n'a pas de barre de
-    /// navigation : dans l'écran historique il vivait en `navigationTitle`, et
-    /// le perdre en chemin aurait laissé `status.composer.title` et
+    /// **Le titre EST la question du mood depuis le 2026-08-28** — il n'y a
+    /// plus deux lignes qui disent la même chose : « Status » puis « Comment
+    /// tu te sens ? » un cran plus bas (`emojiGrid`, qui ne la répète plus).
+    /// La consolidation libère la hauteur qui manquait pour voir les mentions
+    /// (bloc 5) sous le champ de saisie sans faire défiler la feuille. Le
+    /// perdre en chemin laisserait `status.composer.mood.question` et
     /// `status.composer.title.repost` sans lecteur.
+    ///
+    /// **La flèche PUBLIER rejoint la croix ici, à droite de la feuille,
+    /// depuis le même changement.** Le socle ne la peint plus sous le mood
+    /// (`ComposerChromeOwnership.socleZones(for: .mood)` == `[]`) : les deux
+    /// commandes d'ouverture de la feuille vivent désormais ensemble, dans le
+    /// même en-tête — geste identique à `ComposerTopBar`, qui porte déjà sa
+    /// croix ainsi pour le document.
+    ///
+    /// **Les deux boutons sont du verre — LiquidGlass sur iOS 26+, repli
+    /// translucide avant** (`.adaptiveGlass`, `AdaptiveGlass.swift`) : la
+    /// bascule de version vit dans le wrapper partagé, jamais ici.
     private var header: some View {
         HStack(spacing: MeeshySpacing.sm) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                    .font(.system(size: 13, weight: .bold))
+                    // Pas `glassControlForeground()` : ce helper rend
+                    // `indigo950` en thème CLAIR, juste sur une surface qui
+                    // suit le thème — faux ici, le plateau est sombre en
+                    // permanence (même raison que `ComposerTopBar`).
+                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .frame(width: ComposerControlMetrics.visualDiameter,
+                           height: ComposerControlMetrics.visualDiameter)
+                    .adaptiveGlass(in: Circle())
             }
             .accessibilityLabel(Text(ComposerMoodCopy.close))
 
-            Text(viaUsername == nil ? ComposerMoodCopy.title : ComposerMoodCopy.repostTitle)
+            Text(viaUsername == nil ? ComposerMoodCopy.moodQuestion : ComposerMoodCopy.repostTitle)
                 .font(MeeshyFont.relative(16, weight: .semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .lineLimit(1)
 
             Spacer(minLength: 0)
+
+            headerPublishButton
         }
     }
 
@@ -502,16 +550,14 @@ struct ComposerMoodSurface: View {
     /// **`StatusViewModel.moodOptions` et rien d'autre.** Une seconde liste
     /// d'emojis divergerait au premier ajout, et le mood publié ne serait plus
     /// celui que la bulle sait peindre.
+    ///
+    /// **La question n'est plus peinte ICI depuis le 2026-08-28** : elle vit
+    /// dans le TITRE de `header`, et la répéter deux lignes plus bas aurait
+    /// repris exactement l'espace que la consolidation vise à rendre.
     private var emojiGrid: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            Text(ComposerMoodCopy.moodQuestion)
-                .font(MeeshyFont.relative(16, weight: .semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-
-            LazyVGrid(columns: columns, spacing: MeeshySpacing.lg) {
-                ForEach(StatusViewModel.moodOptions, id: \.self) { option in
-                    emojiCell(option)
-                }
+        LazyVGrid(columns: columns, spacing: MeeshySpacing.lg) {
+            ForEach(StatusViewModel.moodOptions, id: \.self) { option in
+                emojiCell(option)
             }
         }
     }

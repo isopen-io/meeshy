@@ -80,9 +80,14 @@ final class ComposerSocleDensityTests: XCTestCase {
 
     /// La cible tactile ne rétrécit pas avec le mot : 44 pt est un plancher, pas
     /// une conséquence du contenu.
+    ///
+    /// **`moodHeaderPublishButton` (2026-08-28) rejoint la liste** : c'est la
+    /// TROISIÈME zone qui lit la règle de densité, depuis que la flèche du
+    /// mood a quitté le socle pour l'en-tête de sa propre surface.
     func test_lesDeuxZones_gardentUneCibleDeQuaranteQuatrePoints() throws {
         let code = try hostSource()
         for ancre in ["private var publishButton: some View {",
+                      "private var moodHeaderPublishButton: some View {",
                       "private var audienceChip: some View {"] {
             guard let bloc = corps(de: ancre, dans: code) else {
                 return XCTFail("`\(ancre)` introuvable — la garde ne mesurerait rien.")
@@ -103,9 +108,13 @@ final class ComposerSocleDensityTests: XCTestCase {
             "La règle doit avoir UNE lecture (`socleShowsLabels`) : deux appels seraient deux seuils à "
                 + "faire diverger, et l'un des deux se casserait en syllabes sans que rien ne le dise."
         )
+        // Trois depuis le 2026-08-28 (audience, flèche du socle document,
+        // flèche de l'en-tête mood) — toujours la MÊME règle, un consommateur
+        // de plus ne change pas le fusible : deux lectures DIVERGENTES le
+        // feraient tomber ci-dessus, et c'est ce que ce test mesure en premier.
         XCTAssertEqual(
-            code.components(separatedBy: "if socleShowsLabels").count - 1, 2,
-            "…et exactement DEUX consommateurs : l'audience et la flèche."
+            code.components(separatedBy: "if socleShowsLabels").count - 1, 3,
+            "…et exactement TROIS consommateurs : l'audience, la flèche du socle et celle de l'en-tête mood."
         )
     }
 

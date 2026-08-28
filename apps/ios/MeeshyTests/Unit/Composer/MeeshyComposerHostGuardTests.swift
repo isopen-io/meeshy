@@ -399,6 +399,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             compacte.contains(compact("if !chromeOwner.assembles(.publish)")),
             "Le socle doit céder à l'atelier par la PROPRIÉTÉ DU CHROME — sans quoi deux barres de publication coexistent"
         )
+        XCTAssertTrue(
+            compacte.contains(compact("!paintedSocleZones.isEmpty")),
+            "Depuis le 2026-08-28, le socle doit AUSSI céder quand ses zones sont vides (le mood, dont la "
+                + "flèche vit dans son propre en-tête) — sans quoi une `HStack` vide se peindrait sous lui."
+        )
         XCTAssertFalse(compacte.contains(compact("if profile")), "Le socle ne se retire jamais selon la porte (loi 5)")
         XCTAssertFalse(compacte.contains(compact("if origin")), "Le socle ne se retire jamais selon l'origine (loi 5)")
 
@@ -435,33 +440,73 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         )
     }
 
-    /// **L'invariant qui empêche les deux règles de diverger.** Le socle ne peint
-    /// des zones QUE là où l'atelier n'assemble pas la publication, et il en peint
-    /// au moins une partout où l'atelier ne l'assemble pas. Deux règles qui
-    /// répondent à la même question doivent répondre la même chose : sans cette
-    /// garde, l'une pourrait céder le chrome au meuble pendant que l'autre ne lui
-    /// donnerait rien à peindre — un socle vide, c'est-à-dire un écran sans issue.
-    func test_lesZonesDuSocle_sontVides_exactementLaOuLAtelierPublie() {
+    /// **L'invariant qui empêche les trois règles de diverger.** Le socle ne
+    /// peint des zones QUE là où PERSONNE d'autre n'assemble la publication —
+    /// ni l'atelier (scène), ni l'en-tête de la surface elle-même (mood,
+    /// depuis le 2026-08-28). Trois règles qui répondent à la même question
+    /// doivent répondre la même chose : sans cette garde, l'une pourrait céder
+    /// le chrome pendant qu'aucune des deux autres ne le reprendrait — un
+    /// socle vide ET un en-tête muet, c'est-à-dire un écran sans issue.
+    ///
+    /// **Rebaptisée au 2026-08-28** (elle s'appelait
+    /// `test_lesZonesDuSocle_sontVides_exactementLaOuLAtelierPublie`) : le
+    /// socle du mood est désormais vide alors même que l'atelier n'y publie
+    /// toujours pas — ce que l'ancien nom, à prendre au pied de la lettre,
+    /// aurait rendu FAUX. `headerPaintsPublish` complète `assembles(.publish)`
+    /// plutôt que de le remplacer : la scène continue de répondre par
+    /// l'atelier, le mood répond désormais par son propre en-tête.
+    func test_lesZonesDuSocle_sontVides_exactementLaOuLaPublicationEstAssembleeAilleurs() {
         for surface in [ComposerSurfaceKind.scene, .document, .mood] {
             let zones = ComposerChromeOwnership.socleZones(for: surface)
-            let atelierPublie = ComposerChromeOwnership.owner(for: surface).assembles(.publish)
+            let publieAilleurs = ComposerChromeOwnership.owner(for: surface).assembles(.publish)
+                || ComposerChromeOwnership.headerPaintsPublish(for: surface)
             XCTAssertEqual(
-                zones.isEmpty, atelierPublie,
-                "\(surface) : le socle peint des zones si et seulement si l'atelier ne les assemble pas. "
-                    + "Les deux règles ont divergé."
+                zones.isEmpty, publieAilleurs,
+                "\(surface) : le socle peint des zones si et seulement si personne d'autre n'assemble la "
+                    + "publication. Les règles ont divergé."
             )
         }
     }
 
-    /// La flèche est la seule zone que le socle peint TOUJOURS quand il est
+    /// La flèche est la seule zone que le socle peint TOUJOURS quand il EST
     /// peint. Sans elle, une surface sans atelier n'aurait aucun moyen de partir.
+    ///
+    /// **Restreinte à `.document` au 2026-08-28** : le socle du mood ne peint
+    /// plus RIEN (`socleZones(for: .mood) == []`), donc il n'y a plus de socle
+    /// « peint » à interroger pour cette surface — sa flèche vit dans son
+    /// PROPRE en-tête, couverte par `test_leMoodPublieDepuisSonPropreEnTete`
+    /// ci-dessous, jamais par cette garde-ci.
     func test_leSocle_porteToujoursSaFleche_quandIlEstPeint() {
-        for surface in [ComposerSurfaceKind.document, .mood] {
+        for surface in [ComposerSurfaceKind.document] {
             XCTAssertTrue(
                 ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
                 "\(surface) : un socle peint sans flèche est un écran sans issue."
             )
         }
+    }
+
+    /// **Le mood publie depuis son PROPRE en-tête, pas depuis le socle.**
+    ///
+    /// Complément direct de la garde ci-dessus : le socle du mood est vide,
+    /// et cette vacance ne serait un écran sans issue QUE si personne d'autre
+    /// n'ouvrait un chemin de publication. `headerPaintsPublish` est cette
+    /// preuve, et son symétrique — le document n'en a pas besoin — est asserté
+    /// dans le même geste pour que la règle ne devienne pas silencieusement
+    /// vraie pour tout le monde.
+    func test_leMoodPublieDepuisSonPropreEnTete() {
+        XCTAssertTrue(
+            ComposerChromeOwnership.headerPaintsPublish(for: .mood),
+            "Le mood n'a plus de flèche au socle : sans son en-tête, ce serait un écran sans issue."
+        )
+        XCTAssertFalse(
+            ComposerChromeOwnership.headerPaintsPublish(for: .document),
+            "Le document garde sa flèche au socle — son en-tête (`ComposerTopBar`) est PARTAGÉ entre les "
+                + "trois surfaces et n'a pas de place réservée à la publication."
+        )
+        XCTAssertFalse(
+            ComposerChromeOwnership.headerPaintsPublish(for: .scene),
+            "La scène publie par l'atelier, jamais par un en-tête app-side."
+        )
     }
 
     /// **Le mood ne voit PAS deux fois son audience.**

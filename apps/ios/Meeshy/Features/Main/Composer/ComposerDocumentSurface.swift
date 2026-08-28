@@ -180,22 +180,26 @@ nonisolated enum ComposerChromeOwnership {
     ///   L'audience, elle, RESTE — et elle CHOISIT depuis le même lot
     ///   (`MeeshyComposerHost.audienceChip`), avec la mémoire du format post
     ///   (`ComposerAudienceMemory.postKey`).
-    /// - `.mood` — la flèche SEULE. L'audience y est ABSENTE, jamais grisée
-    ///   (loi 4) : `ComposerMoodSurface` porte son propre sélecteur six niveaux,
-    ///   dans le RUBAN de son bloc 3, avec la mémoire du format status
+    /// - `.mood` — RIEN, depuis le 2026-08-28. L'audience est ABSENTE, jamais
+    ///   grisée (loi 4) : `ComposerMoodSurface` porte son propre sélecteur six
+    ///   niveaux, dans le RUBAN de son bloc 3, avec la mémoire du format status
     ///   (`ComposerAudienceMemory.statusKey`, loi 10). En peindre un second au
     ///   socle ferait deux contrôles pour un même réglage sur un même écran.
     ///
-    ///   **Ce n'est PLUS la même raison qu'avant le lot 4.9**, et la nuance
-    ///   compte pour la suite : `audienceChip` n'est plus un témoin inerte, c'est
-    ///   un vrai sélecteur. Ce qui l'exclut ici n'est donc pas son inertie mais
-    ///   la PLACE — deux formes d'un même réglage, l'une dans le corps, l'autre
-    ///   dans le socle. Les deux formes existent à dessein : un ruban de six
-    ///   chips tient dans un bloc, jamais dans une rangée qui porte aussi la
-    ///   flèche.
+    ///   **La flèche a rejoint l'audience dans cette colonne « peinte
+    ///   ailleurs » au 2026-08-28** — elle vivait ici seule jusque-là. Elle
+    ///   n'est pas partie : elle s'est déplacée dans l'EN-TÊTE de la surface
+    ///   (`ComposerMoodSurface.header`, à droite de la croix), pour la même
+    ///   raison de PLACE que l'audience avant elle — deux zones du chrome de
+    ///   publication qui vivent désormais dans le corps de la vue plutôt que
+    ///   dans une rangée basse séparée, ce qui laisse la place, sous la
+    ///   saisie, de voir les mentions sans faire défiler la feuille.
+    ///   `headerPaintsPublish(for:)` ci-dessous dit où elle vit ; le chrome
+    ///   reste `.host` (`owner(for:)`, inchangé) — c'est la MÊME main qui
+    ///   peint, à un autre endroit de l'écran.
     ///
-    ///   L'œil est absent pour une raison plus dure : un mood n'a pas de canvas,
-    ///   et la loi 6 interdit d'en fabriquer un aperçu.
+    ///   L'œil reste absent pour une raison plus dure : un mood n'a pas de
+    ///   canvas, et la loi 6 interdit d'en fabriquer un aperçu.
     ///
     /// **Divergence ASSUMÉE avec le plan du lot 4**, qui écrivait « sous `.mood`
     /// … audience + flèche ». La mesure a tranché contre lui, et le dire ici vaut
@@ -214,8 +218,27 @@ nonisolated enum ComposerChromeOwnership {
         case .document: return documentHasScene
             ? [.audience, .preview, .publish]
             : [.audience, .publish]
-        case .mood: return [.publish]
+        case .mood: return []
         }
+    }
+
+    /// **QUI, sous une surface `.host`, peint la flèche dans son PROPRE
+    /// en-tête plutôt que dans le socle du bas.**
+    ///
+    /// Une RÈGLE pure de plus, séparée de `socleZones` pour la question
+    /// qu'elle répond : `socleZones` dit ce que le socle peint ; celle-ci dit
+    /// OÙ va ce qu'il ne peint plus. Les deux doivent rester cohérentes —
+    /// `MeeshyComposerHostGuardTests
+    /// .test_lesZonesDuSocle_sontVides_exactementLaOuLaPublicationEstAssembleeAilleurs`
+    /// le tient : le socle est vide exactement là où l'atelier OU l'en-tête de
+    /// la surface publie.
+    ///
+    /// Seul `.mood` répond `true` aujourd'hui : le document garde sa flèche au
+    /// socle (sa surface n'a pas d'en-tête propre à elle — `ComposerTopBar`
+    /// est le chrome PARTAGÉ des trois surfaces, pas celui du document seul),
+    /// et la scène publie par l'atelier, jamais par ceci.
+    static func headerPaintsPublish(for surface: ComposerSurfaceKind) -> Bool {
+        surface == .mood
     }
 }
 

@@ -510,15 +510,20 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         )
     }
 
-    /// **Zéro clé neuve au catalogue.** Les cinq libellés du mood sont ceux de
-    /// `StatusComposerView`, plus `common.close` que la surface document lit
+    /// **Zéro clé neuve au catalogue.** Les quatre libellés du mood sont ceux
+    /// de `StatusComposerView`, plus `common.close` que la surface document lit
     /// déjà. Le cliquet français est à ZÉRO tolérance et le catalogue est
     /// épinglé à un plafond : une clé de plus pour une phrase déjà traduite
     /// sept fois l'en rapproche pour rien.
+    ///
+    /// **`status.composer.title` n'y est plus depuis le 2026-08-28** — le
+    /// titre affiche directement `status.composer.mood.question`, et la clé
+    /// « Status » devenue sans lecteur a été retirée du catalogue dans le MÊME
+    /// commit (voir `ComposerMoodCopy`).
     func test_lesLibelles_reutilisentLesClesDejaTraduites() throws {
         let code = try surfaceSource()
         let attendues: Set<String> = [
-            "status.composer.title", "status.composer.title.repost",
+            "status.composer.title.repost",
             "status.composer.mood.question", "status.composer.placeholder",
             "status.composer.repost.via", "common.close"
         ]
@@ -546,6 +551,64 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             trouvees, attendues,
             "Le mood n'ajoute AUCUNE clé au catalogue : le cliquet français est à zéro tolérance et le "
                 + "catalogue est épinglé à un plafond. Toute clé hors de cet ensemble est neuve ou perdue."
+        )
+    }
+
+    /// **La consolidation du 2026-08-28** : le titre EST la question du mood,
+    /// et la flèche PUBLIER — reçue déjà composée, jamais construite ici —
+    /// vit à côté de la croix, dans le MÊME en-tête. Sans cette garde, un
+    /// retour en arrière referait deux lignes pour une seule question et
+    /// laisserait la feuille sans flèche accessible depuis son premier écran.
+    func test_leTitre_estDirectementLaQuestion_etLaFlecheRejointLaCroixDansLEnTete() throws {
+        let bloc = try surfaceBlock()
+        guard let entete = blockBody(startingAt: "private var header", in: bloc) else {
+            throw AncreIntrouvable(quoi: "private var header")
+        }
+        XCTAssertTrue(
+            entete.contains("ComposerMoodCopy.moodQuestion"),
+            "Le titre affiche directement la question — sans elle, la consolidation qui libère la hauteur "
+                + "sous la saisie n'a pas eu lieu."
+        )
+        XCTAssertTrue(
+            entete.contains("ComposerMoodCopy.repostTitle"),
+            "Une republication garde son propre titre, distinct de la question du mood."
+        )
+        XCTAssertTrue(
+            entete.contains("headerPublishButton"),
+            "La flèche PUBLIER doit être montée dans l'en-tête — c'est elle que le socle ne peint plus "
+                + "sous le mood (`ComposerChromeOwnership.socleZones(for: .mood)` est vide)."
+        )
+        XCTAssertTrue(
+            entete.contains(".adaptiveGlass(in: Circle())"),
+            "La croix devient un vrai bouton de verre — LiquidGlass sur iOS 26+, repli translucide avant, "
+                + "par le wrapper partagé plutôt qu'un `if #available` réécrit ici."
+        )
+    }
+
+    /// **Garde NÉGATIVE — la question ne se répète plus au-dessus de la
+    /// grille.** Elle vit désormais dans le TITRE (garde ci-dessus) ; la
+    /// répéter ici reprendrait exactement la hauteur que la consolidation
+    /// visait à rendre.
+    func test_laGrilleDEmojis_neRepeteplusLaQuestionDuTitre() throws {
+        let bloc = try surfaceBlock()
+        guard let grille = blockBody(startingAt: "private var emojiGrid", in: bloc) else {
+            throw AncreIntrouvable(quoi: "private var emojiGrid")
+        }
+        XCTAssertFalse(
+            grille.contains("ComposerMoodCopy.moodQuestion"),
+            "La grille ne doit plus peindre la question : elle est montée UNE fois, dans le titre de l'en-tête."
+        )
+    }
+
+    /// La surface reçoit son bouton PUBLIER tout fait — même règle que
+    /// `onClose`, `viaUsername` ou `allowedAudiences` : la matière décidée par
+    /// le site de montage arrive en PARAMÈTRE, jamais reconstruite ici. Sans
+    /// ce paramètre, `header` n'aurait rien à monter à droite de la feuille.
+    func test_laSurface_recoitSaFlecheDejaComposee_etNeLaFabriquePas() throws {
+        let bloc = try surfaceBlock()
+        XCTAssertTrue(
+            bloc.contains("let headerPublishButton: AnyView"),
+            "Le bouton Publier de l'en-tête est un PARAMÈTRE reçu du site de montage."
         )
     }
 
@@ -626,6 +689,11 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         XCTAssertTrue(
             bloc.contains("onDismiss"),
             "Et cette fermeture est celle du MEUBLE, pas une seconde sortie fabriquée sur place."
+        )
+        XCTAssertTrue(
+            bloc.contains("headerPublishButton: AnyView(moodHeaderPublishButton)"),
+            "La flèche de l'en-tête doit être fournie par le meuble — sans elle, la surface n'aurait aucun "
+                + "moyen de partir depuis son en-tête, et le socle ne la peint plus sous le mood."
         )
     }
 

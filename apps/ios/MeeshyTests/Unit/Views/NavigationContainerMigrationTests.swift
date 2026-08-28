@@ -90,10 +90,15 @@ final class NavigationContainerMigrationTests: XCTestCase {
         }
 
         let surface = try String(contentsOf: iosRoot.appendingPathComponent(surfacePath), encoding: .utf8)
+        // Le TITRE est `ComposerMoodCopy.moodQuestion` depuis le 2026-08-28 —
+        // il EST la question du mood, et `status.composer.title` a été retirée
+        // du catalogue avec son unique lecteur (consolidation, voir
+        // `ComposerMoodCopy`). Une republication garde son propre titre
+        // (`repostTitle`).
         XCTAssertTrue(
-            surface.contains("ComposerMoodCopy.title"),
+            surface.contains("ComposerMoodCopy.moodQuestion") && surface.contains("ComposerMoodCopy.repostTitle"),
             "La surface doit peindre son TITRE : il vivait en `navigationTitle`, et le perdre en chemin " +
-            "laisserait `status.composer.title` sans lecteur et la feuille sans en-tête."
+            "laisserait `status.composer.mood.question` sans lecteur et la feuille sans en-tête."
         )
         XCTAssertTrue(
             surface.contains("let onClose: () -> Void"),
