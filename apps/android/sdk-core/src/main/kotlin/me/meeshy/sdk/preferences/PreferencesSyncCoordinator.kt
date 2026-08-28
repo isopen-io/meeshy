@@ -62,7 +62,7 @@ class PreferencesSyncCoordinator(
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch {
-            socketManager.categoryPreferencesUpdated.collect { category -> refresh(category) }
+            socketManager.categoryPreferencesUpdated.collect { category -> refreshCategory(category) }
         }
     }
 
@@ -73,7 +73,17 @@ class PreferencesSyncCoordinator(
         job = null
     }
 
-    private suspend fun refresh(category: String) {
+    /**
+     * Re-read [category] and fold it onto its store, or do nothing when this client keeps
+     * no copy of that block.
+     *
+     * `internal` rather than private on purpose: this is the whole behaviour, and the
+     * collector above is only the trigger. Driving it directly is what lets every rule —
+     * which categories are handled, what a failure does, what a projection preserves — be
+     * asserted without staging a flow emission through a background coroutine, where a
+     * missed delivery reads exactly like a missing write.
+     */
+    internal suspend fun refreshCategory(category: String) {
         when (category) {
             NOTIFICATION -> refreshNotification()
             PRIVACY -> refreshPrivacy()

@@ -106,10 +106,34 @@ périmé. Témoin dédié.
 |---|---|
 | `PreferenceSyncBodyReadProjectionTest` (neuf, `:core:model`) | 8 témoins — décodage clé par clé des deux blocs ; `extras` préservé des deux côtés ; **la jambe chiffrement ni adoptée depuis la réponse ni écrasée** (les deux sens) ; les deux allers-retours écriture→lecture |
 | `PreferencesSocketManagerTest` (+4) | l'arm catégorie émet son NOM ; la remise à zéro globale relaie un événement par catégorie, dans l'ordre ; aucun des deux arms ne fuit dans le flux de l'autre ; l'arm communauté n'atteint ni l'un ni l'autre |
-| `PreferencesSyncCoordinatorTest` (neuf, `:sdk-core`) | 7 témoins — les deux blocs relus et écrits ; la jambe chiffrement intacte ; une catégorie sans magasin **non demandée** ; un échec qui ne touche à rien ; `start()` idempotent ; `stop()` qui ferme |
+| `PreferencesSyncCoordinatorTest` (neuf, `:sdk-core`) | 9 témoins, sur **deux niveaux** — cinq pilotent `refreshCategory` DIRECTEMENT (les deux blocs relus et écrits, la jambe chiffrement intacte, une catégorie sans magasin **jamais demandée**, un échec qui ne touche à rien) ; quatre tiennent le câblage du collecteur (une diffusion le déclenche, `stop()` ferme, `start()` idempotent, un coordinateur non démarré ne lit rien) |
 | `RealtimeSessionCoordinatorTest` (+3) | le collecteur démarre à l'attache, une fois, se redémarre après reconnexion, et **s'arrête à la déconnexion** |
 | `:app:assembleDebug` + `testDebugUnitTest` | délégués au workflow `Android` (voir cycle 130 : `dl.google.com` est refusé par la politique de sortie de ce conteneur) |
 | gateway / web / iOS | **non modifiés** — aucun contrat de fil touché, ce lot n'ajoute qu'un lecteur et deux `GET` déjà servis |
+
+### Ce que le premier jet de témoins a coûté, et la règle qui en sort
+
+La première rédaction mettait CHAQUE règle derrière une émission de flux collectée
+dans une coroutine d'arrière-plan. La CI a rendu un tableau très lisible : les
+**trois** assertions qui exigeaient un CHANGEMENT tombaient, et **toutes** celles
+qui exigeaient l'ABSENCE de changement passaient. C'est exactement la signature
+d'un événement jamais délivré — et non celle d'une écriture manquante.
+
+> **Un témoin dont le sujet est « ce que la synchro ÉCRIT » ne doit pas pouvoir
+> tomber pour « l'événement n'est jamais arrivé ».** Quand le harnais met un
+> transport entre l'assertion et son sujet, la moitié « négative » de la suite
+> devient verte pour la mauvaise raison, et c'est la moitié qui rassure.
+
+D'où les deux niveaux : `refreshCategory` est `internal` — la totalité du
+comportement, piloté en direct — et quatre témoins seulement portent le câblage,
+dont un (« un coordinateur non démarré ne lit rien ») existe pour que le trio de
+câblage ne puisse pas passer sans collecteur.
+
+Le premier échec, lui, était instructif dans l'autre sens : le harnais passait le
+`TestScope` comme portée, et `runTest` attendait un collecteur qui NE SE TERMINE
+JAMAIS. L'`UncompletedCoroutinesError` PROUVAIT que le collecteur est de longue
+durée ; le corriger en le faisant terminer aurait supprimé la propriété voulue.
+La portée à lui donner est `backgroundScope`.
 
 ## Suivi MESURÉ
 
