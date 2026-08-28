@@ -1122,7 +1122,14 @@ export class MessageReadStatusService {
           notifError
         );
       }
-    })();
+    })().catch((error: unknown) =>
+      // La garde du SITE, disjointe de celle du corps (leçon 230). Le `catch`
+      // ci-dessus décrit ce que l'IIFE sait rattraper ; celui-ci décrit ce
+      // qu'elle ne sait PAS — un rejet du `catch` lui-même, ou de la seule
+      // instruction qui le précède. Une promesse détachée n'a pas d'appelant
+      // pour porter son rejet, et Node 22 y répond en arrêtant le process.
+      logger.warn("[MessageReadStatus] notification sync rejected", { error })
+    );
   }
 
   /**

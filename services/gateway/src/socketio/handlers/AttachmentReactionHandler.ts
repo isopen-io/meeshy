@@ -176,6 +176,8 @@ export class AttachmentReactionHandler {
         action === 'add' ? 'attachment-reaction-added' : 'attachment-reaction-removed',
         data,
         payload,
+      ).catch((error: unknown) =>
+        logger.error('attachment reaction offline enqueue rejected', { conversationId, error })
       );
 
       callback?.({ success: true });

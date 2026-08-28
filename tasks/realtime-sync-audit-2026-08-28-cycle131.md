@@ -2,6 +2,10 @@
 
 Date : 2026-08-28 · Issue : #4133 · Branche : `claude/keen-hamilton-funmhr`
 
+Leçon : `tasks/lessons.md` § **Leçon 308**. (Numérotée 308 et non 307 : le
+cycle 130 bis, mené en parallèle sur une branche sœur, a pris le 307 en arrivant
+sur `main` le premier — collision résolue à la fusion, les deux leçons gardées.)
+
 ## Le défaut
 
 `user:preferences-updated` porte une **union de trois scopes** sous un seul nom. Le
