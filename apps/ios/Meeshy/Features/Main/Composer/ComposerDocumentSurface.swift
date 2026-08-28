@@ -1502,27 +1502,6 @@ struct ComposerDocumentSurface: View {
     /// Ratio de la scène incrustée — 9:16 par défaut, 16:9 si le fond est
     /// paysage (source de vérité partagée avec l'atelier et le reader).
     var sceneAspectRatio: CGFloat = CanvasGeometry.portraitRatio
-    /// Les deux rails sont-ils montés autour de la scène (#4061) ?
-    ///
-    /// **Défaut `false` : ce lot ne déplace aucune scène qui n'a pas de rails.**
-    /// Tant que les rails ne sont pas peints (#4062, #4063), l'encastrement
-    /// reste celui d'hier — la géométrie est prête, elle n'est pas imposée.
-    var showsRails: Bool = false
-
-    /// Les portes SERVIES du rail *leading* (#4062) — déjà filtrées par
-    /// `ComposerRailDoor.offered`. La surface ne re-filtre rien : une seconde
-    /// loi 4 divergerait de la première au premier ajustement.
-    var railDoors: [ComposerRailDoor] = []
-
-    /// Relais d'un tap sur une porte du rail. `nil` ⇒ le rail n'a personne
-    /// derrière lui, donc rien n'est peint (loi 4, comme `onTool`).
-    var onRailDoor: ((ComposerRailDoor) -> Void)? = nil
-
-    /// Les actions SERVIES du rail *trailing* (#4063) — déjà filtrées par
-    /// `ComposerTrailingRailPolicy`. Vide ⇒ aucun rail (loi 4).
-    var trailingRailActions: [StoryCanvasContextAction] = []
-
-    var onTrailingRailAction: ((StoryCanvasContextAction) -> Void)? = nil
 
     /// **Relais du tap sur un objet de la scène incrustée (lot 3A du composer
     /// unifié, #4035).** L'hôte retient la sélection et décide de monter
@@ -1825,55 +1804,14 @@ struct ComposerDocumentSurface: View {
                     loadedImagesVersion: sceneImagesVersion
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // **#4061 — la scène s'ENCASTRE, elle n'est jamais recouverte.**
-                // L'encastrement n'est pas une marge choisie : c'est ce que les
-                // deux rails RÉSERVENT (cible tactile 44 pt + gouttière + marge
-                // de bord). Le nombre vit dans `ComposerRailGeometry`, avec la
-                // raison qui le produit — écrit ici en littéral, la raison
-                // disparaîtrait et la première personne qui trouve la scène
-                // étroite le rognerait sans savoir ce qu'elle casse.
-                //
-                // Poser les rails PAR-DESSUS était l'autre option : la loi 6 la
-                // refuse — un rail occupe exactement la place où un
-                // `MeeshyObject` peut vivre, donc l'aperçu mentirait sur le
-                // rendu final.
-                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: showsRails))
-                // **Le rail se pose DANS le couloir déjà réservé** (#4062) —
-                // la surimpression porte sur la vue DÉJÀ encastrée, donc son
-                // repère inclut le couloir : `.bottomLeading` tombe dans
-                // l'espace de plateau, jamais sur la scène.
-                //
-                // C'est ce qui fait que « surimpression » n'est pas ici
-                // synonyme de « recouvrement » : la place a été prise AVANT,
-                // par `sceneInset`, et cette vue ne fait que l'occuper.
-                //
-                // Les DEUX couloirs sont réservés dès maintenant, alors que
-                // seul le rail *leading* existe : sinon la scène se décalerait
-                // le jour où le rail *trailing* arrive (#4063), et la
-                // composition bougerait sous l'auteur — un déplacement que
-                // personne n'a demandé et que rien ne rattrape.
-                .overlay(alignment: .bottomLeading) {
-                    if showsRails, !railDoors.isEmpty {
-                        ComposerLeadingRail(doors: railDoors,
-                                            plateauTint: plateauTint,
-                                            onDoor: onRailDoor)
-                            .padding(.leading, ComposerRailGeometry.outerMargin)
-                            .padding(.bottom, ComposerRailGeometry.gutter)
-                    }
-                }
-                // Le couloir *trailing* était RÉSERVÉ depuis #4061 ; il est
-                // désormais occupé. La scène ne bouge donc pas d'un point en
-                // gagnant ce rail — c'est exactement pourquoi les deux couloirs
-                // avaient été pris d'un coup.
-                .overlay(alignment: .bottomTrailing) {
-                    if showsRails, !trailingRailActions.isEmpty {
-                        ComposerTrailingRail(actions: trailingRailActions,
-                                             plateauTint: plateauTint,
-                                             onAction: onTrailingRailAction)
-                            .padding(.trailing, ComposerRailGeometry.outerMargin)
-                            .padding(.bottom, ComposerRailGeometry.gutter)
-                    }
-                }
+                // **L'encastrement se lit de la RÈGLE, jamais d'un littéral**
+                // (#4061). `railsShown: false` dit ce que cette surface EST :
+                // le DOCUMENT n'a pas de rails. Ils appartiennent à la surface
+                // de SCÈNE, qui n'existe pas encore (lot B) — et les monter ici
+                // aurait obligé chaque règle du document à porter une exception
+                // de scène, exactement ce que la tâche 4.3 de la planche a
+                // fermé en faisant du mood une SURFACE plutôt qu'un cas.
+                .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: false))
                 .padding(.top, 8)
                 sceneDescriptionField
             }
