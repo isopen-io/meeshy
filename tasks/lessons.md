@@ -17441,4 +17441,13 @@ Trois corollaires, tous mesurés dans le lot :
   ABSENCE d'appel.** Cinq des sept catégories de la passerelle n'ont pas de magasin
   Android ; le témoin qui dit « on ne va pas les chercher » ne peut tomber que si
   une route non stubée fait échouer l'appel.
+- **Élargir une interface, c'est un inventaire à tenir dans tous ses doubles ÉCRITS
+  À LA MAIN — et le compilateur est le seul à s'en souvenir.** Les deux `GET`
+  ajoutés à `PreferencesApi` ont fait tomber `CategoryRepositoryTest.FakePreferencesApi`,
+  qui n'a rien à voir avec les préférences user-level. `ConversationRepositoryTest`
+  porte déjà la remarque, mot pour mot, sur les quatre doubles de `ConversationApi` :
+  la connaître ne suffit pas, il faut **grep les implémenteurs AVANT d'ajouter la
+  route**, pas après que la CI l'a dit. Le réflexe : `grep -rn ": <Interface> {"` sur
+  le module, et compléter chaque double dans le même commit — en refusant par défaut,
+  jamais en rendant un succès vide qui ferait passer un test qui devrait tomber.
 

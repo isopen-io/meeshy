@@ -55,6 +55,17 @@ class CategoryRepositoryTest {
 
         override suspend fun updatePrivacy(body: PrivacyPreferenceSyncBody) =
             ApiResponse(success = true, data = Unit)
+
+        // Les deux lectures ajoutees au cycle 131 (#4133). Ce double n'a rien a voir avec
+        // elles : il refuse, ce qui ferait tomber tout test de categories qui les
+        // atteindrait par erreur. Comme les quatre doubles de `ConversationApi`, celui-ci
+        // implemente l'interface A LA MAIN — chaque route ajoutee est donc un inventaire a
+        // tenir, et le compilateur est le seul a s'en souvenir.
+        override suspend fun getNotification() =
+            ApiResponse<NotificationPreferenceSyncBody>(success = false, error = "not stubbed")
+
+        override suspend fun getPrivacy() =
+            ApiResponse<PrivacyPreferenceSyncBody>(success = false, error = "not stubbed")
     }
 
     private fun ok(vararg categories: ApiCategory) =
