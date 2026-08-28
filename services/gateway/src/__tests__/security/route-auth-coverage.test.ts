@@ -386,7 +386,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/magic-link/request', why: "demande de lien magique par email, pré-session" },
   { method: 'GET', url: '/api/v1/auth/magic-link/validate', why: 'consomme un lien magique à usage unique, pré-session' },
   { method: 'POST', url: '/api/v1/auth/magic-link/validate', why: 'idem' },
-  { method: 'GET', url: '/api/v1/auth/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par email (chemin réel dupliqué "/auth/auth" — bug fonctionnel documenté dans l\'audit, pas un trou de garde), vérifié par signature dans le handler' },
+  { method: 'GET', url: '/api/v1/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par e-mail sur connexion suspecte, vérifié par signature dans le handler. Le segment "auth" était DOUBLÉ jusqu\'à #4141 — la route existait à une adresse que rien n\'appelait, et l\'entrée d\'inventaire le disait en la traitant comme un fait acquis plutôt que comme un défaut à corriger' },
 
   // --- me/delete-account : flux de suppression de compte par email, tokens à usage limité ---
   { method: 'GET', url: '/api/v1/me/delete-account/confirm', why: "confirmation de suppression par lien email (token sha256 vérifié en base), pré-session par nature" },

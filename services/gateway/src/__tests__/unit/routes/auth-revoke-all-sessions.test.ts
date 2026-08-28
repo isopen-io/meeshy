@@ -59,7 +59,7 @@ describe('GET /auth/revoke-all-sessions — invalid token', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 400 HTML when token is invalid or expired', async () => {
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=bad-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=bad-token' });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('expired');
@@ -75,7 +75,7 @@ describe('GET /auth/revoke-all-sessions — wrong action', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 400 HTML when payload action is not revoke-all', async () => {
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('Invalid link');
@@ -91,7 +91,7 @@ describe('GET /auth/revoke-all-sessions — missing userId', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 400 HTML when userId is missing from payload', async () => {
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toContain('text/html');
   });
@@ -107,7 +107,7 @@ describe('GET /auth/revoke-all-sessions — success', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 200 HTML with session count on success', async () => {
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.body).toContain('3');
@@ -115,7 +115,7 @@ describe('GET /auth/revoke-all-sessions — success', () => {
   });
 
   it('calls invalidateAllSessions with the userId from token', async () => {
-    await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(mockInvalidateAllSessions).toHaveBeenCalledWith(USER_ID, undefined, 'email_revoke_all');
   });
 });
@@ -129,7 +129,7 @@ describe('GET /auth/revoke-all-sessions — missing token param', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 400 when token query param is missing', async () => {
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions' });
     expect(res.statusCode).toBe(400);
   });
 });
