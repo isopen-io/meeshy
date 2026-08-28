@@ -87,29 +87,67 @@ class PreferencesSocketManagerTest {
 
     /**
      * The category arm of the union (`DELETE /me/preferences`, the four writers of
-     * `me/preferences/{category}`). Feeding it to the conversation decoder would
-     * throw on the missing `conversationId`; the discriminant has to catch it first,
-     * and silently.
-     *
-     * Silently does NOT mean "nothing to do here": this arm has a real Android
-     * reader (`NotificationPreferencesStore` / `PrivacyPreferencesStore`, DataStore
-     * -backed and stale until an unrelated reload), and invalidating it is its own
-     * issue (#4133). What this witness freezes is only that the arm cannot break the
-     * conversation stream on its way past.
+     * `me/preferences/{category}`). Feeding it to the conversation decoder would throw on
+     * the missing `conversationId`, so the discriminant catches it first — and routes it
+     * to its OWN flow rather than dropping it (#4133): it has a real Android reader.
      */
     @Test
-    fun `the category scope of the same event name is ignored`() = runTest {
+    fun `the category scope never reaches the conversation stream`() = runTest {
         val (manager, handlers) = managerWithHandlers()
         manager.conversationPreferencesUpdated.test {
-            handlers.broadcast("""{"userId":"u1","category":"notifications"}""")
+            handlers.broadcast("""{"userId":"u1","category":"notification"}""")
             expectNoEvents()
         }
     }
 
     @Test
-    fun `the community scope of the same event name is ignored`() = runTest {
+    fun `a category broadcast emits the category name`() = runTest {
         val (manager, handlers) = managerWithHandlers()
-        manager.conversationPreferencesUpdated.test {
+        manager.categoryPreferencesUpdated.test {
+            handlers.broadcast("""{"userId":"u1","category":"notification"}""")
+
+            assertThat(awaitItem()).isEqualTo("notification")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * `DELETE /me/preferences` (global reset) emits ONCE PER CATEGORY erased rather than a
+     * single "everything" event — the contract is per category, and a nameless event would
+     * fall into no branch. The bridge therefore has to relay each one, in order.
+     */
+    @Test
+    fun `a global reset relays one event per erased category`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.categoryPreferencesUpdated.test {
+            handlers.broadcast("""{"userId":"u1","category":"privacy"}""")
+            handlers.broadcast("""{"userId":"u1","category":"notification"}""")
+
+            assertThat(awaitItem()).isEqualTo("privacy")
+            assertThat(awaitItem()).isEqualTo("notification")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** A conversation-scope frame must not leak into the category stream. */
+    @Test
+    fun `the conversation scope never reaches the category stream`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.categoryPreferencesUpdated.test {
+            handlers.broadcast(conversationScope)
+            expectNoEvents()
+        }
+    }
+
+    /**
+     * The community arm carries neither key, so it reaches neither stream — and that is
+     * still correct: measured, nothing under `apps/android` caches a community-preference
+     * row, so there is nothing on this device to go stale.
+     */
+    @Test
+    fun `the community scope reaches neither stream`() = runTest {
+        val (manager, handlers) = managerWithHandlers()
+        manager.categoryPreferencesUpdated.test {
             handlers.broadcast(
                 """
                 {

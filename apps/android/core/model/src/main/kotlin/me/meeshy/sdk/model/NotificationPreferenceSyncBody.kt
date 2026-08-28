@@ -46,6 +46,51 @@ public data class NotificationPreferenceSyncBody(
     val groupNotifications: Boolean,
     val notificationBadgeEnabled: Boolean,
 ) {
+    /**
+     * Projects the gateway block BACK onto the device-local one — the read half of [from],
+     * used when `user:preferences-updated` (category scope) says another device changed this
+     * block and the store has to catch up (issue #4133).
+     *
+     * [current] is not a convenience: this body carries the gateway's fields and **only**
+     * those, so the local-only `extras` map has no value on the wire. Rebuilding the block
+     * from the response alone would silently erase a device-side extension on every
+     * broadcast. Everything the gateway owns is taken from the response; everything it does
+     * not know about is carried over from [current].
+     */
+    public fun toPreferences(current: UserNotificationPreferences): UserNotificationPreferences =
+        current.copy(
+            pushEnabled = pushEnabled,
+            emailEnabled = emailEnabled,
+            soundEnabled = soundEnabled,
+            vibrationEnabled = vibrationEnabled,
+            newMessageEnabled = newMessageEnabled,
+            missedCallEnabled = missedCallEnabled,
+            voicemailEnabled = voicemailEnabled,
+            systemEnabled = systemEnabled,
+            conversationEnabled = conversationEnabled,
+            replyEnabled = replyEnabled,
+            mentionEnabled = mentionEnabled,
+            reactionEnabled = reactionEnabled,
+            contactRequestEnabled = contactRequestEnabled,
+            groupInviteEnabled = groupInviteEnabled,
+            memberJoinedEnabled = memberJoinedEnabled,
+            memberLeftEnabled = memberLeftEnabled,
+            postLikeEnabled = postLikeEnabled,
+            postCommentEnabled = postCommentEnabled,
+            postRepostEnabled = postRepostEnabled,
+            storyReactionEnabled = storyReactionEnabled,
+            commentReplyEnabled = commentReplyEnabled,
+            commentLikeEnabled = commentLikeEnabled,
+            dndEnabled = dndEnabled,
+            dndStartTime = dndStartTime,
+            dndEndTime = dndEndTime,
+            dndDays = dndDays,
+            showPreview = showPreview,
+            showSenderName = showSenderName,
+            groupNotifications = groupNotifications,
+            notificationBadgeEnabled = notificationBadgeEnabled,
+        )
+
     public companion object {
         /** Projects the device-local block into the gateway wire body (drops `extras`). */
         public fun from(prefs: UserNotificationPreferences): NotificationPreferenceSyncBody =

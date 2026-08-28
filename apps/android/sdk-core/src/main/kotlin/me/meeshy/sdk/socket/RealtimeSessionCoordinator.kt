@@ -27,6 +27,7 @@ class RealtimeSessionCoordinator @Inject constructor(
     private val socialSocketManager: SocialSocketManager,
     private val categorySocketManager: CategorySocketManager,
     private val preferencesSocketManager: PreferencesSocketManager,
+    private val preferencesSyncCoordinator: me.meeshy.sdk.preferences.PreferencesSyncCoordinator,
     private val callSignalManager: CallSignalManager,
 ) {
     private var lastAuthenticated = false
@@ -42,7 +43,10 @@ class RealtimeSessionCoordinator @Inject constructor(
         when (command) {
             RealtimeCommand.Connect -> socketManager.connect()
             RealtimeCommand.Attach -> attachAll()
-            RealtimeCommand.Disconnect -> socketManager.disconnect()
+            RealtimeCommand.Disconnect -> {
+                preferencesSyncCoordinator.stop()
+                socketManager.disconnect()
+            }
         }
     }
 
@@ -52,5 +56,10 @@ class RealtimeSessionCoordinator @Inject constructor(
         categorySocketManager.attach()
         preferencesSocketManager.attach()
         callSignalManager.attach()
+        // Le pont vers les magasins locaux : les managers ci-dessus n'exposent que des
+        // flux, et un flux qu'aucun collecteur ne lit ne met rien a jour. Le collecteur
+        // des preferences user-level vit ici, pour la session, et non dans un ecran de
+        // reglages qui ne serait ouvert qu'au moment ou l'on en a le moins besoin.
+        preferencesSyncCoordinator.start()
     }
 }
