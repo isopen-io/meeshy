@@ -697,12 +697,14 @@ All models are Decodable/Encodable with readonly properties and optional CodingK
     - [x] conversation — `{ userId, conversationId, version, reset, preferences }`
       → `PreferencesSocketManager` → `ConversationRepository.applyRemoteConversationPreferences`
       (arbitrage `version <= local ⇒ drop` dans le port pur `applyRemote`)
-    - [ ] catégorie — `{ userId, category }` : **vrai manque, pas une feature absente.**
-      `NotificationPreferencesStore` et `PrivacyPreferencesStore` (DataStore, « source
-      de vérité de l'UI ») sont écrits localement puis PATCHés vers
-      `me/preferences/{notification,privacy}` par l'outbox — un bloc changé sur le web
-      laisse donc le magasin de cet appareil périmé. Hors du lot 130 : autre magasin,
-      autre voie. Suivi : #4133.
+    - [x] catégorie — `{ userId, category }` : livré au cycle 131 (#4133).
+      `PreferencesSocketManager.categoryPreferencesUpdated` relaie le NOM, et
+      `PreferencesSyncCoordinator` (collecteur de SESSION, démarré à l'attache et arrêté
+      à la déconnexion) relit la catégorie nommée via les `GET` neufs de `PreferencesApi`
+      puis la projette sur le magasin par `toPreferences(current)` — `current` portant ce
+      que le corps de fil ne porte pas (`extras`, et la jambe chiffrement côté privacy).
+      DEUX catégories sur sept sont gérées : `notification` et `privacy` sont les seules
+      mises en cache côté Android ; les cinq autres n'ont aucun magasin à invalider.
     - [ ] communauté — `{ userId, communityId, reset, preferences }` : aucun lecteur
       Android (mesuré : zéro occurrence de `UserCommunityPreferences` sous
       `apps/android/**`) — rien en cache, donc rien à périmer

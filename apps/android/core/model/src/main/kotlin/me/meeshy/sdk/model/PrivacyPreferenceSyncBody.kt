@@ -37,6 +37,34 @@ public data class PrivacyPreferenceSyncBody(
     val shareUsageData: Boolean,
     val blockScreenshots: Boolean,
 ) {
+    /**
+     * Projects the gateway block BACK onto the device-local one — the read half of [from],
+     * used when `user:preferences-updated` (category scope) says another device changed this
+     * block and the store has to catch up (issue #4133).
+     *
+     * [current] carries what this body deliberately does not, and the asymmetry is the whole
+     * point: the write side omits the four encryption fields precisely so a device sync never
+     * stamps its defaults over a value set on web or iOS. A read that rebuilt the block from
+     * the response alone would do exactly that damage in the other direction — reset the
+     * encryption leg, and the local-only `extras`, on every broadcast. Only the twelve
+     * editable toggles come from the wire.
+     */
+    public fun toPreferences(current: PrivacyPreferences): PrivacyPreferences =
+        current.copy(
+            showOnlineStatus = showOnlineStatus,
+            showLastSeen = showLastSeen,
+            showReadReceipts = showReadReceipts,
+            showTypingIndicator = showTypingIndicator,
+            hideProfileFromSearch = hideProfileFromSearch,
+            allowContactRequests = allowContactRequests,
+            allowGroupInvites = allowGroupInvites,
+            allowCallsFromNonContacts = allowCallsFromNonContacts,
+            saveMediaToGallery = saveMediaToGallery,
+            allowAnalytics = allowAnalytics,
+            shareUsageData = shareUsageData,
+            blockScreenshots = blockScreenshots,
+        )
+
     public companion object {
         /**
          * Projects the device-local block into the gateway wire body — the twelve editable toggles
