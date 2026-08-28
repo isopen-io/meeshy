@@ -74,6 +74,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// et laisse tomber le champ en silence — un test comptant les appels
     /// resterait vert pendant que le consentement disparaît.
     var lastCreateDiscoverabilityPrecision: DiscoverabilityPrecision?
+    /// La LÉGENDE par média, observée pour elle-même. L'enregistrer n'est pas
+    /// du zèle : un paramètre qu'aucun observatoire ne lit se perd au premier
+    /// élargissement suivant, exactement comme celui-ci s'est perdu.
+    var lastCreateMediaCaption: [String: String]?
 
     var deleteCallCount = 0
     var lastDeletePostId: String?
@@ -143,6 +147,7 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// par défaut, sans quoi « le format n'est pas parti » et « il est parti en
     /// story » se confondraient.
     var lastCreateCanvasPostType: PostType?
+    var lastCreateCanvasMediaCaption: [String: String]?
 
     var createWithTypeCallCount = 0
     var lastCreateWithTypeType: PostType?
@@ -272,6 +277,13 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     /// défaut du protocole rabat l'appel sur la signature `visibilityUserIds`
     /// et `discoverabilityPrecision` s'évapore — un test vert prouverait
     /// l'inverse de ce qu'il croit.
+    ///
+    /// **`mediaCaption` a été AJOUTÉ à la requirement, et l'oublier ici a rendu
+    /// deux suites rouges** (#4117, #4118). Une surcharge du double qui perd un
+    /// paramètre ne casse RIEN à la compilation — l'extension par défaut du
+    /// protocole rabat l'appel sur une signature plus pauvre, en silence. Le
+    /// paragraphe ci-dessus l'annonçait mot pour mot et ça n'a rien empêché :
+    /// `test_leDouble_observeLaRequirementCompleteDeCreate` le fait rougir.
     func create(content: String?, type: String, visibility: String, visibilityUserIds: [String]?,
                 moodEmoji: String?, mediaIds: [String]?, audioUrl: String?, audioDuration: Int?,
                 originalLanguage: String?,
@@ -279,8 +291,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
                 repostOfId: String?, location: SharedPlace?,
                 mentions: [PostMentionInput]?,
                 allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                mediaCaption: [String: String]?,
                 discoverabilityPrecision: DiscoverabilityPrecision?) async throws -> APIPost {
         lastCreateDiscoverabilityPrecision = discoverabilityPrecision
+        lastCreateMediaCaption = mediaCaption
         return try await create(content: content, type: type, visibility: visibility,
                                 visibilityUserIds: visibilityUserIds, moodEmoji: moodEmoji,
                                 mediaIds: mediaIds, audioUrl: audioUrl, audioDuration: audioDuration,
@@ -497,8 +511,10 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func createCanvasPost(type: PostType, content: String?, storyEffects: StoryEffects?,
                           visibility: String, visibilityUserIds: [String]?, originalLanguage: String?,
                           mediaIds: [String]?, repostOfId: String?, mentions: [PostMentionInput]?,
-                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?) async throws -> APIPost {
+                          allowSoundExtraction: Bool?, mediaAlt: [String: String]?,
+                          mediaCaption: [String: String]?) async throws -> APIPost {
         lastCreateCanvasPostType = type
+        lastCreateCanvasMediaCaption = mediaCaption
         return try await createStory(content: content, storyEffects: storyEffects, visibility: visibility,
                                      visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
                                      mediaIds: mediaIds, repostOfId: repostOfId, mentions: mentions)
@@ -723,6 +739,8 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         createStoryHangs = false
         createStoryCallCount = 0
         lastCreateCanvasPostType = nil
+        lastCreateCanvasMediaCaption = nil
+        lastCreateMediaCaption = nil
         lastCreateStoryContent = nil
         lastCreateStoryRepostOfId = nil
         lastCreateStoryOriginalLanguage = nil

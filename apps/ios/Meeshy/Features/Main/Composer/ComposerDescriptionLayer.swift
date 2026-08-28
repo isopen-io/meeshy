@@ -61,6 +61,17 @@ struct ComposerDescriptionLayer: View {
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
+    /// **L'autocomplétion @mention du calque.** État d'UI ÉPHÉMÈRE, purement
+    /// local à ce champ — même patron que `ComposerDocumentSurface`,
+    /// `PostDetailView` et `FeedCommentsSheet`, qui en portent chacun un.
+    ///
+    /// Ce n'est pas une règle dédoublée : la RÈGLE (« qu'est-ce qu'un `@`
+    /// actif », « où insérer le pseudo ») vit dans `MentionComposerController`
+    /// et n'existe qu'une fois. Ce qui se dédouble est le CURSEUR, et un
+    /// curseur par champ est exactement ce qu'il faut — deux champs partageant
+    /// une requête active se voleraient leurs suggestions.
+    @StateObject private var mentionBox = ComposerMentionControllerBox()
+
     var body: some View {
         Group {
             if isEditing { editor } else { reader }
@@ -120,6 +131,44 @@ struct ComposerDescriptionLayer: View {
     /// perdre le focus ailleurs : une sortie qu'aucun libellé n'annonce, et que
     /// VoiceOver ne peut pas atteindre.
     private var editor: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // **La bande des mentions s'insère AU-DESSUS du champ**, jamais en
+            // dessous : le calque vit au bas de l'écran, juste sur le socle —
+            // une bande posée sous le champ passerait derrière lui.
+            //
+            // `!suggestions.isEmpty`, pas seulement `activeQuery != nil` — même
+            // raison que la bande du document : ici il n'y a AUCUN appel réseau
+            // en attente qui remplirait la liste plus tard, donc « pas d'ami
+            // accepté », « requête sans correspondance » et « chargement en
+            // cours » sont tous des états NOMINAUX. Gater sur la seule requête
+            // peindrait une bande de verre vide dans chacun.
+            if mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty {
+                ComposerMentionStrip(
+                    controller: mentionBox.controller,
+                    currentText: text,
+                    onSelect: { updated in text = updated }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            field
+        }
+        .animation(
+            .spring(response: 0.3, dampingFraction: 0.8),
+            value: mentionBox.controller.activeQuery != nil && !mentionBox.controller.suggestions.isEmpty
+        )
+        // Les amis acceptés sont le seul jeu de candidats : mentionner qui ne
+        // vous a pas accepté n'a pas de destinataire.
+        .task { mentionBox.candidates = await ComposerMentionFriendsSource.acceptedFriends() }
+        // **Le `@` déclenche la bande, et c'est le TEXTE qui le dit** — jamais
+        // un geste ni un bouton. La règle d'extraction vit dans le contrôleur
+        // (`extractMentionQuery`), partagée avec les trois autres champs du
+        // dépôt qui la posent.
+        .adaptiveOnChange(of: text) { _, nouveau in
+            mentionBox.controller.handleQuery(in: nouveau)
+        }
+    }
+
+    private var field: some View {
         HStack(alignment: .bottom, spacing: 10) {
             TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(1...5)
@@ -131,6 +180,10 @@ struct ComposerDescriptionLayer: View {
             Button {
                 isFocused = false
                 isEditing = false
+                // La requête ne survit pas à la fermeture : rouvrir le calque
+                // sur une bande héritée d'une frappe précédente offrirait des
+                // suggestions pour un `@` que le curseur a quitté.
+                mentionBox.controller.clearSuggestions()
             } label: {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(14).weight(.semibold))
