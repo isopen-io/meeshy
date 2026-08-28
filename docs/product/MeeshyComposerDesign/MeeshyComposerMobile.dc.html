@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Schibsted+Grotesk:wght@400;500;600&family=Spline+Sans+Mono:wght@400;500;600&display=swap"><style>
+body{margin:0;background:#0E0D17;color:#ECE9FB;font-family:"Schibsted Grotesk",system-ui,sans-serif}
+a{color:#8F7DF8}a:hover{color:#B99BFF}
+.dv-turn{padding:40px 44px 34px;border-bottom:1px solid rgba(159,146,255,.16);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 6px}
+.dv-tid{font:600 10px ui-monospace,"Spline Sans Mono",monospace;padding:3px 7px;background:#8F7DF8;color:#0E0D17;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 13px/1.2 "Schibsted Grotesk",sans-serif;color:#ECE9FB}
+.dv-opts{display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start;margin-top:22px}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:11px;width:390px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,"Spline Sans Mono",monospace;padding:3px 7px;background:rgba(159,146,255,.16);color:#ECE9FB;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:500 11.5px/1.4 "Spline Sans Mono",monospace;color:#B8B0DC}
+.dv-cap{font:400 12px/1.55 "Schibsted Grotesk",sans-serif;color:#847CB0;margin:0}
+.dv-cap b{color:#B8B0DC;font-weight:600}
+.dv-opt:target .dv-oid{background:#8F7DF8;color:#0E0D17}
+.dv-next{margin:26px 0 0;font:12px/1.6 "Schibsted Grotesk",sans-serif;color:#847CB0}
+.mono{font-family:"Spline Sans Mono",monospace}
+</style></helmet>
+
+<section class="dv-turn" id="t4">
+<div class="dv-thd"><a class="dv-tid" href="#t4">4</a><span class="dv-tname">Capture — les planches de l'enregistrement, budgets compris</span></div>
+<p class="dv-cap" style="max-width:80ch">Ces planches sont une <b>proposition à trancher</b>, pas un compte rendu : la planche P9 n'est jamais arrivée dans le texte collé, donc la doctrine ci-dessous est déduite de la seule ligne disponible (« C6a — l'appui long ouvre la caméra », gardée par <span class="mono">offersCameraStarter</span> et <span class="mono">profile.allowsCapture</span>) et des leçons de performance que vos propres lots ont déjà payées (E3 <span class="mono">cardSceneHeight</span>, <span class="mono">.card</span> née en pause, <span class="mono">carrierAspect</span>, le funnel Tus d'A4). Tout chiffre marqué <span class="mono" style="color:#E8B84B">À MESURER</span> est un budget que je propose, jamais une mesure.</p>
+
+<div class="dv-opts">
+
+<!-- 4a pipeline -->
+<div class="dv-opt" id="4a" style="width:826px">
+<div class="dv-olabel"><a class="dv-oid" href="#4a">4a</a>Le pipeline de capture — six étages, un budget chacun</div>
+<div style="width:826px;background:#161329;border:1px solid rgba(159,146,255,.18);border-radius:16px;padding:24px 26px 26px;color:#ECE9FB">
+  <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.12em;color:#847CB0">DE L'APPUI LONG À L'OBJET POSÉ · AUCUN RÉ-ENCODAGE SUR LE CHEMIN</div>
+  <div style="display:flex;gap:10px;margin-top:18px;align-items:stretch">
+    <div style="flex:1;border:1px solid rgba(159,146,255,.2);border-radius:12px;padding:13px;background:#1C1838">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;color:#8F7DF8">1 · ARMEMENT</div>
+      <div style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif;margin-top:7px">Session déjà chaude</div>
+      <p style="margin:7px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">La session de capture est configurée au premier affichage de la rangée d'entrées, pas au tap : l'appui long ne fait que démarrer le flux déjà négocié.</p>
+      <div style="margin-top:10px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#69C98F">premier frame ≤ 250 ms</div>
+    </div>
+    <div style="flex:1;border:1px solid rgba(159,146,255,.2);border-radius:12px;padding:13px;background:#1C1838">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;color:#8F7DF8">2 · APERÇU</div>
+      <div style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif;margin-top:7px">Couche de rendu, pas de vue</div>
+      <p style="margin:7px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">L'aperçu est une couche liée à la session. Aucun buffer ne remonte dans l'UI, aucune image intermédiaire n'est créée par frame.</p>
+      <div style="margin-top:10px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#69C98F">60 fps · 0 allocation / frame</div>
+    </div>
+    <div style="flex:1;border:1px solid rgba(159,146,255,.2);border-radius:12px;padding:13px;background:#1C1838">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;color:#8F7DF8">3 · ÉCRITURE</div>
+      <div style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif;margin-top:7px">Direct au fichier, matériel</div>
+      <p style="margin:7px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">L'encodeur matériel écrit le fichier final pendant la prise. Rien n'est gardé en mémoire, rien n'est réécrit au relâchement.</p>
+      <div style="margin-top:10px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#69C98F">relâchement → objet posé ≤ 120 ms</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:10px;align-items:stretch">
+    <div style="flex:1;border:1px solid rgba(159,146,255,.2);border-radius:12px;padding:13px;background:#1C1838">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;color:#8F7DF8">4 · DÉRIVÉS</div>
+      <div style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif;margin-top:7px">Une seule passe</div>
+      <p style="margin:7px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Vignette, poster et <span class="mono">thumbHash</span> sont dérivés du <b style="color:#DDD8F4;font-weight:600">buffer déjà décodé</b> de la prise, en une passe, sur 32×32. Jamais en relisant le fichier.</p>
+      <div style="margin-top:10px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#69C98F">≤ 16 ms · hors thread principal</div>
+    </div>
+    <div style="flex:1;border:1px solid rgba(159,146,255,.2);border-radius:12px;padding:13px;background:#1C1838">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;color:#8F7DF8">5 · POSE</div>
+      <div style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif;margin-top:7px">Le document ne porte qu'une URL</div>
+      <p style="margin:7px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">L'objet posé référence le fichier local et porte ses dimensions ET son ratio, mesurés à l'écriture — jamais décodés plus tard pour être mesurés.</p>
+      <div style="margin-top:10px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#69C98F">0 octet de média dans le document</div>
+    </div>
+    <div style="flex:1;border:1px solid rgba(159,146,255,.2);border-radius:12px;padding:13px;background:#1C1838">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;color:#8F7DF8">6 · MONTÉE</div>
+      <div style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif;margin-top:7px">Résumable, dès la pose</div>
+      <p style="margin:7px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">La montée commence pendant la composition, par blocs, reprise à l'octet — le transcodage vit sur le serveur, jamais dans le composer.</p>
+      <div style="margin-top:10px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#69C98F">blocs 5 Mio · reprise à l'octet</div>
+    </div>
+  </div>
+  <div style="margin-top:18px;padding:13px 15px;border-left:2px solid #8F7DF8;background:#1C1838;border-radius:0 10px 10px 0">
+    <p style="margin:0;font:400 12.5px/1.6 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">La règle qui tient les six étages : <b style="color:#ECE9FB;font-weight:600">le média n'est encodé qu'une fois, à la prise</b>. Rogner, recadrer et couper n'écrivent que des <i>bornes</i> dans l'objet ; le pixel n'est retouché qu'au rendu final, côté serveur. Un éditeur qui ré-encode à chaque geste est la seule manière garantie de rendre ce composer lent.</p>
+  </div>
+</div>
+<p class="dv-cap"><b>Le budget est dans la planche, pas dans un ticket.</b> Chaque étage porte le chiffre qui le fait accepter ou refuser en revue — un étage sans budget mesurable n'est pas spécifié.</p>
+</div>
+
+<!-- 4b prise en cours -->
+<div class="dv-opt" id="4b">
+<div class="dv-olabel"><a class="dv-oid" href="#4b">4b</a>Prise en cours — segments, sans ré-encodage</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,#231F3F 0 11px,#1A1731 11px 22px)"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:44px 14px 0">
+    <div style="display:flex;gap:3px">
+      <span style="flex:2.2;height:3px;border-radius:2px;background:#F07A66"></span>
+      <span style="flex:1.4;height:3px;border-radius:2px;background:#F07A66"></span>
+      <span style="flex:3.1;height:3px;border-radius:2px;background:#fff"></span>
+      <span style="flex:5;height:3px;border-radius:2px;background:rgba(255,255,255,.22)"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-top:14px">
+      <div style="height:30px;padding:0 11px;border-radius:99px;background:rgba(240,122,102,.9);color:#0E0D17;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">● 0:06,4</div>
+      <div style="height:30px;padding:0 11px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">3 SEGMENTS</div>
+      <div style="margin-left:auto;height:30px;padding:0 11px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#69C98F">1080p · 30 IPS</div>
+    </div>
+  </div>
+  <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center">
+    <div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:rgba(255,255,255,.62);border:1px dashed rgba(255,255,255,.24);border-radius:8px;padding:7px 12px">aperçu · couche de session, 60 fps</div>
+    <div style="margin-top:10px;font:500 9px/1.6 'Spline Sans Mono',monospace;color:rgba(255,255,255,.4)">écriture matérielle en cours → fichier final</div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 16px 30px">
+    <div style="display:flex;gap:6px;margin-bottom:18px;align-items:center">
+      <span style="width:40px;height:54px;border-radius:8px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);border:1px solid rgba(255,255,255,.3);position:relative"><span style="position:absolute;right:2px;bottom:2px;font:600 7.5px/1 'Spline Sans Mono',monospace;color:#fff">2,2</span></span>
+      <span style="width:40px;height:54px;border-radius:8px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);border:1px solid rgba(255,255,255,.3);position:relative"><span style="position:absolute;right:2px;bottom:2px;font:600 7.5px/1 'Spline Sans Mono',monospace;color:#fff">1,4</span></span>
+      <span style="width:40px;height:54px;border-radius:8px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);border:1.5px solid #F07A66;position:relative"><span style="position:absolute;right:2px;bottom:2px;font:600 7.5px/1 'Spline Sans Mono',monospace;color:#F07A66">3,1</span></span>
+      <span style="margin-left:6px;width:44px;height:44px;border-radius:99px;border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font-size:15px">⌫</span>
+      <span style="margin-left:auto;font:500 9px/1.5 'Spline Sans Mono',monospace;color:rgba(255,255,255,.55);text-align:right">segments concaténés<br>sans ré-encodage</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="width:52px;height:52px;border-radius:12px;background:repeating-linear-gradient(45deg,#2E2951 0 7px,#241F44 7px 14px);border:1px solid rgba(255,255,255,.25)"></div>
+      <div style="width:86px;height:86px;border-radius:99px;border:4px solid #F07A66;display:flex;align-items:center;justify-content:center">
+        <div style="width:34px;height:34px;border-radius:7px;background:#F07A66"></div>
+      </div>
+      <div style="width:52px;height:52px;border-radius:99px;border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:15px">✓</div>
+    </div>
+    <div style="margin-top:16px;text-align:center;font:500 10px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.55)">relâcher pour clore le segment · ✓ pour poser dans la scène</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Chaque segment est déjà un fichier.</b> Supprimer le dernier segment supprime un fichier, il ne rejoue rien ; valider concatène des pistes déjà encodées, ce qui rend la sortie quasi instantanée quelle que soit la durée.</p>
+</div>
+
+<!-- 4c pose -->
+<div class="dv-opt" id="4c">
+<div class="dv-olabel"><a class="dv-oid" href="#4c">4c</a>La pose — l'objet arrive prêt, la montée a déjà commencé</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Scène</span>
+    <span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#5A5480">slide 1 · 2 objets</span>
+    <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;padding:18px 20px 0">
+    <div style="width:208px;height:370px;border-radius:14px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);position:relative;flex:none;display:flex;align-items:center;justify-content:center">
+      <span style="position:absolute;left:10px;top:10px;font:500 8.5px/1.4 'Spline Sans Mono',monospace;color:#B8B0DC;border:1px dashed #373156;border-radius:6px;padding:3px 6px;background:rgba(17,16,32,.6)">porteur · plan content</span>
+      <span style="font:500 9px/1.5 'Spline Sans Mono',monospace;color:#8F87BC;text-align:center">vidéo capturée · 6,8 s<br>1080×1920 · ratio posé à l'écriture</span>
+      <span style="position:absolute;right:10px;bottom:10px;height:24px;padding:0 9px;border-radius:99px;background:rgba(11,10,20,.7);display:flex;align-items:center;font:600 8.5px/1 'Spline Sans Mono',monospace;color:#69C98F">PRÊT</span>
+    </div>
+    <div style="width:100%;margin-top:18px;padding:12px 13px;border:1px solid #373156;border-radius:12px;background:#161329">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="width:20px;height:20px;border-radius:99px;border:2px solid rgba(143,125,248,.4);border-top-color:#8F7DF8;flex:none"></span>
+        <span style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.08em;color:#B99BFF">MONTÉE EN COURS · 34 %</span>
+        <span style="margin-left:auto;font:500 9.5px/1 'Spline Sans Mono',monospace;color:#847CB0">4,8 / 14,2 Mo</span>
+      </div>
+      <div style="height:5px;border-radius:3px;background:#221E3E;margin-top:11px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:34%;border-radius:3px;background:#8F7DF8"></span></div>
+      <p style="margin:10px 0 0;font:400 11.5px/1.55 'Schibsted Grotesk',sans-serif;color:#847CB0">La composition continue pendant la montée : au moment de publier, il ne reste qu'un accusé à attendre — pas un envoi entier.</p>
+    </div>
+    <div style="width:100%;margin-top:12px;display:flex;gap:7px">
+      <div style="flex:1;height:44px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:6px;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">✂ ROGNER</div>
+      <div style="flex:1;height:44px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:6px;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">⌗ RECADRER</div>
+      <div style="flex:1;height:44px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:6px;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">◍ MUET</div>
+    </div>
+    <p style="margin:12px 0 0;font:400 11px/1.55 'Spline Sans Mono',monospace;color:#5A5480;text-align:center">ces trois gestes écrivent des bornes · aucun ne ré-encode · aucun n'invalide la montée</p>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:8px;padding:12px 14px 26px">
+    <div style="border:1px solid #373156;border-radius:99px;padding:0 12px;height:32px;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">♫ SON ORIGINAL</div>
+    <div style="width:32px;height:32px;border:1px solid #373156;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC">◎</div>
+    <div style="margin-left:auto;background:#8F7DF8;color:#0E0D17;border-radius:99px;height:38px;padding:0 20px;display:flex;align-items:center;font:600 11.5px/1 'Spline Sans Mono',monospace">PUBLIER</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Rogner n'invalide pas la montée.</b> C'est ce qui autorise à monter le fichier pendant que l'utilisateur compose : les bornes voyagent avec la publication, le fichier reste celui qui est déjà en train de partir.</p>
+</div>
+
+<!-- 4d anti-patterns -->
+<div class="dv-opt" id="4d" style="width:826px">
+<div class="dv-olabel"><a class="dv-oid" href="#4d">4d</a>Les solutions à ne jamais retenir — et le coût mesuré</div>
+<div style="width:826px;background:#161329;border:1px solid rgba(159,146,255,.18);border-radius:16px;padding:24px 26px 26px;color:#ECE9FB">
+  <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.12em;color:#847CB0;margin-bottom:4px">HUIT REFUS · CHACUN A DÉJÀ COÛTÉ QUELQUE CHOSE, ICI OU AILLEURS</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 26px;margin-top:14px">
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 01</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Ré-encoder à chaque geste d'édition</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Un trim de 14 s coûte alors des secondes de CPU et invalide la montée déjà faite. Les bornes suffisent : le pixel se décide au rendu.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 02</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Décoder un média pour connaître son ratio</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Le ratio est écrit à la capture et voyage dans l'objet. Votre propre défaut de cadre v1→v3 (<span class="mono">carrierAspect</span>) est né d'un ratio absent à la lecture.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 03</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Un lecteur vidéo par carte du fil</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">La scène en carte naît en pause et le reste — c'est déjà votre règle. Un lecteur par cellule fait fondre la batterie avant la deuxième page de fil.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 04</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Mesurer la hauteur d'une scène à la mise en page</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Le ratio est déclaré, jamais mesuré depuis l'enfant. La récursion d'auto-dimensionnement vous a déjà coûté un crash en liste défilante.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 05</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Faire remonter les buffers de l'aperçu dans l'UI</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Une image par frame construite pour être affichée, c'est 30 à 60 allocations pleine résolution par seconde. L'aperçu appartient à la couche de session.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 06</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Attendre la fin de la composition pour monter</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Publier devient alors aussi long que le réseau. La montée démarre à la pose, par blocs, et reprend à l'octet après une coupure.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14);border-bottom:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 07</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Embarquer le média dans le document</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Le document reste du texte : des URL, des bornes, des ancres. Un brouillon doit rester léger à écrire à chaque frappe.</p>
+    </div>
+    <div style="padding:13px 0;border-top:1px solid rgba(159,146,255,.14);border-bottom:1px solid rgba(159,146,255,.14)">
+      <div style="display:flex;gap:9px;align-items:baseline"><span style="font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">✕ 08</span><span style="font:600 13px/1.3 'Bricolage Grotesque',sans-serif">Transcoder sur l'appareil pour « garantir » la lecture</span></div>
+      <p style="margin:6px 0 0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">L'appareil encode une fois, à la prise. Les variantes de lecture sont un travail de serveur, où elles se mesurent et se rejouent.</p>
+    </div>
+  </div>
+</div>
+<p class="dv-cap"><b>Un refus sans coût n'est pas un refus, c'est un goût.</b> Chaque ligne porte la conséquence mesurable qui la justifie, pour qu'une revue puisse la contester avec un chiffre plutôt qu'un avis.</p>
+</div>
+
+<!-- 4e budgets -->
+<div class="dv-opt" id="4e" style="width:826px">
+<div class="dv-olabel"><a class="dv-oid" href="#4e">4e</a>Budgets — ce qui se mesure, et comment</div>
+<div style="width:826px;background:#161329;border:1px solid rgba(159,146,255,.18);border-radius:16px;padding:24px 26px 26px;color:#ECE9FB">
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.08em;color:#847CB0;padding-bottom:10px;border-bottom:1px solid rgba(159,146,255,.16)">
+    <span>MESURE</span><span>BUDGET PROPOSÉ</span><span>PREUVE ATTENDUE</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Appui long → premier frame d'aperçu</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#69C98F">≤ 250 ms</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">trace signée, appareil le plus ancien supporté, à froid</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Aperçu pendant la prise</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#69C98F">60 fps, 0 chute</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">60 s de capture continue, compteur d'allocations à plat</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Relâchement → objet posé dans la scène</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#69C98F">≤ 120 ms</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">indépendant de la durée : mesuré à 3 s ET à 60 s</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Vignette + poster + <span class="mono">thumbHash</span></span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#69C98F">≤ 16 ms</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">une seule passe prouvée : zéro relecture du fichier</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Mémoire pendant une prise de 60 s</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#E8B84B">plateau, pas de pente</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">la forme de la courbe est le critère, pas sa valeur</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Écriture du brouillon à chaque frappe</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#69C98F">≤ 4 ms</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">document de 3 slides, 12 objets, aucun octet de média</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;border-bottom:1px solid rgba(159,146,255,.1);align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Publier après montée déjà faite</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#69C98F">≤ 1 aller-retour</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">le réseau ne doit plus porter d'octet de média à cet instant</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1.5fr .8fr 1.6fr;gap:0;padding:11px 0;align-items:baseline">
+    <span style="font:500 12.5px/1.4 'Schibsted Grotesk',sans-serif">Scrub du plan 2D</span><span style="font:600 11.5px/1.4 'Spline Sans Mono',monospace;color:#E8B84B">60 fps · à mesurer</span><span style="font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">la virtualisation du plan est le premier chantier si ça saccade — gage déjà posé</span>
+  </div>
+  <div style="margin-top:16px;padding:13px 15px;border-left:2px solid #E8B84B;background:#1C1838;border-radius:0 10px 10px 0">
+    <p style="margin:0;font:400 12.5px/1.6 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Ces huit lignes sont des <b style="color:#ECE9FB;font-weight:600">budgets proposés</b>. Deux principes de mesure comptent plus que les valeurs : mesurer sur l'appareil le plus ancien supporté et à froid, et refuser toute mesure prise sur un build incrémental — la leçon de la rév. 24 quater vaut pour la capture comme pour le reste.</p>
+  </div>
+</div>
+<p class="dv-cap"><b>Le budget se compare, il ne s'admire pas.</b> Chaque ligne dit sur quel appareil et dans quel état la mesure vaut, sinon deux revues obtiennent deux chiffres et personne n'a tort.</p>
+</div>
+
+<!-- 4f restitution -->
+<div class="dv-opt" id="4f">
+<div class="dv-olabel"><a class="dv-oid" href="#4f">4f</a>Aperçu de restitution — le même document, quatre profils</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Aperçu</span>
+    <span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#5A5480">tel que ça se lira</span>
+    <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="display:flex;gap:6px;padding:12px 14px">
+    <div style="flex:1;height:38px;border-radius:10px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:6px;font:600 10px/1 'Spline Sans Mono',monospace;color:#5FD6B0">S</div>
+    <div style="flex:1;height:38px;border-radius:10px;border:1.5px solid #7FA6F2;background:rgba(127,166,242,.12);display:flex;align-items:center;justify-content:center;gap:6px;font:600 10px/1 'Spline Sans Mono',monospace;color:#7FA6F2">P</div>
+    <div style="flex:1;height:38px;border-radius:10px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:6px;font:600 10px/1 'Spline Sans Mono',monospace;color:#F07A66">R</div>
+    <div style="flex:1;height:38px;border-radius:10px;border:1px dashed #5A5480;display:flex;align-items:center;justify-content:center;gap:6px;font:600 10px/1 'Spline Sans Mono',monospace;color:#5A5480">M</div>
+  </div>
+  <div style="flex:1;min-height:0;padding:4px 14px 0;overflow:hidden">
+    <div style="border:1px solid #373156;border-radius:14px;background:#161329;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:9px;padding:11px 12px 7px">
+        <div style="width:32px;height:32px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+        <div style="flex:1;min-width:0"><div style="font:600 12.5px/1.2 'Schibsted Grotesk',sans-serif">Vous</div><div style="font:500 10px/1.4 'Spline Sans Mono',monospace;color:#B8B0DC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">♫ Nuits blanches · @lume · 0:28</div></div>
+      </div>
+      <div style="padding:0 12px 9px;font:400 13.5px/1.55 'Schibsted Grotesk',sans-serif">Dernier soir de tournage.</div>
+      <div style="margin:0 12px 9px;height:196px;border-radius:10px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);position:relative;display:flex;align-items:flex-end;padding:10px">
+        <span style="font:500 11.5px/1.4 'Schibsted Grotesk',sans-serif;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.7)">La grue nord, six heures.</span>
+        <span style="position:absolute;right:9px;top:9px;height:22px;padding:0 8px;border-radius:99px;background:rgba(11,10,20,.7);display:flex;align-items:center;font:600 8.5px/1 'Spline Sans Mono',monospace;color:#fff">1 / 3</span>
+      </div>
+      <div style="display:flex;gap:5px;justify-content:center;padding-bottom:11px"><span style="width:14px;height:5px;border-radius:99px;background:#8F7DF8"></span><span style="width:5px;height:5px;border-radius:99px;background:#5A5480"></span><span style="width:5px;height:5px;border-radius:99px;background:#5A5480"></span></div>
+    </div>
+    <div style="margin-top:14px;padding:12px 13px;border:1px solid #373156;border-radius:12px;background:#161329">
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0">CE QUE CE PROFIL FAIT DE VOTRE DOCUMENT</div>
+      <div style="display:flex;gap:9px;align-items:baseline;margin-top:11px"><span style="font:600 9px/1.5 'Spline Sans Mono',monospace;color:#69C98F;flex:none">GARDE</span><span style="font:400 12px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">les 3 slides en carrousel · le texte comme contenu du post · le son de fond · les légendes par média</span></div>
+      <div style="display:flex;gap:9px;align-items:baseline;margin-top:8px"><span style="font:600 9px/1.5 'Spline Sans Mono',monospace;color:#E8B84B;flex:none">CHANGE</span><span style="font:400 12px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">la scène se lit recadrée dans la carte, en pause et muette jusqu'au tap</span></div>
+      <div style="display:flex;gap:9px;align-items:baseline;margin-top:8px"><span style="font:600 9px/1.5 'Spline Sans Mono',monospace;color:#847CB0;flex:none">PERD</span><span style="font:400 12px/1.5 'Schibsted Grotesk',sans-serif;color:#847CB0">rien</span></div>
+    </div>
+    <div style="margin-top:11px;padding:11px 13px;border:1px solid rgba(232,184,75,.4);background:rgba(232,184,75,.07);border-radius:12px;display:flex;gap:10px;align-items:flex-start">
+      <span style="color:#E8B84B;font-size:13px;flex:none">◈</span>
+      <p style="margin:0;font:400 11.5px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Passer en <b style="color:#E8B84B;font-weight:600">Mood</b> retirerait la scène, les 3 médias et le son : le profil est grisé tant que le document en contient.</p>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;padding:12px 14px 26px;display:flex;gap:9px">
+    <div style="flex:1;height:48px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font:600 10px/1 'Spline Sans Mono',monospace;color:#B8B0DC">‹ MODIFIER</div>
+    <div style="flex:1.4;height:48px;border-radius:12px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font:600 10.5px/1 'Spline Sans Mono',monospace">PUBLIER EN POST</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Un profil ne se choisit pas à l'aveugle.</b> L'aperçu rend le document dans la surface de lecture réelle du profil et dit en trois lignes ce qu'il garde, change et perd — un profil destructeur est grisé, jamais silencieusement accepté.</p>
+</div>
+
+</div>
+<p class="dv-next">Essayez ensuite : « voici P9, corrige <a class="dv-oid" href="#4a">4a</a> et <a class="dv-oid" href="#4b">4b</a> » · « ajoute la capture audio au pipeline de <a class="dv-oid" href="#4a">4a</a> » · « fais la même planche de budgets pour la lecture du fil »</p>
+</section>
+
+<section class="dv-turn" id="t3">
+<div class="dv-thd"><a class="dv-tid" href="#t3">3</a><span class="dv-tname">Les surfaces qui restaient — d'où l'on entre, les outils, ce qui rate</span></div>
+<p class="dv-cap" style="max-width:78ch">Suite de la même logique : les points d'entrée du composer (P3), les outils de scène qui n'avaient pas de vue — dessin, sticker, collage, mention, lieu (P7) —, la collecte d'alt et de son (C7), l'envoi durable hors ligne (lot 2), le troisième viewer (galerie plein écran), le carrousel Post avec audio (P24), l'archive à 20 h (S), et la réponse à une story.</p>
+
+<div class="dv-opts">
+
+<!-- 3a points d'entrée -->
+<div class="dv-opt" id="3a">
+<div class="dv-olabel"><a class="dv-oid" href="#3a">3a</a>D'où l'on entre — un seul objet, cinq portes</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:#0E0D17"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:48px 16px 0;opacity:.4">
+    <div style="display:flex;gap:9px;overflow:hidden">
+      <div style="width:62px;flex:none"><div style="width:62px;height:62px;border-radius:99px;border:2px solid #8F7DF8"></div><div style="height:8px;width:44px;border-radius:4px;background:#221E3E;margin:8px auto 0"></div></div>
+      <div style="width:62px;flex:none"><div style="width:62px;height:62px;border-radius:99px;border:1px solid #373156"></div><div style="height:8px;width:44px;border-radius:4px;background:#221E3E;margin:8px auto 0"></div></div>
+      <div style="width:62px;flex:none"><div style="width:62px;height:62px;border-radius:99px;border:1px solid #373156"></div><div style="height:8px;width:44px;border-radius:4px;background:#221E3E;margin:8px auto 0"></div></div>
+      <div style="width:62px;flex:none"><div style="width:62px;height:62px;border-radius:99px;border:1px solid #373156"></div><div style="height:8px;width:44px;border-radius:4px;background:#221E3E;margin:8px auto 0"></div></div>
+    </div>
+    <div style="height:150px;border-radius:14px;background:#161329;margin-top:16px"></div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;background:#161329;border-top:1px solid rgba(159,146,255,.22);border-radius:22px 22px 0 0;padding:16px 18px 26px">
+    <div style="width:42px;height:4px;border-radius:99px;background:#373156;margin:0 auto 18px"></div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0">CRÉER</div>
+    <div style="display:flex;align-items:center;gap:13px;height:64px;margin-top:6px;border-bottom:1px solid rgba(159,146,255,.1)">
+      <span style="width:38px;height:38px;border-radius:11px;background:rgba(95,214,176,.14);color:#5FD6B0;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace;flex:none">S</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Story</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">20 h puis archive · scène plein cadre</div></div>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:13px;height:64px;border-bottom:1px solid rgba(159,146,255,.1)">
+      <span style="width:38px;height:38px;border-radius:11px;background:rgba(127,166,242,.14);color:#7FA6F2;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace;flex:none">P</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Post</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">permanent · une slide = un média</div></div>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:13px;height:64px;border-bottom:1px solid rgba(159,146,255,.1)">
+      <span style="width:38px;height:38px;border-radius:11px;background:rgba(240,122,102,.14);color:#F07A66;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace;flex:none">R</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Réel</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">vidéo-first · plein écran vertical</div></div>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:13px;height:64px;border-bottom:1px solid rgba(159,146,255,.1)">
+      <span style="width:38px;height:38px;border-radius:11px;background:rgba(232,184,75,.14);color:#E8B84B;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace;flex:none">M</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Mood</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">1 h · texte seul</div></div>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:13px;height:60px">
+      <span style="width:38px;height:38px;border-radius:11px;border:1px dashed #373156;color:#8F87BC;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none">▤</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Reprendre un brouillon</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">2 en attente</div></div>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <p style="margin:14px 0 0;font:400 11.5px/1.55 'Schibsted Grotesk',sans-serif;color:#847CB0">Le profil choisi ici n'enferme rien : il est rechangeable jusqu'au socle, et le contenu déjà saisi survit au changement.</p>
+  </div>
+</div>
+<p class="dv-cap"><b>La porte nomme la durée, pas l'outil.</b> Ce que l'utilisateur choisit, c'est combien de temps ça vit et quelle forme ça prend à la lecture — l'éditeur derrière est le même objet dans les quatre cas.</p>
+</div>
+
+<!-- 3b outils de scène -->
+<div class="dv-opt" id="3b">
+<div class="dv-olabel"><a class="dv-oid" href="#3b">3b</a>Outils de scène — dessin, sticker, collage, mention, lieu</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,#2E2951 0 11px,#241F44 11px 22px)"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:44px 14px 0;display:flex;align-items:center;gap:10px">
+    <div style="width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;justify-content:center;font-size:17px">‹</div>
+    <div style="height:32px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">SLIDE 1 · 3 OBJETS</div>
+    <div style="margin-left:auto;width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;justify-content:center;font-size:16px">⋯</div>
+  </div>
+  <div style="position:absolute;left:26px;top:230px;transform:rotate(-4deg);padding:9px 13px;border-radius:8px;background:#FFD166;color:#0E0D17;font:600 13px/1.2 'Bricolage Grotesque',sans-serif">quai nord</div>
+  <div style="position:absolute;right:34px;top:322px;width:88px;height:88px;border-radius:12px;border:1px dashed rgba(255,255,255,.4);display:flex;align-items:center;justify-content:center;font:500 8.5px/1.4 'Spline Sans Mono',monospace;color:rgba(255,255,255,.72);text-align:center;background:rgba(11,10,20,.3)">sticker<br>placeholder</div>
+  <div style="position:absolute;left:38px;top:420px;height:34px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.6);border:1px solid rgba(255,255,255,.3);display:flex;align-items:center;gap:7px;font:500 11px/1 'Spline Sans Mono',monospace">⌖ Quai nord, Dunkerque</div>
+  <div style="position:absolute;left:52px;top:474px;height:32px;padding:0 11px;border-radius:99px;background:rgba(143,125,248,.85);color:#0E0D17;display:flex;align-items:center;font:600 11px/1 'Spline Sans Mono',monospace">@arto</div>
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 28px">
+    <div style="display:flex;gap:6px;overflow:hidden;margin-bottom:14px">
+      <div style="flex:1;height:60px;border-radius:12px;background:#8F7DF8;color:#0E0D17;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:16px">✎</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">DESSIN</span></div>
+      <div style="flex:1;height:60px;border-radius:12px;background:rgba(11,10,20,.66);border:1px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:16px">☺</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">STICKER</span></div>
+      <div style="flex:1;height:60px;border-radius:12px;background:rgba(11,10,20,.66);border:1px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:16px">⌗</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">COLLAGE</span></div>
+      <div style="flex:1;height:60px;border-radius:12px;background:rgba(11,10,20,.66);border:1px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:16px">@</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">MENTION</span></div>
+      <div style="flex:1;height:60px;border-radius:12px;background:rgba(11,10,20,.66);border:1px solid rgba(255,255,255,.16);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font-size:16px">⌖</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">LIEU</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;padding:11px 13px;border-radius:14px;background:rgba(11,10,20,.72);border:1px solid rgba(255,255,255,.14)">
+      <span style="width:22px;height:22px;border-radius:99px;background:#F07A66;flex:none"></span>
+      <span style="width:22px;height:22px;border-radius:99px;background:#FFD166;flex:none"></span>
+      <span style="width:22px;height:22px;border-radius:99px;background:#5FD6B0;flex:none"></span>
+      <span style="width:22px;height:22px;border-radius:99px;background:#8F7DF8;border:1.5px solid #fff;flex:none"></span>
+      <span style="width:22px;height:22px;border-radius:99px;background:#fff;flex:none"></span>
+      <span style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,.2);position:relative;margin:0 4px"><span style="position:absolute;left:0;top:0;bottom:0;width:34%;border-radius:3px;background:#fff"></span></span>
+      <span style="font:600 9px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.75)">GOMME</span>
+    </div>
+  </div>
+</div>
+<p class="dv-cap"><b>Chaque outil pose un objet, pas un calque d'image.</b> Dessin, sticker, mention et lieu deviennent des <span class="mono">MeeshyObject</span> du plan fg — donc déplaçables, ordonnables et minutables comme le texte.</p>
+</div>
+
+<!-- 3c alt & son -->
+<div class="dv-opt" id="3c">
+<div class="dv-olabel"><a class="dv-oid" href="#3c">3c</a>Accessibilité — collecter l'alt et l'annonce</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Décrire le média</span>
+    <span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#5A5480;margin-left:auto;margin-right:4px">média 1</span>
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font:600 11px/1 'Spline Sans Mono',monospace;color:#B99BFF">OK</div>
+  </div>
+  <div style="flex:1;min-height:0;padding:16px 16px 0;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="width:88px;height:118px;border-radius:10px;background:repeating-linear-gradient(45deg,#2E2951 0 8px,#241F44 8px 16px);border:1px solid #373156;flex:none"></div>
+      <div style="flex:1">
+        <div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:#8F87BC">média 1 · slide 1</div>
+        <div style="margin-top:6px;font:500 9px/1.5 'Spline Sans Mono',monospace;color:#69C98F;border:1px solid rgba(105,201,143,.4);border-radius:5px;padding:3px 7px;display:inline-block">ALT FOURNI</div>
+      </div>
+    </div>
+    <div>
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;margin-bottom:8px">TEXTE ALTERNATIF</div>
+      <div style="border:1px solid #373156;border-radius:12px;padding:12px 13px;min-height:92px;font:400 14px/1.55 'Schibsted Grotesk',sans-serif;color:#DDD8F4">Un quai vide au petit matin, grues à l'arrière-plan.<span style="display:inline-block;width:2px;height:16px;background:#8F7DF8;vertical-align:-3px;margin-left:2px"></span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px;font:500 9.5px/1 'Spline Sans Mono',monospace;color:#5A5480"><span>lu par les lecteurs d'écran</span><span>58 / 400</span></div>
+    </div>
+    <div>
+      <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;margin-bottom:8px">ANNONCE DU SON</div>
+      <div style="border:1px solid #373156;border-radius:12px;padding:12px 13px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:14px;color:#B99BFF">♫</span>
+        <div style="flex:1;min-width:0"><div style="font:500 13px/1.3 'Schibsted Grotesk',sans-serif">Nuits blanches · @lume</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">crédit complet · 0:28</div></div>
+        <span style="font:600 9px/1.5 'Spline Sans Mono',monospace;color:#69C98F;border:1px solid rgba(105,201,143,.4);border-radius:5px;padding:3px 7px;flex:none">AUTO</span>
+      </div>
+      <p style="margin:9px 0 0;font:400 11.5px/1.55 'Schibsted Grotesk',sans-serif;color:#847CB0">L'annonce est dérivée de la piste, jamais saisie à la main : une piste originale s'annonce note&nbsp;+&nbsp;onde, une piste de bibliothèque par son crédit.</p>
+    </div>
+    <div style="margin-top:auto;margin-bottom:16px;display:flex;flex-direction:column;gap:9px">
+      <div style="display:flex;align-items:center;gap:11px;padding:12px 13px;border:1px solid #373156;border-radius:12px">
+        <div style="width:34px;height:44px;border-radius:6px;background:#1A1731;flex:none"></div>
+        <div style="flex:1"><div style="font:500 13px/1.3 'Schibsted Grotesk',sans-serif">média 2</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#847CB0">sans description</div></div>
+        <span style="font:600 9px/1.5 'Spline Sans Mono',monospace;color:#E8B84B;border:1px dashed rgba(232,184,75,.5);border-radius:5px;padding:3px 7px">À DÉCRIRE</span>
+      </div>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;padding:12px 14px 26px">
+    <div style="background:#8F7DF8;color:#0E0D17;border-radius:14px;height:50px;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace">ENREGISTRER · 1 / 2 DÉCRITS</div>
+  </div>
+</div>
+<p class="dv-cap"><b>La description est demandée, jamais imposée.</b> Les médias non décrits restent listés avec leur état pour que l'oubli soit visible avant la publication, sans bloquer l'envoi.</p>
+</div>
+
+<!-- 3d envoi durable -->
+<div class="dv-opt" id="3d">
+<div class="dv-olabel"><a class="dv-oid" href="#3d">3d</a>Envoi durable — hors ligne, puis reprise</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#F07A66;letter-spacing:.06em">HORS LIGNE</span></div>
+  <div style="display:flex;align-items:center;padding:8px 18px 12px"><span style="font:700 19px/1 'Bricolage Grotesque',sans-serif">Fil</span><span style="margin-left:auto;font-size:16px;color:#8F87BC">⌕</span></div>
+  <div style="padding:0 14px 12px">
+    <div style="border:1px solid rgba(240,122,102,.45);background:rgba(240,122,102,.08);border-radius:14px;padding:13px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="width:22px;height:22px;border-radius:99px;border:2px solid rgba(240,122,102,.5);border-top-color:#F07A66;flex:none"></span>
+        <div style="flex:1"><div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#F07A66">EN ATTENTE DE RÉSEAU</div><div style="font:500 13px/1.4 'Schibsted Grotesk',sans-serif;margin-top:4px">Story · 2 slides · 14,2 Mo</div></div>
+      </div>
+      <div style="height:5px;border-radius:3px;background:#221E3E;margin-top:12px;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:62%;border-radius:3px;background:#F07A66"></span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:7px;font:500 9.5px/1 'Spline Sans Mono',monospace;color:#847CB0"><span>média 1 envoyé · média 2 à 62 %</span><span>reprise auto</span></div>
+      <div style="display:flex;gap:7px;margin-top:12px">
+        <div style="flex:1;height:38px;border-radius:10px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">RÉESSAYER</div>
+        <div style="flex:1;height:38px;border-radius:10px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">MODIFIER</div>
+        <div style="width:38px;height:38px;border-radius:10px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:13px;color:#F07A66">✕</div>
+      </div>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:0 14px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;padding:12px;display:flex;gap:9px;align-items:center;flex:none;opacity:.7">
+      <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;flex:none"></div>
+      <div style="flex:1"><div style="height:11px;width:44%;border-radius:4px;background:#221E3E"></div><div style="height:9px;width:26%;border-radius:4px;background:#1A1731;margin-top:7px"></div></div>
+    </div>
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;padding:12px;display:flex;gap:9px;align-items:center;flex:none;opacity:.5">
+      <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;flex:none"></div>
+      <div style="flex:1"><div style="height:11px;width:36%;border-radius:4px;background:#221E3E"></div><div style="height:9px;width:22%;border-radius:4px;background:#1A1731;margin-top:7px"></div></div>
+    </div>
+    <div style="margin-top:auto;margin-bottom:14px;padding:12px 13px;border-left:2px solid #F07A66;background:#161329;border-radius:0 10px 10px 0">
+      <p style="margin:0;font:400 12px/1.55 'Schibsted Grotesk',sans-serif;color:#B8B0DC">Fermer l'application n'annule rien : l'envoi reprend à l'octet où il s'est arrêté, et la publication n'apparaît dans le fil qu'une fois complète — <b style="color:#DDD8F4;font-weight:600">jamais deux fois</b>.</p>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;justify-content:space-around;padding:8px 10px 26px">
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px">▤</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⌕</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#0E0D17;background:#8F7DF8;border-radius:12px">+</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◉</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◍</div>
+  </div>
+</div>
+<p class="dv-cap"><b>L'envoi est un objet du fil, pas une notification.</b> Il occupe la place qu'aura la publication, porte sa propre progression par média, et reste modifiable tant qu'il n'est pas parti.</p>
+</div>
+
+<!-- 3e galerie plein écran -->
+<div class="dv-opt" id="3e">
+<div class="dv-olabel"><a class="dv-oid" href="#3e">3e</a>Galerie plein écran — le troisième viewer</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:#0B0A14"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:44px 14px 0;display:flex;align-items:center;gap:10px;z-index:2">
+    <div style="width:40px;height:40px;border-radius:99px;background:rgba(34,30,62,.7);display:flex;align-items:center;justify-content:center;font-size:16px">✕</div>
+    <span style="font:600 11px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.8)">2 / 3</span>
+    <div style="margin-left:auto;display:flex;gap:6px">
+      <div style="width:40px;height:40px;border-radius:99px;background:rgba(34,30,62,.7);display:flex;align-items:center;justify-content:center;font-size:14px">⤴</div>
+      <div style="width:40px;height:40px;border-radius:99px;background:rgba(34,30,62,.7);display:flex;align-items:center;justify-content:center;font-size:15px">⋯</div>
+    </div>
+  </div>
+  <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);aspect-ratio:9/16;max-height:64%;margin:auto;width:100%;background:repeating-linear-gradient(45deg,#2E2951 0 11px,#241F44 11px 22px);display:flex;align-items:flex-end;justify-content:center;padding-bottom:16px">
+    <span style="font:500 9px/1.4 'Spline Sans Mono',monospace;color:rgba(255,255,255,.75);background:rgba(11,10,20,.6);border-radius:5px;padding:4px 8px">média 2 · vidéo 0:14</span>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 14px 30px;z-index:2">
+    <div style="display:flex;align-items:center;gap:11px;margin-bottom:14px">
+      <span style="width:40px;height:40px;border-radius:99px;background:rgba(34,30,62,.8);display:flex;align-items:center;justify-content:center;font-size:14px;flex:none">▮▮</span>
+      <span style="flex:1;height:5px;border-radius:3px;background:rgba(255,255,255,.22);position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:44%;border-radius:3px;background:#fff"></span><span style="position:absolute;left:44%;top:50%;transform:translate(-50%,-50%);width:13px;height:13px;border-radius:99px;background:#fff"></span></span>
+      <span style="font:500 10px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.8);flex:none">0:06 / 0:14</span>
+      <span style="width:40px;height:40px;border-radius:99px;background:rgba(34,30,62,.8);display:flex;align-items:center;justify-content:center;font-size:13px;flex:none">◍</span>
+    </div>
+    <div style="display:flex;gap:7px;justify-content:center">
+      <span style="width:34px;height:46px;border-radius:6px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);opacity:.5"></span>
+      <span style="width:34px;height:46px;border-radius:6px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);border:1.5px solid #fff"></span>
+      <span style="width:34px;height:46px;border-radius:6px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);opacity:.5"></span>
+    </div>
+    <p style="margin:14px 0 0;font:400 12.5px/1.5 'Schibsted Grotesk',sans-serif;color:rgba(255,255,255,.82);max-width:none">Un quai vide au petit matin, grues à l'arrière-plan.</p>
+  </div>
+</div>
+<p class="dv-cap"><b>Le muet de la galerie est celui du lecteur vidéo, pas celui du fond.</b> Cette surface n'annonce aucun son de fond : elle ne montre que ce qu'elle joue réellement, contrôles compris.</p>
+</div>
+
+<!-- 3f carrousel + audio -->
+<div class="dv-opt" id="3f">
+<div class="dv-olabel"><a class="dv-oid" href="#3f">3f</a>Cas d'usage — carrousel Post avec son</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;padding:8px 18px 12px"><span style="font:700 19px/1 'Bricolage Grotesque',sans-serif">Fil</span><span style="margin-left:auto;font-size:16px;color:#8F87BC">⌕</span></div>
+  <div style="flex:1;min-height:0;padding:0 14px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;overflow:hidden;flex:none">
+      <div style="display:flex;align-items:center;gap:9px;padding:12px 13px 8px">
+        <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 13.5px/1.2 'Schibsted Grotesk',sans-serif">@arto</span><span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#8F87BC">5 h</span></div>
+          <div style="font:500 11px/1.4 'Spline Sans Mono',monospace;color:#B8B0DC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px">♫ Quai nord · @arto · 1:04</div>
+        </div>
+        <div style="width:32px;height:32px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:12px;color:#B99BFF;flex:none">◍</div>
+      </div>
+      <div style="padding:0 13px 10px;font:400 14.5px/1.6 'Schibsted Grotesk',sans-serif">Trois jours sur le port. Le son est de moi.</div>
+      <div style="position:relative;margin:0 13px 10px;height:300px;border-radius:12px;overflow:hidden;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);display:flex;align-items:center;justify-content:center">
+        <span style="font:500 9px/1.4 'Spline Sans Mono',monospace;color:#B8B0DC;background:rgba(11,10,20,.6);border-radius:5px;padding:4px 8px">média 2 · slide 2</span>
+        <span style="position:absolute;right:10px;top:10px;height:24px;padding:0 9px;border-radius:99px;background:rgba(11,10,20,.7);display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#fff">2 / 3</span>
+        <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">‹</span>
+        <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);width:32px;height:32px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff">›</span>
+        <span style="position:absolute;left:12px;bottom:12px;font:500 12px/1.4 'Schibsted Grotesk',sans-serif;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.7);max-width:70%">La grue nord, six heures.</span>
+      </div>
+      <div style="display:flex;gap:5px;justify-content:center;padding-bottom:10px">
+        <span style="width:6px;height:6px;border-radius:99px;background:#5A5480"></span>
+        <span style="width:16px;height:6px;border-radius:99px;background:#8F7DF8"></span>
+        <span style="width:6px;height:6px;border-radius:99px;background:#5A5480"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:0 9px 12px">
+        <div style="height:44px;padding:0 10px;display:flex;align-items:center;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">♡ 341</div>
+        <div style="height:44px;padding:0 10px;display:flex;align-items:center;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">◌ 27</div>
+        <div style="height:44px;padding:0 10px;display:flex;align-items:center;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">↻ 6</div>
+        <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8F87BC">⤴</div>
+      </div>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;justify-content:space-around;padding:8px 10px 26px">
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px">▤</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⌕</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#0E0D17;background:#8F7DF8;border-radius:12px">+</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◉</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◍</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Une légende par slide, un son pour la publication.</b> La pagination ne change ni le texte du post ni l'annonce du son : seule la légende suit le média affiché.</p>
+</div>
+
+<!-- 3g archive -->
+<div class="dv-opt" id="3g">
+<div class="dv-olabel"><a class="dv-oid" href="#3g">3g</a>Après 20 h — l'archive</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 10px">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 15px/1 'Bricolage Grotesque',sans-serif">Archive</span>
+    <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="padding:0 16px 14px">
+    <div style="display:flex;gap:7px">
+      <span style="height:30px;padding:0 11px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace">STORIES</span>
+      <span style="height:30px;padding:0 11px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">MOODS</span>
+      <span style="height:30px;padding:0 11px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">TEMPS FORTS</span>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:0 16px;overflow:hidden">
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;padding-bottom:10px">HIER</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div style="aspect-ratio:9/16;border-radius:10px;background:repeating-linear-gradient(45deg,#2E2951 0 8px,#241F44 8px 16px);border:1px solid #373156;position:relative;display:flex;align-items:flex-end;padding:7px"><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#fff;background:rgba(11,10,20,.6);border-radius:4px;padding:3px 5px">◉ 142</span></div>
+      <div style="aspect-ratio:9/16;border-radius:10px;background:#1A1731;border:1px solid #373156;position:relative;display:flex;align-items:flex-end;padding:7px"><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">◉ 88</span></div>
+      <div style="aspect-ratio:9/16;border-radius:10px;background:repeating-linear-gradient(45deg,#2E2951 0 8px,#241F44 8px 16px);border:1px solid #373156;position:relative;display:flex;align-items:flex-end;padding:7px"><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#fff;background:rgba(11,10,20,.6);border-radius:4px;padding:3px 5px">◉ 61</span></div>
+    </div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;padding:20px 0 10px">CETTE SEMAINE</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div style="aspect-ratio:9/16;border-radius:10px;background:#1A1731;border:1px solid #373156"></div>
+      <div style="aspect-ratio:9/16;border-radius:10px;background:repeating-linear-gradient(45deg,#2E2951 0 8px,#241F44 8px 16px);border:1px solid #373156"></div>
+      <div style="aspect-ratio:9/16;border-radius:10px;background:#1A1731;border:1px solid #373156"></div>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;padding:12px 14px 26px;display:flex;gap:9px">
+    <div style="flex:1;height:48px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font:600 10px/1 'Spline Sans Mono',monospace;color:#B8B0DC">↻ REPUBLIER</div>
+    <div style="flex:1;height:48px;border-radius:12px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font:600 10px/1 'Spline Sans Mono',monospace">+ TEMPS FORT</div>
+  </div>
+</div>
+<p class="dv-cap"><b>L'archive est privée par défaut et le reste.</b> Republier depuis l'archive rouvre la même publication dans le composer — la scène et ses objets sont intacts, l'audience est redemandée.</p>
+</div>
+
+<!-- 3h réponse à une story -->
+<div class="dv-opt" id="3h">
+<div class="dv-olabel"><a class="dv-oid" href="#3h">3h</a>Répondre à une story — la conversation</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:10px;padding:44px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:40px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <div style="width:34px;height:34px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+    <div><div style="font:600 13.5px/1.2 'Schibsted Grotesk',sans-serif">Camille Roux</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#69C98F">en ligne</div></div>
+    <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#8F87BC">◉</div>
+  </div>
+  <div style="flex:1;min-height:0;padding:16px 14px 0;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+    <div style="align-self:flex-end;max-width:78%;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+      <div style="border:1px solid #373156;border-radius:12px;overflow:hidden;background:#161329;width:132px">
+        <div style="height:190px;background:repeating-linear-gradient(45deg,#2E2951 0 8px,#241F44 8px 16px);position:relative;display:flex;align-items:center;justify-content:center;padding:0 10px">
+          <span style="font:600 12px/1.25 'Bricolage Grotesque',sans-serif;color:#fff;text-align:center">Dernier soir de tournage</span>
+        </div>
+        <div style="padding:7px 9px;font:500 9px/1.3 'Spline Sans Mono',monospace;color:#8F87BC">↩ réponse à sa story</div>
+      </div>
+      <div style="background:#8F7DF8;color:#0E0D17;border-radius:14px 14px 4px 14px;padding:10px 13px;font:400 14px/1.5 'Schibsted Grotesk',sans-serif">La lumière est parfaite là.</div>
+      <span style="font:500 9.5px/1 'Spline Sans Mono',monospace;color:#5A5480">9:41 · vu</span>
+    </div>
+    <div style="align-self:flex-start;max-width:78%;display:flex;flex-direction:column;gap:6px">
+      <div style="background:#1A1731;border:1px solid #373156;border-radius:14px 14px 14px 4px;padding:10px 13px;font:400 14px/1.5 'Schibsted Grotesk',sans-serif">Six heures du matin, personne sur le quai.</div>
+      <span style="font:500 9.5px/1 'Spline Sans Mono',monospace;color:#5A5480">9:43</span>
+    </div>
+    <div style="align-self:flex-start;display:flex;align-items:center;gap:9px;padding:9px 12px;background:#1A1731;border:1px solid #373156;border-radius:14px">
+      <span style="width:30px;height:30px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font-size:11px">▶</span>
+      <span style="width:96px;height:20px;background:repeating-linear-gradient(90deg,#8F7DF8 0 2px,transparent 2px 5px);opacity:.75"></span>
+      <span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#B8B0DC">0:07</span>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;padding:10px 12px 26px;display:flex;align-items:center;gap:8px">
+    <div style="width:42px;height:42px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:15px;color:#8F87BC">▣</div>
+    <div style="flex:1;height:42px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;padding:0 15px;font:400 13.5px/1 'Schibsted Grotesk',sans-serif;color:#8F87BC">Message…</div>
+    <div style="width:42px;height:42px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font-size:15px">◍</div>
+  </div>
+</div>
+<p class="dv-cap"><b>La story répondue reste citée, pas aplatie.</b> La vignette porte la scène telle qu'elle était et le lien vers l'original ; si elle a expiré, la citation subsiste avec sa date au lieu de disparaître.</p>
+</div>
+
+</div>
+<p class="dv-next">Essayez ensuite : « les états d'erreur de <a class="dv-oid" href="#3d">3d</a> — refus serveur, quota » · « le sélecteur de stickers de <a class="dv-oid" href="#3b">3b</a> en plein » · « une planche récap qui aligne toutes les vues par profil S·P·R·M »</p>
+</section>
+
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Le reste des vues — entrées, éditeurs, lecture, ruptures</span></div>
+<p class="dv-cap" style="max-width:78ch">Complément de <a class="dv-oid" href="#t1">1</a> : les surfaces que la planche nomme mais que la première série ne montrait pas — entrées externes (P18), capture (P9), étagère des sons (P11), éditeurs trim·crop·cut (P23), spécimen des styles (P21), les trois viewers (P12), continuité et PiP (P19), rupture vécue (P20), et les deux profils restants M et R. Les noms de styles et les glyphes sont des placeholders : ils doivent venir de la table du résolveur et de la loi de l'icône (P22).</p>
+
+<div class="dv-opts">
+
+<!-- 2a entrée externe -->
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a>Entrée externe — publier une pièce jointe</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:#0E0D17"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:52px 18px 0;opacity:.45">
+    <div style="display:flex;gap:10px;align-items:center"><div style="width:34px;height:34px;border-radius:99px;background:#221E3E"></div><div style="flex:1"><div style="height:10px;width:50%;border-radius:4px;background:#221E3E"></div><div style="height:8px;width:30%;border-radius:4px;background:#1A1731;margin-top:6px"></div></div></div>
+    <div style="height:120px;border-radius:12px;background:#161329;margin-top:12px"></div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;background:#161329;border-top:1px solid rgba(159,146,255,.22);border-radius:22px 22px 0 0;padding:16px 18px 26px">
+    <div style="width:42px;height:4px;border-radius:99px;background:#373156;margin:0 auto 16px"></div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0">TRANSFÉRER VERS UNE PUBLICATION</div>
+    <div style="display:flex;gap:11px;align-items:center;margin-top:14px;padding:11px;border:1px solid #373156;border-radius:12px;background:#1A1731">
+      <div style="width:52px;height:70px;border-radius:8px;background:repeating-linear-gradient(45deg,#2E2951 0 7px,#241F44 7px 14px);flex:none"></div>
+      <div style="min-width:0">
+        <div style="font:500 13.5px/1.3 'Schibsted Grotesk',sans-serif">Vidéo · 0:14</div>
+        <div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:#8F87BC">reçue de @lume · 1080×1920</div>
+        <div style="margin-top:5px;display:inline-flex;gap:6px"><span style="font:600 9px/1.5 'Spline Sans Mono',monospace;color:#69C98F;border:1px solid rgba(105,201,143,.45);border-radius:5px;padding:2px 6px">TRANSFÉRABLE</span></div>
+      </div>
+    </div>
+    <div style="margin-top:14px;padding:12px 13px;border:1px solid #373156;border-radius:12px">
+      <div style="font:400 14px/1.5 'Schibsted Grotesk',sans-serif;color:#8F87BC">Ajouter un mot…<span style="display:inline-block;width:2px;height:16px;background:#8F7DF8;vertical-align:-3px;margin-left:2px"></span></div>
+    </div>
+    <div style="display:flex;gap:7px;margin-top:14px">
+      <div style="flex:1;height:56px;border-radius:12px;border:1.5px solid #F07A66;background:rgba(240,122,102,.1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 11.5px/1 'Spline Sans Mono',monospace;color:#F07A66">R</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#B8B0DC">Réel</span></div>
+      <div style="flex:1;height:56px;border-radius:12px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 11.5px/1 'Spline Sans Mono',monospace;color:#5FD6B0">S</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">Story</span></div>
+      <div style="flex:1;height:56px;border-radius:12px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font:600 11.5px/1 'Spline Sans Mono',monospace;color:#7FA6F2">P</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">Post</span></div>
+      <div style="flex:1;height:56px;border-radius:12px;border:1px dashed #5A5480;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;opacity:.5"><span style="font:600 11.5px/1 'Spline Sans Mono',monospace;color:#5A5480">M</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#5A5480">texte seul</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:52px;margin-top:8px;border-top:1px solid rgba(159,146,255,.12)">
+      <span style="font-size:15px;color:#8F87BC;width:20px;text-align:center">◎</span><span style="font:500 14px/1 'Schibsted Grotesk',sans-serif">Audience</span>
+      <span style="margin-left:auto;font:500 12px/1 'Spline Sans Mono',monospace;color:#B99BFF">Amis</span><span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="margin-top:10px;background:#8F7DF8;color:#0E0D17;border-radius:14px;height:52px;display:flex;align-items:center;justify-content:center;font:600 12.5px/1 'Spline Sans Mono',monospace">PUBLIER EN RÉEL</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le format se choisit là où la pièce arrive.</b> Un profil que la pièce ne peut pas tenir est montré désactivé avec sa raison, jamais masqué : l'utilisateur apprend la règle au lieu de la deviner.</p>
+</div>
+
+<!-- 2b capture -->
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a>Capture — l'appui long ouvre la caméra</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,#231F3F 0 11px,#1A1731 11px 22px)"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:46px 16px 0;display:flex;align-items:center;gap:10px">
+    <div style="width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;justify-content:center;font-size:17px">✕</div>
+    <div style="height:32px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">◐ FLASH AUTO</div>
+    <div style="margin-left:auto;width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.6);display:flex;align-items:center;justify-content:center;font-size:15px">⟲</div>
+  </div>
+  <div style="position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center">
+    <div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:rgba(255,255,255,.7);border:1px dashed rgba(255,255,255,.28);border-radius:8px;padding:7px 12px">aperçu caméra · 9:16</div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 16px 30px">
+    <div style="display:flex;gap:7px;justify-content:center;margin-bottom:20px">
+      <span style="height:30px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.62);display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#fff">PHOTO</span>
+      <span style="height:30px;padding:0 12px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace">VIDÉO</span>
+      <span style="height:30px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.62);display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.75)">MAINS LIBRES</span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="width:52px;height:52px;border-radius:12px;background:repeating-linear-gradient(45deg,#2E2951 0 7px,#241F44 7px 14px);border:1px solid rgba(255,255,255,.25)"></div>
+      <div style="width:82px;height:82px;border-radius:99px;border:4px solid rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center">
+        <div style="width:62px;height:62px;border-radius:99px;background:#F07A66"></div>
+      </div>
+      <div style="width:52px;height:52px;border-radius:99px;border:1px solid rgba(255,255,255,.25);display:flex;align-items:center;justify-content:center;font-size:17px">☺</div>
+    </div>
+    <div style="margin-top:16px;text-align:center;font:500 10px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.55)">maintenir pour filmer · relâcher pour poser dans la scène</div>
+  </div>
+</div>
+<p class="dv-cap"><b>La caméra est une entrée, pas un mode.</b> Ce qu'elle rend est posé dans la scène courante selon la même règle que la galerie : pas de fond ⇒ il devient le fond, sinon un objet de premier plan.</p>
+</div>
+
+<!-- 2c étagère des sons -->
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a>Étagère des sons — emprunter, ou enregistrer</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:8px 14px 12px">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 15px/1 'Bricolage Grotesque',sans-serif">Son de fond</span>
+  </div>
+  <div style="padding:0 16px 12px">
+    <div style="height:42px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;gap:9px;padding:0 13px;font:500 13px/1 'Schibsted Grotesk',sans-serif;color:#8F87BC"><span style="font-size:13px">⌕</span>Chercher un titre, un auteur</div>
+    <div style="display:flex;gap:7px;margin-top:11px">
+      <span style="height:30px;padding:0 11px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace">EMPRUNTÉS</span>
+      <span style="height:30px;padding:0 11px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">ENREGISTRÉS</span>
+      <span style="height:30px;padding:0 11px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">ORIGINAUX</span>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:0 16px;display:flex;flex-direction:column;gap:9px;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:11px;padding:10px;border:1.5px solid rgba(143,125,248,.55);border-radius:12px;background:rgba(143,125,248,.08)">
+      <div style="width:44px;height:44px;border-radius:9px;background:repeating-linear-gradient(45deg,#2E2951 0 6px,#241F44 6px 12px);flex:none;display:flex;align-items:center;justify-content:center;font-size:14px">♫</div>
+      <div style="flex:1;min-width:0"><div style="font:500 13.5px/1.3 'Schibsted Grotesk',sans-serif">Nuits blanches</div><div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:#8F87BC">@lume · 0:28 · emprunté 4×</div></div>
+      <div style="width:34px;height:34px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font-size:12px;flex:none">▮▮</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:11px;padding:10px;border:1px solid #373156;border-radius:12px">
+      <div style="width:44px;height:44px;border-radius:9px;background:#1A1731;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8F87BC">♫</div>
+      <div style="flex:1;min-width:0"><div style="font:500 13.5px/1.3 'Schibsted Grotesk',sans-serif">Quai nord</div><div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:#8F87BC">@arto · 1:04</div></div>
+      <div style="width:34px;height:34px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC;flex:none">▶</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:11px;padding:10px;border:1px solid #373156;border-radius:12px">
+      <div style="width:44px;height:44px;border-radius:9px;background:#1A1731;flex:none;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8F87BC">〰</div>
+      <div style="flex:1;min-width:0"><div style="font:500 13.5px/1.3 'Schibsted Grotesk',sans-serif">Son original</div><div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:#8F87BC">la piste de votre vidéo · 0:14</div></div>
+      <div style="width:34px;height:34px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC;flex:none">▶</div>
+    </div>
+    <div style="margin-top:6px;padding:12px 13px;border-left:2px solid #8F7DF8;background:#161329;border-radius:0 10px 10px 0">
+      <p style="margin:0;font:400 12px/1.55 'Schibsted Grotesk',sans-serif;color:#B8B0DC">Une piste <b style="color:#DDD8F4;font-weight:600">originale</b> s'annonce par note&nbsp;+&nbsp;onde ; une piste de bibliothèque par son crédit complet. Jamais l'un à la place de l'autre, même cache froid.</p>
+    </div>
+    <div style="margin-top:auto;margin-bottom:14px;display:flex;align-items:center;gap:11px;padding:13px;border:1px dashed #373156;border-radius:12px">
+      <div style="width:44px;height:44px;border-radius:99px;background:#F07A66;color:#0E0D17;display:flex;align-items:center;justify-content:center;font-size:15px;flex:none">◍</div>
+      <div><div style="font:500 13.5px/1.3 'Schibsted Grotesk',sans-serif">Enregistrer une voix</div><div style="font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:#8F87BC">note vocale · pas un son de fond</div></div>
+    </div>
+  </div>
+</div>
+<p class="dv-cap"><b>La provenance gouverne l'affichage.</b> La note vocale est rangée à part et le dit : elle n'est pas un fond audio, donc elle n'allumera jamais le badge de son ni le bouton 🔇 des surfaces de lecture.</p>
+</div>
+
+<!-- 2d éditeurs -->
+<div class="dv-opt" id="2d">
+<div class="dv-olabel"><a class="dv-oid" href="#2d">2d</a>Éditeurs — rogner · recadrer · couper</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 12px">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Recadrer</span>
+    <span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#5A5480;margin-left:auto;margin-right:4px">média 1</span>
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font:600 11px/1 'Spline Sans Mono',monospace;color:#B99BFF">OK</div>
+  </div>
+  <div style="flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:0 22px">
+    <div style="width:100%;aspect-ratio:9/16;max-height:100%;position:relative;background:repeating-linear-gradient(45deg,#2E2951 0 10px,#241F44 10px 20px);border-radius:6px;overflow:hidden">
+      <div style="position:absolute;inset:0;background:rgba(11,10,20,.55)"></div>
+      <div style="position:absolute;left:8%;right:8%;top:18%;bottom:18%;border:1.5px solid #fff;background:repeating-linear-gradient(45deg,#2E2951 0 10px,#241F44 10px 20px)">
+        <span style="position:absolute;left:33.3%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28)"></span>
+        <span style="position:absolute;left:66.6%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28)"></span>
+        <span style="position:absolute;top:33.3%;left:0;right:0;height:1px;background:rgba(255,255,255,.28)"></span>
+        <span style="position:absolute;top:66.6%;left:0;right:0;height:1px;background:rgba(255,255,255,.28)"></span>
+        <span style="position:absolute;left:-2px;top:-2px;width:20px;height:4px;background:#fff"></span><span style="position:absolute;left:-2px;top:-2px;width:4px;height:20px;background:#fff"></span>
+        <span style="position:absolute;right:-2px;bottom:-2px;width:20px;height:4px;background:#fff"></span><span style="position:absolute;right:-2px;bottom:-2px;width:4px;height:20px;background:#fff"></span>
+      </div>
+    </div>
+  </div>
+  <div style="padding:16px 14px 0;display:flex;gap:7px;justify-content:center">
+    <span style="height:32px;padding:0 12px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace">9:16</span>
+    <span style="height:32px;padding:0 12px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">4:5</span>
+    <span style="height:32px;padding:0 12px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">1:1</span>
+    <span style="height:32px;padding:0 12px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">LIBRE</span>
+  </div>
+  <div style="padding:16px 14px 0">
+    <div style="height:52px;border-radius:10px;border:1.5px solid #FFD166;background:#1A1731;position:relative;display:flex;overflow:hidden">
+      <span style="flex:1;background:repeating-linear-gradient(90deg,#2E2951 0 3px,#241F44 3px 6px)"></span>
+      <span style="position:absolute;left:0;top:0;bottom:0;width:16px;background:#FFD166;border-radius:9px 0 0 9px"></span>
+      <span style="position:absolute;right:22%;top:0;bottom:0;width:16px;background:#FFD166;border-radius:0 9px 9px 0"></span>
+      <span style="position:absolute;right:0;top:0;bottom:0;width:22%;background:rgba(11,10,20,.62)"></span>
+      <span style="position:absolute;left:38%;top:0;bottom:0;width:1.5px;background:#FF6B6B"></span>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:8px;font:500 9.5px/1 'Spline Sans Mono',monospace;color:#8F87BC"><span>0:00</span><span style="color:#FFD166">rogné · 0:11,2</span><span>0:14</span></div>
+  </div>
+  <div style="display:flex;gap:8px;padding:18px 14px 30px">
+    <div style="flex:1;height:46px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Spline Sans Mono',monospace;color:#8F87BC">✂ COUPER</div>
+    <div style="flex:1;height:46px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Spline Sans Mono',monospace;color:#8F87BC">⟲ PIVOTER</div>
+    <div style="flex:1;height:46px;border-radius:12px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;gap:7px;font:600 10px/1 'Spline Sans Mono',monospace;color:#8F87BC">◍ MUET</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Un seul écran pour les trois gestes.</b> Le cadre porte le recadrage, la bande porte le rognage, la coupe scinde à la tête de lecture — l'ordre des rangées suit l'ordre des décisions, pas trois écrans successifs.</p>
+</div>
+
+<!-- 2e styles -->
+<div class="dv-opt" id="2e">
+<div class="dv-olabel"><a class="dv-oid" href="#2e">2e</a>Spécimen des styles de texte</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 10px">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 15px/1 'Bricolage Grotesque',sans-serif">Style du texte</span>
+    <span style="margin-left:auto;font:500 10.5px/1 'Spline Sans Mono',monospace;color:#5A5480">18 styles</span>
+  </div>
+  <div style="padding:0 14px 14px;display:flex;justify-content:center">
+    <div style="width:150px;height:266px;border-radius:12px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);display:flex;align-items:center;justify-content:center;padding:0 14px">
+      <span style="font:700 21px/1.2 'Bricolage Grotesque',sans-serif;color:#fff;text-align:center;text-shadow:0 0 18px rgba(143,125,248,.9),0 0 4px #fff">Dernier soir</span>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:0 14px 20px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-content:start;overflow:hidden">
+    <div style="height:64px;border-radius:10px;border:1.5px solid #8F7DF8;background:#1A1731;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 15px/1 'Bricolage Grotesque',sans-serif;color:#fff;text-shadow:0 0 12px rgba(143,125,248,.95)">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#B99BFF">NÉON</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 15px/1 'Bricolage Grotesque',sans-serif;color:#fff">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">PLEIN</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 15px/1 'Bricolage Grotesque',sans-serif;color:transparent;-webkit-text-stroke:1px #DDD8F4">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">CONTOUR</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 14px/1 'Bricolage Grotesque',sans-serif;color:#0E0D17;background:#fff;border-radius:4px;padding:2px 6px">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">SURLIGNÉ</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:600 14px/1 'Spline Sans Mono',monospace;color:#5FD6B0;letter-spacing:.1em">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">MACHINE</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 15px/1 'Bricolage Grotesque',sans-serif;background:linear-gradient(100deg,#8F7DF8,#5FD6B0);-webkit-background-clip:text;background-clip:text;color:transparent">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">DÉGRADÉ</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 15px/1 'Bricolage Grotesque',sans-serif;color:#fff;text-shadow:3px 3px 0 #F07A66">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">OMBRE</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:500 15px/1 'Schibsted Grotesk',sans-serif;color:#DDD8F4;font-style:italic">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">ITALIQUE</span></div>
+    <div style="height:64px;border-radius:10px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:700 15px/1 'Bricolage Grotesque',sans-serif;color:#E8B84B;text-transform:uppercase;letter-spacing:.08em">Aa</span><span style="font:500 8px/1 'Spline Sans Mono',monospace;color:#8F87BC">CAPITALES</span></div>
+    <div style="height:64px;border-radius:10px;border:1px dashed #373156;display:flex;align-items:center;justify-content:center;grid-column:span 3;font:500 9.5px/1.5 'Spline Sans Mono',monospace;color:#5A5480;text-align:center">9 styles restants — noms et rendus à reprendre de la table du résolveur (18 entrées, repli sur style inconnu)</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le spécimen se lit sur le fond réel.</b> L'aperçu en haut applique le style sélectionné au vrai texte de la scène ; la grille ne montre que <span class="mono">Aa</span> pour rester comparable d'un style à l'autre.</p>
+</div>
+
+<!-- 2f viewer story -->
+<div class="dv-opt" id="2f">
+<div class="dv-olabel"><a class="dv-oid" href="#2f">2f</a>Viewer Story — le rail latéral</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,#2E2951 0 11px,#241F44 11px 22px)"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:44px 14px 0">
+    <div style="display:flex;gap:4px">
+      <span style="flex:1;height:2.5px;border-radius:2px;background:#fff"></span>
+      <span style="flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.85)"></span>
+      <span style="flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.28)"></span>
+      <span style="flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.28)"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:9px;margin-top:14px">
+      <div style="width:34px;height:34px;border-radius:99px;background:#221E3E;border:1.5px solid #fff;flex:none"></div>
+      <div style="min-width:0">
+        <div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 13.5px/1.2 'Schibsted Grotesk',sans-serif">Camille Roux</span><span style="font:500 10px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.65)">2 h</span></div>
+        <div style="font:500 10.5px/1.5 'Spline Sans Mono',monospace;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px">♫ Nuits blanches · @lume · 0:28</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:4px">
+        <div style="width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.5);display:flex;align-items:center;justify-content:center;font-size:14px">⋯</div>
+        <div style="width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.5);display:flex;align-items:center;justify-content:center;font-size:16px">✕</div>
+      </div>
+    </div>
+  </div>
+  <div style="position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:12px;align-items:center">
+    <div style="width:44px;height:44px;border-radius:99px;background:rgba(11,10,20,.55);display:flex;align-items:center;justify-content:center;font-size:15px">◍</div>
+    <div style="width:44px;height:44px;border-radius:99px;background:rgba(11,10,20,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-size:14px">♡</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">128</span></div>
+    <div style="width:44px;height:44px;border-radius:99px;background:rgba(11,10,20,.55);display:flex;align-items:center;justify-content:center;font-size:14px">↻</div>
+    <div style="width:44px;height:44px;border-radius:99px;background:rgba(11,10,20,.55);display:flex;align-items:center;justify-content:center;font-size:14px">⤴</div>
+    <div style="width:44px;height:44px;border-radius:99px;background:rgba(11,10,20,.55);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-size:13px">◉</span><span style="font:600 8px/1 'Spline Sans Mono',monospace">42</span></div>
+  </div>
+  <div style="position:absolute;left:24px;right:80px;top:44%;transform:translateY(-50%)">
+    <span style="font:700 30px/1.16 'Bricolage Grotesque',sans-serif;color:#fff;text-shadow:0 2px 18px rgba(0,0,0,.6)">Dernier soir de tournage</span>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;padding:0 14px 28px">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div style="flex:1;height:44px;border-radius:99px;border:1px solid rgba(255,255,255,.4);display:flex;align-items:center;padding:0 15px;font:400 13.5px/1 'Schibsted Grotesk',sans-serif;color:rgba(255,255,255,.7)">Répondre à Camille…</div>
+      <div style="width:44px;height:44px;border-radius:99px;background:rgba(11,10,20,.55);display:flex;align-items:center;justify-content:center;font-size:14px">☺</div>
+    </div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le crédit du son est dans l'en-tête, le muet dans le rail.</b> Le muet reste local à la surface : le couper ici ne coupe rien dans le fil, et l'annonce ne disparaît jamais parce qu'on a coupé le son.</p>
+</div>
+
+<!-- 2g réel -->
+<div class="dv-opt" id="2g">
+<div class="dv-olabel"><a class="dv-oid" href="#2g">2g</a>Réel plein écran</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:linear-gradient(170deg,#2E2951,#141127)"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:46px 16px 0;display:flex;align-items:center;gap:10px">
+    <span style="font:600 15px/1 'Bricolage Grotesque',sans-serif">Réels</span>
+    <span style="height:28px;padding:0 11px;border-radius:99px;background:rgba(11,10,20,.5);display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.8)">ABONNEMENTS</span>
+    <div style="margin-left:auto;width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.5);display:flex;align-items:center;justify-content:center;font-size:15px">◉</div>
+  </div>
+  <div style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);font:500 10.5px/1.6 'Spline Sans Mono',monospace;color:rgba(255,255,255,.55);border:1px dashed rgba(255,255,255,.22);border-radius:8px;padding:7px 12px">vidéo verticale · 9:16</div>
+  <div style="position:absolute;right:12px;bottom:120px;display:flex;flex-direction:column;gap:14px;align-items:center">
+    <div style="width:44px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-size:18px">♡</span><span style="font:600 9px/1 'Spline Sans Mono',monospace">2,1k</span></div>
+    <div style="width:44px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-size:17px">◌</span><span style="font:600 9px/1 'Spline Sans Mono',monospace">86</span></div>
+    <div style="width:44px;height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><span style="font-size:17px">↻</span><span style="font:600 9px/1 'Spline Sans Mono',monospace">14</span></div>
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px">⤴</div>
+    <div style="width:44px;height:44px;border-radius:99px;border:1px solid rgba(255,255,255,.35);display:flex;align-items:center;justify-content:center;font-size:14px">◍</div>
+  </div>
+  <div style="position:absolute;left:0;right:76px;bottom:0;padding:0 16px 30px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">
+      <div style="width:32px;height:32px;border-radius:99px;background:#221E3E;border:1px solid rgba(255,255,255,.35);flex:none"></div>
+      <span style="font:600 13.5px/1 'Schibsted Grotesk',sans-serif">@arto</span>
+      <span style="height:26px;padding:0 10px;border-radius:99px;border:1px solid #fff;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace">SUIVRE</span>
+    </div>
+    <div style="font:500 11px/1.5 'Spline Sans Mono',monospace;color:rgba(255,255,255,.9);margin-bottom:6px">↻ @lume</div>
+    <p style="margin:0 0 10px;font:400 14px/1.5 'Schibsted Grotesk',sans-serif;color:#fff;max-width:none">Le quai à six heures, personne. <span style="color:rgba(255,255,255,.6)">#nord</span></p>
+    <div style="display:inline-flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:99px;background:rgba(11,10,20,.55);border:1px solid rgba(255,255,255,.22);font:500 10px/1 'Spline Sans Mono',monospace;max-width:100%;overflow:hidden;white-space:nowrap">♫ Nuits blanches · @lume · 0:28</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Deux sons, un seul bouton.</b> Le 🔇 du rail ne pilote que la piste de fond empruntée ; l'audio natif du réel reste actif par design, et le bouton ne se monte que s'il existe réellement un lecteur local à piloter.</p>
+</div>
+
+<!-- 2h détail du post -->
+<div class="dv-opt" id="2h">
+<div class="dv-olabel"><a class="dv-oid" href="#2h">2h</a>Détail du post — le muet câblé</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 10px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 15px/1 'Bricolage Grotesque',sans-serif">Publication</span>
+    <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:9px;padding:14px 16px 8px">
+      <div style="width:38px;height:38px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font:600 13.5px/1.3 'Schibsted Grotesk',sans-serif">Camille Roux</div>
+        <div style="font:500 11px/1.4 'Spline Sans Mono',monospace;color:#B99BFF;white-space:nowrap">↻ @lume</div>
+      </div>
+      <div style="height:30px;padding:0 11px;border-radius:99px;border:1px solid #8F7DF8;color:#B99BFF;display:flex;align-items:center;font:600 9px/1 'Spline Sans Mono',monospace">SUIVRE</div>
+    </div>
+    <div style="padding:0 16px 12px;font:400 15px/1.6 'Schibsted Grotesk',sans-serif">Dernier soir de tournage. Le quai à six heures, personne.</div>
+    <div style="margin:0 16px;height:300px;border-radius:12px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);position:relative;display:flex;align-items:center;justify-content:center;flex:none">
+      <span style="font:600 22px/1.25 'Bricolage Grotesque',sans-serif;color:#fff;text-align:center;padding:0 24px;text-shadow:0 2px 14px rgba(0,0,0,.55)">Dernier soir de tournage</span>
+      <span style="position:absolute;right:10px;top:10px;width:36px;height:36px;border-radius:99px;background:rgba(11,10,20,.65);border:1px solid rgba(159,146,255,.35);display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff">◍</span>
+      <span style="position:absolute;left:10px;bottom:10px;font:500 8.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC;background:rgba(11,10,20,.6);border-radius:5px;padding:4px 7px">canvas rendu · le tap pilote ce lecteur</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:4px;padding:12px 12px 0">
+      <div style="height:44px;padding:0 10px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">♡ 128</div>
+      <div style="height:44px;padding:0 10px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">◌ 12</div>
+      <div style="height:44px;padding:0 10px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">↻ 3</div>
+      <div style="height:44px;padding:0 10px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">⌸</div>
+      <div style="margin-left:auto;height:44px;width:44px;display:flex;align-items:center;justify-content:center;font-size:13px;color:#B99BFF">◍</div>
+    </div>
+    <div style="margin:6px 16px 0;padding:11px 13px;border-top:1px solid rgba(159,146,255,.14);display:flex;gap:10px;align-items:flex-start">
+      <div style="width:30px;height:30px;border-radius:99px;background:#221E3E;flex:none"></div>
+      <div><div style="font:600 12px/1.3 'Schibsted Grotesk',sans-serif">@arto</div><div style="font:400 13px/1.5 'Schibsted Grotesk',sans-serif;color:#B8B0DC">La lumière est parfaite là.</div></div>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;padding:10px 14px 26px;display:flex;gap:9px;align-items:center">
+    <div style="flex:1;height:42px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;padding:0 15px;font:400 13.5px/1 'Schibsted Grotesk',sans-serif;color:#8F87BC">Commenter…</div>
+    <div style="width:42px;height:42px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font-size:14px">⤴</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le bouton n'existe que si un canvas est réellement rendu.</b> Un post sans scène ne montre ni muet ni badge — la porte du bouton est le même prédicat que celui du rendu, jamais une seconde condition recopiée.</p>
+</div>
+
+<!-- 2i continuité / PiP -->
+<div class="dv-opt" id="2i">
+<div class="dv-olabel"><a class="dv-oid" href="#2i">2i</a>Continuité — brouillon repris, PiP</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;padding:8px 18px 12px"><span style="font:700 19px/1 'Bricolage Grotesque',sans-serif">Fil</span><span style="margin-left:auto;font-size:16px;color:#8F87BC">⌕</span></div>
+  <div style="padding:0 14px">
+    <div style="border:1px solid rgba(143,125,248,.45);background:rgba(143,125,248,.08);border-radius:14px;padding:12px;display:flex;gap:11px;align-items:center">
+      <div style="width:44px;height:60px;border-radius:8px;background:repeating-linear-gradient(45deg,#2E2951 0 7px,#241F44 7px 14px);flex:none"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#B99BFF">BROUILLON · IL Y A 12 MIN</div>
+        <div style="font:500 13.5px/1.4 'Schibsted Grotesk',sans-serif;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Story · 2 slides · Dernier soir…</div>
+      </div>
+      <div style="height:34px;padding:0 13px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;flex:none">REPRENDRE</div>
+    </div>
+  </div>
+  <div style="flex:1;min-height:0;padding:12px 14px 0;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;padding:12px;display:flex;gap:9px;align-items:center;flex:none">
+      <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;flex:none"></div>
+      <div style="flex:1"><div style="height:11px;width:46%;border-radius:4px;background:#221E3E"></div><div style="height:9px;width:28%;border-radius:4px;background:#1A1731;margin-top:7px"></div></div>
+    </div>
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;padding:12px;display:flex;gap:9px;align-items:center;flex:none">
+      <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;flex:none"></div>
+      <div style="flex:1"><div style="height:11px;width:38%;border-radius:4px;background:#221E3E"></div><div style="height:9px;width:24%;border-radius:4px;background:#1A1731;margin-top:7px"></div></div>
+    </div>
+  </div>
+  <div style="position:absolute;right:14px;bottom:104px;width:104px;height:185px;border-radius:12px;overflow:hidden;border:1px solid rgba(159,146,255,.35);background:repeating-linear-gradient(45deg,#2E2951 0 8px,#241F44 8px 16px);box-shadow:0 14px 30px rgba(0,0,0,.55)">
+    <div style="position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:6px">
+      <span style="width:22px;height:22px;border-radius:99px;background:rgba(11,10,20,.66);display:flex;align-items:center;justify-content:center;font-size:9px;color:#fff">◍</span>
+      <span style="width:22px;height:22px;border-radius:99px;background:rgba(11,10,20,.66);display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff">✕</span>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:0;padding:6px;font:500 8px/1.3 'Spline Sans Mono',monospace;color:#fff;background:linear-gradient(to top,rgba(11,10,20,.8),transparent)">@arto · 0:06 / 0:14</div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;justify-content:space-around;padding:8px 10px 26px">
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px">▤</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⌕</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#0E0D17;background:#8F7DF8;border-radius:12px">+</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◉</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◍</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Rien ne se perd en quittant.</b> Le brouillon revient en tête du fil avec ce qu'il contient déjà ; la lecture quittée continue en vignette, avec son propre muet et sa position.</p>
+</div>
+
+<!-- 2j sentinelle -->
+<div class="dv-opt" id="2j">
+<div class="dv-olabel"><a class="dv-oid" href="#2j">2j</a>Rupture vécue — la sentinelle</div>
+<div style="width:390px;height:844px;background:#0B0A14;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#fff;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:#141127"></div>
+  <div style="position:absolute;left:0;right:0;top:0;padding:44px 14px 0">
+    <div style="display:flex;gap:4px"><span style="flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.4)"></span><span style="flex:1;height:2.5px;border-radius:2px;background:rgba(255,255,255,.18)"></span></div>
+    <div style="display:flex;align-items:center;gap:9px;margin-top:14px">
+      <div style="width:34px;height:34px;border-radius:99px;background:#221E3E;border:1.5px solid rgba(255,255,255,.5);flex:none"></div>
+      <span style="font:600 13.5px/1 'Schibsted Grotesk',sans-serif">Camille Roux</span>
+      <div style="margin-left:auto;width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.5);display:flex;align-items:center;justify-content:center;font-size:16px">✕</div>
+    </div>
+  </div>
+  <div style="margin:auto;padding:0 34px;text-align:center;position:relative;z-index:2">
+    <div style="width:64px;height:64px;border-radius:18px;border:1.5px dashed rgba(185,155,255,.5);margin:0 auto 20px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#B99BFF">◈</div>
+    <h3 style="margin:0 0 10px;font:600 21px/1.24 'Bricolage Grotesque',sans-serif;color:#fff">Cette story utilise un format plus récent</h3>
+    <p style="margin:0 0 22px;font:400 14px/1.6 'Schibsted Grotesk',sans-serif;color:#B8B0DC;max-width:none">Votre version de l'application ne sait pas encore la peindre. Elle n'est pas perdue : elle s'affichera telle que son auteur l'a composée après la mise à jour.</p>
+    <div style="background:#8F7DF8;color:#0E0D17;border-radius:14px;height:50px;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace">METTRE À JOUR</div>
+    <div style="margin-top:12px;height:50px;display:flex;align-items:center;justify-content:center;font:600 11px/1 'Spline Sans Mono',monospace;color:#8F87BC">PASSER À LA SUIVANTE</div>
+    <div style="margin-top:26px;font:500 9.5px/1.6 'Spline Sans Mono',monospace;color:#5A5480">sentinelle · aucun cadre vide, aucun fond par défaut</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Une rupture se raconte, elle ne se subit pas.</b> Jamais un écran noir ni un fond par défaut à la place de la scène : la sentinelle dit ce qui manque, ce qui est intact, et le seul geste utile.</p>
+</div>
+
+<!-- 2k mood -->
+<div class="dv-opt" id="2k">
+<div class="dv-olabel"><a class="dv-oid" href="#2k">2k</a>Mood — texte seul, une heure</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">✕</div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:6px;background:#E8B84B;color:#0E0D17;font:600 10.5px/1 'Spline Sans Mono',monospace">M</span>
+      <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Mood</span><span style="color:#8F87BC;font-size:11px">▾</span>
+    </div>
+    <span style="margin-left:auto;font:500 10.5px/1 'Spline Sans Mono',monospace;color:#5A5480">expire dans 1 h</span>
+  </div>
+  <div style="flex:1;min-height:0;padding:28px 22px 0;display:flex;flex-direction:column">
+    <div style="font:600 27px/1.3 'Bricolage Grotesque',sans-serif;color:#DDD8F4">Je relis tout, ne me dérangez pas<span style="display:inline-block;width:3px;height:26px;background:#8F7DF8;vertical-align:-4px;margin-left:3px"></span></div>
+    <div style="margin-top:14px;font:500 10.5px/1 'Spline Sans Mono',monospace;color:#5A5480">content · 34 / 180</div>
+    <div style="margin-top:auto;margin-bottom:16px;padding:12px 13px;border-left:2px solid #E8B84B;background:#161329;border-radius:0 10px 10px 0">
+      <p style="margin:0;font:400 12px/1.55 'Schibsted Grotesk',sans-serif;color:#B8B0DC">Le Mood n'a <b style="color:#DDD8F4;font-weight:600">pas de scène</b> : ni rail de slides, ni fond, ni son. La rangée d'entrées est réduite à l'emoji, et le socle ne porte que l'audience.</p>
+    </div>
+  </div>
+  <div style="padding:0 14px 10px;display:flex;gap:7px">
+    <div style="width:64px;height:48px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:16px">☺</div>
+    <div style="flex:1;height:48px;border-radius:12px;border:1px dashed #373156;display:flex;align-items:center;padding:0 13px;font:500 9.5px/1 'Spline Sans Mono',monospace;color:#5A5480">photo · caméra · lieu · micro — indisponibles en Mood</div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:8px;padding:12px 14px 26px">
+    <div style="width:32px;height:32px;border:1px solid #373156;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC">◎</div>
+    <span style="font:500 11px/1 'Spline Sans Mono',monospace;color:#B8B0DC">Amis proches</span>
+    <div style="margin-left:auto;background:#8F7DF8;color:#0E0D17;border-radius:99px;height:38px;padding:0 20px;display:flex;align-items:center;font:600 11.5px/1 'Spline Sans Mono',monospace">PUBLIER</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le profil retire, il n'ajoute pas.</b> Les entrées absentes restent visibles et grisées avec leur raison, pour que passer de Mood à Story se comprenne d'un coup d'œil.</p>
+</div>
+
+<!-- 2l audience -->
+<div class="dv-opt" id="2l">
+<div class="dv-olabel"><a class="dv-oid" href="#2l">2l</a>Audience — qui verra</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;gap:12px;padding:44px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 15px/1 'Bricolage Grotesque',sans-serif">Audience</span>
+    <span style="margin-left:auto;font:600 11px/1 'Spline Sans Mono',monospace;color:#B99BFF">OK</span>
+  </div>
+  <div style="flex:1;min-height:0;overflow:hidden;padding:6px 16px 0">
+    <div style="display:flex;align-items:center;gap:12px;height:60px;border-bottom:1px solid rgba(159,146,255,.12)">
+      <span style="width:22px;text-align:center;font-size:15px;color:#8F87BC">◍</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Public</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">tout le monde, y compris hors abonnés</div></div>
+      <span style="width:22px;height:22px;border-radius:99px;background:#8F7DF8;color:#0E0D17;display:flex;align-items:center;justify-content:center;font-size:11px">✓</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:60px;border-bottom:1px solid rgba(159,146,255,.12)">
+      <span style="width:22px;text-align:center;font-size:15px;color:#8F87BC">◎</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Abonnés</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">418 personnes</div></div>
+      <span style="width:22px;height:22px;border-radius:99px;border:1.5px solid #373156"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:60px;border-bottom:1px solid rgba(159,146,255,.12)">
+      <span style="width:22px;text-align:center;font-size:15px;color:#8F87BC">◐</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Amis proches</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">12 personnes · liste modifiable</div></div>
+      <span style="width:22px;height:22px;border-radius:99px;border:1.5px solid #373156"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:60px;border-bottom:1px solid rgba(159,146,255,.12)">
+      <span style="width:22px;text-align:center;font-size:15px;color:#8F87BC">⌸</span>
+      <div style="flex:1"><div style="font:500 14.5px/1.3 'Schibsted Grotesk',sans-serif">Choisir des personnes</div><div style="font:500 10px/1.5 'Spline Sans Mono',monospace;color:#8F87BC">3 sélectionnées</div></div>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;padding:20px 0 10px">SÉLECTION</div>
+    <div style="display:flex;flex-wrap:wrap;gap:7px">
+      <span style="height:32px;padding:0 11px;border-radius:99px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;gap:7px;font:500 11.5px/1 'Schibsted Grotesk',sans-serif">@arto <span style="color:#8F87BC">✕</span></span>
+      <span style="height:32px;padding:0 11px;border-radius:99px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;gap:7px;font:500 11.5px/1 'Schibsted Grotesk',sans-serif">@lume <span style="color:#8F87BC">✕</span></span>
+      <span style="height:32px;padding:0 11px;border-radius:99px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;gap:7px;font:500 11.5px/1 'Schibsted Grotesk',sans-serif">@nadia <span style="color:#8F87BC">✕</span></span>
+    </div>
+    <div style="margin-top:22px;padding:12px 13px;border-left:2px solid #8F7DF8;background:#161329;border-radius:0 10px 10px 0">
+      <p style="margin:0;font:400 12px/1.55 'Schibsted Grotesk',sans-serif;color:#B8B0DC">L'audience appartient à la <span class="mono" style="color:#DDD8F4">publication</span>, jamais à une slide : changer de profil la conserve.</p>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;padding:12px 14px 26px">
+    <div style="background:#8F7DF8;color:#0E0D17;border-radius:14px;height:50px;display:flex;align-items:center;justify-content:center;font:600 12px/1 'Spline Sans Mono',monospace">APPLIQUER · PUBLIC</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Un seul niveau porte l'audience.</b> Les listes nommées affichent leur effectif pour que « amis proches » ne soit jamais une abstraction au moment d'appuyer sur Publier.</p>
+</div>
+
+</div>
+<p class="dv-next">Essayez ensuite : « les 9 styles manquants de <a class="dv-oid" href="#2e">2e</a>, voici la table » · « variante clair pour <a class="dv-oid" href="#2h">2h</a> et <a class="dv-oid" href="#2l">2l</a> » · « rends <a class="dv-oid" href="#2f">2f</a> et <a class="dv-oid" href="#2g">2g</a> navigables au swipe »</p>
+</section>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">MeeshyComposer — vues mobiles, du document à la lecture</span></div>
+<p class="dv-cap" style="max-width:78ch">Maquettes hi-fi sur les jetons de la planche (UI sombre fixe, <span class="mono">Bricolage&nbsp;Grotesque</span> · <span class="mono">Schibsted&nbsp;Grotesk</span> · <span class="mono">Spline&nbsp;Sans&nbsp;Mono</span>, accent <span class="mono">#8F7DF8</span>). Hypothèses posées à partir de la planche : barre haute <span class="mono">✕ · type · rail des slides · ⋯</span> (#4047), scène incrustée EN HAUT dès qu'un fond est choisi (#3939), pose d'un média (#4038), appui long (#4046), une slide EST une scène (rév.&nbsp;27). Les visuels sont des placeholders — aucune image réelle n'est fournie.</p>
+
+<div class="dv-opts">
+
+<!-- ============ 1a — Amorce ============ -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Amorce — document sans scène</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace;color:#DDD8F4"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">✕</div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:6px;background:#7FA6F2;color:#0E0D17;font:600 10.5px/1 'Spline Sans Mono',monospace">P</span>
+      <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Post</span>
+      <span style="color:#8F87BC;font-size:11px">▾</span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <div style="width:26px;height:36px;border:1.5px dashed #373156;border-radius:6px"></div>
+      <div style="width:26px;height:36px;border:1.5px dashed #373156;border-radius:6px;display:flex;align-items:center;justify-content:center;font:600 13px/1 'Spline Sans Mono',monospace;color:#8F87BC">+</div>
+    </div>
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;padding:20px 20px 0;min-height:0">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="width:38px;height:38px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+      <div style="flex:1">
+        <div style="font:500 15.5px/1.5 'Schibsted Grotesk',sans-serif;color:#8F87BC">Écrire quelque chose…<span style="display:inline-block;width:2px;height:17px;background:#8F7DF8;vertical-align:-3px;margin-left:2px"></span></div>
+        <div style="margin-top:14px;font:500 11px/1 'Spline Sans Mono',monospace;color:#5A5480">content · brouillon enregistré</div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:12px 14px 10px;display:flex;gap:6px;justify-content:space-between">
+    <div style="flex:1;height:52px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font-size:16px">▣</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">PHOTO</span></div>
+    <div style="flex:1;height:52px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font-size:16px">◉</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">CAMÉRA</span></div>
+    <div style="flex:1;height:52px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font-size:16px">☺</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">EMOJI</span></div>
+    <div style="flex:1;height:52px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font-size:16px">▤</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">DOC</span></div>
+    <div style="flex:1;height:52px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font-size:16px">⌖</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">LIEU</span></div>
+    <div style="flex:1;height:52px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px"><span style="font-size:16px">◍</span><span style="font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">MICRO</span></div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:8px;padding:12px 14px 26px">
+    <div style="border:1px solid #373156;border-radius:99px;padding:0 12px;height:32px;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">♫ AJOUTER UN SON</div>
+    <div style="width:32px;height:32px;border:1px solid #373156;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC">◎</div>
+    <div style="margin-left:auto;background:#8F7DF8;color:#0E0D17;border-radius:99px;height:38px;padding:0 20px;display:flex;align-items:center;font:600 11.5px/1 'Spline Sans Mono',monospace">PUBLIER</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le clavier d'abord.</b> Rien ne préjuge du format : le texte est <span class="mono">content</span>, la rangée d'entrées est la seule porte vers une scène. Le socle porte déjà le son de fond, l'audience et l'envoi.</p>
+</div>
+
+<!-- ============ 1b — la scène naît ============ -->
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>Naissance de la scène — le fond est choisi</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:10px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">✕</div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:6px;background:#5FD6B0;color:#0E0D17;font:600 10.5px/1 'Spline Sans Mono',monospace">S</span>
+      <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Story</span><span style="color:#8F87BC;font-size:11px">▾</span>
+    </div>
+    <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+      <div style="width:26px;height:36px;border-radius:6px;border:1.5px solid #8F7DF8;background:linear-gradient(160deg,#2E2951,#1B1834)"></div>
+      <div style="width:26px;height:36px;border:1.5px dashed #373156;border-radius:6px;display:flex;align-items:center;justify-content:center;font:600 13px/1 'Spline Sans Mono',monospace;color:#8F87BC">+</div>
+    </div>
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;align-items:center;padding:16px 20px 0">
+    <div style="width:208px;height:370px;border-radius:14px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);position:relative;display:flex;align-items:flex-end;justify-content:center;padding-bottom:22px;flex:none">
+      <span style="position:absolute;top:12px;left:12px;font:500 8.8px/1.4 'Spline Sans Mono',monospace;color:#B8B0DC;border:1px dashed #373156;border-radius:6px;padding:3px 6px;background:rgba(17,16,32,.55)">fond · plan bg</span>
+      <span style="font:600 20px/1.25 'Bricolage Grotesque',sans-serif;color:#fff;text-align:center;text-shadow:0 2px 14px rgba(0,0,0,.6);max-width:80%">Le texte devient<br>un objet</span>
+      <span style="position:absolute;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:9px">
+        <span style="width:34px;height:34px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:13px">✎</span>
+        <span style="width:34px;height:34px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:13px">☺</span>
+        <span style="width:34px;height:34px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:13px">♫</span>
+        <span style="width:34px;height:34px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:12px">⌗</span>
+      </span>
+    </div>
+    <div style="width:100%;display:flex;gap:10px;align-items:flex-start;margin-top:18px">
+      <div style="width:32px;height:32px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+      <div style="flex:1">
+        <div style="font:400 14.5px/1.55 'Schibsted Grotesk',sans-serif;color:#DDD8F4">Dernier soir de tournage.<span style="display:inline-block;width:2px;height:16px;background:#8F7DF8;vertical-align:-3px;margin-left:2px"></span></div>
+        <div style="margin-top:8px;font:500 10.5px/1 'Spline Sans Mono',monospace;color:#5A5480">description de la slide</div>
+      </div>
+    </div>
+  </div>
+  <div style="padding:10px 14px;display:flex;gap:6px">
+    <div style="flex:1;height:46px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:15px">▣</div>
+    <div style="flex:1;height:46px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:15px">◉</div>
+    <div style="flex:1;height:46px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:15px">☺</div>
+    <div style="flex:1;height:46px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:15px">⌖</div>
+    <div style="flex:1;height:46px;border-radius:12px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:15px">◍</div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:8px;padding:12px 14px 26px">
+    <div style="border:1px solid rgba(143,125,248,.55);border-radius:99px;padding:0 12px;height:32px;display:flex;align-items:center;gap:6px;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#DDD8F4">♫ NUITS BLANCHES · @lume · 0:28</div>
+    <div style="width:32px;height:32px;border:1px solid #373156;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC">◎</div>
+    <div style="margin-left:auto;background:#8F7DF8;color:#0E0D17;border-radius:99px;height:38px;padding:0 20px;display:flex;align-items:center;font:600 11.5px/1 'Spline Sans Mono',monospace">PUBLIER</div>
+  </div>
+</div>
+<p class="dv-cap"><b>La scène est incrustée, pas plein écran.</b> Elle naît en haut du document ; le texte glisse dessous et devient sa description. Le son posé s'annonce par son crédit, jamais par une note générique.</p>
+</div>
+
+<!-- ============ 1c — éditeur de scène ============ -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Éditeur de scène — objet sélectionné</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:relative;flex:1;min-height:0;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;padding:44px 14px 0">
+      <div style="width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.62);display:flex;align-items:center;justify-content:center;font-size:17px">‹</div>
+      <div style="display:flex;gap:5px;margin-left:2px">
+        <div style="width:22px;height:31px;border-radius:5px;border:1.5px solid #8F7DF8;background:linear-gradient(160deg,#2E2951,#1B1834)"></div>
+        <div style="width:22px;height:31px;border-radius:5px;border:1px solid rgba(255,255,255,.25);background:rgba(11,10,20,.5)"></div>
+        <div style="width:22px;height:31px;border-radius:5px;border:1px dashed rgba(255,255,255,.3);display:flex;align-items:center;justify-content:center;font:600 11px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.6)">+</div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <div style="height:32px;padding:0 11px;border-radius:99px;background:rgba(11,10,20,.62);display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">9:16</div>
+        <div style="width:40px;height:40px;border-radius:99px;background:rgba(11,10,20,.62);display:flex;align-items:center;justify-content:center;font-size:16px">⋯</div>
+      </div>
+    </div>
+    <div style="position:absolute;left:44px;top:210px;width:250px;padding:12px 14px;border:1.5px solid #8F7DF8;border-radius:8px;background:rgba(14,13,23,.28)">
+      <div style="font:600 25px/1.2 'Bricolage Grotesque',sans-serif;color:#fff;text-shadow:0 2px 14px rgba(0,0,0,.55)">Dernier soir de tournage</div>
+      <span style="position:absolute;left:-6px;top:-6px;width:11px;height:11px;border-radius:3px;background:#8F7DF8"></span>
+      <span style="position:absolute;right:-6px;top:-6px;width:11px;height:11px;border-radius:3px;background:#8F7DF8"></span>
+      <span style="position:absolute;left:-6px;bottom:-6px;width:11px;height:11px;border-radius:3px;background:#8F7DF8"></span>
+      <span style="position:absolute;right:-6px;bottom:-6px;width:11px;height:11px;border-radius:3px;background:#8F7DF8"></span>
+      <span style="position:absolute;left:0;top:-30px;font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.08em;color:#8F7DF8;background:rgba(11,10,20,.75);border-radius:5px;padding:5px 7px">TEXT · PLAN FG · z 2</span>
+    </div>
+    <div style="position:absolute;left:96px;top:496px;width:200px;height:132px;border:1px dashed rgba(255,255,255,.35);border-radius:8px;display:flex;align-items:center;justify-content:center;font:500 9px/1 'Spline Sans Mono',monospace;color:rgba(255,255,255,.7);background:rgba(11,10,20,.25)">media · plan content</div>
+    <div style="margin-top:auto;padding:0 14px 12px;display:flex;gap:7px;flex-wrap:wrap">
+      <div style="height:34px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid rgba(143,125,248,.6);color:#B99BFF;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">STYLE · NÉON</div>
+      <div style="height:34px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">TAILLE 38</div>
+      <div style="height:34px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">ALIGN ⬒</div>
+      <div style="height:34px;padding:0 12px;border-radius:99px;background:rgba(11,10,20,.7);border:1px solid #373156;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace">0:00 → 0:06</div>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:10px;padding:12px 14px 26px">
+    <div style="width:38px;height:38px;border:1px solid #373156;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#8F87BC">▤</div>
+    <div style="flex:1;height:38px;border:1px solid #373156;border-radius:10px;display:flex;align-items:center;gap:8px;padding:0 11px">
+      <span style="font:600 9.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">PLAN 2D</span>
+      <span style="flex:1;height:6px;border-radius:3px;background:#1A1731;position:relative"><span style="position:absolute;left:0;top:0;bottom:0;width:42%;border-radius:3px;background:#8F7DF8"></span></span>
+      <span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">0:06</span>
+    </div>
+    <div style="background:#8F7DF8;color:#0E0D17;border-radius:10px;height:38px;padding:0 16px;display:flex;align-items:center;font:600 11px/1 'Spline Sans Mono',monospace">OK</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Trois plans, un seul objet à la fois.</b> L'inspecteur est une rangée de jetons au-dessus du socle : il change de contenu selon le <span class="mono">kind</span>, jamais de place. Le cadre reste 9:16, le porteur y est letterboxé.</p>
+</div>
+
+<!-- ============ 1d — appui long ============ -->
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>Appui long sur un objet</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px)"></div>
+  <div style="position:absolute;inset:0;background:rgba(11,10,20,.72)"></div>
+  <div style="position:absolute;left:44px;top:206px;width:250px;padding:12px 14px;border:1.5px solid #8F7DF8;border-radius:8px;background:rgba(34,30,62,.9)">
+    <div style="font:600 25px/1.2 'Bricolage Grotesque',sans-serif;color:#fff">Dernier soir de tournage</div>
+  </div>
+  <div style="position:absolute;left:44px;top:346px;width:250px;background:#161329;border:1px solid rgba(159,146,255,.22);border-radius:14px;overflow:hidden;box-shadow:0 22px 40px rgba(0,0,0,.5)">
+    <div style="padding:11px 15px 9px;font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;border-bottom:1px solid rgba(159,146,255,.14)">OBJET TEXT · PLAN FG</div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 15px;height:50px;border-bottom:1px solid rgba(159,146,255,.1)"><span style="font-size:14px;color:#B99BFF">▲</span><span style="font:500 14.5px/1 'Schibsted Grotesk',sans-serif">Monter</span></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 15px;height:50px;border-bottom:1px solid rgba(159,146,255,.1)"><span style="font-size:14px;color:#B99BFF">▼</span><span style="font:500 14.5px/1 'Schibsted Grotesk',sans-serif">Reculer</span></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 15px;height:50px;border-bottom:1px solid rgba(159,146,255,.1)"><span style="font-size:14px;color:#B99BFF">✎</span><span style="font:500 14.5px/1 'Schibsted Grotesk',sans-serif">Modifier</span></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 15px;height:50px"><span style="font-size:14px;color:#F07A66">⤴</span><span style="font:500 14.5px/1 'Schibsted Grotesk',sans-serif;color:#F07A66">Sortir de la scène</span></div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;background:#0B0A14;border-top:1px solid #373156;padding:14px 18px 28px;display:flex;gap:10px;align-items:flex-start">
+    <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:6px;background:#5FD6B0;color:#0E0D17;font:600 10.5px/1 'Spline Sans Mono',monospace;flex:none">S</span>
+    <p style="margin:0;font:400 12px/1.55 'Schibsted Grotesk',sans-serif;color:#8F87BC">En <b style="color:#DDD8F4;font-weight:600">Story</b>, ce menu ne s'ouvre pas : l'objet reste manipulable au doigt, jamais par liste.</p>
+  </div>
+</div>
+<p class="dv-cap"><b>Quatre actions, jamais cinq.</b> « Sortir de la scène » est la seule destructrice et porte la couleur d'alerte ; l'ordre suit l'empilement (monter/reculer) avant l'édition.</p>
+</div>
+
+<!-- ============ 1e — plan 2D ============ -->
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Plan 2D — pistes, images-clés, tête de lecture</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:8px 14px 12px;border-bottom:1px solid rgba(55,49,86,.6)">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">‹</div>
+    <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Plan 2D</span>
+    <span style="font:500 10.5px/1 'Spline Sans Mono',monospace;color:#5A5480">slide 1 · 0:06</span>
+    <div style="margin-left:auto;width:40px;height:40px;border-radius:99px;background:#1A1731;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:13px">▶</div>
+  </div>
+  <div style="padding:14px 14px 0;flex:none;display:flex;justify-content:center">
+    <div style="width:168px;height:299px;border-radius:12px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);display:flex;align-items:center;justify-content:center;font:600 15px/1.25 'Bricolage Grotesque',sans-serif;color:#fff;text-align:center;padding:0 16px">Dernier soir de tournage</div>
+  </div>
+  <div style="flex:1;min-height:0;margin:14px 12px 0;background:#0B0A14;border:1px solid #373156;border-radius:14px;padding:12px 12px 14px;overflow:hidden;position:relative">
+    <div style="height:18px;margin-left:96px;background:repeating-linear-gradient(90deg,rgba(159,146,255,.28) 0 1px,transparent 1px 13px) left bottom/100% 7px no-repeat,repeating-linear-gradient(90deg,rgba(159,146,255,.28) 0 1.5px,transparent 1.5px 65px) left bottom/100% 13px no-repeat;position:relative">
+      <span style="position:absolute;left:0;top:0;font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">0s</span>
+      <span style="position:absolute;left:65px;top:0;font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">2s</span>
+      <span style="position:absolute;left:130px;top:0;font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">4s</span>
+      <span style="position:absolute;left:195px;top:0;font:500 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">6s</span>
+    </div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#8F87BC;padding:12px 0 5px">PLAN FG</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="flex:0 0 88px;font:500 9.5px/1.3 'Spline Sans Mono',monospace;color:#DDD8F4">texte · titre</span>
+      <span style="flex:1;height:26px;border-radius:6px;background:#1A1731;position:relative">
+        <span style="position:absolute;left:4px;top:3px;bottom:3px;width:72%;border-radius:5px;background:#8F7DF8;color:#0B0A14;font:600 8.5px/20px 'Spline Sans Mono',monospace;padding:0 8px;overflow:hidden">0:00 → 0:04,5</span>
+        <span style="position:absolute;left:32%;top:50%;width:8px;height:8px;background:#FFD166;transform:translate(-50%,-50%) rotate(45deg);border-radius:2px"></span>
+        <span style="position:absolute;left:58%;top:50%;width:8px;height:8px;background:#FFD166;transform:translate(-50%,-50%) rotate(45deg);border-radius:2px"></span>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="flex:0 0 88px;font:500 9.5px/1.3 'Spline Sans Mono',monospace;color:#DDD8F4">sticker</span>
+      <span style="flex:1;height:26px;border-radius:6px;background:#1A1731;position:relative">
+        <span style="position:absolute;left:38%;top:3px;bottom:3px;width:36%;border-radius:5px;background:#B99BFF;color:#0B0A14;font:600 8.5px/20px 'Spline Sans Mono',monospace;padding:0 8px;overflow:hidden">2,2 → 5,0</span>
+      </span>
+    </div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#8F87BC;padding:12px 0 5px">PLAN CONTENT</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="flex:0 0 88px;font:500 9.5px/1.3 'Spline Sans Mono',monospace;color:#DDD8F4">porteur · vidéo</span>
+      <span style="flex:1;height:26px;border-radius:6px;background:#1A1731;position:relative">
+        <span style="position:absolute;inset:3px 4px;border-radius:5px;background:#5FD6B0;color:#0B0A14;font:600 8.5px/20px 'Spline Sans Mono',monospace;padding:0 8px;overflow:hidden">0:00 → 0:06 · trim</span>
+      </span>
+    </div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#8F87BC;padding:12px 0 5px">PLAN BG · SON</div>
+    <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+      <span style="flex:0 0 88px;font:500 9.5px/1.3 'Spline Sans Mono',monospace;color:#DDD8F4">nuits blanches</span>
+      <span style="flex:1;height:26px;border-radius:6px;background:#1A1731;position:relative">
+        <span style="position:absolute;inset:3px 4px;border:1.5px dashed #373156;border-radius:5px;font:500 8.5px/19px 'Spline Sans Mono',monospace;color:#8F87BC;padding:0 8px">boucle · muet à la carte</span>
+      </span>
+    </div>
+    <span style="position:absolute;left:calc(96px + 42%);top:36px;bottom:14px;width:1.5px;background:#FF6B6B"></span>
+    <span style="position:absolute;left:calc(96px + 42%);top:31px;transform:translateX(-50%);width:11px;height:11px;border-radius:3px;background:#FF6B6B"></span>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:10px;padding:12px 14px 26px;margin-top:12px">
+    <div style="height:38px;padding:0 13px;border:1px solid #373156;border-radius:10px;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#FFD166">◆ IMAGE-CLÉ</div>
+    <div style="height:38px;padding:0 13px;border:1px solid #373156;border-radius:10px;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">✂ COUPER</div>
+    <div style="margin-left:auto;background:#8F7DF8;color:#0E0D17;border-radius:10px;height:38px;padding:0 16px;display:flex;align-items:center;font:600 11px/1 'Spline Sans Mono',monospace">OK</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le temps se lit en pistes, groupées par plan.</b> La piste de son est en pointillé : elle existe pour le cadrage, pas pour l'édition. Aperçu figé au-dessus de la tête de lecture, jamais un aperçu qui joue tout seul.</p>
+</div>
+
+<!-- ============ 1f — socle déployé ============ -->
+<div class="dv-opt" id="1f">
+<div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a>Socle déployé — ce qui part</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;position:relative;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="position:absolute;inset:0;background:#0E0D17"></div>
+  <div style="position:absolute;left:0;right:0;top:0;height:210px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:16px;opacity:.5">
+    <div style="width:112px;height:160px;border-radius:10px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px)"></div>
+  </div>
+  <div style="position:absolute;left:0;right:0;bottom:0;background:#161329;border-top:1px solid rgba(159,146,255,.22);border-radius:22px 22px 0 0;padding:16px 18px 26px">
+    <div style="width:42px;height:4px;border-radius:99px;background:#373156;margin:0 auto 18px"></div>
+    <div style="font:600 9px/1 'Spline Sans Mono',monospace;letter-spacing:.1em;color:#847CB0;margin-bottom:10px">PUBLICATION</div>
+    <div style="display:flex;gap:7px;margin-bottom:20px">
+      <div style="flex:1;height:62px;border-radius:12px;border:1.5px solid #5FD6B0;background:rgba(95,214,176,.1);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:600 12px/1 'Spline Sans Mono',monospace;color:#5FD6B0">S</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#B8B0DC">20 h</span></div>
+      <div style="flex:1;height:62px;border-radius:12px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:600 12px/1 'Spline Sans Mono',monospace;color:#7FA6F2">P</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">permanent</span></div>
+      <div style="flex:1;height:62px;border-radius:12px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:600 12px/1 'Spline Sans Mono',monospace;color:#F07A66">R</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">vidéo</span></div>
+      <div style="flex:1;height:62px;border-radius:12px;border:1px solid #373156;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px"><span style="font:600 12px/1 'Spline Sans Mono',monospace;color:#E8B84B">M</span><span style="font:500 9px/1 'Spline Sans Mono',monospace;color:#8F87BC">1 h</span></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:56px;border-top:1px solid rgba(159,146,255,.12)">
+      <span style="font-size:15px;color:#8F87BC;width:20px;text-align:center">◎</span>
+      <span style="font:500 14px/1 'Schibsted Grotesk',sans-serif">Audience</span>
+      <span style="margin-left:auto;font:500 12px/1 'Spline Sans Mono',monospace;color:#B99BFF">Public</span>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:56px;border-top:1px solid rgba(159,146,255,.12)">
+      <span style="font-size:15px;color:#8F87BC;width:20px;text-align:center">♫</span>
+      <span style="font:500 14px/1 'Schibsted Grotesk',sans-serif">Son de fond</span>
+      <span style="margin-left:auto;font:500 12px/1 'Spline Sans Mono',monospace;color:#B8B0DC">Nuits blanches · @lume</span>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:56px;border-top:1px solid rgba(159,146,255,.12)">
+      <span style="font-size:15px;color:#8F87BC;width:20px;text-align:center">⌖</span>
+      <span style="font:500 14px/1 'Schibsted Grotesk',sans-serif">Lieu</span>
+      <span style="margin-left:auto;font:500 12px/1 'Spline Sans Mono',monospace;color:#5A5480">Aucun</span>
+      <span style="color:#8F87BC;font-size:12px">›</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;height:56px;border-top:1px solid rgba(159,146,255,.12);border-bottom:1px solid rgba(159,146,255,.12)">
+      <span style="font-size:15px;color:#8F87BC;width:20px;text-align:center">◐</span>
+      <span style="font:500 14px/1 'Schibsted Grotesk',sans-serif">Vue unique</span>
+      <span style="margin-left:auto;width:44px;height:26px;border-radius:99px;background:#221E3E;border:1px solid #373156;position:relative"><span style="position:absolute;left:3px;top:2px;width:20px;height:20px;border-radius:99px;background:#8F87BC"></span></span>
+    </div>
+    <div style="margin-top:20px;background:#8F7DF8;color:#0E0D17;border-radius:14px;height:52px;display:flex;align-items:center;justify-content:center;gap:9px;font:600 12.5px/1 'Spline Sans Mono',monospace">PUBLIER LA STORY <span style="opacity:.6">·</span> 1 SLIDE</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le profil se change jusqu'au dernier geste.</b> Une seule feuille porte tout ce qui décide de l'envoi ; le bouton nomme ce qui part et combien de slides, pour qu'aucune publication ne soit une surprise.</p>
+</div>
+
+<!-- ============ 1g — rail des slides ============ -->
+<div class="dv-opt" id="1g">
+<div class="dv-olabel"><a class="dv-oid" href="#1g">1g</a>Rail des slides — en Post, une slide est UN média</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;gap:12px;padding:8px 14px 10px">
+    <div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#8F87BC">✕</div>
+    <div style="display:flex;align-items:center;gap:7px">
+      <span style="display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:6px;background:#7FA6F2;color:#0E0D17;font:600 10.5px/1 'Spline Sans Mono',monospace">P</span>
+      <span style="font:600 14px/1 'Bricolage Grotesque',sans-serif">Post</span><span style="color:#8F87BC;font-size:11px">▾</span>
+    </div>
+    <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:18px;color:#8F87BC">⋯</div>
+  </div>
+  <div style="display:flex;gap:8px;padding:4px 14px 14px;border-bottom:1px solid rgba(55,49,86,.6);overflow:hidden">
+    <div style="width:46px;height:64px;border-radius:8px;border:1.5px solid #8F7DF8;background:repeating-linear-gradient(45deg,#2E2951 0 7px,#241F44 7px 14px);position:relative;flex:none"><span style="position:absolute;left:4px;top:3px;font:600 8.5px/1 'Spline Sans Mono',monospace;color:#fff">1</span></div>
+    <div style="width:46px;height:64px;border-radius:8px;border:1px solid #373156;background:#1A1731;position:relative;flex:none"><span style="position:absolute;left:4px;top:3px;font:600 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">2</span></div>
+    <div style="width:46px;height:64px;border-radius:8px;border:1px solid #373156;background:#1A1731;position:relative;flex:none"><span style="position:absolute;left:4px;top:3px;font:600 8.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">3</span></div>
+    <div style="width:46px;height:64px;border-radius:8px;border:1px dashed #373156;display:flex;align-items:center;justify-content:center;font:600 15px/1 'Spline Sans Mono',monospace;color:#8F87BC;flex:none">+</div>
+    <div style="margin-left:auto;align-self:center;font:500 9px/1.5 'Spline Sans Mono',monospace;color:#5A5480;text-align:right">glisser<br>pour réordonner</div>
+  </div>
+  <div style="flex:1;min-height:0;padding:16px 20px 0;display:flex;flex-direction:column;gap:14px">
+    <div style="height:250px;border-radius:12px;border:1px solid #373156;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);display:flex;align-items:flex-end;padding:12px">
+      <span style="font:500 9px/1.4 'Spline Sans Mono',monospace;color:#B8B0DC;border:1px dashed #373156;border-radius:6px;padding:3px 6px;background:rgba(17,16,32,.6)">média 1 · porteur de la slide</span>
+    </div>
+    <div>
+      <div style="font:400 14.5px/1.55 'Schibsted Grotesk',sans-serif;color:#DDD8F4">Le quai à six heures, personne.<span style="display:inline-block;width:2px;height:16px;background:#8F7DF8;vertical-align:-3px;margin-left:2px"></span></div>
+      <div style="margin-top:7px;font:500 10.5px/1 'Spline Sans Mono',monospace;color:#5A5480">légende du média 1 · pas le texte du post</div>
+    </div>
+    <div style="margin-top:auto;margin-bottom:12px;padding:11px 13px;border-left:2px solid #8F7DF8;background:#161329;border-radius:0 10px 10px 0">
+      <p style="margin:0;font:400 12px/1.55 'Schibsted Grotesk',sans-serif;color:#B8B0DC">Le <span class="mono" style="color:#DDD8F4">content</span> du post a son propre logement, dans le socle — une légende ne le remplace jamais.</p>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;gap:8px;padding:12px 14px 26px">
+    <div style="border:1px solid #373156;border-radius:99px;padding:0 12px;height:32px;display:flex;align-items:center;font:600 9.5px/1 'Spline Sans Mono',monospace;color:#8F87BC">♫ AJOUTER UN SON</div>
+    <div style="width:32px;height:32px;border:1px solid #373156;border-radius:99px;display:flex;align-items:center;justify-content:center;font-size:11px;color:#8F87BC">◎</div>
+    <div style="margin-left:auto;background:#8F7DF8;color:#0E0D17;border-radius:99px;height:38px;padding:0 20px;display:flex;align-items:center;font:600 11.5px/1 'Spline Sans Mono',monospace">PUBLIER · 3</div>
+  </div>
+</div>
+<p class="dv-cap"><b>Le rail dit ce qu'une slide signifie.</b> En Post il compte des médias et le texte sous l'aperçu est une légende ; en Story ou Réel le même rail compte des publications entières et ce texte EST le contenu.</p>
+</div>
+
+<!-- ============ 1h — lecture ============ -->
+<div class="dv-opt" id="1h">
+<div class="dv-olabel"><a class="dv-oid" href="#1h">1h</a>Lecture — la carte du fil</div>
+<div style="width:390px;height:844px;background:#111020;border:1.5px solid #373156;border-radius:36px;overflow:hidden;display:flex;flex-direction:column;color:#DDD8F4;box-shadow:0 18px 50px rgba(0,0,0,.45)">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 26px 6px;font:500 12px/1 'Spline Sans Mono',monospace"><span>9:41</span><span style="color:#8F87BC;letter-spacing:.12em">▪▪▪ ▮</span></div>
+  <div style="display:flex;align-items:center;padding:8px 18px 12px"><span style="font:700 19px/1 'Bricolage Grotesque',sans-serif">Fil</span><span style="margin-left:auto;font-size:16px;color:#8F87BC">⌕</span></div>
+  <div style="flex:1;min-height:0;padding:0 14px;display:flex;flex-direction:column;gap:12px;overflow:hidden">
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;overflow:hidden;flex:none">
+      <div style="display:flex;align-items:center;gap:9px;padding:12px 13px 6px">
+        <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:7px"><span style="font:600 13.5px/1.2 'Schibsted Grotesk',sans-serif">Camille Roux</span><span style="font:500 10px/1 'Spline Sans Mono',monospace;color:#8F87BC">2 h</span></div>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-top:4px">
+            <span style="font:500 11px/1.3 'Spline Sans Mono',monospace;color:#B99BFF;white-space:nowrap">↻ @lume</span>
+            <span style="font:500 11px/1.3 'Spline Sans Mono',monospace;color:#B8B0DC;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">♫ Nuits blanches · @lume · 0:28</span>
+          </div>
+        </div>
+        <div style="width:32px;height:32px;border-radius:99px;border:1px solid #373156;display:flex;align-items:center;justify-content:center;font-size:12px;color:#8F87BC;flex:none">⨯</div>
+      </div>
+      <div style="padding:8px 13px 12px;font:400 14.5px/1.6 'Schibsted Grotesk',sans-serif;color:#DDD8F4">Dernier soir de tournage. Le quai à six heures, personne.</div>
+      <div style="margin:0 13px 12px;border-radius:12px;overflow:hidden;border:1px solid #373156;height:300px;flex:none;background:repeating-linear-gradient(45deg,#2E2951 0 9px,#241F44 9px 18px);position:relative;display:flex;align-items:center;justify-content:center">
+        <span style="font:600 22px/1.25 'Bricolage Grotesque',sans-serif;color:#fff;text-align:center;padding:0 22px;text-shadow:0 2px 14px rgba(0,0,0,.55)">Dernier soir de tournage</span>
+        <span style="position:absolute;left:10px;bottom:10px;font:500 8.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC;background:rgba(11,10,20,.6);border-radius:5px;padding:4px 7px">scène · muette, en pause</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:0 9px 12px">
+        <div style="height:44px;padding:0 11px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">♡ 128</div>
+        <div style="height:44px;padding:0 11px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">◌ 12</div>
+        <div style="height:44px;padding:0 11px;display:flex;align-items:center;gap:6px;font:500 11.5px/1 'Spline Sans Mono',monospace;color:#B8B0DC">↻ 3</div>
+        <div style="margin-left:auto;width:44px;height:44px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#8F87BC">⤴</div>
+      </div>
+    </div>
+    <div style="border:1px solid #373156;border-radius:16px;background:#161329;padding:12px 13px;display:flex;gap:9px;align-items:center;opacity:.55">
+      <div style="width:36px;height:36px;border-radius:99px;background:#221E3E;border:1px solid #373156;flex:none"></div>
+      <div style="flex:1"><div style="height:11px;width:44%;border-radius:4px;background:#221E3E"></div><div style="height:9px;width:26%;border-radius:4px;background:#1A1731;margin-top:7px"></div></div>
+    </div>
+  </div>
+  <div style="background:#0B0A14;border-top:1px solid #373156;display:flex;align-items:center;justify-content:space-around;padding:8px 10px 26px">
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px">▤</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">⌕</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:19px;color:#0E0D17;background:#8F7DF8;border-radius:12px">+</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◉</div>
+    <div style="width:52px;height:44px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#8F87BC">◍</div>
+  </div>
+</div>
+<p class="dv-cap"><b>L'icône est le verbe.</b> <span class="mono">↻ @lume</span> sans « republié de », le crédit du son sur la même ligne, la scène muette et en pause dans la carte : le mouvement vit dans la destination du tap.</p>
+</div>
+
+</div>
+<p class="dv-next">Essayez ensuite : « ouvre <a class="dv-oid" href="#1c">1c</a> en plein écran avec les 18 styles de texte » · « une variante clair de <a class="dv-oid" href="#1a">1a</a> » · « rends <a class="dv-oid" href="#1e">1e</a> interactif — scrub et sélection »</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}"></script>
+</body>
+</html>
