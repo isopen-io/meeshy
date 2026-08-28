@@ -2290,10 +2290,22 @@ export class CallService {
     );
 
     if (outcome === 'conflict') {
-      logger.warn('⚠️ Call end lost race to a concurrent terminal write — returning current session', {
-        callId, endedBy
+      // Issue #3581 follow-up — this branch used to silently RETURN the
+      // fresh session, same as the stale-read guard above did before #3581.
+      // The loser of this race is exactly the "already ended by someone
+      // else" case that fix exists for: a resolved promise here is
+      // indistinguishable from "I just ended it" to both callers
+      // (CallEventsHandler, routes/calls.ts), which fall through to
+      // re-broadcast call:ended, re-post the call-summary, and (for a
+      // `missed` outcome) re-fire the missed-call notification for a call
+      // this request did not actually end. Throw the same
+      // CallAlreadyEndedError the stale-read guard throws so both callers
+      // absorb it as the idempotent no-op it is.
+      const current = await this.getCallSession(callId);
+      logger.warn('⚠️ Call end lost race to a concurrent terminal write', {
+        callId, endedBy, currentStatus: current.status
       });
-      return this.getCallSession(callId);
+      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
     }
 
     this.clearHeartbeats(callId);
