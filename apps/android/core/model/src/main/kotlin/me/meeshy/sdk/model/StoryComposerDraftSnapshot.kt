@@ -37,16 +37,17 @@ data class StoryDraftFilterSnapshot(
  * The durable form of one slide of an in-progress story composer draft — the fields this
  * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
  * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), its
- * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), and its photo [filter]
- * (`null` = none). Richer on-canvas content (text/sticker elements, backgrounds, pinned
- * duration) is deliberately **absent** here — a draft that carries any of it is not yet
+ * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), its photo [filter]
+ * (`null` = none), and its pinned on-screen [durationSecondsPin] (`null` = duration derived
+ * from content, not pinned by the author). Richer on-canvas content (text/sticker elements,
+ * backgrounds) is deliberately **absent** here — a draft that carries any of it is not yet
  * persistable (see [me.meeshy] `StoryComposerAutosave`), so a restore from this snapshot
  * is never lossy.
  *
- * Every field is a primitive, a list of primitives, or the primitive-only
- * [StoryDraftTransformSnapshot], so the snapshot serialises with no deep object graph and
- * no polymorphic serialiser — the deliberate cost of keeping this cut thin and its
- * round-trip trivially total.
+ * Every field is a primitive, a list of primitives, or a primitive-only nested value
+ * ([StoryDraftTransformSnapshot], [StoryDraftFilterSnapshot]), so the snapshot serialises
+ * with no deep object graph and no polymorphic serialiser — the deliberate cost of keeping
+ * this cut thin and its round-trip trivially total.
  */
 @Serializable
 data class StoryDraftSlideSnapshot(
@@ -55,12 +56,14 @@ data class StoryDraftSlideSnapshot(
     val mediaIds: List<String> = emptyList(),
     val transform: StoryDraftTransformSnapshot? = null,
     val filter: StoryDraftFilterSnapshot? = null,
+    val durationSecondsPin: Double? = null,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption or attached media. A
-     * canvas [transform] and a photo [filter] are fidelity that ride along with such
-     * content — a pan/zoom or a filter with no media to frame or tint is meaningless — so
-     * they deliberately do **not** make a slide worth restoring on their own.
+     * canvas [transform], a photo [filter] and a pinned [durationSecondsPin] are fidelity
+     * that ride along with such content — a pan/zoom, a filter, or a duration pin with no
+     * media to frame, tint or time is meaningless — so they deliberately do **not** make a
+     * slide worth restoring on their own.
      */
     val hasContent: Boolean get() = text.isNotBlank() || mediaIds.isNotEmpty()
 }

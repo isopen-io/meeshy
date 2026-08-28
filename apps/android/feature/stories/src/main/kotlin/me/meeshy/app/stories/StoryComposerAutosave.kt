@@ -27,9 +27,10 @@ sealed interface StoryDraftPersist {
  * ## Fidelity gate
  *
  * The [StoryComposerDraftSnapshot] round-trips a slide's caption, media, identity, its
- * 9:16 canvas pan/zoom [StorySlide.transform] and its photo [StorySlide.filter] — but
- * **not** its remaining on-canvas rich content (text/sticker elements, background, pinned
- * duration). So a draft carrying any of that would restore lossily — a silent partial the
+ * 9:16 canvas pan/zoom [StorySlide.transform], its photo [StorySlide.filter] and its
+ * pinned [StorySlide.durationSecondsPin] — but **not** its remaining on-canvas rich
+ * content (text/sticker elements, background). So a draft carrying any of that would
+ * restore lossily — a silent partial the
  * user never asked for. This layer
  * refuses that: a deck with still-unrepresentable rich content is treated as *not yet
  * persistable* — [resolve] purges any stale stored draft (so a cold start never rebuilds a
@@ -80,30 +81,31 @@ object StoryComposerAutosave {
 
     /**
      * Whether [deck] is a freshly opened composer: exactly one slide, blank, with no media,
-     * no rich content, an identity canvas transform and no photo filter — the only state a
-     * stored draft may be restored into. The transform and filter are checked explicitly
-     * here (both are persistable, so no longer part of [deckHasRichContent]) so a silently
-     * panned canvas or a picked filter still counts as touched and a restore never clobbers it.
+     * no rich content, an identity canvas transform, no photo filter and no pinned duration —
+     * the only state a stored draft may be restored into. The transform, filter and duration
+     * pin are checked explicitly here (all three are persistable, so no longer part of
+     * [deckHasRichContent]) so a silently panned canvas, a picked filter or a pinned duration
+     * still counts as touched and a restore never clobbers it.
      */
     fun deckIsPristine(deck: StorySlideDeck): Boolean =
         deck.size == 1 && !deck.hasText && !deck.hasMedia && !deckHasRichContent(deck) &&
-            deck.slides.all { it.transform.isIdentity && it.filter == null }
+            deck.slides.all { it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null }
 
     /**
      * Whether any slide carries on-canvas content the snapshot cannot represent: a text or
-     * sticker element, a colour/media background, or a pinned duration. Such a deck is not
-     * yet persistable. The 9:16 canvas transform and the photo filter are **not** here —
-     * both are now round-tripped by the snapshot ([StorySlide.transform] ↔
+     * sticker element, or a colour/media background. Such a deck is not yet persistable. The
+     * 9:16 canvas transform, the photo filter and the pinned duration are **not** here — all
+     * three are now round-tripped by the snapshot ([StorySlide.transform] ↔
      * [StoryDraftTransformSnapshot]; [StorySlide.filter]/[StorySlide.filterIntensity] ↔
-     * [StoryDraftFilterSnapshot]).
+     * [StoryDraftFilterSnapshot]; [StorySlide.durationSecondsPin] ↔
+     * [StoryDraftSlideSnapshot.durationSecondsPin]).
      */
     fun deckHasRichContent(deck: StorySlideDeck): Boolean =
         deck.slides.any { slide ->
             slide.elements.isNotEmpty() ||
                 slide.stickers.isNotEmpty() ||
                 slide.background != null ||
-                slide.backgroundMediaId != null ||
-                slide.durationSecondsPin != null
+                slide.backgroundMediaId != null
         }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -123,6 +125,7 @@ fun StorySlideDeck.toDraftSnapshot(
             mediaIds = it.mediaIds,
             transform = it.transform.toDraftSnapshot(),
             filter = it.toFilterSnapshot(),
+            durationSecondsPin = it.durationSecondsPin,
         )
     },
     selectedId = selectedId,
@@ -135,8 +138,8 @@ fun StorySlideDeck.toDraftSnapshot(
  * Rebuilds a deck from a stored [StoryComposerDraftSnapshot], or `null` when the blob is
  * structurally broken (no slides, or a selection that names no present slide) — the deck
  * invariants would otherwise throw. The persistable fields (id / caption / media / canvas
- * transform / photo filter) are restored; every still-gated richer field takes its
- * fresh-slide default.
+ * transform / photo filter / pinned duration) are restored; every still-gated richer field
+ * takes its fresh-slide default.
  */
 fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
     if (!isStructurallyValid) return null
@@ -149,6 +152,7 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 transform = it.transform.toCanvasTransform(),
                 filter = it.filter?.filter,
                 filterIntensity = it.filter?.intensity ?: StoryFilterMatrix.DEFAULT_INTENSITY,
+                durationSecondsPin = it.durationSecondsPin,
             )
         },
         selectedId = selectedId,

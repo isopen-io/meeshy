@@ -2316,3 +2316,22 @@ by a store the seam predates.
   local evidence, and the **Android** CI check (clean ubuntu Maven cache, not this proxy) is the authoritative
   full gate. A retry-with-backoff loop that greps for `429` and re-runs is the right local tool; do not read a
   429-truncated `compileKotlin FAILED` (no `e:`/error text, daemon vanished) as a code failure.
+
+## 2026-08-28 — the story-draft fidelity gate's three SCALAR dimensions are now all lifted; what remains is object graphs (slice `story-draft-persist-duration`)
+`story-draft-persist-duration` lifted the third and last scalar dimension of the story-composer autosave
+fidelity gate — the author-pinned `StorySlide.durationSecondsPin: Double?`. It followed the transform and
+filter slices' pattern but was even thinner: no nested `@Serializable` snapshot type was needed (the field
+is already a nullable scalar), so the change was one field on `StoryDraftSlideSnapshot`, two mapper lines,
+and the now-routine decoupled-gate move (drop from `deckHasRichContent`, add the explicit `== null` guard to
+`deckIsPristine`). The pin is restored verbatim — it can only reach the snapshot through `setSelectedDuration`,
+which already clamps to `[2,600]` via `StoryDurationPin.clamp`, so no re-clamp on restore.
+- **The remaining fidelity-gate dimensions are NOT scalars — they want real slices, not one-liners.** With
+  transform/filter/duration done, what's left in `deckHasRichContent` is the two object-list dimensions
+  (`elements: List<StoryTextElement>`, `stickers: List<StoryStickerElement>` → their own mirror snapshots)
+  and the sealed background (`StoryBackgroundValue` → closed-polymorphic or wire-string projection, carrying
+  `backgroundMediaId`/`backgroundLoop` WITH it, never alone). The "mirror the last scalar slice" reflex stops
+  here — an object list needs its own element snapshot type and its own round-trip/order tests.
+- **Container bootstrap this run: `dl.google.com` 200; pristine `android-37.0` alone worked** (AGP mapped
+  compileSdk 37 → android-37.0 on first `./gradlew`, no hash error, no copy→patch). Full CI-mirror gate
+  (`assembleDebug testDebugUnitTest`, all modules) BUILD SUCCESSFUL locally — the "try pristine first" note
+  held again.

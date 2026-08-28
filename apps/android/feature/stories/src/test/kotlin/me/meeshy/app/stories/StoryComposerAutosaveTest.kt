@@ -12,9 +12,9 @@ import org.junit.Test
  * [StoryComposerAutosave] — the pure decision layer that turns a live composer deck into
  * a save / clear / no-op against the durable draft store, and restores a stored draft
  * only into a pristine composer. The rich-content fidelity gate (a draft carrying
- * elements/stickers/filter/background/duration is not yet persistable) is the
- * load-bearing rule: it keeps a restore from ever being lossy. The 9:16 canvas pan/zoom
- * transform is persistable and round-trips through the snapshot.
+ * elements/stickers/background is not yet persistable) is the load-bearing rule: it keeps
+ * a restore from ever being lossy. The 9:16 canvas pan/zoom transform, the photo filter and
+ * the pinned duration are persistable and round-trip through the snapshot.
  */
 class StoryComposerAutosaveTest {
 
@@ -170,9 +170,9 @@ class StoryComposerAutosaveTest {
     }
 
     @Test
-    fun `deckHasRichContent is true for a pinned duration`() {
+    fun `deckHasRichContent is false for a pinned duration now that it is persistable`() {
         val deck = blankDeck().setSelectedDuration(12.0)
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isTrue()
+        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
     }
 
     @Test
@@ -206,6 +206,11 @@ class StoryComposerAutosaveTest {
             StoryCanvasTransform(scale = 2f).clampedTo(1000f, 1000f),
         )
         assertThat(StoryComposerAutosave.deckIsPristine(panned)).isFalse()
+    }
+
+    @Test
+    fun `a single blank slide with a pinned duration is not pristine`() {
+        assertThat(StoryComposerAutosave.deckIsPristine(blankDeck().setSelectedDuration(12.0))).isFalse()
     }
 
     // ---- restore ----
@@ -456,6 +461,85 @@ class StoryComposerAutosaveTest {
 
         val action = StoryComposerAutosave.resolve(
             deck = deck.setSelectedFilter(StoryFilter.FADE),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    // ---- pinned duration persistence ----
+
+    @Test
+    fun `toDraftSnapshot carries a pinned duration and maps no pin to null`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedDuration(18.0)
+            .addSlide("s2")
+            .updateSelectedText("plain")
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+
+        assertThat(snap.slides.first().durationSecondsPin).isEqualTo(18.0)
+        assertThat(snap.slides[1].durationSecondsPin).isNull()
+    }
+
+    @Test
+    fun `toDeck restores a persisted duration and a null pin to no pin`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", mediaIds = listOf("m1"), durationSecondsPin = 25.0),
+                StoryDraftSlideSnapshot(id = "s2", text = "plain"),
+            ),
+            selectedId = "s1",
+        )
+
+        val deck = snap.toDeck()
+
+        assertThat(deck).isNotNull()
+        assertThat(deck!!.slides.first().durationSecondsPin).isEqualTo(25.0)
+        assertThat(deck.slides[1].durationSecondsPin).isNull()
+    }
+
+    @Test
+    fun `a pinned duration survives the deck-snapshot-deck round-trip`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedDuration(33.0)
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().durationSecondsPin).isEqualTo(33.0)
+    }
+
+    @Test
+    fun `a media slide with a pinned duration resolves to Save carrying that duration`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedDuration(45.0)
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().durationSecondsPin).isEqualTo(45.0)
+    }
+
+    @Test
+    fun `pinning a duration on an already-saved draft resolves to Save, not None`() {
+        val deck = StorySlideDeck.single("s1").addMediaToSelected("m1")
+        val previous = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck.setSelectedDuration(20.0),
             visibility = StoryVisibility.PUBLIC,
             repostOfId = null,
             nowIso = now,

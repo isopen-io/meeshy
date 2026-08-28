@@ -4117,8 +4117,26 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation-RED-proven twice: re-adding the filter to the rich-content gate reddens EXACTLY the 3
       filter-persistence autosave tests; removing the `filter == null` pristine guard reddens EXACTLY the
       one pristine test; everything else stays green.
+      **Pinned-duration persistence done** (slice `story-draft-persist-duration`, 2026-08-28): the third
+      fidelity-gate dimension is lifted — a slide's author-pinned on-screen duration
+      (`StorySlide.durationSecondsPin: Double?`) now round-trips through the snapshot, so a user who set a
+      slide's timeline duration and left the composer gets it back on return. New nullable primitive
+      `StoryDraftSlideSnapshot.durationSecondsPin: Double? = null` (`null` = duration derived from content,
+      not pinned, so legacy blobs and fresh slides decode without inventing a default); `toDraftSnapshot`/
+      `toDeck` map `StorySlide.durationSecondsPin` ↔ the field; `deckHasRichContent` no longer counts a
+      pinned duration (now representable), while `deckIsPristine` gained an explicit `durationSecondsPin ==
+      null` check so a silently pinned duration on an empty canvas still counts as touched and a restore
+      never clobbers it. A pinned duration is *fidelity* not *content* — it never makes a draft worth
+      restoring on its own (a duration with no media to time is meaningless). +13 tests (5
+      `StoryComposerDraftSnapshotTest` duration round-trip/legacy-null/worth-restoring/changed/cleared, 6
+      `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways/round-trip + 2 resolve Save, 2
+      `StoryComposerViewModelTest` persist-duration/restore-duration; the pre-existing `deckHasRichContent
+      is true for a pinned duration` test flipped to assert the new persistable behaviour).
+      Mutation-RED-proven twice: re-adding the duration to the rich-content gate reddens EXACTLY the 4
+      duration gate/save tests (3 autosave + 1 VM persist); removing the `durationSecondsPin == null`
+      pristine guard reddens EXACTLY the one pristine test; everything else stays green.
       **Pending**: widening the snapshot to carry the remaining rich on-canvas content — text/sticker
-      elements, background (+loop/media), pinned duration — lifts the rest of the fidelity gate.
+      elements, background (+loop/media) — lifts the rest of the fidelity gate.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
