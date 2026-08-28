@@ -697,10 +697,15 @@ All models are Decodable/Encodable with readonly properties and optional CodingK
     - [x] conversation — `{ userId, conversationId, version, reset, preferences }`
       → `PreferencesSocketManager` → `ConversationRepository.applyRemoteConversationPreferences`
       (arbitrage `version <= local ⇒ drop` dans le port pur `applyRemote`)
-    - [ ] catégorie — `{ userId, category }` : aucune préférence `me/preferences/*`
-      n'est mise en cache côté Android, donc rien à invalider aujourd'hui
-    - [ ] communauté — `{ userId, communityId, reset, preferences }` : idem, pas de
-      ligne de préférence de communauté en cache
+    - [ ] catégorie — `{ userId, category }` : **vrai manque, pas une feature absente.**
+      `NotificationPreferencesStore` et `PrivacyPreferencesStore` (DataStore, « source
+      de vérité de l'UI ») sont écrits localement puis PATCHés vers
+      `me/preferences/{notification,privacy}` par l'outbox — un bloc changé sur le web
+      laisse donc le magasin de cet appareil périmé. Hors du lot 130 : autre magasin,
+      autre voie. Suivi : #4133.
+    - [ ] communauté — `{ userId, communityId, reset, preferences }` : aucun lecteur
+      Android (mesuré : zéro occurrence de `UserCommunityPreferences` sous
+      `apps/android/**`) — rien en cache, donc rien à périmer
   - `user:preferences-reordered` / `user:preferences-community-reordered` — NON
     écoutés, décision du cycle 130 : ils ne portent que `orderInCategory`, qu'aucune
     surface Android ne lit et qu'aucun geste de glisser-déposer ne produit. Un témoin

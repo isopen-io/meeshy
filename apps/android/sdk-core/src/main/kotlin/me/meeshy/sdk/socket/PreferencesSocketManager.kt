@@ -29,11 +29,25 @@ import javax.inject.Singleton
  * (`{ userId, conversationId, version, reset, preferences }`), category
  * (`{ userId, category }`) and community (`{ userId, communityId, … }`). A strict
  * decoder fed the wrong arm throws, so the presence of `conversationId`
- * discriminates BEFORE decoding, exactly as the iOS decode site does. The other two
- * arms are dropped here without noise: neither has an Android reader today
- * (`me/preferences/*` is not cached on this client, and community preferences have
- * no cached row), and a decode failure logged once per broadcast would read like a
- * defect rather than the deliberate silence it is.
+ * discriminates BEFORE decoding, exactly as the iOS decode site does — and it
+ * discriminates rather than logs, because a decode failure recorded on every
+ * broadcast of a sibling scope would read like a defect instead of the deliberate
+ * silence it is.
+ *
+ * The other two arms are outside THIS lot, and they are not equal:
+ *
+ * - **community** (`{ userId, communityId, ... }`) has no Android reader at all —
+ *   measured, zero occurrence of `UserCommunityPreferences` under
+ *   `apps/android/**`. Nothing is cached, so nothing can go stale.
+ * - **category** (`{ userId, category }`) DOES have one, and it is a real gap
+ *   rather than an absent feature: `NotificationPreferencesStore` and
+ *   `PrivacyPreferencesStore` are DataStore-backed and documented as the UI source
+ *   of truth, written locally and PATCHed to `me/preferences/{notification,privacy}`
+ *   through the outbox. A block changed on the web or on the iPhone therefore
+ *   leaves this device's store stale — the same defect this class fixes for
+ *   conversations, one arm over. Left out deliberately: it invalidates a different
+ *   store on a different lane, and folding it in would widen the lot past what its
+ *   witnesses cover. Tracked as issue #4133.
  *
  * ## What is NOT listened to, and why
  *

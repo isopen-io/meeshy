@@ -129,9 +129,26 @@ apparaît.
 - **Web et iOS arbitrent différemment un `reset: false` sans instantané**
   (voir ci-dessus). Latent aujourd'hui ; à trancher d'un côté ou de l'autre le
   jour où un écrivain émet cette forme.
-- **Android n'a toujours aucun lecteur de préférences de COMMUNAUTÉ ni de la
-  catégorie utilisateur** (les deux autres arms de l'union). Distinct de ce lot :
-  ni l'un ni l'autre n'a de ligne mise en cache côté Android à corriger — c'est une
-  feature absente, pas une synchro cassée.
+- **Les deux autres arms de l'union ne sont PAS équivalents**, et la première
+  rédaction de ce rapport les avait mis dans le même sac — corrigé avant fusion,
+  après mesure :
+  - **communauté** — aucun lecteur Android (zéro occurrence de
+    `UserCommunityPreferences` sous `apps/android/**`). Rien en cache, rien à
+    périmer : feature absente, pas synchro cassée.
+  - **catégorie** (`{ userId, category }`) — **vrai manque, de la même famille que
+    celui que ce lot ferme.** `NotificationPreferencesStore` et
+    `PrivacyPreferencesStore` sont adossés à DataStore et documentés comme « la
+    source de vérité de l'UI » ; ils sont écrits localement puis PATCHés vers
+    `me/preferences/{notification,privacy}` par l'outbox. Un bloc changé sur le web
+    ou sur l'iPhone laisse donc le magasin de cet appareil périmé, exactement comme
+    l'épinglage l'était pour les conversations. Hors de ce lot délibérément : autre
+    magasin, autre voie, et l'y fondre dépasserait ce que ses témoins couvrent.
+    **Issue de suivi : #4133.**
+
+  > La leçon est dans la façon dont c'est arrivé : l'énumération « les deux autres
+  > arms n'ont pas de lecteur » était une phrase, pas une mesure. Elle a tenu
+  > jusqu'à ce qu'on grep `me/preferences` sous `apps/android/`. C'est la leçon 261
+  > appliquée à sa propre note de suivi — **une énumération écrite dans le même
+  > souffle que le correctif hérite de sa confiance sans avoir été vérifiée.**
 - **Le geste de glisser-déposer n'existe pas sur Android**, d'où les deux
   événements de réordonnancement non câblés.

@@ -89,7 +89,13 @@ class PreferencesSocketManagerTest {
      * The category arm of the union (`DELETE /me/preferences`, the four writers of
      * `me/preferences/{category}`). Feeding it to the conversation decoder would
      * throw on the missing `conversationId`; the discriminant has to catch it first,
-     * and silently — this arm has no Android reader.
+     * and silently.
+     *
+     * Silently does NOT mean "nothing to do here": this arm has a real Android
+     * reader (`NotificationPreferencesStore` / `PrivacyPreferencesStore`, DataStore
+     * -backed and stale until an unrelated reload), and invalidating it is its own
+     * issue (#4133). What this witness freezes is only that the arm cannot break the
+     * conversation stream on its way past.
      */
     @Test
     fun `the category scope of the same event name is ignored`() = runTest {
