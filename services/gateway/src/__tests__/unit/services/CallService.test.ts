@@ -1729,7 +1729,18 @@ describe('CallService', () => {
       ).rejects.toThrow('NOT_A_PARTICIPANT: You are not in this call');
     });
 
-    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+    // Issue #3581 follow-up — the guard at the TOP of endCall() (a call
+    // already terminal at the initial read) now throws CallAlreadyEndedError
+    // instead of silently resolving, so CallEventsHandler/routes/calls.ts can
+    // treat it as an idempotent no-op. This SIBLING branch — losing the race
+    // to a concurrent terminal writer DURING the transaction itself (P2034 /
+    // version conflict) — was never updated to match: it still silently
+    // resolves to the fresh (already-ended-by-the-winner) session, so the
+    // LOSER of the race falls straight back into the exact bug #3581 closed:
+    // CallEventsHandler re-broadcasts call:ended, re-posts the call-summary,
+    // and (for a `missed` outcome) re-fires the missed-call notification —
+    // for a call this request did not actually end.
+    it('throws CallAlreadyEndedError (not a silent resolve) when Mongo reports a P2034 write conflict on the terminal write — sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call', async () => {
       const initiatorParticipant = createMockParticipant({
         role: ParticipantRole.initiator
       });
@@ -1741,6 +1752,7 @@ describe('CallService', () => {
         ...mockCall,
         status: CallStatus.ended,
         endedAt: new Date(),
+        endReason: CallEndReason.completed,
         participants: [{ ...initiatorParticipant, leftAt: new Date(), user: createMockUser() }],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1754,9 +1766,10 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockRejectedValueOnce(p2034);
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
 
-      const result = await callService.endCall('call-123', 'user-123', 'participant-123');
+      const rejection = callService.endCall('call-123', 'user-123', 'participant-123');
 
-      expect(result.status).toBe(CallStatus.ended);
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should allow any active participant to end a P2P call (spec C4)', async () => {
