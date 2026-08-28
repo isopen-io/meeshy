@@ -106,5 +106,13 @@ balayage de code, d'un déclencheur qui agit.
   (`syncEncryption` puis `syncPrivacy`) — et le rattrapage de ce lot hérite du
   même doublon. Défaut de performance préexistant, relevé au cycle 133, non
   touché ici.
-- **iOS n'a toujours pas été mesuré** sur la question du cycle 132 — troisième
-  cycle consécutif où ce suivi est reporté.
+- **iOS a été mesuré EN PARALLÈLE, pas ici** : le cycle 133 bis (#4201,
+  `tasks/realtime-sync-audit-2026-08-28-cycle133-bis.md`) a livré la symétrique
+  iOS pendant que ce lot était en cours, et les deux ont été intégrés à la
+  fusion. Aucun chemin de code partagé — iOS y ajoute un déclencheur de
+  DIFFUSION à un `UserPreferencesManager` qui n'avait que du cycle de vie, là où
+  le web ajoute un déclencheur de CONNEXION à un double qui n'avait que des
+  annonces. Les deux lots portent le veto de course, chacun avec le sien
+  (`pendingCategories` côté iOS, `preference-write-lock` côté web).
+  Collision de NUMÉRO de leçon à la fusion : les deux gardées, la nôtre
+  renumérotée 313.
