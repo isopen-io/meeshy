@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { refreshMirroredPreferenceCategory } from '@/lib/preferences/mirrored-preference-categories';
 import type { PreferenceCategory } from '@/types/preferences';
 
 type SyncMessage =
@@ -32,6 +33,7 @@ function handleSyncMessage(message: SyncMessage) {
       queryClientRef.invalidateQueries({
         queryKey: queryKeys.preferences.category(message.category),
       });
+      refreshMirroredPreferenceCategory(message.category);
       break;
     case 'user-updated':
       queryClientRef.invalidateQueries({
@@ -46,7 +48,20 @@ export function initSettingsSync(queryClient: QueryClient) {
   getChannel();
 }
 
+/**
+ * Annonce une écriture de l'onglet COURANT.
+ *
+ * `BroadcastChannel` ne délivre jamais à l'émetteur, et le cache React Query de
+ * la catégorie vient d'être posé par la mutation : ce qui reste à faire ici est
+ * la relecture du double Zustand que les bulles rendent — sinon l'onglet qui a
+ * fait le geste est le SEUL à ne pas le voir sur ses surfaces de messagerie.
+ *
+ * Elle est due canal ou pas : un navigateur sans `BroadcastChannel` doit voir
+ * son propre changement comme les autres.
+ */
 export function broadcastPreferenceUpdate(category: PreferenceCategory) {
+  refreshMirroredPreferenceCategory(category);
+
   getChannel()?.postMessage({
     type: 'preferences-updated',
     category,

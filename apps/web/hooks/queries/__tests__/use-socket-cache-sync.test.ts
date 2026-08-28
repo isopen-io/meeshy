@@ -144,6 +144,12 @@ jest.mock('@/stores/conversation-preferences-store', () => ({
   },
 }));
 
+const refreshMirroredPreferenceCategoryMock = jest.fn();
+jest.mock('@/lib/preferences/mirrored-preference-categories', () => ({
+  refreshMirroredPreferenceCategory: (category: string) =>
+    refreshMirroredPreferenceCategoryMock(category),
+}));
+
 jest.mock('@/utils/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
@@ -1107,6 +1113,49 @@ describe('useSocketCacheSync — user:preferences-updated', () => {
     });
 
     expect(applyRemotePreferencesMock).not.toHaveBeenCalled();
+  });
+
+  // Le scope catégorie n'invalidait qu'une clé React Query, dont l'écran de
+  // réglages est le seul observateur. Le bloc `privacy` que les bulles RENDENT
+  // vit dans un second exemplaire (Zustand) dont `initialize()`, appelé une
+  // fois au montage, était l'unique source : couper ses accusés de lecture
+  // depuis le téléphone laissait les coches en place jusqu'à un rechargement.
+  it('relit le double Zustand que la catégorie annoncée périme', () => {
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!({ userId: 'current-user', category: 'privacy' }); });
+
+    expect(refreshMirroredPreferenceCategoryMock).toHaveBeenCalledWith('privacy');
+  });
+
+  it('passe la catégorie telle quelle — la règle du double vit à un seul site', () => {
+    // Le routeur ne connaît pas la liste des catégories doublées ; il délivre
+    // l'annonce, et `refreshMirroredPreferenceCategory` décide. Sans ça, la
+    // liste vivrait en deux endroits et divergerait au premier ajout.
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!({ userId: 'current-user', category: 'audio' }); });
+
+    expect(refreshMirroredPreferenceCategoryMock).toHaveBeenCalledWith('audio');
+  });
+
+  it('ne relit aucun double pour les scopes conversation et communauté', () => {
+    const { wrapper } = createTestHarness('conv-1');
+    renderHook(() => useSocketCacheSync({ conversationId: 'conv-1', enabled: true }), { wrapper });
+
+    act(() => { capturedPreferencesListener!(conversationScopeEvent); });
+    act(() => {
+      capturedPreferencesListener!({
+        userId: 'current-user',
+        communityId: 'comm-1',
+        reset: false,
+        preferences: { isPinned: true, isMuted: false, isArchived: false, isHidden: false, notificationLevel: 'all', customName: null, categoryId: null, orderInCategory: null },
+      });
+    });
+
+    expect(refreshMirroredPreferenceCategoryMock).not.toHaveBeenCalled();
   });
 });
 
