@@ -5,7 +5,7 @@ Ce fichier est le contrat complet ; le prompt `/loop` s'y réfère au lieu de le
 
 ---
 
-## Les cinq lois
+## Les sept lois
 
 **1. PRÉSERVER ET COMPLÉTER, jamais supprimer.** La maquette est une **cible**, pas une liste
 d'autorisations. Ce que l'app porte en plus du document **se conserve**. Un élément absent de la
@@ -29,6 +29,28 @@ sous-vues chez elles.
 
 **5. La fin se PROUVE.** Une issue se ferme sur une capture du simulateur posée à côté de sa cible
 et un gate vert — jamais sur une déclaration.
+
+**6. Toute VIGNETTE montre la DONNÉE en visuel.** Jamais un carré vide, jamais un placeholder gris,
+jamais une icône seule. Vignette d'**effet** (filtre, style de texte, fond), de **contenu en
+édition**, de **slide** de carrousel, de **média**, de **son** (forme d'onde), de **fond**. Un
+`Rectangle` de couleur là où une image est disponible est un **défaut**, pas un choix de design.
+Le substitut n'est toléré que pendant le chargement, et il s'efface dès que la donnée arrive.
+
+**7. L'édition des données se fait en TEMPS RÉEL.** Ce que l'utilisateur modifie se voit
+**immédiatement** dans la scène, l'aperçu, la vignette et le document — sans validation
+intermédiaire, sans attendre la fermeture d'une feuille. Un réglage qui ne prend effet qu'au
+« Appliquer » fait choisir à l'aveugle. **Corollaire :** un éditeur temps réel doit porter un
+**snapshot** pour que l'annulation restaure vraiment ce qui existait avant.
+
+---
+
+## La navigation — les 31 vues sont un GRAPHE
+
+Les vues ne sont pas 31 écrans isolés. Chaque issue de vue déclare, **avant d'être codée** :
+**d'où l'on vient** (la vue précédente et le geste qui amène ici) et **où l'on va** (les vues
+atteignables et leur geste). Une vue livrée dont l'entrée ou la sortie n'est pas câblée n'est pas
+livrée : elle est inatteignable, ou sans issue. L'enchaînement se vérifie au simulateur en suivant
+le **chemin complet** depuis le fil, jamais en ouvrant la vue par un raccourci de code.
 
 ---
 
@@ -144,3 +166,7 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 2. `./apps/ios/meeshy.sh build` vert.
 3. Aucun fichier touché au-dessus de 1 100 lignes.
 4. Les dimensions non mûres ouvertes en issues, jamais laissées implicites.
+5. **Chaque vignette de la vue montre la vraie donnée** (loi 6) — vérifié sur la capture, pas sur le code.
+6. **Chaque réglage de la vue s'y voit en direct** (loi 7) — la modification et son annulation, toutes deux filmées ou capturées.
+7. **L'entrée et la sortie de la vue sont câblées** — le chemin complet depuis le fil a été parcouru au simulateur.
+8. **La revue est conduite par Opus** et conclut sur les sept lois, une par une.
