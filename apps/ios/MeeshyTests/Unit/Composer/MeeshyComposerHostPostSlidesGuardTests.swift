@@ -108,30 +108,58 @@ final class MeeshyComposerHostPostSlidesGuardTests: XCTestCase {
     /// bandes montrant les mêmes vignettes seraient deux inventaires à faire
     /// diverger, et la seconde mentirait au premier chemin d'ingestion qui
     /// n'alimente que l'une. C'est le « d'un seul tenant » de #4047.
+    ///
+    /// **RE-POINTÉE au #4064**, et il faut dire pourquoi plutôt que de la
+    /// réparer en silence : #4070 a sorti la barre haute de la surface document
+    /// pour en faire un composant PARTAGÉ (`ComposerTopBar`), que la surface de
+    /// scène consomme aussi. La garde, elle, lisait toujours
+    /// `ComposerDocumentSurface.swift` — elle a donc rougi sur un fichier où le
+    /// rail n'était plus, pendant que le rail allait très bien. Une garde de
+    /// source ne suit pas le code qu'elle protège : c'est à la main qu'on la
+    /// déplace, et le gate ciblé de #4070 ne l'exécutait pas.
+    ///
+    /// Elle en sort RENFORCÉE. « Un seul exemplaire » ne se compte plus dans un
+    /// fichier : il se prouve par l'ABSENCE du rail chez les deux surfaces qui
+    /// consomment la barre — la forme que #4070 rend vérifiable et que la
+    /// version d'avant ne pouvait pas exprimer.
     func test_theRailLivesInTheTopBar_andOnlyThere() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        func source(_ fichier: String) throws -> String {
+            let url = URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Composer/\(fichier)")
+            return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        }
 
-        XCTAssertTrue(source.contains("struct ComposerDocumentSurface"),
-            "La source de la surface est introuvable — la garde ne mesurerait RIEN.")
+        let barre = try source("ComposerTopBar.swift")
+        XCTAssertTrue(barre.contains("struct ComposerTopBar"),
+            "La source de la barre haute est introuvable — la garde ne mesurerait RIEN.")
         XCTAssertEqual(
-            source.components(separatedBy: "slideRail").count - 1, 2,
+            barre.components(separatedBy: "slideRail").count - 1, 2,
             "`slideRail` doit apparaître EXACTEMENT deux fois : sa déclaration et son unique montage, "
-                + "dans la barre haute. Un troisième site est un second rail."
+                + "dans le `body` de la barre haute. Un troisième site est un second rail."
         )
 
-        guard let barre = source.range(of: "private var exitAffordance"),
-              let fin = source.range(of: "private var slideRail", range: barre.upperBound..<source.endIndex)
+        guard let corps = barre.range(of: "var body: some View"),
+              let fin = barre.range(of: "private var slideRail", range: corps.upperBound..<barre.endIndex)
         else {
-            return XCTFail("`exitAffordance` doit précéder `slideRail` — la barre haute le MONTE.")
+            return XCTFail("Le `body` de la barre haute doit précéder `slideRail` — c'est lui qui le MONTE.")
         }
         XCTAssertTrue(
-            source[barre.upperBound..<fin.lowerBound].contains("slideRail"),
+            barre[corps.upperBound..<fin.lowerBound].contains("slideRail"),
             "La barre haute doit monter le rail. Ailleurs, il redevient la bande basse que #4047 remplace."
         )
+
+        // **La moitié « et nulle part ailleurs », désormais VÉRIFIABLE.** Les
+        // deux surfaces consomment la barre ; qu'aucune ne nomme le rail est ce
+        // qui garantit qu'il n'en existe qu'un.
+        for surface in ["ComposerDocumentSurface.swift", "ComposerSceneSurface.swift"] {
+            let code = try source(surface)
+            XCTAssertTrue(code.contains("ComposerTopBar("),
+                "\(surface) doit CONSOMMER la barre — sinon cette garde ne dit rien de cette surface.")
+            XCTAssertFalse(code.contains("slideRail"),
+                "\(surface) redéclare un rail de slides : c'est le second inventaire que #4047 interdit.")
+        }
     }
 
     // MARK: - Le `⋯` de la barre haute (#4047)

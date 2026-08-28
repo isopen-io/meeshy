@@ -237,6 +237,13 @@ nonisolated enum ComposerChromeOwnership {
 /// Restent les gestes que le document sait faire et que RIEN d'autre à l'écran
 /// ne fait :
 ///
+/// - **choisir le fond** — le SYMÉTRIQUE de l'entrée suivante, arrivé par le
+///   même défaut dans l'autre sens (#4064). Sur la surface DOCUMENT, la palette
+///   s'ouvre par l'icône de fond de la rangée d'outils ; sur la surface de
+///   SCÈNE cette rangée n'existe plus — le chrome est passé aux deux rails — et
+///   aucune porte ne fait entrer une COULEUR, qui n'est pas un `MeeshyObject`.
+///   La palette y était donc devenue INATTEIGNABLE : on pouvait retirer le
+///   fond, jamais en changer.
 /// - **retirer le fond** — poser une couleur était une porte à SENS UNIQUE :
 ///   la bande de pastilles l'écrit, et aucun contrôle ne l'effaçait. Un post
 ///   devenu toile ne pouvait plus redevenir un post sans toile.
@@ -244,6 +251,7 @@ nonisolated enum ComposerChromeOwnership {
 ///   Il porte plus loin que le rail : le rail retire les MÉDIAS un à un, celui-ci
 ///   emporte aussi le texte, le fond, le lieu et la transcription.
 nonisolated enum ComposerOverflowEntry: Equatable, CaseIterable {
+    case pickBackground
     case removeBackground
     case clearAll
 }
@@ -257,13 +265,21 @@ nonisolated enum ComposerOverflowPolicy {
     /// `clearAll` ne se sert PAS sur un composer vierge — « tout effacer »
     /// n'aurait rien à effacer, et l'offrir dirait à l'auteur qu'il a composé
     /// quelque chose qu'il ne retrouve pas.
+    ///
+    /// **`backgroundPickerIsReachable` dit un FAIT D'ÉCRAN, pas une surface**, et
+    /// c'est délibéré : la règle n'a pas à savoir laquelle des quatre vues est
+    /// montée, seulement si la palette a DÉJÀ un chemin. Son défaut est `true` —
+    /// le défaut SÛR : un appelant qui l'ignore n'obtient jamais un DOUBLON de
+    /// contrôle, au pire une entrée manquante que l'écran offre ailleurs.
     static func entries(
         hasBackground: Bool,
         hasMedia: Bool,
         hasText: Bool,
-        hasLocation: Bool
+        hasLocation: Bool,
+        backgroundPickerIsReachable: Bool = true
     ) -> [ComposerOverflowEntry] {
         var served: [ComposerOverflowEntry] = []
+        if !backgroundPickerIsReachable { served.append(.pickBackground) }
         if hasBackground { served.append(.removeBackground) }
         if hasBackground || hasMedia || hasText || hasLocation { served.append(.clearAll) }
         return served
@@ -277,6 +293,9 @@ nonisolated enum ComposerOverflowPolicy {
 nonisolated enum ComposerOverflowCopy {
     static func label(_ entry: ComposerOverflowEntry) -> String {
         switch entry {
+        case .pickBackground:
+            return String(localized: "composer.overflow.pickBackground",
+                          defaultValue: "Couleur de fond", bundle: .main)
         case .removeBackground:
             return String(localized: "composer.overflow.removeBackground",
                           defaultValue: "Retirer le fond", bundle: .main)
@@ -288,6 +307,7 @@ nonisolated enum ComposerOverflowCopy {
 
     static func icon(_ entry: ComposerOverflowEntry) -> String {
         switch entry {
+        case .pickBackground: return "paintpalette.fill"
         case .removeBackground: return "paintpalette"
         case .clearAll: return "trash"
         }

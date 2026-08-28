@@ -46,20 +46,35 @@ final class ComposerMediaStripTests: XCTestCase {
 
     // 2 — la surface PEINT le média reçu, en vignettes retirables.
     func test_laSurface_peintLeMedia_enVignettesRetirables() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
         // Le ruban a été MONTÉ en barre haute au 2026-08-27 (#4047) et s'appelle
         // désormais `slideRail` — en Post une slide EST un média, le rail des
         // slides et l'inventaire des pièces jointes sont le MÊME objet. Ce que
         // cette garde protège n'a pas changé d'un mot : le média choisi est
-        // VISIBLE et RETIRABLE. Seul son logement a bougé.
+        // VISIBLE et RETIRABLE. Seul son logement a bougé — DEUX fois.
+        //
+        // **RE-POINTÉE au #4064.** #4070 a sorti la barre haute de la surface
+        // document pour en faire `ComposerTopBar`, partagée avec la surface de
+        // scène ; cette garde lisait toujours `ComposerDocumentSurface.swift` et
+        // rougissait donc sur un fichier où le ruban n'était plus. Une garde de
+        // source ne suit pas le code qu'elle protège : c'est à la main qu'on la
+        // déplace, et un gate CIBLÉ ne l'exécute pas pour le dire.
+        let raw = try source("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
         XCTAssertTrue(raw.contains("private var slideRail"), "slideRail introuvable ou source vide")
         XCTAssertFalse(raw.contains("private var mediaStrip"),
             "Le ruban vit en DEUX exemplaires — l'ancien en bas, le rail en haut : deux inventaires du "
                 + "même média, à faire diverger au premier chemin d'ingestion qui n'alimente que l'un.")
+        XCTAssertFalse(
+            try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+                .contains("private var mediaStrip"),
+            "L'ancien ruban est revenu dans le document : c'est le second inventaire que #4047 interdit."
+        )
         let src = compact(raw)
+        // `let`, et pas `var` : la barre RECEIT l'inventaire et ne peut pas
+        // l'amender — une forme plus forte que celle que gardait la version
+        // d'avant, où la surface document le déclarait en `var`.
         XCTAssertTrue(
-            src.contains("varlocalMedia:[ComposerDocumentMedia]"),
-            "La surface doit RECEVOIR `localMedia` — elle reste sans état, le meuble le possède."
+            src.contains("letlocalMedia:[ComposerDocumentMedia]"),
+            "La barre doit RECEVOIR `localMedia` — elle reste sans état, le meuble le possède."
         )
         XCTAssertTrue(
             src.contains("ForEach(localMedia,id:\\.url)") && src.contains("ComposerMediaThumbnail("),

@@ -597,11 +597,18 @@ struct MeeshyComposerHost: View {
     /// et aucune ne se répond sans son id.
     @State private var selectedSceneItemId: String?
 
+    /// **La bande contextuelle DEMANDÉE sur la surface de scène (#4064).**
+    ///
+    /// Ce n'est pas ce qui s'affiche : `ComposerSceneBand.opened` tranche, et
+    /// refuse une bande qui n'est pas SERVIE. Garder la demande et le service
+    /// séparés est ce qui empêche une bande vide d'occuper les ≈ 170 pt que
+    /// l'encastrement vient de libérer.
+    @State private var requestedSceneBand: ComposerSceneBand?
+
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
     /// déplie sur un champ lié au CONTENU partagé (`documentText`). Vit dans le
     /// MEUBLE, comme tout état de chrome de la scène.
-    @State private var descriptionExpanded = false
 
     /// **T2.5 — la POSITION posée sur le brouillon.** Vit dans le MEUBLE, comme
     /// `documentLocalMedia` juste au-dessus : `ComposerDocumentDraft.location`
@@ -1255,6 +1262,20 @@ struct MeeshyComposerHost: View {
                 canLeaveScene: selectedFormat != .story
             ),
             onTrailingAction: { action in handleTrailingRailAction(action) },
+            // **Les bandes SERVIES par ce meuble** (#4064) — `palette` seule.
+            // La timeline vit dans l'atelier et les 18 styles exigent un objet
+            // `text` sélectionné, qu'aucune porte de cette surface ne pose :
+            // les servir peindrait une bande vide.
+            band: ComposerSceneBand.opened(requestedSceneBand, served: [.palette]),
+            bandColors: StoryBackgroundPalette.colors,
+            onPickBandColor: { hex in
+                documentBackground = hex
+                viewModel.applyBackground(hex: hex)
+                // La bande se referme sur le choix : la couleur est visible sur
+                // la scène juste au-dessus, donc la garder ouverte occuperait
+                // l'espace pour montrer ce que l'écran montre déjà.
+                requestedSceneBand = nil
+            },
             description: $documentText,
             descriptionPlaceholder: ComposerDocumentCopy.placeholder
         )
@@ -1512,73 +1533,30 @@ struct MeeshyComposerHost: View {
         }
     }
 
-    /// **B2 (#3925) — la description repliable sous le canvas.**
+    /// **B2 (#3925), devenue le CALQUE DE LECTURE au #4065.**
     ///
-    /// En mode scène (Story/Réel), une section repliable liée au CONTENU
-    /// PARTAGÉ (`documentText`) : ce que l'auteur écrit ici part comme
-    /// `slide.content` (via `applyContentText`, le même canal que B1) et le
-    /// reader l'affiche par-dessus le canvas composé (la légende `content` des
-    /// viewers existants — `ReelsPlayerView`, `FeedPostCard`, `PostDetailView`,
-    /// le `StoryViewer`). C'est la surface d'ÉDITION, côté scène, du contenu que
-    /// B1 préserve entre les modes — jamais un second champ : une description
-    /// écrite ici et retrouvée dans le champ du document au retour, et l'inverse.
+    /// En mode scène (Story/Réel), la description liée au CONTENU PARTAGÉ
+    /// (`documentText`) : ce que l'auteur écrit ici part comme `slide.content`
+    /// (via `applyContentText`, le même canal que B1) et le reader l'affiche
+    /// par-dessus le canvas composé — la légende `content` des viewers existants
+    /// (`ReelsPlayerView`, `FeedPostCard`, `PostDetailView`, `StoryViewer`).
+    /// C'est la surface d'ÉDITION, côté scène, du contenu que B1 préserve entre
+    /// les modes — jamais un second champ.
     ///
-    /// Repliée par défaut (`descriptionExpanded`) : une barre compacte qui ne
-    /// mange pas le canvas, l'aperçu du contenu quand il existe, l'invite quand
-    /// il est vide.
+    /// **Elle fut une barre repliable à chevron, et ce n'en est plus une.** La
+    /// barre montrait un RÉSUMÉ d'une ligne, en texte brut, sous une icône et un
+    /// chevron : trois éléments de chrome pour dire ce que le lecteur verrait,
+    /// et qui ne le montraient pas. `ComposerDescriptionLayer` rend le texte
+    /// avec le renderer du lecteur et se déplie au tap — un seul calque, monté
+    /// aussi par la surface de scène. Les deux profils voient donc EXACTEMENT la
+    /// même chose, ce que deux implémentations n'auraient pas tenu deux lots.
     private var sceneDescriptionSection: some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "text.alignleft")
-                        .font(MeeshyFont.relative(13))
-                    Text(sceneDescriptionSummary)
-                        .font(MeeshyFont.relative(14))
-                        .lineLimit(1)
-                        .foregroundColor(documentText.isEmpty
-                                         ? MeeshyColors.textSecondary(isDark: true)
-                                         : MeeshyColors.textPrimary(isDark: true))
-                    Spacer(minLength: 8)
-                    Image(systemName: descriptionExpanded ? "chevron.down" : "chevron.up")
-                        .font(MeeshyFont.relative(11))
-                }
-                .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 11)
-                .contentShape(Rectangle())
-            }
-            .accessibilityLabel(Text(String(
-                localized: "composer.scene.description.a11y.toggle",
-                defaultValue: "Afficher ou masquer la description", bundle: .main)))
-            .accessibilityValue(Text(sceneDescriptionSummary))
-
-            if descriptionExpanded {
-                TextField(
-                    String(localized: "composer.scene.description.placeholder",
-                           defaultValue: "Ajoutez une description…", bundle: .main),
-                    text: sceneDescriptionBinding,
-                    axis: .vertical
-                )
-                .lineLimit(1...4)
-                .font(MeeshyFont.relative(15))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .padding(.horizontal, 16)
-                .padding(.bottom, 12)
-            }
-        }
+        ComposerDescriptionLayer(
+            text: sceneDescriptionBinding,
+            placeholder: String(localized: "composer.scene.description.placeholder",
+                                defaultValue: "Ajoutez une description…", bundle: .main)
+        )
         .background(MeeshyColors.textPrimary(isDark: true).opacity(0.06))
-    }
-
-    /// L'aperçu de la barre repliée : le contenu quand il existe, l'invite
-    /// « ajoutez une description » quand il est vide — un contrôle sans effet
-    /// est absent, celui-ci dit toujours ce qu'il fait (loi 4).
-    private var sceneDescriptionSummary: String {
-        documentText.isEmpty
-            ? String(localized: "composer.scene.description.placeholder",
-                     defaultValue: "Ajoutez une description…", bundle: .main)
-            : documentText
     }
 
     /// **Le binding qui garde UN seul contenu.** Écrire dans la description met
@@ -1670,8 +1648,25 @@ struct MeeshyComposerHost: View {
             hasBackground: documentBackground != nil,
             hasMedia: !documentLocalMedia.isEmpty,
             hasText: !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-            hasLocation: documentLocation != nil
+            hasLocation: documentLocation != nil,
+            backgroundPickerIsReachable: backgroundPaletteIsReachable
         )
+    }
+
+    /// **La palette a-t-elle DÉJÀ un chemin à l'écran ?** (#4064)
+    ///
+    /// Sur la surface DOCUMENT, oui : l'icône de fond de la rangée d'outils la
+    /// déplie. Sur la surface de SCÈNE, non — cette rangée n'y existe plus (le
+    /// chrome est passé aux deux rails) et le rail *leading* ne porte que des
+    /// portes qui font entrer un `MeeshyObject` ; une COULEUR n'en est pas un.
+    /// Le `⋯` est alors le seul chemin restant, et la règle le lui accorde.
+    ///
+    /// La question se pose au MEUBLE parce que c'est lui qui monte les vues ;
+    /// `ComposerOverflowPolicy`, elle, ne reçoit qu'un FAIT — pas un nom de
+    /// surface, qu'elle n'aurait aucun moyen d'éprouver.
+    private var backgroundPaletteIsReachable: Bool {
+        ComposerMountedView.mounted(surface: mountedSurface,
+                                    hasScene: documentHasScene) != .scene
     }
 
     /// **Le `⋯` de la barre haute (#4047).** Il ne peint QUE les entrées que la
@@ -1708,6 +1703,11 @@ struct MeeshyComposerHost: View {
     /// lisent sans monter une vue.
     private func perform(_ entry: ComposerOverflowEntry) {
         switch entry {
+        case .pickBackground:
+            // Bascule : le même geste ouvre et referme la bande. « Ouvrir »
+            // sans « refermer » rendrait les ≈ 170 pt à sens unique.
+            requestedSceneBand = requestedSceneBand == .palette ? nil : .palette
+
         case .removeBackground:
             // L'INTENTION de l'auteur est `documentBackground` : c'est elle qui
             // fait naître la scène (`documentHasScene`). Le canvas, lui, garde

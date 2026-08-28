@@ -68,12 +68,21 @@ struct ComposerSceneSurface: View {
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
 
+    // MARK: - La bande contextuelle
+
+    /// La bande OUVERTE — déjà résolue par `ComposerSceneBand.opened`. `nil` ⇒
+    /// le bas ne porte que le socle (#4064). Cette vue ne re-filtre rien : une
+    /// seconde loi 4 divergerait de la première, exactement comme pour les
+    /// deux rails.
+    var band: ComposerSceneBand?
+    var bandColors: [String] = []
+    var onPickBandColor: ((String) -> Void)?
+
     // MARK: - La description
 
     @Binding var description: String
     let descriptionPlaceholder: String
 
-    @FocusState private var isDescriptionFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -130,37 +139,38 @@ struct ComposerSceneSurface: View {
                 }
                 .padding(.top, 8)
 
+                // **La bande contextuelle, entre la scène et la description**
+                // (#4064). L'ordre n'est pas un rangement : de haut en bas, le
+                // bas de l'écran descend les niveaux du modèle — l'objet (les
+                // rails, sur la scène), la SCÈNE (cette bande), la SLIDE (la
+                // description), la PUBLICATION (le socle, au meuble).
+                //
+                // Montée sans transition ni animation : la bande est un frère
+                // du canvas, et animer son insertion ferait varier la frame de
+                // `StoryCanvasUIView` sur chaque image du ressort.
+                if let band {
+                    ComposerSceneBandView(band: band,
+                                          colors: bandColors,
+                                          onPickColor: onPickBandColor)
+                }
+
                 descriptionField
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    /// La description de la `MeeshySlide`. Champ compact — le contenu long vit
-    /// sur le canvas, ceci le légende.
+    /// La description de la `MeeshySlide`, rendue **comme le lecteur la verra**
+    /// (#4065). Le calque est PARTAGÉ avec l'atelier : deux rendus « en mode
+    /// lecture » auraient divergé au premier ajustement, et l'un des deux se
+    /// serait mis à mentir sur le rendu final — ce qu'interdit la loi 6.
     ///
     /// **En profil P, ce n'est pas le texte du post** : c'est la LÉGENDE de ce
     /// média-là, et la publication garde son `content` (#4045, chaîne serveur
-    /// #4055). Le calque de LECTURE qui la rendra comme le lecteur la verra est
-    /// #4065 — jusque-là, elle reste un champ.
+    /// #4055). Ce que ce calque rend est donc encore le `content` du meuble ;
+    /// changer sa SOURCE est le lot de #4045, pas celui-ci.
     private var descriptionField: some View {
-        ZStack(alignment: .topLeading) {
-            if description.isEmpty {
-                Text(descriptionPlaceholder)
-                    .font(.callout)
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
-                    .allowsHitTesting(false)
-            }
-            TextEditor(text: $description)
-                .focused($isDescriptionFocused)
-                .scrollContentBackground(.hidden)
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .font(.callout)
-                .frame(height: 56)
-                .padding(.horizontal, 12)
-                .accessibilityLabel(Text(descriptionPlaceholder))
-        }
+        ComposerDescriptionLayer(text: $description,
+                                 placeholder: descriptionPlaceholder)
     }
 }

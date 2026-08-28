@@ -214,12 +214,20 @@ final class ComposerSceneActivationTests: XCTestCase {
     }
 
     // 11 — B2 : les libellés de la section sont traduits dans les 7 locales.
+    //
+    // **`composer.scene.description.a11y.toggle` en est SORTIE au #4065**, avec
+    // le chevron qu'elle nommait : la barre repliable a cédé la place au calque
+    // de lecture, et la clé n'avait plus aucun lecteur. Une clé gardée ici sans
+    // lecteur aurait fait croire à sept traductions vivantes pour un contrôle
+    // qui n'existe plus. Les trois clés du calque prennent sa place.
     func test_lesLibellesDescription_sontTraduits_7Locales() throws {
         let catalog = try source("Meeshy/Localizable.xcstrings")
         let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
         let strings = json?["strings"] as? [String: Any]
         for key in ["composer.scene.description.placeholder",
-                    "composer.scene.description.a11y.toggle"] {
+                    "composer.description.amorce",
+                    "composer.description.a11y.edit",
+                    "composer.description.a11y.done"] {
             guard let entry = strings?[key] as? [String: Any],
                   let locs = entry["localizations"] as? [String: Any] else {
                 return XCTFail("Clé « \(key) » absente du catalogue")
