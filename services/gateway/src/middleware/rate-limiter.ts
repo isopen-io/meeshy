@@ -66,6 +66,19 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     // RedisStore natif via `redis` (cf. registerMessageRateLimiter). Passer une
     // instance à `store` crashait le boot en staging (plugin fait `new store()`).
     redis: getCacheStore().getNativeClient() ?? undefined,
+    // `request.ip` porte l'adresse de l'APPELANT depuis #4137 (`trustProxy`,
+    // cf. `config/trust-proxy.ts`). Avant cela, c'était l'adresse du conteneur
+    // Traefik — identique pour tout le monde — et cette clé désignait donc UN
+    // SEUL seau de 300 req/min pour la plateforme entière : elle ne freinait
+    // personne individuellement, et un client qui la saturait faisait répondre
+    // 429 à tous les autres.
+    //
+    // La clé reste l'adresse, et NON l'utilisateur, pour une raison d'ordre :
+    // ce limiteur est un hook global posé par `setupMiddleware()`, qui s'exécute
+    // AVANT les gardes d'authentification de chaque route — `authContext`
+    // n'existe pas encore ici. Les limiteurs qui doivent compter par compte le
+    // font au niveau de leur route (`createPostRouteRateLimitConfig` et ses
+    // sœurs), là où l'appelant est connu.
     keyGenerator: (request: FastifyRequest) => {
       return `global:${request.ip}`;
     },
@@ -77,11 +90,14 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     // donc silencieusement ignorée, et les sondes subissaient le quota : un
     // flood faisait échouer `/health` et redémarrer le conteneur.
     //
-    // Le test `isLocalIp` de cette clause N'EST PAS repris, délibérément :
-    // Fastify tourne sans `trustProxy` derrière Traefik sur un réseau Docker,
-    // donc `request.ip` est une adresse privée `172.x` pour TOUT LE MONDE.
-    // Réactiver la clause telle quelle aurait désactivé le rate limiting
-    // entier — un renommage naïf était bien pire que le bug.
+    // Le test `isLocalIp` de cette clause N'A JAMAIS été repris, et ne doit pas
+    // l'être : une exemption fondée sur la FORME d'une adresse n'a aucun sens
+    // ici. Elle a d'ailleurs neutralisé les limiteurs d'authentification
+    // pendant toute sa durée de vie (#4137, `utils/rate-limiter.ts`), pour
+    // exactement la raison notée ici — `request.ip` était une adresse privée
+    // `172.x` pour tout le monde. Depuis #4137, `trustProxy` rend l'adresse de
+    // l'appelant ; la conclusion ne change pas pour autant : ce qui exempte
+    // ici, ce sont des CHEMINS de sonde, jamais une plage d'adresses.
     allowList: (request: FastifyRequest) => {
       const path = request.url.split('?')[0];
       return path === '/health' || path === '/healthz' || path === '/ready';

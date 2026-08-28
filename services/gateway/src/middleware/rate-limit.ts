@@ -8,7 +8,6 @@
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { logger } from '../utils/logger.js';
-import { isLocalIp } from '../utils/rate-limiter';
 import { UnifiedAuthRequest } from './auth';
 
 /**
@@ -63,7 +62,13 @@ export async function registerRateLimiting(fastify: FastifyInstance): Promise<vo
     max: RATE_LIMITS.DEFAULT.max,
     timeWindow: RATE_LIMITS.DEFAULT.timeWindow,
     cache: 10000,
-    allowList: (req) => isLocalIp(req.ip),
+    // Pas d'`allowList` fondée sur la forme de l'adresse. Elle valait
+    // `(req) => isLocalIp(req.ip)`, ce qui, derrière Traefik sur un réseau
+    // Docker (`request.ip` en 172.16.0.0/12 pour tout le monde), exemptait la
+    // planète entière. Cette fonction n'est aujourd'hui montée nulle part —
+    // raison de plus pour ne pas y laisser le piège en attendant : la remonter
+    // telle quelle aurait rouvert le défaut de #4137 sans qu'aucun témoin ne
+    // rougisse.
     redis: fastify.redis ?? undefined, // Use Redis for distributed rate limiting (if available)
     skipOnError: true, // Don't block requests if Redis is down
     keyGenerator: (request) => {

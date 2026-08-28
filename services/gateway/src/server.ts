@@ -39,6 +39,7 @@ import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS } from './config/cors-methods';
 import { conditionalGetOnSend } from './utils/etag';
+import { resolveTrustProxy } from './config/trust-proxy';
 import { MutationLogService } from './services/MutationLogService';
 // L'enregistrement des routes REST (~50 fichiers) vit dans `./route-registration`,
 // un module SANS effet de bord au chargement (voir le commentaire en tête de
@@ -197,6 +198,11 @@ class MeeshyServer {
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
+        // Sans cette option, `request.ip` est l'adresse du conteneur Traefik —
+        // la MÊME pour tous les appelants — et toute limitation « par IP » se
+        // réduit à un seau unique pour la plateforme (#4137). Cf.
+        // `config/trust-proxy.ts` pour la raison du nombre plutôt que `true`.
+        trustProxy: resolveTrustProxy(),
         https: {
           key: fs.readFileSync(keyPath),
           cert: fs.readFileSync(certFilePath),
@@ -216,6 +222,9 @@ class MeeshyServer {
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
+        // Mode NOMINAL en production : le gateway est derrière Traefik. Voir
+        // le commentaire de la branche HTTPS ci-dessus et #4137.
+        trustProxy: resolveTrustProxy(),
         ajv: {
           customOptions: {
             strict: 'log' as const, // Allow unknown keywords like 'example' (for OpenAPI documentation)

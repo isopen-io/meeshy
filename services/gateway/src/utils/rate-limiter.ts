@@ -22,8 +22,19 @@ import { enhancedLogger } from './logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'RateLimiter' });
 
 /**
- * Check if an IP address is local (loopback or private network).
- * Local IPs are exempt from rate limiting in dev environments.
+ * Vrai si l'adresse appartient au loopback ou à une plage privée.
+ *
+ * ATTENTION — cette fonction est juste ; c'est son USAGE comme exemption de
+ * limitation qui ne l'était pas. Le gateway tourne derrière Traefik sur un
+ * réseau Docker bridge : `request.ip` vaut une adresse `172.16.0.0/12` pour
+ * TOUS les appelants, un attaquant compris. Exempter « les adresses locales »
+ * y désactive donc la limitation pour tout le monde — c'est exactement ce qui
+ * s'était produit (cf. `middleware()` ci-dessous et #4137).
+ *
+ * Ne JAMAIS s'en servir pour accorder une faveur de sécurité. Une exemption
+ * de développement se déclare explicitement (`RATE_LIMIT_DISABLED`), jamais
+ * par la forme d'une adresse — sinon la production hérite en silence d'une
+ * commodité de poste de travail.
  */
 export function isLocalIp(ip: string): boolean {
   if (!ip) return false;
@@ -36,6 +47,27 @@ export function isLocalIp(ip: string): boolean {
     normalized.startsWith('10.') ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(normalized)
   );
+}
+
+/**
+ * Unique échappatoire à la limitation de débit : une DÉCLARATION explicite,
+ * lue à chaque appel (et non figée au chargement du module, pour rester
+ * pilotable en test sans réimporter).
+ *
+ * Elle est volontairement pénible à activer par accident : il faut poser
+ * `RATE_LIMIT_DISABLED=true`, et jamais en production — le témoin ci-dessous
+ * refuse la combinaison. Aucune adresse IP, aucun en-tête, aucune forme de
+ * requête ne doit plus ouvrir cette porte.
+ */
+function rateLimitDisabled(): boolean {
+  if (process.env.RATE_LIMIT_DISABLED !== 'true') return false;
+  if (process.env.NODE_ENV === 'production') {
+    logger.error(
+      'RATE_LIMIT_DISABLED est posé en production — ignoré. La limitation reste active.'
+    );
+    return false;
+  }
+  return true;
 }
 
 export interface RateLimiterConfig {
@@ -220,7 +252,7 @@ export class RateLimiter {
   middleware() {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        if (isLocalIp(request.ip)) return;
+        if (rateLimitDisabled()) return;
 
         const shouldSkip = await this.config.skip(request);
         if (shouldSkip) {
