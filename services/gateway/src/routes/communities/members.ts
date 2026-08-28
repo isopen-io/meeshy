@@ -449,9 +449,16 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Only community admins can update member roles');
       }
 
-      // Mettre a jour le role du membre
+      // Mettre a jour le role du membre.
+      //
+      // `communityId` BORNE la ligne a la communaute du chemin (#4142). Sans
+      // lui, la garde d'admin ci-dessus porte sur la communaute `:id` pendant
+      // que l'ecriture porte sur `CommunityMember.id`, qui est GLOBAL : un
+      // administrateur de A promouvait un membre de B en connaissant son
+      // identifiant de ligne. La decision d'autorisation et la ligne ecrite
+      // doivent designer la meme communaute.
       const updatedMember = await fastify.prisma.communityMember.update({
-        where: { id: memberId },
+        where: { id: memberId, communityId: id },
         data: { role: validatedData.role as string },
         include: {
           user: {
@@ -463,7 +470,18 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
             }
           }
         }
+      }).catch((error: unknown) => {
+        // P2025 = aucune ligne ne satisfait le `where`. Ici cela veut dire
+        // « ce membre n'appartient pas a cette communaute » — un 404, jamais un
+        // 403 : repondre « interdit » confirmerait que la ligne existe
+        // AILLEURS, ce que l'appelant n'a pas le droit d'apprendre.
+        if ((error as { code?: string }).code === 'P2025') return null;
+        throw error;
       });
+
+      if (!updatedMember) {
+        return sendNotFound(reply, 'Member not found in this community');
+      }
 
       return sendSuccess(reply, updatedMember);
     } catch (error) {
