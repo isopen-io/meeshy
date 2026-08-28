@@ -170,7 +170,7 @@ function emitToConversationRoom(
  * successful edit into a 500. `onError` lets callers log against the
  * originating request.
  *
- * ── L'ÉPINGLE, sixième transport, arrivée au cycle 130 ──────────────────────
+ * ── L'ÉPINGLE, sixième transport, arrivée au cycle 130 bis ──────────────────────
  *
  * « Collapsing them here means a sixth transport cannot silently reopen it »,
  * dit le paragraphe ci-dessus. Le sixième transport est arrivé — les deux
@@ -275,7 +275,7 @@ export async function broadcastMessageMutation(params: MessageMutationParams): P
   // `broadcastReactionMutation` garde l'appel identique de cette manière.
   //
   // Cette ligne portait « c'était ici la dernière exception de la famille ».
-  // C'était une AFFIRMATION, et le balayage du cycle 130 l'a mesurée fausse :
+  // C'était une AFFIRMATION, et le balayage du cycle 130 bis l'a mesurée fausse :
   // il en restait QUATORZE dans `services/gateway/src/`, dont deux à cinquante
   // lignes d'ici, sur les deux entrées d'épingle. Une famille se COMPTE, elle
   // ne se conclut pas depuis le site qu'on vient de corriger — c'est la règle

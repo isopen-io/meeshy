@@ -2263,7 +2263,7 @@ export function registerMessagesRoutes(
           pinnedBy: userId
         };
         // `broadcastMessageMutation` — le site UNIQUE de cette famille — plutôt
-        // que la room et la file re-codées ici (cycle 130). Il porte les deux
+        // que la room et la file re-codées ici (cycle 130 bis). Il porte les deux
         // gardes que la copie manuscrite n'avait pas : l'émission de room dans
         // un `try` (une levée d'adaptateur rendait 500 sur une épingle DÉJÀ
         // commise, et sautait la mise en file au passage), et le `.catch` sur la

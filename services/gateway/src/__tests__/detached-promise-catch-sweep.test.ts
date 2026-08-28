@@ -11,7 +11,7 @@
  * Elle était écrite, expliquée, et appliquée avec soin sur les sites qui la
  * CITENT — `broadcastLinkMessage` la commente trois fois, `broadcastReadStatus`
  * une. **Rien ne la gardait**, et le balayage en a relevé QUATORZE
- * contre-exemples en production au cycle 130, dont deux dans le fichier même de
+ * contre-exemples en production au cycle 130 bis, dont deux dans le fichier même de
  * l'épingle et un dans le doc-comment qui affirmait « c'était ici la dernière
  * exception de la famille ».
  *

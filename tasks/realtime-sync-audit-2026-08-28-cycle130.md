@@ -1,120 +1,154 @@
-# Cycle 130 — la promesse détachée qui n'a d'autre écouteur que le process
+# Cycle 130 — trois écrivains, deux lecteurs : Android n'avait jamais écouté ses propres préférences
 
-**Issue** : [#4134](https://github.com/isopen-io/meeshy/issues/4134)
-**Branche** : `claude/keen-hamilton-hxyc32`
-**Base** : `a4b374ee` (cycle 129 mergé)
+Date : 2026-08-28 · Issue : #4127 · Branche : `claude/keen-hamilton-funmhr`
 
-## 1. Ce qui a été cherché
+## Le défaut
 
-Une classe de défaut du temps réel, pas un site. Point de départ : la règle la
-plus longuement expliquée du `CLAUDE.md` du gateway — celle qui interdit une
-promesse détachée sans `.catch` — et la question à lui poser : **est-elle
-appliquée, ou seulement écrite ?**
+`UserConversationPreferences` est une ligne **par utilisateur**, pas par appareil.
+Épingler, mettre en sourdine, archiver, passer en « mentions seules », renommer,
+mettre en favori, étiqueter ou recatégoriser une conversation passe par un
+écrivain unique côté passerelle — `writeConversationPreferences`
+(`services/gateway/src/services/conversationPreferencesSync.ts`) — qui incrémente
+`version` et diffuse l'instantané complet sur la room personnelle du compte :
 
-## 2. Ce qui a été mesuré
+```ts
+broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, {
+  userId, conversationId, version, reset: false, preferences: toPreferencesPayload(row),
+});
+```
 
-**Quatorze** promesses détachées sans `.catch` dans `services/gateway/src/`
-(hors tests), relevées par un balayage. Aucune n'était une panne le jour de la
-mesure — tous les callees avalent leurs erreurs — donc quatorze **pièges
-armés**, au sens du cycle 84.
+Le web le décode (`applyRemotePreferences`,
+`apps/web/stores/conversation-preferences-store.ts`), iOS aussi
+(`ConversationStore.applyRemote` via `ConversationStoreSocketBridge`).
 
-| famille | sites | forme |
-|---|---|---|
-| épingle REST (`PUT`/`DELETE …/pin`) | 2 | mise en file détachée **+ émission de room non gardée** |
-| réactions (`ReactionHandler`) | 4 | file ×2, notification ×2 |
-| réaction de pièce jointe | 1 | file |
-| réaction d'agent (`MeeshySocketIOManager`) | 1 | file |
-| fenêtre de grâce d'appel (`CallEventsHandler`) | 2 | **dans un `setTimeout`** |
-| heartbeat d'appel (`CallService`) | 1 | **dans un `setTimeout`** |
-| ré-hydratation des appels au démarrage (`server.ts`) | 1 | au boot |
-| statut de lecture (route + `MessageReadStatusService`) | 2 | IIFE asynchrone |
+**Android n'avait aucun écouteur.** Mesuré : zéro occurrence de
+`preferences-updated` sous `apps/android/**/*.kt`, la seule mention du dépôt étant
+une case NON cochée d'`apps/android/tasks/inventory-sdk.md`.
 
-Deux propriétés donnent son prix à l'inventaire :
+Conséquence, sur le geste le plus banal de l'application : épingler une
+conversation depuis le web ou l'iPhone ne changeait **rien** sur le téléphone
+Android, jusqu'à un rechargement complet sans rapport. Ni immédiatement, ni à la
+reconnexion, ni au retour de l'application au premier plan.
 
-1. **La garantie appartient au SITE.** « Le callee avale ses erreurs » décrit
-   l'autre bout. C'est déjà FAUX dès que le callee porte une instruction avant
-   son propre `try` : `onDisconnectGraceExpired` en porte **trois**, dont un
-   accès de propriété sur un paramètre. Un des commentaires du dépôt écrivait
-   l'inverse comme une justification — *« `_createReactionNotification` handles
-   errors internally; void to be explicit »*.
-2. **Cinq des quatorze sont dans un `setTimeout`.** Aucun `try/catch` englobant
-   à invoquer, et le rappel se déclenche longtemps après la requête qui l'a armé :
-   le rejet n'a nulle part où être vu, et son seul effet observable est l'arrêt
-   du process sous le `--unhandled-rejections=throw` par défaut de Node 22.
+## Pourquoi rien ne l'a signalé
 
-## 3. L'épingle — le sixième transport annoncé
+**1. La liste se rafraîchit sur trois autres trames — mais aucune n'est émise
+par un écrivain de préférences.** `ConversationListViewModel` répond déjà à
+`conversation:unread-updated`, `message:new` et `conversation:updated` par une
+relecture fusionnée. Le raccourci naturel — « la liste se resynchronise de toute
+façon » — est faux ici : `writeConversationPreferences` n'émet **que**
+`USER_PREFERENCES_UPDATED`, jamais `conversation:updated`. Il n'existait donc
+aucun chemin, ni direct ni indirect.
 
-Deux des quatorze sont les entrées d'épingle. Elles ne manquaient pas seulement
-le `.catch` : elles avaient re-codé à la main deux des trois audiences de
-`broadcastMessageMutation`, dont le doc-comment prédit — littéralement — que
-« collapsing them here means a **sixth transport** cannot silently reopen it ».
+**2. Le voisin immédiat, lui, était câblé.** `CategorySocketManager` décode les
+quatre trames de catégories (`category:created/updated/deleted`,
+`categories:reordered`) et le catalogue se replie en direct. Une surface où la
+moitié du sujet arrive en temps réel se relit comme une surface faite — c'est la
+forme du cycle 123 (« une surface rangée dans "fait" parce que la donnée y
+arrivait bien, alors que ce qui manquait était en AVAL »), ici avec la donnée
+voisine plutôt que le consommateur aval.
 
-Ce que la copie manuscrite perdait en plus, et c'est le défaut de comportement
-du lot : **l'émission de room n'était pas gardée**. `io.to(room).emit(...)` LÈVE
-quand l'adaptateur ou l'encodeur est en défaut, et l'épingle est DÉJÀ commise en
-base à ce moment-là. Mesuré, en restaurant l'ancienne forme sous les nouveaux
-témoins :
+**3. Le pilotage l'avait noté sans le compter.** Une case à cocher dans un
+inventaire de parité n'a ni témoin ni gate ; elle disparaît de la vue dès que le
+fichier grossit. Le défaut a été trouvé en livrant #4126 — en posant, sur le
+détachement de catégorie du cycle 129, la question « qui **applique** ce que
+j'émets ? » — et pas en relisant l'inventaire.
 
-| ce qui arrive quand l'émission lève | avant | après |
-|---|---|---|
-| statut rendu par la route | **500** sur une écriture réussie | 200 |
-| entrée de file hors ligne | **jamais posée** | posée |
-| rejet de la file sans écouteur | **1** | 0 |
+## Ce qui change
 
-Un incident COSMÉTIQUE emportait la seule garantie DURABLE du chemin —
-l'inversion exacte que le cycle 116 avait corrigée sur les deux producteurs de
-`message:new`, rejouée sur un chemin que ce lot-là ne couvrait pas.
-
-Le correctif n'est donc pas d'ajouter un `.catch` aux deux sites : c'est de les
-faire passer par le helper. `MessageMutationParams` accueille `'pinned'` et
-`'unpinned'`, et **le TYPE dit quelles audiences chaque mutation doit
-atteindre** : `prisma` n'existe que sur `edited` et `deleted`, les deux seules
-mutations qui DÉPLACENT l'aperçu de la liste. L'épingle ne touche ni l'aperçu,
-ni son ordre, ni son compteur — l'en dispenser au type, plutôt que par un
-drapeau lu dans le corps, évite de faire payer la passe d'aperçu à chaque
-épinglage et empêche le prochain transport de la croire obligatoire.
-
-## 4. Le cliquet
-
-`src/__tests__/detached-promise-catch-sweep.ts` + son test, inventaire **VIDE**.
-Deux choix de rédaction à reprendre :
-
-- **le discriminant est la POSITION, pas le mot-clé.** La première rédaction
-  cherchait `void` précédé de « n'importe quoi qui ne soit pas un mot » et rendait
-  plus de cent faux positifs, tous des annotations de retour (`(): void {`,
-  `Promise<void>`). Un balayage qui cherche un IDIOME mesure sa popularité, pas
-  une propriété (cycle 107). La propriété retenue : `void` en position
-  d'INSTRUCTION, donc précédé de `;`, `{`, `}` ou du début du fichier ;
-- **détecter sur une source dépouillée, RAPPORTER depuis la source brute.** Les
-  commentaires citent la forme fautive pour l'expliquer — le dépôt en porte cinq
-  — donc la détection doit les neutraliser ; mais la clé d'inventaire doit garder
-  ses littéraux, sans quoi les deux `_enqueueOfflineReactionEvent` voisins de
-  `ReactionHandler` seraient indiscernables. Le dépouillement remplace chaque
-  caractère par une espace de MÊME longueur, ce qui laisse les offsets alignés.
-
-La fixture porte les deux moitiés : `unguarded.ts` (les quatre formes relevées en
-production) prouve que le balayage VOIT, `guarded.ts` prouve qu'il ne prend pas
-la forme juste — ni les deux `void` qui ne détachent rien — pour la fautive.
-
-## 5. Preuves
-
-| gate | verdict |
+| site | ce qui change |
 |---|---|
-| cliquet AVANT le lot | **ROUGE** — 14 sites, 3 témoins de fixture verts |
-| cliquet APRÈS le lot | VERT — inventaire vide |
-| témoins d'épingle, ancienne forme restaurée | **ROUGE** — 3/3 (500, file sautée, rejet nu) |
-| témoins d'épingle, forme corrigée | VERT — 20/20 |
-| `tsc --noEmit` (gateway) | `EXIT=0` |
-| suite gateway complète | voir le commit |
+| `core/model/…/ConversationPreferencesSocketPayloads.kt` (neuf) | la charge de l'émetteur copiée clé par clé (`ConversationPreferencesWirePayload`, `UserPreferencesConversationUpdatedSocketData`) et **le port pur** `applyRemote`, qui porte tout l'arbitrage |
+| `core/model/…/Conversation.kt` | `ApiConversationPreferences.version` — l'arbitre, absent du modèle Android |
+| `sdk-core/…/socket/PreferencesSocketManager.kt` (neuf) | l'écouteur de `user:preferences-updated`, discriminant l'arm CONVERSATION de l'union avant décodage |
+| `sdk-core/…/socket/RealtimeSessionCoordinator.kt` | le nouveau manager rejoint l'attache de session |
+| `sdk-core/…/conversation/ConversationRepository.kt` | `applyRemoteConversationPreferences()` — l'I/O autour du port pur, une transaction Room |
+| `feature/conversations/…/ConversationListViewModel.kt` | la collecte : une écriture de cache, **aucune relecture réseau** |
 
-## 6. Ce que ce cycle laisse ouvert
+**L'arbitrage vit dans une fonction PURE, pas dans le dépôt.** `applyRemote` rend
+`null` pour « ne rien écrire », si bien que chaque règle d'abandon est couverte
+en JVM sans base de données, et que le dépôt ne porte que la transaction.
 
-- **Le balayage ne lit que `services/gateway/src/`.** `apps/web` et le SDK
-  portent le même idiome et n'ont pas de cliquet. Ce n'est pas la même
-  conséquence — un rejet nu dans un navigateur ne tue pas de process — mais c'est
-  la même perte de signal.
-- **Il ne voit que la forme `void`.** Un appel asynchrone dont le retour est
-  simplement ignoré (`this.doWork();` sans `void` ni `await`) produit exactement
-  le même rejet nu, et le balayage ne peut pas le distinguer d'un appel
-  synchrone sans typeur. Le mesurer demanderait un passage TypeScript, pas un
-  balayage — lot à part, à instruire avant de le promettre.
+**Le port suit la règle du WEB, pas celle d'iOS, sur un point.** Un événement
+`reset: false` sans instantané : le web l'abandonne **sans avancer le compteur**
+(« avancer le compteur ferait tomber la PROCHAINE diffusion, celle qui portait
+l'état »), iOS avance `version` quand même. Mesuré : la passerelle n'émet cette
+forme sur **aucun** chemin — `toPreferencesPayload` est inconditionnel et le
+`reset: true` est le seul cas sans instantané. La divergence est donc LATENTE, et
+Android prend le côté qui ne peut pas perdre une mise à jour. Suivi ouvert.
+
+**L'instantané atterrit sur `ApiConversation.preferences`**, l'écrasement que
+`resolvedPreferences` lit EN PREMIER — le même champ que le chemin optimiste —
+donc la ligne se re-range à l'émission Room suivante, sans attendre une relecture,
+et la prochaine synchro REST (la vérité du serveur) remplace la charge entière.
+
+## Ce qui N'est délibérément PAS câblé, et pourquoi
+
+Le critère 4 de l'issue demandait de trancher le sort de
+`USER_PREFERENCES_REORDERED` et `USER_PREFERENCES_COMMUNITY_REORDERED`. **Ils ne
+sont pas écoutés**, et c'est une décision, pas un oubli :
+
+- ils ne portent que `orderInCategory` ;
+- `ConversationSections.of` range sur `isPinned` + `categoryId`, rien d'autre ;
+- `orderInCategory` a **zéro occurrence** dans `apps/android/**/*.kt`, et Android
+  n'expose aucun geste de glisser-déposer.
+
+Un écouteur y décoderait une charge qu'aucune surface ne peut lire — le contrôle
+inerte que le cycle 123 a trouvé sur `PostCard` (« cliquer une traduction ne
+changeait rien »), pris à l'envers. Un témoin gèle l'absence
+(`no reorder listener is registered`) pour que le prochain lecteur doive
+l'ajouter plutôt que le supposer présent. **Issue de suivi ouverte** pour le jour
+où Android gagne le geste.
+
+Trois clés du fil restent hors du cache pour la même raison — `orderInCategory`,
+`readingMode`, `clearHistoryBefore` — mais elles restent DÉCLARÉES sur le type de
+fil : le type dit ce que l'émetteur envoie, pas ce que ce client consomme, et une
+clé absente du type est une clé que personne ne retrouve le jour où un lecteur
+apparaît.
+
+## Gates
+
+| gate | résultat |
+|---|---|
+| `ConversationPreferencesSocketPayloadsTest` (neuf, `:core:model`) | 10 témoins — décodage clé par clé de la charge RÉELLE de l'émetteur, les quatre règles d'abandon, le reset, l'effacement de colonnes, la base version 0 d'une ligne hydratée par REST |
+| `PreferencesSocketManagerTest` (neuf, `:sdk-core`) | 6 témoins — l'arm conversation décodé, les arms catégorie et communauté du MÊME nom d'événement silencieux, une charge malformée sans crash du callback, l'absence d'écouteur de reorder |
+| `ConversationRepositoryTest` (+4) | l'écriture Room, l'abandon de version, la conversation non hydratée, **et zéro mutation en file hors ligne** |
+| `ConversationListViewModelTest` (+2) | la trame atteint l'écrivain de cache, **et ne déclenche aucune relecture de liste** |
+| `RealtimeSessionCoordinatorTest` (+5 assertions) | le manager s'attache à la session, une fois, et se ré-attache après une reconnexion |
+| `:app:assembleDebug` + `testDebugUnitTest` | **délégués au workflow `Android`** — `dl.google.com` est refusé par la politique de sortie de ce conteneur (l'en-tête de `.github/workflows/android.yml` le dit et c'est la raison d'être du workflow) ; `sdkmanager` ne peut pas s'amorcer, aucune tâche Gradle ne peut tourner ici |
+| gateway / web / iOS | **non modifiés** — la charge de fil est inchangée, ce lot n'ajoute qu'un lecteur |
+
+## Suivi MESURÉ
+
+- **`GET /conversations` ne sert PAS `version`** (`conversationUserPreferencesSelect`
+  ne le sélectionne pas), ni `orderInCategory`. Une ligne hydratée par REST repart
+  donc du compteur 0 sur les trois clients — bénin tant qu'aucune diffusion n'est
+  rejouée, et c'est pourquoi la passerelle démarre son premier upsert à 1. Le
+  noter ici parce que la prochaine personne à lire `version` sur cette route
+  croira le champ servi.
+- **Web et iOS arbitrent différemment un `reset: false` sans instantané**
+  (voir ci-dessus). Latent aujourd'hui ; à trancher d'un côté ou de l'autre le
+  jour où un écrivain émet cette forme.
+- **Les deux autres arms de l'union ne sont PAS équivalents**, et la première
+  rédaction de ce rapport les avait mis dans le même sac — corrigé avant fusion,
+  après mesure :
+  - **communauté** — aucun lecteur Android (zéro occurrence de
+    `UserCommunityPreferences` sous `apps/android/**`). Rien en cache, rien à
+    périmer : feature absente, pas synchro cassée.
+  - **catégorie** (`{ userId, category }`) — **vrai manque, de la même famille que
+    celui que ce lot ferme.** `NotificationPreferencesStore` et
+    `PrivacyPreferencesStore` sont adossés à DataStore et documentés comme « la
+    source de vérité de l'UI » ; ils sont écrits localement puis PATCHés vers
+    `me/preferences/{notification,privacy}` par l'outbox. Un bloc changé sur le web
+    ou sur l'iPhone laisse donc le magasin de cet appareil périmé, exactement comme
+    l'épinglage l'était pour les conversations. Hors de ce lot délibérément : autre
+    magasin, autre voie, et l'y fondre dépasserait ce que ses témoins couvrent.
+    **Issue de suivi : #4133.**
+
+  > La leçon est dans la façon dont c'est arrivé : l'énumération « les deux autres
+  > arms n'ont pas de lecteur » était une phrase, pas une mesure. Elle a tenu
+  > jusqu'à ce qu'on grep `me/preferences` sous `apps/android/`. C'est la leçon 261
+  > appliquée à sa propre note de suivi — **une énumération écrite dans le même
+  > souffle que le correctif hérite de sa confiance sans avoir été vérifiée.**
+- **Le geste de glisser-déposer n'existe pas sur Android**, d'où les deux
+  événements de réordonnancement non câblés.
