@@ -548,6 +548,25 @@ detect_simulator() {
         return 0
     fi
 
+    # Priority 0: explicit device — MEESHY_DEVICE_ID
+    #
+    # Les simulateurs du PROJET (Meeshy-iOS26, Meeshy-iOS18, ...) ne portent pas
+    # "iPhone" dans leur nom : aucune des priorites suivantes ne peut les elire,
+    # meme demarres. Sans cette porte, une mesure demandee sur iOS 26 partait sur
+    # le premier "iPhone ..." venu et ne valait pas pour son runtime.
+    if [ -n "${MEESHY_DEVICE_ID:-}" ]; then
+        local explicit
+        explicit=$(xcrun simctl list devices | grep "$MEESHY_DEVICE_ID" | head -n 1 || true)
+        if [ -z "$explicit" ]; then
+            err "MEESHY_DEVICE_ID=$MEESHY_DEVICE_ID introuvable dans les simulateurs"
+            exit 1
+        fi
+        DEVICE_ID="$MEESHY_DEVICE_ID"
+        DEVICE_NAME=$(echo "$explicit" | sed 's/ (.*//' | xargs)
+        ok "Target (MEESHY_DEVICE_ID): ${BOLD}$DEVICE_NAME${NC}"
+        return 0
+    fi
+
     local device_family="iPhone"
     [ "$PLATFORM" = "ipad" ] && device_family="iPad"
 
