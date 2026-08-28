@@ -35,13 +35,12 @@ const buildPrismaMock = () => ({
     delete: jest.fn<any>(),
     updateMany: jest.fn<any>(),
   },
-  // categories.ts uses prisma.conversationPreference.updateMany on DELETE
-  // (pre-existing) — keep the surface so the route doesn't crash.
-  conversationPreference: {
-    updateMany: jest.fn<any>(),
-  },
-  // Real model name (in case Phase 1 fixes the surface).
+  // The DELETE route detaches conversations from the category. `categoryId` is
+  // a column of `UserConversationPreferences` — the surface that used to be
+  // kept here for `conversationPreference` propped up a call the generated
+  // client rejects, and is gone with it (cycle 129).
   userConversationPreferences: {
+    findMany: jest.fn<any>().mockResolvedValue([]),
     updateMany: jest.fn<any>(),
   },
   $transaction: jest.fn<any>(),
@@ -152,7 +151,7 @@ describe('category routes — socket emissions (Phase 1 contract)', () => {
       id: TEST_CATEGORY_ID,
       userId: TEST_USER_ID,
     });
-    prisma.$transaction.mockResolvedValue([{ count: 0 }, {}] as any);
+    prisma.userConversationCategory.delete.mockResolvedValue({ id: TEST_CATEGORY_ID } as any);
 
     const res = await env.app.inject({
       method: 'DELETE',

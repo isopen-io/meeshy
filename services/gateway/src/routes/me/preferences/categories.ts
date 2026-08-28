@@ -28,6 +28,7 @@ import type {
   UserConversationCategoryPayload,
 } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../../../utils/socket-broadcast';
+import { detachConversationsFromCategory } from '../../../services/conversationPreferencesSync';
 
 interface CategoryRow {
   id: string;
@@ -496,23 +497,20 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           return sendNotFound(reply, 'NOT_FOUND', { message: 'Category not found' });
         }
 
-        // Transaction: détacher les conversations puis supprimer la catégorie
-        await prisma.$transaction([
-          // Mettre categoryId à null pour toutes les conversations de cette catégorie
-          prisma.conversationPreference.updateMany({
-            where: {
-              userId,
-              categoryId
-            },
-            data: {
-              categoryId: null
-            }
-          }),
-          // Supprimer la catégorie
-          prisma.userConversationCategory.delete({
-            where: { id: categoryId }
-          })
-        ]);
+        // Détacher AVANT de supprimer : dans l'autre ordre, les lignes de
+        // préférences pointeraient un instant vers une catégorie fantôme, et un
+        // échec du détachement les y laisserait pour de bon. Ici le pire cas est
+        // une catégorie vide encore présente, que l'appelant peut resupprimer.
+        //
+        // `categoryId` est une colonne de `UserConversationPreferences` : le
+        // détachement est une écriture de préférences, donc il passe par
+        // l'écrivain unique qui incrémente `version` et diffuse le nouvel
+        // instantané aux autres appareils.
+        await detachConversationsFromCategory(fastify, { userId, categoryId });
+
+        await prisma.userConversationCategory.delete({
+          where: { id: categoryId }
+        });
 
         const deletedPayload: CategoryDeletedEventData = {
           userId,
@@ -558,7 +556,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const { updates } = request.body;
 
         // Batch update avec vérification de propriété
-        await Promise.all(
+        const results = await Promise.all(
           updates.map(update =>
             prisma.userConversationCategory.updateMany({
               where: {
@@ -572,11 +570,21 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           )
         );
 
-        const reorderedPayload: CategoriesReorderedEventData = {
-          userId,
-          updates: updates.map(u => ({ categoryId: u.categoryId, order: u.order })),
-        };
-        broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORIES_REORDERED, reorderedPayload);
+        // La charge nomme ce qui a été ÉCRIT, jamais ce qui a été DEMANDÉ : le
+        // filtre d'appartenance ci-dessus écarte silencieusement une catégorie
+        // qui n'est pas à l'appelant, et l'annoncer enverrait ses autres
+        // appareils appliquer un ordre que la base ne porte pas — en confirmant
+        // au passage l'existence d'une catégorie qu'il n'a pas le droit de
+        // nommer. Aucune écriture ⇒ aucune diffusion.
+        const written = updates.filter((_, index) => (results[index]?.count ?? 0) > 0);
+
+        if (written.length > 0) {
+          const reorderedPayload: CategoriesReorderedEventData = {
+            userId,
+            updates: written.map(u => ({ categoryId: u.categoryId, order: u.order })),
+          };
+          broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORIES_REORDERED, reorderedPayload);
+        }
 
         return sendSuccess(reply, undefined, { message: 'Categories reordered successfully' });
       } catch (error: any) {

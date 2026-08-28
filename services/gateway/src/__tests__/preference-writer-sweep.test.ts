@@ -35,6 +35,7 @@ import { sweepPreferenceWriteSites, formatSite } from './preference-writer-sweep
  * | `community-preferences.ts` (PUT) | `USER_PREFERENCES_UPDATED` (scope communauté) |
  * | `community-preferences.ts` (DELETE) | `USER_PREFERENCES_UPDATED` (`reset: true`) |
  * | `community-preferences.ts` (reorder) | `USER_PREFERENCES_COMMUNITY_REORDERED` — ajouté au cycle 128 |
+ * | `conversationPreferencesSync.detachConversationsFromCategory` | `USER_PREFERENCES_UPDATED`, une par conversation détachée — ajouté au cycle 129 |
  *
  * Les trois écrivains de `user-deletions.ts` n'y figurent PAS : ils passent par
  * `writeConversationPreferences`, ce qui est précisément la forme voulue — un
@@ -45,6 +46,7 @@ const FROZEN_WRITE_SITES = [
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/conversation-preferences.ts|userConversationPreferences|update',
+  'services/conversationPreferencesSync.ts|userConversationPreferences|updateMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
 ].sort();
