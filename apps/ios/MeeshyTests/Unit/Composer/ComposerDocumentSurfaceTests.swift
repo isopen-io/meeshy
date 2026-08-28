@@ -489,10 +489,17 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
             "Le document porte le chip dans SA barre haute — entre la fermeture et le rail des slides. "
                 + "La rangée du plateau y ferait deux barres empilées pour un header d'un seul tenant."
         )
-        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .scene), .plateauRow)
+        // **La scène rejoint la règle au #4124.** L'argument qui la gardait sur
+        // la rangée du plateau — « elle n'a pas de barre haute à elle » — a
+        // cessé d'être vrai : l'atelier expose désormais un accessoire *leading*
+        // dans SA rangée, contre la fermeture. Le chip y descend, et la rangée
+        // du plateau disparaît sous l'atelier : c'était la seconde barre que le
+        // header d'un seul tenant interdit, la même que #4047 avait retirée du
+        // document.
+        XCTAssertEqual(ComposerFormatFanPlacement.place(for: .scene), .atelierHeader,
+            "L'atelier porte le chip contre sa fermeture — plus de rangée empilée au-dessus de lui.")
         XCTAssertEqual(ComposerFormatFanPlacement.place(for: .mood), .plateauRow,
-            "La scène et le mood gardent la rangée : ni l'une ni l'autre n'a de barre haute à elle où loger "
-                + "le chip.")
+            "Le mood garde la rangée : il n'a pas de barre haute à lui où loger le chip.")
 
         // La question n'est pas « quel bloc le peint » mais « combien de fois le
         // meuble le peint », et la réponse doit rester UNE. Le site a changé au

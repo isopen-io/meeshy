@@ -57,26 +57,36 @@ public nonisolated enum StoryCanvasFraming {
 
     /// Truth-table helper for `canvasIsCarded`.
     ///
-    /// Mode dessin IMMERSIF (user 2026-07-11) : `drawingActive` ne carde PLUS —
-    /// pendant le dessin le canvas reste plein écran (`.free`), dessinable
-    /// jusqu'aux angles, avec les seules bulles flottantes par-dessus (aucune
-    /// sheet). Remplace la spec 2026-06-02 « identique pour tous les outils,
-    /// dessin inclus ». Le paramètre est conservé pour documenter la table de
-    /// vérité (testée par `StoryCanvasFramingTests.test_isCarded_truthTable`).
+    /// **RETOURNÉE au #4124 (directive porteur 2026-08-28).** La règle disait
+    /// « plein écran par défaut, cardée quand un panneau réduit la zone
+    /// visible » ; elle dit maintenant l'inverse — **cardée par défaut**, plein
+    /// écran seulement là où l'immersion est le sujet :
     ///
-    /// Timeline (2026-07-14) : forcée via `ComposerControlsLayer`'s override
-    /// pendant que `bandStateMachine.state` lui-même reste `.hidden` (le band
-    /// panel est présenté sans passer par le state machine) — `timelineActive`
-    /// capture donc ce cas séparément, comme `drawingActive`/`textActive`.
-    /// Default `false` keeps pre-existing call sites source-compatible.
-    /// L'édition texte court-circuite tout : le canvas reste plein écran, les
-    /// contrôles flottent par-dessus. Ce n'est pas un terme de la disjonction
-    /// mais une sortie anticipée — quand l'éditeur s'ouvre depuis la tuile
-    /// Texte, la band n'est pas `.hidden` (elle est seulement masquée et
-    /// non-interactive), et `bandPresent` seul relancerait le carding.
+    /// > « mettre la scène 9:16 au centre avec coin arrondi et un peu d'espace
+    /// > à gauche, haut, bas et droite de l'écran »
+    ///
+    /// Les deux exceptions ne sont pas des restes : ce sont deux directives
+    /// antérieures du même porteur, et elles ne sont pas révoquées.
+    ///
+    /// - **DESSIN immersif** (2026-07-11) : pendant le dessin le canvas reste
+    ///   plein écran, dessinable jusqu'aux angles, bulles flottantes sans sheet.
+    ///   Le paramètre était jusqu'ici conservé « pour documenter la table » et
+    ///   ne décidait RIEN — tant que le repos ne cardait pas, lui et le repos
+    ///   rendaient le même verdict. Il redevient décisif, et il l'emporte même
+    ///   band déployée.
+    /// - **ÉDITION TEXTE** (2026-07-28) : sortie anticipée, jamais un terme de
+    ///   la disjonction. Quand l'éditeur s'ouvre depuis la tuile Texte, la band
+    ///   n'est PAS `.hidden` (seulement masquée et non-interactive), donc un
+    ///   terme ordinaire serait écrasé par `bandPresent`.
+    ///
+    /// `bandPresent` et `timelineActive` deviennent de ce fait sans effet
+    /// PROPRE — cardé ∪ cardé = cardé. Ils restent au contrat parce qu'ils
+    /// nomment les deux raisons HISTORIQUES du cardage : les retirer
+    /// obligerait chaque appelant à re-prouver qu'il n'en avait pas besoin, et
+    /// perdrait la trace de la règle qu'on vient d'inverser.
     public static func isCarded(bandPresent: Bool, drawingActive: Bool, textActive: Bool, timelineActive: Bool = false) -> Bool {
-        guard !textActive else { return false }
-        return bandPresent || timelineActive
+        guard !textActive, !drawingActive else { return false }
+        return true
     }
 
     /// Présentation du canvas **reader** selon la visibilité du chrome.

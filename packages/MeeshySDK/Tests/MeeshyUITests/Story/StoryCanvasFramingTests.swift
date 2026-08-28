@@ -125,13 +125,32 @@ final class StoryCanvasFramingTests: XCTestCase {
     }
 
     func test_isCarded_truthTable() {
-        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false))
+        // **#4124 — le REPOS carde désormais.** La directive porteur du
+        // 2026-08-28 dit « mettre la scène 9:16 au centre avec coin arrondi et
+        // un peu d'espace à gauche haut, bas et droite » : au repos, l'atelier
+        // ne remplit plus l'écran. `bandPresent` cesse donc d'être la raison
+        // PRINCIPALE du cardage — il n'en reste qu'un cas parmi d'autres.
+        //
+        // Ce qui reste plein écran est ce que deux directives antérieures ont
+        // rendu immersif, et elles ne sont pas révoquées : le DESSIN (2026-07-11,
+        // dessinable jusqu'aux angles) et l'ÉDITION TEXTE (2026-07-28).
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: false, timelineActive: false),
+                      "Au repos, la scène est une CARTE — c'est le résultat attendu de #4124.")
         XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false))
         // Mode dessin IMMERSIF (user 2026-07-11) : le dessin seul ne carde
         // PLUS — canvas plein écran, dessinable jusqu'aux angles, bulles
         // flottantes sans sheet. (Remplace la spec 2026-06-02 « identique
         // pour tous les outils, dessin inclus ».)
         XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: true, textActive: false, timelineActive: false))
+        // **Le dessin RETROUVE son effet dans la règle.** Il y figurait
+        // jusqu'ici « pour documenter la table » sans rien décider : tant que le
+        // repos ne cardait pas, `drawingActive` et le repos rendaient le même
+        // verdict, et le paramètre était indistinguable d'un défaut. Le repos
+        // cardant, c'est lui qui tient désormais l'immersion du dessin — et un
+        // témoin ne peut le prouver que sur le cas où les deux DIVERGENT.
+        XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: false, textActive: false, timelineActive: false))
+        XCTAssertFalse(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: false, timelineActive: false),
+                       "Le dessin est immersif même band déployée : il l'emporte sur le cardage.")
         // Édition texte (user 2026-07-28) : le canvas reste PLEIN ÉCRAN, les
         // bulles et « Terminé » flottent par-dessus, le clavier recouvre le bas
         // — assumé, l'attention est sur le texte.

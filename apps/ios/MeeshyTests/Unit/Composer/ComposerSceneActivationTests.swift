@@ -184,16 +184,30 @@ final class ComposerSceneActivationTests: XCTestCase {
         )
     }
 
-    // 9 — B2 (#3925) : la section description repliable est peinte SOUS le canvas,
-    // en mode scène uniquement.
-    func test_laSectionDescription_estPeinteSousLaScene() throws {
+    // 9 — B2 (#3925), **retourné au #4124** : la description ne se peint PLUS
+    // sous le canvas.
+    //
+    // Trois formes en trois lots — barre repliable à chevron (#3925), calque de
+    // lecture (#4065), COUCHE ouverte par une icône (#4124) — et la troisième
+    // est la seule qui rende sa place à la scène. La directive porteur du
+    // 2026-08-28 demande la scène 9:16 CENTRÉE et marginée ; une bande
+    // permanente en bas prend exactement l'espace qu'il faut lui rendre.
+    //
+    // Ce que ce témoin gardait — « la description existe et vit au bon endroit »
+    // — n'est pas affaibli : il asserte désormais qu'elle vit dans une COUCHE,
+    // ce qui est une position tout aussi vérifiable et une place mieux choisie.
+    func test_laDescription_vitDansUneCouche_etNonSousLeCanvas() throws {
         let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(raw.contains("private var sceneDescriptionSection"),
-                      "sceneDescriptionSection introuvable ou source vide")
+        XCTAssertTrue(raw.contains("private var sceneDescriptionLayer"),
+                      "sceneDescriptionLayer introuvable ou source vide")
         let src = compact(raw)
-        XCTAssertTrue(
+        XCTAssertFalse(
             src.contains("ifmountedSurface==.scene{sceneDescriptionSection}"),
-            "La section description ne se peint qu'en mode SCÈNE (Story/Réel), sous le canvas."
+            "La description est revenue occuper le bas en permanence — la place que la scène centrée réclame."
+        )
+        XCTAssertTrue(
+            src.contains("ifeditsSceneDescription{sceneDescriptionLayer}"),
+            "Elle s'ouvre par l'icône de la rangée haute, en couche par-dessus tout."
         )
     }
 

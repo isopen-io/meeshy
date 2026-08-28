@@ -76,6 +76,31 @@ extension StoryComposerView {
         HStack(alignment: .center, spacing: 0) {
             dismissButton
 
+            // **Le type de publication se pose ICI, contre la fermeture**
+            // (#4124, directive porteur 2026-08-28 : « mettre le choix du type
+            // de la scène à côté du bouton de fermeture »).
+            //
+            // Il flottait jusqu'ici sur une rangée à part, AU-DESSUS du
+            // composer — deux barres pour un seul en-tête, et la seconde
+            // n'appartenait même pas à l'atelier. C'est exactement ce que #4047
+            // avait déjà corrigé sur la surface document ; l'atelier rejoint la
+            // règle.
+            //
+            // La vue vient de l'app (`storyComposerHeaderLeadingAccessory`) :
+            // ce qu'elle porte lit l'éventail, la mémoire de format et le
+            // plafond d'audience — le SDK n'a pas à les connaître.
+            if let leading = headerLeadingAccessory {
+                leading.makeView()
+                    .padding(.leading, ComposerControlMetrics.groupSpacing)
+                    // **`fixedSize` + priorité, sinon le rail des slides le
+                    // comprime.** Mesuré à l'écran : le rail occupe TOUT
+                    // l'interstice entre la fermeture et les actions, et le chip
+                    // de type s'y réduisait à son chevron — « Story » disparu,
+                    // le seul mot qui dise ce qu'on est en train de composer.
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(1)
+            }
+
             // Bande de slides — entre le bouton de fermeture et le choix de la
             // cible d'audience. Le rail scrolle horizontalement et occupe tout
             // l'interstice ; sur un composer vierge (empty-state picker), il

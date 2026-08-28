@@ -767,12 +767,31 @@ extension StoryComposerView {
             // L'édition texte ne carde plus le canvas : il n'y a donc plus rien
             // à réserver pour sa rangée haute, qui flotte par-dessus.
             let chromeAtTop = showTopBar
+            // **`+ headerRowHeight` au #4124.** Le `max(safeTop, 59)` réservait la
+            // ZONE SÛRE, pas la rangée : la barre haute FLOTTE au-dessus du
+            // canvas, si bien qu'elle ne prélevait aucune hauteur — invisible
+            // tant que le canvas était plein écran et que le chrome se posait
+            // dessus par-dessus. Cardée, la carte démarrait 10 pt sous la barre,
+            // mesuré à l'écran : le ✕ et le chip de type se posaient sur la
+            // composition. Même raison que le plancher bas, à l'autre bout.
             let headerInset = chromeAtTop
-                ? max(proxy.safeAreaInsets.top, 59) + 12
+                ? max(proxy.safeAreaInsets.top, 59) + Self.headerRowHeight + 12
                 : proxy.safeAreaInsets.top + 12
             // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
             // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
-            let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
+            //
+            // **Le plancher passe de 16 à `bottomOverlayClearance` au #4124**, et
+            // c'est le rail de FABs qui l'impose : il FLOTTE au-dessus du canvas,
+            // donc il ne prélève aucune hauteur — tant que le repos ne cardait
+            // pas, il flottait sur un canvas plein écran et personne ne s'en
+            // plaignait. La carte cardée, elle, doit passer AU-DESSUS de lui,
+            // sinon les six outils se posent sur la composition et la scène n'a
+            // « pas d'espace en bas », à rebours de la directive.
+            //
+            // La MÊME constante que le bandeau de reprise de brouillon : deux
+            // littéraux jumeaux finissent par diverger.
+            let bottomInset = max(presentedSheetHeight, ComposerControlMetrics.bottomOverlayClearance)
+                + max(proxy.safeAreaInsets.bottom, 0)
                 + Self.canvasSheetGap
             // « L'import de l'image de fond impose le cadre et forme du Canvas » :
             // un fond paysage bascule le ratio en 16:9 (`currentCanvasRatio`), sinon
@@ -795,7 +814,16 @@ extension StoryComposerView {
                 // Le sheet est plafonné (`presentedSheetHeight` → `maxSheetKeeping…`)
                 // pour que la carte reste ENTIÈREMENT visible, jamais rognée.
                 // PORTRAIT (9:16) : remplit la région → `.center` (aucun mou).
-                verticalAlignment: canvasRatio > 1 ? .bottom : .center,
+                //
+                // **`presentedSheetHeight > 0` est ajouté au #4124**, et c'est la
+                // condition que la règle de 2026-07-20 sous-entendait sans
+                // pouvoir la dire : « remonter AVEC le sheet » n'a de sens que
+                // s'il y en a un. Tant que le repos ne cardait pas, la question
+                // ne se posait jamais — il n'y avait pas de carte au repos. Elle
+                // se pose maintenant, et sans cette condition une carte paysage
+                // se collerait en bas d'un écran vide, tout le mou en haut, à
+                // rebours de « la scène au CENTRE ».
+                verticalAlignment: canvasRatio > 1 && presentedSheetHeight > 0 ? .bottom : .center,
                 canvasRatio: canvasRatio))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size, ratio: canvasRatio)
             // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
@@ -910,6 +938,11 @@ extension StoryComposerView {
     /// ENTIÈREMENT visible AU-DESSUS (plus de bas masqué / débordement). L'état AU
     /// REPOS (FABs flottants, band `.hidden`) et le dessin immersif restent PLEIN
     /// écran — les FABs/bulles flottent par-dessus. Cf. `StoryCanvasFraming.isCarded`.
+    /// Hauteur de la rangée haute flottante — une pastille de 44 pt de cible.
+    /// Nommée plutôt qu'écrite en littéral : elle sert à RÉSERVER de la place au
+    /// canvas cardé, donc elle doit suivre la rangée si celle-ci grandit.
+    static let headerRowHeight: CGFloat = 44
+
     var canvasIsCarded: Bool {
         Self.resolveCanvasIsCarded(
             isTextEditing: viewModel.textEditingMode != .inactive,
@@ -1049,9 +1082,22 @@ extension StoryComposerView {
                     .overlay(Color.black.opacity(0.20))
                     .ignoresSafeArea()
             } else {
+                // **Le plateau prend la couleur du slide, ASSOMBRIE** (directive
+                // porteur 2026-08-28, #4124 : « un fond même couleur que
+                // MeeshyComposer — sombre, prend la couleur de fond si aucun
+                // média n'est mis en fond »).
+                //
+                // Le voile n'est pas une préférence de teinte : sans lui, le
+                // plateau et la carte ont EXACTEMENT la même couleur, et la
+                // carte disparaît. Mesuré à l'écran le jour où le liseré a cédé
+                // la place à l'ombre — une ombre n'a rien à détacher quand les
+                // deux surfaces sont identiques. C'est le même voile que la
+                // branche MÉDIA juste au-dessus applique à son flou, pour la
+                // même raison.
                 Rectangle()
                     .fill(storyBackgroundStyle(
                         viewModel.backgroundColor.replacingOccurrences(of: "#", with: "")))
+                    .overlay(Color.black.opacity(0.28))
                     .ignoresSafeArea()
                     .animation(.easeInOut(duration: 0.25), value: canvasIsCarded)
             }
@@ -1081,21 +1127,32 @@ extension StoryComposerView {
         WindowMetrics.windowSize.height
     }
 
-    /// Liseré pointillé du bord du canvas, visible uniquement quand le fond ne
-    /// couvre pas toute la surface (letterbox « fit », ou aucun média de fond)
-    /// et hors mode dessin plein écran. Blanc translucide + ombre douce pour
-    /// rester lisible sur fond clair comme sombre, sans jamais capturer les
-    /// gestes (`allowsHitTesting(false)`).
+    /// Ce qui DÉTACHE le canvas de son plateau, hors mode dessin plein écran.
+    ///
+    /// **Une OMBRE portée, plus un liseré (directive porteur 2026-08-28,
+    /// #4124 : « le canvas sans bordure, juste un effet d'ombrage pour
+    /// remarquer ses arrondis »).** Trois formes se sont succédé ici — trait
+    /// pointillé, puis contour blanc solide (2026-08-27), puis ceci — et
+    /// l'ombre est celle qui tient la promesse des deux autres sans en payer le
+    /// prix : un liseré blanc à 55 % DESSINE une ligne qui n'appartient pas à la
+    /// composition, et l'auteur la voit sur son aperçu alors que le lecteur ne
+    /// la verra jamais. C'est la loi 6 prise au mot.
+    ///
+    /// L'ombre, elle, ne dessine rien SUR la carte : elle la décolle du fond, et
+    /// les arrondis se lisent par le décrochage. Deux passes — une large et
+    /// diffuse pour la profondeur, une courte et dense pour l'arête — parce
+    /// qu'une seule ombre large laisse le bord flou sur un plateau de teinte
+    /// proche, exactement le cas du letterbox, qui EST la couleur du fond.
+    ///
+    /// La condition `!backgroundFillsCanvas` reste : quand le fond couvre toute
+    /// la carte, son propre bord la découpe déjà.
     @ViewBuilder
     func canvasOutlineOverlay(cornerRadius: CGFloat) -> some View {
         if !viewModel.backgroundFillsCanvas && !viewModel.drawingEditingMode.isActive {
-            // Contour ARRONDI et SOLIDE (directive 2026-08-27) — le canvas se
-            // travaille dans une carte franche, plus de trait pointillé. Les
-            // seules lignes discontinues qui restent sont les guides MAGNET
-            // (zones de vue/vie), portés par le snap UIKit.
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.55), lineWidth: 1.5)
-                .shadow(color: .black.opacity(0.3), radius: 1)
+                .fill(Color.clear)
+                .shadow(color: .black.opacity(0.28), radius: 18, x: 0, y: 8)
+                .shadow(color: .black.opacity(0.18), radius: 3, x: 0, y: 1)
                 .allowsHitTesting(false)
                 .transition(.opacity)
         }
