@@ -40,8 +40,8 @@ const MIRRORED_CATEGORIES: Readonly<Record<string, (state: MirroredState) => Pro
 };
 
 type MirroredState = {
-  syncPrivacy: () => Promise<void>;
-  syncEncryption: () => Promise<void>;
+  syncPrivacy: () => Promise<unknown>;
+  syncEncryption: () => Promise<unknown>;
 };
 
 /**

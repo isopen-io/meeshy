@@ -879,9 +879,11 @@ describe('useUserPreferencesStore', () => {
       expect(state.error).toBeNull();
     });
 
-    it('still completes initialization even when individual syncs fail (errors are swallowed)', async () => {
-      // Sync methods catch their own errors — initialize never hits its catch block.
-      // Verify: network failure → still initialized, no error state, isLoading cleared.
+    it("n'horodate RIEN quand aucune lecture n'a rendu de données", async () => {
+      // Le défaut du cycle 134 : `syncAll()` absorbait l'échec de ses quatre
+      // `GET`, donc une passe entièrement ratée posait `lastSyncedAt` comme une
+      // passe réussie. Un onglet ouvert hors ligne déclarait une hydratation
+      // qui n'avait rien lu.
       mockGetAuthToken.mockReturnValue('tok');
       mockFetch.mockRejectedValue(new Error('network failure'));
 
@@ -892,7 +894,119 @@ describe('useUserPreferencesStore', () => {
       const state = useUserPreferencesStore.getState();
       expect(state.isInitialized).toBe(true);
       expect(state.isLoading).toBe(false);
-      expect(state.error).toBeNull(); // sync methods swallow errors
+      expect(state.lastSyncedAt).toBeNull();
+      expect(state.error).toBe('Failed to load preferences');
+    });
+
+    it("laisse l'horodatage PRÉCÉDENT intact quand la passe ne lit rien", async () => {
+      act(() => {
+        useUserPreferencesStore.setState({ lastSyncedAt: '2026-01-01T00:00:00.000Z' });
+      });
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeErrorResponse());
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().initialize();
+      });
+
+      expect(useUserPreferencesStore.getState().lastSyncedAt).toBe('2026-01-01T00:00:00.000Z');
+    });
+
+    it("horodate dès qu'UNE seule lecture a rendu des données", async () => {
+      // `some`, jamais `every` : un point de terminaison absent en permanence
+      // — `privacy` l'a été — supprimerait sinon l'horodatage à vie, et le
+      // rattrapage de reconnexion serait dû à CHAQUE connexion pour zéro
+      // fraîcheur de plus.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockImplementation((url: string) =>
+        url.includes('/preferences/notification') ? makeOkResponse({}) : makeErrorResponse(),
+      );
+
+      await act(async () => {
+        await useUserPreferencesStore.getState().initialize();
+      });
+
+      const state = useUserPreferencesStore.getState();
+      expect(state.lastSyncedAt).not.toBeNull();
+      expect(state.error).toBeNull();
+    });
+  });
+
+  // ─── le contrat de lecture des sync* ─────────────────────────────────────────
+
+  describe('contrat de lecture des sync*', () => {
+    const readers = [
+      'syncNotifications',
+      'syncEncryption',
+      'syncEncryptionKeys',
+      'syncPrivacy',
+    ] as const;
+
+    it.each(readers)('%s rend true quand des données serveur ont été appliquées', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeOkResponse({}));
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(true);
+      });
+    });
+
+    it.each(readers)('%s rend false sans jeton', async (method) => {
+      mockGetAuthToken.mockReturnValue(null);
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it.each(readers)('%s rend false sur un statut non-2xx', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeErrorResponse());
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+    });
+
+    it.each(readers)('%s rend false sur une enveloppe sans données', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(
+        Promise.resolve({ ok: true, json: () => Promise.resolve({ success: false }) } as Response),
+      );
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+    });
+
+    it.each(readers)('%s rend false quand le réseau tombe', async (method) => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockRejectedValue(new Error('network error'));
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState()[method]()).resolves.toBe(false);
+      });
+    });
+
+    it('syncAll rend false quand les QUATRE lectures échouent', async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockRejectedValue(new Error('network error'));
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState().syncAll()).resolves.toBe(false);
+      });
+    });
+
+    it("syncAll rend true dès qu'une lecture aboutit", async () => {
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockImplementation((url: string) =>
+        url.includes('/preferences/encryption') ? makeOkResponse({}) : makeErrorResponse(),
+      );
+
+      await act(async () => {
+        await expect(useUserPreferencesStore.getState().syncAll()).resolves.toBe(true);
+      });
     });
   });
 

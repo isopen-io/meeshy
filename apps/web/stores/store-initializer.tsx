@@ -78,10 +78,14 @@ export function StoreInitializer({ children }: StoreInitializerProps) {
    * prochain montage. `StoreInitializer` enveloppe l'application entière.
    *
    * L'abonnement est posé APRÈS le premier rendu comme l'hydratation, et sa
-   * clause « la lecture initiale n'a jamais abouti » lit `lastSyncedAt`, que
-   * seule une hydratation RÉUSSIE renseigne — un onglet ouvert hors ligne se
-   * rattrape donc à sa première connexion, et un démarrage nominal ne paie
-   * aucune requête de plus.
+   * clause « la lecture initiale n'a rien rendu » lit `lastSyncedAt`, que seule
+   * une lecture ABOUTIE renseigne — un onglet ouvert hors ligne se rattrape
+   * donc à sa première connexion, et un démarrage nominal ne paie aucune
+   * requête de plus.
+   *
+   * L'ORDRE des deux effets ne fait rien à l'affaire : la clause lit
+   * `isInitialized`, donc une connexion qui précède l'hydratation ci-dessus
+   * attend son verdict au lieu de doubler ses lectures.
    */
   useEffect(() => startMirroredPreferenceRehydration(), []);
 

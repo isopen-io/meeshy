@@ -31,6 +31,7 @@ jest.mock('@/lib/preferences/mirrored-preference-categories', () => ({
 
 const storeState = {
   isLoading: false,
+  isInitialized: false,
   lastSyncedAt: null as string | null,
 };
 
@@ -53,7 +54,18 @@ function start(): { emit: StatusListener; stop: () => void } {
 /** L'état nominal après un démarrage réussi : la lecture initiale a abouti. */
 function hydrated() {
   storeState.isLoading = false;
+  storeState.isInitialized = true;
   storeState.lastSyncedAt = '2026-08-28T10:00:00.000Z';
+}
+
+/**
+ * La passe initiale a rendu son VERDICT sans rien lire : pas de jeton au
+ * montage, ou un onglet ouvert hors ligne dont les quatre `GET` sont tombés.
+ */
+function initializedWithoutReading() {
+  storeState.isLoading = false;
+  storeState.isInitialized = true;
+  storeState.lastSyncedAt = null;
 }
 
 describe('startMirroredPreferenceRehydration', () => {
@@ -62,6 +74,7 @@ describe('startMirroredPreferenceRehydration', () => {
     unsubscribe.mockReset();
     rehydrateMirroredPreferences.mockReset();
     storeState.isLoading = false;
+    storeState.isInitialized = false;
     storeState.lastSyncedAt = null;
   });
 
@@ -95,7 +108,7 @@ describe('startMirroredPreferenceRehydration', () => {
     // Un jeton qui arrive ensuite trouve un store qui n'a lu personne : sans
     // cette clause, rien ne le remplirait avant un décrochage, qui peut ne
     // jamais venir.
-    storeState.lastSyncedAt = null;
+    initializedWithoutReading();
     const { emit } = start();
 
     emit({ isConnected: false });
@@ -104,9 +117,37 @@ describe('startMirroredPreferenceRehydration', () => {
     expect(rehydrateMirroredPreferences).toHaveBeenCalledTimes(1);
   });
 
-  it("ne double PAS une hydratation déjà en vol", () => {
-    storeState.isLoading = true;
+  it("relit à la première connexion pour un onglet ouvert HORS LIGNE", () => {
+    // Les quatre `GET` d'`initialize()` sont tombés : la passe s'est TERMINÉE
+    // sans rien lire, et le store rend ses valeurs persistées. Sans cette
+    // clause, le bloc doublé resterait périmé jusqu'à un décrochage — qui,
+    // pour un onglet qui vient seulement de trouver le réseau, ne viendra
+    // peut-être jamais.
+    initializedWithoutReading();
+    const { emit } = start();
+
+    emit({ isConnected: true });
+
+    expect(rehydrateMirroredPreferences).toHaveBeenCalledTimes(1);
+  });
+
+  it("ne relit RIEN tant que la passe initiale n'a pas rendu son verdict", () => {
+    // `initialize()` est lancé APRÈS l'authentification ; une connexion socket
+    // qui arrive avant qu'il ne pose `isLoading` trouverait `lastSyncedAt` à
+    // null et paierait deux `GET` que la passe initiale s'apprête à faire.
+    storeState.isInitialized = false;
+    storeState.isLoading = false;
     storeState.lastSyncedAt = null;
+    const { emit } = start();
+
+    emit({ isConnected: true });
+
+    expect(rehydrateMirroredPreferences).not.toHaveBeenCalled();
+  });
+
+  it("ne double PAS une hydratation déjà en vol", () => {
+    initializedWithoutReading();
+    storeState.isLoading = true;
     const { emit } = start();
 
     emit({ isConnected: true });
