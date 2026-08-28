@@ -58,6 +58,18 @@ class OutboxRepository @Inject constructor(
     suspend fun deliverable(lane: String): List<OutboxEntity> = outboxDao.deliverableForLane(lane)
 
     /**
+     * Whether this device still owes the server a [kind] write on [lane] — enqueued and
+     * neither delivered (a delivered row is deleted) nor exhausted.
+     *
+     * Read by anything that would otherwise fold a SERVER value onto a device-local store:
+     * a `true` here means the local copy is NEWER than what a read would return, and
+     * overwriting it would silently revert the user's own change. See
+     * `PreferencesSyncCoordinator`.
+     */
+    suspend fun hasDeliverable(lane: String, kind: OutboxKind): Boolean =
+        outboxDao.hasDeliverableOfKind(lane, kind.name)
+
+    /**
      * Distinct per-conversation message lanes ([OutboxLanes.forMessage]) currently holding at
      * least one non-exhausted row, oldest-holding-lane first. [OutboxFlushWorker] discovers
      * which dynamic lanes to drain from this on every pass — a lane's concrete id is only known
