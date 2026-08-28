@@ -108,6 +108,7 @@ public final class UserPreferencesManager: ObservableObject {
         observeAuth()
         observeForeground()
         observeRemotePreferenceBroadcast()
+        observeSocketReconnection()
     }
 
     // MARK: - Typed Update Methods (local-first)
@@ -591,6 +592,55 @@ public final class UserPreferencesManager: ObservableObject {
             // relecture, et garantit en prime que le `GET` part APRÈS le dernier
             // événement de la rafale.
             .debounce(for: .seconds(Self.remoteRefreshCoalescingWindow), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in await self?.fetchFromBackend() }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Private: Socket reconnection (quatrième déclencheur — PÉRENNE)
+
+    /// Le second déclencheur PÉRENNE, à côté des deux déclencheurs de CYCLE DE
+    /// VIE (`observeAuth` / `observeForeground`) et du déclencheur VIF
+    /// (`observeRemotePreferenceBroadcast`) — à parité d'Android (#4197,
+    /// `PreferencesSyncCoordinator`) et du web (#4209,
+    /// `startMirroredPreferenceRehydration`).
+    ///
+    /// Une diffusion n'atteint que les appareils PRÉSENTS pour l'entendre, et
+    /// rien ne la rejoue à la reconnexion : un abonnement enregistre un écouteur,
+    /// il ne demande pas d'arriéré (leçon 310). Quand le socket tombe puis se
+    /// reconnecte alors que l'app reste au PREMIER PLAN — redéploiement gateway,
+    /// bascule WiFi↔cellulaire, coupure transitoire —, aucun changement de cycle
+    /// de vie ne se produit : `observeAuth`/`observeForeground` ne fire pas, et
+    /// le bloc reste périmé jusqu'au prochain aller-retour d'app ou à une
+    /// nouvelle diffusion. La reconnexion est le déclencheur qui manquait.
+    ///
+    /// `didReconnect` ne fire qu'après une reconnexion RÉELLE (garde
+    /// `hadPreviousConnection` côté `MessageSocketManager`) : pas de relecture au
+    /// premier connect (couvert par `observeAuth`/`initialize`), pas sur un état
+    /// `CONNECTED` qui se répète. Aucun étranglement de 5 min ici (contrairement
+    /// à `observeForeground`) : une reconnexion est la PREUVE d'une fenêtre
+    /// pendant laquelle une annonce a pu être manquée — comme la diffusion.
+    ///
+    /// `fetchFromBackend()` est réutilisé tel quel : il porte déjà la garde
+    /// d'authentification, le veto `pendingCategories` (via `applyRemote`, qui
+    /// protège un geste local en vol que l'outbox draine encore au moment de la
+    /// reconnexion) et la politique « un échec réseau ne remet rien à zéro ».
+    private func observeSocketReconnection() {
+        observeSocketReconnection(
+            MessageSocketManager.shared.didReconnect.eraseToAnyPublisher()
+        )
+    }
+
+    /// `internal` : seam d'injection pour les tests, qui poussent leur propre
+    /// sujet plutôt que le publisher du socket partagé — même couture que
+    /// `observeRemotePreferenceBroadcast(_:)`.
+    func observeSocketReconnection(_ publisher: AnyPublisher<Void, Never>) {
+        publisher
+            // `didReconnect` peut être émis depuis un thread de rappel socket ;
+            // on livre le sink sur le main, comme le fait `.debounce(scheduler:)`
+            // du déclencheur de diffusion.
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 Task { [weak self] in await self?.fetchFromBackend() }
             }
