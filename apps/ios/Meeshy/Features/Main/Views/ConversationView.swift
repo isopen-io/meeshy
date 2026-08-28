@@ -475,11 +475,6 @@ struct ConversationView: View {
     /// ancré. FIGÉE tant qu'un message est en cours de rédaction : voir
     /// `resolvedScrollButtonAnchor(current:composerHeight:isComposing:)`.
     @State var composerScrollButtonAnchor: CGFloat = 130
-    /// #3918 — non-nil pendant l'animation de survol du texte envoyé
-    /// (`ComposerSendFlyPreview`). Posé par `sendMessageWithAttachments()`
-    /// AVANT que le champ ne soit vidé ; auto-effacé après
-    /// `ComposerSendFlyPreview.duration`.
-    @State var sendFlyPayload: ComposerSendFlyPayload?
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
 
@@ -2081,27 +2076,6 @@ struct ConversationView: View {
             VStack {
                 Spacer()
                 ZStack(alignment: .bottom) {
-                    // #3918, refonte #3935, retrait de la remontée #3938 — le
-                    // texte envoyé apparaît EN FONDU (plus de remontée : mal
-                    // rendue, retirée sans retour sur demande porteur
-                    // 2026-08-27) à son emplacement final. Posé en PREMIER
-                    // calque du ZStack (donc DERRIÈRE le composer qui suit,
-                    // occulté par son fond opaque `composerBackground` — un
-                    // `.overlay()` posé APRÈS le composer le dessinerait
-                    // au-dessus). Pur calque de rendu : ne pousse ni ne
-                    // redimensionne rien autour de lui.
-                    if let payload = sendFlyPayload,
-                       ComposerSendFlyPreview.landsAboveComposer(in: readingModeController.mode) {
-                        ComposerSendFlyPreview(
-                            text: payload.text,
-                            readingMode: readingModeController.mode,
-                            isDark: isDark
-                        )
-                        .padding(.bottom, composerHeight)
-                        .allowsHitTesting(false)
-                        .id(payload.id)
-                    }
-
                     VStack(spacing: 0) {
                         if viewModel.activeMentionQuery != nil {
                             mentionSuggestionPanel

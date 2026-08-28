@@ -74,7 +74,6 @@ extension ConversationView {
         // `self` est une struct SwiftUI : la fermeture copie la vue, mais
         // `@State` porte un stockage PARTAGÉ — muter `overlayState` ici
         // touche bien l'état affiché, sans risque de cycle (pas de classe).
-        // Même patron que `ComposerSendFlyPreview`/`triggerSendFlyAnimation`.
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.longPressRepositionDelay) {
             self.overlayState.showOverlayMenu = true
         }
