@@ -87,7 +87,10 @@ balayage de code, d'un déclencheur qui agit.
 | `__tests__/lib/mirrored-preference-categories.test.ts` (+4, 9 au total) | le veto sur les deux chemins ; le rattrapage relit toutes les catégories doublées, et rien d'autre |
 | `__tests__/stores/user-preferences-store.test.ts` (+4, 57 au total) | les deux écritures optimistes se déclarent, et libèrent sur refus comme sans jeton |
 | `npx jest __tests__/stores __tests__/lib hooks/queries/__tests__` | **86 suites, 1707 témoins verts** (85 suites / 1704 avant les témoins de câblage) |
+| `bun run test:coverage` (apps/web, la commande de la CI) | **806 suites, 14795 témoins verts**, 21 sautés — la suite web ENTIÈRE, sous `bun` comme la CI et non sous node |
+| `scripts/check-type-debt.sh` (étape BLOQUANTE de la CI) | `✓ 1194 erreurs de types — la dette n'a pas bougé.` — le cliquet du dépôt dit en ses propres termes ce que le comptage brut ci-dessous disait en lignes |
 | `tsc --noEmit` (apps/web) | **1787 lignes de diagnostic AVANT comme APRÈS** (mesuré par `git stash`) — aucune erreur ajoutée, et aucune sur les fichiers touchés. Le bruit préexistant est massif et non traité ici. |
+| `scripts/check-law-literals.sh` (étape BLOQUANTE de la CI) | `✓ No law literals found in skin files` |
 | `eslint` | **toujours non exécutable dans ce conteneur** (`eslint@10` + `eslint-plugin-react@7.37.5` → `contextOrFilename.getFilename is not a function`) — panne préexistante mesurée au cycle 133, déléguée à la CI |
 | gateway / iOS / Android | **non modifiés** — aucun contrat de fil touché |
 
