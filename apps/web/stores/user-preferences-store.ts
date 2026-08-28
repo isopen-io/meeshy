@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { trackPreferenceWrite } from '@/lib/preferences/preference-write-lock';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type {
   NotificationPreference,
@@ -459,36 +460,38 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           encryption: { ...state.encryption, ...prefs }
         }));
 
-        try {
-          // Encryption preferences are stored in privacy preferences
-          // We need to merge with existing privacy prefs
-          const currentPrivacy = get().privacy;
-          const updatedEncryption = get().encryption;
+        return trackPreferenceWrite(async () => {
+          try {
+            // Encryption preferences are stored in privacy preferences
+            // We need to merge with existing privacy prefs
+            const currentPrivacy = get().privacy;
+            const updatedEncryption = get().encryption;
 
-          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              ...currentPrivacy,
-              encryptionPreference: updatedEncryption.encryptionPreference,
-              autoEncryptNewConversations: updatedEncryption.autoEncryptNewConversations,
-              showEncryptionStatus: updatedEncryption.showEncryptionStatus,
-              warnOnUnencrypted: updatedEncryption.warnOnUnencrypted,
-            }),
-          });
+            const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                ...currentPrivacy,
+                encryptionPreference: updatedEncryption.encryptionPreference,
+                autoEncryptNewConversations: updatedEncryption.autoEncryptNewConversations,
+                showEncryptionStatus: updatedEncryption.showEncryptionStatus,
+                warnOnUnencrypted: updatedEncryption.warnOnUnencrypted,
+              }),
+            });
 
-          if (!response.ok) {
-            // Revert on error
-            await get().syncEncryption();
-            throw new Error('Failed to update encryption preferences');
+            if (!response.ok) {
+              // Revert on error
+              await get().syncEncryption();
+              throw new Error('Failed to update encryption preferences');
+            }
+          } catch (error) {
+            console.error('[UserPreferencesStore] Error updating encryption:', error);
+            throw error;
           }
-        } catch (error) {
-          console.error('[UserPreferencesStore] Error updating encryption:', error);
-          throw error;
-        }
+        });
       },
 
       updateEncryptionLocalSettings: async (settings) => {
@@ -506,24 +509,26 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           privacy: { ...state.privacy, ...prefs }
         }));
 
-        try {
-          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(get().privacy),
-          });
+        return trackPreferenceWrite(async () => {
+          try {
+            const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+              method: 'PUT',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(get().privacy),
+            });
 
-          if (!response.ok) {
-            await get().syncPrivacy();
-            throw new Error('Failed to update privacy preferences');
+            if (!response.ok) {
+              await get().syncPrivacy();
+              throw new Error('Failed to update privacy preferences');
+            }
+          } catch (error) {
+            console.error('[UserPreferencesStore] Error updating privacy:', error);
+            throw error;
           }
-        } catch (error) {
-          console.error('[UserPreferencesStore] Error updating privacy:', error);
-          throw error;
-        }
+        });
       },
 
       updateLanguage: (prefs) => {

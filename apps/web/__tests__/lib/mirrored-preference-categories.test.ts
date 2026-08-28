@@ -22,13 +22,23 @@ jest.mock('@/stores/user-preferences-store', () => ({
   },
 }));
 
-import { refreshMirroredPreferenceCategory } from '@/lib/preferences/mirrored-preference-categories';
+let writeInFlight = false;
+
+jest.mock('@/lib/preferences/preference-write-lock', () => ({
+  isPreferenceWriteInFlight: () => writeInFlight,
+}));
+
+import {
+  refreshMirroredPreferenceCategory,
+  rehydrateMirroredPreferences,
+} from '@/lib/preferences/mirrored-preference-categories';
 
 describe('refreshMirroredPreferenceCategory', () => {
   beforeEach(() => {
     syncPrivacy.mockClear().mockResolvedValue(undefined);
     syncEncryption.mockClear().mockResolvedValue(undefined);
     syncNotifications.mockClear();
+    writeInFlight = false;
   });
 
   it('relit le bloc privacy quand la catégorie privacy est annoncée', () => {
@@ -78,5 +88,50 @@ describe('refreshMirroredPreferenceCategory', () => {
 
     process.off('unhandledRejection', unhandled);
     expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it('SAUTE la relecture tant qu\'une écriture optimiste est en vol', () => {
+    // Le veto vit sur la RELECTURE, pas sur son déclencheur : les deux chemins
+    // — l'annonce et le rattrapage de reconnexion — le partagent donc d'un seul
+    // site. Sauter laisse la valeur locale, qui est celle que l'utilisateur
+    // vient de poser ; relire rendrait l'ancienne et défairait son geste.
+    writeInFlight = true;
+
+    refreshMirroredPreferenceCategory('privacy');
+
+    expect(syncPrivacy).not.toHaveBeenCalled();
+    expect(syncEncryption).not.toHaveBeenCalled();
+  });
+});
+
+describe('rehydrateMirroredPreferences', () => {
+  beforeEach(() => {
+    syncPrivacy.mockClear().mockResolvedValue(undefined);
+    syncEncryption.mockClear().mockResolvedValue(undefined);
+    syncNotifications.mockClear();
+    writeInFlight = false;
+  });
+
+  it('relit TOUTES les catégories doublées', () => {
+    // Le rattrapage ne sait pas quelle annonce a été manquée pendant la
+    // coupure : il relit donc tout ce qui est doublé.
+    rehydrateMirroredPreferences();
+
+    expect(syncPrivacy).toHaveBeenCalledTimes(1);
+    expect(syncEncryption).toHaveBeenCalledTimes(1);
+  });
+
+  it('ne relit rien qui ne soit pas doublé', () => {
+    rehydrateMirroredPreferences();
+
+    expect(syncNotifications).not.toHaveBeenCalled();
+  });
+
+  it('respecte le MÊME veto que la relecture par annonce', () => {
+    writeInFlight = true;
+
+    rehydrateMirroredPreferences();
+
+    expect(syncPrivacy).not.toHaveBeenCalled();
   });
 });
