@@ -1114,35 +1114,53 @@ flowchart TD
 <!-- ================================================================ P7 -->
 <section id="p7"><div class="wrap">
   <div class="prail"><span class="pnum">P7</span><h2>Les outils — un par carte, la précision par format</h2></div>
-  <p class="lede">Chaque carte : le déclencheur, le panneau contextuel, et <b>exactement</b> ce que
-  l'outil fait en Story, Post, Réel, Mood. Un format sans chip = l'outil n'y est pas monté, et la
-  raison est écrite.</p>
+  <p class="lede">Les outils vivent dans la <b>rangée d'outils</b> : ce sont les portes qui font
+  ENTRER de la matière, et chacune <b>crée un <span class="mono">MeeshyObject</span></b> d'un kind
+  donné. Chaque carte : le déclencheur, l'<b>inspecteur</b> qu'il ouvre, et <b>exactement</b> ce que
+  l'outil fait sous chaque profil de la <span class="mono">MeeshyPublication</span>. Un profil sans
+  chip = l'outil n'y est pas monté, et la raison est écrite. La rangée <b>défile</b> depuis #4032 —
+  statique elle sortait de l'écran aux grandes tailles de texte — et le drapeau de langue reste fixe
+  à sa droite, la langue déclarée devenant la <span class="mono">locale</span> de tout objet posé.</p>
 
   <div class="grid g2">
     <div class="card"><h4>Texte <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Style</span><span class="ob">Famille (18)</span><span class="ob">Couleur</span><span class="ob">Fond</span><span class="ob">Taille</span><span class="ob">Align</span><span class="ob">Langue</span></div>
-      <p>Tap <span class="mono">Aa</span> → objet au centre, clavier levé, <b>édition en zone</b>
-      (règle existante). Double-tap un texte = ré-édition ; tap = sélection (inspecteur prérempli).
-      18 familles de style (rangée défilante d'aperçus « Aa », chacun rendu dans sa police) — dont
-      « italique » et « rétro », le vocabulaire historique du lecteur enfin productible. L'onglet
-      Langue déclare la langue d'origine de l'objet — préremplie par détection.</p>
+      <p>Tap <span class="mono">Aa</span> → un <span class="mono">MeeshyObject</span> de kind
+      <span class="mono">text</span> naît au plan <span class="mono">foreground</span>, au centre,
+      clavier levé, <b>édition en zone</b> (règle existante). <b>Trois gestes, trois sens</b> :
+      tap = sélection (l'<b>inspecteur</b> paraît, prérempli) · double-tap = ré-édition · appui long
+      = les actions de CET objet (#4046). 18 familles de style (rangée défilante d'aperçus « Aa »,
+      chacun rendu dans sa police) — dont « italique » et « rétro », le vocabulaire historique du
+      lecteur enfin productible. L'onglet Langue écrit la <span class="mono">locale</span> de
+      l'objet — préremplie par détection, et par défaut celle que déclare la rangée d'outils.</p>
       <div class="fmt">
-        <span class="f"><span class="chip chS">S</span><p>Complet. Les textes composent le
-          <span class="mono">content</span> indexé.</p></span>
-        <span class="f"><span class="chip chP">P</span><p>Sur scène uniquement. Le texte principal
-          du post reste <span class="mono">content</span> — indexé, traduit, rendu natif — jamais un
-          objet.</p></span>
+        <span class="f"><span class="chip chS">S</span><p>Complet. En profil S la <b>description</b>
+          de la <span class="mono">MeeshySlide</span> EST le <span class="mono">content</span> de la
+          publication — un seul texte, pas deux.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Sur scène uniquement. En profil P la
+          description d'une slide est la <b>légende de SON média</b> ; le
+          <span class="mono">content</span> du post lui est PROPRE — indexé, traduit, rendu natif —
+          et n'est jamais un <span class="mono">MeeshyObject</span> (#4045).</p></span>
         <span class="f"><span class="chip chR">R</span><p>Ancrage bandes par défaut (le porteur
           vidéo reste lisible) ; timing synchronisé à la vidéo.</p></span>
-        <span class="f"><span class="tag tAb">M —</span><p>Pas de scène. Le texte du mood est
-          <span class="mono">content</span>, point.</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Aucune
+          <span class="mono">MeeshySlide</span>, donc aucune scène. Le texte du mood est le
+          <span class="mono">content</span> de la publication, point.</p></span>
       </div></div>
 
     <div class="card"><h4>Média &amp; filtres <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Recadrer</span><span class="ob">Rogner (trim)</span><span class="ob">Volume</span><span class="ob">Filtre (8)</span><span class="ob">Premier plan</span></div>
-      <p>Caméra, galerie, dernière capture (jamais de prompt à l'ouverture — la demande d'accès
-      part sur le tap, règle existante). Filtres : vintage, N&amp;B, chaud, froid, dramatic, vivid,
-      fade, chrome. <span class="tag tNew">nouveau</span> appui long sur la scène = capture (P9).
+      <p>Caméra, galerie, <b>dernière capture</b> (jamais de prompt à l'ouverture — la demande
+      d'accès part sur le tap, règle existante ; l'amorce elle-même ne s'était <b>jamais affichée</b>
+      avant #4036, un mode PhotoKit qui ne téléchargeait pas). Chaque porte crée un
+      <span class="mono">MeeshyObject</span> de kind <span class="mono">media</span>, dont le PLAN
+      est choisi par la règle de pose, jamais par une question. Le <b>mime déclaré</b> voyage avec
+      lui : le fichier est copié sous <span class="mono">{objectId}.{ext}</span>, et ce nom est ce
+      que l'aval relit pour l'étiqueter (#4038). Filtres : vintage, N&amp;B, chaud, froid, dramatic,
+      vivid, fade, chrome — servis par l'<b>inspecteur</b> quand l'objet est sélectionné.
+      <span class="tag tNew">nouveau</span> appui long sur une scène VIDE = capture (P9) ; sur un
+      objet, c'est son menu (#4046) — le départage se fait sur la présence d'un objet sous le
+      doigt.
       <span class="tag tNew">nouveau</span> <b>Coller une image — LA SURFACE DÉCIDE (O12)</b> :
       le PasteButton de la SCÈNE produit TOUJOURS un objet média pleine qualité (≤ 2 048 px ;
       carte de carrousel si le composer est en Post sans scène) — jamais un sticker, jamais de
@@ -1154,22 +1172,36 @@ flowchart TD
       l'export reste déterministe. Un <b>document</b> (PDF…) n'entre jamais en scène : il reste
       une pièce jointe du post sans scène (G8).</p>
       <div class="fmt">
-        <span class="f"><span class="chip chS">S</span><p>1 porteur par slide + médias premier plan
-          (<span class="mono">fgMediaItem</span>).</p></span>
-        <span class="f"><span class="chip chP">P</span><p>1 slide = 1 carte de carrousel,
-          <span class="mono">PostMedia.order</span> écrit à l'index (corrige l'ordre constant 0).</p></span>
-        <span class="f"><span class="chip chR">R</span><p>La vidéo est LE porteur — verrouillée au
-          plan <span class="mono">.content</span> ; trim + volume ; 16:9 accepté sans rognage (P6).</p></span>
-        <span class="f"><span class="tag tAb">M —</span><p>Aucun média aujourd'hui : préservé tel
-          quel.</p></span>
+        <span class="f"><span class="chip chS">S</span><p>Une
+          <span class="mono">MeeshySlide</span> AGRÈGE : premier média au plan
+          <span class="mono">background</span>, les suivants au plan
+          <span class="mono">foreground</span> (<span class="mono">fgMediaItem</span>).</p></span>
+        <span class="f"><span class="chip chP">P</span><p>Chaque média ouvre SA
+          <span class="mono">MeeshySlide</span>, où il est le fond — c'est ce qui fait un
+          carrousel plutôt qu'une scène composée. <span class="mono">PostMedia.order</span> écrit à
+          l'index (corrige l'ordre constant 0).</p></span>
+        <span class="f"><span class="chip chR">R</span><p>UNE seule slide — le réel EST la scène. La
+          vidéo est LE porteur, verrouillée au plan <span class="mono">content</span> ; trim +
+          volume ; 16:9 accepté sans rognage (P6).</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Aucune slide, donc aucun objet :
+          préservé tel quel.</p></span>
       </div></div>
 
     <div class="card"><h4>Son <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Bibliothèque</span><span class="ob">Fichier</span><span class="ob">Micro</span><span class="ob">Volume</span><span class="ob">Bornes</span><span class="ob">Extraction ✓</span></div>
-      <p>Trois sources (existant). Un son emprunté garde son crédit — l'atome partagé
+      <p>Trois sources (existant). Chacune crée un <span class="mono">MeeshyObject</span> de kind
+      <span class="mono">audio</span>. Un son emprunté garde son crédit — l'atome partagé
       « titre · @pseudo · M:SS » le rend partout, décompte compris. Le toggle
       <span class="mono">allowSoundExtraction</span> est enfin transmis (défaut documenté :
       déclaré, jamais envoyé).</p>
+      <p><b>Où l'objet <span class="mono">audio</span> se pose</b> : le plan
+      <span class="mono">background</span> a une place pour LUI, à côté de celle du visuel. Le
+      premier son d'une scène la prend ; un second se pose au plan
+      <span class="mono">foreground</span>, où il reste audible — jamais un remplacement silencieux
+      (#4052). En profil P il n'ouvre <b>aucune</b> <span class="mono">MeeshySlide</span> : ce n'est
+      pas une page du carrousel, c'est la bande-son de la scène qu'on regarde. Conséquence sur le
+      <b>rail</b> : son chip porte une onde, et il porte TOUJOURS sa croix — aucune slide ne le
+      sélectionne, elle serait donc sa seule action manquante.</p>
       <p><b>La loi des deux plans</b> (directive 2026-08-20) : un chip audio n'existe que pour le
       son de PREMIER PLAN (Story · Réel). Le son de FOND n'est jamais un chip — il s'annonce après
       les détails d'auteur et boucle tant que la timeline du contenu n'est pas finie, exactement
@@ -1277,9 +1309,14 @@ flowchart TD
 
     <div class="card"><h4>Fond <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">Couleur</span><span class="ob">Dégradé</span><span class="ob">Média</span><span class="ob">Chip fond</span></div>
-      <p>Le fond est un objet du plan <span class="mono">.background</span> — déplaçable
-      <b>uniquement via son chip</b> et la boucle vidéo n'appartient qu'au fond (deux règles
-      produit existantes, conservées à la lettre).</p>
+      <p>Le fond est un <span class="mono">MeeshyObject</span> du plan
+      <span class="mono">background</span> — déplaçable <b>uniquement via son chip</b>, et la boucle
+      vidéo n'appartient qu'à lui (deux règles produit existantes, conservées à la lettre). Il ne
+      s'EMPILE pas : monter et reculer ordonnent le plan <span class="mono">foreground</span>, où il
+      ne vit pas — son menu d'appui long ne les offre donc jamais (#4046). Une couleur posée fait
+      NAÎTRE la <span class="mono">MeeshyScene</span>, incrustée dans l'écran document (#4033), et le
+      <span class="mono">⋯</span> gagne alors « Retirer le fond » — sans quoi ce serait une porte à
+      sens unique.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>Complet.</p></span>
         <span class="f"><span class="chip chP">P</span><p>Sur scène.</p></span>
@@ -1291,16 +1328,21 @@ flowchart TD
 
     <div class="card"><h4>Slides <span class="tag tEx">existant</span></h4>
       <div class="panel"><span class="ob on">+ Ajouter</span><span class="ob">Dupliquer</span><span class="ob">Supprimer</span><span class="ob">≤ 10</span></div>
-      <p>Rail de vignettes (existant). Chaque slide est une Scene du document — mêmes objets,
-      mêmes règles.</p>
+      <p>Le <b>rail</b> des <span class="mono">MeeshySlide</span>, monté dans la <b>barre haute</b>
+      depuis #4047 : les slides sont la STRUCTURE de la publication, elles se lisent là où se lit son
+      profil. Chaque slide EST une <span class="mono">MeeshyScene</span> plus sa description — mêmes
+      objets, mêmes règles. Le ✕ de retrait ne se peint que sur la slide SÉLECTIONNÉE : à 40 pt il
+      occupe le quart du chip, et viser une vignette pour l'amener à l'écran la supprimait.</p>
       <div class="fmt">
         <span class="f"><span class="chip chS">S</span><p>≤ 10, lecture séquencée par
           <span class="mono">computedTotalDuration()</span> (autorité unique conservée).</p></span>
-        <span class="f"><span class="chip chP">P</span><p>1 slide = 1 carte du carrousel — un seul
-          modèle mental (C3/A).</p></span>
-        <span class="f"><span class="tag tAb">R —</span><p>Une seule scène : le montage d'un réel
-          est INTERNE (timeline P8), pas une pagination.</p></span>
-        <span class="f"><span class="tag tAb">M —</span><p>Pas de scène.</p></span>
+        <span class="f"><span class="chip chP">P</span><p>1 <span class="mono">MeeshySlide</span> =
+          1 carte du carrousel = 1 média — un seul modèle mental (C3/A). Un objet
+          <span class="mono">audio</span> fait exception : il n'en ouvre aucune (#4052).</p></span>
+        <span class="f"><span class="tag tAb">R —</span><p>UNE seule slide : le montage d'un réel
+          est INTERNE à sa <span class="mono">MeeshyScene</span> (timeline P8), pas une
+          pagination.</p></span>
+        <span class="f"><span class="tag tAb">M —</span><p>Aucune slide.</p></span>
       </div></div>
   </div>
 </div></section>
@@ -1308,10 +1350,13 @@ flowchart TD
 <!-- ================================================================ P8 -->
 <section id="p8"><div class="wrap">
   <div class="prail"><span class="pnum">P8</span><h2>Timeline — un plan, pas une liste</h2></div>
-  <p class="lede">La rupture la plus nette avec l'existant (32 vues, une piste visible à la fois).
-  <b>Vertical = empilement</b> — l'ordre des pistes EST l'ordre à l'écran, borné par les trois
-  plans. <b>Horizontal = durée</b> — étirer un bord règle début/fin. Le canvas reste vivant
-  au-dessus : on règle le temps en regardant l'image.</p>
+  <p class="lede">La timeline montre <b>les <span class="mono">MeeshyObject</span> d'UNE
+  <span class="mono">MeeshyScene</span></b> — jamais plusieurs slides à la fois : une slide est une
+  scène, et une scène a son temps. C'est la rupture la plus nette avec l'existant (32 vues, une
+  piste visible à la fois). <b>Vertical = empilement</b> — l'ordre des pistes EST l'ordre à l'écran,
+  borné par les <b>trois plans</b> de la scène. <b>Horizontal = durée</b> — étirer un bord règle le
+  <span class="mono">timing</span> de l'objet. Le canvas reste vivant au-dessus : on règle le temps
+  en regardant l'image.</p>
   <div class="tl" role="img" aria-label="Maquette de la timeline en plan : pistes empilées par plan, barres de durée, keyframes et tête de lecture">
     <div class="tl-ruler"><span class="lbl" style="left:0">0 s</span><span class="lbl" style="left:120px">2 s</span><span class="lbl" style="left:240px">4 s</span><span class="lbl" style="left:360px">6 s</span><span class="lbl" style="left:480px">8 s</span></div>
     <div class="tl-plane">foreground — au plus près du spectateur</div>
@@ -1324,8 +1369,10 @@ flowchart TD
     <div class="tl-row"><span class="tl-name">♫ Nuits d'été</span><div class="tl-lane"><div class="tl-bar" style="left:0;width:82%;background:#847CB0">bornes début/fin · vol 60 %<span class="kf" style="left:12%"></span></div></div></div>
   </div>
   <div class="grid g3" style="margin-top:16px">
-    <div class="card"><h4>Piste fantôme — aller ET retour</h4><p>Un objet sans timing (le cas
-      majoritaire) n'affiche pas une barre pleine : un cadre pointillé dit « suit la slide ». Le
+    <div class="card"><h4>Piste fantôme — aller ET retour</h4><p>Un
+      <span class="mono">MeeshyObject</span> sans <span class="mono">timing</span> (le cas
+      majoritaire) n'affiche pas une barre pleine : un cadre pointillé dit « suit la
+      <span class="mono">MeeshySlide</span> ». Le
       distinguer d'une durée fixée évite de figer par accident (O4/B) — c'est
       <span class="mono">timing == nil</span>, pas <span class="mono">0 → durée</span>. Et la
       sortie est aussi évidente que l'entrée (rév. 2, U9) : l'inspecteur timing porte l'action
@@ -1336,9 +1383,12 @@ flowchart TD
       traverser un plan = cran net DÉFINI (seuil + haptique <span class="mono">.rigid</span>).
       Étirer un bord = durée — poignées ≥ 44 pt, débordantes sur barre étroite. Losanges =
       keyframes existants — x, y, scale, opacity, volume, easing
-      (<span class="mono">StoryKeyframe</span>, inchangé). Tap la barre = inspecteur de l'objet.
-      <b>Couleur de barre = le PLAN</b> (fg/content/bg, jetons du système) — jamais le format ni
-      le kind (rév. 2, U15).</p></div>
+      (<span class="mono">StoryKeyframe</span>, inchangé). Tap la barre = l'<b>inspecteur</b> de ce
+      <span class="mono">MeeshyObject</span> — le même que le tap sur la scène ouvre (#4035), donc
+      la même zone, jamais une seconde. <b>Couleur de barre = le PLAN</b>
+      (<span class="mono">foreground</span> / <span class="mono">content</span> /
+      <span class="mono">background</span>, jetons du système) — jamais le profil ni le
+      <span class="mono">kind</span> (rév. 2, U15).</p></div>
     <div class="card"><h4>Héritage préservé</h4><p><span class="mono">computedTotalDuration()</span>
       reste l'autorité de durée ; la règle graduée dérive toujours du gabarit des libellés ;
       le compteur audio ne rembobine plus la slide (défaut connu, corrigé par le modèle unique).
@@ -1366,26 +1416,32 @@ flowchart TD
       <div class="sc" style="align-items:center;justify-content:center;border-color:#F87171">
         <span class="ob" style="border-color:#F87171;color:#F87171">⏺ 00:07 — maintenir = vidéo</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>3 · Maintien.</b> Relâcher pose le média : porteur si la scène est vide,
-    premier plan sinon. L'enregistrement est TOUJOURS rouge sémantique
-    (<span class="mono">MeeshyColors.error</span>) — jamais la couleur d'un format (U15).</figcaption></figure>
+    </div><figcaption><b>3 · Maintien.</b> Relâcher crée un <span class="mono">MeeshyObject</span>,
+    et c'est la <b>règle de pose</b> qui choisit son plan — <span class="mono">background</span> si
+    la <span class="mono">MeeshyScene</span> n'a pas de fond, <span class="mono">foreground</span>
+    sinon. Aucune question posée. L'enregistrement est TOUJOURS rouge sémantique
+    (<span class="mono">MeeshyColors.error</span>) — jamais la couleur d'un profil (U15).</figcaption></figure>
   </div>
   <p style="max-width:76ch">Disponible partout où le profil autorise le média
   (<span class="chip chS">S</span> <span class="chip chP">P</span> <span class="chip chR">R</span> ;
-  jamais <span class="chip chM">M</span>) — en Post, seulement UNE FOIS une scène née (rév. 2,
-  M3 : sans scène il n'y a pas de surface où maintenir ; l'acquisition passe par la rangée).
-  Les amorces existantes — caméra, galerie, dernière capture — ne bougent pas : l'appui long
-  s'ajoute, il ne remplace rien.</p>
+  jamais <span class="chip chM">M</span>, qui n'a aucune <span class="mono">MeeshySlide</span>) —
+  en Post, seulement UNE FOIS une <span class="mono">MeeshyScene</span> née (rév. 2, M3 : sans scène
+  il n'y a pas de surface où maintenir ; l'acquisition passe par la rangée d'outils).
+  <b>Le départage avec le menu d'objet est la présence d'un objet sous le doigt</b> : maintenir sur
+  une scène VIDE ouvre le viseur, maintenir sur un <span class="mono">MeeshyObject</span> ouvre SES
+  actions (#4046) — les deux gestes ne se disputent jamais la même cible. Les <b>amorces</b> —
+  caméra, galerie, dernière capture — ne bougent pas : l'appui long s'ajoute, il ne remplace
+  rien.</p>
   <h3>Le même geste, un sens par contexte — LA table (rév. 2, U4)</h3>
   <div class="scrollx"><table>
     <thead><tr><th>Contexte</th><th>Appui long 0,45 s / slop 24 px</th><th>Annulation</th></tr></thead>
     <tbody>
-      <tr><td><b>Scène du composer</b> (vide ou porteur)</td><td>ouvre le viseur (v1) → capture</td><td>glisser hors viseur, ou ✕</td></tr>
-      <tr><td><b>Objet texte</b> du composer</td><td>RIEN (le tap sélectionne, le double-tap édite) — le geste n'est pas surchargé ici</td><td>—</td></tr>
+      <tr><td><b><span class="mono">MeeshyScene</span> du composer</b>, sans objet sous le doigt</td><td>ouvre le viseur (v1) → capture</td><td>glisser hors viseur, ou ✕</td></tr>
+      <tr><td><b>Un <span class="mono">MeeshyObject</span></b> du composer <span class="tag tNew">rév. 2026-08-28 · #4046</span></td><td>SES actions, et elles seules : Monter · Reculer · Modifier · Supprimer — chacune servie <b>seulement si elle a un effet</b>, jamais grisée. Un objet seul de son plan n'offre aucun empilement ; un objet du plan <span class="mono">background</span> non plus. Le tap sélectionne, le double-tap édite : les trois gestes ne se recouvrent pas</td><td>tap ailleurs</td></tr>
       <tr><td><b>Aperçu / reader</b> (ScenePlayer)</td><td>pause (invariant existant du viewer)</td><td>relâcher</td></tr>
       <tr><td><b>« Mes stickers »</b> (grille)</td><td>retirer de la bibliothèque (S6)</td><td>confirmation inline</td></tr>
       <tr><td><b>Chip Références</b></td><td>menu des 4 modes (existant)</td><td>tap ailleurs</td></tr>
-      <tr><td><b>Balayage bas</b> (frontière, M15)</td><td colspan="2">depuis la SCÈNE = nouvel objet texte ; depuis la BARRE HAUTE = fermer (auto-brouillon, P10 — l'accident est gratuit)</td></tr>
+      <tr><td><b>Balayage bas</b> (frontière, M15)</td><td colspan="2">depuis la <span class="mono">MeeshyScene</span> = un <span class="mono">MeeshyObject</span> de kind <span class="mono">text</span> de plus ; depuis la <b>barre haute</b> = fermer (auto-brouillon, P10 — l'accident est gratuit)</td></tr>
     </tbody>
   </table></div>
 </div></section>
