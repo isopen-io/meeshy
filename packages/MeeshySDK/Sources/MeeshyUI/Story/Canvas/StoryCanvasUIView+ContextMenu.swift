@@ -15,7 +15,14 @@ import MeeshySDK
 /// `nonisolated` sur le TYPE : le package pose `.defaultIsolation(MainActor
 /// .self)` (SE-0466), qui isolerait cet énuméré et le rendrait illisible
 /// depuis un contexte non isolé.
-nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
+/// **Public depuis #4063** : le rail *trailing* est une vue de l'APP, et il
+/// porte exactement ces actions — même règle, autre géographie. Les recopier
+/// côté app aurait fait deux inventaires d'un même geste, dont la divergence
+/// n'aurait rougi nulle part.
+///
+/// `Hashable` pour la même raison : l'hôte déclare en `Set` ce dont il possède
+/// la primitive, et la vue les énumère par `id: \.self`.
+public nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable, Hashable {
     case edit
     case duplicate
     case bringForward
@@ -55,7 +62,7 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
     ///   que `hasEditor`, qui ne demande pas s'il existe un éditeur mais si
     ///   l'hôte en a câblé un. **Le défaut FERME** : un appelant qui ne se
     ///   prononce pas n'offre pas la sortie.
-    static func offered(
+    public static func offered(
         isLocked: Bool,
         isBackground: Bool,
         sharesPlaneWithAnother: Bool,
@@ -76,7 +83,7 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
         return servies
     }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .edit:         return "Modifier"
         case .duplicate:    return "Dupliquer"
@@ -87,7 +94,7 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
         }
     }
 
-    var systemImage: String {
+    public var systemImage: String {
         switch self {
         case .edit:         return "pencil"
         case .duplicate:    return "doc.on.doc"
@@ -152,9 +159,13 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// n'a aucun effet, donc n'est pas offerte (loi 4).
     var canLeaveScene: Bool { onItemLeftScene != nil }
 
+    /// Projection de `StorySceneObjectPredicates` — la règle a été EXTRAITE
+    /// pour que le rail *trailing* (#4063) pose la même question sans en
+    /// recopier la réponse. Deux implémentations d'une même règle divergent
+    /// sans qu'aucun témoin ne le voie : chaque copie reste cohérente avec
+    /// elle-même, et le menu finit par offrir ce que le rail refuse.
     func isBackgroundItem(id: String) -> Bool {
-        slide.effects.mediaObjects?.first(where: { $0.id == id })?.isBackground == true
-            || slide.effects.audioPlayerObjects?.first(where: { $0.id == id })?.isBackground == true
+        StorySceneObjectPredicates.isBackground(slide: slide, id: id)
     }
 
     /// **Un FRÈRE de plan, tous types confondus.** L'empilement raisonne sur les
@@ -162,18 +173,7 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// que le rendu trie) : compter les seuls médias dirait « seul » d'un objet
     /// posé sous un texte, et retirerait une action qui a bel et bien un effet.
     func foregroundSiblingExists(besides id: String) -> Bool {
-        let effets = slide.effects
-        var voisins = 0
-        for objet in effets.mediaObjects ?? [] where objet.id != id && objet.isBackground != true {
-            voisins += 1
-        }
-        for objet in effets.audioPlayerObjects ?? [] where objet.id != id && objet.isBackground != true {
-            voisins += 1
-        }
-        voisins += effets.textObjects.filter { $0.id != id }.count
-        voisins += (effets.stickerObjects ?? []).filter { $0.id != id }.count
-        voisins += slide.locationObjects.filter { $0.id != id }.count
-        return voisins > 0
+        StorySceneObjectPredicates.sharesPlaneWithAnother(slide: slide, besides: id)
     }
 
     /// Point de passage UNIQUE entre une entrée du menu et la primitive qui

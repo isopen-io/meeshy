@@ -670,7 +670,10 @@ extension StoryComposerViewModel {
         return obj
     }
 
-    func deleteElement(id: String) {
+    /// Public depuis #4063 : le rail *trailing* de l'app agit sur le MODÈLE,
+    /// jamais sur la vue UIKit — c'est lui qui garde publication, reader et
+    /// export d'accord sur ce qu'est la slide.
+    public func deleteElement(id: String) {
         // Defensive guard : a locked text object (e.g. the repost-attribution
         // badge from `init(reposting:authorHandle:)`) cannot be deleted from
         // any path — context menu, timeline panel, contextual toolbar, etc.
@@ -764,7 +767,8 @@ extension StoryComposerViewModel {
         currentEffects = effects
     }
 
-    func duplicateElement(id: String) {
+    /// Public depuis #4063 — même raison que `deleteElement`.
+    public func duplicateElement(id: String) {
         var effects = currentEffects
         if var text = effects.textObjects.first(where: { $0.id == id }) {
             // Locked text objects (repost-attribution badge) are not duplicable —

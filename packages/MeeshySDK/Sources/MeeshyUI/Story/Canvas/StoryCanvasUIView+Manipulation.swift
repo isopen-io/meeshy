@@ -236,7 +236,7 @@ extension StoryCanvasUIView {
     /// long-press, action VoiceOver — mutent `slide.effects` sans passer par
     /// lui et ont besoin de la leur.
     func isLockedItem(id: String) -> Bool {
-        slide.effects.textObjects.first(where: { $0.id == id })?.isLocked == true
+        StorySceneObjectPredicates.isLocked(slide: slide, id: id)
     }
 
     func deleteItem(id: String) {

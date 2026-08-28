@@ -1518,6 +1518,12 @@ struct ComposerDocumentSurface: View {
     /// derrière lui, donc rien n'est peint (loi 4, comme `onTool`).
     var onRailDoor: ((ComposerRailDoor) -> Void)? = nil
 
+    /// Les actions SERVIES du rail *trailing* (#4063) — déjà filtrées par
+    /// `ComposerTrailingRailPolicy`. Vide ⇒ aucun rail (loi 4).
+    var trailingRailActions: [StoryCanvasContextAction] = []
+
+    var onTrailingRailAction: ((StoryCanvasContextAction) -> Void)? = nil
+
     /// **Relais du tap sur un objet de la scène incrustée (lot 3A du composer
     /// unifié, #4035).** L'hôte retient la sélection et décide de monter
     /// `sceneInspector` — la surface reste sans état sur CE que ce tap
@@ -1852,6 +1858,19 @@ struct ComposerDocumentSurface: View {
                                             plateauTint: plateauTint,
                                             onDoor: onRailDoor)
                             .padding(.leading, ComposerRailGeometry.outerMargin)
+                            .padding(.bottom, ComposerRailGeometry.gutter)
+                    }
+                }
+                // Le couloir *trailing* était RÉSERVÉ depuis #4061 ; il est
+                // désormais occupé. La scène ne bouge donc pas d'un point en
+                // gagnant ce rail — c'est exactement pourquoi les deux couloirs
+                // avaient été pris d'un coup.
+                .overlay(alignment: .bottomTrailing) {
+                    if showsRails, !trailingRailActions.isEmpty {
+                        ComposerTrailingRail(actions: trailingRailActions,
+                                             plateauTint: plateauTint,
+                                             onAction: onTrailingRailAction)
+                            .padding(.trailing, ComposerRailGeometry.outerMargin)
                             .padding(.bottom, ComposerRailGeometry.gutter)
                     }
                 }
