@@ -35,17 +35,33 @@ const mockResolveEndReason = jest.fn((reason?: string) => {
   }
 }) as jest.Mock<any>;
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn().mockImplementation(() => ({
-    endCall: mockEndCall,
-    clearRingingTimeout: mockClearRingingTimeout,
-    createCallSummaryMessage: mockCreateCallSummaryMessage,
-    createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
-    forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
-    getCallSession: mockGetCallSession,
-    resolveEndReason: mockResolveEndReason,
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  // Mirrors the real CallAlreadyEndedError (services/CallService.ts) — same
+  // message shape `parseCallHandlerError` splits on, plus the `endReason`
+  // the production class carries on top of it. Issue #3581: endCall() now
+  // throws this on a call already in a terminal state instead of returning
+  // silently — the handler must treat it as an idempotent no-op.
+  class CallAlreadyEndedError extends Error {
+    readonly endReason: string;
+    constructor(endReason: string) {
+      super('CALL_ENDED: This call has already ended');
+      this.name = 'CallAlreadyEndedError';
+      this.endReason = endReason;
+    }
+  }
+  return {
+    CallService: jest.fn().mockImplementation(() => ({
+      endCall: mockEndCall,
+      clearRingingTimeout: mockClearRingingTimeout,
+      createCallSummaryMessage: mockCreateCallSummaryMessage,
+      createLiveCallMessage: jest.fn<any>().mockResolvedValue(null),
+      forceEndOrphanedCallSession: mockForceEndOrphanedCallSession,
+      getCallSession: mockGetCallSession,
+      resolveEndReason: mockResolveEndReason,
+    })),
+    CallAlreadyEndedError,
+  };
+});
 
 jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn(),
@@ -91,6 +107,7 @@ jest.mock('../../../utils/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { CALL_EVENTS, CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -501,6 +518,61 @@ describe('CallEventsHandler — call:end handler', () => {
         expect.objectContaining({ code: CALL_ERROR_CODES.PERMISSION_DENIED })
       );
       expect(ack).toHaveBeenCalledWith({ success: false });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #3581 — endCall() throws CallAlreadyEndedError (instead of
+  // returning the current session) when the call is already in a terminal
+  // state. A retried/duplicate call:end (e.g. a client that never received
+  // its ack, or a race against another path resolving the same call, like
+  // the ringing-timeout's markCallAsMissed) must be an idempotent no-op:
+  // ack success, but do NOT re-broadcast call:ended, re-post the summary,
+  // or run the orphaned-session force-end recovery (the call is already
+  // correctly closed — nothing is orphaned).
+  // -------------------------------------------------------------------------
+
+  describe('idempotency: endCall throws CallAlreadyEndedError (already-terminal call)', () => {
+    let directEmit: jest.MockedFunction<any>;
+    let ack: jest.MockedFunction<any>;
+    let io: ReturnType<typeof makeIo>['io'];
+    let roomEmit: jest.MockedFunction<any>;
+
+    beforeEach(async () => {
+      mockEndCall.mockRejectedValue(new CallAlreadyEndedError('completed'));
+
+      const prisma = makePrisma();
+      const { socket, handlers, directEmit: d } = makeSocket();
+      directEmit = d;
+      ({ io, roomEmit } = makeIo());
+      ack = jest.fn<any>();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => CALLER_ID);
+      await handlers[CALL_EVENTS.END](END_DATA, ack);
+    });
+
+    it('acks { success: true } — the caller\'s intent (call ended) already holds', () => {
+      expect(ack).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('does NOT emit CALL_EVENTS.ERROR to the sender socket', () => {
+      expect(directEmit).not.toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.anything()
+      );
+    });
+
+    it('does NOT re-broadcast call:ended to the call/conversation rooms', () => {
+      expect(roomEmit).not.toHaveBeenCalled();
+    });
+
+    it('does NOT re-post the call summary', () => {
+      expect(mockCreateCallSummaryMessage).not.toHaveBeenCalled();
+    });
+
+    it('does NOT run the orphaned-session force-end recovery', () => {
+      expect(mockForceEndOrphanedCallSession).not.toHaveBeenCalled();
     });
   });
 

@@ -2084,9 +2084,23 @@ export class CallService {
     // delayed/retried `call:end` and get silently overwritten back to
     // `ended`/`completed` — reopening the exact "phantom completed call"
     // bug the C3/C4 pre-answer fix above was meant to close.
+    //
+    // Issue #3581 (2026-08-28) — this guard used to RETURN the current
+    // session instead of throwing. `CallEventsHandler`'s `call:end` handler
+    // has no way to tell "endCall() just genuinely ended the call" apart
+    // from "endCall() no-oped on an already-terminal call" from a resolved
+    // promise alone, so it fell straight through to re-broadcast
+    // `call:ended` to the room, re-post the call-summary system message, and
+    // (when the terminal status is `missed`) re-fire the missed-call
+    // notification — on every retried/duplicate `call:end`. Throwing
+    // `CallAlreadyEndedError` (same class `joinCallAttempt` already uses for
+    // the identical "already terminal" condition) lets both callers
+    // (`CallEventsHandler`, `routes/calls.ts`) special-case this as the
+    // idempotent no-op it is, without touching the broadcast/summary/
+    // notification side effects a SECOND time.
     if (TERMINAL_STATUSES.includes(call.status)) {
-      logger.warn('⚠️ Call already in terminal state', { callId, currentStatus: call.status });
-      return this.getCallSession(callId);
+      logger.info('ℹ️ endCall() no-op — call already in terminal state', { callId, currentStatus: call.status });
+      throw new CallAlreadyEndedError(call.endReason ?? CallEndReason.completed);
     }
 
     // CVE-004: Verify user has permission to end the call (initiator or moderator role)

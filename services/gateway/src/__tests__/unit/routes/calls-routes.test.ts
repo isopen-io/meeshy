@@ -42,23 +42,39 @@ const mockSendSuccess = jest.fn<any>((reply: any, data: any, opts?: any) => {
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
-jest.mock('../../../services/CallService', () => ({
-  CallService: jest.fn<any>().mockImplementation(() => ({
-    initiateCall: (...args: any[]) => mockInitiateCall(...args),
-    getCallSession: (...args: any[]) => mockGetCallSession(...args),
-    getCallTranscript: (...args: any[]) => mockGetCallTranscript(...args),
-    endCall: (...args: any[]) => mockEndCall(...args),
-    joinCall: (...args: any[]) => mockJoinCall(...args),
-    leaveCall: (...args: any[]) => mockLeaveCall(...args),
-    getActiveCallForConversation: (...args: any[]) =>
-      mockGetActiveCallForConversation(...args),
-    listHistory: (...args: any[]) => mockListHistory(...args),
-    finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
-    broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
-    invalidateSignalCache: (...args: any[]) => mockInvalidateSignalCache(...args),
-    broadcastParticipantLeft: (...args: any[]) => mockBroadcastParticipantLeft(...args),
-  })),
-}));
+jest.mock('../../../services/CallService', () => {
+  // Mirrors the real CallAlreadyEndedError (services/CallService.ts) — same
+  // message shape `parseCallHandlerError` splits on, plus the `endReason`
+  // the production class carries on top of it. Issue #3581: endCall() now
+  // throws this on a call already in a terminal state instead of returning
+  // silently — the route must treat it as an idempotent 200, not an error.
+  class CallAlreadyEndedError extends Error {
+    readonly endReason: string;
+    constructor(endReason: string) {
+      super('CALL_ENDED: This call has already ended');
+      this.name = 'CallAlreadyEndedError';
+      this.endReason = endReason;
+    }
+  }
+  return {
+    CallService: jest.fn<any>().mockImplementation(() => ({
+      initiateCall: (...args: any[]) => mockInitiateCall(...args),
+      getCallSession: (...args: any[]) => mockGetCallSession(...args),
+      getCallTranscript: (...args: any[]) => mockGetCallTranscript(...args),
+      endCall: (...args: any[]) => mockEndCall(...args),
+      joinCall: (...args: any[]) => mockJoinCall(...args),
+      leaveCall: (...args: any[]) => mockLeaveCall(...args),
+      getActiveCallForConversation: (...args: any[]) =>
+        mockGetActiveCallForConversation(...args),
+      listHistory: (...args: any[]) => mockListHistory(...args),
+      finalizeCallSummary: (...args: any[]) => mockFinalizeCallSummary(...args),
+      broadcastCallEndedIfTerminal: (...args: any[]) => mockBroadcastCallEndedIfTerminal(...args),
+      invalidateSignalCache: (...args: any[]) => mockInvalidateSignalCache(...args),
+      broadcastParticipantLeft: (...args: any[]) => mockBroadcastParticipantLeft(...args),
+    })),
+    CallAlreadyEndedError,
+  };
+});
 
 jest.mock('../../../middleware/auth', () => ({
   createUnifiedAuthMiddleware: jest.fn<any>().mockReturnValue(jest.fn<any>()),
@@ -103,6 +119,7 @@ jest.mock('@meeshy/shared/types/api-schemas', () => ({
 // ─── Import SUT after mocks ────────────────────────────────────────────────────
 
 import callRoutes from '../../../routes/calls';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -713,6 +730,37 @@ describe('callRoutes', () => {
 
       expect(reply.status).toHaveBeenCalledWith(400);
       expect(reply._body?.error).toBe('ALREADY_ENDED');
+    });
+
+    // Issue #3581 — endCall() throws CallAlreadyEndedError (instead of
+    // returning the current session) when the call is already in a terminal
+    // state. Unlike the generic-error branch above, this is not a failure:
+    // the caller's intent already holds, so the route must return the
+    // current (terminal) session with a 200, not a 4xx error — and must NOT
+    // touch broadcastCallEndedIfTerminal/invalidateSignalCache/
+    // finalizeCallSummary/broadcastParticipantLeft a second time (all
+    // already ran on whichever path ended the call first).
+    it('returns the current session with 200 when the call already ended (idempotent, mirrors call:end socket handler)', async () => {
+      const membership = makeMembership();
+      const { routes, reply } = setup({
+        participant: { findFirst: jest.fn<any>().mockResolvedValue(membership) },
+        callSession: { findFirst: jest.fn<any>() },
+      });
+
+      const session = makeCallSession({ status: 'ended' });
+      mockGetCallSession
+        .mockResolvedValueOnce(session) // pre-end membership lookup
+        .mockResolvedValueOnce(session); // idempotent re-fetch in the catch branch
+      mockEndCall.mockRejectedValueOnce(new CallAlreadyEndedError('completed'));
+
+      const req = makeRequest({ params: { callId: CALL_ID } });
+      await getRoute(routes, 'DELETE', '/calls/:callId')(req, reply);
+
+      expect(reply._body).toMatchObject({ success: true, data: session });
+      expect(reply.status).not.toHaveBeenCalledWith(400);
+      expect(mockBroadcastCallEndedIfTerminal).not.toHaveBeenCalled();
+      expect(mockFinalizeCallSummary).not.toHaveBeenCalled();
+      expect(mockBroadcastParticipantLeft).not.toHaveBeenCalled();
     });
 
     it('uses fallback message on error without message', async () => {

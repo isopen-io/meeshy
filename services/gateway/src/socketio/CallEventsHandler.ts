@@ -4137,6 +4137,24 @@ export class CallEventsHandler {
           reason: endReason
         });
       } catch (error) {
+        // Issue #3581 — `endCall()` throws `CallAlreadyEndedError` when the
+        // call was ALREADY in a terminal state (a retried/duplicate
+        // `call:end`, or a race against another path that just resolved the
+        // same call — e.g. the ringing-timeout's `markCallAsMissed`). This is
+        // not a failure: the caller's intent (call ended) already holds, so
+        // ack success and stop here — no `call:ended` re-broadcast, no
+        // re-posted call-summary, no re-fired missed-call notification (all
+        // already ran on whichever path ended the call first), and no
+        // `forceEndOrphanedCallAfterOptimisticBroadcast`, which exists for
+        // genuine failures, not for a call that is already correctly closed.
+        if (error instanceof CallAlreadyEndedError) {
+          logger.info('ℹ️ Socket: call:end no-op — call already ended', {
+            callId: data.callId, endReason: error.endReason
+          });
+          ack?.({ success: true });
+          return;
+        }
+
         logger.error('Error ending call', error);
         const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to end call');
 
