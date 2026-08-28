@@ -377,96 +377,49 @@
         }
       }
     },
-    "conversation.selection.countPlural": {
+    "conversation.selection.count": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم تحديد %d رسالة"
+            "value": "تم تحديد %d"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d Nachrichten ausgewählt"
+            "value": "%d ausgewählt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d messages selected"
+            "value": "%d selected"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d mensajes seleccionados"
+            "value": "%d seleccionados"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d messages sélectionnés"
+            "value": "%d sélectionnés"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d messaggi selezionati"
+            "value": "%d selezionati"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "%d mensagens selecionadas"
-          }
-        }
-      }
-    },
-    "conversation.selection.countSingular": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تم تحديد رسالة واحدة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 Nachricht ausgewählt"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 message selected"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensaje seleccionado"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 message sélectionné"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 messaggio selezionato"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1 mensagem selecionada"
+            "value": "%d selecionadas"
           }
         }
       }
@@ -119913,6 +119866,53 @@
           "stringUnit": {
             "state": "translated",
             "value": "Localização"
+          }
+        }
+      }
+    },
+    "composer.attach.mention": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إشارة"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwähnen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mention"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mencionar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mentionner"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menzionare"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mencionar"
           }
         }
       }

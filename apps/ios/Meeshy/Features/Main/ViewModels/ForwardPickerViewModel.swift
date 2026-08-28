@@ -67,16 +67,38 @@ final class ForwardPickerViewModel: ObservableObject {
         authManager.currentUser?.id ?? ""
     }
 
+    /// La lecture cache-first, INJECTÉE comme les quatre services voisins.
+    ///
+    /// Elle lisait `CacheCoordinator.shared` en direct — le seul point de ce
+    /// view-model qui échappait à l'injection. Conséquence mesurée : les tests
+    /// devenaient dépendants de l'ORDRE. Toute suite qui hydrate le cache
+    /// « list » (`GlobalSearchViewModelTests` y pose `conv-hydrate`) et toute
+    /// exécution qui laisse un cache DISQUE derrière elle — la phase 3 du gate
+    /// laisse l'app connectée à un vrai compte — injectaient leurs
+    /// conversations dans les assertions d'ici.
+    ///
+    /// Le défaut porte la discrimination `CacheResult` là où elle se lit : une
+    /// page `.expired` ou `.empty` ne rend RIEN, elle ne rend pas « du vide
+    /// frais ».
+    private let cachedConversations: @Sendable () async -> [Conversation]
+
     init(
         conversationService: ConversationServiceProviding = ConversationService.shared,
         friendService: FriendServiceProviding = FriendService.shared,
         contactDirectoryService: ContactDirectoryServiceProviding = ContactDirectoryService.shared,
-        authManager: AuthManaging = AuthManager.shared
+        authManager: AuthManaging = AuthManager.shared,
+        cachedConversations: @escaping @Sendable () async -> [Conversation] = {
+            switch await CacheCoordinator.shared.conversations.load(for: "list") {
+            case .fresh(let data, _), .stale(let data, _): return data
+            case .expired, .empty: return []
+            }
+        }
     ) {
         self.conversationService = conversationService
         self.friendService = friendService
         self.contactDirectoryService = contactDirectoryService
         self.authManager = authManager
+        self.cachedConversations = cachedConversations
     }
 
     // MARK: - Pagination
@@ -91,12 +113,7 @@ final class ForwardPickerViewModel: ObservableObject {
         // (aucun spinner quand le cache « list » est plein), puis revalidation
         // silencieuse via fetchNextPage. Réintroduit le cache-first supprimé par
         // le refactor 99ceb9a49b (ForwardPickerViewModel devenu réseau-pur).
-        switch await CacheCoordinator.shared.conversations.load(for: "list") {
-        case .fresh(let data, _), .stale(let data, _):
-            appendConversationTargets(data.map(Self.makeTarget))
-        case .expired, .empty:
-            break
-        }
+        appendConversationTargets(await cachedConversations().map(Self.makeTarget))
         await fetchNextPage()
     }
 

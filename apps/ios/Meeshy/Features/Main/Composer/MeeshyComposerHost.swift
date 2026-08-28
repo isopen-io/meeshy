@@ -492,7 +492,19 @@ struct MeeshyComposerHost: View {
     /// Les personnes que ce mood nomme sans que son texte le dise. Le meuble
     /// les porte ; la RÈGLE de ce qu'on en déclare au serveur est
     /// `ComposerMoodPolicy.declared` (`nil` et jamais `[]`, loi 3).
-    @State private var moodReferences: [ComposerReference] = []
+    /// Les personnes NOMMÉES par la composition en cours, partagées par les
+    /// deux surfaces : le chip « Mentionner » du mood et l'outil `@` de la
+    /// rangée du document ouvrent la MÊME feuille et écrivent ici.
+    ///
+    /// Un seul état parce que le meuble ne monte qu'une surface à la fois et
+    /// remet le tout à zéro entre deux : deux états auraient été deux
+    /// vérités à faire diverger, pour une capacité identique.
+    @State private var composerReferences: [ComposerReference] = []
+
+    /// La feuille qui NOMME — ouverte par l'outil `@` de la rangée du
+    /// document. Même patron que `showsEmojiPicker` : la présentation vit
+    /// dans le meuble, jamais dans la surface, qui reste sans état.
+    @State private var showsReferencePicker = false
 
     /// L'envoi EN VOL du socle. Il ferme le gate le temps de l'aller-retour :
     /// sans lui, un double tap sur la flèche produirait deux publications, ce
@@ -1336,6 +1348,7 @@ struct MeeshyComposerHost: View {
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
         .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
+        .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3)** — trois sélecteurs montés
         // ICI, sur le meuble, jamais dans `ComposerDocumentSurface` : la
@@ -1850,6 +1863,9 @@ struct MeeshyComposerHost: View {
         case .insertsEmojiIntoText:
             HapticFeedback.light()
             showsEmojiPicker = true
+        case .opensReferencePicker:
+            HapticFeedback.light()
+            showsReferencePicker = true
         case .attachesLocalMedia(let intake):
             HapticFeedback.light()
             presentMediaIntake(intake)
@@ -2002,6 +2018,34 @@ struct MeeshyComposerHost: View {
         .presentationDragIndicator(.visible)
     }
 
+    /// **La SECONDE porte pour nommer** — celle qui n'écrit pas.
+    ///
+    /// La première reste la frappe `@`, servie inline par la surface
+    /// (`ComposerMentionControllerBox` → `ComposerMentionStrip`) : elle écrit le
+    /// nom DANS le texte, pendant la saisie. Celle-ci cherche la personne
+    /// correctement, puis laisse choisir COMMENT elle paraît — `INLINE`,
+    /// `NOTE` (« Avec … » sous le contenu) ou `SILENT` (notifiée, invisible aux
+    /// tiers). Le mode ne se choisit pas à la frappe, et c'est toute la raison
+    /// d'être de cette feuille.
+    ///
+    /// `forCanvas: false` — un post n'a aucune couche de positionnement : lui
+    /// proposer le badge `PINNED` promettrait un affichage qui n'arriverait
+    /// jamais. C'est `StoryMentionPickerSheet` qui porte cette règle, on ne fait
+    /// que lui dire de quelle matière il s'agit.
+    ///
+    /// Exactement la feuille que `ReferenceComposerBar` ouvre depuis le mood :
+    /// une seconde aurait été une seconde vérité sur « comment on nomme ».
+    private var referencePickerSheet: some View {
+        StoryMentionPickerSheet(
+            references: composerReferences,
+            modes: PostReferenceDisplay.declarable(forCanvas: false)
+        ) { updated in
+            composerReferences = updated
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
     /// Les six emojis de tête, ceux que le composer du fil propose déjà. Écrits
     /// ici plutôt qu'en ligne pour que la liste reste une donnée nommée le jour
     /// où elle deviendra une mémoire de récents.
@@ -2042,7 +2086,7 @@ struct MeeshyComposerHost: View {
             // REÇOIT son offre — il la décidait, et peignait alors les six
             // niveaux du SDK jusque sous une republication.
             allowedAudiences: offeredAudiences,
-            references: $moodReferences,
+            references: $composerReferences,
             viaUsername: moodSeed?.viaUsername,
             onClose: onDismiss
         )
@@ -2453,7 +2497,7 @@ struct MeeshyComposerHost: View {
                 text: documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
-                references: moodReferences,
+                references: composerReferences,
                 repostOfId: intent.origin.repostedPostId,
                 audioUrl: moodSeed?.audioUrl
             )
@@ -2513,7 +2557,12 @@ struct MeeshyComposerHost: View {
                     ? documentDiscoverability.precisionToSend
                     : nil,
                 originalLanguage: documentLanguage,
-                mobileTranscription: documentTranscription
+                mobileTranscription: documentTranscription,
+                // Les personnes nommées par la feuille de l'outil `@`. Sans ce
+                // passage, la feuille aurait laissé choisir des gens et un mode
+                // puis le brouillon serait parti avec `mentions: nil` : un geste
+                // complet pour une conséquence nulle.
+                references: composerReferences
             )
         }
     }

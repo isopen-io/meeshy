@@ -483,6 +483,28 @@ nonisolated enum ComposerDocumentToolEffect: Equatable {
     /// fait exactement `composerText += emoji`.
     case insertsEmojiIntoText
 
+    /// Ouvre la feuille qui NOMME quelqu'un — recherche de la personne, puis
+    /// choix du MODE (`PostReferenceDisplay`).
+    ///
+    /// **Ce n'est pas un raccourci vers la frappe `@`.** Le composer a DEUX
+    /// portes pour nommer, et elles ne font pas la même chose :
+    ///
+    /// - la **frappe** `@` — inline, pendant la saisie : la liste de
+    ///   suggestions paraît au-dessus du champ et le nom s'écrit DANS le
+    ///   texte. Elle vit déjà (`ComposerMentionControllerBox` →
+    ///   `handleQuery(in:)` → `ComposerMentionStrip`) et n'a jamais eu besoin
+    ///   de bouton ;
+    /// - la **feuille**, ouverte par cet outil — « nommer quelqu'un SANS
+    ///   l'écrire » : on cherche la personne correctement, puis on choisit
+    ///   comment elle paraît — `INLINE` (écrite dans le texte), `NOTE`
+    ///   (rangée « Avec … » sous le contenu) ou `SILENT` (notifiée,
+    ///   invisible aux tiers).
+    ///
+    /// Insérer `@` dans le texte aurait confondu les deux : le mode ne se
+    /// choisit pas à la frappe, et une mention en `NOTE` ou `SILENT` n'a par
+    /// définition rien à écrire dans le texte.
+    case opensReferencePicker
+
     /// Ouvre un sélecteur qui pose un fichier LOCAL dans le brouillon (T2.3) —
     /// photothèque, caméra ou importateur de documents, selon
     /// `ComposerMediaIntake`.
@@ -546,6 +568,7 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     case photo
     case camera
     case emoji
+    case mention
     case document
     case place
     case microphone
@@ -555,7 +578,7 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
     /// écrite ici en toutes lettres, et `ComposerDocumentSurfaceTests` vérifie
     /// qu'aucun outil n'en manque.
     static let canonicalRow: [ComposerDocumentTool] = [
-        .photo, .camera, .emoji, .document, .place, .microphone
+        .photo, .camera, .emoji, .mention, .document, .place, .microphone
     ]
 
     /// **Ce que cet outil DÉCLENCHE — et `nil` veut dire « rien ».**
@@ -602,6 +625,8 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
             return .attachesLocalMedia(.camera)
         case .emoji:
             return .insertsEmojiIntoText
+        case .mention:
+            return .opensReferencePicker
         case .document:
             return .attachesLocalMedia(.files)
         case .place:
@@ -635,6 +660,7 @@ nonisolated enum ComposerDocumentTool: String, CaseIterable, Equatable {
         case .photo: return "photo"
         case .camera: return "camera"
         case .emoji: return "face.smiling"
+        case .mention: return "at"
         case .document: return "paperclip"
         case .place: return "mappin.and.ellipse"
         case .microphone: return "mic"
@@ -1173,10 +1199,22 @@ nonisolated struct ComposerDocumentDraft: Equatable {
 
     /// Le brouillon d'un DOCUMENT.
     ///
-    /// Il ne porte ni emoji ni mentions — et ce n'est pas un oubli : la surface
-    /// document n'a ni grille d'emojis ni barre de références. Lui inventer des
-    /// champs qu'aucune vue ne remplit aurait fabriqué une capacité que le
-    /// premier lecteur aurait crue tenue.
+    /// Il ne porte pas d'emoji — et ce n'est pas un oubli : la surface document
+    /// n'a pas de grille d'emojis DÉFINISSANTS (celle de la rangée écrit dans
+    /// le texte, ce qui est autre chose). Lui inventer un champ qu'aucune vue
+    /// ne remplit aurait fabriqué une capacité que le premier lecteur aurait
+    /// crue tenue.
+    ///
+    /// **`references` est arrivé avec l'outil `@` de la rangée** — retour
+    /// porteur 2026-08-28 : « il manque `@` pour mentionner ». La surface a
+    /// désormais sa porte pour NOMMER sans écrire, et ce paramètre est ce qui
+    /// l'empêche d'être décorative : sans lui, la feuille aurait laissé choisir
+    /// des personnes et un mode, puis le brouillon serait parti avec
+    /// `mentions: nil` — un geste complet, une conséquence nulle.
+    ///
+    /// Pas de valeur par défaut, pour la MÊME raison que les champs ci-dessous :
+    /// un défaut le ferait disparaître d'un site d'appel sans casser la moindre
+    /// compilation, et les personnes nommées ne seraient prévenues de rien.
     ///
     /// **`visibilityUserIds` est arrivé au lot 4.9, avec le sélecteur du
     /// socle**, et il n'a PAS de valeur par défaut : le socle sait désormais
@@ -1229,7 +1267,8 @@ nonisolated struct ComposerDocumentDraft: Equatable {
         location: SharedPlace?,
         discoverabilityPrecision: DiscoverabilityPrecision?,
         originalLanguage: String?,
-        mobileTranscription: MobileTranscriptionPayload?
+        mobileTranscription: MobileTranscriptionPayload?,
+        references: [ComposerReference]
     ) -> ComposerDocumentDraft {
         ComposerDocumentDraft(
             format: format,
@@ -1237,7 +1276,12 @@ nonisolated struct ComposerDocumentDraft: Equatable {
             emoji: nil,
             visibility: visibility,
             visibilityUserIds: visibility.requiresUserSelection ? visibilityUserIds : nil,
-            mentions: nil,
+            // `ComposerMoodPolicy.declared` malgré son nom : c'est le SITE
+            // UNIQUE de la normalisation de la loi 3 pour les références
+            // (`payload`, puis vide ⇒ `nil`). La recopier ici en ferait une
+            // jumelle à faire diverger — le nom du porteur est une dette, la
+            // règle n'en est pas une.
+            mentions: ComposerMoodPolicy.declared(references),
             repostOfId: repostOfId,
             audioUrl: nil,
             localMedia: localMedia,
@@ -1354,6 +1398,12 @@ nonisolated enum ComposerDocumentCopy {
         case .camera:
             return String(localized: "composer.attach.camera",
                           defaultValue: "Caméra", bundle: .main)
+        // Le MÊME mot que le chip du mood (`reference.sheet.title`) : les deux
+        // ouvrent la même feuille, et deux vocabulaires pour un seul geste se
+        // liraient comme deux gestes (dimension 6).
+        case .mention:
+            return String(localized: "composer.attach.mention",
+                          defaultValue: "Mentionner", bundle: .main)
         case .emoji:
             return String(localized: "composer.attach.emoji",
                           defaultValue: "Emoji", bundle: .main)

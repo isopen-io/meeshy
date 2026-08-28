@@ -29,7 +29,7 @@ final class ComposerSendFlyFadesInPlaceSourceGuardTests: XCTestCase {
     }
 
     func test_callSite_noLongerPassesComposerHeightOrKeyboardHeightToThePreview() throws {
-        let block = try Self.propertyBlock(anchor: "if let payload = sendFlyPayload {", in: Self.conversationViewPath, matchAnchorLiterally: true)
+        let block = try Self.propertyBlock(anchor: Self.sendFlyAnchor, in: Self.conversationViewPath, matchAnchorLiterally: true)
         XCTAssertFalse(block.contains("composerHeight: composerHeight"), "l'hôte ne doit plus transmettre `composerHeight` — la vue n'anime plus de position")
         XCTAssertFalse(block.contains("keyboardHeight: keyboardHeight"), "l'hôte ne doit plus transmettre `keyboardHeight` — la vue n'anime plus de position")
     }
@@ -70,23 +70,51 @@ final class ComposerSendFlyFadesInPlaceSourceGuardTests: XCTestCase {
     }
 
     func test_callSite_passesReadingModeAndIsDarkToThePreview() throws {
-        let block = try Self.propertyBlock(anchor: "if let payload = sendFlyPayload {", in: Self.conversationViewPath, matchAnchorLiterally: true)
+        let block = try Self.propertyBlock(anchor: Self.sendFlyAnchor, in: Self.conversationViewPath, matchAnchorLiterally: true)
         XCTAssertTrue(block.contains("readingMode: readingModeController.mode"), "l'hôte doit transmettre le mode de lecture RÉEL, pas un style neutre")
         XCTAssertTrue(block.contains("isDark: isDark"), "l'hôte doit transmettre son état clair/sombre déjà suivi")
     }
 
-    func test_usesBubbleShape_matchesTheRealPerModeSplit() throws {
-        let block = try Self.propertyBlock(anchor: "var usesBubbleShape: Bool {", in: Self.flyPreviewPath)
-        guard let focalCase = block.range(of: "case .focal, .script:") else {
-            return XCTFail("le cas Focal/Script (rangée plate) est introuvable")
+    /// **Recalibrée deux fois pour la même raison : elle lisait la FORME et non
+    /// la règle.**
+    ///
+    /// Elle ancrait sur `var usesBubbleShape`, qui contenait le `switch` en
+    /// ligne ; celui-ci a été extrait en `landsAboveComposer(in:)`, et la garde
+    /// a rougi sur un déménagement, pas sur une régression. Elle découpait de
+    /// plus le bloc en supposant que `.focal` précède `.bubbles` — l'ordre des
+    /// cas a changé au passage, ce qui l'aurait cassée une seconde fois même
+    /// avec la bonne ancre.
+    ///
+    /// Chaque cas est donc lu SÉPARÉMENT, de son étiquette jusqu'au `case`
+    /// suivant : ni l'ordre ni le nom du porteur n'entrent plus dans le témoin.
+    func test_landsAboveComposer_matchesTheRealPerModeSplit() throws {
+        let block = try Self.propertyBlock(
+            anchor: "static func landsAboveComposer(in mode: ConversationReadingMode) -> Bool {",
+            in: Self.flyPreviewPath
+        )
+
+        XCTAssertEqual(
+            try Self.branch(forCase: "case .focal, .script:", in: block), false,
+            "Focal/Script doit rendre SANS bulle : le message y paraît instantanément dans le flux plat"
+        )
+        XCTAssertEqual(
+            try Self.branch(forCase: "case .bubbles, .river, .summary:", in: block), true,
+            "Bulles/Rivière/Résumé doit rendre AVEC bulle — c'est là qu'une bulle neuve atterrit au-dessus du composer"
+        )
+    }
+
+    /// Le `return` d'un cas, lu de son étiquette jusqu'au `case` suivant (ou la
+    /// fin du bloc). Indépendant de l'ordre de déclaration.
+    private static func branch(forCase label: String, in block: String) throws -> Bool {
+        guard let start = block.range(of: label) else {
+            throw GuardIsBlind(description: "Le cas « \(label) » est introuvable : la garde ne garde plus rien")
         }
-        guard let bubbleCase = block.range(of: "case .bubbles, .river, .summary:") else {
-            return XCTFail("le cas Bulles/Rivière/Résumé (bulle pleine) est introuvable")
-        }
-        let focalBlock = String(block[focalCase.upperBound..<bubbleCase.lowerBound])
-        XCTAssertTrue(focalBlock.contains("return false"), "Focal/Script doit rendre SANS bulle (rangée plate)")
-        let bubbleBlock = String(block[bubbleCase.upperBound...])
-        XCTAssertTrue(bubbleBlock.contains("return true"), "Bulles/Rivière/Résumé doit rendre AVEC bulle")
+        let rest = block[start.upperBound...]
+        let end = rest.range(of: "case ")?.lowerBound ?? rest.endIndex
+        let body = String(rest[..<end])
+        if body.contains("return true") { return true }
+        if body.contains("return false") { return false }
+        throw GuardIsBlind(description: "Le cas « \(label) » ne rend ni true ni false")
     }
 
     func test_bubbleShape_matchesTheRealBubbleBackground() throws {
@@ -165,6 +193,19 @@ final class ComposerSendFlyFadesInPlaceSourceGuardTests: XCTestCase {
     /// `matchAnchorLiterally` : quand `true`, l'ancre elle-même délimite un
     /// bloc `if` (pas une déclaration `var`/`func`) — la fermeture accolade
     /// suit la même logique de comptage.
+    /// **Ancre PRÉFIXE, délibérément.**
+    ///
+    /// Elle citait `if let payload = sendFlyPayload {`, accolade comprise. Le
+    /// site a depuis gagné une clause (`if let payload = sendFlyPayload,`) et
+    /// la garde est devenue AVEUGLE — elle rougissait sur son ancre, pas sur
+    /// son sujet. Une garde ancrée sur une signature meurt à chaque paramètre
+    /// ou clause ajoutés, alors que ce qu'elle protège n'a pas bougé.
+    ///
+    /// Le préfixe s'arrête donc au nom, qui est ce qui identifie le site ; les
+    /// deux helpers comptent les accolades DEPUIS l'ancre, donc le bloc trouvé
+    /// est le même. Ne pas y remettre l'accolade.
+    private static let sendFlyAnchor = "if let payload = sendFlyPayload"
+
     private static func propertyBlock(anchor: String, in relativePath: String, matchAnchorLiterally: Bool = false) throws -> String {
         let source = try strippedSource(at: relativePath)
         guard let anchorRange = source.range(of: anchor) else {

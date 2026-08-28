@@ -160,18 +160,49 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// alors à cinq éléments. `servedRow` reste une PROJECTION de
     /// `canonicalRow` (`canonicalRow.filter { $0.effect != nil }`), jamais une
     /// liste écrite à part.
-    func test_servedRow_sertLesSixOutils_dansLOrdreCanonique() {
+    func test_servedRow_sertTousLesOutils_dansLOrdreCanonique() {
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
             ComposerDocumentTool.canonicalRow,
-            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · document · lieu · micro — jamais "
-                + "d'une liste à part. Le micro doit désormais y figurer : c'est le dernier des six."
+            "L'ordre vient de `canonicalRow` — photo · caméra · emoji · mention · document · lieu · micro "
+                + "— jamais d'une liste à part."
         )
         XCTAssertEqual(
             ComposerDocumentTool.servedRow,
-            [.photo, .camera, .emoji, .document, .place, .microphone],
+            [.photo, .camera, .emoji, .mention, .document, .place, .microphone],
             "La rangée servie doit couvrir la rangée canonique dans l'ordre exact que les doigts "
-                + "connaissent depuis la feuille historique."
+                + "connaissent depuis la feuille historique. `.mention` se range à côté de l'emoji : "
+                + "les deux seuls outils dont la destination est le TEXTE, pas une pièce jointe."
+        )
+    }
+
+    // MARK: - La mention a son affordance, et elle a un EFFET
+
+    /// **`@` manquait à la rangée** — retour porteur 2026-08-28 : « il manque
+    /// `@` pour mentionner ».
+    ///
+    /// L'autocomplétion, elle, était déjà là et vivante : la surface monte
+    /// `ComposerMentionControllerBox`, l'alimente par
+    /// `ComposerMentionFriendsSource` et relaie chaque frappe à
+    /// `handleQuery(in:)`. Ce qui manquait n'était donc pas la mécanique mais
+    /// l'AFFORDANCE — le geste n'existait que pour qui savait déjà taper `@`.
+    ///
+    /// L'outil ne peut pas être décoratif : `servedRow` est la projection
+    /// `canonicalRow.filter { $0.effect != nil }`, donc un `.mention` sans
+    /// effet ne serait tout simplement PAS peint. La loi 4 tient ici sans
+    /// discipline — elle est une propriété du type.
+    func test_laMention_estServie_etSonEffetEcritDansLeTexte() {
+        XCTAssertEqual(
+            ComposerDocumentTool.mention.effect, .opensReferencePicker,
+            "sans effet, `.mention` disparaîtrait de `servedRow` — un outil peint a forcément un geste"
+        )
+        XCTAssertTrue(
+            ComposerDocumentTool.servedRow.contains(.mention),
+            "l'outil doit être SERVI, pas seulement déclaré"
+        )
+        XCTAssertEqual(
+            ComposerDocumentTool.mention.symbolName, "at",
+            "le glyphe DIT ce que l'outil fait, et `at` est de la même famille ligne que ses voisins"
         )
     }
 
@@ -193,7 +224,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     func test_servedRow_devientEgalACanonicalRow_leMicroVientDeGagnerUnEffet() {
         XCTAssertEqual(
             ComposerDocumentTool.servedRow, ComposerDocumentTool.canonicalRow,
-            "La rangée couvre désormais les six outils de la feuille absorbée — la PREMIÈRE des deux "
+            "La rangée couvre désormais tous les outils de la feuille absorbée — la PREMIÈRE des deux "
                 + "conditions de levée de la porte du document, la SECONDE (la langue) étant tombée au T2.2."
         )
         XCTAssertNotNil(
@@ -278,7 +309,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "bonjour", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
         )
         XCTAssertEqual(brouillon.location, lieu, "Le brouillon doit porter le lieu tel que la fabrique l'a reçu.")
 
@@ -370,7 +401,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [], location: lieu,
-            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+            discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
         )
         XCTAssertNotEqual(
             ComposerDocumentSendPlan.plan(for: brouillon, isOffline: false), .refuse(.emptyDraft),
@@ -399,7 +430,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
         let brouillon = ComposerDocumentDraft.document(
             format: .post, forcePlainPost: false, text: "", visibility: .public,
             visibilityUserIds: [], repostOfId: nil, localMedia: [vocal], location: nil,
-            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit
+            discoverabilityPrecision: nil, originalLanguage: "fr", mobileTranscription: transcrit, references: []
         )
         XCTAssertEqual(
             brouillon.mobileTranscription, transcrit,

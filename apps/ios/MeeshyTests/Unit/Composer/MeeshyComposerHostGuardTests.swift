@@ -998,7 +998,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     func test_leBrouillonDuDocument_nePlafonnePasLeTexte_carUnPostNaPasDePlafond() {
         let long = String(repeating: "a", count: 300)
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+            format: .post, forcePlainPost: false, text: long, visibility: .public, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
         )
 
         XCTAssertEqual(brouillon.text?.count, 300)
@@ -1010,7 +1010,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lecteur aurait crue tenue.
     func test_leBrouillonDuDocument_neFabriqueNiEmojiNiMention() {
         let brouillon = ComposerDocumentDraft.document(
-            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil
+            format: .post, forcePlainPost: false, text: "bonjour", visibility: .friends, visibilityUserIds: [], repostOfId: nil, localMedia: [], location: nil, discoverabilityPrecision: nil, originalLanguage: nil, mobileTranscription: nil, references: []
         )
         XCTAssertNil(brouillon.emoji)
         XCTAssertNil(brouillon.mentions)
@@ -1117,7 +1117,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "inconditionnel jetterait ce que l'auteur vient d'écrire sur un envoi que le publieur a "
                 + "refusé — et l'écran se refermerait comme si tout allait bien."
         )
-        for jet in ["documentText = \"\"", "moodEmoji = nil", "moodReferences = []"] {
+        for jet in ["documentText = \"\"", "moodEmoji = nil", "composerReferences = []"] {
             XCTAssertFalse(
                 compacte.contains(compact(jet)),
                 "L'envoi du socle exécute « \(jet) » : sur un refus, la saisie serait perdue sans même que "
@@ -2766,6 +2766,91 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             corps.contains(compact("originalLanguage: nil")),
             "Le cas `.document` pose encore `originalLanguage: nil` : la langue déclarée par l'auteur "
                 + "n'atteint jamais le brouillon envoyé à la porte."
+        )
+    }
+
+    // MARK: - L'outil `@` OUVRE la feuille, il n'écrit pas dans le texte
+
+    /// **Le composer a DEUX portes pour nommer, et elles ne font pas la même
+    /// chose** — précision porteur du 2026-08-28.
+    ///
+    /// - la **frappe** `@`, inline pendant la saisie : la liste paraît
+    ///   au-dessus du champ et le nom s'écrit DANS le texte. Elle vivait déjà
+    ///   (`ComposerMentionControllerBox` → `handleQuery(in:)` →
+    ///   `ComposerMentionStrip`) et n'a jamais eu besoin d'un bouton ;
+    /// - la **feuille**, ouverte par l'outil de la rangée : on cherche la
+    ///   personne correctement, puis on choisit COMMENT elle paraît — `INLINE`,
+    ///   `NOTE` (« Avec … » sous le contenu) ou `SILENT` (notifiée, invisible
+    ///   aux tiers).
+    ///
+    /// Faire écrire `@` au bouton confondrait les deux : le MODE ne se choisit
+    /// pas à la frappe, et une mention `NOTE` ou `SILENT` n'a par définition
+    /// rien à écrire dans le texte. La garde interdit donc explicitement cette
+    /// confusion — c'est la première conception essayée, et celle qu'un
+    /// prochain lot pourrait réessayer.
+    func test_loutilMention_ouvreLaFeuille_etNecritPasDansLeTexte() throws {
+        let code = try hostCode()
+
+        XCTAssertTrue(
+            code.contains("case .opensReferencePicker:"),
+            "l'hôte doit traiter l'effet — sans branche, le bouton serait inerte"
+        )
+
+        guard let start = code.range(of: "case .opensReferencePicker:") else { return }
+        let rest = code[start.upperBound...]
+        let end = rest.range(of: "case .")?.lowerBound ?? rest.endIndex
+        let branche = String(rest[..<end])
+
+        XCTAssertTrue(
+            branche.contains("showsReferencePicker = true"),
+            "la branche doit OUVRIR la feuille de choix"
+        )
+        XCTAssertFalse(
+            branche.contains("documentText"),
+            "l'outil ne touche pas au texte : nommer sans écrire est précisément ce qu'il apporte, "
+                + "et le mode ne se choisit pas à la frappe"
+        )
+        XCTAssertTrue(
+            code.contains("StoryMentionPickerSheet("),
+            "la feuille montée doit être CELLE du mood — une seconde serait une seconde vérité sur "
+                + "« comment on nomme »"
+        )
+    }
+
+    /// **Ce que la feuille choisit doit ATTEINDRE le brouillon.**
+    ///
+    /// Sans ce passage, on aurait laissé choisir des personnes et un mode, puis
+    /// le document serait parti avec `mentions: nil` : un geste complet pour
+    /// une conséquence nulle — exactement ce que la loi 4 interdit, une couche
+    /// plus bas que le bouton.
+    func test_lesPersonnesNommees_atteignentLeBrouillonDuDocument() throws {
+        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+            return XCTFail("`documentDraft` est introuvable — la garde ne mesurerait RIEN")
+        }
+        XCTAssertTrue(
+            compact(bloc).contains(compact("references: composerReferences")),
+            "le brouillon du document doit emporter les références déclarées par la feuille"
+        )
+    }
+
+    /// La surface doit continuer d'ÉCOUTER le texte : c'est l'autre porte, et
+    /// la retirer ferait de la frappe `@` un caractère ordinaire.
+    func test_laSurface_relaieChaqueFrappeAuControleurDeMention() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        XCTAssertTrue(
+            code.contains("mentionBox.controller.handleQuery(in: newText)"),
+            "la surface doit relayer chaque frappe au contrôleur — c'est ce qui ouvre la requête"
+        )
+        XCTAssertTrue(
+            code.contains("ComposerMentionStrip("),
+            "la bande de suggestions doit rester montée : c'est la réponse visible à la requête"
         )
     }
 }

@@ -56,16 +56,36 @@ final class ConnectionBannerTypingEntriesTests: XCTestCase {
     // MARK: - Remontée de la pastille
 
     /// La pastille naissait trop bas sous le chrome de ses hôtes. Elle remonte
-    /// de trois fois sa hauteur — en RENDANT de la marge, jamais en débordant :
+    /// de QUATRE fois sa hauteur — en RENDANT de la marge, jamais en débordant :
     /// un hôte déjà collé en haut reste où il est.
-    func test_liftedTopPadding_liftsByThreeTimesThePillHeight() {
+    ///
+    /// **Ce témoin disait `3 ×` pendant que le code posait `4 ×`.** Les deux
+    /// moitiés ont bougé dans le MÊME commit (`cf376fe114`), et seule la moitié
+    /// production a suivi #4016 — dont le doc-comment nomme la valeur, sa
+    /// raison (« JUSTE SOUS la Dynamic Island ») et le fait qu'elle AUGMENTE la
+    /// précédente. Le témoin était donc la moitié périmée, et il faisait rougir
+    /// le gate iOS entier pour tout le monde.
+    ///
+    /// Sa première assertion était fausse d'une seconde façon, plus
+    /// intéressante : `72 - topLift` vaut `-16` à quatre hauteurs, or
+    /// `liftedTopPadding` BORNE à `0`. Écrite comme une soustraction, elle
+    /// n'exerçait la borne dans AUCUN des deux régimes — elle la contournait.
+    /// Les deux cas sont désormais nommés séparément.
+    func test_liftedTopPadding_liftsByFourTimesThePillHeight() {
+        XCTAssertEqual(SyncPillMetrics.topLift, 4 * SyncPillMetrics.height,
+                       "la remontée est exprimée en hauteurs de pastille, pas en points en dur (#4016)")
+
+        XCTAssertEqual(
+            ConnectionBanner.liftedTopPadding(base: 120),
+            120 - SyncPillMetrics.topLift,
+            "marge plus grande que la remontée : ce qui reste est rendu"
+        )
+
         XCTAssertEqual(
             ConnectionBanner.liftedTopPadding(base: 72),
-            72 - SyncPillMetrics.topLift,
-            "72 pt sous le header de conversation : la marge disponible est rendue"
+            0,
+            "72 pt sous le header de conversation : la remontée les consomme TOUS, et la borne retient à 0 plutôt que de passer au-dessus"
         )
-        XCTAssertEqual(SyncPillMetrics.topLift, 3 * SyncPillMetrics.height,
-                       "la remontée est exprimée en hauteurs de pastille, pas en points en dur")
     }
 
     func test_liftedTopPadding_neverPushesAboveTheTopOfItsHost() {

@@ -22,7 +22,21 @@ final class ForwardPickerViewModelTests: XCTestCase {
 
     // MARK: - Factory
 
-    private func makeSUT(currentUserId: String = "me") -> (sut: ForwardPickerViewModel, service: MockConversationService) {
+    /// `cached` est VIDE par défaut, et c'est ce qui rend ces tests
+    /// déterministes. La lecture cache-first du view-model tapait
+    /// `CacheCoordinator.shared` en direct : les assertions d'ici voyaient donc
+    /// tout ce qu'une autre suite avait hydraté (`conv-hydrate`, posé par
+    /// `GlobalSearchViewModelTests`) ET tout ce qu'une exécution précédente
+    /// avait laissé sur le DISQUE du simulateur — la phase 3 du gate laisse
+    /// l'app connectée à un vrai compte, dont les conversations remontaient
+    /// ici sous forme d'ObjectId bien réels.
+    ///
+    /// Un test qui échoue à cause de ce qu'un AUTRE a écrit ne dit rien sur son
+    /// sujet : il dit dans quel ordre la suite a tourné.
+    private func makeSUT(
+        currentUserId: String = "me",
+        cached: [Conversation] = []
+    ) -> (sut: ForwardPickerViewModel, service: MockConversationService) {
         let service = MockConversationService()
         let authManager = MockAuthManager()
         authManager.currentUser = MeeshyUser(id: currentUserId, username: "moi")
@@ -30,9 +44,24 @@ final class ForwardPickerViewModelTests: XCTestCase {
             conversationService: service,
             friendService: friendService,
             contactDirectoryService: directoryService,
-            authManager: authManager
+            authManager: authManager,
+            cachedConversations: { cached }
         )
         return (sut, service)
+    }
+
+    // MARK: - Le cache-first reste EXERCÉ, il n'est pas seulement neutralisé
+
+    func test_loadInitial_servesTheCachedPageBeforeTheNetworkAnswers() async {
+        let (sut, service) = makeSUT(cached: [makeConv("cached-1")])
+        service.listPageResult = .success(
+            ConversationPage(items: [], rawItems: [], nextCursor: nil, hasMore: false)
+        )
+
+        await sut.loadInitial()
+
+        XCTAssertEqual(sut.targets.map(\.id), ["conv:cached-1"],
+                       "le cache-first doit rester servi — l'injecter ne doit pas revenir à le supprimer")
     }
 
     private func makeConv(_ id: String, participantUserId: String? = nil) -> Conversation {

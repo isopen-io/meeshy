@@ -520,3 +520,63 @@ describe('Bannir — l’autorité de plateforme (#3941)', () => {
     await app.close();
   });
 });
+
+/**
+ * **Le rôle de PLATEFORME ne protège pas sa cible** — décision porteur du
+ * 2026-08-28, en tranchant la première des deux questions laissées ouvertes par
+ * #3941.
+ *
+ * #3941 a donné à un `ADMIN`/`BIGBOSS` de la plateforme les droits du créateur
+ * dans toute conversation dont il est membre. La décision porte sur ce qu'il
+ * peut **faire** — elle ne lui accorde aucune protection supplémentaire. Un
+ * créateur reste donc maître de son fil : il peut en bannir un `BIGBOSS`.
+ *
+ * > C'est le comportement d'avant #3941, mais il cessait d'être un accident le
+ * > jour où le rôle de plateforme est entré dans la décision d'à côté. Une
+ * > asymétrie assumée doit avoir son témoin, sinon le prochain lot qui fera
+ * > passer la CIBLE par la même loi que l'ACTEUR la refermera sans le voir — et
+ * > personne ne saura qu'elle était voulue.
+ */
+describe('Bannir — le rôle de plateforme de la CIBLE ne la protège pas (#3941)', () => {
+  it('un créateur bannit un BIGBOSS de son propre fil', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>()
+      .mockResolvedValueOnce({ id: 'part-curr', role: 'creator' })
+      .mockResolvedValueOnce({
+        id: 'part-tgt',
+        userId: TARGET_ID,
+        role: 'member',
+        bannedAt: null,
+        displayName: 'Boss',
+        // Le rang de plateforme de la cible est là, et il ne change RIEN :
+        // la comparaison ne consulte que le rang de CONVERSATION.
+        user: { role: 'BIGBOSS' },
+      });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('et un ADMIN de plateforme ne bannit toujours pas le créateur — au niveau, jamais au-dessus', async () => {
+    const app = await buildApp({
+      prisma: makePrisma({ currentRole: 'member', targetRole: 'creator' }),
+      platformRole: 'BIGBOSS',
+    });
+
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${CONV_ID}/participants/${TARGET_ID}/ban`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+});

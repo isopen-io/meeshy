@@ -35,6 +35,7 @@ final class ComposerToolIconsTests: XCTestCase {
         XCTAssertEqual(ComposerDocumentTool.photo.symbolName, "photo")
         XCTAssertEqual(ComposerDocumentTool.camera.symbolName, "camera")
         XCTAssertEqual(ComposerDocumentTool.emoji.symbolName, "face.smiling")
+        XCTAssertEqual(ComposerDocumentTool.mention.symbolName, "at")
         XCTAssertEqual(ComposerDocumentTool.document.symbolName, "paperclip")
         XCTAssertEqual(ComposerDocumentTool.place.symbolName, "mappin.and.ellipse")
         XCTAssertEqual(ComposerDocumentTool.microphone.symbolName, "mic")

@@ -57,8 +57,13 @@ extension ConversationView {
         isTyping = false
         composerState.showOptions = false
 
+        // `DeviceLayout.windowSize`, jamais `UIScreen.main.bounds` : le seuil se
+        // mesure sur la FENÊTRE où l'app est rendue, pas sur la dalle. En Split
+        // View ou Slide Over, la seconde est bien plus haute que la première —
+        // une cellule au bas de la fenêtre restait alors sous le seuil, et le
+        // menu paraissait sans le recentrage qu'il exige.
         guard let frame = cellFrame,
-              frame.midY > UIScreen.main.bounds.height * Self.longPressRepositionThreshold
+              frame.midY > DeviceLayout.windowSize.height * Self.longPressRepositionThreshold
         else {
             overlayState.showOverlayMenu = true
             return

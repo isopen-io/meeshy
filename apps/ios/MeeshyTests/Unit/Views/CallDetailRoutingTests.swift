@@ -97,7 +97,11 @@ final class CallDetailRoutingTests: XCTestCase {
     ///
     /// Ce commit a donné un SECOND paramètre à la fermeture — `focalPreview`,
     /// les pixels de la cellule vivante que l'overlay élève au lieu d'en
-    /// reconstruire une. Le marqueur `onLongPress: { messageId in` ne
+    /// reconstruire une. Le marqueur s'arrête au NOM du premier paramètre :
+    /// il citait `onLongPress: { messageId in`, et la fermeture a depuis
+    /// gagné `cellFrame`. Une garde ancrée sur une signature meurt à chaque
+    /// paramètre ajouté, alors que ce qu'elle protège n'a pas bougé — ne pas
+    /// y remettre le `in`. Le marqueur ne
     /// désignait donc plus rien : le témoin échouait sur son `guard`, sans
     /// même avoir regardé le routage qu'il protège.
     ///
@@ -128,22 +132,40 @@ final class CallDetailRoutingTests: XCTestCase {
     /// geste qui ouvre ces options est le même partout dans le fil.
     func test_conversationView_onLongPress_opensTheUsualOptions_forEveryMessage() throws {
         let view = try source("Features/Main/Views/ConversationView.swift")
-        guard let body = closureBody(after: "onLongPress: { messageId in", in: view) else {
+        guard let body = closureBody(after: "onLongPress: { messageId", in: view) else {
             XCTFail("ConversationView must define the onLongPress closure"); return
         }
+
+        // L'OUVERTURE a été extraite dans `presentLongPressMenu(for:cellFrame:)`
+        // — la fermeture ne porte plus le littéral, elle délègue. La garde suit
+        // donc la chaîne au lieu de rougir sur un déménagement : ce qu'elle
+        // protège n'est pas l'endroit où la ligne est écrite, c'est qu'aucun
+        // aiguillage PAR TYPE ne se réintroduise entre le geste et le menu.
         XCTAssertTrue(
-            body.contains("overlayState.showOverlayMenu = true"),
+            body.contains("presentLongPressMenu("),
+            "l'appui long doit passer par l'unité qui présente le menu"
+        )
+
+        let presenter = try source("Features/Main/Views/ConversationView+LongPressMenu.swift")
+        XCTAssertTrue(
+            presenter.contains("overlayState.showOverlayMenu = true"),
             "l'appui long ouvre les options habituelles, quel que soit le message"
         )
-        XCTAssertFalse(
-            body.contains("msg.messageSource != .system"),
-            "plus aucun no-op par type : un avis système a les mêmes options que les autres"
-        )
-        XCTAssertFalse(
-            body.contains("overlayState.callDetailMessage = msg"),
-            "les détails d'appel ne sont plus une BRANCHE de l'appui long — ils sont une " +
-            "action DANS les options habituelles (voir le témoin du résolveur)"
-        )
+
+        // Les deux interdits se cherchent des DEUX côtés de l'extraction : un
+        // aiguillage réintroduit dans le présentateur serait aussi efficace que
+        // dans la fermeture, et invisible à une garde qui n'en lirait qu'une.
+        for etape in [body, presenter] {
+            XCTAssertFalse(
+                etape.contains("messageSource != .system"),
+                "plus aucun no-op par type : un avis système a les mêmes options que les autres"
+            )
+            XCTAssertFalse(
+                etape.contains("overlayState.callDetailMessage = msg"),
+                "les détails d'appel ne sont plus une BRANCHE de l'appui long — ils sont une " +
+                "action DANS les options habituelles (voir le témoin du résolveur)"
+            )
+        }
     }
 
     /// **Un geste retiré doit rendre sa destination, pas la perdre.** L'appui
