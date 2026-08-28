@@ -700,6 +700,59 @@ footer .mono{font-size:11.5px}
       déclarée</b>.</p></div>
   </div>
 
+  <h3>L'anatomie d'un <span class="mono">MeeshyObject</span> — neuf champs, sept kinds</h3>
+  <p>Le nom est nouveau, la structure ne l'est pas : elle est <b>déjà dans le contrat partagé</b>
+  (<span class="mono">packages/shared/types/canvas-v3.ts</span>, <span class="mono">ObjectV3</span>),
+  versionnée, avec un golden commun aux trois clients. Ce que le modèle apporte n'est pas un schéma
+  neuf — c'est <b>UNE définition là où chaque famille redéclarait la sienne</b>.</p>
+
+  <div class="scrollx"><table>
+    <caption>Les neuf champs — ce qu'ils portent, et leurs bornes réelles</caption>
+    <thead><tr><th>Champ</th><th>Type</th><th>Ce qu'il dit</th><th>Borne au contrat</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">id</td><td class="mono">String</td><td>l'identité de l'objet — <b>et le nom du fichier</b> quand il porte un média (<span class="mono">{id}.{ext}</span>)</td><td>non vide</td></tr>
+      <tr><td class="mono">kind</td><td class="mono">String</td><td><b>ce que l'objet EST</b> : sept valeurs actives, trois RÉSERVÉES (refusées, pas inconnues)</td><td>énumération fermée, erreur nommée <span class="mono">KIND_RESERVED</span> / <span class="mono">KIND_UNKNOWN</span></td></tr>
+      <tr><td class="mono">anchor</td><td class="mono">free(x,y) | band(top|bottom)</td><td><b>une INTENTION, pas une coordonnée</b> : « au-dessus du contenu » survit au changement de porteur, « y = 0,08 » saute</td><td>union discriminée ; x·y ∈ [0,1]</td></tr>
+      <tr><td class="mono">plane</td><td class="mono">bg | content | fg</td><td>le plan — <i>le fil abrège ce que le modèle nomme</i> <span class="mono">background</span> / <span class="mono">foreground</span></td><td>trois valeurs, pas quatre</td></tr>
+      <tr><td class="mono">z</td><td class="mono">Int</td><td>l'ordre DANS le plan — c'est lui que l'empilement change, et lui seul</td><td>entier</td></tr>
+      <tr><td class="mono">transform</td><td class="mono">{scale, rotation, opacity}</td><td>la pose. <b>Trois champs, pas cinq</b> : la position vit dans <span class="mono">anchor</span>, l'ordre dans <span class="mono">z</span></td><td>scale &gt; 0 · opacity ∈ [0,1]</td></tr>
+      <tr><td class="mono">timing?</td><td class="mono">{start, end, rate, keyframes}</td><td>ABSENT = « suit la slide », et c'est le cas majoritaire — la <b>piste fantôme</b> de la timeline. Jamais <span class="mono">0 → durée</span>, qui figerait</td><td>≤ 60 keyframes · <span class="mono">end ≥ start</span> (<span class="mono">TIMING_END_BEFORE_START</span>) · rate ∈ [0,25 ; 4]</td></tr>
+      <tr><td class="mono">locale?</td><td class="mono">String</td><td>la langue de CET objet — héritée de la langue déclarée dans la rangée d'outils, surchargeable objet par objet</td><td>2 à 8 caractères</td></tr>
+      <tr><td class="mono">payload</td><td class="mono">Record&lt;String, unknown&gt;</td><td><b>PERMISSIF par contrat</b>, et c'est délibéré : c'est là que vit ce qui est propre à chaque kind, sans qu'un kind neuf n'exige une migration de schéma</td><td>aucune — les invariants y sont portés par le convertisseur et le golden, pas par Zod</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="scrollx"><table>
+    <caption>Les sept kinds ACTIFS — ce que chacun met dans son <span class="mono">payload</span></caption>
+    <thead><tr><th>kind</th><th>Ce qu'il pose</th><th>Plan habituel</th><th>Porte qui le crée</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">text</td><td>18 familles de style, couleur, fond, alignement, taille — et <span class="mono">translations</span> par langue (le Prisme, PAR OBJET)</td><td class="mono">foreground</td><td>outil <span class="mono">Aa</span> · balayage bas depuis la scène</td></tr>
+      <tr><td class="mono">media</td><td>image ou vidéo : le fichier, son mime DÉCLARÉ, son ratio intrinsèque, ses filtres</td><td><b>selon la règle de pose</b> : <span class="mono">background</span> si le fond est libre, <span class="mono">foreground</span> sinon</td><td>photo · caméra · dernière capture · appui long · coller</td></tr>
+      <tr><td class="mono">sticker</td><td>emoji ou image ≤ 512 px ; gagne <span class="mono">transform</span> et <span class="mono">timing</span> qu'il n'avait pas</td><td class="mono">foreground</td><td>panneau stickers · coller DANS ce panneau</td></tr>
+      <tr><td class="mono">audio</td><td>une piste : source (originale ou empruntée avec son <span class="mono">soundId</span>), volume, bornes, forme d'onde</td><td><b>la seconde place du</b> <span class="mono">background</span> si elle est libre — sinon <span class="mono">foreground</span> (#4052)</td><td>bibliothèque · fichier · micro</td></tr>
+      <tr><td class="mono">place</td><td>une pastille de lieu POSÉE sur la scène — <b>à ne pas confondre avec le lieu de la publication</b> : l'un décore une image, l'autre dit d'où l'on publie</td><td class="mono">foreground</td><td>outil lieu (sur scène)</td></tr>
+      <tr><td class="mono">drawing</td><td>les traits : pinceau, épaisseur, couleur — timables comme le reste</td><td class="mono">foreground</td><td>mode dessin immersif</td></tr>
+      <tr><td class="mono">mention</td><td>un badge de référence, porteur de son <span class="mono">referenceUserId</span> — c'est lui qui l'exclut de la dérivation INLINE du texte</td><td class="mono">foreground</td><td>chip Références, mode PINNED</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="callout"><b>Trois kinds RÉSERVÉS, et « réservé » n'est pas « inconnu ».</b>
+  <span class="mono">hashtag</span> · <span class="mono">annotation</span> ·
+  <span class="mono">interactive</span> sont NOMMÉS au contrat et REFUSÉS en v1, avec une erreur qui
+  les distingue d'un kind inventé (<span class="mono">KIND_RESERVED</span> contre
+  <span class="mono">KIND_UNKNOWN</span>). La différence n'est pas cosmétique : elle dit à un client
+  futur « ce nom t'attend » plutôt que « ce nom n'existe pas ».</div>
+
+  <div class="callout"><b>Ce que la structure NE porte pas, et où ça vit.</b> Un
+  <span class="mono">MeeshyObject</span> ne porte ni audience, ni lieu de publication, ni langue
+  déclarée : ce sont des champs de la <span class="mono">MeeshyPublication</span>. Il ne porte pas
+  non plus le ratio de sa scène — il se lit du porteur (coupe S8). Et le <b>son de fond</b> est
+  l'exception qui mérite d'être dite : au fil, il vit sur le DOCUMENT
+  (<span class="mono">CanvasV3.sound</span>) et non dans les objets d'une scène, parce qu'il traverse
+  les slides. Le modèle le décrit comme la seconde place du plan
+  <span class="mono">background</span> — c'est ce que l'auteur VOIT ; le contrat le range là où il
+  doit survivre à un changement de slide.</div>
+
   <h3>Ce que les quatre noms NE couvrent pas — le chrome</h3>
   <p>Les quatre noms décrivent le <b>contenu</b>. La moitié des règles de cette planche parlent de ce
   qui l'<b>entoure</b> : une barre, un rail, un socle, un inspecteur. Sans nom, ces pièces se
@@ -880,10 +933,14 @@ footer .mono{font-size:11.5px}
 <!-- ================================================================ P3 -->
 <section id="p3"><div class="wrap">
   <div class="prail"><span class="pnum">P3</span><h2>Carte de navigation</h2></div>
-  <p class="lede">Dix portes, un composer, trois viewers. Les flèches pleines sont des
-  navigations ; les pointillés, des retours d'état (brouillon, file, archive). Rév. 2 : e3 est
-  HORS v1 (aucun point d'entrée réels n'existe) ; e2 route v1 vers la sheet feed existante (C4) ;
-  e9 et e10 s'ajoutent (O13, U12) — détail en P18.</p>
+  <p class="lede">Dix portes, un composer, trois viewers. <b>Chaque porte fixe le profil INITIAL
+  d'une <span class="mono">MeeshyPublication</span></b> — et rien de plus : le profil reste
+  changeable par l'éventail, et la description de la <span class="mono">MeeshySlide</span> survit à
+  la bascule (loi 9). Les flèches pleines sont des navigations ; les pointillés, des retours d'état
+  (brouillon, file, archive). <span class="tag tNew">rév. 2026-08-28</span> <b>e2 ne route plus vers
+  la feuille historique</b> : le fil monte le composer, dette levée. <b>e4 n'est plus la seule porte
+  de son profil</b> : l'éventail offre le Mood quand la composition est du texte seul (#4030). e3
+  reste HORS v1 (aucun point d'entrée réels n'existe au dépôt).</p>
   <pre class="mermaid">
 flowchart TD
   subgraph E[Portes d'entrée — chacune fixe un profil]
@@ -898,16 +955,17 @@ flowchart TD
     e9([Média reçu en conversation — P18]):::s
     e10([« + Créer » de l'Étagère])
   end
-  C{{MeeshyComposer<br/>plateau · scène 9:16 · socle}}
-  e1 & e5 & e6 & e7 & e8 & e9 & e10 --> C
-  e2 -. v1 : sheet feed C4 .-> C
+  C{{MeeshyComposer<br/>plateau · barre haute · scène · outils · socle<br/>= une MeeshyPublication}}
+  e1 & e2 & e5 & e6 & e7 & e8 & e9 & e10 --> C
   e3 -. hors v1 .-> C
-  e4 -. StatusComposer S3 .-> C
-  C -->|outil requis| T[Panneau contextuel<br/>Texte · Média · Son · Dessin · Sticker · Lieu · Références · Fond]
+  e4 -. porte du profil M — l'éventail l'atteint aussi #4030 .-> C
+  C -->|rangée d'outils| T[Crée un MeeshyObject<br/>text · media · audio · drawing · sticker · place · mention]
   T --> C
-  C -->|poignée ⏱| TL[Timeline — plan 2D]
+  C -->|un objet sélectionné| I[Inspecteur — les contrôles de CET objet]
+  I --> C
+  C -->|poignée ⏱| TL[Timeline — les objets d'UNE MeeshyScene]
   TL --> C
-  C -->|œil du socle| PV[Aperçu = ScenePlayer]
+  C -->|œil du socle| PV[Aperçu = le LECTEUR, loi 6]
   PV --> C
   C -->|Publier| Q[[File offline<br/>clientMutationId]]
   C -.->|Fermer| D[(Brouillons)]
@@ -1708,16 +1766,25 @@ flowchart TD
 <section id="p14"><div class="wrap">
   <div class="prail"><span class="pnum">P14</span><h2>Nouveautés &amp; arbitrages — après la préservation, jamais avant</h2></div>
   <div class="grid g3">
-    <div class="card"><h4><span class="tag tNew">nouveau</span> MeeshyObject unifié</h4><p>Une seule
-      définition de transform/timing/layer/locale. Sticker animable, lieu scalable, mention posable —
-      gratuits par construction.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> <span class="mono">MeeshyObject</span> unifié</h4><p>Une
+      seule définition de <span class="mono">transform</span> / <span class="mono">timing</span> /
+      <span class="mono">plane</span> / <span class="mono">locale</span>, là où chaque famille les
+      redéclare aujourd'hui. Les <b>sept kinds</b> la partagent : sticker animable, lieu scalable,
+      mention posable — gratuits par construction. Le renommage des types <span class="mono">Story*</span>
+      en mémoire iOS est un chantier À PART (#4048), jamais un effet de bord d'un lot de feature.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Bandes actives &amp; ancrage</h4><p>Le
-      16:9 jamais rogné ; <span class="mono">.band(.top/.bottom)</span> survit au changement de
-      porteur.</p></div>
-    <div class="card"><h4><span class="tag tNew">nouveau</span> Timeline plan 2D</h4><p>Vertical =
-      empilement, horizontal = durée, pistes fantômes. Remplace 32 vues mono-piste.</p></div>
-    <div class="card"><h4><span class="tag tNew">nouveau</span> Appui long = capture</h4><p>Photo au
-      relâcher, vidéo au maintien — même seuil que le hold du reader.</p></div>
+      porteur 16:9 jamais rogné ; l'<span class="mono">anchor</span> d'un
+      <span class="mono">MeeshyObject</span> — <span class="mono">.band(.top/.bottom)</span> — survit
+      au changement de porteur, là où une coordonnée saute. On stocke le rang, jamais le
+      résultat.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Timeline plan 2D</h4><p>Les
+      <span class="mono">MeeshyObject</span> d'UNE <span class="mono">MeeshyScene</span> : vertical =
+      empilement borné par les trois plans, horizontal = <span class="mono">timing</span>, pistes
+      fantômes pour ceux qui n'en ont pas. Remplace 32 vues mono-piste.</p></div>
+    <div class="card"><h4><span class="tag tNew">nouveau</span> Appui long = capture</h4><p>Sur une
+      <span class="mono">MeeshyScene</span> SANS objet sous le doigt : photo au relâcher, vidéo au
+      maintien — même seuil que le hold du reader. Sur un <span class="mono">MeeshyObject</span>,
+      c'est SON menu (#4046) : les deux gestes ne se disputent jamais la même cible.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Plateau configurable</h4><p>Noir ·
       indigo profond · violet profond — un jeton d'interface, pas un thème par écran.</p></div>
     <div class="card"><h4><span class="tag tNew">nouveau</span> Audience 6 niveaux partout</h4><p>Le
@@ -1864,7 +1931,8 @@ flowchart TD
       <tr><td><b>Presets d'animation de texte</b> (pop, glissé, machine à écrire…)</td><td class="ab">les keyframes existent, aucun preset nommé</td><td>bibliothèque de presets = keyframes PRÉGÉNÉRÉS — des données, zéro vue neuve</td><td>non</td></tr>
       <tr><td><b>Layouts / collage</b> (2·3·4 cases)</td><td class="ab">médias premier plan libres seulement</td><td>presets d'ANCRES qui posent N objets média — des données encore</td><td>non</td></tr>
       <tr><td><b>Publication programmée</b></td><td class="ab">absente</td><td><b>hors v1 INTÉGRAL</b> (O11 gelé — la prémisse best-effort ne se promet pas non plus, rév. 2 M4) ; la version fiable exige <span class="mono">scheduledAt</span> serveur</td><td>léger, pour la version fiable</td></tr>
-      <tr><td><b>Alt text</b> (accessibilité)</td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.alt</span>, schema :830) — aucun client ne l'écrit</td><td>un champ dans l'inspecteur média. La prémisse la moins chère de toute la table</td><td>non — le champ est déjà là</td></tr>
+      <tr><td><b>Alt text</b> (accessibilité)</td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.alt</span>) et le contrat de route l'accepte (<span class="mono">mediaAlt</span>) — <b>aucun client ne l'écrit encore</b></td><td>un champ dans l'<b>inspecteur</b> du <span class="mono">MeeshyObject</span> média. La prémisse la moins chère de toute la table</td><td>non — le champ est déjà là</td></tr>
+      <tr><td><b>Légende par média</b> (la description d'une <span class="mono">MeeshySlide</span> en profil P) <span class="tag tNew">rév. 2026-08-28 · #4055</span></td><td class="ok">le champ serveur EXISTE (<span class="mono">PostMedia.caption</span>), était SERVI et écrit par PERSONNE — le contrat de route l'accepte désormais (<span class="mono">mediaCaption</span>)</td><td>la description de la slide, déjà saisissable, doit VOYAGER : la chaîne iOS reste à écrire, et #4045 en dépend</td><td>fait — jumeau exact de <span class="mono">mediaAlt</span>, corps partagé</td></tr>
       <tr><td><b>Désactiver / limiter les commentaires</b></td><td class="ab">absent (recensé hors périmètre)</td><td>drapeau sur les payloads de création EXISTANTS (rév. 2, C11 — <i>amendé rév. 24 : <span class="mono">PublishIntent</span> n'est plus déscopé, il est sur main pour le format audio ; les payloads de création restent néanmoins les porteurs de ce drapeau</i>) + garde sur les routes de commentaires</td><td>léger</td></tr>
       <tr><td><b>Duo / côte-à-côte</b> (duet)</td><td class="ab">repost & citation seuls</td><td><b>pas en v1</b> — scène scindée à 2 porteurs = coût lecteur réel ; l'attribution existe déjà (repost + SILENT auto)</td><td>oui</td></tr>
       <tr><td><b>Co-auteur</b> (post collaboratif)</td><td class="ab">références PINNED seules</td><td><b>pas en v1</b> — invitation + double attribution = contrat et ACL neufs</td><td>oui</td></tr>
@@ -1878,8 +1946,11 @@ flowchart TD
   VisionKit couvre le cas sticker sans moteur AR. <b>Lecture d'ensemble :</b> les prémisses 1 à 8
   tiennent dans le modèle proposé sans le déformer — <span class="mono">interactive</span> est un
   kind de plus, <span class="mono">rate</span> un champ de timing, presets et layouts des DONNÉES.
-  C'est le test de validité du modèle unique : une feature SOTA qui exigerait une famille d'objets
-  à part signalerait un modèle raté.</div>
+  C'est le <b>test de validité du modèle</b> : une feature SOTA qui exigerait une famille d'objets à
+  part — hors des sept kinds, hors des trois plans — signalerait un
+  <span class="mono">MeeshyObject</span> raté. <b>Le test a servi depuis</b> : le son de fond
+  n'a demandé aucun kind neuf, seulement la seconde place du plan
+  <span class="mono">background</span> que le modèle déclarait déjà (#4052).</div>
 </div></section>
 
 <!-- ================================================================ P17 -->
@@ -1896,10 +1967,10 @@ flowchart TD
       <tr><td class="mono">S2</td><td><b>PublishIntent différé</b> — <b>AMENDÉ rév. 24 : LEVÉ EN PARTIE.</b> Le composer unifié appelait les trois chemins d'envoi existants ; <span class="mono">PublishIntent</span> existe désormais sur main (lot v2 7.3) et sert le format AUDIO, avec deux appelants de production. Le déscopage tient encore pour les trois autres formats</td><td>l'arbitrage d'origine disait « le verbe unique est de l'hygiène, pas un gain » ; le lot 7 a mesuré une PERTE DE CONTENU (un vocal composé hors ligne était détruit), ce qui n'est pas de l'hygiène. La prémisse a changé — l'arbitrage est amendé, pas effacé</td></tr>
       <tr><td class="mono">S3</td><td><b>Mood hors v1.</b> StatusComposerView conservé tel quel</td><td>son UX est déjà saine (6 audiences, brouillon, offline) — elle ne change pas d'un pixel</td></tr>
       <tr><td class="mono">S4</td><td><b>Timeline v1 sans édition de keyframes DANS le plan</b> — pistes, plans, durées, fantômes ; les keyframes restent à l'inspecteur</td><td>la demande est « empiler + durées » : servie. Et c'était LE point chaud perf à mesurer</td></tr>
-      <tr><td class="mono">S5</td><td><b>Trois ancres, pas quatre.</b> <span class="mono">.pinned(toObject:)</span> et le kind <span class="mono">annotation</span> partent en « plus tard »</td><td>l'ancrage relatif est de la complexité de solveur sans demande</td></tr>
+      <tr><td class="mono">S5</td><td><b>Trois valeurs d'<span class="mono">anchor</span>, pas quatre.</b> <span class="mono">.pinned(toObject:)</span> — l'ancrage d'un <span class="mono">MeeshyObject</span> à un AUTRE — et le kind <span class="mono">annotation</span> partent en « plus tard » : les sept kinds actifs n'en comptent ni l'un ni l'autre</td><td>l'ancrage relatif est de la complexité de solveur sans demande</td></tr>
       <tr><td class="mono">S6</td><td><b>« Mes stickers » v1 = les récents</b> (grille LRU, appui long = retirer)</td><td>coller, retrouver, reposer — le geste entier est servi ; la gestion (dossiers) n'apporte rien en v1</td></tr>
       <tr><td class="mono">S7</td><td><b>L'Étagère = MyStoriesView étendue</b> (elle a déjà Published/Drafts — vérifié à l'écran) : + file d'envoi, + archive</td><td>même surface, coût divisé</td></tr>
-      <tr><td class="mono">S8</td><td><b><span class="mono">Scene.ratio</span> supprimé</b> — le ratio se lit du média porteur</td><td>aucun : c'était une redondance du modèle</td></tr>
+      <tr><td class="mono">S8</td><td><b>Le ratio d'une <span class="mono">MeeshyScene</span> n'est pas un champ</b> — il se lit du <span class="mono">MeeshyObject</span> porteur, au plan <span class="mono">content</span></td><td>aucun : c'était une redondance du modèle, et une seconde source de vérité sur la même question</td></tr>
     </tbody>
   </table></div>
   <div class="callout"><b>L'élément bloquant, arbitré — O2 (le modèle).</b> C'était le seul
@@ -1932,11 +2003,13 @@ flowchart TD
 <!-- ================================================================ P18 -->
 <section id="p18"><div class="wrap">
   <div class="prail"><span class="pnum">P18</span><h2>Entrées externes — partage entrant &amp; média reçu <span class="tag tNew">rév. 2 · lot G</span></h2></div>
-  <p class="lede">Le composer devient joignable depuis TOUT ce que l'utilisateur reçoit ou
-  possède : la feuille de partage iOS (depuis n'importe quelle app) et les médias reçus en
-  conversation. Deux règles au-dessus de tout : <b>l'extension DÉCRIT, l'app compose</b> (O14) —
-  et <b>créer un post depuis un média reçu tient en 2 gestes</b> (O13). Rien ne se réinvente :
-  chaque pièce réutilise une mécanique vérifiée du dépôt.</p>
+  <p class="lede">Deux portes de plus vers une <span class="mono">MeeshyPublication</span> : la
+  feuille de partage iOS (depuis n'importe quelle app) et les médias reçus en conversation. Comme
+  toutes les portes, elles ne fixent que l'état INITIAL — profil, et un
+  <span class="mono">MeeshyObject</span> déjà posé (loi 9). Deux règles au-dessus de tout :
+  <b>l'extension DÉCRIT, l'app compose</b> (O14) — l'extension n'a ni scène ni socle, donc rien pour
+  choisir une audience — et <b>créer un post depuis un média reçu tient en 2 gestes</b> (O13). Rien
+  ne se réinvente : chaque pièce réutilise une mécanique vérifiée du dépôt.</p>
 
   <h3>Le partage entrant — de n'importe quelle app vers un post</h3>
   <div class="phrow">
