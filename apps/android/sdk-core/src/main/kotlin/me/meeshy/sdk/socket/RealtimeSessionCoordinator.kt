@@ -26,6 +26,7 @@ class RealtimeSessionCoordinator @Inject constructor(
     private val messageSocketManager: MessageSocketManager,
     private val socialSocketManager: SocialSocketManager,
     private val categorySocketManager: CategorySocketManager,
+    private val preferencesSocketManager: PreferencesSocketManager,
     private val callSignalManager: CallSignalManager,
 ) {
     private var lastAuthenticated = false
@@ -49,6 +50,7 @@ class RealtimeSessionCoordinator @Inject constructor(
         messageSocketManager.attach()
         socialSocketManager.attach()
         categorySocketManager.attach()
+        preferencesSocketManager.attach()
         callSignalManager.attach()
     }
 }

@@ -21,6 +21,8 @@ import me.meeshy.sdk.model.MemberRole
 import me.meeshy.sdk.model.MemberRosterPage
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
+import me.meeshy.sdk.model.applyRemote
 import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
@@ -399,6 +401,39 @@ class ConversationRepository @Inject constructor(
     suspend fun setTagsOptimistic(id: String, tags: List<String>): Boolean {
         val normalized = tags.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
         return updatePreferencesOptimistic(id) { it.copy(tags = normalized) }
+    }
+
+    /**
+     * Apply a conversation-scope `user:preferences-updated` broadcast to the cached
+     * row — the read side of the per-USER preferences the user changed on ANOTHER
+     * device (issue #4127).
+     *
+     * The arbitration lives in the pure [applyRemote]; this method is only the I/O
+     * around it, so every drop rule is JVM-covered without a database. `false` means
+     * nothing was written: the conversation is not cached (the next list refresh
+     * catches up — the same silent drop iOS makes), or the event lost the version
+     * arbitration.
+     *
+     * The snapshot lands on [ApiConversation.preferences] rather than on
+     * `userPreferences[0]` for the same reason the optimistic path writes there: it
+     * is the override `resolvedPreferences` reads FIRST, so the list re-buckets on
+     * the Room emission without waiting for a refetch, and the next REST sync — the
+     * server's own truth — replaces the whole row payload and clears the override.
+     */
+    suspend fun applyRemoteConversationPreferences(
+        event: UserPreferencesConversationUpdatedSocketData,
+    ): Boolean = database.withTransaction {
+        val row = conversationDao.find(event.conversationId) ?: return@withTransaction false
+        val conversation = MeeshyApi.json.decodeFromString<ApiConversation>(row.payload)
+        val next = conversation.resolvedPreferences.applyRemote(event) ?: return@withTransaction false
+        conversationDao.upsertAll(
+            listOf(
+                row.copy(
+                    payload = MeeshyApi.json.encodeToString(conversation.copy(preferences = next)),
+                ),
+            ),
+        )
+        true
     }
 
     /**

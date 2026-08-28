@@ -692,8 +692,19 @@ All models are Decodable/Encodable with readonly properties and optional CodingK
 - [ ] **Participants**
   - `participant:role-updated` ← ParticipantRoleUpdatedEventData { conversationId, userId, newRole, updatedBy, participant }
 
-- [ ] **User Preferences**
-  - `user:preferences-updated` ← { userId, category }
+- [x] **User Preferences** — scope CONVERSATION livré au cycle 130 (#4127)
+  - `user:preferences-updated` ← union de TROIS scopes sous un seul nom :
+    - [x] conversation — `{ userId, conversationId, version, reset, preferences }`
+      → `PreferencesSocketManager` → `ConversationRepository.applyRemoteConversationPreferences`
+      (arbitrage `version <= local ⇒ drop` dans le port pur `applyRemote`)
+    - [ ] catégorie — `{ userId, category }` : aucune préférence `me/preferences/*`
+      n'est mise en cache côté Android, donc rien à invalider aujourd'hui
+    - [ ] communauté — `{ userId, communityId, reset, preferences }` : idem, pas de
+      ligne de préférence de communauté en cache
+  - `user:preferences-reordered` / `user:preferences-community-reordered` — NON
+    écoutés, décision du cycle 130 : ils ne portent que `orderInCategory`, qu'aucune
+    surface Android ne lit et qu'aucun geste de glisser-déposer ne produit. Un témoin
+    (`PreferencesSocketManagerTest.no reorder listener is registered`) gèle l'absence.
 
 - [ ] **Calls** (complex, see video-call types)
   - `call:initiated`, `call:participant-joined`, `call:signal`, etc.
