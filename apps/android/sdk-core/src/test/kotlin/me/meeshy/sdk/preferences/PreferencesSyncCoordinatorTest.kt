@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.model.ApiCategory
@@ -108,6 +109,16 @@ class PreferencesSyncCoordinatorTest {
             every { categoryPreferencesUpdated } returns events
         }
 
+        /**
+         * Suspends until the coordinator's collector is actually subscribed. Emitting before
+         * that point loses the event, which is indistinguishable from "the sync did not
+         * write" — the exact ambiguity that made the first version of this suite fail on
+         * every assertion that demanded a change and pass on every one that did not.
+         */
+        suspend fun awaitCollector() {
+            events.subscriptionCount.first { it > 0 }
+        }
+
         fun coordinator(scope: kotlinx.coroutines.CoroutineScope) = PreferencesSyncCoordinator(
             socketManager = socket,
             preferencesApi = api,
@@ -205,6 +216,8 @@ class PreferencesSyncCoordinatorTest {
         val api = CountingApi(notification = notificationBody(pushEnabled = false))
         val harness = Harness(api = api)
         harness.coordinator(backgroundScope).start()
+        harness.awaitCollector()
+
         harness.events.emit("notification")
         advanceUntilIdle()
 
@@ -219,9 +232,10 @@ class PreferencesSyncCoordinatorTest {
         val harness = Harness(api = api)
         val coordinator = harness.coordinator(backgroundScope)
         coordinator.start()
-        advanceUntilIdle()
+        harness.awaitCollector()
 
         coordinator.stop()
+        advanceUntilIdle()
         harness.events.emit("notification")
         advanceUntilIdle()
 
@@ -238,6 +252,8 @@ class PreferencesSyncCoordinatorTest {
         coordinator.start()
         coordinator.start()
         coordinator.start()
+        harness.awaitCollector()
+
         harness.events.emit("notification")
         advanceUntilIdle()
 
