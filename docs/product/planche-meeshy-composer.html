@@ -2292,6 +2292,17 @@ flowchart TD
   le spécimen complet — <b>habillage web approximatif, non normatif</b> : les polices réelles
   sont celles du résolveur iOS (<span class="mono">StoryTextFontResolver</span>, matérialisation
   CoreText, 0 octet embarqué — sentinelle de disponibilité testée sur 18.2 et 26.1).</p>
+
+  <div class="callout"><b>Un style est une valeur du <span class="mono">payload</span>, pas un
+  champ du modèle</b> — et c'est exactement pourquoi la liste a pu passer de 11 à 18 sans
+  migration. Les neuf champs d'un <span class="mono">MeeshyObject</span> ne connaissent aucune
+  police : ils décrivent OÙ l'objet est (<span class="mono">anchor</span>,
+  <span class="mono">plane</span>, <span class="mono">z</span>), comment il est POSÉ
+  (<span class="mono">transform</span>) et QUAND il joue (<span class="mono">timing</span>). Ce qui
+  fait qu'un texte est « néon » plutôt que « machine » vit dans le
+  <span class="mono">payload</span>, permissif par contrat. <b>Le dix-neuvième style ne coûtera donc
+  ni champ, ni version, ni migration</b> — c'est la promesse de la dimension 12 (« la complexité se
+  paie dans le code ») rendue mesurable sur un cas précis.</div>
   <div class="grid g3" style="grid-template-columns:repeat(auto-fill,minmax(200px,1fr))">
     <div class="card"><h4>gras</h4><p style="font-size:22px;font-weight:800;color:var(--ink)">Salut le monde</p><p style="font-size:10px" class="mono">système .black</p></div>
     <div class="card"><h4>néon</h4><p style="font-size:22px;font-weight:700;color:#fff;text-shadow:0 0 6px var(--acc),0 0 14px var(--acc)">Salut le monde</p><p style="font-size:10px" class="mono">système .rounded semibold + glow</p></div>
@@ -2317,7 +2328,18 @@ flowchart TD
       (<span class="mono">CanvasChromeScheme</span>) : le style garde sa famille, le contraste
       s'inverse — jamais un contour ajouté à la main par style.</li>
     <li>Chaque style compose avec couleur · fond · taille · alignement · position — les réglages
-      EXISTANTS du panneau (P7), orthogonaux à la famille.</li>
+      EXISTANTS du panneau (P7), orthogonaux à la famille. <b>L'orthogonalité a une frontière
+      nette dans le modèle</b> : couleur, fond, taille et alignement sont du
+      <span class="mono">payload</span> (ils font le style) ; la POSITION n'en est pas — elle vit
+      dans <span class="mono">anchor</span> et <span class="mono">transform</span>, communs aux sept
+      kinds. Un style ne peut donc pas déplacer un objet, et un déplacement ne peut pas le
+      restyler.</li>
+    <li><b>Traduire un texte ne le restyle pas.</b> Un <span class="mono">MeeshyObject</span> de
+      kind <span class="mono">text</span> porte ses traductions DANS le même
+      <span class="mono">payload</span> que son style, et son <span class="mono">locale</span> au
+      premier niveau : le Prisme change la chaîne servie, jamais la famille, la couleur ni la pose.
+      C'est ce qui rend un texte « néon » encore néon quand un lecteur le lit en arabe — RTL
+      compris, l'inversion étant une propriété de la mise en page, pas du style.</li>
     <li>Le web (lot F) mappe les 18 noms vers des piles système équivalentes — mêmes noms, mêmes
       intentions, un commentaire par famille cite la police iOS d'origine ; style inconnu ⇒
       défaut, jamais un throw.</li>
@@ -2335,6 +2357,30 @@ flowchart TD
   outil par outil, sous-contrôle par sous-contrôle. Règle RTL du dépôt : les symboles SÉMANTIQUES
   ne s'inversent pas. Les glyphes déjà en prod sont marqués <span class="tag tEx">existant</span> ;
   le reste est la cible des lots C/D/E.</p>
+
+  <div class="callout"><b>Le tableau mélange TROIS niveaux du modèle, et c'est légitime — mais il
+  faut savoir lequel.</b> Une icône dit un verbe ; le verbe ne s'applique pas toujours au même
+  objet.
+  <ul style="margin:8px 0 0;padding-left:18px">
+    <li><b>Créent un <span class="mono">MeeshyObject</span></b> — les sept kinds, tous présents :
+      Texte (<span class="mono">text</span>) · Média (<span class="mono">media</span>) · Stickers
+      (<span class="mono">sticker</span>) · Son (<span class="mono">audio</span>) · Lieu
+      (<span class="mono">place</span>) · Dessin (<span class="mono">drawing</span>) ·
+      <b>Références</b> (<span class="mono">mention</span>). <b>La table est donc COMPLÈTE sur les
+      kinds</b> — vérifié ligne à ligne, et c'est le seul contrôle de complétude qu'elle admette.</li>
+    <li><b>Agissent sur un objet DÉJÀ posé, sans en créer</b> — Filtres (une propriété du
+      <span class="mono">payload</span> d'un objet <span class="mono">media</span>) et les six
+      sous-contrôles de Texte (style, couleur, fond, taille, alignement, langue).</li>
+    <li><b>Agissent sur un AUTRE niveau</b> — <b>Fond</b> vise le PLAN
+      <span class="mono">background</span> de la <span class="mono">MeeshyScene</span>, pas un
+      kind ; <b>Slides</b> (ajouter · dupliquer · supprimer) vise la
+      <span class="mono">MeeshySlide</span> ; barre haute et socle visent la
+      <span class="mono">MeeshyPublication</span>.</li>
+  </ul>
+  <b>La distinction n'est pas théorique : elle décide de la loi 4.</b> Un contrôle du premier
+  groupe est absent quand le profil refuse son kind ; un du deuxième est absent quand rien n'est
+  sélectionné ; un du troisième ne dépend d'aucune sélection. Trois raisons de disparaître, qui se
+  ressemblent à l'écran et ne se testent pas de la même façon.</div>
   <div class="scrollx"><table>
     <thead><tr><th>Surface</th><th>Contrôle</th><th>SF Symbol</th><th>Note</th></tr></thead>
     <tbody>
@@ -2381,7 +2427,9 @@ flowchart TD
   transcribe, modes Simple/Pro), <span class="mono">ImageEditorModel</span> (crop, ratios,
   filtres, ajustements — Simple/Pro), <span class="mono">MeeshyVideoEditorView</span> (dock
   d'outils, historique, export). Le composer les OUVRE depuis l'inspecteur média — il ne les
-  réécrit pas.</p>
+  réécrit pas. <b>Un éditeur édite UN <span class="mono">MeeshyObject</span></b> — jamais la
+  <span class="mono">MeeshyScene</span>, jamais la slide : c'est ce qui rend l'inspecteur la seule
+  porte légitime vers eux, et ce qui explique qu'ils n'aient aucun état à eux.</p>
   <div class="phrow">
     <figure class="phfig lg"><div class="ph"><div class="notch"></div>
       <div class="ctx" style="margin-top:22px"><span class="ob">✕</span><span class="lbl">Éditer l'audio — Simple</span><span class="ob" style="margin-left:auto">✓</span></div>
@@ -2454,9 +2502,15 @@ flowchart TD
   <div class="callout"><b>Les règles communes des trois — un seul vocabulaire.</b> 1) Les poignées
   se saisissent à ≥ 44 pt, débordantes quand la zone est étroite (la règle M11 de la timeline).
   2) La haptique dit les BUTÉES (début/fin, snap au playhead) — jamais le mouvement continu.
-  3) NON-DESTRUCTIF partout : l'original n'est jamais réécrit, le document porte les bornes
-  (<span class="mono">bounds</span>, <span class="mono">timing</span>) — rouvrir l'éditeur
-  retrouve tout. 4) ✓ applique, ✕ abandonne — jamais d'application au fil du geste. 5) Le
+  3) NON-DESTRUCTIF partout : l'original n'est jamais réécrit, le document porte les bornes —
+  rouvrir l'éditeur retrouve tout. <b>Et « le document » désigne DEUX champs, à deux niveaux, qu'il
+  ne faut pas confondre</b> : le trim d'un <span class="mono">MeeshyObject</span> — kind
+  <span class="mono">media</span> ou <span class="mono">audio</span> POSÉ sur la scène — écrit son
+  <span class="mono">timing</span> (<span class="mono">start</span>/<span class="mono">end</span>,
+  relatifs à la slide) ; le trim du SON DE FOND, qui vit sur la
+  <span class="mono">MeeshyPublication</span> et traverse les slides, écrit
+  <span class="mono">sound.bounds</span>. <b>Le même geste, la même poignée, deux champs</b> — et
+  c'est l'endroit d'où vient l'objet, pas l'éditeur ouvert, qui décide lequel. 4) ✓ applique, ✕ abandonne — jamais d'application au fil du geste. 5) Le
   playhead est TOUJOURS rouge sémantique (<span class="mono">--play</span>), les poignées
   TOUJOURS accent — aucun des deux n'emprunte une couleur de format (U15).</div>
 </div></section>
@@ -2467,7 +2521,11 @@ flowchart TD
   <p class="lede">Six situations concrètes, de bout en bout — ce que l'utilisateur voit ET entend.
   Elles exercent les lois B3.3-6 (deux plans audio, provenance, existence, bouton muet), la
   continuité (loi 8) et le carrousel dont « le temps appartient au contenu, pas à la
-  navigation ».</p>
+  navigation ». <b>Les six exercent les QUATRE niveaux à la fois</b>, et c'est ce qui en fait des
+  cas et non des captures : une carte est une <span class="mono">MeeshySlide</span>, ce qu'elle
+  montre est une <span class="mono">MeeshyScene</span>, ce qu'on y a posé sont des
+  <span class="mono">MeeshyObject</span>, et ce qui traverse les cartes — la piste, l'audience —
+  appartient à la <span class="mono">MeeshyPublication</span>.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
@@ -2481,7 +2539,10 @@ flowchart TD
     </div><figcaption><b>1 · Carrousel simple (sans piste).</b> Pagination par points + compteur.
     <b>AUCUN glyphe audio nulle part</b> — pas de piste ⇒ rien (B3.5) : ni ♫ barré, ni bouton 🔇.
     L'ordre des cartes est <span class="mono">PostMedia.order</span> (écrit à l'index — le fix
-    P7). Chaque carte = une Scene du document.</figcaption></figure>
+    P7). <b>Chaque carte est une <span class="mono">MeeshySlide</span></b> — sa
+    <span class="mono">MeeshyScene</span> porte un unique <span class="mono">MeeshyObject</span> de
+    kind <span class="mono">media</span>, né au plan <span class="mono">background</span> (règle de
+    pose : aucun fond visuel préalable).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="flex:1;display:flex;flex-direction:column;gap:5px;padding:26px 9px 8px">
         <span class="ob">@aïcha · 1 h · <b>♫ Nuits d'été · @sam · 0:15</b></span>
@@ -2542,15 +2603,22 @@ flowchart TD
       <div class="ctx"><span class="lbl">rail de scènes : [1] [●2] [3] [+]</span></div>
       <div class="ctx"><span class="ob on">♫ Nuits d'été — bornes 0:02→0:17</span><span class="ob">✂</span></div>
       <div class="socle"><span class="aud">👥 Amis</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>6 · Composer le cas 2.</b> Le carrousel s'édite comme des slides (1 carte
-    = 1 Scene) ; le son de fond se pose UNE fois au niveau du DOCUMENT (panneau Son), ses bornes
-    par le trim P23 (✂). L'aperçu (👁) joue exactement ce que la carte 2 rendra — feuilletage
+    </div><figcaption><b>6 · Composer le cas 2.</b> Le carrousel s'édite comme des slides —
+    <b>1 carte = 1 <span class="mono">MeeshySlide</span></b>, donc une
+    <span class="mono">MeeshyScene</span> et sa DESCRIPTION. En profil <b>P</b>, cette description
+    n'est pas le texte du post : <b>c'est la LÉGENDE de ce média-là</b>, et le post garde son
+    <span class="mono">content</span> à lui — une carte peut donc être décrite sans que le post
+    change d'un mot (chaîne iOS : <span class="mono">#4055</span>). Le son de fond se pose UNE fois
+    au niveau de la <span class="mono">MeeshyPublication</span> (panneau Son), ses bornes par le
+    trim P23 (✂). L'aperçu (👁) joue exactement ce que la carte 2 rendra — feuilletage
     compris, le son continue. WYSIWYG par construction (loi 6 de P1).</figcaption></figure>
   </div>
   <div class="callout"><b>La lecture croisée qui verrouille tout.</b> Vignettes 1↔2 : l'EXISTENCE
   (B3.5) — le glyphe n'apparaît que si une piste existe. Vignettes 3↔4 : la PROVENANCE (B3.4) —
-  ♫〰 ou crédit, jamais l'un pour l'autre. Vignettes 2 et 6 : le TEMPS — la piste appartient au
-  document, pas à la page. Vignette 5 : la COMPOSITION des lois — ↻ (loi 7) + ♫〰 (B3.4) + né en
+  ♫〰 ou crédit, jamais l'un pour l'autre. Vignettes 2 et 6 : le TEMPS — la piste appartient à la
+  <span class="mono">MeeshyPublication</span>, pas à la <span class="mono">MeeshySlide</span> ;
+  feuilleter ne la rembobine donc pas, et c'est une propriété du MODÈLE avant d'être un choix
+  d'interface. Vignette 5 : la COMPOSITION des lois — ↻ (loi 7) + ♫〰 (B3.4) + né en
   pause + continuité (loi 8) sur une seule carte, sans qu'aucune n'en contredise une autre.</div>
 </div></section>
 
