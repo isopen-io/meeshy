@@ -359,7 +359,7 @@ services:
     profiles: ["full"]
     network_mode: host
     volumes:
-      - ../config/turnserver.conf:/etc/turnserver.conf:ro
+      - ../../config/turnserver.conf:/etc/turnserver.conf:ro
     healthcheck:
       test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
       interval: 30s

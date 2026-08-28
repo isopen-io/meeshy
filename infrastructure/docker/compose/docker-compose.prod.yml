@@ -449,13 +449,30 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ./config/turnserver.conf:/etc/turnserver.conf:ro
+      # Gabarit versionne (denied-peer-ip, quota, TLS) — jamais monte tel
+      # quel sur /etc/turnserver.conf : __TURN_SECRET__ y est substitue au
+      # demarrage (voir entrypoint) a partir du secret partage avec
+      # TURNCredentialService (gateway), jamais commite.
+      - ../../config/turnserver.prod.conf:/etc/turnserver.template.conf:ro
       - traefik_dumped_certs:/etc/coturn/dumped:ro
+    environment:
+      - TURN_SECRET=${TURN_SECRET}
     entrypoint:
       - /bin/sh
       - -c
       - |
         set -e
+
+        # 0) Refuser de demarrer un relais TURN sans secret fort et propre a
+        #    cet environnement : coturn valide les identifiants HMAC que
+        #    TURNCredentialService signe avec CE MEME secret (services/gateway/
+        #    src/services/TURNCredentialService.ts) — un secret absent ou par
+        #    defaut ouvrirait soit un relais qui rejette tout appel, soit un
+        #    relais que n'importe qui peut faire consommer sa bande passante.
+        if [ -z "$$TURN_SECRET" ] || [ "$$TURN_SECRET" = "__TURN_SECRET__" ] || [ "$$TURN_SECRET" = "meeshy-turn-secret-CHANGE-IN-PRODUCTION" ]; then
+          echo "[FATAL] TURN_SECRET env var must be set to a strong, non-default value before starting coturn." >&2
+          exit 1
+        fi
 
         CERT_FILE=/etc/coturn/dumped/certs/turn.meeshy.me.crt
         KEY_FILE=/etc/coturn/dumped/private/turn.meeshy.me.key
@@ -493,7 +510,10 @@ services:
           ) &
         fi
 
-        exec turnserver -c /etc/turnserver.conf
+        # 4) Materialiser la config reelle depuis le gabarit read-only —
+        #    jamais ecrire sur le mount RO lui-meme.
+        sed "s|__TURN_SECRET__|$$TURN_SECRET|g" /etc/turnserver.template.conf > /tmp/turnserver.conf
+        exec turnserver -c /tmp/turnserver.conf
     healthcheck:
       test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
       interval: 30s
