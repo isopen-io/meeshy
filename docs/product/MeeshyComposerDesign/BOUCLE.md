@@ -42,6 +42,14 @@ intermédiaire, sans attendre la fermeture d'une feuille. Un réglage qui ne pre
 « Appliquer » fait choisir à l'aveugle. **Corollaire :** un éditeur temps réel doit porter un
 **snapshot** pour que l'annulation restaure vraiment ce qui existait avant.
 
+> **Ce que la loi 7 ne dit PAS.** Elle gouverne l'**effet**, pas le bouton. Les captures cibles
+> portent des `OK` (`1c`), `APPLIQUER` (`2l`), `ENREGISTRER` (`3c`) — et ce ne sont pas des
+> infractions : ces boutons **ferment une surface**, ils ne déclenchent rien. Le test qui tranche est
+> unique : **le changement se voit-il AVANT qu'on appuie ?** Si oui, le bouton est une sortie, il est
+> légitime. Si non, c'est une validation différée, et elle tombe. Un bouton nommé « Appliquer » qui
+> n'applique rien — parce que tout est déjà appliqué — est bien nommé pour l'utilisateur : il dit
+> « c'est bon, je garde ».
+
 ---
 
 ## La navigation — les 31 vues sont un GRAPHE
@@ -98,10 +106,21 @@ Poser `Status = In Progress` dans le projet org #1 avant d'écrire une ligne.
 **Quatorze vues ne sont couvertes par AUCUNE issue fermée** — elles partent de zéro, sans dette ni
 promesse antérieure : `1d` `1e` `1h` `2d` `2e` `2f` `2g` `2h` `2j` `3c` `3e` `3g` `3h` `4b`.
 
-Deux arbitrages produit sont **posés** et gouvernent plusieurs vues (loi 2) :
+**⚠️ La géographie de la scène a été ARBITRÉE le 2026-08-28.** Les six issues héritées (#4061 à
+#4065, #4070) venaient de la planche rév. 27 et décrivaient **deux rails latéraux encastrant la
+scène** — une disposition qu'**aucune capture ne montre**. Vérifié : `1b` porte **un seul** rail,
+**flottant sur le bord DROIT** de la scène, à quatre actions (✎ ☺ ♫ #), et garde sa **rangée d'outils
+basse permanente** ; `1c` et `3b` sont **plein écran, bord à bord, sans aucun rail**, l'inspecteur y
+étant une **rangée horizontale de jetons** portant des valeurs lisibles (`TAILLE 38`, `0:00 → 0:06`).
+Le document gagne — deux places pour deux rôles (le rail agit SUR la scène, la rangée fait ENTRER la
+matière), la largeur est vitale en édition, et le pouce est en bas. Détail et ce qui survit du lot :
+commentaire du 2026-08-28 sur #4061.
+
+Trois arbitrages produit sont **posés** et gouvernent plusieurs vues (loi 2) :
 - **Un profil impossible est GRISÉ AVEC SA RAISON, jamais absent** (#4030) — `1a` `2a` `2k` `3a` `4f`.
 - **Une note vocale n'est JAMAIS un fond audio** ; l'intention se déclare par la porte empruntée,
   pas par la nature du fichier (#4052) — `1b` `2c` `2f` `2g` `2h` `3e`.
+- **La géographie suit le document, pas la planche** (#4061) — `1a` `1b` `1c` `3b`.
 
 ### 2 — Lire la cible
 
