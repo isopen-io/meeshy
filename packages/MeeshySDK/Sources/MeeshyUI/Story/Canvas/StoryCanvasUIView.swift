@@ -197,6 +197,10 @@ public final class StoryCanvasUIView: UIView {
     /// composer typically uses this to open the inline text editor or the
     /// media editor sheet (legacy `onEditText` / `onEditMedia` UX parity).
     public var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?
+    /// **L'objet SORT de la scène (#4046)** — l'hôte décide ce qu'il devient
+    /// (en Post : une slide du carrousel). Non câblée, l'action n'est pas
+    /// offerte : le SDK ne fabrique pas un geste sans destinataire.
+    public var onItemLeftScene: ((String, CanvasItemKind) -> Void)?
 
     /// Called after the context-menu "Dupliquer" action creates a copy of an
     /// element. Parent uses this to mirror viewModel-owned ephemeral state

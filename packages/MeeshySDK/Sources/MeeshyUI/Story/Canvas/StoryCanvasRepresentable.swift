@@ -33,6 +33,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     @Binding public var slide: StorySlide
     public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
+    /// #4046 — l'objet SORT de la scène ; l'hôte décide ce qu'il devient.
+    public var onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
@@ -102,6 +104,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                onItemLeftScene: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
@@ -123,6 +126,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
+        self.onItemLeftScene = onItemLeftScene
         self.onItemDuplicated = onItemDuplicated
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
@@ -176,6 +180,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         }
         view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
+        view.onItemLeftScene = onItemLeftScene
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded

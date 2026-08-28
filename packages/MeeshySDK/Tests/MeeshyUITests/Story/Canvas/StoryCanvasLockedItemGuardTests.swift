@@ -172,11 +172,16 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
         )
     }
 
+    /// « Toutes les actions » exige désormais que l'hôte sache RECEVOIR une
+    /// sortie (#4046) : `canLeaveScene` est le sixième cas, et son défaut
+    /// FERME. Sans ce paramètre, ce témoin n'affirmerait plus « toutes » mais
+    /// « toutes sauf une », en le disant avec le même mot.
     func test_offered_unlockedItem_keepsEveryAction() {
         XCTAssertEqual(
             StoryCanvasContextAction.offered(
                 isLocked: false, isBackground: false,
-                sharesPlaneWithAnother: true, hasEditor: true),
+                sharesPlaneWithAnother: true, hasEditor: true,
+                canLeaveScene: true),
             StoryCanvasContextAction.allCases
         )
     }
@@ -247,6 +252,10 @@ final class StoryCanvasLockedItemGuardTests: XCTestCase {
 
     func test_contextMenu_ordinaryText_offersEveryAction() {
         let view = makeCanvas()
+        // Comme pour l'éditeur ci-dessus : la fixture CÂBLE le relais de sortie,
+        // sans quoi elle affirmerait « toutes les actions » sur un menu à qui
+        // il en manque une par construction (#4046).
+        view.onItemLeftScene = { (_: String, _: StoryCanvasUIView.CanvasItemKind) in }
 
         let titles = view.contextMenu(for: Self.freeId, kind: .text).children.map(\.title)
 

@@ -20,6 +20,13 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
     case duplicate
     case bringForward
     case sendBackward
+    /// **Le média quitte la scène et redevient une slide du post (#4046).**
+    ///
+    /// D'une autre NATURE que les deux au-dessus : l'empilement écrit le `z`
+    /// d'un `MeeshyObject` — son ordre DANS son plan — quand celle-ci écrit son
+    /// `plane`. Les confondre ferait passer un objet devant un fond au lieu de
+    /// le sortir.
+    case leaveScene
     case delete
 
     /// **Ce qu'un objet offre VRAIMENT (#4046) — loi 4, sans exception : une
@@ -42,17 +49,29 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
     /// duplication, ni suppression : les trois retirent ou dénaturent
     /// l'attribution. L'empilement lui reste, s'il a un effet : il ne touche pas
     /// au contenu.
+    /// - Parameter canLeaveScene: l'hôte SAIT-il recevoir un objet qui sort ?
+    ///   Le SDK ne connaît ni « Story » ni « Post » — ce sont des notions de
+    ///   l'app. Il ne demande donc pas le PROFIL mais l'EFFET : même frontière
+    ///   que `hasEditor`, qui ne demande pas s'il existe un éditeur mais si
+    ///   l'hôte en a câblé un. **Le défaut FERME** : un appelant qui ne se
+    ///   prononce pas n'offre pas la sortie.
     static func offered(
         isLocked: Bool,
         isBackground: Bool,
         sharesPlaneWithAnother: Bool,
-        hasEditor: Bool
+        hasEditor: Bool,
+        canLeaveScene: Bool = false
     ) -> [StoryCanvasContextAction] {
         let empile = !isBackground && sharesPlaneWithAnother
         var servies: [StoryCanvasContextAction] = []
         if !isLocked, hasEditor { servies.append(.edit) }
         if !isLocked { servies.append(.duplicate) }
         if empile { servies.append(contentsOf: [.bringForward, .sendBackward]) }
+        // Un FOND se sort aussi — c'est même le cas nominal en Post. La sortie
+        // ne dépend donc pas du plan, contrairement à l'empilement. Le VERROU,
+        // lui, la refuse : sortir le badge d'attribution d'une republication
+        // retirerait l'attribution, ce que le verrou existe pour empêcher.
+        if !isLocked, canLeaveScene { servies.append(.leaveScene) }
         if !isLocked { servies.append(.delete) }
         return servies
     }
@@ -63,6 +82,7 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
         case .duplicate:    return "Dupliquer"
         case .bringForward: return "Mettre au premier plan"
         case .sendBackward: return "Mettre à l'arrière"
+        case .leaveScene:   return "Sortir de la scène"
         case .delete:       return "Supprimer"
         }
     }
@@ -73,6 +93,7 @@ nonisolated enum StoryCanvasContextAction: CaseIterable, Sendable, Equatable {
         case .duplicate:    return "doc.on.doc"
         case .bringForward: return "square.3.stack.3d.top.filled"
         case .sendBackward: return "square.2.stack.3d.bottom.filled"
+        case .leaveScene:   return "rectangle.portrait.and.arrow.right"
         case .delete:       return "trash"
         }
     }
@@ -110,7 +131,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 isLocked: isLockedItem(id: id),
                 isBackground: isBackgroundItem(id: id),
                 sharesPlaneWithAnother: foregroundSiblingExists(besides: id),
-                hasEditor: onItemDoubleTapped != nil
+                hasEditor: onItemDoubleTapped != nil,
+                canLeaveScene: canLeaveScene
             )
             .map { action in
                 UIAction(title: action.title,
@@ -125,6 +147,11 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// Le FOND n'est pas dans le plan : l'empiler ne veut rien dire. Lu sur
     /// l'objet lui-même plutôt que sur `hitTestItem`, qui l'exclut déjà — la
     /// règle doit rester vraie même si un appelant futur vise un fond.
+    /// « Sortir de la scène » a-t-elle quelqu'un derrière elle ? Même
+    /// prédicat que `hasEditor` pour « Modifier » : une action sans relais
+    /// n'a aucun effet, donc n'est pas offerte (loi 4).
+    var canLeaveScene: Bool { onItemLeftScene != nil }
+
     func isBackgroundItem(id: String) -> Bool {
         slide.effects.mediaObjects?.first(where: { $0.id == id })?.isBackground == true
             || slide.effects.audioPlayerObjects?.first(where: { $0.id == id })?.isBackground == true
@@ -165,6 +192,9 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         case .duplicate:    contextDuplicate(id: id)
         case .bringForward: bringForward(id: id)
         case .sendBackward: sendBackward(id: id)
+        // DÉLÉGUÉE : le SDK ne sait pas ce qu'est « redevenir une slide du
+        // post ». Il rend l'objet à l'hôte, qui décide de son sort.
+        case .leaveScene:   onItemLeftScene?(id, kind)
         case .delete:       contextDelete(id: id)
         }
     }
