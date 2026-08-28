@@ -68,6 +68,21 @@ La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « to
 changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
 qui a été touché, l'app décide ce que cela sélectionne.**
 
+**L'amorce « dernière capture » paraît enfin (#4036).** Elle est construite, câblée et documentée
+depuis S5 — l'ancre A4 promet « la dernière photo accessible en 1 geste » — et ne s'était **jamais
+affichée**, même autorisation complète accordée : l'auteur voyait la capsule « Galerie » à sa place.
+
+La cause était un mode de livraison PhotoKit. `.fastFormat` ne rend que ce qui est **déjà local** et
+ne télécharge jamais — `isNetworkAccessAllowed` ne le gouverne pas. Un asset iCloud dont la vignette
+locale a été purgée (le cas nominal sous « optimiser le stockage », réglage par **défaut**) rendait
+donc `nil`, et l'amorce disparaissait sans un mot. Le code AUTORISAIT pourtant le rapatriement
+réseau, deux lignes plus bas : une intention posée qu'aucun réglage n'honorait.
+
+> **Un repli qui rend `nil` en silence ne se voit pas dans les tests : il se voit à l'écran, sous la
+> forme d'une affordance qui n'arrive jamais.** Il ne s'attrape donc ni en lisant le code — qui a
+> l'air complet — ni en comptant les tests, mais en OUVRANT l'écran et en cherchant ce que la spec y
+> promet.
+
 **Le socle RÉTRÉCIT aux grandes tailles de texte, il ne se casse pas (#4057).** Ses deux zones
 nommées portent un pictogramme et un mot ; aux paliers d'accessibilité, le mot ne tient plus. Mesuré
 en allemand à `accessibility-XXXL` : « Veröffentlichen » se cassait en syllabes **empilées** —
