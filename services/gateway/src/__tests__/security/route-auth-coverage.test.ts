@@ -481,6 +481,33 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     expect(routes.length).toBeGreaterThan(100);
   });
 
+  // -------------------------------------------------------------------------
+  // Le segment doublé (#4141)
+  // -------------------------------------------------------------------------
+  // `registerRevokeAllSessionsRoute` déclarait '/auth/revoke-all-sessions' sur
+  // une instance que `route-registration.ts` monte DÉJÀ sous
+  // `${API_PREFIX}/auth`. Le chemin réel était donc
+  // `/api/v1/auth/AUTH/revoke-all-sessions`, quand l'e-mail « nouvelle
+  // connexion détectée » envoie `/api/v1/auth/revoke-all-sessions` : le lien
+  // « ce n'était pas moi » — SEUL site du dépôt qui coupe réellement les
+  // sockets d'un intrus — répondait 404.
+  //
+  // Le défaut ne se voit dans aucun fichier pris isolément : la déclaration est
+  // correcte, le montage est correct, c'est leur COMPOSITION qui est fausse.
+  // Il ne peut donc s'attraper que sur le serveur ASSEMBLÉ, et c'est pourquoi
+  // cette garde vit ici plutôt que dans un test du module de routes.
+  it('ne monte aucune route dont un segment est immédiatement répété', () => {
+    const doublons = routes
+      .map((route) => {
+        const segments = route.url.split('/').filter(Boolean);
+        const doublon = segments.find((segment, i) => i > 0 && segment === segments[i - 1]);
+        return doublon ? `${route.method} ${route.url}  (segment « ${doublon} » répété)` : null;
+      })
+      .filter((ligne): ligne is string => ligne !== null);
+
+    expect(doublons).toEqual([]);
+  });
+
   it('rejette tout appelant totalement anonyme (401/403) sur toute route qui ne figure ni dans PUBLIC_ROUTES ni dans KNOWN_GAPS', async () => {
     const failures: string[] = [];
     const unusedPublic = new Set(PUBLIC_ROUTES.map((e) => `${e.method} ${e.url}`));

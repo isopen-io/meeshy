@@ -27,6 +27,13 @@ jest.mock('../../../routes/me/export', () => ({
 
 import meRoutes from '../../../routes/me/index';
 
+// Le plugin est monté sous le préfixe RÉEL de la production
+// (`route-registration.ts` : `${API_PREFIX}/me`). C'est le seul montage qui
+// puisse voir un défaut de COMPOSITION : la route déclarait '/me' sous ce
+// préfixe, servait donc `/api/v1/me/me`, et un test qui l'enregistre sans
+// préfixe la trouvait toujours (#4141).
+const PREFIXE_PRODUCTION = '/api/v1/me';
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -66,7 +73,7 @@ async function buildApp(prismaOverrides: any = {}, authenticated = true): Promis
   });
   app.decorate('prisma', makePrisma(prismaOverrides) as any);
 
-  await app.register(meRoutes);
+  await app.register(meRoutes, { prefix: PREFIXE_PRODUCTION });
   await app.ready();
   return app;
 }
@@ -79,7 +86,7 @@ describe('GET /me — not authenticated', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 401 when not authenticated', async () => {
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(401);
   });
 });
@@ -92,14 +99,14 @@ describe('GET /me — no registered user in auth context', () => {
       (req as any).authContext = { isAuthenticated: true, userId: USER_ID, registeredUser: null };
     });
     app2.decorate('prisma', makePrisma() as any);
-    await app2.register(meRoutes);
+    await app2.register(meRoutes, { prefix: PREFIXE_PRODUCTION });
     await app2.ready();
     app = app2;
   });
   afterAll(async () => { await app.close(); });
 
   it('returns 401 when registeredUser is missing', async () => {
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(401);
   });
 });
@@ -112,7 +119,7 @@ describe('GET /me — user not found in DB', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 404 when user is not found', async () => {
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(404);
   });
 });
@@ -123,7 +130,7 @@ describe('GET /me — success', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 200 with user data', async () => {
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
@@ -141,7 +148,7 @@ describe('GET /me — DB error', () => {
   afterAll(async () => { await app.close(); });
 
   it('returns 500 on DB error', async () => {
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(500);
   });
 });

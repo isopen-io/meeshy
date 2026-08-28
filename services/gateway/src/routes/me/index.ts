@@ -28,9 +28,17 @@ export default async function meRoutes(fastify: FastifyInstance) {
   // await fastify.register(settingsRoutes);
   // await fastify.register(devicesRoutes);
 
-  // Optional: Add a root /me endpoint for user info
+  // La racine du module, PAS '/me' : `route-registration.ts` monte déjà ce
+  // plugin sous `${API_PREFIX}/me`, si bien que le chemin réel était
+  // `/api/v1/me/me` — une adresse qu'aucun client du dépôt n'appelle (vérifié
+  // sur web, iOS, SDK et Android : toutes les occurrences de `/me` y sont des
+  // routes de PAGE ou des liens profonds). La route était donc inatteignable,
+  // et le commentaire d'origine — « a root /me endpoint » — disait bien
+  // l'intention. Même défaut que #4141, trouvé par la garde de segment doublé
+  // posée dans le même lot ; l'unification du compte sous une seule adresse
+  // reste portée par #4178.
   fastify.get(
-    '/me',
+    '/',
     {
       preValidation: [fastify.authenticate],
       schema: {

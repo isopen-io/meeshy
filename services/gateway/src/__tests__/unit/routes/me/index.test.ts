@@ -73,6 +73,13 @@ jest.mock('../../../../services/ConsentValidationService', () => ({
 import meRoutes from '../../../../routes/me/index';
 import type { UnifiedAuthRequest } from '../../../../middleware/auth';
 
+// Le plugin est monté sous le préfixe RÉEL de la production
+// (`route-registration.ts` : `${API_PREFIX}/me`). C'est le seul montage qui
+// puisse voir un défaut de COMPOSITION : la route déclarait '/me' sous ce
+// préfixe, servait donc `/api/v1/me/me`, et un test qui l'enregistre sans
+// préfixe la trouvait toujours (#4141).
+const PREFIXE_PRODUCTION = '/api/v1/me';
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const USER_ID = 'usr-me-test-00001';
@@ -121,7 +128,7 @@ async function buildApp(opts: {
     }
   });
 
-  await app.register(meRoutes);
+  await app.register(meRoutes, { prefix: PREFIXE_PRODUCTION });
   await app.ready();
   return app;
 }
@@ -134,7 +141,7 @@ describe('GET /me — authenticated user', () => {
   afterAll(() => app.close());
 
   it('returns 200 with user data', async () => {
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
@@ -146,7 +153,7 @@ describe('GET /me — authenticated user', () => {
 describe('GET /me — unauthenticated', () => {
   it('returns 401 when not authenticated', async () => {
     const app = await buildApp({ auth: 'unauthenticated' });
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(401);
     await app.close();
   });
@@ -157,7 +164,7 @@ describe('GET /me — user not found in DB', () => {
     const prisma = makePrisma();
     prisma.user.findUnique = jest.fn<any>().mockResolvedValue(null);
     const app = await buildApp({ prisma });
-    const res = await app.inject({ method: 'GET', url: '/me' });
+    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(404);
     await app.close();
   });
