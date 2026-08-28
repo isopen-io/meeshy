@@ -12285,3 +12285,37 @@ nouveau suivi ouvert par cette Vague : le patron `connected`-only est désormais
 champs de la fonction qui en avaient besoin (`avgRtt`, `avgPacketLoss`, `qualityDistribution`) — un
 audit ultérieur pourrait vérifier qu'aucun futur champ de `CallReliabilitySummary` ne réintroduit la
 même dilution.
+
+## Vague 181 — `endCall()` ne devenait idempotent que sur une des deux branches « déjà terminé » (gateway) (2026-08-28)
+
+Point d'entrée : routine automatique d'amélioration continue (audio/vidéo calling), première Vague
+sous la nouvelle gouvernance issue-first (directive CLAUDE.md 2026-08-26 — désormais chaque Vague
+ouvre son issue GitHub dans le milestone #6 « Appels audio/vidéo fonctionnels sur les trois paires »
+avant tout code). Audit délégué sur gateway/web (seule zone testable localement dans ce conteneur),
+en évitant les familles déjà closes des Vagues 148-180 (ci-dessus).
+
+En lisant `git log` sur les fichiers calling depuis la dernière Vague, une session antérieure du même
+jour avait fermé #3581 (commit `86052377`, « `endCall()` devient idempotent ») en rendant la garde de
+LECTURE INITIALE de `CallService.endCall()` idempotente (`throw CallAlreadyEndedError` au lieu de
+`return` silencieux quand l'appel est déjà terminal au moment de la lecture). La branche jumelle —
+`outcome === 'conflict'` (Mongo P2034, perte de la course d'écriture optimiste PENDANT la transaction :
+deux `call:end` quasi-simultanés, ou une course contre `CallCleanupService`/le timeout de sonnerie) —
+retournait toujours silencieusement la session courante, exactement le motif que #3581 venait de
+fermer sur l'autre branche. Le perdant de cette course tombait donc dans le chemin authoritatif côté
+appelant : rediffusion de `call:ended`, re-post du résumé d'appel, re-déclenchement de la notification
+d'appel manqué pour un call qu'il n'a pas réellement terminé.
+
+Fix (issue #4202, PR #4203) : la branche `conflict` lève désormais `CallAlreadyEndedError(current.endReason
+?? CallEndReason.completed)`, même classe/contrat que la garde de lecture initiale — les deux appelants
+(`CallEventsHandler.call:end`, `routes/calls.ts DELETE /calls/:callId`) l'absorbent déjà génériquement,
+aucun changement côté appelant. TDD : test existant qui encodait l'ancien comportement fautif converti
+en RED (`rejects.toBeInstanceOf(CallAlreadyEndedError)`, confirmé rouge sur la source non patchée) puis
+GREEN. `CallService.test.ts` : 228/228. Filtre calling-stack complet
+(`CallEventsHandler|CallService|CallCleanupService|calls-routes|call-`) : 57 suites / 1239 tests, 0
+échec. `tsc --noEmit` propre. CI PR #4203 : 15/15 checks verts (Trivy neutral, Voice E2E Benchmark
+skipped par design), aucun commentaire de revue, `mergeable_state: clean` — mergé sur `main`
+(`f952012b`).
+
+Suivi identifié, non traité dans ce lot (à ouvrir en issue séparée si retenu) : `leaveCall()` a une
+branche de conflit de version structurellement identique (`CallService.ts` ~ligne 1877, « Leave-triggered
+call end lost race... ») qui retourne toujours silencieusement — mérite le même examen.
