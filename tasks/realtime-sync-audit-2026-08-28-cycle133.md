@@ -1,170 +1,126 @@
-# Cycle 133 — un déclencheur PÉRENNE seul ne converge pas, et un abonné mort fait croire que le canal est branché
+# Cycle 133 — l'annonce arrivait bien ; elle atterrissait sur le jumeau que personne ne lit
 
-Date : 2026-08-28 · Issue : #4201 · Branche : `claude/keen-hamilton-t861y6`
+Date : 2026-08-28 · Issue : #4207 · Branche : `claude/keen-hamilton-d5piu9`
 
-Leçon : `tasks/lessons.md` § **Leçon 311**. Base : cycle 132 (#4197, PR #4198),
-dont c'est le suivi MESURÉ — « iOS et web n'ont pas été mesurés sur cette
-question ».
+Leçon : `tasks/lessons.md` § **Leçon 311**. Base : cycle 132 (#4197), dont le
+« Suivi MESURÉ » disait, mot pour mot : *« iOS et web n'ont pas été mesurés sur
+cette question »*. Ce cycle a mesuré le web.
 
-## Le balayage demandé
+## La question reprise du cycle 132
 
-La question du cycle 132 : **un magasin local dont l'unique source est une
-diffusion**. Posée aux deux autres clients, elle rend un verdict par client.
-
-| client | déclencheur VIF (diffusion) | déclencheur PÉRENNE (cycle de vie) | verdict |
-|---|---|---|---|
-| Android (cycle 132) | `PreferencesSocketManager` | **manquait** → livré au cycle 132 | complet |
-| web | `use-socket-cache-sync` invalide `queryKeys.preferences.category(…)` | React Query : `refetchOnReconnect: 'always'` + `refetchOnWindowFocus: 'always'` | complet |
-| **iOS** | **manquant** | `observeAuth` + `observeForeground` | **incomplet — l'inverse exact d'Android** |
-
-Le défaut cherché était « une synchronisation qui n'a que le vif ». iOS porte sa
-**symétrique** : une synchronisation qui n'a que le pérenne. Elle ne se voit pas
-avec la même question — il faut poser les deux.
+Le cycle 132 cherchait, sur Android, **un magasin local dont l'unique source est
+une diffusion**. Portée au web, la question rend une réponse plus embarrassante
+que sur Android : la diffusion arrive, elle est décodée, elle est routée — et
+elle atterrit sur un exemplaire que **personne ne lit**.
 
 ## Le défaut
 
-`UserPreferencesManager` (SDK) n'avait que deux déclencheurs, tous deux de cycle
-de vie :
+Le web tient DEUX exemplaires des préférences user-level :
 
-| déclencheur | site | limite |
+| exemplaire | qui l'écrit | qui le lit |
 |---|---|---|
-| ouverture de session | `observeAuth()` → `fetchFromBackend()` | une fois par login |
-| retour au premier plan | `observeForeground()` | **étranglé à 5 min** (`minSyncInterval`) |
+| cache React Query `queryKeys.preferences.category(c)` | `usePreferences(c)` — les écrans de réglages | l'écran de réglages **monté**, et lui seul |
+| store Zustand `user-preferences-store` | `initialize()` au montage | **les bulles de messagerie** (`DeliveryIndicator`, `FocalRow`, `BubbleMessageNormalView`) et l'écran de chiffrement |
 
-Conséquence : un réglage changé sur le web ou sur Android n'atteignait pas
-l'iPhone tant qu'il restait au premier plan — et un aller-retour vers l'app dans
-les cinq minutes suivant la dernière synchro était **sauté par l'étranglement**,
-donc ne rattrapait rien non plus. Le bloc `notification` étant miroité dans l'App
-Group que lit `NSEPreferencesGate`, « périmé » veut dire ici, littéralement : le
-téléphone continue de sonner selon une règle que l'utilisateur vient de changer
-ailleurs.
+Les TROIS routes par lesquelles un changement de catégorie s'annonce visaient
+toutes le premier :
 
-L'étranglement mérite d'être nommé pour lui-même : **il est correct pour le
-déclencheur qu'il garde et faux comme unique politique de fraîcheur.** Rouvrir
-l'app n'est la preuve de rien ; une diffusion est la preuve que quelque chose a
-bougé. Les traiter pareil, c'est appliquer à une PREUVE la retenue qu'on réserve
-à un SOUPÇON.
+| route | site | ce qu'elle faisait |
+|---|---|---|
+| un autre **appareil** | `use-socket-cache-sync.ts`, branche `'category' in data` | `invalidateQueries(preferences.category(c))` |
+| un autre **onglet** | `lib/settings-sync.ts` → `handleSyncMessage` | la même invalidation |
+| l'onglet **courant** | `usePreferences` → `onSuccess` | `setQueryData` sur la même clé |
 
-## Ce qui rendait le trou invisible
+Et le second exemplaire — celui que la messagerie REND — n'avait qu'une source :
+`initialize()`, appelé une fois au montage de `StoreInitializer` (`useEffect` à
+dépendances vides).
 
-La diffusion **arrive** pourtant sur iOS : le gateway l'émet
-(`preferences-broadcast.ts`), `MessageSocketManager` la décode et la publie sur
-`userPreferencesUpdated` (scope catégorie, `{ userId, category }`).
+Couper « accusés de lecture » laissait donc les coches de livraison en place
+**jusqu'à un rechargement complet de la page**. Depuis un autre appareil, depuis
+un autre onglet — et depuis **l'écran de réglages du même onglet**, puisque
+`PrivacySettings` écrit par React Query et que `DeliveryIndicator` lit le store
+Zustand. Le geste le plus direct qu'un utilisateur puisse faire sur cette
+préférence était le cas le plus visible du défaut.
 
-Elle avait même un abonné — un seul, dans `ConversationListViewModel` — et cet
-abonné ne pouvait **jamais** s'exécuter :
-
-```swift
-guard let self, let convId = event.conversationId else { return }
-```
-
-Depuis que l'union a été scindée en deux publishers (`3114acbe3`), le site de
-décodage route toute charge portant un `conversationId` vers
-`userPreferencesConversationUpdated` ; le publisher plat ne porte donc, par
-construction, que `conversationId == nil`. Le `guard` sortait à chaque
-événement.
-
-Le publisher avait ainsi **zéro abonné effectif** : le scope qu'il porte n'avait
-pas de lecteur, et le scope que son unique abonné attendait ne lui était plus
-livré. Le SDK le disait déjà en toutes lettres, douze lignes plus haut —
-« Routed separately from `userPreferencesUpdated` (category scope) ». C'est le
-`guard` qui n'a pas suivi la scission, pas la documentation qui manquait.
-
-Le chemin conversation, lui, ne perdait rien : il arrive par
-`ConversationStoreSocketBridge` → `ConversationStore.applyRemote` →
-`observeStore()` → `mergeUserStateFromStore`. Le sink était donc mort **et**
-redondant — ce qui explique que personne ne l'ait remarqué, et ce qui rendait
-son coût réel invisible : il faisait paraître le canal BRANCHÉ.
-
-### Trois témoins verts gardaient le chemin mort
-
-`ConversationListViewModelTests` poussait
-`UserPreferencesUpdatedEvent(category: "conversation", conversationId: "conv1")`
-— une forme que le décodeur de production **ne peut pas produire sur ce
-publisher**. Trois assertions vertes, sur un sink que le fil ne pouvait plus
-atteindre.
-
-C'est la même faille de méthode que la note web sur `bridge: undefined` (« un
-payload construit à la main porte la clé ; sur le fil la question ne se pose
-pas ») : **un témoin qui fabrique sa charge utile peut prouver un chemin que le
-fil ne peut pas emprunter.**
+Une invalidation ne relit que s'il existe un OBSERVATEUR de la clé. Hors de
+l'écran de réglages de la catégorie, il n'y en a aucun : les trois routes
+étaient donc, dans le cas nominal, des no-ops complètes.
 
 ## Ce qui change
 
 | site | ce qui change |
 |---|---|
-| `UserPreferencesManager` | troisième déclencheur : `observeRemotePreferenceBroadcast()`, câblé dans `init()` à côté des deux autres ; `namesUserLevelCategory` (décision pure) ; `remoteRefreshCoalescingWindow` |
-| `ConversationListViewModel` | le sink mort est retiré, remplacé par la note qui dit pourquoi il ne pouvait plus s'exécuter et où va désormais ce scope |
-| `UserPreferencesManagerTests` | +8 témoins (scope, câblage, regroupement, veto d'écho, garde d'authentification) |
-| `ConversationListViewModelTests` | les trois témoins du chemin mort remplacés par UN témoin des deux moitiés du contrat réel |
+| `lib/preferences/mirrored-preference-categories.ts` (NOUVEAU) | la règle du double : quelle catégorie est doublée, et comment elle se relit |
+| `hooks/queries/use-socket-cache-sync.ts` | la branche catégorie délivre l'annonce au double, après avoir invalidé la clé |
+| `lib/settings-sync.ts` | `handleSyncMessage` (autre onglet) **et** `broadcastPreferenceUpdate` (onglet courant) la délivrent aussi |
 
-### Pourquoi une RELECTURE, et non une application de charge utile
+### Pourquoi la règle vit à un seul site, et les routes n'en savent rien
 
-L'événement ne porte aucune valeur : le gateway émet `{ userId, category }`.
-C'est une INVALIDATION, exactement comme côté web
-(`queryClient.invalidateQueries`). Le geste est donc `fetchFromBackend()`,
-réutilisé **tel quel** — il porte déjà les trois politiques que ce chemin doit
-respecter : la garde d'authentification, le veto `pendingCategories` (via
-`applyRemote`) et « un échec réseau ne remet rien à zéro ».
+Les trois routes passent la catégorie **telle quelle** ; c'est
+`refreshMirroredPreferenceCategory` qui décide. Écrire la liste des catégories
+doublées dans le routeur socket l'aurait mise en trois exemplaires — la forme
+exacte du défaut qu'on répare, un étage plus haut.
 
-### Pourquoi le veto n'a pas eu à être écrit
+### Pourquoi `broadcastPreferenceUpdate`, et non un quatrième appel dans `usePreferences`
 
-Le cycle 132 a dû inventer son veto (`hasDeliverable`) parce qu'Android n'en
-avait pas. iOS en avait déjà un, pour la même raison et sous une autre forme :
-`pendingCategories` + `shouldApplyRemote`, posés pour empêcher un
-`fetchFromBackend()` de foreground d'écraser une édition locale en attente.
+`BroadcastChannel` **ne délivre jamais à l'émetteur**. L'onglet qui fait le geste
+est donc le seul que la route inter-onglets ne couvre pas — et c'est celui de
+l'utilisateur. Faire porter la relecture par `broadcastPreferenceUpdate`, déjà
+appelé par les deux mutations (`PATCH` et `PUT`) à chaque succès, couvre ce cas
+sans ajouter un site d'appel. Témoin dédié : la relecture est due **canal ou
+pas** — un navigateur sans `BroadcastChannel` doit voir son propre changement.
 
-L'écho — le gateway renvoie au compte ÉMETTEUR la diffusion déclenchée par son
-propre PATCH — est **exactement** la course que ce veto garde, arrivée par une
-porte de plus. Un témoin dédié le tient sur ce chemin-là aussi
-(`test_remoteBroadcast_echoOfOwnPendingEdit_doesNotUndoTheGesture`) : c'est la
-règle du cycle 132 (« une relecture qui gagne la course contre l'écriture locale
-qu'elle double ANNULE un geste de l'utilisateur ») vérifiée, pas re-implémentée.
+### Pourquoi `privacy` seule, et pourquoi elle en relit DEUX
 
-### Pourquoi un regroupement de 300 ms
+Mesuré : `privacy` est la seule catégorie dont le bloc Zustand a un lecteur hors
+des réglages. Le bloc `notifications` du store **n'a aucun consommateur en
+production** (l'écran `/notifications/preferences` tient son propre état local,
+et `useNotificationPreferences` n'est exporté que par le baril) ; les cinq
+autres catégories sont lues à la demande par l'écran qui les affiche. Leur
+donner une relecture ici serait une requête de plus pour zéro fraîcheur de plus
+— même arbitrage qu'au cycle 132 pour les cinq catégories sans magasin.
 
-`DELETE /me/preferences` émet **une fois par catégorie effacée** — sept
-événements pour un geste — et il n'existe pas de `GET` par catégorie
-(`PreferenceServiceProviding` n'expose que `getAllPreferences()`). Sans fenêtre,
-une remise à zéro globale coûtait sept lectures complètes. La fenêtre garantit
-en prime que la lecture part APRÈS le dernier événement de la rafale.
+`syncPrivacy` et `syncEncryption` sont en revanche deux projections de la MÊME
+ligne (`GET /me/preferences/privacy`) : une annonce `privacy` périme les deux,
+donc les deux se relisent.
 
-### Pourquoi `namesUserLevelCategory` exige un nom CONNU
+### La course du cycle 132, mesurée ici aussi
 
-Le scope conversation est déjà routé ailleurs, donc `conversationId == nil` est
-vrai en production sur ce publisher : la seconde condition (le `category` tombe
-dans les sept `PreferenceCategory`) pourrait passer pour redondante. Elle ne
-l'est pas. Un nom hors des sept gelés — charge fabriquée, gateway plus récent,
-scope à venir — n'est pas une raison de relire sept blocs. **On exige que le nom
-soit reconnu plutôt que de faire confiance à l'absence d'un champ voisin** : la
-première formulation vieillit avec le contrat, la seconde avec le décodeur.
+Le cycle 132 a posé un veto parce qu'une relecture pouvait **annuler un geste**
+resté dans l'outbox. Le web n'a pas d'outbox pour ces écritures : elles sont en
+ligne d'abord, et chacune des trois annonces est POSTÉRIEURE à la persistance
+(la diffusion est émise par la passerelle après écriture ; `broadcastPreferenceUpdate`
+est appelé dans le `onSuccess` de la mutation). Une relecture rend donc toujours
+au moins ce que l'écriture qui l'a déclenchée a posé. Aucun veto n'est requis —
+et l'écrire quand même aurait été une garde sans sujet.
 
 ## Gates
 
 | gate | résultat |
 |---|---|
-| `UserPreferencesManagerTests` (+8) | les sept noms du gateway déclenchent ; un scope conversation ne déclenche pas (même quand son `category` porte par hasard un nom user-level) ; un nom inconnu ne déclenche pas ; une diffusion relit ET applique ; sept événements ⇒ UNE lecture ; l'écho d'un geste en attente ne le défait pas ; non authentifié ⇒ aucune lecture |
-| `ConversationListViewModelTests` (−3 morts, +1) | une diffusion de scope catégorie ne déplace aucune ligne, ET la même ligne suit bien le store — les deux moitiés dans un seul témoin, donc l'assertion négative ne peut pas passer pour une bonne raison |
-| `sdk-tests.yml` / `ios.yml` | délégués à CI (macOS) — aucun toolchain Swift dans ce conteneur, mesuré à nouveau (`which swift swiftc xcodebuild` : rien). Les deux workflows sont déclenchés par ce lot (`packages/MeeshySDK/**` et `apps/ios/**`) |
-| gateway / web / Android | **non modifiés** — aucun contrat de fil touché ; ce lot n'ajoute qu'un abonné à un événement qui existe déjà et voyage déjà |
+| `__tests__/lib/mirrored-preference-categories.test.ts` (nouveau, 5) | la catégorie `privacy` relit ses DEUX projections ; les six autres ne relisent rien ; un nom inconnu du client ne lève pas ; un échec de relecture ne produit aucun rejet non capturé |
+| `__tests__/lib/settings-sync.test.ts` (nouveau, 5) | les deux routes locales — l'autre onglet et l'onglet courant ; `user-updated` ne relit rien ; la relecture est due sans `BroadcastChannel` et sans `initSettingsSync` |
+| `hooks/queries/__tests__/use-socket-cache-sync.test.ts` (+3, 54 au total) | la branche catégorie délivre l'annonce, la passe TELLE QUELLE (la règle vit à un seul site), et les scopes conversation / communauté ne relisent aucun double |
+| `npx jest __tests__/stores __tests__/lib hooks/queries/__tests__` | 83 suites, 1683 témoins verts |
+| `tsc --noEmit` (apps/web) | aucune erreur sur les fichiers touchés (le bruit préexistant des `__tests__` est inchangé) |
+| `eslint` | **non exécutable dans ce conteneur** : `eslint@10` + `eslint-plugin-react@7.37.5` lèvent `contextOrFilename.getFilename is not a function` sur N'IMPORTE quel fichier (mesuré sur `lib/utils.ts`, non touché) — panne préexistante, déléguée à la CI |
+| gateway / iOS / Android | **non modifiés** — aucun contrat de fil touché ; ce lot ne change qu'un routage côté web |
 
 ## Suivi MESURÉ
 
-- **La NSE lit un miroir que seul le processus de l'APP rafraîchit.** Ce lot
-  raccourcit la fenêtre de péremption (une diffusion reçue app ouverte écrit
-  désormais le miroir App Group), il ne la ferme pas : application tuée, aucun
-  processus n'écoute, et `NSEPreferencesGate` sert la dernière valeur écrite. La
-  garde qui compte dans ce cas est **serveur** — c'est elle qui décide de ne pas
-  pousser. Mesurer que les deux gardes disent la même chose (et laquelle prime)
-  est un lot à part, et il vaut pour les trois plateformes.
-- **Les trois témoins de décodage de `UserPreferencesUpdatedEvent`**
-  (`MessageSocketMiscEventTests`, `category: "pin" | "mute" | "reaction"`)
-  décrivent une charge que le gateway n'émet pas : le scope conversation ne
-  porte pas de `category` du tout, et le scope catégorie n'en porte que sept
-  noms. Ils testent la TOLÉRANCE du décodeur, ce qui est légitime, mais leurs
-  valeurs entretiennent le modèle mental faux qui a produit ce cycle. Les
-  ré-ancrer sur des charges réelles est un lot de propreté, sans défaut de
-  justesse.
-- **`ConversationListViewModel` reste à 2505 lignes**, très au-delà du budget
-  800–1100. Ce lot en RETIRE, il n'en ajoute pas ; le découpage par
-  responsabilité reste à faire et n'appartient pas à un lot de synchronisation.
+- **Le web n'a toujours qu'un déclencheur ÉPHÉMÈRE pour ce double.** Ce lot
+  répare le trajet de l'annonce ; il ne donne pas au store la seconde source
+  PÉRENNE que le cycle 132 a donnée à Android. Un onglet resté ouvert pendant
+  une coupure de socket ne reçoit jamais la diffusion, et rien ne la rejoue à la
+  reconnexion. `useConnectionStatus` expose déjà la transition — c'est un lot à
+  part, et c'est exactement la leçon 310 rejouée sur l'autre client.
+- **La route socket n'est montée que sur les écrans de conversation**
+  (`useSocketCacheSync` est appelé par `ConversationLayout` et
+  `bubble-stream-page`). C'est suffisant pour le symptôme visé — les bulles sont
+  sur cet écran — mais un changement fait ailleurs pendant qu'aucune
+  conversation n'est ouverte n'atteint le double qu'au prochain montage.
+- **`syncAll()` lit `/me/preferences/privacy` DEUX fois** au démarrage
+  (`syncEncryption` puis `syncPrivacy`, deux projections d'une seule ligne).
+  Défaut de performance préexistant, non touché ici : le fusionner change la
+  forme des deux actions et de leurs témoins.
+- **iOS n'a toujours pas été mesuré** sur la question du cycle 132.
