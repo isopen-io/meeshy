@@ -1016,29 +1016,25 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        messageSocket.userPreferencesUpdated
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                guard let self, let convId = event.conversationId else { return }
-                if let idx = convIndex(for: convId) {
-                    var conv = conversations[idx]
-                    if let isPinned = event.isPinned { conv.userState.isPinned = isPinned }
-                    if let isMuted = event.isMuted { conv.userState.isMuted = isMuted }
-                    if let isArchived = event.isArchived { conv.userState.isArchived = isArchived }
-                    if let mentionsOnly = event.mentionsOnly { conv.userState.mentionsOnly = mentionsOnly }
-                    if let categoryId = event.categoryId { conv.userState.sectionId = categoryId }
-                    if let reaction = event.reaction { conv.userState.reaction = reaction }
-                    if let customName = event.customName { conv.userState.customName = customName }
-                    if let tags = event.tags {
-                        conv.tags = tags.enumerated().map { index, name in
-                            MeeshyConversationTag(name: name, color: MeeshyConversationTag.colors[index % MeeshyConversationTag.colors.count])
-                        }
-                    }
-                    conversations[idx] = conv
-                    schedulePersist()
-                }
-            }
-            .store(in: &cancellables)
+        // (Retiré) abonnement à `messageSocket.userPreferencesUpdated`.
+        //
+        // Ce sink greffait pin/mute/archive/section/réaction/tags sur la ligne
+        // NOMMÉE par `event.conversationId`, derrière un `guard … else { return }`
+        // — et ce guard ne pouvait plus jamais passer. Depuis que l'union
+        // `user:preferences-updated` a été scindée en deux publishers, le site de
+        // décodage (`MessageSocketManager`) route toute charge portant un
+        // `conversationId` vers `userPreferencesConversationUpdated` ; le publisher
+        // plat ne porte, par construction, que le scope CATÉGORIE (`{ userId,
+        // category }`), donc `conversationId == nil` à chaque émission.
+        //
+        // Le scope conversation ne perd rien : il arrive par
+        // `ConversationStoreSocketBridge` → `ConversationStore.applyRemote` →
+        // `observeStore()` → `mergeUserStateFromStore`, source de vérité de
+        // `userState` pour cette liste. Ce sink était donc mort ET redondant —
+        // mais il faisait paraître le publisher plat ABONNÉ, et rendait par là
+        // invisible le fait que le scope qu'il porte réellement (les sept
+        // catégories user-level) n'avait aucun lecteur sur iOS. Il en a un
+        // depuis #4201 : `UserPreferencesManager.observeRemotePreferenceBroadcast`.
 
         messageSocket.conversationUpdated
             .receive(on: DispatchQueue.main)

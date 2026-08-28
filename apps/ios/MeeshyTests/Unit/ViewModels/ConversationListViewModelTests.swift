@@ -1863,47 +1863,45 @@ final class ConversationListViewModelTests: XCTestCase {
     }
 
     // MARK: - Socket: user preferences updated
+    //
+    // Les trois témoins qui vivaient ici poussaient un
+    // `UserPreferencesUpdatedEvent(category: "conversation", conversationId:
+    // "conv1")` — une forme que le décodeur de PRODUCTION ne peut pas produire
+    // sur ce publisher : depuis la scission de l'union, toute charge portant un
+    // `conversationId` est routée vers `userPreferencesConversationUpdated`, et
+    // le publisher plat ne porte que le scope CATÉGORIE. Ils gardaient donc un
+    // sink que le fil ne pouvait plus atteindre, et par là même rendaient
+    // invisible l'absence du seul abonné qui comptait (#4201).
+    //
+    // Ce qui les remplace dit les DEUX moitiés du contrat réel : la ligne suit
+    // le STORE, et le publisher plat ne la touche pas.
 
-    func test_socketUserPreferencesUpdated_updatesPinState() async throws {
+    func test_conversationScopePreference_movesTheRow_throughTheStore_notTheFlatPublisher() async throws {
+        let store = Self.makeTestStore()
         let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket, store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        await sut.storeHydrationTask?.value
 
+        // Le publisher PLAT ne porte que le scope catégorie (`{ userId,
+        // category }`) : il ne nomme aucune conversation et ne doit donc rien
+        // déplacer dans la liste. Sa destination est
+        // `UserPreferencesManager.observeRemotePreferenceBroadcast` (SDK).
         messageSocket.userPreferencesUpdated.send(
-            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "conv1", isPinned: true, isMuted: nil)
+            UserPreferencesUpdatedEvent(userId: "user1", category: "notification")
         )
+        await drainMainQueue()
 
-        try await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertFalse(sut.conversations[0].userState.isPinned,
+                       "une diffusion de scope catégorie ne nomme aucune conversation — la ligne ne bouge pas")
 
-        XCTAssertTrue(sut.conversations[0].userState.isPinned)
-    }
+        // Le scope conversation, lui, arrive par ConversationStoreSocketBridge →
+        // ConversationStore → observeStore() → mergeUserStateFromStore.
+        try await store.apply(.setPinned(true), for: "000000000000000000000001")
+        try? await Task.sleep(nanoseconds: 300_000_000)
 
-    func test_socketUserPreferencesUpdated_updatesMuteState() async throws {
-        let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.conversations = [makeConversation(id: "conv1", isMuted: false)]
-
-        messageSocket.userPreferencesUpdated.send(
-            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "conv1", isPinned: nil, isMuted: true)
-        )
-
-        try await Task.sleep(nanoseconds: 50_000_000)
-
-        XCTAssertTrue(sut.conversations[0].userState.isMuted)
-    }
-
-    func test_socketUserPreferencesUpdated_ignoresUnknownConversation() async throws {
-        let messageSocket = MockMessageSocket()
-        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
-
-        messageSocket.userPreferencesUpdated.send(
-            UserPreferencesUpdatedEvent(userId: "user1", category: "conversation", conversationId: "unknown", isPinned: true, isMuted: nil)
-        )
-
-        try await Task.sleep(nanoseconds: 50_000_000)
-
-        XCTAssertFalse(sut.conversations[0].userState.isPinned)
+        XCTAssertTrue(sut.conversations[0].userState.isPinned,
+                      "le store est la source de vérité de userState pour cette liste")
     }
 
     // MARK: - markAsUnread: preserves existing unread count
