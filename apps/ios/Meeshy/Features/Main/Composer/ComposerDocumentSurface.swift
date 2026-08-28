@@ -1508,6 +1508,19 @@ struct ComposerDocumentSurface: View {
     /// gagnerait sa slide.
     var selectableMediaURLs: Set<URL> = []
 
+    /// **La teinte du PLATEAU, pour que l'occultation de la rangée d'outils s'y
+    /// fonde (#4032).**
+    ///
+    /// Elle vient du meuble — c'est lui qui peint l'écran entier de cette
+    /// couleur (`PlateauTint`, trois teintes, réglable par l'auteur). La
+    /// re-choisir ici en dur est exactement ce que le retour porteur du
+    /// 2026-08-27 a rejeté : un fond noir sous le drapeau, sur un plateau navy.
+    ///
+    /// Défaut `.clear` : une surface montée sans teinte n'occulte rien, plutôt
+    /// que d'inventer une couleur. C'est le repli SÛR — un dégradé transparent
+    /// ne peut pas jurer.
+    var plateauTint: Color = .clear
+
     /// **La zone contextuelle de l'état INSPECTEUR (lot 3A, #4035 — planche
     /// P4 §3).** Rendue DIRECTEMENT au-dessus de `toolRow` — seulement quand
     /// l'hôte retient une sélection sur la scène. `nil` ⇒ ABSENTE (loi 4 :
@@ -1809,28 +1822,58 @@ struct ComposerDocumentSurface: View {
         // accessoires (le chip de lieu, la capsule de langue) en silence —
         // alors que ni l'un ni l'autre ne dépend de `tools`.
         if !tools.isEmpty || toolRowLeadingAccessory != nil || toolRowTrailingAccessory != nil {
-            // Rangée STATIQUE, fond UNIFORME du plateau (retour porteur
-            // 2026-08-27) : le fond noir sous le drapeau du scroll précédent
-            // ne matchait pas le plateau navy — moche. Les outils tiennent à
-            // l'écran ; le drapeau/langue reste à droite, sans aucun fond
-            // ajouté. Si la rangée débordait un jour, la rendre scrollable
-            // exigera d'abord un fond d'occultation ALIGNÉ sur la teinte du
-            // plateau (pas une couleur en dur).
+            // **La rangée DÉFILE, et son occultation est peinte de la teinte du
+            // PLATEAU (#4032).**
+            //
+            // Elle fut scrollable, puis rendue STATIQUE sur retour porteur du
+            // 2026-08-27 — le fond noir sous le drapeau ne matchait pas le
+            // plateau navy. Le retour ne condamnait pas le défilement : il
+            // condamnait un fond CODÉ EN DUR, et posait la condition de retour
+            // en toutes lettres — « un fond d'occultation ALIGNÉ sur la teinte
+            // du plateau ».
+            //
+            // La condition est remplie ici : `plateauTint` vient du meuble, qui
+            // peint déjà tout l'écran de cette couleur. Et le besoin est MESURÉ,
+            // pas supposé — à `accessibility-XXXL` la rangée statique occupait
+            // 630 pt sur un écran de 402, calée à x = −114 : coupée des DEUX
+            // côtés, avec des outils qu'aucun geste n'atteignait.
             HStack(spacing: 16) {
-                if let toolRowLeadingAccessory {
-                    toolRowLeadingAccessory
-                }
-                ForEach(tools, id: \.rawValue) { tool in
-                    toolButton(tool)
-                    // Icône « couleur de fond » JUSTE APRÈS l'emoji (#4031) :
-                    // elle replie/déplie la palette de couleurs.
-                    if tool == .emoji, onPickBackground != nil {
-                        backgroundColorToggle
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 16) {
+                        if let toolRowLeadingAccessory {
+                            toolRowLeadingAccessory
+                        }
+                        ForEach(tools, id: \.rawValue) { tool in
+                            toolButton(tool)
+                            // Icône « couleur de fond » JUSTE APRÈS l'emoji
+                            // (#4031) : elle replie/déplie la palette.
+                            if tool == .emoji, onPickBackground != nil {
+                                backgroundColorToggle
+                            }
+                        }
                     }
+                    // Le padding vertical vit ICI, dans le contenu défilant :
+                    // posé sur le `ScrollView`, il rognerait la zone tactile des
+                    // icônes au lieu de les aérer.
+                    .padding(.vertical, 2)
                 }
-                Spacer(minLength: 8)
                 if let toolRowTrailingAccessory {
+                    // **L'occultation, en dégradé de la teinte du plateau.** Un
+                    // outil qui glisse sous le drapeau doit s'y effacer, pas s'y
+                    // superposer. Le dégradé est INVISIBLE tant que rien ne
+                    // passe dessous — il va de la teinte transparente à la
+                    // teinte pleine, sur la couleur que le meuble peint déjà.
                     toolRowTrailingAccessory
+                        .background(
+                            LinearGradient(
+                                colors: [plateauTint.opacity(0), plateauTint],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: 44)
+                            .offset(x: -22),
+                            alignment: .leading
+                        )
                 }
             }
             .padding(16)

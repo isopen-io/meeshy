@@ -1217,6 +1217,10 @@ struct MeeshyComposerHost: View {
             // vérité sur « ce chip mène-t-il quelque part ? ». Un son n'y entre
             // pas : il est la bande-son, pas une page.
             selectableMediaURLs: Set(slideIdByMediaURL.keys),
+            // #4032 — l'occultation de la rangée défilante se peint de la teinte
+            // que le meuble applique DÉJÀ à tout l'écran, jamais d'une couleur
+            // re-choisie. C'est le retour porteur du 2026-08-27, tenu.
+            plateauTint: tint.color,
             // Le meuble ne décide QUE de l'ABSENCE/PRÉSENCE de la scène ; QUELS
             // contrôles la zone sert est la décision du SDK, portée par l'`init?`
             // de `EmbeddedSceneInspector` (il échoue pour tout kind qu'aucun

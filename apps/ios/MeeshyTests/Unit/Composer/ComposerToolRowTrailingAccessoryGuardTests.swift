@@ -77,19 +77,96 @@ final class ComposerToolRowTrailingAccessoryGuardTests: XCTestCase {
             "`toolRow` ne rend plus `toolRowTrailingAccessory` : la capsule de langue redeviendrait un "
                 + "overlay séparé — la source même du chevauchement corrigé par la revue Opus 2026-08-27."
         )
-        // `accessoryRange` est cherché APRÈS `spacerRange` : la condition qui
-        // montre `toolRow` cite `toolRowTrailingAccessory != nil` (pour ne
-        // pas cacher la capsule quand `tools` est vide) — une première
-        // occurrence LÉGITIME avant le `Spacer()`.
-        guard let spacerRange = toolRow.range(of: "Spacer()"),
+        // **Ancre corrigée au #4032 : elle épinglait un MÉCANISME, pas
+        // l'invariant.** Elle cherchait le littéral `Spacer()` — devenu
+        // `Spacer(minLength: 8)`, puis supprimé quand la rangée est passée en
+        // `ScrollView` (le contenu défilant prend la largeur, l'accessoire est
+        // poussé en queue sans qu'aucun ressort ne soit nécessaire). La garde
+        // rougissait donc sur une refonte qui ne violait rien de ce qu'elle
+        // protège.
+        //
+        // Ce qu'elle protège VRAIMENT — et qui n'a pas bougé — c'est que
+        // l'accessoire de queue est un ENFANT de la rangée, jamais un overlay
+        // posé par-dessus : deux enfants d'un `HStack` ne se superposent jamais,
+        // par construction, et c'est ce qui a corrigé le chevauchement mesuré.
+        guard let toolsRange = toolRow.range(of: "ForEach(tools"),
               let accessoryRange = toolRow.range(
-                of: "toolRowTrailingAccessory", range: spacerRange.upperBound..<toolRow.endIndex
+                of: "toolRowTrailingAccessory", range: toolsRange.upperBound..<toolRow.endIndex
               ) else {
-            return XCTFail("Structure de `toolRow` inattendue — `Spacer()`/accessoire introuvables.")
+            return XCTFail("Structure de `toolRow` inattendue — les outils ou l'accessoire sont introuvables.")
         }
         XCTAssertTrue(
-            spacerRange.lowerBound < accessoryRange.lowerBound,
-            "`toolRowTrailingAccessory` doit suivre le `Spacer()` : c'est le slot de QUEUE de la rangée."
+            toolsRange.lowerBound < accessoryRange.lowerBound,
+            "`toolRowTrailingAccessory` doit venir APRÈS les outils : c'est le slot de QUEUE de la rangée."
+        )
+    }
+
+    // MARK: - #4032 — la rangée DÉFILE, et son occultation est celle du plateau
+
+    /// **Le besoin est MESURÉ, pas supposé.** À `accessibility-XXXL`, la rangée
+    /// statique occupait 630 pt sur un écran de 402, calée à x = −114 : coupée
+    /// des DEUX côtés, avec des outils qu'aucun geste n'atteignait. Après ce
+    /// lot : x = 16, largeur 370.
+    func test_toolRow_defileHorizontalement() throws {
+        let source = try surfaceSource()
+        guard let toolRow = body(of: "private var toolRow: some View {", in: source) else {
+            return XCTFail("`toolRow` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            toolRow.contains("ScrollView(.horizontal, showsIndicators: false)"),
+            "Les outils doivent DÉFILER : statiques, ils sortent de l'écran aux grandes tailles de texte, "
+                + "et rien ne permet alors de les atteindre."
+        )
+        guard let scrollRange = toolRow.range(of: "ScrollView(.horizontal"),
+              let accessoryRange = toolRow.range(of: "toolRowTrailingAccessory",
+                                                 range: scrollRange.upperBound..<toolRow.endIndex) else {
+            return XCTFail("Le défilement ou l'accessoire sont introuvables.")
+        }
+        XCTAssertTrue(
+            scrollRange.lowerBound < accessoryRange.lowerBound,
+            "Le drapeau reste FIXE : il vit HORS du `ScrollView`, sinon il défilerait avec les outils."
+        )
+    }
+
+    /// **Le retour porteur du 2026-08-27, rendu MÉCANIQUE.**
+    ///
+    /// La rangée fut déjà scrollable, et fut annulée : le fond noir sous le
+    /// drapeau ne matchait pas le plateau navy. Le retour ne condamnait pas le
+    /// défilement — il condamnait un fond CODÉ EN DUR, et posait la condition de
+    /// retour en toutes lettres : « un fond d'occultation ALIGNÉ sur la teinte
+    /// du plateau ». Cette garde interdit que la condition se reperde.
+    func test_lOccultationDuDrapeau_estPeinteDeLaTeinteDuPlateau_jamaisEnDur() throws {
+        let source = try surfaceSource()
+        guard let toolRow = body(of: "private var toolRow: some View {", in: source) else {
+            return XCTFail("`toolRow` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            toolRow.contains("plateauTint.opacity(0), plateauTint"),
+            "L'occultation doit aller de la teinte TRANSPARENTE à la teinte PLEINE du plateau — elle est "
+                + "alors invisible tant que rien ne passe dessous, et se fond quand un outil y glisse."
+        )
+        for interdit in ["Color.black", ".black", "Color(hex:", "MeeshyColors.plateauNoir",
+                        "MeeshyColors.indigo950", "MeeshyColors.violet950"] {
+            XCTAssertFalse(
+                toolRow.contains(interdit),
+                "`toolRow` peint « \(interdit) » : c'est un fond CODÉ EN DUR, exactement ce que le retour "
+                    + "porteur du 2026-08-27 a rejeté. La teinte vient du meuble, qui peint déjà l'écran."
+            )
+        }
+    }
+
+    /// Le fusible : la surface DOIT recevoir la teinte, sinon l'occultation se
+    /// peint en `.clear` — invisible, donc inoffensive, mais la garde ci-dessus
+    /// passerait au vert sur un dégradé qui n'occulte rien.
+    func test_leMeuble_passeSaTeinteALaSurface() throws {
+        let source = try hostSource()
+        guard let block = body(of: "private var documentSurface: some View {", in: source) else {
+            return XCTFail("`documentSurface` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(
+            block.contains("plateauTint: tint.color"),
+            "Le meuble doit passer SA teinte : c'est lui qui peint l'écran, et la re-choisir dans la "
+                + "surface est ce que le retour porteur a rejeté."
         )
     }
 

@@ -68,6 +68,18 @@ La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « to
 changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
 qui a été touché, l'app décide ce que cela sélectionne.**
 
+**La rangée d'outils DÉFILE, et le drapeau reste fixe (#4032).** Statique, elle sortait de l'écran
+dès les grandes tailles de texte : mesurée à `accessibility-XXXL`, elle occupait **630 pt sur un
+écran de 402, calée à x = −114** — coupée des DEUX côtés, avec des outils qu'aucun geste
+n'atteignait. Après : x = 16, largeur 370.
+
+**Un retour porteur qui annule un lot ne condamne pas toujours l'idée.** Celui du 2026-08-27
+condamnait le fond NOIR sous le drapeau, sur un plateau navy — pas le défilement —, et il posait sa
+condition de retour en toutes lettres : « un fond d'occultation ALIGNÉ sur la teinte du plateau ». Le
+dégradé va donc de la teinte transparente à la teinte pleine, prise du meuble qui peint déjà l'écran :
+invisible tant que rien ne passe dessous, il se fond dès qu'un outil y glisse. La condition est
+tenue par une garde, pas par une promesse.
+
 **L'appui long sur un objet ouvre SES actions, et elles seules (#4046).** Le menu servait ses cinq
 entrées à tout objet non verrouillé, et deux n'avaient alors aucun effet : « Mettre au premier plan »
 un objet **seul de son plan** ne déplace rien — le menu proposait un geste dont le résultat est
