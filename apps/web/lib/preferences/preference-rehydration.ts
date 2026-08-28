@@ -41,22 +41,30 @@ type MissedWindow = {
 
 /**
  * Le rattrapage est dû quand une annonce a pu être manquée : après un vrai
- * décrochage, ou quand AUCUNE passe d'hydratation n'a été menée.
+ * décrochage, ou quand la passe d'hydratation initiale s'est terminée SANS
+ * RIEN LIRE.
  *
- * `lastSyncedAt` dit exactement cela, et rien de plus : `initialize()` sort
- * avant de lire quand il n'y a pas de jeton au montage — un jeton qui arrive
- * ensuite trouve donc un store qui n'a lu personne, et sa première connexion
- * le remplit. Ce champ ne dit PAS que la lecture a RÉUSSI : `syncAll()` absorbe
- * l'échec de chacun de ses quatre `GET`, donc une passe entièrement ratée pose
- * quand même l'horodatage. Voir le suivi mesuré du cycle 134.
+ * `lastSyncedAt` dit exactement cela depuis qu'`initialize()` ne le pose que
+ * sur une lecture aboutie : pas de jeton au montage, ou les quatre `GET`
+ * tombés — l'onglet ouvert hors ligne. Les deux rendent un store qui n'a lu
+ * personne, et la première connexion le remplit.
  *
- * Le rattrapage n'est pas dû tant qu'une hydratation est déjà en vol :
- * `initialize()` lit les mêmes lignes, et la doubler serait exactement la
- * requête gratuite que la clause `everConnected` évite par ailleurs.
+ * Deux clauses le retiennent, et elles couvrent deux fenêtres différentes :
+ *
+ * - `isInitialized` — la passe initiale n'a pas encore rendu son verdict.
+ *   `initialize()` n'est lancé qu'APRÈS l'authentification ; une connexion
+ *   socket qui arrive avant lui trouverait `lastSyncedAt` à null et paierait
+ *   deux `GET` que la passe s'apprête à faire.
+ * - `isLoading` — l'hydratation est EN VOL. Elle lit les mêmes lignes, et la
+ *   doubler serait exactement la requête gratuite que `everConnected` évite
+ *   par ailleurs.
  */
-function isDue(missedWindow: MissedWindow, state: { isLoading: boolean; lastSyncedAt: string | null }): boolean {
+function isDue(
+  missedWindow: MissedWindow,
+  state: { isLoading: boolean; isInitialized: boolean; lastSyncedAt: string | null },
+): boolean {
   if (state.isLoading) return false;
-  return missedWindow.missed || state.lastSyncedAt === null;
+  return missedWindow.missed || (state.isInitialized && state.lastSyncedAt === null);
 }
 
 /**
