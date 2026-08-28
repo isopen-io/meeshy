@@ -150,4 +150,49 @@ describe('AttachmentReactionService', () => {
     const svc = new AttachmentReactionService(prisma);
     expect(await svc.resolveConversationId('m1')).toBe('conv1');
   });
+
+  // ── Validation d'emoji : parité EXACTE avec ReactionService (la jumelle) ──
+  //
+  // `sanitizeEmoji` rend `null` pour un non-emoji, et `isValidEmoji(emoji: string)`
+  // fait `emoji.trim()` — donc `isValidEmoji(null)` LÈVE un `TypeError`. L'ancien
+  // `if (!isValidEmoji(sanitizeEmoji(o.emoji)))` faisait donc remonter au client
+  // un `TypeError` interne au lieu du refus propre « Invalid emoji format », et
+  // la branche `throw` était du code MORT. Ces témoins exercent les VRAIES
+  // fonctions partagées (ce fichier ne les mocke pas), seule façon de voir le
+  // défaut : le témoin jumeau du fichier `__tests__/unit/…` mocke `isValidEmoji`
+  // pour rendre `false` sur `null`, ce qui désarme exactement ce bug (cf.
+  // CLAUDE.md § « mocker les schémas partagés DÉSARME »).
+  it('rejects an add with a clean "Invalid emoji format", never a raw TypeError', async () => {
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    await expect(
+      svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: 'hi' })
+    ).rejects.toThrow('Invalid emoji format');
+    // Rien n'a été écrit, et aucun upsert n'a été tenté.
+    expect(await svc.getReactionSummary('att1')).toEqual({});
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects a remove with an invalid emoji instead of silently "succeeding"', async () => {
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    await expect(
+      svc.removeAttachmentReaction({ attachmentId: 'att1', participantId: 'p1', emoji: 'hi' })
+    ).rejects.toThrow('Invalid emoji format');
+  });
+
+  it('an invalid-emoji remove never wipes the participant\'s other reactions', async () => {
+    // Garde le pire cas : `sanitizeEmoji('hi')` → null ; passé tel quel dans le
+    // `where`, un `emoji: null` ne cible plus un emoji précis. La jumelle
+    // `ReactionService.removeReaction` refuse AVANT le `deleteMany` — celle-ci
+    // doit faire pareil, sinon un remove malformé peut emporter des lignes
+    // voisines.
+    const prisma = makePrismaMock();
+    const svc = new AttachmentReactionService(prisma);
+    await svc.addAttachmentReaction({ attachmentId: 'att1', messageId: 'm1', participantId: 'p1', emoji: '❤️' });
+    await expect(
+      svc.removeAttachmentReaction({ attachmentId: 'att1', participantId: 'p1', emoji: 'hi' })
+    ).rejects.toThrow('Invalid emoji format');
+    expect(await svc.getReactionSummary('att1')).toEqual({ '❤️': 1 });
+  });
 });
