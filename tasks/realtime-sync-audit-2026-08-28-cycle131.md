@@ -146,4 +146,4 @@ La portée à lui donner est `backgroundScope`.
 - **Aucune hydratation au démarrage à froid.** Les deux `GET` neufs ne sont
   appelés que par une diffusion. Un appareil qui a raté l'événement (hors ligne au
   moment du changement) reste périmé jusqu'à la diffusion suivante. Les câbler à
-  une relecture de démarrage est un lot à part, et il vaut la peine d'être posé.
+  une relecture de démarrage est un lot à part : **issue #4197**.
