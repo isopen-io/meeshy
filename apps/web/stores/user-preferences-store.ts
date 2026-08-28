@@ -197,6 +197,39 @@ const DEFAULT_STORY_PREFERENCES: StoryPreferences = {
   storyNotificationsEnabled: true,
 };
 
+/**
+ * Ce qu'une écriture a le droit d'envoyer : les clés que L'APPELANT a soumises,
+ * et rien d'autre.
+ *
+ * Les trois écritures envoyaient un instantané de DOCUMENT ENTIER
+ * (`get().privacy`, `get().notifications`) sur un `PUT` que la passerelle traite
+ * en REMPLACEMENT — `update: { [category]: validated }`, Zod comblant les clés
+ * absentes par leurs `default()`. Or chaque tranche du store est un
+ * SOUS-ENSEMBLE STRICT de son document, et la tranche `privacy` ne peut pas même
+ * en porter le bloc chiffrement : `syncPrivacy` l'en retire, `EncryptionPreferences`
+ * en est le seul porteur. Basculer un réglage de confidentialité remettait donc
+ * les quatre réglages de chiffrement aux défauts — plus d'auto-chiffrement des
+ * conversations neuves, sans un signe.
+ *
+ * Envoyer le SOUMIS retire la dépendance à la fidélité de la tranche : le
+ * serveur fusionne par `submittedKeysOnly` sur ce qu'il obéit déjà, donc ce
+ * qu'on ne nomme pas ne bouge pas. C'est la forme qu'Android applique déjà et
+ * qu'il documente (`PrivacyPreferenceSyncBody` : « a body that omits the
+ * encryption keys leaves the server's encryption preferences untouched instead
+ * of silently stamping the device defaults over a value the user may have set on
+ * web/iOS »). Elle ferme au passage l'écrasement concurrent : un voisin changé
+ * sur un AUTRE appareil n'est plus annulé par une bascule sans rapport.
+ *
+ * `undefined` est retiré parce que `JSON.stringify` le retire de toute façon —
+ * sans quoi la garde « aucune clé » compterait une clé que le serveur ne verra
+ * jamais, et paierait un aller-retour, un journal de mutation et une diffusion
+ * `preferences:updated` pour zéro changement.
+ */
+const submittedKeys = <T extends object>(prefs: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(prefs).filter(([, value]) => value !== undefined),
+  ) as Partial<T>;
+
 const DEFAULT_STATE: UserPreferencesState = {
   notifications: DEFAULT_NOTIFICATION_PREFERENCES,
   encryption: DEFAULT_ENCRYPTION_PREFERENCES,
@@ -505,19 +538,27 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
+        // `StoreNotificationPreferences` est un `Pick` de 14 des 33 champs du
+        // schéma : un remplacement construit sur cette tranche remettait aux
+        // défauts les dix-neuf autres — `callsEnabled`, `dndDays`,
+        // `dndUtcOffsetMinutes`, les sept bascules sociales — dès que
+        // l'hydratation n'avait pas abouti.
+        const submitted = submittedKeys(prefs);
+        if (Object.keys(submitted).length === 0) return;
+
         // Optimistic update
         set(state => ({
-          notifications: { ...state.notifications, ...prefs }
+          notifications: { ...state.notifications, ...submitted }
         }));
 
         try {
           const response = await fetch(buildApiUrl('/me/preferences/notification'), {
-            method: 'PUT',
+            method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(get().notifications),
+            body: JSON.stringify(submitted),
           });
 
           if (!response.ok) {
@@ -535,31 +576,30 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
+        const submitted = submittedKeys(prefs);
+        if (Object.keys(submitted).length === 0) return;
+
         // Optimistic update
         set(state => ({
-          encryption: { ...state.encryption, ...prefs }
+          encryption: { ...state.encryption, ...submitted }
         }));
 
         return trackPreferenceWrite(async () => {
           try {
-            // Encryption preferences are stored in privacy preferences
-            // We need to merge with existing privacy prefs
-            const currentPrivacy = get().privacy;
-            const updatedEncryption = get().encryption;
-
+            // Le chiffrement vit dans le document `privacy`, et c'est tout ce
+            // que ce site en sait : il n'a rien à dire des réglages de
+            // confidentialité voisins. Les réaffirmer depuis la tranche locale
+            // — ce que faisait `...currentPrivacy` — annulait un réglage changé
+            // sur un AUTRE appareil à chaque bascule de chiffrement, et
+            // estampait les huit défauts de la tranche quand l'hydratation
+            // n'avait pas abouti.
             const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
               method: 'PATCH',
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify({
-                ...currentPrivacy,
-                encryptionPreference: updatedEncryption.encryptionPreference,
-                autoEncryptNewConversations: updatedEncryption.autoEncryptNewConversations,
-                showEncryptionStatus: updatedEncryption.showEncryptionStatus,
-                warnOnUnencrypted: updatedEncryption.warnOnUnencrypted,
-              }),
+              body: JSON.stringify(submitted),
             });
 
             if (!response.ok) {
@@ -584,20 +624,29 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
+        const submitted = submittedKeys(prefs);
+        if (Object.keys(submitted).length === 0) return;
+
         // Optimistic update
         set(state => ({
-          privacy: { ...state.privacy, ...prefs }
+          privacy: { ...state.privacy, ...submitted }
         }));
 
         return trackPreferenceWrite(async () => {
           try {
+            // `PATCH`, jamais `PUT` : la tranche `privacy` ne porte PAS le bloc
+            // chiffrement du même document (`syncPrivacy` l'en retire), donc un
+            // remplacement construit sur elle remettait `encryptionPreference`,
+            // `autoEncryptNewConversations`, `showEncryptionStatus` et
+            // `warnOnUnencrypted` aux défauts de Zod — à chaque bascule d'un
+            // réglage sans rapport.
             const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
-              method: 'PUT',
+              method: 'PATCH',
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
               },
-              body: JSON.stringify(get().privacy),
+              body: JSON.stringify(submitted),
             });
 
             if (!response.ok) {
