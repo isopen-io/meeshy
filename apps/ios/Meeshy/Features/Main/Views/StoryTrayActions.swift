@@ -205,7 +205,8 @@ struct StoryComposerCover: ViewModifier {
                         visibilityUserIds: visibilityUserIds,
                         draftId: draftId,
                         references: references,
-                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
+                                                               caption: accessibility.mediaCaption ?? [:]),
                         allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     // La création accepte TOUJOURS : hors-ligne, la story part

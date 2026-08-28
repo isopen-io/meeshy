@@ -60,16 +60,25 @@ public nonisolated enum ComposerExitAction: Equatable, Sendable {
 public nonisolated struct ComposerMediaAccessibility: Equatable, Sendable {
 
     public let mediaAlt: [String: String]?
+
+    /// La LÉGENDE par média (`PostMedia.caption`, #4055) — même clé, même
+    /// borne et même règle d'ignorance que `mediaAlt` (cf. `PostMediaText`),
+    /// donc même traduction d'ids à la publication.
+    public let mediaCaption: [String: String]?
+
     public let allowSoundExtraction: Bool?
 
-    public init(mediaAlt: [String: String]?, allowSoundExtraction: Bool?) {
+    public init(mediaAlt: [String: String]?,
+                mediaCaption: [String: String]? = nil,
+                allowSoundExtraction: Bool?) {
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
         self.allowSoundExtraction = allowSoundExtraction
     }
 
     /// L'auteur n'a rien saisi ni rien basculé. Distinct d'un dictionnaire vide
     /// et d'un `false` explicite : le gateway lit l'absence « n'y touche pas ».
-    public static let empty = ComposerMediaAccessibility(mediaAlt: nil, allowSoundExtraction: nil)
+    public static let empty = ComposerMediaAccessibility(mediaAlt: nil, mediaCaption: nil, allowSoundExtraction: nil)
 }
 
 /// Le déclenchement de publication, rendu atteignable de l'EXTÉRIEUR (V3-1) —
@@ -185,6 +194,7 @@ extension StoryComposerView {
     static func accessibilityHandoff(from store: MediaAccessibilityStore) -> ComposerMediaAccessibility {
         ComposerMediaAccessibility(
             mediaAlt: store.mediaAltPayload(),
+            mediaCaption: store.mediaCaptionPayload(),
             allowSoundExtraction: store.allowSoundExtractionPayload()
         )
     }

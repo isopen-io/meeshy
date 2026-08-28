@@ -232,7 +232,7 @@ final class PostEditPayloadTests: XCTestCase {
         XCTAssertEqual(json.keys.count, 3, "tout le reste est `nil`, donc omis")
     }
 
-    // MARK: - La garde qui attrape le QUATORZIÈME champ
+    // MARK: - La garde qui attrape le champ SUIVANT, quel qu'il soit
 
     func test_everyDeclarableField_reachesTheEncodedBody() throws {
         let full = PostEditDraft(
@@ -241,7 +241,8 @@ final class PostEditPayloadTests: XCTestCase {
             removeMediaIds: ["m"], storyEffects: StoryEffects(background: "#000"),
             mediaIds: ["n"], location: .remove,
             mentions: [PostMentionInput(username: "ada")],
-            allowSoundExtraction: false, mediaAlt: ["n": "alt"]
+            allowSoundExtraction: false, mediaAlt: ["n": "alt"],
+            mediaCaption: ["n": "légende"]
         )
 
         let json = try encoded(PostEditPayload.build(known: PostEditField.all, draft: full))
@@ -254,13 +255,15 @@ final class PostEditPayloadTests: XCTestCase {
 
     func test_documentEditPath_neverDeclaresWhatTheSheetHasNeverPainted() throws {
         let neverPainted: Set<PostEditField> = [
-            .moodEmoji, .storyEffects, .mediaIds, .mentions, .allowSoundExtraction, .mediaAlt
+            .moodEmoji, .storyEffects, .mediaIds, .mentions, .allowSoundExtraction,
+            .mediaAlt, .mediaCaption
         ]
         // Le brouillon PORTE de la matière sur les six champs ; seule la
         // déclaration l'empêche de partir.
         let draft = PostEditDraft(
             content: "c", moodEmoji: "🙂", storyEffects: StoryEffects(background: "#000"),
-            mediaIds: ["n"], mentions: [], allowSoundExtraction: true, mediaAlt: ["n": "alt"]
+            mediaIds: ["n"], mentions: [], allowSoundExtraction: true, mediaAlt: ["n": "alt"],
+            mediaCaption: ["n": "légende"]
         )
 
         let json = try encoded(PostEditPayload.build(known: documentFields, draft: draft))

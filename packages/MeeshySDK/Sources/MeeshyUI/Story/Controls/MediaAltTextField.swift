@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Champ de texte alternatif d'un média — accessibilité, pas décoration.
 ///
@@ -11,27 +12,54 @@ import SwiftUI
 /// Patron d'état repris de `StoryAudioCell` (`@State` local pour une saisie
 /// fluide, resync via `.adaptiveOnChange` quand la valeur amont change pour
 /// une raison NON liée à cette frappe — undo/redo, changement de slide).
+/// **Un seul champ pour les DEUX textes** (#4055). Il ne diffère que par ses
+/// libellés, et les dupliquer aurait produit deux composants qui divergent sur
+/// le patron d'état — celui-là même dont le doc-comment ci-dessus explique
+/// qu'il est subtil (resync `.adaptiveOnChange`, commit à la perte de focus et
+/// au démontage). Ce qui change se lit en UN endroit, `labels`.
 struct MediaAltTextField: View {
+    let kind: PostMediaText
     let text: String
     let onCommit: (String) -> Void
 
     @State private var draft: String
     @FocusState private var isFocused: Bool
 
-    init(text: String, onCommit: @escaping (String) -> Void) {
+    init(kind: PostMediaText = .alt, text: String, onCommit: @escaping (String) -> Void) {
+        self.kind = kind
         self.text = text
         self.onCommit = onCommit
         _draft = State(initialValue: text)
     }
 
+    /// Les trois chaînes que la NATURE du texte décide. Séparées du corps
+    /// pour que la différence entre les deux champs tienne en une lecture —
+    /// et pour qu'aucune ne se retrouve écrite deux fois.
+    private var labels: (label: String, placeholder: String, hint: String) {
+        switch kind {
+        case .alt:
+            return (
+                String(localized: "story.media.alt.label", defaultValue: "Texte alternatif", bundle: .module),
+                String(localized: "story.media.alt.placeholder", defaultValue: "Décrivez ce média pour VoiceOver", bundle: .module),
+                String(localized: "story.media.alt.a11yHint", defaultValue: "Décrit ce média aux personnes qui utilisent VoiceOver.", bundle: .module)
+            )
+        case .caption:
+            return (
+                String(localized: "story.media.caption.label", defaultValue: "Légende", bundle: .module),
+                String(localized: "story.media.caption.placeholder", defaultValue: "Écrivez la légende de ce média", bundle: .module),
+                String(localized: "story.media.caption.a11yHint", defaultValue: "Texte affiché sous ce média. Différent du texte alternatif, qui décrit l'image sans être affiché.", bundle: .module)
+            )
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(String(localized: "story.media.alt.label", defaultValue: "Texte alternatif", bundle: .module))
+            Text(labels.label)
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             TextField(
-                String(localized: "story.media.alt.placeholder", defaultValue: "Décrivez ce média pour VoiceOver", bundle: .module),
+                labels.placeholder,
                 text: $draft,
                 axis: .vertical
             )
@@ -40,8 +68,8 @@ struct MediaAltTextField: View {
             .font(.system(size: 13))
             .focused($isFocused)
             .onSubmit { commitIfChanged() }
-            .accessibilityLabel(String(localized: "story.media.alt.label", defaultValue: "Texte alternatif", bundle: .module))
-            .accessibilityHint(String(localized: "story.media.alt.a11yHint", defaultValue: "Décrit ce média aux personnes qui utilisent VoiceOver.", bundle: .module))
+            .accessibilityLabel(labels.label)
+            .accessibilityHint(labels.hint)
         }
         .adaptiveOnChange(of: text) { _, newValue in
             // Le texte a changé pour une raison EXTÉRIEURE à cette frappe

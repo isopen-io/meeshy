@@ -651,6 +651,10 @@ class FeedViewModel: ObservableObject {
                 mentions: mentions,
                 allowSoundExtraction: nil,
                 mediaAlt: nil,
+                // Le composer de FIL ne collecte pas encore de textes par
+                // média — il n'a pas d'inspecteur média (#4045). `nil` dit
+                // « je n'en parle pas », jamais « efface ».
+                mediaCaption: nil,
                 discoverabilityPrecision: discoverabilityPrecision
             )
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)

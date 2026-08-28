@@ -17,11 +17,20 @@ struct MediaAccessibilityPanel: View {
     let mediaId: String
     let altText: String
     let onAltCommitted: (String) -> Void
+    /// La LÉGENDE du média (#4055) — collectée dans le MÊME panneau que le
+    /// texte alternatif parce qu'elle a le même porteur et le même cycle de
+    /// vie, et distinguée par son libellé parce qu'elle ne dit pas la même
+    /// chose (`PostMediaText`).
+    let captionText: String
+    let onCaptionCommitted: (String) -> Void
 
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        MediaAltTextField(text: altText, onCommit: onAltCommitted)
+        VStack(alignment: .leading, spacing: 10) {
+            MediaAltTextField(kind: .alt, text: altText, onCommit: onAltCommitted)
+            MediaAltTextField(kind: .caption, text: captionText, onCommit: onCaptionCommitted)
+        }
             .padding(10)
             .background(
                 RoundedRectangle(cornerRadius: 8)

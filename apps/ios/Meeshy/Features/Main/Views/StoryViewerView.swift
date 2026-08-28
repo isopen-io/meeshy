@@ -932,7 +932,8 @@ struct StoryViewerView: View {
                         draftId: draftId,
                         repostOfId: wrapper.story.id,
                         references: references,
-                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
+                                                               caption: accessibility.mediaCaption ?? [:]),
                         allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     republishStorySource = nil

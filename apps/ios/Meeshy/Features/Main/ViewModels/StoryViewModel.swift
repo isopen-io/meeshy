@@ -299,7 +299,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: item.visibility,
             visibilityUserIds: item.visibilityUserIds ?? [],
             declaredMentions: item.mentionsPayload ?? [],
-            composerMediaAlt: item.mediaAltPayload ?? [:],
+            composerMediaTexts: ComposerMediaTexts(alt: item.mediaAltPayload ?? [:],
+                                                   caption: item.mediaCaptionPayload ?? [:]),
             allowSoundExtraction: item.allowSoundExtractionPayload,
             // Une valeur inconnue (row écrite par une version future) retombe
             // sur la story plutôt que d'échouer : le rejeu publie, au pire sous
@@ -424,11 +425,16 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// texte. Vide = aucune référence hors texte ; le serveur relit le
         /// texte lui-même.
         var declaredMentions: [PostMentionInput] = []
-        /// Le texte alternatif saisi par l'auteur, keyé par ID D'ÉLÉMENT DU
-        /// COMPOSER. La traduction vers les ids `PostMedia` n'est possible
-        /// qu'après l'upload, qui les attribue — `runStoryUpload` la fait juste
-        /// avant l'envoi (`StoryMediaAltMapping.serverKeyed`).
-        var composerMediaAlt: [String: String] = [:]
+        /// Les DEUX textes saisis par l'auteur — texte alternatif et LÉGENDE
+        /// (#4055) —, keyés par ID D'ÉLÉMENT DU COMPOSER. La traduction vers
+        /// les ids `PostMedia` n'est possible qu'après l'upload, qui les
+        /// attribue — `runStoryUpload` la fait juste avant l'envoi
+        /// (`StoryMediaTextMapping.serverKeyed`).
+        ///
+        /// Un porteur NOMMÉ plutôt que deux dictionnaires voisins : cf.
+        /// `ComposerMediaTexts`, dont le doc dit pourquoi l'ordre positionnel
+        /// ne doit pas être ce qui les distingue.
+        var composerMediaTexts: ComposerMediaTexts = .none
         /// L'opt-in d'extraction de bande-son du post. `nil` = l'auteur n'a rien
         /// tranché : le défaut serveur s'applique par silence.
         var allowSoundExtraction: Bool? = nil
@@ -1475,7 +1481,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// Le texte alternatif par média, keyé par ID D'ÉLÉMENT DU COMPOSER :
         /// les ids serveur n'existent qu'après l'upload. `runStoryUpload`
         /// traduit juste avant l'envoi.
-        composerMediaAlt: [String: String] = [:],
+        composerMediaTexts: ComposerMediaTexts = .none,
         /// L'opt-in d'extraction de bande-son du post entier. `nil` = l'auteur
         /// n'a rien tranché.
         allowSoundExtraction: Bool? = nil
@@ -1506,7 +1512,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     visibilityUserIds: visibilityUserIds,
                     draftId: draftId,
                     declaredMentions: declaredMentions,
-                    composerMediaAlt: composerMediaAlt,
+                    composerMediaTexts: composerMediaTexts,
                     allowSoundExtraction: allowSoundExtraction
                 )
             }
@@ -1537,7 +1543,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
             declaredMentions: declaredMentions,
-            composerMediaAlt: composerMediaAlt,
+            composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction,
             targetType: targetType
         )
@@ -1573,7 +1579,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 draftId: draftId,
                 repostOfId: repostOfId,
                 declaredMentions: declaredMentions,
-                composerMediaAlt: composerMediaAlt,
+                composerMediaTexts: composerMediaTexts,
                 allowSoundExtraction: allowSoundExtraction
             )
             // L'item vient d'être créé : personne d'autre ne peut le détenir,
@@ -1680,7 +1686,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         visibilityUserIds: [String] = [],
         draftId: String? = nil,
         declaredMentions: [PostMentionInput] = [],
-        composerMediaAlt: [String: String] = [:],
+        composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil
     ) async {
         guard let intent = await persistPublishIntentToQueue(
@@ -1695,7 +1701,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibilityUserIds: visibilityUserIds,
             draftId: draftId,
             declaredMentions: declaredMentions,
-            composerMediaAlt: composerMediaAlt,
+            composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction
         ) else { return }
 
@@ -1763,7 +1769,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// Accessibilité : ces deux champs ne vivent NULLE PART ailleurs (le
         /// brouillon ne les porte pas), donc un rejeu qui ne les emporterait
         /// pas publierait une story muette pour les lecteurs d'écran.
-        composerMediaAlt: [String: String] = [:],
+        composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
         // 1. Re-key slide backgrounds.
@@ -1845,7 +1851,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             originalLanguage: originalLanguage,
             draftId: draftId,
             mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions,
-            mediaAltPayload: composerMediaAlt.isEmpty ? nil : composerMediaAlt,
+            mediaAltPayload: composerMediaTexts.payload(.alt),
+            mediaCaptionPayload: composerMediaTexts.payload(.caption),
             allowSoundExtractionPayload: allowSoundExtraction,
             targetTypePayload: targetType.rawValue
         )
@@ -2445,8 +2452,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // (`PostService.applyMediaAlt` filtre le reste sans rien dire).
             // L'upload vient d'attribuer les `postMediaId` : c'est ici, et
             // nulle part plus tôt, que la traduction est possible.
-            let serverMediaAlt = StoryMediaAltMapping.serverKeyed(
-                composerKeyed: upload.composerMediaAlt,
+            let serverMediaAlt = StoryMediaTextMapping.serverKeyed(
+                composerKeyed: upload.composerMediaTexts.alt,
+                mediaObjects: updatedEffects.mediaObjects ?? []
+            )
+            // La LÉGENDE suit EXACTEMENT le même chemin (#4055) : mêmes ids de
+            // composer, même traduction, et le même filtrage silencieux côté
+            // gateway si on envoyait les ids d'origine.
+            let serverMediaCaption = StoryMediaTextMapping.serverKeyed(
+                composerKeyed: upload.composerMediaTexts.caption,
                 mediaObjects: updatedEffects.mediaObjects ?? []
             )
 
@@ -2465,7 +2479,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 repostOfId: upload.repostOfId,
                 mentions: canvasMentions.isEmpty ? nil : canvasMentions,
                 allowSoundExtraction: upload.allowSoundExtraction,
-                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
+                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt,
+                mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption
             )
 
             newPostIds.append(post.id)
@@ -2578,7 +2593,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         /// traduit en ids serveur juste avant le PUT. Le gateway ne l'applique
         /// qu'aux médias ATTACHÉS par cette édition (`mediaIdsToAttach`), donc
         /// un texte saisi sur un média déjà en ligne n'a pas d'effet ici.
-        composerMediaAlt: [String: String] = [:],
+        composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil
     ) -> Bool {
         guard let slide = slides.first else { return false }
@@ -2597,7 +2612,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 draftId: draftId,
                 references: references,
                 declaredReferencesAreKnown: declaredReferencesAreKnown,
-                composerMediaAlt: composerMediaAlt,
+                composerMediaTexts: composerMediaTexts,
                 allowSoundExtraction: allowSoundExtraction
             )
         }
@@ -2621,7 +2636,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         draftId: String? = nil,
         references: [ComposerReference] = [],
         declaredReferencesAreKnown: Bool = false,
-        composerMediaAlt: [String: String] = [:],
+        composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil
     ) async {
         do {
@@ -2772,8 +2787,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             let declaredMentions: [PostMentionInput]? = declaredReferencesAreKnown
                 ? Self.declaredMentions(references: references, effects: updatedEffects)
                 : nil
-            let serverMediaAlt = StoryMediaAltMapping.serverKeyed(
-                composerKeyed: composerMediaAlt,
+            let serverMediaAlt = StoryMediaTextMapping.serverKeyed(
+                composerKeyed: composerMediaTexts.alt,
+                mediaObjects: updatedEffects.mediaObjects ?? []
+            )
+            let serverMediaCaption = StoryMediaTextMapping.serverKeyed(
+                composerKeyed: composerMediaTexts.caption,
                 mediaObjects: updatedEffects.mediaObjects ?? []
             )
             let post = try await postService.update(
@@ -2790,7 +2809,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 location: nil,
                 mentions: declaredMentions,
                 allowSoundExtraction: allowSoundExtraction,
-                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt
+                mediaAlt: serverMediaAlt.isEmpty ? nil : serverMediaAlt,
+                mediaCaption: serverMediaCaption.isEmpty ? nil : serverMediaCaption
             )
 
             // 7. Réconciliation locale : cover local-first re-rendue (la

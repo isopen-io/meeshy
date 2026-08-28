@@ -58,7 +58,8 @@ extension View {
                         draftId: draftId,
                         references: references,
                         declaredReferencesAreKnown: current.composer.editingKnowsDeclaredReferences,
-                        composerMediaAlt: accessibility.mediaAlt ?? [:],
+                        composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
+                                                               caption: accessibility.mediaCaption ?? [:]),
                         allowSoundExtraction: accessibility.allowSoundExtraction
                     )
                     // Hors-ligne : le composer reste ouvert, rien n'est perdu —

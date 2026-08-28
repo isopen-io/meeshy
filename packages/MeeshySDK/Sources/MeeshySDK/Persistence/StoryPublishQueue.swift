@@ -70,6 +70,12 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     /// muette pour les lecteurs d'écran. Optionnel — rétro-compatible avec les
     /// rows persistés avant lui (→ `nil`).
     public let mediaAltPayload: [String: String]?
+    /// La LÉGENDE par média (#4055), persistée pour EXACTEMENT la raison
+    /// écrite ci-dessus — et plus fortement encore : un texte alternatif perdu
+    /// publie une story muette pour les lecteurs d'écran, une légende perdue
+    /// publie un média que l'auteur croyait avoir légendé, VISIBLEMENT.
+    /// Optionnel — les rows écrites avant ce champ se relisent en `nil`.
+    public let mediaCaptionPayload: [String: String]?
     /// L'opt-in d'extraction de bande-son, tel que l'auteur l'a tranché. `nil`
     /// = il n'a rien tranché (ou row antérieure au champ) : le défaut serveur
     /// s'applique alors par silence.
@@ -88,7 +94,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         case id, tempStoryId, visibility, slidesPayload, repostOfId
         case mediaReferences, createdAt, retryCount, lastError, visibilityUserIds
         case originalLanguage, draftId, mentionsPayload
-        case mediaAltPayload, allowSoundExtractionPayload, targetTypePayload
+        case mediaAltPayload, mediaCaptionPayload, allowSoundExtractionPayload, targetTypePayload
     }
 
     public init(
@@ -102,6 +108,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         draftId: String? = nil,
         mentionsPayload: [PostMentionInput]? = nil,
         mediaAltPayload: [String: String]? = nil,
+        mediaCaptionPayload: [String: String]? = nil,
         allowSoundExtractionPayload: Bool? = nil,
         targetTypePayload: String? = nil
     ) {
@@ -120,6 +127,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.draftId = draftId
         self.mentionsPayload = mentionsPayload
         self.mediaAltPayload = mediaAltPayload
+        self.mediaCaptionPayload = mediaCaptionPayload
         self.allowSoundExtractionPayload = allowSoundExtractionPayload
         self.targetTypePayload = targetTypePayload
     }
@@ -140,6 +148,9 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.draftId = try container.decodeIfPresent(String.self, forKey: .draftId)
         self.mentionsPayload = try container.decodeIfPresent([PostMentionInput].self, forKey: .mentionsPayload)
         self.mediaAltPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaAltPayload)
+        // Row écrite avant #4055 : pas de clé, donc `nil` — jamais un échec de
+        // décodage, qui perdrait la publication en attente TOUT ENTIÈRE.
+        self.mediaCaptionPayload = try container.decodeIfPresent([String: String].self, forKey: .mediaCaptionPayload)
         self.allowSoundExtractionPayload = try container.decodeIfPresent(Bool.self, forKey: .allowSoundExtractionPayload)
         self.targetTypePayload = try container.decodeIfPresent(String.self, forKey: .targetTypePayload)
     }

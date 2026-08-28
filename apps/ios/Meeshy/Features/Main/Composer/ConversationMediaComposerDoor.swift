@@ -260,7 +260,8 @@ struct ConversationMediaComposerDoor: View {
                     visibilityUserIds: visibilityUserIds,
                     draftId: draftId,
                     references: references,
-                    composerMediaAlt: accessibility.mediaAlt ?? [:],
+                    composerMediaTexts: ComposerMediaTexts(alt: accessibility.mediaAlt ?? [:],
+                                                           caption: accessibility.mediaCaption ?? [:]),
                     allowSoundExtraction: accessibility.allowSoundExtraction
                 )
                 // La publication accepte TOUJOURS : hors-ligne, elle part en

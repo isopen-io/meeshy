@@ -466,7 +466,11 @@ struct ComposerToolPanelHost: View {
             ? MeeshyColors.indigo400.opacity(0.18)
             : (colorScheme == .dark ? Color.white.opacity(0.07) : MeeshyColors.indigo950.opacity(0.05))
         let isAccessibilityExpanded = expandedAccessibilityMediaId == media.id
+        // La pastille s'allume dès que l'UN des deux textes est saisi : le
+        // panneau en porte deux depuis #4055, et n'en regarder qu'un ferait
+        // paraître vide un média qui porte une légende.
         let hasAccessibilityInfo = !accessibilityStore.alt(for: media.id).isEmpty
+            || !accessibilityStore.caption(for: media.id).isEmpty
         VStack(alignment: .leading, spacing: isAccessibilityExpanded ? 6 : 0) {
             HStack(spacing: 8) {
                 // Thumbnail
@@ -583,6 +587,10 @@ struct ComposerToolPanelHost: View {
                     onAltCommitted: { text in
                         accessibilityStore.setAlt(text, for: media.id)
                         onMediaAltCommitted?(media.id, text)
+                    },
+                    captionText: accessibilityStore.caption(for: media.id),
+                    onCaptionCommitted: { text in
+                        accessibilityStore.setCaption(text, for: media.id)
                     }
                 )
             }

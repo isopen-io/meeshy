@@ -115,6 +115,15 @@ public struct CreatePostRequest: Encodable {
     /// id de `mediaIds` ci-dessus, ignoré côté gateway pour tout id qui n'y
     /// figure pas (miroir de `CreatePostSchema.mediaAlt`).
     public let mediaAlt: [String: String]?
+    /// LÉGENDE par média (`PostMedia.caption`) — même clé, même borne et même
+    /// règle d'ignorance que `mediaAlt` ci-dessus (miroir de
+    /// `CreatePostSchema.mediaCaption`, #4055).
+    ///
+    /// Champ DISTINCT et non une variante de `mediaAlt` : le texte alternatif
+    /// DÉCRIT le média pour qui ne le voit pas, la légende est ce que l'auteur
+    /// ÉCRIT et que tout le monde VOIT. Cf. `PostMediaText`, qui porte la
+    /// distinction pour les deux bouts de la chaîne.
+    public let mediaCaption: [String: String]?
     /// Grain de découvrabilité géographique DEMANDÉ — le second opt-in de la
     /// spec du 2026-08-02, INDÉPENDANT de `location` ci-dessus : afficher un
     /// lieu sur un contenu et rendre ce contenu trouvable à proximité sont
@@ -131,7 +140,7 @@ public struct CreatePostRequest: Encodable {
     /// rendre trouvable.
     public let discoverabilityPrecision: DiscoverabilityPrecision?
 
-    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) {
+    public init(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", moodEmoji: String? = nil, visibilityUserIds: [String]? = nil, mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil, repostOfId: String? = nil, location: SharedPlace? = nil, storyEffects: StoryEffects? = nil, allowSoundExtraction: Bool? = nil, mentions: [PostMentionInput]? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil, discoverabilityPrecision: DiscoverabilityPrecision? = nil) {
         self.content = content; self.type = type; self.visibility = visibility
         self.moodEmoji = moodEmoji; self.visibilityUserIds = visibilityUserIds
         self.mediaIds = mediaIds; self.audioUrl = audioUrl; self.audioDuration = audioDuration
@@ -143,6 +152,7 @@ public struct CreatePostRequest: Encodable {
         self.allowSoundExtraction = allowSoundExtraction
         self.mentions = mentions
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
         self.discoverabilityPrecision = discoverabilityPrecision
     }
 }
@@ -257,13 +267,17 @@ public struct UpdatePostRequest: Encodable, Sendable {
     /// ignoré côté gateway pour tout id qui n'y figure pas (un média déjà
     /// attaché au post ne se réécrit pas par ce canal).
     public let mediaAlt: [String: String]?
+    /// LÉGENDE par média à l'édition (#4055) — même tri-état que `mediaAlt` :
+    /// clé absente = « n'y touche pas ».
+    public let mediaCaption: [String: String]?
 
     public init(content: String? = nil, visibility: String? = nil, visibilityUserIds: [String]? = nil,
                 moodEmoji: String? = nil, originalLanguage: String? = nil, type: String? = nil,
                 removeMediaIds: [String]? = nil, storyEffects: StoryEffects? = nil,
                 mediaIds: [String]? = nil, location: PostLocationUpdate? = nil,
                 mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil,
-                mediaAlt: [String: String]? = nil) {
+                mediaAlt: [String: String]? = nil,
+                mediaCaption: [String: String]? = nil) {
         self.content = content; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
         self.moodEmoji = moodEmoji
@@ -276,12 +290,13 @@ public struct UpdatePostRequest: Encodable, Sendable {
         self.mentions = mentions
         self.allowSoundExtraction = allowSoundExtraction
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
     }
 
     enum CodingKeys: String, CodingKey {
         case content, visibility, visibilityUserIds, moodEmoji, originalLanguage
         case type, removeMediaIds, storyEffects, mediaIds, location, mentions
-        case allowSoundExtraction, mediaAlt
+        case allowSoundExtraction, mediaAlt, mediaCaption
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -301,6 +316,10 @@ public struct UpdatePostRequest: Encodable, Sendable {
         try c.encodeIfPresent(mentions, forKey: .mentions)
         try c.encodeIfPresent(allowSoundExtraction, forKey: .allowSoundExtraction)
         try c.encodeIfPresent(mediaAlt, forKey: .mediaAlt)
+        // Encodeur MANUEL : un champ ajouté au type et oublié ICI ne part
+        // jamais — sans erreur, sans témoin. C'est cette ligne qui fait
+        // voyager la légende à l'édition.
+        try c.encodeIfPresent(mediaCaption, forKey: .mediaCaption)
         switch location {
         case .set(let place): try c.encode(place, forKey: .location)
         case .remove: try c.encodeNil(forKey: .location)
@@ -380,6 +399,8 @@ public struct CreateStoryRequest: Encodable {
     /// l'auteur n'a rien tranché, le défaut serveur s'applique par SILENCE et
     /// non par écrasement.
     public let allowSoundExtraction: Bool?
+    /// LÉGENDE par média (miroir de `CreatePostSchema.mediaCaption`, #4055).
+    public let mediaCaption: [String: String]?
     /// Texte alternatif par média (miroir de `CreatePostSchema.mediaAlt`).
     ///
     /// La clé est un id de `mediaIds` ci-dessus, et rien d'autre :
@@ -388,7 +409,7 @@ public struct CreateStoryRequest: Encodable {
     /// le serveur, sans erreur. Cf. `StoryMediaAltMapping.serverKeyed`.
     public let mediaAlt: [String: String]?
 
-    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil) {
+    public init(type: String = PostType.story.rawValue, content: String? = nil, storyEffects: StoryEffects? = nil, visibility: String = "PUBLIC", visibilityUserIds: [String]? = nil, originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil, mentions: [PostMentionInput]? = nil, allowSoundExtraction: Bool? = nil, mediaAlt: [String: String]? = nil, mediaCaption: [String: String]? = nil) {
         self.type = type
         self.content = content; self.storyEffects = storyEffects; self.visibility = visibility
         self.visibilityUserIds = visibilityUserIds
@@ -397,6 +418,7 @@ public struct CreateStoryRequest: Encodable {
         self.mentions = mentions
         self.allowSoundExtraction = allowSoundExtraction
         self.mediaAlt = mediaAlt
+        self.mediaCaption = mediaCaption
     }
 }
 
