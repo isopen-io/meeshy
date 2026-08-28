@@ -62,8 +62,21 @@ final class MeeshyComposerHostSceneInspectorGuardTests: XCTestCase {
         XCTAssertTrue(compacted.contains("onSceneItemTapped:{_,kindinselectedSceneItemKind=kind}"),
             "`onSceneItemTapped` doit retenir le KIND de la sélection — c'est lui qui décide QUELS "
                 + "contrôles s'appliquent ; retenir l'id seul ne le dirait pas.")
-        XCTAssertTrue(compacted.contains("onSceneBackgroundTapped:{selectedSceneItemKind=nil}"),
-            "`onSceneBackgroundTapped` doit effacer `selectedSceneItemKind` — sans lui, la zone "
-                + "contextuelle resterait montée après un tap sur le fond de la scène.")
+        // **Repointée au #4035.** Elle épinglait `{selectedSceneItemKind=nil}` —
+        // « le tap sur le fond EFFACE ». C'était juste, et c'était aussi ce qui
+        // rendait l'inspecteur INATTEIGNABLE : en Post, la règle 4 fait du seul
+        // média de la slide son FOND, et le hit-test du canvas n'itère que le
+        // conteneur des OBJETS. Le geste réel de l'utilisateur tombait donc
+        // toujours sur l'effacement.
+        //
+        // Le rappel passe désormais par une RÈGLE nommée, éprouvée à part
+        // (`ComposerSceneBackgroundTapPolicyTests`) : effacer reste ce qu'elle
+        // rend dans trois cas sur quatre, mais ce n'est plus une constante
+        // écrite dans un `body`, où aucun test ne pouvait la lire.
+        XCTAssertTrue(compacted.contains("onSceneBackgroundTapped:{handleSceneBackgroundTap()}"),
+            "`onSceneBackgroundTapped` doit passer par la RÈGLE — un littéral écrit ici serait "
+                + "invisible aux tests, et c'est exactement ce qui a laissé l'inspecteur inatteignable.")
+        XCTAssertTrue(compacted.contains("ComposerSceneBackgroundTapPolicy.selection("),
+            "…et le meuble doit APPELER la règle, pas en réécrire une seconde copie.")
     }
 }

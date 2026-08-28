@@ -72,6 +72,37 @@ nonisolated enum ComposerReelGate {
     }
 }
 
+/// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne (#4035).**
+///
+/// Règle PURE, hors de tout `body` : une condition posée dans une vue est
+/// invisible aux tests, et celle-ci gouverne l'existence même de la zone
+/// contextuelle.
+///
+/// **Pourquoi elle existe.** L'inspecteur était câblé de bout en bout — la
+/// scène transmet `onItemTapped`, l'hôte retient la sélection, la surface monte
+/// la zone — et pourtant INATTEIGNABLE sur l'écran document. En profil Post une
+/// slide ne porte qu'UN média, et la règle 4 en fait son FOND (#4038) ; or le
+/// hit-test du canvas n'itère que le conteneur des ITEMS, où un fond ne vit
+/// pas. Le tap retombait donc sur `onBackgroundTapped`, qui effaçait la
+/// sélection : écran identique au bit près, mesuré au simulateur le 2026-08-28.
+///
+/// **Elle vit côté APP, pas dans le geste du SDK.** Rendre le fond
+/// « hit-testable » côté canvas changerait la manipulation de l'atelier plein
+/// écran, que ce lot doit laisser intact — c'est la condition même de
+/// l'arbitrage porteur (« coquille NEUVE, modèle PARTAGÉ »). Le SDK dit ce qui a
+/// été TOUCHÉ ; l'app décide ce que cela SÉLECTIONNE.
+nonisolated enum ComposerSceneBackgroundTapPolicy {
+
+    /// `nil` ⇒ aucune sélection ⇒ aucune zone contextuelle (loi 4).
+    static func selection(
+        currentSelection: StoryCanvasUIView.CanvasItemKind?,
+        backgroundIsMedia: Bool
+    ) -> StoryCanvasUIView.CanvasItemKind? {
+        guard currentSelection == nil, backgroundIsMedia else { return nil }
+        return .media
+    }
+}
+
 /// **Le gate du MOOD — la jumelle de `ComposerReelGate` (#4030).**
 ///
 /// Le fan du fil offrait `[.post, .story]` et, quand la composition qualifiait,
@@ -636,6 +667,20 @@ struct MeeshyComposerHost: View {
             || ComposerReelGate.compositionQualifiesAsReel(viewModel.currentEffects)
     }
 
+    /// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne (#4035).**
+    ///
+    /// Un TOGGLE, et c'est ce qui le rend utilisable : rien de sélectionné et
+    /// un fond média ⇒ on le sélectionne ; sinon ⇒ on efface. L'auteur entre et
+    /// sort de l'inspecteur par le même geste, sur la même cible — sans quoi
+    /// une sélection posée par un tap sur le fond n'aurait aucune sortie, la
+    /// zone contextuelle restant montée pour toujours.
+    private func handleSceneBackgroundTap() {
+        selectedSceneItemKind = ComposerSceneBackgroundTapPolicy.selection(
+            currentSelection: selectedSceneItemKind,
+            backgroundIsMedia: viewModel.currentSlide.effects.hasVisualBackgroundMedia
+        )
+    }
+
     /// **#4030 — le gate du mood, nourri de la MÊME composition que celui du
     /// réel.** Le mood est une carte SANS scène et SANS média : il ne regarde
     /// donc pas `currentEffects` objet par objet comme le fait le réel, mais
@@ -1127,7 +1172,20 @@ struct MeeshyComposerHost: View {
             // PRÉSENCE ; ce que la zone montre reste au SDK
             // (`EmbeddedSceneInspector`, qui lit le MÊME `viewModel`).
             onSceneItemTapped: { _, kind in selectedSceneItemKind = kind },
-            onSceneBackgroundTapped: { selectedSceneItemKind = nil },
+            // **#4035 — taper la scène quand son FOND est un média le
+            // SÉLECTIONNE.** Sans cette ligne l'inspecteur était INATTEIGNABLE
+            // sur l'écran document, et le câblage complet ne le disait pas :
+            // en profil Post, une slide ne porte QU'UN média et la règle 4 en
+            // fait son FOND (#4038) ; or `hitTestItem` n'itère que
+            // `itemsContainer`, où un fond ne vit pas — le tap retombait donc
+            // sur `onBackgroundTapped`, qui EFFAÇAIT la sélection. Mesuré au
+            // simulateur le 2026-08-28 : écran identique au bit près.
+            //
+            // La correction est APP-SIDE et non dans le geste du SDK : y
+            // rendre le fond « hit-testable » changerait la manipulation de
+            // l'atelier plein écran, que ce lot doit laisser intact. Le SDK dit
+            // ce qui a été touché, l'app décide ce que cela sélectionne.
+            onSceneBackgroundTapped: { handleSceneBackgroundTap() },
             // Taper une vignette amène SA slide sur la scène (#4038). La table
             // `slideIdByMediaURL` est justement l'index qui relie les deux ;
             // sans elle il faudrait deviner par l'ordre, qui ment dès qu'un

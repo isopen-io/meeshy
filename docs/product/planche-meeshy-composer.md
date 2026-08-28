@@ -53,6 +53,21 @@ la demande de départ : une scène doit pouvoir être **un seul média présenta
 il devient un objet de **premier plan**. Un audio devient le **son de fond** s'il n'y en a pas.
 Aucune question n'est posée à l'utilisateur (#4038).
 
+**Taper la scène ouvre le contrôleur de ce qu'elle contient, juste au-dessus de la rangée d'outils
+(#4035).** Aucune sélection ⇒ **zone absente**, jamais un panneau vide. Et le geste est un
+**va-et-vient** : le même tap referme, sinon une zone ouverte par le fond n'aurait aucune sortie.
+
+**Une chaîne dont chaque maillon est juste peut ne transporter personne.** L'inspecteur était câblé
+de bout en bout — la scène transmet la sélection, le meuble la retient, la surface monte la zone —
+et pourtant inatteignable : en Post une slide ne porte qu'UN média, la règle 4 en fait son FOND, et
+le hit-test du canvas n'itère que le conteneur des OBJETS, où un fond ne vit pas. Le tap retombait
+sur « fond touché », qui EFFAÇAIT la sélection. La question à poser à un câblage n'est donc pas
+« le rappel est-il branché ? » mais **« le geste réel de l'utilisateur atteint-il ce rappel ? »**.
+
+La correction vit côté APP, jamais dans le geste du SDK : rendre le fond « touchable » côté canvas
+changerait la manipulation de l'atelier plein écran, que ce lot doit laisser intact. **Le SDK dit ce
+qui a été touché, l'app décide ce que cela sélectionne.**
+
 **Le mime DÉCLARÉ voyage avec le média posé (#4038).** Poser un média sur une scène le COPIE sous
 `{objectId}.{ext}`, et c'est ce NOM que tout l'aval relit pour étiqueter le téléversement. Le choix
 de l'extension EST donc le transport du mime — et il était guessé : une URL source sans extension
