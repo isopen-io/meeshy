@@ -246,6 +246,16 @@ footer .mono{font-size:11.5px}
 <!-- ================================================================ P0 -->
 <section id="p0"><div class="wrap">
   <div class="prail"><span class="pnum">P0</span><h2>Avancement — le tableau de bord vivant <span class="tag tNew">rév. 25 · 2026-08-27</span></h2></div>
+  <div class="callout"><b>Ce tableau de bord est un COMPTE RENDU daté, jamais la source d'état.</b>
+  Le pilotage vit dans les issues du projet « Meeshy — pilotage » : quand ce tableau et une issue
+  divergent, <b>l'issue a raison</b>. Ce qui est stable ici, c'est le VOCABULAIRE — chaque tâche
+  porte sur un niveau du modèle, et c'est ce qui permet de dire ce qu'elle livre :
+  <span class="mono">MeeshyPublication</span> (ce qui part : audience, profil, son de fond) ·
+  <span class="mono">MeeshySlide</span> (le rail, les descriptions) ·
+  <span class="mono">MeeshyScene</span> (les trois plans, le 9:16, le porteur) ·
+  <span class="mono">MeeshyObject</span> (les kinds, la pose, le timing, l'inspecteur). Une tâche
+  qui ne sait pas dire sur quel niveau elle porte n'est pas encore spécifiée.</div>
+
   <p class="lede">L'état RÉEL du chantier, chiffré sur les <b>121</b> tâches d'exécution des huit lots A→H <i>et</i> des lots du chantier v2
   (dénominateur 51→57→63→65, rév. 7 : le rattrapage revue Opus du lot B ajoute six tâches B8a→B8f ;
   rév. 8 : le rattrapage revue Opus du lot F ajoute six tâches F7a→F7f ; rév. 9 : dénominateur INCHANGÉ à 63 — les cinq tâches E1→E5 y sont depuis la rév. 8, les porter à 68 au gate final du lot E aurait compté ce lot deux fois ; <b>rév. 10 : dénominateur 63→65</b> — cette planche avait pris deux jours de retard sur le dépôt : lot D (mergé sur main, <span class="mono">24d1bf752</span>), lot E (mergé sur main, <span class="mono">e9e674a55</span>, dont le SWAP d'E4 livré par le socle C) et C1 (mergé, <span class="mono">ff41657b9</span>) basculent en <b>Fait &amp; testé</b> sans changer le compte (ils étaient déjà dans les 63) ; C4 se scinde en DEUX tâches distinctes — l'en-tête <span class="mono">X-Canvas-Caps</span> (livré, <span class="mono">cf05538d9</span>) et le 426 + la porte de mise à jour (restant) — ce qui ajoute UNE tâche ; et la correction du défaut de cadre v1→v3 par <span class="mono">carrierAspect</span> (<span class="mono">b82ebbc17</span>) ajoute UNE tâche rattrapage hors plan initial, comme B8/F7 en leur temps. 63 + 1 (scission C4) + 1 (carrierAspect) = 65. <b>Rév. 11 — 65→67</b> : la directive de parité iOS&nbsp;⇄&nbsp;Web du 2026-08-23 requalifie deux dettes du lot F, jusque-là classées « lot futur », en tâches de rattrapage — même statut que B8/F7/carrierAspect en leur temps. <b>W1</b> — le web ne dispatche que <span class="mono">text·media·audio·sticker</span> (<span class="mono">CanvasV3Scene.tsx:591-599</span>) et laisse tomber <span class="mono">place</span> et <span class="mono">drawing</span> sur un <span class="mono">return null</span> documenté « ignoré EN SILENCE », alors qu'iOS ÉMET les deux (<span class="mono">CanvasV3Migration.swift:263,269</span>) et que le golden PARTAGÉ porte un <span class="mono">('L1','place','fg')</span> : une story iOS avec une épingle de lieu s'affiche sur le web SANS son lieu, sans rien signaler. Écart LIVE. <b>W2</b> — le web ne rend que <span class="mono">scenes[sceneIndex]</span>, sans enchaînement inter-scènes ; écart LATENT tant qu'iOS n'émet qu'une scène, qui devient LIVE au multi-diapositives du lot C — il se cale donc AVANT lui, sans quoi le lot C fabrique lui-même la régression. <i>Nuance relevée en vérifiant : le contrat déclare SEPT kinds actifs, <span class="mono">mention</span> compris, mais AUCUN écrivain n'en émet et iOS fait <span class="mono">continue</span> à la lecture — deux écarts vivants, pas trois.</i> Détail exécutable : <span class="mono">tasks/todo-composer-lot-c-et-v2-2026-08-23.md</span>.
@@ -732,9 +742,21 @@ footer .mono{font-size:11.5px}
       <tr><td class="mono">audio</td><td>une piste : source (originale ou empruntée avec son <span class="mono">soundId</span>), volume, bornes, forme d'onde</td><td><b>la seconde place du</b> <span class="mono">background</span> si elle est libre — sinon <span class="mono">foreground</span> (#4052)</td><td>bibliothèque · fichier · micro</td></tr>
       <tr><td class="mono">place</td><td>une pastille de lieu POSÉE sur la scène — <b>à ne pas confondre avec le lieu de la publication</b> : l'un décore une image, l'autre dit d'où l'on publie</td><td class="mono">foreground</td><td>outil lieu (sur scène)</td></tr>
       <tr><td class="mono">drawing</td><td>les traits : pinceau, épaisseur, couleur — timables comme le reste</td><td class="mono">foreground</td><td>mode dessin immersif</td></tr>
-      <tr><td class="mono">mention</td><td>un badge de référence, porteur de son <span class="mono">referenceUserId</span> — c'est lui qui l'exclut de la dérivation INLINE du texte</td><td class="mono">foreground</td><td>chip Références, mode PINNED</td></tr>
+      <tr><td class="mono">mention</td><td>un badge de référence, porteur de son <span class="mono">referenceUserId</span> — c'est lui qui l'exclut de la dérivation INLINE du texte</td><td class="mono">foreground</td><td><b class="ab">aucune — déclaré actif, produit par personne</b> (voir ci-dessous)</td></tr>
     </tbody>
   </table></div>
+
+  <div class="callout"><b><span class="mono">mention</span> est le septième kind, et il n'est
+  ACTIF que sur le papier.</b> Le contrat le range dans
+  <span class="mono">ACTIVE_KINDS</span>, le décodeur Swift sait le lire — et <b>aucun écrivain du
+  dépôt ne l'émet</b>, pendant qu'à la relecture iOS le traite dans le MÊME
+  <span class="mono">case</span> que les kinds réservés :
+  <span class="mono">case .mention, .reserved: continue</span>. Il n'y a donc pas sept kinds
+  vivants mais <b>six</b>, plus un déclaré. Ce n'est pas un détail de comptage : c'est la forme
+  exacte du piège que ce dépôt documente ailleurs — <i>un champ que le contrat déclare et
+  qu'aucun producteur n'écrit est tenu pour acquis par tous ceux qui lisent le schéma</i>. Le jour
+  où une surface l'émettra, elle sera silencieusement jetée à la lecture, sans qu'aucun témoin ne
+  tombe. Les Références (P22) passent aujourd'hui par le texte INLINE, pas par ce kind.</div>
 
   <div class="callout"><b>Trois kinds RÉSERVÉS, et « réservé » n'est pas « inconnu ».</b>
   <span class="mono">hashtag</span> · <span class="mono">annotation</span> ·
@@ -790,7 +812,10 @@ footer .mono{font-size:11.5px}
 <section id="p1"><div class="wrap">
   <div class="prail"><span class="pnum">P1</span><h2>Doctrine — onze lois, aucune exception</h2></div>
   <p class="lede">Tout le reste du document se déduit d'ici. Quand deux planches semblent se
-  contredire, c'est la loi qui tranche.</p>
+  contredire, c'est la loi qui tranche. <b>Chaque loi porte sur UN niveau du modèle</b>, et le dire
+  n'est pas une glose : deux lois qui semblent se contredire portent presque toujours sur deux
+  niveaux différents — c'est le cas des lois 3 et 9, dont la rév. 3 a dû expliciter qu'elles
+  tiennent ENSEMBLE.</p>
   <div class="grid g3">
     <div class="card"><h4>1 · Le format est un champ</h4><p>Jamais un écran. On n'entre pas dans
       « le composer de story » : on entre dans le composer, déjà réglé sur STORY parce qu'on vient
@@ -798,20 +823,31 @@ footer .mono{font-size:11.5px}
     <div class="card"><h4>2 · Un objet, cinq familles en moins</h4><p>Texte, média, sticker, son,
       lieu, dessin, mention — un seul <b class="mono">MeeshyObject</b> (transform, timing,
       layer, locale). Aujourd'hui chaque famille redéclare scale/rotation/zIndex/startTime/keyframes
-      (<span class="mono">StoryModels.swift:272-276, 629-664, 914-928</span>).</p></div>
+      (<span class="mono">StoryModels.swift:272-276, 629-664, 914-928</span>).
+      <b>« Cinq en moins » est un compte, pas une image</b> : la migration v1→v3 convertit SIX
+      familles séparées en UNE liste — six boucles dans
+      <span class="mono">CanvasV3Migration</span>, donc cinq déclarations de pose qui
+      disparaissent. Anatomie complète des neuf champs et des sept kinds : § modèle.</p></div>
     <div class="card"><h4>3 · La scène est 9:16, toujours</h4><p>Le contenu porteur garde son ratio ;
       le hors-champ devient deux bandes <b>actives</b>. Un post sans visuel n'a pas de scène du
-      tout — un cadre vide est une injonction à le remplir.</p></div>
+      tout — un cadre vide est une injonction à le remplir. <b>Niveau :</b> la
+      <span class="mono">MeeshyScene</span>. « Pas de scène du tout » est littéral au contrat —
+      <span class="mono">scenes</span> est ABSENT, pas vide.</p></div>
     <div class="card"><h4>4 · Rien à l'écran sans raison</h4><p>Un contrôle d'OBJET apparaît si —
       et seulement si — l'objet courant l'accepte, le profil l'autorise, et l'action a un effet
-      maintenant. Sinon il n'est pas grisé : il n'est pas là. Portée précisée (rév. 2) : la loi
+      maintenant. Sinon il n'est pas grisé : il n'est pas là. <b>Niveau :</b> UN
+      <span class="mono">MeeshyObject</span> — « l'objet courant l'accepte » se lit sur son
+      <span class="mono">kind</span>, et c'est ce qui rend la loi testable plutôt qu'esthétique.
+      Portée précisée (rév. 2) : la loi
       vaut pour les contrôles d'objet, jamais pour les PORTES DE CRÉATION — l'état AMORCE (P4)
       garde toujours un domicile visible. Exception nommée : le sélecteur d'audience d'un repost
       montre les niveaux bornés, verrouillés avec leur raison (P10).</p></div>
     <div class="card"><h4>5 · Le socle ne bouge jamais</h4><p>Audience · aperçu · publier, en bas,
       dans le plateau sombre (noir / indigo profond / violet profond — jeton choisi par
       l'utilisateur dans ses réglages d'interface). La seule erreur irréversible d'une publication
-      est son audience : elle reste lisible en permanence.</p></div>
+      est son audience : elle reste lisible en permanence. <b>Niveau :</b> la
+      <span class="mono">MeeshyPublication</span> — le socle est le seul endroit de l'écran qui ne
+      parle jamais d'un objet ni d'une slide, mais de ce qui PART.</p></div>
     <div class="card"><h4>6 · Le lecteur EST l'aperçu</h4><p>Composer et viewers partagent le même
       registre de rendu (<b class="mono">MeeshyScenePlayer</b>). L'aperçu du socle, la carte de
       feed, le viewer plein écran : trois chromes, un moteur. WYSIWYG par construction.</p></div>
@@ -826,13 +862,22 @@ footer .mono{font-size:11.5px}
       visibles sont f(format COURANT, seed), recalculées à chaque bascule S↔P↔R. Le texte de BASE
       est PRÉSERVÉ d'un mode à l'autre (post↔réel↔story↔mood) — porté par la description repliable —,
       et les objets de scène gardent chacun leur place. Le champ nouvellement montré adopte le
-      contenu préservé, jamais du vide. <b>Rév. 3 (2026-08-27)</b> — révise « le texte ne migre
-      jamais » de la rév. 2 : loi 9 (préservation) et loi 3 (une seule scène) tenues ensemble.</p></div>
+      contenu préservé, jamais du vide. <b>Niveaux :</b> la préservation joue sur DEUX — la
+      description de la <span class="mono">MeeshySlide</span> (le texte de base) et les
+      <span class="mono">MeeshyObject</span> de sa <span class="mono">MeeshyScene</span> (chacun
+      garde <span class="mono">anchor</span>, <span class="mono">plane</span>,
+      <span class="mono">z</span>). Ce que la bascule recalcule n'est ni l'un ni l'autre : c'est le
+      jeu de kinds AUTORISÉS. <b>Rév. 3 (2026-08-27)</b> — révise « le texte ne migre
+      jamais » de la rév. 2 : loi 9 (préservation) et loi 3 (une seule scène) tenues ensemble,
+      justement parce qu'elles ne portent pas sur le même niveau.</p></div>
     <div class="card"><h4>10 · L'audience se souvient PAR FORMAT</h4><p>Mémoires S/P/R/M
       séparées (préservation de <span class="mono">StoryVisibilityPreferenceStore</span> et
       <span class="mono">lastStatusVisibility</span>) — un post Public ponctuel ne contamine
       jamais la story intime suivante. Le chip se met en évidence quand l'audience diffère de
-      l'habituelle du format. Rév. 2 (U7).</p></div>
+      l'habituelle du format. <b>Niveau :</b> la <span class="mono">MeeshyPublication</span> —
+      l'audience n'est jamais une propriété d'une slide ni d'un objet, ce qui est exactement
+      pourquoi elle peut se souvenir PAR FORMAT sans rien contaminer du contenu (loi 9).
+      Rév. 2 (U7).</p></div>
     <div class="card"><h4>11 · Personne ne lit du vide</h4><p>L'archive est TOUJOURS
       restituée (v1 d'origine aux anciens clients, v3 converti aux clients à jour) ; un contenu
       v3-natif servi à un client qui ne sait pas le lire devient une SENTINELLE lisible qui
@@ -2366,8 +2411,10 @@ flowchart TD
       Texte (<span class="mono">text</span>) · Média (<span class="mono">media</span>) · Stickers
       (<span class="mono">sticker</span>) · Son (<span class="mono">audio</span>) · Lieu
       (<span class="mono">place</span>) · Dessin (<span class="mono">drawing</span>) ·
-      <b>Références</b> (<span class="mono">mention</span>). <b>La table est donc COMPLÈTE sur les
-      kinds</b> — vérifié ligne à ligne, et c'est le seul contrôle de complétude qu'elle admette.</li>
+      <b>Références</b> (<span class="mono">mention</span>). <b>La table couvre donc les sept kinds</b> —
+      vérifié ligne à ligne. Avec une réserve qui compte : <span class="mono">mention</span> n'est
+      PAS produit aujourd'hui (§ modèle), donc la ligne « Références » décrit un chemin INLINE et
+      non la pose d'un objet.</li>
     <li><b>Agissent sur un objet DÉJÀ posé, sans en créer</b> — Filtres (une propriété du
       <span class="mono">payload</span> d'un objet <span class="mono">media</span>) et les six
       sous-contrôles de Texte (style, couleur, fond, taille, alignement, langue).</li>
