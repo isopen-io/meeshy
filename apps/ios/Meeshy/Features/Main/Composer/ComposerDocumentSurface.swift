@@ -1509,6 +1509,15 @@ struct ComposerDocumentSurface: View {
     /// reste celui d'hier — la géométrie est prête, elle n'est pas imposée.
     var showsRails: Bool = false
 
+    /// Les portes SERVIES du rail *leading* (#4062) — déjà filtrées par
+    /// `ComposerRailDoor.offered`. La surface ne re-filtre rien : une seconde
+    /// loi 4 divergerait de la première au premier ajustement.
+    var railDoors: [ComposerRailDoor] = []
+
+    /// Relais d'un tap sur une porte du rail. `nil` ⇒ le rail n'a personne
+    /// derrière lui, donc rien n'est peint (loi 4, comme `onTool`).
+    var onRailDoor: ((ComposerRailDoor) -> Void)? = nil
+
     /// **Relais du tap sur un objet de la scène incrustée (lot 3A du composer
     /// unifié, #4035).** L'hôte retient la sélection et décide de monter
     /// `sceneInspector` — la surface reste sans état sur CE que ce tap
@@ -1823,6 +1832,29 @@ struct ComposerDocumentSurface: View {
                 // `MeeshyObject` peut vivre, donc l'aperçu mentirait sur le
                 // rendu final.
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: showsRails))
+                // **Le rail se pose DANS le couloir déjà réservé** (#4062) —
+                // la surimpression porte sur la vue DÉJÀ encastrée, donc son
+                // repère inclut le couloir : `.bottomLeading` tombe dans
+                // l'espace de plateau, jamais sur la scène.
+                //
+                // C'est ce qui fait que « surimpression » n'est pas ici
+                // synonyme de « recouvrement » : la place a été prise AVANT,
+                // par `sceneInset`, et cette vue ne fait que l'occuper.
+                //
+                // Les DEUX couloirs sont réservés dès maintenant, alors que
+                // seul le rail *leading* existe : sinon la scène se décalerait
+                // le jour où le rail *trailing* arrive (#4063), et la
+                // composition bougerait sous l'auteur — un déplacement que
+                // personne n'a demandé et que rien ne rattrape.
+                .overlay(alignment: .bottomLeading) {
+                    if showsRails, !railDoors.isEmpty {
+                        ComposerLeadingRail(doors: railDoors,
+                                            plateauTint: plateauTint,
+                                            onDoor: onRailDoor)
+                            .padding(.leading, ComposerRailGeometry.outerMargin)
+                            .padding(.bottom, ComposerRailGeometry.gutter)
+                    }
+                }
                 .padding(.top, 8)
                 sceneDescriptionField
             }

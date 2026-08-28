@@ -1212,6 +1212,20 @@ struct MeeshyComposerHost: View {
             ),
             showsScene: documentHasScene,
             sceneAspectRatio: viewModel.currentCanvasRatio,
+            // **#4061/#4062 — les rails ne paraissent QUE là où il y a une
+            // scène.** Sans scène, l'écran document est un texte : deux rails
+            // y encadreraient du vide, et l'encastrement volerait 124 pt à un
+            // champ qui n'en profite pas.
+            showsRails: documentHasScene,
+            // La composition du rail est une RÈGLE (`ComposerRailDoor.offered`),
+            // lue au format COURANT — jamais au format d'ouverture : les
+            // capacités se recalculent à chaque bascule S↔P↔R (loi 9).
+            railDoors: ComposerRailDoor.offered(
+                served: servedRailDoors,
+                format: selectedFormat,
+                allowsCapture: profile.allowsCapture
+            ),
+            onRailDoor: { door in handleRailDoor(door) },
             // Lot 3A (#4035) — état INSPECTEUR : retenir la sélection remontée
             // par le canvas, et monter la zone contextuelle SEULEMENT quand
             // elle existe (loi 4). Le meuble ne décide QUE de l'ABSENCE/
@@ -1858,6 +1872,54 @@ struct MeeshyComposerHost: View {
     /// cas distincts sur `tool.effect` — `.photoLibrary`/`.camera`/`.files`
     /// restent une question posée au SÉLECTEUR à ouvrir
     /// (`presentMediaIntake`), jamais une seconde question posée à l'outil.
+    /// **Les portes que CE meuble sait réellement servir** (#4062).
+    ///
+    /// La loi 4 s'applique ici, pas dans la vue : une porte peinte dont le
+    /// résultat n'a nulle part où aller est exactement ce qu'elle interdit. Ce
+    /// jeu est donc l'inventaire des chemins d'ingestion RÉELS de l'hôte, et
+    /// il grandira porte par porte.
+    ///
+    /// **DEUX portes en sont absentes, et chacune pour une raison MESURÉE.**
+    ///
+    /// `sticker` — le meuble n'a aucun chemin qui pose un `MeeshyObject` de
+    /// kind `sticker` sur la scène. `showsEmojiPicker` insère dans le TEXTE
+    /// (`insertsEmojiIntoText`), ce qui n'est pas la même chose : la peindre
+    /// ouvrirait un sélecteur dont le résultat n'atteindrait jamais la scène.
+    ///
+    /// `description` — le champ existe bien sous la scène, mais **rien ne
+    /// permet de lui donner le focus depuis l'extérieur** : la surface n'expose
+    /// aucun relais de focus vers `sceneDescriptionField`. La porte serait donc
+    /// un bouton sans effet, et la loi 4 ne fait pas d'exception pour les
+    /// portes qu'on a l'intention de câbler bientôt. Elle entrera avec #4065,
+    /// qui construit le calque de description.
+    ///
+    /// Les quatre restantes réempruntent les chemins que `handleDocumentTool`
+    /// sert déjà.
+    private var servedRailDoors: Set<ComposerRailDoor> {
+        [.media, .sound, .place, .mention]
+    }
+
+    /// Une porte du rail délègue au chemin d'ingestion EXISTANT — le rail est
+    /// une autre GÉOGRAPHIE, pas un second pipeline. Écrire ici un chemin neuf
+    /// ferait diverger la porte de la rangée qui fait déjà la même chose.
+    private func handleRailDoor(_ door: ComposerRailDoor) {
+        switch door {
+        case .description, .sticker:
+            // Injoignables : `servedRailDoors` ne les sert pas, et la loi 4
+            // veut qu'une porte sans effet ne soit pas peinte. Le `switch`
+            // reste exhaustif pour qu'ajouter leur chemin oblige à passer ici.
+            break
+        case .media:
+            handleDocumentTool(.photo)
+        case .sound:
+            handleDocumentTool(.microphone)
+        case .mention:
+            handleDocumentTool(.mention)
+        case .place:
+            handleDocumentTool(.place)
+        }
+    }
+
     private func handleDocumentTool(_ tool: ComposerDocumentTool) {
         switch tool.effect {
         case .insertsEmojiIntoText:
