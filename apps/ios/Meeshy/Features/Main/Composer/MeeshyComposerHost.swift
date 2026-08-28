@@ -605,6 +605,11 @@ struct MeeshyComposerHost: View {
     /// l'encastrement vient de libérer.
     @State private var requestedSceneBand: ComposerSceneBand?
 
+    /// **La couche d'écriture de la description, par-dessus l'atelier** (#4124).
+    /// `false` ⇒ rien n'est monté : la scène occupe tout ce que le chrome lui
+    /// laisse, et le bas ne porte plus de champ permanent.
+    @State private var editsSceneDescription = false
+
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
     /// déplie sur un champ lié au CONTENU partagé (`documentText`). Vit dans le
@@ -965,11 +970,13 @@ struct MeeshyComposerHost: View {
             // ce `body` interdit, et elle a rougi pour le dire.
             if paintsFormatFan { plateauTools }
             surfaceWithIntakePortals
-            // B2 (#3925) — la description repliable vit SOUS le canvas, en mode
-            // scène uniquement : c'est la surface d'édition, côté scène, du
-            // CONTENU partagé que B1 préserve entre les modes. Le reader
-            // l'affiche par-dessus le canvas composé (légende `content`).
-            if mountedSurface == .scene { sceneDescriptionSection }
+            // **La description a quitté le bas au #4124.** Elle y vivait en
+            // permanence — d'abord une barre à chevron, puis le calque de
+            // lecture — et prenait la place que la scène CENTRÉE réclame, pour
+            // un texte que l'auteur ne regarde pas la plupart du temps. Elle
+            // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
+            // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
+            // l'écrit.
             // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
             // peint donc les MÊMES trois zones seulement quand l'atelier les a
             // cédées : deux barres de publication, dont une inerte, seraient
@@ -985,6 +992,14 @@ struct MeeshyComposerHost: View {
             }
         }
         .background(tint.color.ignoresSafeArea())
+        // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
+        // meuble et non en `.sheet` : une feuille système laisse voir la scène
+        // NETTE derrière son bord arrondi et impose sa propre poignée, alors que
+        // la directive demande la scène FLOUTÉE et un « Terminé » au-dessus du
+        // clavier — deux choses qu'une feuille ne sait pas faire ensemble.
+        .overlay {
+            if editsSceneDescription { sceneDescriptionLayer }
+        }
         // `initial: true` couvre la graine SYNCHRONE (la republication, connue
         // dès la construction) ; le changement couvre la graine ASYNCHRONE (la
         // reprise hors-ligne, qui arrive quand la file a répondu). Un seul
@@ -1202,6 +1217,75 @@ struct MeeshyComposerHost: View {
         .storyRecentCameraRollProvided()
         .storyPasteProvided()
         .storyStickerLibraryProvided()
+        // **Les deux accessoires de la rangée haute de l'atelier** (#4124). Le
+        // SDK expose deux emplacements ; ce qu'on y met reste app-side — le chip
+        // lit l'éventail et la mémoire de format, l'icône ouvre un éditeur dont
+        // le TEXTE appartient au meuble.
+        //
+        // Le chip est gaté par la MÊME règle que partout ailleurs
+        // (`ComposerFormatFanPlacement`) : c'est elle qui garantit qu'il n'y a
+        // jamais deux sélecteurs à l'écran, par l'exhaustivité de son `switch`
+        // et non par un compte d'occurrences.
+        .storyComposerHeaderLeadingAccessory {
+            HStack(spacing: 6) {
+                if mountsFormatFan
+                    && ComposerFormatFanPlacement.place(for: mountedSurface) == .atelierHeader {
+                    formatChip
+                }
+                atelierDescriptionButton
+            }
+        }
+    }
+
+    /// **L'icône qui ouvre la description de la slide** (#4124).
+    ///
+    /// Elle remplace le « Touchez pour écrire » qui occupait le bas de l'écran
+    /// en permanence — un calque de lecture y prenait la place que la scène
+    /// centrée réclame, pour un texte que l'auteur ne regarde pas la plupart du
+    /// temps.
+    ///
+    /// Le glyphe dit ce qu'il ouvre : `text.alignleft` est le PARAGRAPHE, pas
+    /// un crayon (qui aurait dit « modifier la scène ») ni une bulle (qui aurait
+    /// dit « commenter »).
+    ///
+    /// **Le point signale un texte DÉJÀ écrit**, sans le lire : un contrôle qui
+    /// n'affiche jamais son état oblige à l'ouvrir pour savoir s'il est vide.
+    ///
+    /// **Elle se pose du côté qui QUALIFIE**, avec le type — pas dans le groupe
+    /// d'actions. Ce n'est pas un rangement : posée à droite, elle portait ce
+    /// groupe à cinq pastilles sur 402 pt, et la mesure a montré le sélecteur
+    /// d'audience tronqué en « F » avec l'icône à moitié sous la flèche. Un
+    /// ATTRIBUT rangé parmi les ACTIONS déborde.
+    private var atelierDescriptionButton: some View {
+        Button {
+            HapticFeedback.light()
+            editsSceneDescription = true
+        } label: {
+            Image(systemName: "text.alignleft")
+                .font(.system(size: 13, weight: .bold))
+                // **`glassControlForeground()`, jamais `textPrimary(isDark: true)`**
+                // — et la différence se voit. Le chrome du document vit sur un
+                // plateau SOMBRE en permanence, donc y coder « clair » marchait ;
+                // celui de l'atelier suit `canvasChromeScheme`, qui bascule avec
+                // le FOND du canvas. Un glyphe clair posé sur un fond de scène
+                // pastel disparaît, mesuré à l'écran.
+                .glassControlForeground()
+                .frame(width: ComposerControlMetrics.visualDiameter,
+                       height: ComposerControlMetrics.visualDiameter)
+                .adaptiveGlass(in: Circle())
+                .overlay(alignment: .topTrailing) {
+                    if !documentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Circle()
+                            .fill(MeeshyColors.indigo400)
+                            .frame(width: 7, height: 7)
+                            .offset(x: 1, y: -1)
+                    }
+                }
+        }
+        .accessibilityLabel(Text(ComposerDescriptionCopy.openLayer))
+        .accessibilityValue(Text(documentText.isEmpty
+                                 ? ComposerDescriptionCopy.amorce
+                                 : documentText))
     }
 
     /// La surface « document sans scène » (V2).
@@ -1568,30 +1652,108 @@ struct MeeshyComposerHost: View {
         }
     }
 
-    /// **B2 (#3925), devenue le CALQUE DE LECTURE au #4065.**
+    /// **B2 (#3925), devenue la COUCHE D'ÉCRITURE au #4124.**
     ///
-    /// En mode scène (Story/Réel), la description liée au CONTENU PARTAGÉ
-    /// (`documentText`) : ce que l'auteur écrit ici part comme `slide.content`
-    /// (via `applyContentText`, le même canal que B1) et le reader l'affiche
-    /// par-dessus le canvas composé — la légende `content` des viewers existants
-    /// (`ReelsPlayerView`, `FeedPostCard`, `PostDetailView`, `StoryViewer`).
-    /// C'est la surface d'ÉDITION, côté scène, du contenu que B1 préserve entre
-    /// les modes — jamais un second champ.
+    /// Ce que l'auteur écrit ici part comme `slide.content` (via
+    /// `applyContentText`, le même canal que B1) et le reader l'affiche
+    /// par-dessus le canvas composé — la légende `content` des viewers
+    /// existants. C'est la surface d'ÉDITION, côté scène, du contenu que B1
+    /// préserve entre les modes ; jamais un second champ.
     ///
-    /// **Elle fut une barre repliable à chevron, et ce n'en est plus une.** La
-    /// barre montrait un RÉSUMÉ d'une ligne, en texte brut, sous une icône et un
-    /// chevron : trois éléments de chrome pour dire ce que le lecteur verrait,
-    /// et qui ne le montraient pas. `ComposerDescriptionLayer` rend le texte
-    /// avec le renderer du lecteur et se déplie au tap — un seul calque, monté
-    /// aussi par la surface de scène. Les deux profils voient donc EXACTEMENT la
-    /// même chose, ce que deux implémentations n'auraient pas tenu deux lots.
-    private var sceneDescriptionSection: some View {
-        ComposerDescriptionLayer(
-            text: sceneDescriptionBinding,
-            placeholder: String(localized: "composer.scene.description.placeholder",
-                                defaultValue: "Ajoutez une description…", bundle: .main)
-        )
-        .background(MeeshyColors.textPrimary(isDark: true).opacity(0.06))
+    /// ## Trois formes en trois lots, et la troisième dit pourquoi
+    ///
+    /// Elle fut une **barre repliable à chevron** (#3925) : trois éléments de
+    /// chrome pour dire ce que le lecteur verrait, et qui ne le montraient pas.
+    /// Puis le **calque de lecture** (#4065), qui le montrait — mais depuis le
+    /// bas de l'écran, en permanence. La scène étant désormais CENTRÉE et
+    /// marginée (#4124), cette place permanente est précisément celle qu'il faut
+    /// lui rendre.
+    ///
+    /// Elle devient donc une **couche**, ouverte par l'icône de la rangée haute.
+    /// Le calque de lecture n'est pas abandonné : il est ce que la couche
+    /// contient — même composant, mêmes mentions, même rendu par le renderer du
+    /// lecteur.
+    ///
+    /// ## Le flou vient du MATÉRIAU, jamais d'un `.blur()`
+    ///
+    /// `.ultraThinMaterial` floute ce qui est derrière lui par composition, sans
+    /// toucher à la vue floutée. Un `.blur(radius:)` sur l'atelier aurait
+    /// re-rendu le canvas — `StoryCanvasUIView` reconstruit ses layers à chaque
+    /// `layoutSubviews` — pour un effet que le système sait produire à coût nul.
+    /// La hauteur que la couche laisse à l'en-tête. Le chrome de l'atelier est
+    /// FLOTTANT — il ne prélève aucune hauteur —, donc cette réserve est ce qui
+    /// le garde net. Même valeur que celle dont le canvas cardé se décale, pour
+    /// que les deux bords tombent à la même ligne.
+    /// 44 pt de cible + 32 pt d'air. Mesuré à l'écran : à 52 pt la rangée était
+    /// coupée en deux par le bord du matériau — la réserve doit couvrir la
+    /// CIBLE tactile entière, pas la seule pastille visible (36 pt).
+    private static let descriptionLayerHeaderClearance: CGFloat = 76
+
+    private var sceneDescriptionLayer: some View {
+        // **La couche commence SOUS l'en-tête, qui reste NET.** La directive dit
+        // « en dessous de l'entête », et ce n'est pas un détail de marge : la
+        // rangée haute est le seul repère qui dise OÙ l'on est pendant qu'on
+        // écrit — le ✕ pour sortir, le chip pour savoir ce qu'on compose. La
+        // flouter avec la scène ferait un écran d'écriture sans adresse.
+        ZStack(alignment: .top) {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: Self.descriptionLayerHeaderClearance)
+                Rectangle()
+                    .fill(.ultraThinMaterial)
+                    // Taper le fond ferme : la sortie ne dépend pas du seul bouton.
+                    .onTapGesture { editsSceneDescription = false }
+            }
+            .ignoresSafeArea(edges: .bottom)
+
+            // **Ancrée en HAUT, jamais centrée.** Une zone centrée passe sous le
+            // clavier dès qu'il monte — et sa hauteur varie avec la langue, la
+            // barre de suggestions et le clavier tiers. Ancrée sous la zone
+            // sûre, elle reste visible quelle que soit cette hauteur, et le
+            // texte grandit vers le bas comme dans n'importe quel éditeur.
+            // **Elle prend TOUT l'écran sous l'en-tête** (directive porteur
+            // 2026-08-28). Pas une zone posée en haut : une SURFACE d'écriture,
+            // qui commence sous la rangée et descend jusqu'au clavier.
+            //
+            // La raison donnée porte plus loin que cet écran — « ceci permet de
+            // maintenir la même logique partout plus tard comme comportement au
+            // niveau de modification de Slide » : ce qu'on fixe ici est le
+            // patron d'ÉDITION d'une slide, que toute surface éditant une slide
+            // reprendra.
+            VStack(spacing: 0) {
+                ComposerDescriptionLayer(
+                    text: sceneDescriptionBinding,
+                    placeholder: String(localized: "composer.scene.description.placeholder",
+                                        defaultValue: "Ajoutez une description…", bundle: .main),
+                    // La couche a toute la place : la troncature du repos n'a
+                    // plus de raison d'être ici.
+                    collapsedLineLimit: 24,
+                    opensEditingOnAppear: true,
+                    // Le texte part du HAUT de la surface et descend, comme dans
+                    // n'importe quel éditeur — centré, il flotterait au milieu
+                    // d'un vide et sauterait à chaque ligne ajoutée.
+                    fillsAvailableHeight: true
+                )
+                .padding(.horizontal, 8)
+                .padding(.top, Self.descriptionLayerHeaderClearance + 8)
+                .padding(.bottom, 12)
+            }
+        }
+        // **« Terminé » au-dessus du clavier**, à la place que le système lui
+        // réserve — jamais un bouton flottant posé sur la couche, qui se
+        // retrouverait sous le clavier dès que le texte grandit.
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                // `indigo400`, pas `indigo500` : c'est le jeton d'accent que le
+                // meuble mesure déjà au seuil composant (3:1). En introduire un
+                // second obligerait la suite de contraste à le mesurer sur les
+                // trois teintes de plateau — pour un bouton qui vit sur la barre
+                // de clavier, où aucune de ces teintes n'est le fond.
+                Button(ComposerDescriptionCopy.doneShort) { editsSceneDescription = false }
+                    .foregroundColor(MeeshyColors.indigo400)
+            }
+        }
+        .transition(.opacity)
     }
 
     /// **Le binding qui garde UN seul contenu.** Écrire dans la description met
@@ -2285,13 +2447,18 @@ struct MeeshyComposerHost: View {
     /// CONSTRUCTION les sert toutes les deux : en écrire une par place aurait
     /// donné deux sélecteurs à faire diverger, et le compte d'occurrences que
     /// les gardes tiennent est là pour l'interdire.
+    /// **Le premier plan est ADAPTATIF depuis #4124.** Il était
+    /// `textSecondary(isDark: true)` — juste tant que le chip ne vivait que sur
+    /// le plateau, sombre par construction. Descendu dans la rangée de
+    /// l'atelier, il hérite de `canvasChromeScheme`, qui suit le FOND du canvas :
+    /// sur une scène pastel, un premier plan clair s'efface.
     private var formatChip: some View {
         ComposerFormatFan(
             offeredFormats: profile.offeredFormats,
             selection: formatSelection
         )
         .font(.footnote.weight(.semibold))
-        .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+        .glassControlForeground()
     }
 
     // MARK: - Le socle — jamais conditionnel à la PORTE

@@ -26,14 +26,37 @@ final class StoryComposerView_TimelineSpaceReservationTests: XCTestCase {
 
     // MARK: - resolveCanvasIsCarded
 
-    func test_resolveCanvasIsCarded_bandHiddenNoOverride_isNotCarded() {
+    /// **RETOURNÉ au #4124** (directive porteur 2026-08-28 : « mettre la scène
+    /// 9:16 au centre avec coin arrondi et un peu d'espace à gauche, haut, bas
+    /// et droite »). Le repos CARDE désormais — il ne reste plein écran que là
+    /// où l'immersion est le sujet, et ces deux cas ont leurs témoins juste en
+    /// dessous.
+    ///
+    /// Ce que le nom de ce test disait — « band cachée, aucun override ⇒ pas
+    /// cardé » — était vrai d'une règle qui posait le plein écran par défaut.
+    /// La règle dit maintenant l'inverse, donc le témoin change de verdict et de
+    /// nom : le garder à `false` aurait figé une directive révoquée.
+    func test_resolveCanvasIsCarded_auRepos_carde() {
         let result = StoryComposerView.resolveCanvasIsCarded(
             isTextEditing: false,
             effectiveBandIsHidden: true,
             drawingActive: false,
             presentedSystemSheetFraction: nil
         )
-        XCTAssertFalse(result)
+        XCTAssertTrue(result, "Au repos, la scène est une carte centrée et marginée.")
+    }
+
+    /// Les deux immersions que #4124 ne révoque PAS, et qui tiennent le plein
+    /// écran contre le nouveau défaut.
+    func test_resolveCanvasIsCarded_lesDeuxImmersions_restentPleinEcran() {
+        XCTAssertFalse(StoryComposerView.resolveCanvasIsCarded(
+            isTextEditing: false, effectiveBandIsHidden: true,
+            drawingActive: true, presentedSystemSheetFraction: nil),
+            "Le dessin reste immersif — dessinable jusqu'aux angles (2026-07-11).")
+        XCTAssertFalse(StoryComposerView.resolveCanvasIsCarded(
+            isTextEditing: true, effectiveBandIsHidden: false,
+            drawingActive: false, presentedSystemSheetFraction: 0.5),
+            "L'édition texte reste immersive et l'emporte sur tout (2026-07-28).")
     }
 
     /// Régression centrale : reproduit exactement ce qui se passe sur les 6

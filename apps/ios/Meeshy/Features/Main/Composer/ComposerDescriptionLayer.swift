@@ -58,6 +58,22 @@ struct ComposerDescriptionLayer: View {
     /// libérer (#4061).
     var collapsedLineLimit: Int = 3
 
+    /// **Ouvre directement en ÉDITION** (#4124). La couche plein écran de
+    /// l'atelier est ouverte PAR un geste qui dit déjà « je veux écrire » :
+    /// y présenter d'abord le mode lecture demanderait un second tap pour
+    /// atteindre ce que le premier avait demandé.
+    ///
+    /// Défaut `false` — le calque monté en place (surface de scène) s'ouvre au
+    /// repos, où c'est le tap sur le texte qui déclenche l'édition.
+    var opensEditingOnAppear: Bool = false
+
+    /// **Occupe toute la hauteur qu'on lui donne** (#4124). Le champ compact
+    /// convient au calque posé EN PLACE, où il légende une scène ; la couche
+    /// plein écran, elle, est une surface d'écriture — le texte y part du haut
+    /// et descend. Centré dans une hauteur libre, il flotterait au milieu d'un
+    /// vide et sauterait d'une demi-ligne à chaque retour.
+    var fillsAvailableHeight: Bool = false
+
     @State private var isEditing = false
     @FocusState private var isFocused: Bool
 
@@ -76,9 +92,12 @@ struct ComposerDescriptionLayer: View {
         Group {
             if isEditing { editor } else { reader }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity,
+               maxHeight: fillsAvailableHeight ? .infinity : nil,
+               alignment: .topLeading)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
+        .onAppear { if opensEditingOnAppear { isEditing = true } }
     }
 
     // MARK: - Le repos : ce que le lecteur verra
@@ -132,6 +151,9 @@ struct ComposerDescriptionLayer: View {
     /// VoiceOver ne peut pas atteindre.
     private var editor: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // La bande des mentions passe EN TÊTE quand la couche remplit
+            // l'écran : le curseur y démarre en haut, pas au ras du clavier.
+
             // **La bande des mentions s'insère AU-DESSUS du champ**, jamais en
             // dessous : le calque vit au bas de l'écran, juste sur le socle —
             // une bande posée sous le champ passerait derrière lui.
@@ -151,6 +173,7 @@ struct ComposerDescriptionLayer: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
             field
+            if fillsAvailableHeight { Spacer(minLength: 0) }
         }
         .animation(
             .spring(response: 0.3, dampingFraction: 0.8),
@@ -171,9 +194,12 @@ struct ComposerDescriptionLayer: View {
     private var field: some View {
         HStack(alignment: .bottom, spacing: 10) {
             TextField(placeholder, text: $text, axis: .vertical)
-                .lineLimit(1...5)
+                .lineLimit(fillsAvailableHeight ? 1...24 : 1...5)
                 .font(MeeshyFont.relative(15))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                // Adaptatif, pour la même raison que la coche : le calque sert
+                // deux fonds, un plateau sombre et une couche floutée qui prend
+                // la teinte de la scène.
+                .glassControlForeground()
                 .focused($isFocused)
                 .accessibilityLabel(Text(placeholder))
 
@@ -187,7 +213,11 @@ struct ComposerDescriptionLayer: View {
             } label: {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(14).weight(.semibold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    // Adaptatif : le calque vit sur le plateau SOMBRE de la
+                    // surface de scène ET sur la couche floutée de l'atelier,
+                    // qui prend la teinte du fond composé. Une couleur figée
+                    // « claire » disparaît sur la seconde.
+                    .glassControlForeground()
                     .frame(width: 32, height: 32)
             }
             .accessibilityLabel(Text(ComposerDescriptionCopy.done))
@@ -220,5 +250,22 @@ nonisolated enum ComposerDescriptionCopy {
     static var done: String {
         String(localized: "composer.description.a11y.done",
                defaultValue: "Terminer la description", bundle: .main)
+    }
+
+    /// Le libellé du bouton de clavier de la COUCHE (#4124). Court, parce qu'il
+    /// se lit dans la barre du clavier où « Terminer la description » serait
+    /// tronqué — et parce qu'à cet endroit le contexte est déjà donné par ce
+    /// qu'on est en train d'écrire. `common.done` existe et est traduite dans
+    /// les sept langues : aucune clé neuve pour une phrase déjà servie.
+    static var doneShort: String {
+        String(localized: "common.done", defaultValue: "Terminé", bundle: .main)
+    }
+
+    /// Ce que l'icône de la rangée haute OUVRE — l'indice VoiceOver du geste,
+    /// distinct de l'indice du calque en place (« Touchez pour modifier »),
+    /// parce que le geste n'est pas le même : ici on ouvre une couche.
+    static var openLayer: String {
+        String(localized: "composer.description.a11y.open",
+               defaultValue: "Écrire la description", bundle: .main)
     }
 }
