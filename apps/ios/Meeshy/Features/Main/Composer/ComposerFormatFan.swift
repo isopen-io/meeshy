@@ -104,16 +104,30 @@ nonisolated enum ComposerFormatFanPlacement {
     /// l'EXHAUSTIVITÉ du `switch` qui le garantit, pas un compte d'occurrences
     /// dans un fichier — un compte se contourne en renommant, un `switch` non.
     enum Place: Equatable {
-        /// La rangée au-dessus de la surface — scène et mood.
+        /// La rangée au-dessus de la surface — le mood, et lui seul depuis
+        /// #4124.
         case plateauRow
         /// La barre haute de la surface, entre la fermeture et le rail des
-        /// slides — le document, et lui seul.
+        /// slides — le document.
         case documentHeader
+        /// La rangée haute de l'ATELIER, contre sa fermeture (#4124). Elle y
+        /// entre par l'accessoire *leading* que le SDK expose
+        /// (`storyComposerHeaderLeadingAccessory`) : la vue reste app-side, le
+        /// SDK n'apprend rien du produit.
+        case atelierHeader
     }
 
+    /// **La scène a quitté la rangée du plateau au #4124.** L'argument qui l'y
+    /// gardait — « elle n'a pas de barre haute à elle » — a cessé d'être vrai le
+    /// jour où l'atelier a exposé son accessoire *leading*. Le chip flottait
+    /// alors sur une rangée à part AU-DESSUS de l'atelier : deux barres pour un
+    /// seul en-tête, exactement ce que #4047 avait retiré au document.
+    ///
+    /// Le mood, lui, reste sur la rangée : il n'a toujours aucune barre haute.
     static func place(for surface: ComposerSurfaceKind) -> Place {
         switch surface {
-        case .scene, .mood: return .plateauRow
+        case .scene: return .atelierHeader
+        case .mood: return .plateauRow
         case .document: return .documentHeader
         }
     }
@@ -218,14 +232,21 @@ struct ComposerFormatFan: View {
                 }
             }
         } label: {
+            // **Premier plan ADAPTATIF depuis #4124.** Les deux couleurs étaient
+            // codées `isDark: true` — juste tant que le chip ne vivait que sur
+            // le plateau du meuble, sombre par construction. Descendu dans la
+            // rangée de l'ATELIER (#4124), il hérite de `canvasChromeScheme`,
+            // qui suit le FOND du canvas : sur une scène pastel, un premier plan
+            // clair s'efface, mesuré à l'écran. Le chevron garde sa hiérarchie —
+            // il est secondaire — par l'OPACITÉ, qui ne dépend d'aucun thème.
             HStack(spacing: 4) {
                 Text(ComposerFormatCopy.label(selection))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 Image(systemName: "chevron.down")
                     .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                    .opacity(0.6)
             }
+            .glassControlForeground()
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .adaptiveGlass(in: Capsule(), tint: ComposerFormatFanPalette.selectedFill)

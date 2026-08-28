@@ -31,6 +31,11 @@ public struct StoryComposerView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
 
+    /// **L'accessoire *leading* de la rangée haute, fourni par l'app** (#4124).
+    /// `nil` ⇒ rien n'est peint — aucun emplacement réservé, aucun fond.
+    /// Détail de la doctrine : `StoryComposerHeaderAccessories.swift`.
+    @Environment(\.storyComposerHeaderLeadingAccessory) var headerLeadingAccessory
+
     // MARK: - Canvas-local state
 
     @State var selectedFilter: StoryFilter?
