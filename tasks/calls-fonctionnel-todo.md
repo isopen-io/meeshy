@@ -12319,3 +12319,52 @@ skipped par design), aucun commentaire de revue, `mergeable_state: clean` — me
 Suivi identifié, non traité dans ce lot (à ouvrir en issue séparée si retenu) : `leaveCall()` a une
 branche de conflit de version structurellement identique (`CallService.ts` ~ligne 1877, « Leave-triggered
 call end lost race... ») qui retourne toujours silencieusement — mérite le même examen.
+
+## Vague 182 — `leaveCall()` rediffusait encore `call:ended`/summary sur la branche « conflit de version », le jumeau que #4202 avait identifié sans le traiter (2026-08-28)
+
+Point d'entrée : le suivi laissé par la Vague 181 elle-même — `leaveCall()` a une branche de conflit
+de version (Mongo P2034, perte de la course d'écriture optimiste PENDANT la transaction) structurellement
+identique à celle qu'#4202 a fermée sur `endCall()`. Elle retournait toujours silencieusement
+`this.getCallSession(callId)` : le perdant de la course tombait dans le chemin authoritatif côté
+appelant (rediffusion de `call:ended`/`participant-left`, re-post du résumé d'appel, re-déclenchement de
+la notification d'appel manqué) pour un call qu'il n'a pas réellement terminé.
+
+Différence structurelle avec `endCall()`, découverte en instruisant le correctif : **`leaveCall()` a
+CINQ appelants** (`CallEventsHandler.call:leave`, `.call:force-leave`, `.leaveParticipationAndBroadcast`
+— grâce de reconnexion —, `AuthHandler`'s boucle de déconnexion anonyme, `routes/calls.ts DELETE
+.../participants/:participantId`), quand `endCall()` n'en a que deux. Faire lever `CallAlreadyEndedError`
+côté `CallService` seul, sans mettre à jour les cinq catch, aurait remplacé le bug par un PIRE : les
+quatre chemins socket seraient tombés dans leur repli de « échec véritable »
+(`forceEndOrphanedCallAfterOptimisticBroadcast` / `forceCleanupParticipationAfterLeaveFailure`), qui
+force-termine l'appel une SECONDE fois et re-diffuse pour un appel déjà correctement clos — vérifié en
+lisant chacun des cinq catch avant de toucher au premier.
+
+Fix (issue #4215, PR #4216) : `CallService.ts` reprend exactement le correctif #4202 (`throw new
+CallAlreadyEndedError(current.endReason ?? CallEndReason.completed)`). Nouveau côté
+`CallEventsHandler` : `absorbAlreadyEndedLeave(io, callId, error)`, le no-op idempotent partagé par les
+trois catch internes (log, invalide le cache de signal, évince la room de l'appel — no-op si le gagnant
+de la course l'a déjà fait — sans re-diffuser/re-résumer/re-force-cleanup). Câblé jusqu'à `AuthHandler`
+via un troisième callback injecté (`absorbAlreadyEndedCallLeave`, même patron que
+`broadcastCallParticipantLeft`/`forceCleanupCallParticipant`, posé dans `MeeshySocketIOManager.ts`). La
+route REST reprend le patron déjà établi par la route `endCall` (catch dédié, 200 idempotent).
+
+TDD : test existant qui encodait l'ancien comportement fautif (`CallService.test.ts`, describe
+`leaveCall`, cas P2034) converti en RED (`rejects.toBeInstanceOf(CallAlreadyEndedError)`, confirmé rouge)
+puis GREEN. Nouveaux tests par site d'appel : `CallEventsHandler-leave-already-ended.test.ts`,
+`CallEventsHandler-disconnect-already-ended.test.ts`, ajouts à `CallEventsHandler-force-leave.test.ts`
+et `AuthHandler.test.ts`, `calls-leave-already-ended.test.ts`. Un mock partiel de `CallService` dans
+`CallEventsHandler-disconnect.test.ts` (n'exportait pas `CallAlreadyEndedError`) a d'abord fait tomber 7
+témoins existants sous le correctif de production (`error instanceof CallAlreadyEndedError` lève quand la
+classe est `undefined`) — corrigé en `jest.requireActual`, le patron déjà établi ailleurs dans le dépôt
+pour ce type de double.
+
+`CallService.test.ts` : 324/324. Filtre calling-stack complet
+(`CallEventsHandler|CallService|CallCleanupService|calls-routes|calls-leave|call-|AuthHandler`) : 63
+suites / 1347 tests, 0 échec. Suite gateway complète : 904 suites / 20558 tests, 0 échec. `tsc --noEmit`
+et `bun run build` propres. CI PR #4216 : 15/15 checks verts (Trivy neutral, Voice E2E Benchmark skipped
+par design — identique au profil #4203), aucun commentaire de revue, `mergeable_state: clean` — mergé sur
+`main` (`5f63b252`).
+
+Aucun nouveau suivi ouvert par cette Vague : les deux branches jumelles « déjà terminé » d'`endCall()` et
+`leaveCall()` sont désormais alignées sur le même contrat, sur les sept appelants au total (deux pour
+`endCall()`, cinq pour `leaveCall()`).
