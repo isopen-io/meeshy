@@ -74,7 +74,11 @@ const SITES: readonly string[] = [
   'apps/web/components/auth/register-form-wizard.tsx',
   'apps/web/components/auth/wizard-steps/SecurityStep.tsx',
   'apps/web/components/auth/PasswordRequirementsChecklist.tsx',
-  'apps/web/components/settings/ProfileSettings.tsx',
+  // `apps/web/components/settings/ProfileSettings.tsx` a été SUPPRIMÉ (#4189) :
+  // huit de ses appels visaient des routes inexistantes, et son seul
+  // importateur était son propre `.example.tsx`, lui-même importé nulle part.
+  // Le formulaire monté par `app/settings/page.tsx` est `user-settings.tsx`,
+  // dont l'homonymie a longtemps fait croire au contraire.
 ];
 
 describe('longueur minimale du mot de passe — une règle, pas onze', () => {
