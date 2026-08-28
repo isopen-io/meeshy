@@ -144,9 +144,25 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("blockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
+    /// `BlockActionResponse`, comme son jumeau `dispatchBlockUser` — et
+    /// **c'est tout le correctif** du rapport porteur 2026-08-28 (« impossible
+    /// de débloquer les contacts bloqués »).
+    ///
+    /// Ce site attendait `[String: Bool]`. Le gateway répond
+    /// `{ "message": "User unblocked" }`, ce que son propre schéma déclare :
+    /// décoder cette charge en dictionnaire de `Bool` LÈVE. Le dispatcher
+    /// jetait donc TOUJOURS, l'enregistrement d'outbox n'était jamais acquitté,
+    /// et l'écran affichait « Impossible de débloquer » — sur un serveur qui
+    /// avait pourtant écrit le déblocage.
+    ///
+    /// Un type de réponse trop STRICT transforme un succès serveur en échec
+    /// client : ni erreur réseau, ni refus explicite, juste une divergence
+    /// entre ce qui EST et ce qui se voit. Les deux jumeaux frappent la même
+    /// route sous deux verbes et rendent la même forme — leur asymétrie était
+    /// le défaut, et `OutboxDispatcherUnblockDecodingTests` interdit son retour.
     private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UnblockUserPayload.self)
-        let _: APIResponse<[String: Bool]> = try await APIClient.shared.requestWithHeaders(
+        let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/users/\(payload.targetUserId)/block",
             method: "DELETE",
             body: nil,
