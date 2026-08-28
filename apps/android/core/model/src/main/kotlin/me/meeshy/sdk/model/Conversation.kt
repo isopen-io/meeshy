@@ -138,6 +138,18 @@ data class ApiConversationPreferences(
     val mentionsOnly: Boolean = false,
     val reaction: String? = null,
     val tags: List<String> = emptyList(),
+    /**
+     * Optimistic-vs-socket arbiter for `user:preferences-updated`
+     * ([applyRemote]) — the port of iOS `ConversationUserState.version` and of
+     * web's `UserConversationPreferences.version`.
+     *
+     * `GET /conversations` does NOT serve it (`conversationUserPreferencesSelect`,
+     * `services/gateway/src/routes/conversations/core.ts`), so a row hydrated from
+     * REST lands here at the `0` default — the same baseline the two other clients
+     * use for an absent snapshot, and the reason the gateway starts its first
+     * upsert at version 1 rather than the schema default 0.
+     */
+    val version: Int = 0,
 )
 
 @Serializable

@@ -19,6 +19,7 @@ import me.meeshy.sdk.model.PaginatedParticipantsPagination
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
+import me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.AddParticipantRequest
 import me.meeshy.sdk.net.api.ConversationApi
@@ -318,6 +319,90 @@ class ConversationRepositoryTest {
 
         assertThat(applied).isFalse()
         assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.READ_RECEIPT)).isEmpty()
+    }
+
+    /**
+     * Le geste fait sur un AUTRE appareil (#4127). `UserConversationPreferences` est
+     * une ligne par UTILISATEUR : sans cet écrivain, épingler depuis le web laissait
+     * la ligne Android non épinglée jusqu'à un rechargement complet sans rapport.
+     */
+    @Test
+    fun `applyRemoteConversationPreferences writes a broadcast pin onto the cached row`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1", title = "Team"))),
+            ),
+        )
+        repo.refresh()
+
+        val applied = repo.applyRemoteConversationPreferences(
+            broadcast(version = 1, isPinned = true, categoryId = "cat-1"),
+        )
+
+        assertThat(applied).isTrue()
+        val prefs = repo.conversationStream("c1").first()?.resolvedPreferences
+        assertThat(prefs?.isPinned).isTrue()
+        assertThat(prefs?.categoryId).isEqualTo("cat-1")
+        assertThat(prefs?.version).isEqualTo(1)
+    }
+
+    /**
+     * L'écrivain diffuse à TOUS les appareils de l'utilisateur, y compris celui qui
+     * vient d'écrire : une trame qui ne dépasse pas le compteur local décrit un
+     * passé, et l'appliquer rembobinerait le geste le plus récent.
+     */
+    @Test
+    fun `applyRemoteConversationPreferences drops a broadcast that does not beat the local version`() =
+        runTest {
+            val repo = repository(
+                FakeConversationApi(
+                    ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+                ),
+            )
+            repo.refresh()
+            repo.applyRemoteConversationPreferences(broadcast(version = 3, isPinned = true))
+
+            val applied = repo.applyRemoteConversationPreferences(
+                broadcast(version = 3, isPinned = false),
+            )
+
+            assertThat(applied).isFalse()
+            assertThat(repo.conversationStream("c1").first()?.resolvedPreferences?.isPinned).isTrue()
+        }
+
+    /** Conversation non hydratée : rien à écrire, la prochaine relecture rattrape. */
+    @Test
+    fun `applyRemoteConversationPreferences returns false for an unknown conversation id`() = runTest {
+        val repo = repository(
+            FakeConversationApi(ApiResponse(success = true, data = emptyList())),
+        )
+        repo.refresh()
+
+        val applied = repo.applyRemoteConversationPreferences(
+            broadcast(version = 1, isPinned = true, conversationId = "missing"),
+        )
+
+        assertThat(applied).isFalse()
+    }
+
+    /**
+     * Le relais est un pur ÉCRIVAIN de cache : il ne doit RIEN mettre dans la file
+     * hors ligne. Renvoyer au serveur ce que le serveur vient d'annoncer ferait
+     * boucler l'écriture entre les appareils.
+     */
+    @Test
+    fun `applyRemoteConversationPreferences queues no outbox mutation`() = runTest {
+        val repo = repository(
+            FakeConversationApi(
+                ApiResponse(success = true, data = listOf(ApiConversation(id = "c1"))),
+            ),
+        )
+        repo.refresh()
+
+        repo.applyRemoteConversationPreferences(broadcast(version = 1, isPinned = true))
+
+        assertThat(OutboxRepository(db, db.outboxDao()).deliverable(OutboxLanes.CONVERSATION_PREFS))
+            .isEmpty()
     }
 
     @Test
@@ -1067,4 +1152,32 @@ class ConversationRepositoryTest {
         assertThat((result as NetworkResult.Failure).error.message)
             .isEqualTo("Vous ne pouvez pas bannir un participant de rang égal ou supérieur")
     }
+
+    /**
+     * La charge RÉELLE de l'émetteur (`toPreferencesPayload`,
+     * `services/gateway/src/services/conversationPreferencesSync.ts`), traversant le
+     * vrai décodeur — jamais un événement construit dans le langage du client.
+     */
+    private fun broadcast(
+        version: Int,
+        isPinned: Boolean,
+        categoryId: String? = null,
+        conversationId: String = "c1",
+    ): UserPreferencesConversationUpdatedSocketData =
+        me.meeshy.sdk.net.MeeshyApi.json.decodeFromString<UserPreferencesConversationUpdatedSocketData>(
+            """
+            {
+              "userId": "u1", "conversationId": "$conversationId",
+              "version": $version, "reset": false,
+              "preferences": {
+                "isPinned": $isPinned, "isMuted": false, "mentionsOnly": false,
+                "isArchived": false, "tags": [],
+                "categoryId": ${if (categoryId == null) "null" else "\"$categoryId\""},
+                "orderInCategory": null, "customName": null, "reaction": null,
+                "readingMode": "auto", "deletedForUserAt": null, "clearHistoryBefore": null
+              }
+            }
+            """.trimIndent(),
+        )
+
 }
