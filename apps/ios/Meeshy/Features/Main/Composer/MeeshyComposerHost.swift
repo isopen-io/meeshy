@@ -974,7 +974,13 @@ struct MeeshyComposerHost: View {
             // peint donc les MÊMES trois zones seulement quand l'atelier les a
             // cédées : deux barres de publication, dont une inerte, seraient
             // une régression sèche sur la surface de création la plus utilisée.
-            if !chromeOwner.assembles(.publish) {
+            //
+            // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
+            // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
+            // (`ComposerMoodSurface.header`), et sans cette garde le socle se
+            // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
+            // un padding, l'espace exact que la consolidation vise à rendre.
+            if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
                 socle
             }
         }
@@ -2226,7 +2232,13 @@ struct MeeshyComposerHost: View {
             allowedAudiences: offeredAudiences,
             references: $composerReferences,
             viaUsername: moodSeed?.viaUsername,
-            onClose: onDismiss
+            onClose: onDismiss,
+            // La flèche PUBLIER a quitté le socle pour l'en-tête de la surface
+            // au 2026-08-28 (`ComposerChromeOwnership.headerPaintsPublish`).
+            // `AnyView`, comme `formatFan:`/`overflowMenu:` de `ComposerTopBar` :
+            // c'est le MEUBLE qui construit le bouton — la surface le reçoit
+            // déjà fait, elle ne publie jamais elle-même.
+            headerPublishButton: AnyView(moodHeaderPublishButton)
         )
     }
 
@@ -2569,6 +2581,66 @@ struct MeeshyComposerHost: View {
         // n'en dérive plus aucun, et la flèche perdrait son nom à l'instant même
         // où elle devient compacte — le défaut que `StatusComposerView` a dû
         // corriger, dans l'autre sens.
+        .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
+        .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
+        .accessibilityHint(publishBlockedHint)
+    }
+
+    /// **La flèche PUBLIER de l'en-tête du mood** — même geste, même gate, même
+    /// accessibilité que `publishButton` ci-dessus (`publishDocument()`,
+    /// `canPublishDocument`, `publishBlockedHint`) : SEUL l'endroit change.
+    /// Deux écritures d'un même bouton diverger­aient au premier ajustement du
+    /// gate, donc les trois propriétés partagées restent l'UNIQUE source —
+    /// cette vue ne fait qu'habiller la même action en pastille de verre.
+    ///
+    /// **Verre PROÉMINENT (`.adaptiveGlassProminent`), pas régulier** : c'est
+    /// l'action TERMINALE de la feuille — le même traitement que la flèche de
+    /// `StoryComposerView+TopBar` (`adaptiveGlassProminent(in:tint:)`), pour
+    /// que le geste « publier depuis l'en-tête d'un composer » ait partout le
+    /// même relief. `.opacity` marque l'état désactivé : un remplissage plein
+    /// aurait l'air armé même quand le gate refuse.
+    ///
+    /// **Pas de `.composerHitTarget()`** — `internal` à `MeeshyUI`,
+    /// inatteignable depuis l'app. Sans objet de toute façon : la capsule fait
+    /// déjà `ComposerControlMetrics.visualDiameter` (36 pt) de haut, et le
+    /// texte + les deux paddings horizontaux de 14 pt la portent bien au-delà
+    /// des 44 pt HIG en largeur.
+    private var moodHeaderPublishButton: some View {
+        Button {
+            publishDocument()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up")
+                    .accessibilityHidden(true)
+                // Même réduction qu'ailleurs (#4057) : à `accessibility-XXXL`
+                // un libellé collé à l'icône se casserait en syllabes empilées
+                // dans une pastille qui n'a pas la largeur d'une rangée.
+                if socleShowsLabels {
+                    Text("composer.socle.publish", bundle: .main)
+                        .lineLimit(1)
+                }
+            }
+            .font(.footnote.weight(.bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 14)
+            // Même plancher que `publishButton` (#4057, cible ≥ 44 pt HIG) —
+            // pas `ComposerControlMetrics.visualDiameter` (36 pt) : ce jeton
+            // dimensionne le CERCLE de la croix, et son complément
+            // (`.composerHitTarget()`, qui élargit la zone de CONTACT sans
+            // grossir le rendu) est `internal` à `MeeshyUI`, inatteignable
+            // depuis l'app.
+            .frame(minWidth: 44, minHeight: 44)
+        }
+        // `brandPrimary`, pas `indigo500` en dur : c'est le MÊME jeton (alias),
+        // et c'est celui que la flèche jumelle de `StoryComposerView+TopBar`
+        // utilise déjà pour le même traitement — un seul nom pour un même fond
+        // de bouton prominent à travers le composer, jamais deux orthographes.
+        // Blanc sur `brandPrimary` est aussi la paire déjà mesurée par le chip
+        // d'audience SÉLECTIONNÉ de cette même surface (`brandGradient`, dont
+        // `brandPrimary` est le premier arrêt) — pas une paire neuve.
+        .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
+        .opacity(canPublishDocument ? 1 : 0.45)
+        .disabled(!canPublishDocument)
         .accessibilityLabel(Text("composer.socle.publish", bundle: .main))
         .accessibilityValue(isPublishingDocument ? ComposerSocleCopy.publishInProgress : "")
         .accessibilityHint(publishBlockedHint)

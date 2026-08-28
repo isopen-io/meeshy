@@ -150,8 +150,16 @@ final class ComposerSceneBandTests: XCTestCase {
 
         XCTAssertTrue(compacte.contains("socle"),
                       "Le bloc lu n'est pas celui du body — la garde ne mesurerait RIEN")
-        XCTAssertTrue(compacte.contains(compact("if !chromeOwner.assembles(.publish) { socle }")),
-                      "Le socle est monté par la seule PROPRIÉTÉ DU CHROME, sur une seule ligne lisible.")
+        // Complétée au 2026-08-28 (`&& !paintedSocleZones.isEmpty`, elle aussi
+        // une RÈGLE lue — `ComposerChromeOwnership.socleZones` — jamais un `if`
+        // sur une bande, un outil ou un contexte) : le mood a cédé sa flèche à
+        // son propre en-tête, et sans cette clause le socle peindrait une
+        // `HStack` vide en dessous. Toujours PAS une bande — la garde négative
+        // ci-dessous continue de le vérifier.
+        XCTAssertTrue(
+            compacte.contains(compact("if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty { socle }")),
+            "Le socle est monté par la seule PROPRIÉTÉ DU CHROME (et ses zones), sur une seule ligne lisible."
+        )
         // Et la bande n'apparaît PAS dans ce `body` : elle est passée à la
         // surface de scène, dans une propriété à part. Un identifiant de bande
         // ici voudrait dire qu'une condition de bande a été écrite au niveau

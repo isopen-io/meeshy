@@ -726,9 +726,17 @@ final class ComposerIntentTests: XCTestCase {
             ComposerChromeOwnership.owner(for: surface), .host,
             "3e maillon — le chrome revient au meuble : il n'y a pas d'atelier sous cette surface pour peindre la flèche."
         )
+        // 4e maillon, RÉÉCRIT au 2026-08-28 : le socle du mood ne peint plus la
+        // flèche (`socleZones` est vide) — elle vit désormais dans l'en-tête de
+        // la surface (`ComposerMoodSurface.header`), et `headerPaintsPublish`
+        // en est la preuve éprouvable sans monter de vue.
         XCTAssertTrue(
-            ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
-            "4e maillon — et le socle peint bien un PUBLIEUR. Sans lui, les trois premiers maillons mèneraient "
+            ComposerChromeOwnership.socleZones(for: surface).isEmpty,
+            "Le socle ne peint plus la flèche du mood — elle a rejoint son propre en-tête."
+        )
+        XCTAssertTrue(
+            ComposerChromeOwnership.headerPaintsPublish(for: surface),
+            "4e maillon — et l'en-tête peint bien un PUBLIEUR. Sans lui, les trois premiers maillons mèneraient "
             + "à un écran sans issue, ce que le lot 3 a refusé de livrer pour la porte du fil."
         )
     }
@@ -750,9 +758,12 @@ final class ComposerIntentTests: XCTestCase {
         let surface = ComposerSurfaceRouting.surface(opening: profil.opensWith, format: profil.initialFormat)
         XCTAssertEqual(surface, .mood, "2e maillon — republier un mood ouvre la surface du mood.")
         XCTAssertEqual(ComposerChromeOwnership.owner(for: surface), .host, "3e maillon — le chrome revient au meuble.")
+        // 4e maillon, RÉÉCRIT au 2026-08-28 : voir la même note sur la chaîne de
+        // création ci-dessus — la flèche vit dans l'en-tête de la surface, pas
+        // dans le socle, pour les DEUX portes du mood.
         XCTAssertTrue(
-            ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
-            "4e maillon — le socle publie."
+            ComposerChromeOwnership.headerPaintsPublish(for: surface),
+            "4e maillon — l'en-tête publie."
         )
     }
 
