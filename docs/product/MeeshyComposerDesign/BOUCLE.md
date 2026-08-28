@@ -78,6 +78,31 @@ mène. Six tours, précédés des découpes.
 
 Poser `Status = In Progress` dans le projet org #1 avant d'écrire une ligne.
 
+**Les 23 issues rouvertes le 2026-08-28** portent chacune une promesse faite sous l'ancien standard,
+à re-vérifier sur la capture de sa vue. Elles se traitent **avec** la vue, jamais séparément.
+
+| Vue | Issues rouvertes à re-vérifier sur cette capture |
+|---|---|
+| `1a` | #4047 #3883 #4031 #4032 #3882 #3904 #4034 #4030 #4029 #3884 #3547 #4053 #4057 #3546 #3544 |
+| `1b` | #3939 #3885 #4035 #4038 #4031 #4032 #4047 #4052 #4053 |
+| `1c` | #4035 #3888 #4038 #3939 |
+| `1f` | #4057 #4034 #3548 #4053 #4112 |
+| `1g` | #4047 #3883 #4038 #4053 |
+| `2a` `2k` `3a` `4f` | #4030 #4029 #3884 #3547 #4053 |
+| `2b` `4c` | #3546 |
+| `2c` | #4052 #3880 |
+| `2d` `2e` `2l` `3c` | #3880 |
+| `2i` | #3544 |
+| `3b` | #3904 #4034 #3548 |
+
+**Quatorze vues ne sont couvertes par AUCUNE issue fermée** — elles partent de zéro, sans dette ni
+promesse antérieure : `1d` `1e` `1h` `2d` `2e` `2f` `2g` `2h` `2j` `3c` `3e` `3g` `3h` `4b`.
+
+Deux arbitrages produit sont **posés** et gouvernent plusieurs vues (loi 2) :
+- **Un profil impossible est GRISÉ AVEC SA RAISON, jamais absent** (#4030) — `1a` `2a` `2k` `3a` `4f`.
+- **Une note vocale n'est JAMAIS un fond audio** ; l'intention se déclare par la porte empruntée,
+  pas par la nature du fichier (#4052) — `1b` `2c` `2f` `2g` `2h` `3e`.
+
 ### 2 — Lire la cible
 
 La vue `<id>` a sa capture dans `cible/<id>.png` et sa doctrine dans `vues.md`. **Regarder l'image**,
