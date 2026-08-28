@@ -1875,10 +1875,23 @@ export class CallService {
     );
 
     if (leaveOutcome === 'conflict') {
-      logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write — returning current session', {
-        callId, userId
+      // Vague 182 (#4202/Vague 181 follow-up) — this branch used to silently
+      // RETURN the fresh session, the identical anti-pattern #3581 fixed on
+      // endCall()'s own conflict branch (see its doc comment). The loser of
+      // this race is exactly "already ended by someone else": a resolved
+      // promise here is indistinguishable from "I just ended it" to every
+      // caller (CallEventsHandler's call:leave/call:force-leave,
+      // AuthHandler's anonymous-disconnect loop, routes/calls.ts's
+      // leave/kick route), which fall through to re-broadcast call:ended,
+      // re-post the call-summary, and (for a `missed` outcome) re-fire the
+      // missed-call notification for a call this leaveCall() did not
+      // actually end. Throw the same CallAlreadyEndedError endCall() throws
+      // so every caller absorbs it as the idempotent no-op it is.
+      const current = await this.getCallSession(callId);
+      logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write', {
+        callId, userId, currentStatus: current.status
       });
-      return this.getCallSession(callId);
+      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
     }
 
     if (isLastParticipant) {

@@ -1160,7 +1160,19 @@ describe('CallService', () => {
       expect(result.status).toBe(CallStatus.ended);
     });
 
-    it('resolves to the fresh session instead of throwing raw Prisma error when Mongo reports a P2034 write conflict on the terminal write (sibling of the call:join fix, 2026-07-04: near-simultaneous call:end/leave for the same call)', async () => {
+    // Vague 182 (#4202/Vague 181 follow-up) — endCall()'s sibling P2034/version
+    // conflict branch was fixed to throw CallAlreadyEndedError instead of
+    // silently resolving to the fresh (already-ended-by-the-winner) session —
+    // see the matching `describe('endCall')` test above. This is the
+    // structurally identical branch on leaveCall(): the loser of the race is
+    // exactly "already ended by someone else", and a resolved promise here is
+    // indistinguishable from "I just ended it" to every caller
+    // (CallEventsHandler's call:leave/call:force-leave, AuthHandler's
+    // anonymous-disconnect loop, routes/calls.ts's leave/kick route), which
+    // then re-broadcast call:ended, re-post the call-summary, and (for a
+    // `missed` outcome) re-fire the missed-call notification for a call this
+    // leaveCall() did not actually end.
+    it('throws CallAlreadyEndedError (not a silent resolve) when Mongo reports a P2034 write conflict on the terminal write — sibling of the call:join/endCall fix, 2026-07-04: near-simultaneous call:end/leave for the same call', async () => {
       const participant = createMockParticipant();
       const callWithParticipant = createMockCallSession({
         status: CallStatus.active,
@@ -1171,6 +1183,7 @@ describe('CallService', () => {
         ...callWithParticipant,
         status: CallStatus.ended,
         endedAt: new Date(),
+        endReason: CallEndReason.completed,
         participants: [{ ...participant, leftAt: new Date(), user: createMockUser() }],
         initiator: createMockUser(),
         conversation: createMockConversation()
@@ -1185,9 +1198,10 @@ describe('CallService', () => {
       mockPrisma.$transaction.mockRejectedValueOnce(p2034);
       mockPrisma.callSession.findUnique.mockResolvedValueOnce(currentCall);
 
-      const result = await callService.leaveCall(validLeaveData);
+      const rejection = callService.leaveCall(validLeaveData);
 
-      expect(result.status).toBe(CallStatus.ended);
+      await expect(rejection).rejects.toBeInstanceOf(CallAlreadyEndedError);
+      await expect(rejection).rejects.toMatchObject({ endReason: CallEndReason.completed });
     });
 
     it('should not end call when other participants remain', async () => {

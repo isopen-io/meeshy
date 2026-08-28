@@ -966,6 +966,22 @@ export default async function callRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(reply, toCallSessionResponse(callSession));
     } catch (error: any) {
+      // Vague 182 (#4202/Vague 181 follow-up) — mirrors the END route's own
+      // CallAlreadyEndedError handling above and the socket call:leave
+      // handler: leaveCall() throws it when this leave/kick lost the race
+      // to a concurrent terminal write, not when it genuinely failed. The
+      // caller's intent already holds, so this is a 200 with the call's
+      // current (terminal) session, not an error — nothing here
+      // re-broadcasts call:ended, re-posts the call-summary, or touches
+      // broadcastParticipantLeft.
+      if (error instanceof CallAlreadyEndedError) {
+        logger.info('ℹ️ REST: call already ended — idempotent no-op', {
+          callId: request.params.callId, endReason: error.endReason
+        });
+        const currentSession = await callService.getCallSession(request.params.callId);
+        return sendSuccess(reply, toCallSessionResponse(currentSession));
+      }
+
       logger.error('❌ REST: Error leaving call', error);
 
       const errorMessage = error.message || 'Failed to leave call';

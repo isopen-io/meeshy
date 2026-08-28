@@ -924,6 +924,15 @@ export class CallEventsHandler {
         endReasonHint
       });
     } catch (leaveError) {
+      // Vague 182 — see absorbAlreadyEndedLeave's doc comment: skip the
+      // generic force-cleanup fallback below for the idempotent no-op case,
+      // or a call another path already correctly ended gets force-ended a
+      // second time and re-broadcast.
+      if (leaveError instanceof CallAlreadyEndedError) {
+        await this.absorbAlreadyEndedLeave(io, participation.callSessionId, leaveError);
+        return;
+      }
+
       await this.forceCleanupParticipationAfterLeaveFailure({ io, participation, userId, leaveError });
     }
   }
@@ -1438,6 +1447,28 @@ export class CallEventsHandler {
   private async evictCallRoomSockets(io: SocketIOServer, callId: string): Promise<void> {
     const socketsInCallRoom = await io.in(ROOMS.call(callId)).fetchSockets();
     await Promise.all(socketsInCallRoom.map((s) => s.leave(ROOMS.call(callId))));
+  }
+
+  /**
+   * Vague 182 (#4202/Vague 181 follow-up) — the idempotent-no-op counterpart
+   * to `forceEndOrphanedCallAfterOptimisticBroadcast`/
+   * `forceCleanupParticipationAfterLeaveFailure`. `CallService.leaveCall()`
+   * throws `CallAlreadyEndedError` when this leave lost the race to a
+   * concurrent terminal write (see its doc comment): the call is already
+   * correctly closed by whichever path won, which already ran the full
+   * call:ended broadcast/summary/missed-call fanout. Every leaveCall()
+   * caller in this class (and, via MeeshySocketIOManager's wiring,
+   * AuthHandler's anonymous-disconnect loop) absorbs it the same way — log,
+   * drop the cached signal session, and make sure this call's room has no
+   * lingering socket membership (a no-op if the winner's own termination
+   * already evicted it) — instead of falling into the generic failure
+   * fallback, which used to force-end an already-ended call a second time
+   * and re-broadcast/re-notify for it.
+   */
+  async absorbAlreadyEndedLeave(io: SocketIOServer, callId: string, error: CallAlreadyEndedError): Promise<void> {
+    logger.info('ℹ️ Socket: leave no-op — call already ended', { callId, endReason: error.endReason });
+    this.invalidateSignalSession(callId);
+    await this.evictCallRoomSockets(io, callId);
   }
 
   private async resolveParticipantId(userId: string, conversationId: string): Promise<string | null> {
@@ -3268,6 +3299,16 @@ export class CallEventsHandler {
           });
         }
       } catch (error) {
+        // Vague 182 — absorb the idempotent no-op (see
+        // absorbAlreadyEndedLeave's doc comment) BEFORE the generic
+        // force-end fallback below, which would otherwise force-end an
+        // already-ended call a second time and surface a spurious error to
+        // a user who, in fact, successfully hung up.
+        if (error instanceof CallAlreadyEndedError) {
+          await this.absorbAlreadyEndedLeave(io, data.callId, error);
+          return;
+        }
+
         logger.error('❌ Socket: Error leaving call', error);
 
         // Sibling-drift fix (Vague 27, mirrors call:end's catch) — if
@@ -3479,6 +3520,15 @@ export class CallEventsHandler {
                 await Promise.all(socketsInCallRoom.map(s => s.leave(ROOMS.call(call.id))));
               }
             } catch (leaveError) {
+              // Vague 182 — see absorbAlreadyEndedLeave's doc comment: skip
+              // the generic force-end fallback below for the idempotent
+              // no-op case, or a call another path already correctly ended
+              // gets force-ended a second time and re-broadcast.
+              if (leaveError instanceof CallAlreadyEndedError) {
+                await this.absorbAlreadyEndedLeave(io, call.id, leaveError);
+                continue;
+              }
+
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });
 
               // Sibling-drift fix (Vague 27, mirrors call:end/call:leave's
