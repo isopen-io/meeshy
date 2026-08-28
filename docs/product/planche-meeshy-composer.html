@@ -1458,11 +1458,13 @@ flowchart TD
         <span class="ob" style="opacity:.55">🏘 Communauté 🔒 borné par la publication de @source</span>
       </div>
       <div class="socle"><span class="aud">⊖ Sauf 3</span><span class="eye">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>Audience.</b> Les 6 niveaux, inline depuis le chip — EXCEPT/ONLY ouvrent
-    leur liste de personnes. En repost, le sélecteur est borné par la loi d'audience (FRIENDS et
-    COMMUNITY sont incomparables : un « rétrécissement » apparent peut élargir) — et les niveaux
-    bornés restent VISIBLES, verrouillés, avec leur raison en une ligne (rév. 2, U6 : exception
-    nommée à la loi 4 — une liste silencieusement amputée se lit comme un bug).</figcaption></figure>
+    </div><figcaption><b>Audience</b> — <i>elle appartient à la
+    <span class="mono">MeeshyPublication</span>, jamais à une slide ni à un objet.</i> Les 6 niveaux,
+    inline depuis le chip — EXCEPT/ONLY ouvrent leur liste de personnes. Elle se souvient PAR PROFIL
+    (loi 10). En repost, le sélecteur est borné par la loi d'audience (FRIENDS et COMMUNITY sont
+    incomparables : un « rétrécissement » apparent peut élargir) — et les niveaux bornés restent
+    VISIBLES, verrouillés, avec leur raison en une ligne (rév. 2, U6 : exception nommée à la loi 4 —
+    une liste silencieusement amputée se lit comme un bug).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc" style="border-style:solid;border-color:var(--acc)">
         <div class="band"><span class="ob">Titre</span></div>
@@ -1471,13 +1473,20 @@ flowchart TD
       </div>
       <div class="ctx"><span class="lbl">l'aperçu EST le lecteur — même registre, zéro vue dédiée</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye" style="border-color:var(--acc);color:var(--acc)">👁</span><span class="pub">Publier</span></div>
-    </div><figcaption><b>Aperçu.</b> L'œil bascule la scène en lecture réelle (progression, sons,
-    timings). Ce que le lecteur verra, exactement.</figcaption></figure>
+    </div><figcaption><b>Aperçu</b> — <i>il remet les <span class="mono">MeeshySlide</span> de la
+    publication au LECTEUR, il ne rend rien lui-même (loi 6).</i> L'œil bascule la
+    <span class="mono">MeeshyScene</span> en lecture réelle (progression, sons, timings) : ce que le
+    lecteur verra, exactement. Il n'est monté que si la publication a une scène — sinon il n'aurait
+    rien à montrer, et un aperçu VIDE ment autant qu'un aperçu maison (#4053).</figcaption></figure>
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div class="sc" style="opacity:.35"><div class="media169" style="flex:1"><span class="lbl">scène</span></div></div>
       <div class="ctx"><span class="ob on">⇡ dans la file — hors ligne OK</span></div>
       <div class="socle"><span class="aud">🌐</span><span class="eye">👁</span><span class="pub">Publié ✓</span></div>
-    </div><figcaption><b>Publier.</b> Le bouton route vers les TROIS chemins d'envoi existants
+    </div><figcaption><b>Publier</b> — <i>il envoie la <span class="mono">MeeshyPublication</span>
+    entière : son profil, ses slides, son audience, son lieu, sa langue.</i> Le bouton
+    <b>AIGUILLE d'abord sur le profil</b> (#4030) — un profil offert par l'éventail sans publieur
+    derrière serait une publication qu'on peut composer et pas envoyer —, puis route vers les TROIS
+    chemins d'envoi existants
     (S2 — <span class="mono">PublishIntent</span> unique était déscopé par la rév. 2 C11 : « le verbe
     unique est de l'hygiène, pas un gain ». <b>AMENDÉ rév. 24 — la prémisse a changé, l'arbitrage n'est pas
     réécrit.</b> Le lot v2 7 a mesuré une PERTE DE CONTENU réelle, pas une gêne d'hygiène : un vocal composé
@@ -1490,18 +1499,28 @@ flowchart TD
     remplace le post temporaire). La file UNIQUE création+édition est une cible post-v1 (§F).</figcaption></figure>
   </div>
   <ul class="klist" style="max-width:76ch">
-    <li>La <b>langue de publication</b> vit dans le PANNEAU (rév. 2, M13 — le socle garde trois
-      membres) et ne fait surface que si la détection contredit la langue système — héritée par
-      les objets, surchargée par objet (C6/B). Le web l'enverra enfin
+    <li>La <b>langue déclarée</b> appartient à la <span class="mono">MeeshyPublication</span> et vit
+      dans la <b>rangée d'outils</b>, à sa droite (rév. 2, M13 — le socle garde trois membres). Elle
+      devient la <span class="mono">locale</span> de tout <span class="mono">MeeshyObject</span>
+      posé, surchargeable par objet (C6/B). Le web l'enverra enfin
       (<span class="mono">originalLanguage</span> jamais transmis aujourd'hui pour un post
       ordinaire — défaut documenté).</li>
-    <li>La <b>qualification réel</b> est un badge du chip FORMAT, en barre haute (M8/M13) — la
-      dégradation REEL→POST serveur reste l'autorité.</li>
+    <li>La <b>qualification réel</b> est un badge du chip de PROFIL, dans l'<b>éventail</b> de la
+      barre haute (M8/M13) — la dégradation REEL→POST serveur reste l'autorité. L'offre RESPIRE :
+      le profil R n'est offert que tant que la composition qualifie, et une sélection restée sur un
+      profil retiré retombe sur celui de la porte.</li>
     <li>Fermer sans publier = <b>brouillon AUTOMATIQUE</b> + toast « Brouillon enregistré —
       Jeter » (rév. 2, M10 : zéro question au moment le plus fragile, zéro perte possible ; le
       mood auto-sauvegarde déjà). L'Étagère (P11) reprend exactement où on s'est arrêté.</li>
-    <li>Un <b>lieu joint sans pastille</b> se rappelle au socle par son chip « 📍 » (U10) — tap =
-      le retirer. Jamais de métadonnée invisible au moment de publier.</li>
+    <li>Le <b>lieu de la publication</b> — à ne pas confondre avec un
+      <span class="mono">MeeshyObject</span> de kind <span class="mono">place</span>, la pastille
+      qu'on POSE sur une scène : l'un dit d'où l'on publie, l'autre décore une image.
+      <span class="tag tNew">rév. 2026-08-28 · #4034</span> Il ne se rappelle plus par un chip de la
+      rangée : le <b>composant Position</b> porte tout — son entête NOMME le lieu (nom, à défaut
+      l'adresse, le mot générique en dernier recours), sa bascule dit s'il est trouvable, sa croix de
+      verre le retire. Le composant se monte sur le LIEU et non sur l'opt-in de découvrabilité,
+      sinon le lieu d'une publication privée disparaîtrait avec le seul moyen de l'enlever. Jamais de
+      métadonnée invisible au moment de publier.</li>
   </ul>
 </div></section>
 
@@ -1522,9 +1541,12 @@ flowchart TD
         <span class="ob">🌒 Story du 12/08 · ↻ Republier</span>
       </div>
       <div class="socle"><span class="aud">Mes contenus</span><span class="pub">+ Créer</span></div>
-    </div><figcaption><b>Une liste d'états</b>, pas quatre écrans — fusion du tray perso, de
-    « Mes stories », des brouillons et de la file. Tap = reprendre (intention
-    <span class="mono">.draft</span> / <span class="mono">.edit</span>). La rangée d'échec avec
+    </div><figcaption><b>Une liste d'ÉTATS d'une <span class="mono">MeeshyPublication</span></b>, pas
+    quatre écrans — fusion du tray perso, de « Mes stories », des brouillons et de la file. L'état
+    n'est pas une propriété du modèle : une publication ne « sait » pas qu'elle est brouillon ou
+    archivée, c'est l'Étagère qui range. Tap = reprendre (intention
+    <span class="mono">.draft</span> / <span class="mono">.edit</span> — la porte fixe alors le
+    profil initial, loi 9). La rangée d'échec avec
     Reprendre/Supprimer EXISTE (<span class="mono">FailedStoryRow</span>) et est conservée telle
     quelle. « + Créer » : dernier format créé, jamais un menu (U12, P5). Un partage entrant
     arrive ICI, en brouillon, annoncé par bannière (P18).</figcaption></figure>
@@ -1548,11 +1570,15 @@ flowchart TD
 <!-- ================================================================ P12 -->
 <section id="p12"><div class="wrap">
   <div class="prail"><span class="pnum">P12</span><h2>Les viewers — trois chromes, un noyau</h2></div>
-  <p class="lede"><span class="mono">MeeshyScenePlayer</span> rend le document partout : timelines,
-  canvas, layers fond/contenu/premier plan, références, traduction par objet, lieu épinglé
+  <p class="lede"><span class="mono">MeeshyScenePlayer</span> rend une
+  <span class="mono">MeeshyScene</span> partout : ses trois plans
+  (<span class="mono">background</span> · <span class="mono">content</span> ·
+  <span class="mono">foreground</span>), le <span class="mono">timing</span> de chaque
+  <span class="mono">MeeshyObject</span>, les références, la traduction par objet, le lieu épinglé
   (<span class="mono">hashtag</span> et <span class="mono">annotation</span> : kinds RÉSERVÉS,
-  hors v1 — O1/S5, rév. 2 M2). Ce qui change entre les trois, c'est le <b>chrome</b> — et rien
-  d'autre.</p>
+  hors v1 — O1/S5, rév. 2 M2). Ce qui change entre les trois viewers, c'est le <b>chrome</b> — et
+  rien d'autre. C'est ce qui rend la loi 6 vraie <i>par construction</i> : l'aperçu du socle n'est
+  pas « comme » le lecteur, il EST le lecteur.</p>
   <div class="phrow">
     <figure class="phfig"><div class="ph"><div class="notch"></div>
       <div style="display:flex;gap:2px;padding:24px 9px 4px"><span style="flex:1;height:3px;background:var(--acc);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span><span style="flex:1;height:3px;background:var(--phline);border-radius:2px"></span></div>
@@ -1612,16 +1638,18 @@ flowchart TD
 <!-- ================================================================ P13 -->
 <section id="p13"><div class="wrap">
   <div class="prail"><span class="pnum">P13</span><h2>Matrice maîtresse — chaque outil, chaque format, exactement</h2></div>
-  <p class="lede">La référence de tri : <span class="ok">✓ existant</span> ·
-  <span class="nv">◆ nouveau</span> · <span class="ab">— absent (raison)</span>. Première colonne
-  épinglée ; la table défile.</p>
+  <p class="lede">Ce que chaque outil produit, <b>par profil de la
+  <span class="mono">MeeshyPublication</span></b>. Les colonnes sont les quatre profils ; « — » ne
+  veut pas dire « désactivé » mais <b>pas monté</b> (loi 4). Référence de tri :
+  <span class="ok">✓ existant</span> · <span class="nv">◆ nouveau</span> ·
+  <span class="ab">— absent (raison)</span>. Première colonne épinglée ; la table défile.</p>
   <div class="scrollx"><table class="mx">
     <thead><tr><th>Feature</th><th><span class="chip chS">S</span> Story</th><th><span class="chip chP">P</span> Post</th><th><span class="chip chR">R</span> Réel</th><th><span class="chip chM">M</span> Mood</th></tr></thead>
     <tbody>
       <tr class="grp"><td colspan="5">Composition</td></tr>
-      <tr><td>Content (texte du post)</td><td class="ok">✓ dérivé des textes de scène (index)</td><td class="ok">✓ champ principal · 5 000 · mentions @ · hashtags</td><td class="ok">✓ légende (= content)</td><td class="ok">✓ « Comment tu vas ? » + moodEmoji</td></tr>
-      <tr><td>Texte sur scène</td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si scène</td><td class="ok">✓ bandes par défaut · timé</td><td class="ab">— pas de scène</td></tr>
-      <tr><td>Médias</td><td class="ok">✓ porteur/slide + premier plan</td><td class="ok">✓ carrousel (order écrit) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée</td><td class="ab">— jamais eu</td></tr>
+      <tr><td><span class="mono">content</span> de la publication</td><td class="ok">✓ = la description de sa <span class="mono">MeeshySlide</span></td><td class="ok">✓ PROPRE au post · 5 000 · mentions @ · hashtags — distinct de la description de chaque slide, qui est la légende de son média <span class="nv">◆ #4045</span></td><td class="ok">✓ = la description de sa slide</td><td class="ok">✓ « Comment tu vas ? » + moodEmoji</td></tr>
+      <tr><td><span class="mono">MeeshyObject</span> de kind <span class="mono">text</span></td><td class="ok">✓ 18 styles · zone · timing · keyframes</td><td class="ok">✓ si la slide a une <span class="mono">MeeshyScene</span></td><td class="ok">✓ ancré aux bandes par défaut · timé</td><td class="ab">— aucune slide</td></tr>
+      <tr><td><span class="mono">MeeshyObject</span> de kind <span class="mono">media</span></td><td class="ok">✓ la slide AGRÈGE : fond puis premiers plans</td><td class="ok">✓ chaque média ouvre SA slide (carrousel) <span class="nv">◆ fix order=0</span></td><td class="ok">✓ vidéo porteuse verrouillée au plan <span class="mono">content</span></td><td class="ab">— jamais eu</td></tr>
       <tr><td>Capture appui long</td><td class="nv">◆</td><td class="nv">◆ dès qu'une scène existe (M3)</td><td class="nv">◆</td><td class="ab">—</td></tr>
       <tr><td>Coller une image (O12 : la surface décide)</td><td class="nv">◆ scène = média ≤2048 · panneau = sticker ≤512</td><td class="nv">◆ média (carte carrousel si sans scène) · panneau = sticker</td><td class="nv">◆ média bandes/overlay · panneau = sticker</td><td class="ab">—</td></tr>
       <tr><td>Filtres (8)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
@@ -1630,24 +1658,24 @@ flowchart TD
       <tr><td>Stickers</td><td class="ok">✓ <span class="nv">◆ +timing/keyframes</span></td><td class="ok">✓ si scène</td><td class="ok">✓ timés</td><td class="ab">— moodEmoji ≠ sticker</td></tr>
       <tr><td>Stickers image (vrais)</td><td class="nv">◆ collage/clavier</td><td class="nv">◆ scène ou carrousel</td><td class="nv">◆ timés</td><td class="ab">—</td></tr>
       <tr><td>Bibliothèque « Mes stickers »</td><td class="nv" colspan="3">◆ LOCALE — feature d'app, zéro sync backend ; le sticker POSÉ voyage comme média du contenu</td><td class="ab">—</td></tr>
-      <tr><td>Son de fond</td><td class="ok">✓ biblio/fichier/micro · bornes · TTS</td><td class="ok">✓ audio post + emprunté <span class="nv">◆ + fond (carrousel compris) : boucle timeline, fil muet</span></td><td class="ok">✓ piste vidéo + emprunt</td><td class="ab">—</td></tr>
-      <tr><td>Audio premier plan (chips)</td><td class="ok">✓ chips = premier plan SEUL (le fond n'est jamais un chip)</td><td class="ok">✓ lecteur du post audio (contenu, pas chip)</td><td class="ok">✓ chips premier plan uniquement</td><td class="ab">—</td></tr>
+      <tr><td><span class="mono">audio</span> au plan <span class="mono">background</span> (la bande-son)</td><td class="ok">✓ biblio/fichier/micro · bornes · TTS</td><td class="ok">✓ audio post + emprunté <span class="nv">◆ un vocal posé y va, et n'ouvre AUCUNE slide (#4052) : boucle timeline, fil muet</span></td><td class="ok">✓ piste vidéo + emprunt</td><td class="ab">— aucune scène</td></tr>
+      <tr><td><span class="mono">audio</span> au plan <span class="mono">foreground</span> (les chips)</td><td class="ok">✓ le chip n'existe QUE pour ce plan — un son de fond n'est jamais un chip</td><td class="ok">✓ lecteur du post audio (contenu, pas chip)</td><td class="ok">✓ premier plan uniquement</td><td class="ab">—</td></tr>
       <tr><td>Extraction de son (toggle)</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td><td class="ok">✓ <span class="nv">◆ enfin envoyé</span></td><td class="ab">—</td></tr>
-      <tr><td>Lieu — méta / pastille</td><td class="ok">✓ / ✓ <span class="nv">◆ scalable</span></td><td class="ok">✓ / si scène</td><td class="ok">✓ / timée</td><td class="ab">— / —</td></tr>
+      <tr><td><b>lieu de la publication</b> / <span class="mono">MeeshyObject</span> de kind <span class="mono">place</span> — <i>deux choses, même mot</i></td><td class="ok">✓ / ✓ <span class="nv">◆ scalable</span></td><td class="ok">✓ (composant Position, #4034) / si la slide a une scène</td><td class="ok">✓ / timée</td><td class="ab">— / — (aucune slide)</td></tr>
       <tr><td>Références 4 modes</td><td class="ok">✓ tous</td><td class="ok">✓ tous (PINNED ⇒ scène)</td><td class="ok">✓ tous</td><td class="ok">✓ sauf PINNED (pas de scène)</td></tr>
       <tr><td>Hashtags</td><td class="ok">✓ extraction serveur</td><td class="ok">✓ idem</td><td class="ok">✓ idem</td><td class="ok">✓ idem</td></tr>
-      <tr><td>Slides</td><td class="ok">✓ ≤10 (+ / dupl. / suppr.)</td><td class="ok">✓ = cartes carrousel</td><td class="ab">— une scène, montage interne</td><td class="ab">—</td></tr>
+      <tr><td><span class="mono">MeeshySlide</span> (le <b>rail</b>, barre haute)</td><td class="ok">✓ ≤10 (+ / dupl. / suppr.)</td><td class="ok">✓ 1 slide = 1 média = 1 carte du carrousel</td><td class="ab">— UNE slide : le réel EST la scène, montage interne</td><td class="ab">— aucune</td></tr>
       <tr><td>Timeline plan 2D</td><td class="nv">◆ (remplace 32 vues)</td><td class="nv">◆ si scène</td><td class="nv">◆ piste maître verrouillée</td><td class="ab">—</td></tr>
       <tr><td>Keyframes (x·y·scale·opacity·vol·easing)</td><td class="ok">✓</td><td class="ok">✓ si scène</td><td class="ok">✓</td><td class="ab">—</td></tr>
       <tr><td>Transitions (slide : entrée/sortie · clips : jointures)</td><td class="ok">✓ existant</td><td class="ok">✓ si scène</td><td class="ok">✓ via timeline</td><td class="ab">—</td></tr>
-      <tr><td>Fond (couleur·dégradé·média)</td><td class="ok">✓ chip mouvable · loop=fond</td><td class="ok">✓ si scène</td><td class="ab">— vidéo = porteur</td><td class="ab">— teinte du thème</td></tr>
-      <tr><td>Langue par objet</td><td class="ok">✓ textes (audience-driven) — généralisation aux kinds non-texte : post-v1 (§F)</td><td class="nv">◆ textes</td><td class="nv">◆ textes</td><td class="ab">—</td></tr>
+      <tr><td>plan <span class="mono">background</span> — visuel (couleur · dégradé · média)</td><td class="ok">✓ chip mouvable · loop = fond</td><td class="ok">✓ une couleur posée FAIT NAÎTRE la scène, incrustée (#4033)</td><td class="ab">— la vidéo EST le porteur</td><td class="ab">— teinte du thème</td></tr>
+      <tr><td><span class="mono">locale</span> d'un <span class="mono">MeeshyObject</span> — héritée de la langue déclarée, surchargeable</td><td class="ok">✓ kind <span class="mono">text</span> (audience-driven) — généralisation aux autres kinds : post-v1 (§F)</td><td class="nv">◆ <span class="mono">text</span></td><td class="nv">◆ <span class="mono">text</span></td><td class="ab">— aucun objet</td></tr>
       <tr class="grp"><td colspan="5">Publication</td></tr>
       <tr><td>Audience</td><td class="ok">✓ 6 niveaux + EXCEPT/ONLY</td><td class="ok">3 exposés <span class="nv">◆ → 6 partout</span></td><td class="nv">◆ 6 (hérite du socle)</td><td class="ok">✓ 6 niveaux</td></tr>
       <tr><td>Langue de publication</td><td class="ok">✓</td><td class="ok">✓ iOS <span class="nv">◆ web l'envoie enfin</span></td><td class="ok">✓</td><td class="ok">✓</td></tr>
       <tr><td>Brouillons</td><td class="ok">✓ StoryDraftStore</td><td class="ab">— étendu P : post-v1 (§F ; outbox texte existante conservée)</td><td class="ab">— post-v1 (§F)</td><td class="ok">✓ draft mood</td></tr>
       <tr><td>File offline</td><td class="ok">✓ PublishQueue</td><td class="ok">✓ texte — extension média/audio : post-v1 (§F)</td><td class="ab">— post-v1 (§F)</td><td class="ok">✓ branche offline</td></tr>
-      <tr><td>Aperçu = lecteur</td><td class="ok">✓ (né en pause) <span class="nv">◆ au socle</span></td><td class="nv">◆</td><td class="nv">◆</td><td class="nv">◆ bulle</td></tr>
+      <tr><td>Aperçu = lecteur (loi 6)</td><td class="ok">✓ (né en pause) <span class="nv">◆ au socle</span></td><td class="ok">✓ <span class="nv">◆ livré #4053 — monté ssi la publication a une <span class="mono">MeeshyScene</span></span></td><td class="nv">◆</td><td class="nv">◆ bulle</td></tr>
       <tr><td>Édition publiée</td><td class="ok">✓ reset engagement · tri-état</td><td class="ok">✓ PUT (tri-état)</td><td class="ok">✓ = post</td><td class="ok">✓ statusUpdated</td></tr>
       <tr><td>Repost (source)</td><td class="ok">✓ → naît POST · snapshot média</td><td class="ok">✓ + citation</td><td class="ok">✓</td><td class="ok">✓ (mood copié)</td></tr>
       <tr><td>Republication (auteur)</td><td class="ok">✓ date fraîche</td><td class="ab">— permanent</td><td class="ab">— permanent</td><td class="ab">— 1 h, balayé</td></tr>
