@@ -50,6 +50,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
 > résume.
 >
+> ### 253i — le vocabulaire des bascules, enfermé par son NOM (issue #4266)
+>
+> - Base `cd9aa95b`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-253i-toggle-vocabulary.md`.
+> - **252i déplacé d'un cran** : là une GARDE était bornée par la forme qu'elle
+>   interdisait ; ici une RÈGLE juste (`callToggleAccessibility` — trait
+>   `.isToggle`, valeur, repli iOS 17) était bornée par son **nom**, son
+>   **fichier** et ses **clés**. Cinq sites l'appliquaient, tous d'appel.
+> - Devenu `toggleStateAccessibility`, hors de `CallView.swift`, clés
+>   `a11y.toggle.*` (7 locales transportées, catalogue inchangé à 3408).
+>   **5 → 8 sites** ; 5 défauts réels soldés en DEUX familles de remède (trait +
+>   valeur pour les interrupteurs, **nom qui varie** pour un menu et un j'aime).
+> - **Le remède se lit sur la JUMELLE** : l'issue annonçait « trait + valeur »
+>   pour le j'aime de story ; sa jumelle de `FeedCommentsSheet` sert un NOM qui
+>   varie et une valeur qui porte le COMPTE. Un j'aime n'est pas un interrupteur.
+> - **Une garde qui suit un renommage sans changer de CIBLE est morte** :
+>   `isNotFilePrivate` lisait `CallView.swift`, qui ne contient plus le motif —
+>   elle serait restée verte en cessant de voir. Cible déplacée avec le code.
+> - **3 des 8 « muettes » n'étaient pas des défauts**, et le dire fait partie de
+>   la mesure : un titre variable passé par un constructeur maison, une icône de
+>   TYPE et non d'état, une rangée agrégée par son conteneur. Cinq affinages du
+>   balayage (102 → 20 → 13 → 9 → 5).
+> - **Garde partielle, annoncée comme telle** : elle interdit de RÉÉCRIRE le
+>   vocabulaire (clé + trait), elle n'exige pas encore qu'on l'APPLIQUE partout.
+>
 > ### 252i — la garde de 249i ne pouvait pas voir la neuvième copie (issue #4260)
 >
 > - Base `9286ce92`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-252i-language-flag-role.md`.

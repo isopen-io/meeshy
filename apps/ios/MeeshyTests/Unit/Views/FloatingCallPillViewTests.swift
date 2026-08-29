@@ -489,15 +489,15 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_muteButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
         // Corps équilibré, pas une fenêtre de 1 000 caractères :
-        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // `toggleStateAccessibility` se trouvait à 1 001 — UN caractère de
         // trop — et la garde virait au rouge sur du code parfaitement juste.
         guard let vicinity = DeclarationBodyScanner.body(containing: "private var muteButton", in: source) else {
             XCTFail("FloatingCallPillView must define muteButton")
             return
         }
         XCTAssertTrue(
-            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)"),
-            "The mute button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            vicinity.contains("toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)"),
+            "The mute button must apply .toggleStateAccessibility so VoiceOver exposes the " +
             "same toggle trait + on/off value as the equivalent control in CallView — a plain " +
             "label swap alone loses the toggle semantics and rotor navigation support."
         )
@@ -506,15 +506,15 @@ final class FloatingCallPillViewTests: XCTestCase {
     func test_speakerButton_appliesToggleAccessibility() throws {
         let source = try pillSource()
         // Corps équilibré, pas une fenêtre de 1 000 caractères :
-        // `callToggleAccessibility` se trouvait à 1 001 — UN caractère de
+        // `toggleStateAccessibility` se trouvait à 1 001 — UN caractère de
         // trop — et la garde virait au rouge sur du code parfaitement juste.
         guard let vicinity = DeclarationBodyScanner.body(containing: "private var speakerButton", in: source) else {
             XCTFail("FloatingCallPillView must define speakerButton")
             return
         }
         XCTAssertTrue(
-            vicinity.contains("callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
-            "The speaker button must apply .callToggleAccessibility so VoiceOver exposes the " +
+            vicinity.contains("toggleStateAccessibility(isToggle: true, isActive: callManager.isSpeaker)"),
+            "The speaker button must apply .toggleStateAccessibility so VoiceOver exposes the " +
             "same toggle trait + on/off value as the equivalent control in CallView."
         )
     }

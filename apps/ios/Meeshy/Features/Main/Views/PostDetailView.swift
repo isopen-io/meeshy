@@ -1129,10 +1129,22 @@ struct PostDetailView: View {
                     toggleDetailBookmark()
                 }
             } label: {
+                // Le TITRE disait « Enregistrer » que le post soit déjà
+                // enregistré ou non — seule l'icône changeait. Dans un MENU,
+                // c'est le nom qui porte l'état : un lecteur d'écran y entend
+                // une liste de commandes, pas des interrupteurs, et
+                // « Enregistrer » sur un post déjà enregistré est faux
+                // (253i, #4266).
+                //
+                // La barre d'action de CE MÊME FICHIER fait varier son
+                // étiquette depuis toujours, avec ces deux clés exactes : le
+                // savoir était à trente lignes d'ici.
                 Label(
                     displayPost?.primaryReelDisplayMedia != nil
                         ? String(localized: "feed.reel.save_media", defaultValue: "Sauvegarder", bundle: .main)
-                        : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main),
+                        : (isPostBookmarked
+                            ? String(localized: "a11y.post.bookmark_remove", defaultValue: "Retirer des favoris", bundle: .main)
+                            : String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main)),
                     systemImage: displayPost?.primaryReelDisplayMedia != nil
                         ? "arrow.down.to.line"
                         : (isPostBookmarked ? "bookmark.fill" : "bookmark")

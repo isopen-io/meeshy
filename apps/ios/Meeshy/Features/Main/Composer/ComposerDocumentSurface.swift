@@ -1963,6 +1963,11 @@ struct ComposerDocumentSurface: View {
                     : MeeshyColors.textSecondary(isDark: true))
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))
+        // Le doc-comment ci-dessus écrivait la règle à l'envers — « Active
+        // (palette dépliée) : teintée accent pour dire "ouvert" » : l'état ne
+        // se disait QUE par la teinte, ce qui est exactement WCAG 1.4.1
+        // (253i, #4266). Il se dit maintenant aussi.
+        .toggleStateAccessibility(isToggle: true, isActive: showColorPalette)
     }
 
     /// **Le picker de couleur de fond (F2, #3885)** — « un post sans visuel
