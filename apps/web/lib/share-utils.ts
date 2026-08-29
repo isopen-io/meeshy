@@ -136,10 +136,16 @@ export async function validateAffiliateToken(token: string): Promise<boolean> {
 
 /**
  * Valide un lien de conversation
+ *
+ * #4170 critère 6 — `GET /links/:linkId/info` n'a JAMAIS existé comme route :
+ * un 404 en production, indépendamment de la refonte plus large de l'issue.
+ * `GET /links/:identifier` (`routes/links/retrieval.ts`) EST la route réelle
+ * qui rend les détails d'un lien (existence + validité), en accès optionnel —
+ * exactement ce dont un contrôle de validité a besoin.
  */
 export async function validateConversationLink(linkId: string): Promise<boolean> {
   try {
-    const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
+    const response = await fetch(buildApiUrl(`/links/${linkId}`));
     return response.ok;
   } catch (error) {
     console.error('Erreur validation lien conversation:', error);
@@ -157,19 +163,36 @@ export function generateQRCodeData(url: string): string {
 }
 
 /**
- * Obtient les statistiques de partage d'un lien (optionnel)
+ * Obtient les statistiques d'usage d'un lien (optionnel)
+ *
+ * #4170 critère 6 — `GET /links/:linkId/stats` (per-lien) n'a jamais existé
+ * comme route ; c'était un 404. Point important : ce n'est PAS le même
+ * `/links/stats` que `routes/links/user.ts` sert (celui-là est AGRÉGÉ, sur
+ * TOUS les liens du créateur connecté — sans rapport avec un `linkId`
+ * précis). La seule route qui décrit UN lien par son identifiant est
+ * `GET /links/:identifier`, dont `data.stats` porte des mesures RÉELLES
+ * (messages, membres, participants anonymes) — jamais `views`/`shares`/
+ * `clicks`, que Meeshy ne mesure nulle part : les servir aurait recopié
+ * l'anti-motif que #4170 corrige ailleurs (un champ qu'on ne sait pas
+ * mesurer n'est pas rendu avec une valeur d'emprunt).
  */
 export async function getShareStats(linkId: string): Promise<{
-  views: number;
-  shares: number;
-  clicks: number;
+  totalMessages: number;
+  totalMembers: number;
+  totalAnonymousParticipants: number;
 } | null> {
   try {
-    const response = await fetch(buildApiUrl(`/links/${linkId}/stats`));
+    const response = await fetch(buildApiUrl(`/links/${linkId}`));
 
     if (response.ok) {
       const data = await response.json();
-      return data.data;
+      const stats = data?.data?.stats;
+      if (!stats) return null;
+      return {
+        totalMessages: stats.totalMessages,
+        totalMembers: stats.totalMembers,
+        totalAnonymousParticipants: stats.totalAnonymousParticipants,
+      };
     }
   } catch (error) {
     console.error('Erreur récupération statistiques:', error);

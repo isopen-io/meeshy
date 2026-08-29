@@ -654,7 +654,7 @@ describe('GET /conversations/:conversationId/links', () => {
     expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
   });
 
-  it('moderator sees all links (no creatorId filter)', async () => {
+  it('moderator sees all links (aucun filtre createdBy)', async () => {
     const { prisma, reply, route } = getLinksRoute();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'moderator' }));
     const mockLinks = [{ id: 'link1', currentUses: 5 }, { id: 'link2', currentUses: 2 }];
@@ -662,7 +662,7 @@ describe('GET /conversations/:conversationId/links', () => {
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
     const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).not.toHaveProperty('creatorId');
+    expect(findCall.where).not.toHaveProperty('createdBy');
     expect(reply._body).toMatchObject({
       success: true,
       isModerator: true,
@@ -680,7 +680,7 @@ describe('GET /conversations/:conversationId/links', () => {
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
     const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).not.toHaveProperty('creatorId');
+    expect(findCall.where).not.toHaveProperty('createdBy');
     expect(reply._body).toMatchObject({ isModerator: true });
   });
 
@@ -691,17 +691,23 @@ describe('GET /conversations/:conversationId/links', () => {
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
     const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).not.toHaveProperty('creatorId');
+    expect(findCall.where).not.toHaveProperty('createdBy');
   });
 
-  it('regular member sees only own links (creatorId filter applied)', async () => {
+  it('regular member sees only own links (filtre createdBy applique)', async () => {
     const { prisma, reply, route } = getLinksRoute();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
     prisma.conversationShareLink.findMany.mockResolvedValue([{ id: 'link1', currentUses: 1 }]);
     const req = makeRequest({ params: { conversationId: CONV_ID } });
     await route.handler(req, reply);
     const findCall = prisma.conversationShareLink.findMany.mock.calls[0][0];
-    expect(findCall.where).toHaveProperty('creatorId', USER_ID);
+    // #4170 -- ce temoin assertait `creatorId`, une colonne qui N'EXISTE PAS sur
+    // ConversationShareLink (le schema declare `createdBy`). Le Prisma mocke ne
+    // valide aucun nom de colonne, donc le test restait VERT sur du code qui levait
+    // en production et tombait dans le catch-all : 500 sur toute lecture par un
+    // membre non-moderateur. Un temoin qui asserte l'IMPLEMENTATION plutot que le
+    // COMPORTEMENT peut verrouiller un defaut au lieu de le prevenir.
+    expect(findCall.where).toHaveProperty('createdBy', USER_ID);
     expect(reply._body).toMatchObject({ isModerator: false });
   });
 

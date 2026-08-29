@@ -331,7 +331,13 @@ export function registerSharingRoutes(
       const links = await prisma.conversationShareLink.findMany({
         where: {
           conversationId,
-          ...(isModerator ? {} : { creatorId: userId }) // Si pas modérateur, filtrer par créateur
+          // #4170 -- `creatorId` N'EXISTE PAS sur ConversationShareLink. Le schema
+          // declare `createdBy` ; `creator` n'est que le nom de la RELATION, et
+          // Prisma leve sur un champ inconnu. Le catch-all rendait donc 500, et un
+          // membre non-moderateur ne pouvait JAMAIS lister ses propres liens par
+          // cette porte -- un filtre d'autorisation qui echoue en refusant tout est
+          // silencieux : il ressemble a une panne, jamais a un droit mal ecrit.
+          ...(isModerator ? {} : { createdBy: userId })
         },
         include: {
           creator: {

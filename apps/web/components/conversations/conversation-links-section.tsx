@@ -13,10 +13,10 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Link2, Copy, Clock, Users, Eye, FileText, Image, MessageSquare, User, CheckCircle, XCircle, MoreHorizontal } from 'lucide-react';
+import { Link2, Copy, Clock, Users, Eye, FileText, Image, MessageSquare, CheckCircle, XCircle, MoreHorizontal } from 'lucide-react';
 
 import { copyToClipboard } from '@/lib/clipboard';
-import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
+import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
@@ -49,13 +49,10 @@ interface ShareLink {
   creator: {
     id: string;
     username: string;
-    firstName: string;
-    lastName: string;
-    displayName: string;
-    avatar?: string;
-  };
-  _count: {
-    anonymousParticipants: number;
+    firstName: string | null;
+    lastName: string | null;
+    displayName: string | null;
+    avatar: string | null;
   };
 }
 
@@ -81,11 +78,22 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
         return;
       }
 
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.CONVERSATION.GET_CONVERSATION_LINKS(conversationId)), {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      // #4170 critère 8 — `GET /conversations/:conversationId/links`
+      // (`conversations/sharing.ts`) filtrait sur `creatorId`, une colonne qui
+      // n'existe pas sur `ConversationShareLink` : Prisma levait et le
+      // catch-all rendait 500 pour tout membre NON modérateur — ce composant
+      // ne pouvait donc jamais afficher les liens d'un membre ordinaire.
+      // `GET /links?conversationId=` (`links/user.ts`) filtre sur `createdBy`,
+      // la colonne réelle. `expand=creator` restaure la carte auteur qu'un
+      // schéma de réponse sans `properties` supprimait déjà côté serveur (le
+      // handler la composait, mais aucune déclaration ne la laissait
+      // traverser fast-json-stringify) — `link.creator` était donc toujours
+      // `undefined` et faisait planter cette popover à l'ouverture ; `policy`
+      // restaure permissions et restrictions pour la même raison.
+      const response = await fetch(
+        buildApiUrl(`/links?conversationId=${conversationId}&expand=creator,policy`),
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       if (response.ok) {
         const result = await response.json();
@@ -178,10 +186,6 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                 <Users className="h-3 w-3" />
                 {link.currentUses}/{link.maxUses || '∞'}
               </span>
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                {link._count.anonymousParticipants}
-              </span>
               {link.expiresAt && (
                 <span className="flex items-center gap-1">
                   <Clock className="h-3 w-3" />
@@ -231,7 +235,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                       <span className="font-medium">{t('links.createdBy')}</span>
                       <div className="flex items-center gap-1 mt-1">
                         <Avatar className="h-4 w-4">
-                          <AvatarImage src={link.creator.avatar} />
+                          <AvatarImage src={link.creator.avatar ?? undefined} />
                           <AvatarFallback className="text-xs">
                             {link.creator.firstName?.charAt(0) || link.creator.username?.charAt(0)}
                           </AvatarFallback>

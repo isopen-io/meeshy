@@ -74,6 +74,18 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findFirst: jest.fn<any>(),
       update: jest.fn<any>().mockResolvedValue({ id: LINK_DB_ID, linkId: LINK_PUBLIC_ID }),
     },
+    // #4170 — PATCH pose désormais `isActive:false` au même effet que
+    // `/toggle` (admin.ts) : révoquer les invités déjà entrés
+    // (`revokeShareLinkGuests`, socketio/revokeShareLinkGuests.ts). Le double
+    // porte la surface Prisma que la production appelle réellement, sinon
+    // toute mutation vers `isActive:false` tombe en 500 pour une raison qui
+    // n'a rien à voir avec le témoin (`participant.findMany` indéfini). Zéro
+    // invité trouvé par défaut : les témoins existants qui désactivent un
+    // lien sans se soucier de la révocation restent inchangés.
+    participant: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
     ...overrides,
   } as any;
 }

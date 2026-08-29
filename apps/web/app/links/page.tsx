@@ -146,9 +146,18 @@ export default function LinksPage() {
       const offset = append ? shareLinksOffset : 0;
 
       // Fonction interne pour charger les share links
+      //
+      // #4170 critère 1/8 — `GET /links/my-links` absorbé par `GET /links`
+      // (`links/user.ts`) : mêmes bornes de pagination par `?offset=`/`?limit=`
+      // (l'ancienne route bornait à 50, la nouvelle à 100 — cette page ne
+      // demande jamais plus que `LINKS_PER_PAGE`, donc aucune régression),
+      // `?expand=conversation` restitue `conversation.{id,title,type,description}`
+      // que le filtre de recherche (`link.conversation.title`, plus bas) et le
+      // reste de cette page lisent. `pagination.hasMore` — déjà le même champ
+      // sur les deux routes — continue de gouverner `hasMoreShareLinks`.
       const fetchShareLinks = async () => {
         const shareLinksResponse = await fetch(
-          buildApiUrl(`/api/links/my-links?limit=${LINKS_PER_PAGE}&offset=${offset}`),
+          buildApiUrl(`/api/links?limit=${LINKS_PER_PAGE}&offset=${offset}&expand=conversation`),
           {
             headers: { Authorization: `Bearer ${token}` }
           }
@@ -330,10 +339,16 @@ export default function LinksPage() {
   };
 
   // Basculer l'état actif/inactif
+  // #4170 critère 4/8 — `PATCH /links/:linkId/toggle` absorbé par la porte
+  // générique `PATCH /links/:linkId` (`links/management.ts`), qui accepte
+  // `isActive` depuis l'origine et révoque désormais aussi les invités
+  // connectés en désactivant (parité avec `/toggle`, corrigée dans ce même
+  // lot côté serveur). `/toggle` reste un alias déprécié pour Android
+  // (`LinkApi.kt`) ; ce client-ci migre.
   const handleToggleActive = async (link: ConversationLink) => {
     try {
       const token = authManager.getAuthToken();
-      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}/toggle`), {
+      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}`), {
         method: 'PATCH',
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -355,13 +370,16 @@ export default function LinksPage() {
   };
 
   // Prolonger la durée
+  //
+  // #4170 critère 4/8 — même absorption que `handleToggleActive` ci-dessus :
+  // `/extend` → `PATCH /links/:linkId` avec `expiresAt`.
   const handleExtendDuration = async (link: ConversationLink, days: number) => {
     try {
       const token = authManager.getAuthToken();
       const newExpiresAt = new Date(link.expiresAt || new Date());
       newExpiresAt.setDate(newExpiresAt.getDate() + days);
 
-      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}/extend`), {
+      const response = await fetch(buildApiUrl(`/api/links/${link.linkId}`), {
         method: 'PATCH',
         headers: { 
           Authorization: `Bearer ${token}`,

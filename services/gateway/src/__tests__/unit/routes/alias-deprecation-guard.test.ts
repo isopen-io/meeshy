@@ -334,15 +334,54 @@ describe('Le recensement des adresses en sursis', () => {
   });
 });
 
+/**
+ * Les SUCCESSEURS, que le vocabulaire attrape à tort.
+ *
+ * `VOCABULAIRE` répond à « ce voisinage parle-t-il d'alias ? », jamais à « CETTE
+ * route EN EST-ELLE un ? ». Or une adresse cible parle nécessairement de ses
+ * prédécesseurs — c'est même le seul endroit honnête où le dire, puisque c'est
+ * elle qui les remplace. **Déclarer ses prédécesseurs n'est pas se déclarer
+ * soi-même**, et les trois entrées ci-dessous sont exactement ce cas.
+ *
+ * Elles n'ont RIEN à faire dans `DETTE` : y entrer signifierait « alias déclaré
+ * qui n'annonce pas encore », ce qui serait faux, et le mensonge survivrait à la
+ * correction — la dette ne se viderait jamais de ces trois-là, puisqu'elles ne
+ * peuvent pas annoncer un successeur qu'elles SONT.
+ *
+ * Cette liste est un aveu de la limite du détecteur, pas une dispense : chaque
+ * entrée porte l'issue qui a introduit la route cible, et le témoin ci-dessous
+ * vérifie qu'elle désigne encore quelque chose de réel.
+ */
+const SUCCESSEURS: readonly { readonly cle: string; readonly issue: string }[] = [
+  { cle: 'links/user.ts GET /links', issue: '#4170 — cible de /my-links et /links/stats' },
+  { cle: 'me/index.ts GET /', issue: '#4178 — cible de /auth/me' },
+  {
+    cle: 'user-deletions.ts POST ${basePath}/conversations/:conversationId/restore-for-me',
+    issue: "#4332 — n'a AUCUN successeur à nommer : la corbeille n'existe qu'ici",
+  },
+];
+
 describe('Une adresse qui se déclare alias le DIT au client', () => {
   it("n'admet aucun alias muet hors de la dette nommée", () => {
     const enDette = new Set(DETTE.map((d) => d.cle));
+    const successeurs = new Set(SUCCESSEURS.map((s) => s.cle));
     const muets = balayer()
       .filter((e) => e.declare && !e.annonce)
       .map(cle)
-      .filter((c) => !enDette.has(c));
+      .filter((c) => !enDette.has(c) && !successeurs.has(c));
 
     expect(muets).toEqual([]);
+  });
+
+  it('chaque SUCCESSEUR nommé désigne encore une route réelle du balayage', () => {
+    // Sans ce témoin, la liste ci-dessus deviendrait une dispense permanente :
+    // une entrée qui ne désigne plus rien continuerait d'exempter un nom que
+    // personne ne porte, et le jour où ce nom réapparaîtrait sur un VRAI alias,
+    // il entrerait muet sans faire rougir personne.
+    const balayees = new Set(balayer().map(cle));
+    const fantomes = SUCCESSEURS.map((s) => s.cle).filter((c) => !balayees.has(c));
+
+    expect(fantomes).toEqual([]);
   });
 
   it('les dix adresses du territoire portent leur annonce', () => {

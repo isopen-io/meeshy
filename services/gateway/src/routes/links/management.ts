@@ -22,6 +22,78 @@ import {
   updateLinkBodySchema,
   shareLinkSchema
 } from './types';
+import { revokeShareLinkGuests } from '../../socketio/revokeShareLinkGuests';
+
+/**
+ * Le verdict d'autorisation d'un geste de gestion sur un lien — trois issues,
+ * jamais un booléen : le 404 (identifiant public introuvable) et le 403
+ * (trouvé, mais ni créateur ni modérateur) sont deux refus de nature
+ * différente et les quatre portes appelantes doivent pouvoir les distinguer
+ * sans reparcourir la logique de rang.
+ */
+export type ShareLinkManagementLoad =
+  | { readonly outcome: 'not-found' }
+  | { readonly outcome: 'forbidden' }
+  | { readonly outcome: 'ok'; readonly id: string };
+
+/**
+ * Le bloc UNIQUE « charger un lien par son identifiant PUBLIC et décider qui a
+ * le droit de le gérer » — recopié QUATRE fois avant #4170 (`PATCH`
+ * ci-dessous, `/toggle`, `/extend`, `DELETE` dans `admin.ts`), chacune avec
+ * son propre `findFirst` et son propre calcul `isCreator`/`isConversationAdmin`.
+ * Le seuil EFFECTIF d'une règle recopiée quatre fois est celui de sa copie la
+ * plus permissive le jour où l'une d'elles dérive — c'est exactement ce que
+ * l'audit de #4170 a trouvé sur la lecture (`creatorId` contre `createdBy`
+ * dans `conversations/sharing.ts`) et ce qu'une source UNIQUE empêche
+ * structurellement de reproduire ici.
+ *
+ * Charger par l'identifiant PUBLIC seul — jamais `createdBy: userId` dans le
+ * `where` : cela rendrait `isCreator` tautologique et `isConversationAdmin`
+ * ne déciderait plus rien, un hôte non-créateur recevant un 404 « introuvable »
+ * là où la route promet un verdict (#4007, commentaire porté par les quatre
+ * copies avant unification).
+ */
+export async function loadShareLinkForManagement(
+  fastify: FastifyInstance,
+  userId: string,
+  platformRole: string | null | undefined,
+  publicLinkId: string
+): Promise<ShareLinkManagementLoad> {
+  const link = await fastify.prisma.conversationShareLink.findFirst({
+    where: { linkId: publicLinkId },
+    include: {
+      conversation: {
+        include: {
+          participants: {
+            where: { userId, isActive: true }
+          }
+        }
+      }
+    }
+  });
+
+  if (!link) {
+    return { outcome: 'not-found' };
+  }
+
+  const isCreator = link.createdBy === userId;
+  // Le rang de conversation replie sa casse (#3875) et l'administrateur de la
+  // plateforme agit avec les droits du créateur (#3941) : un lien de partage
+  // est une affaire d'administration de conversation comme une autre. `some`
+  // sur une liste déjà filtrée sur l'appelant (`where: { userId }` ci-dessus).
+  const isConversationAdmin = link.conversation.participants.some(member =>
+    actorHasMinimumRole(
+      { conversationRole: member.role, platformRole },
+      MemberRole.MODERATOR,
+    )
+  );
+
+  if (!isCreator && !isConversationAdmin) {
+    return { outcome: 'forbidden' };
+  }
+
+  return { outcome: 'ok', id: link.id };
+}
 
 export async function registerManagementRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -90,36 +162,13 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       }
 
       const userId = request.authContext.registeredUser!.id;
+      const platformRole = request.authContext.registeredUser?.role;
 
-      const shareLink = await fastify.prisma.conversationShareLink.findFirst({
-        where: { linkId },
-        include: {
-          conversation: {
-            include: {
-              participants: {
-                where: { userId, isActive: true }
-              }
-            }
-          }
-        }
-      });
-
-      if (!shareLink) {
+      const loaded = await loadShareLinkForManagement(fastify, userId, platformRole, linkId);
+      if (loaded.outcome === 'not-found') {
         return sendNotFound(reply, 'Lien de partage non trouvé');
       }
-
-      const isCreator = shareLink.createdBy === userId;
-      // `Participant.role` est en minuscules en base (#3875) — égalité stricte
-      // sur `'ADMIN'`/`'MODERATOR'` ne matchait jamais. `hasMinimumMemberRole`
-      // replie la casse ET tolère les lignes historiques pas encore migrées.
-      const isConversationAdmin = shareLink.conversation.participants.some(member =>
-        actorHasMinimumRole(
-          { conversationRole: member.role, platformRole: request.authContext.registeredUser?.role },
-          MemberRole.MODERATOR,
-        )
-      );
-
-      if (!isCreator && !isConversationAdmin) {
+      if (loaded.outcome === 'forbidden') {
         return sendForbidden(reply, 'Permissions insuffisantes pour modifier ce lien');
       }
 
@@ -145,7 +194,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
       if (body.allowedIpRanges !== undefined) updateData.allowedIpRanges = body.allowedIpRanges;
 
       const updatedLink = await fastify.prisma.conversationShareLink.update({
-        where: { id: shareLink.id },
+        where: { id: loaded.id },
         data: updateData,
         include: {
           conversation: {
@@ -171,6 +220,27 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
           }
         }
       });
+
+      // #4170 — le seuil EFFECTIF d'une règle recopiée est celui de sa porte
+      // la PLUS PERMISSIVE : `PATCH /links/:linkId` accepte `isActive` depuis
+      // l'origine (`updateLinkSchema` le déclare), mais SEUL `/toggle`
+      // (`admin.ts`) revoquait les invités déjà entrés en désactivant. Un
+      // appelant qui coupait un lien par CETTE porte-ci laissait donc chaque
+      // invité anonyme connecté dans la room de la conversation, sans le
+      // savoir — la moitié « inaccessible to EXISTING anonymous users » que
+      // le contrat OpenAPI de `/toggle` promet, `PATCH` ne la tenait pas.
+      // Convergeant sur le même effet quel que soit le champ qui le déclenche
+      // (`updateData.isActive === false`, jamais `body.isActive` — un body
+      // sans `isActive` ne doit rien révoquer), cette route unique referme
+      // l'écart plutôt que de le documenter.
+      if (updateData.isActive === false) {
+        await revokeShareLinkGuests({
+          prisma: fastify.prisma,
+          io: fastify.socketIOHandler?.getManager()?.getIO(),
+          manager: fastify.socketIOHandler?.getManager(),
+          shareLinkId: loaded.id,
+        });
+      }
 
       return sendSuccess(reply, updatedLink, { message: 'Lien mis à jour avec succès' });
 
