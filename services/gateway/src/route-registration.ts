@@ -62,6 +62,7 @@ import { broadcastRoutes } from './routes/admin/broadcasts';
 import { adminPostRoutes } from './routes/admin/posts';
 import { agentAdminRoutes } from './routes/admin/agent';
 import { agentTopicsRoutes } from './routes/admin/agent-topics';
+import { routeUsageRoutes } from './routes/admin/route-usage';
 import { userRoutes } from './routes/users';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
@@ -277,6 +278,11 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // Register agent admin routes (at /api/v1/admin/agent)
     await server.register(agentAdminRoutes, { prefix: `${API_PREFIX}/admin/agent` });
     await server.register(agentTopicsRoutes, { prefix: `${API_PREFIX}/admin/agent` });
+
+    // #4275 — la lecture du compteur d'acces (S5). Elle vit avec les autres
+    // routes d'administration : c'est la seule facon de lire le compte sans
+    // acces SSH, et donc de prouver qu'une adresse est morte avant de la retirer.
+    await server.register(routeUsageRoutes, { prefix: `${API_PREFIX}/admin` });
 
     // Register user routes
     await server.register(userRoutes, { prefix: API_PREFIX });

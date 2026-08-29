@@ -34,6 +34,7 @@ import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { registerRouteUsageCounterHook } from './utils/route-usage-counter';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
@@ -616,6 +617,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       done();
     });
     logger.info('✅ Request timing hook registered');
+
+    // #4275 — le compteur d'acces par route s'arme au MEME point du cycle de vie
+    // que le hook de timing voisin : onResponse, ou le routage est deja resolu,
+    // donc `routeOptions.url` rend le GABARIT et jamais l'URL concrete. Sans ce
+    // compteur, le critere de retrait de #4178/#4181/#4182/#4184 (« zero appel
+    // sur deux versions publiees ») etait inatteignable par construction.
+    registerRouteUsageCounterHook(this.server);
+    logger.info('✅ Route usage counter hook registered');
 
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
