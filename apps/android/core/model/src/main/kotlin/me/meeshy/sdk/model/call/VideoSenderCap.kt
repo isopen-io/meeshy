@@ -13,6 +13,43 @@ enum class ThermalState {
     FAIR,
     SERIOUS,
     CRITICAL,
+    ;
+
+    companion object {
+        /**
+         * Collapse a raw Android `PowerManager.THERMAL_STATUS_*` integer onto a
+         * [ThermalState] tier — the pure half of the iOS `ThermalStateMonitor` port,
+         * so the `:app` call layer only forwards `PowerManager.getCurrentThermalStatus()`
+         * (a plain `Int`) and keeps this decision unit-tested off-device.
+         *
+         * Parity with iOS `ProcessInfo.ThermalState` (four tiers) over Android's seven:
+         * `NONE`(0) → [NOMINAL]; `LIGHT`(1)/`MODERATE`(2) → [FAIR] (throttling begun but
+         * UX not yet largely impacted); `SEVERE`(3) → [SERIOUS]; `CRITICAL`(4) and the
+         * two hotter emergency tiers `EMERGENCY`(5)/`SHUTDOWN`(6) → [CRITICAL].
+         *
+         * The collapse is **monotonic and clamped at both ends** rather than an exact
+         * `when`: any value at or above [STATUS_CRITICAL] sheds the most encode load —
+         * so a future OS tier above `SHUTDOWN` degrades protectively instead of being
+         * mistaken for cool — while a sub-`NONE`/negative reading (an absent or
+         * unreadable sensor, never a real "cold" report) forwards untouched as
+         * [NOMINAL] so it never silently punishes a cool device's call quality.
+         */
+        fun fromAndroidThermalStatus(status: Int): ThermalState = when {
+            status >= STATUS_CRITICAL -> CRITICAL
+            status == STATUS_SEVERE -> SERIOUS
+            status >= STATUS_LIGHT -> FAIR
+            else -> NOMINAL
+        }
+
+        /** Mirror of `PowerManager.THERMAL_STATUS_LIGHT` — the floor of the [FAIR] tier (kept local so `:core:model` stays JVM-pure). */
+        private const val STATUS_LIGHT = 1
+
+        /** Mirror of `PowerManager.THERMAL_STATUS_SEVERE` — the sole [SERIOUS] tier. */
+        private const val STATUS_SEVERE = 3
+
+        /** Mirror of `PowerManager.THERMAL_STATUS_CRITICAL` — the floor of the shed-most-load [CRITICAL] tier. */
+        private const val STATUS_CRITICAL = 4
+    }
 }
 
 /**

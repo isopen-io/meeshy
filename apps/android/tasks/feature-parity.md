@@ -5773,8 +5773,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
-      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
-      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. **Thermal-source
+      mapping landed** (slice `call-thermal-status-mapping`): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the seven raw `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers,
+      monotonic & clamped at both ends, so the `:app` layer only forwards `getCurrentThermalStatus()`.
+      Pending: only the live RTP-sender actuator (needs an emulator/WebRTC, not JVM-testable).
 - [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
       **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
       `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
@@ -5797,9 +5800,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
       `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
       `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
-      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
-      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
-      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Thermal-source mapping
+      landed** (slice `call-thermal-status-mapping`, 2026-08-29): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the raw `PowerManager.THERMAL_STATUS_*` int the `:app` layer forwards. **Pending:** only the real
+      WebRTC actuator seam (apply the cap to the live RTP video sender, debounce re-apply) + consuming
+      `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
