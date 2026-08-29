@@ -369,11 +369,24 @@ Chaque itération = UN LOT. Tu ne t'arrêtes pas entre deux lots.
     et repasse les rouges en `Todo` avec la mesure qui a échoué.
 
     Si staging ne porte PAS ton commit — tu n'as pas l'accès SSH pour déployer —
-    n'invente rien : laisse les issues `In Progress`, commente
-    « livré sur dev en <sha>, gates verts, EN ATTENTE de déploiement staging
-    pour mesure », et continue le lot suivant. Une session locale déploiera.
+    n'invente rien, mais LAISSE LE RELAIS COMPLET. Pour chaque issue du lot,
+    poste UN commentaire contenant, dans cet ordre :
+
+      1. le titre `## ⏳ Livré sur dev — en attente de mesure en intégration` ;
+      2. le SHA court du commit, et les gates que TU as passés, chiffrés ;
+      3. les gates que tu n'as PAS pu passer, et pourquoi
+         (« pas de Xcode dans cette session », « pas de SDK Android ») ;
+      4. **les commandes `curl` EXACTES de `a_mesurer_en_integration`, avec le
+         résultat attendu de chacune** — c'est ce bloc, et lui seul, qui permet
+         à une session locale de fermer sans relire ton code ;
+      5. critère par critère : `fait` / `partiel` / `non_fait`, avec la preuve
+         dont tu disposes.
+
+    Puis laisse l'issue `In Progress` et continue le lot suivant.
 
     **Ne ferme JAMAIS une issue sans mesure rejouée.** La fin se prouve.
+    Un commentaire sans le bloc 4 oblige la session locale à tout relire :
+    c'est le seul endroit où bâcler coûte plus cher que de ne rien faire.
 
 11. Si le build CI est ROUGE : c'est prioritaire sur tout. Lis le log, corrige,
     re-pousse. Le lot suivant continue d'écrire pendant ce temps.
@@ -400,6 +413,117 @@ Une session web sans accès SSH ne peut pas déployer ; si elle fermait quand m�
 la file se viderait sans qu'aucune ligne soit prouvée en intégration. Le prompt
 lui fait donc livrer, gater, pousser — et **rendre la main honnêtement** sur la
 seule étape qu'elle ne peut pas faire.
+
+## Le prompt LOCAL de CLÔTURE — vérifier et fermer ce que les sessions web ont livré
+
+Une session web livre sur `dev` mais ne peut ni déployer, ni passer les gates
+iOS/Android. Elle laisse donc des issues `In Progress` avec leurs mesures en
+commentaire. **Ce prompt est l'autre moitié du relais** : sans lui, la file se
+remplit d'un travail fait mais jamais prouvé, ce qui est pire qu'un travail non
+fait — parce que ça se lit comme du progrès.
+
+À coller après `/loop` dans une session **locale** :
+
+```
+Tu tiens la boucle de CLÔTURE. Tu ne développes pas : tu PROUVES et tu fermes.
+Une session web livre sur `dev` sans pouvoir déployer ni gater iOS/Android ;
+ton travail est de finir ce qu'elle ne pouvait pas finir.
+
+═══ 1. TROUVER CE QUI ATTEND ═══
+
+    git pull --rebase
+    gh issue list --repo isopen-io/meeshy --state open --limit 100 \
+      --search "in:comments \"en attente de mesure en intégration\"" \
+      --json number,title,updatedAt
+
+Retiens celles dont le commentaire d'attente porte un SHA **déjà présent sur
+`dev`** (`git log --oneline | grep <sha>`). Une issue dont le commit n'est pas
+sur `dev` n'est pas prête : passe.
+
+═══ 2. AMENER STAGING AU BON COMMIT ═══
+
+    gh run list --branch dev --limit 5 --workflow Docker --json status,conclusion,headSha
+    # le build du SHA doit être `completed success`
+
+    ssh root@meeshy.me 'cd /opt/meeshy/staging && docker compose pull gateway-staging && docker compose up -d gateway-staging'
+    until curl -s https://gate.staging.meeshy.me/health | grep -q "<sha court>"; do sleep 10; done
+
+Si le build est ROUGE : c'est ta priorité. Lis le log, corrige, pousse. Ne
+ferme rien tant que `dev` n'est pas vert.
+
+═══ 3. PASSER LES GATES QUE LA SESSION WEB N'A PAS PU PASSER ═══
+
+Lis le point 3 de son commentaire. Pour chaque surface qu'elle a déclarée non
+gatée, passe le gate ici, UNE À LA FOIS :
+
+    cd packages/MeeshySDK && xcodebuild test -scheme MeeshySDK-Package \
+      -destination 'id=C295B364-8CA6-4214-BC52-E411A97EBFE2' > /tmp/sdk.log 2>&1
+    grep -c "TEST SUCCEEDED" /tmp/sdk.log        # 1 attendu, et lis le total de tests
+
+    ./apps/ios/meeshy.sh test
+    # ATTENTION : ce script rend 0 même sur un bundle qui NE COMPILE PAS (#4258).
+    # Vérifie qu'il a bien exécuté des tests pour CHAQUE phase, pas seulement la 0.
+
+    cd apps/android && JAVA_HOME=/opt/homebrew/opt/openjdk@21 ./gradlew \
+      :core:network:testDebugUnitTest :sdk-core:testDebugUnitTest :app:compileDebugKotlin
+
+Un gate rouge → l'issue repasse `Todo` avec le log, et tu passes à la suivante.
+
+═══ 4. VÉRIFIER LA DoD, CRITÈRE PAR CRITÈRE ═══
+
+Pour CHAQUE issue :
+
+  a. Relis son § « Critère de fin » dans l'issue — pas le résumé du commit,
+     pas le commentaire de la session web : **le texte de l'issue**. C'est lui
+     le contrat.
+
+  b. Rejoue le bloc 4 de son commentaire, commande par commande, et COLLE la
+     sortie réelle. Une commande dont tu ne rejoues pas la sortie ne prouve
+     rien — recopier « attendu : 200 » n'est pas une mesure.
+
+  c. Un critère est `fait` seulement si une mesure ou une sortie de test le
+     montre. « Le code fait ce qu'il faut » n'est pas une preuve : c'est une
+     lecture, et c'est exactement ce que ces boucles existent pour remplacer.
+
+  d. Cherche ce qui part À CÔTÉ de ce qui est mesuré : une charge servie
+     porte-t-elle un champ qu'elle ne devrait pas ? une garde retient-elle le
+     texte mais laisse-t-elle passer le fichier ? C'est la question qui a
+     attrapé les défauts les plus graves de ce dépôt.
+
+═══ 5. FERMER, OU RENDRE ═══
+
+  TOUS les critères `fait` → ferme l'issue avec un commentaire portant :
+      • le commit et les gates, chiffrés ;
+      • les mesures REJOUÉES, avec leur sortie réelle ;
+      • critère par critère, l'état et sa preuve ;
+      • les dimensions mûres et celles qui restent (ouvre une issue par
+        dimension non mûre — jamais une ligne dans un fichier) ;
+      • ce qui reste, s'il reste quelque chose.
+
+  UN critère `partiel` ou `non_fait` → NE FERME PAS. Repasse l'issue en `Todo`,
+  commente la mesure qui a échoué avec sa sortie, et dis ce qui manque. Une
+  issue rendue avec sa mesure vaut mieux qu'une issue fermée sur une intention.
+
+═══ 6. BOUCLER ═══
+
+Reprends au point 1. Quand plus rien n'attend de mesure, dis-le et arrête.
+
+═══ INTERDITS ═══
+
+- fermer sur une lecture de code, un résumé d'agent, ou un « ça devrait marcher » ;
+- fermer une issue dont un gate n'a pas été passé ;
+- toucher la production (staging seulement) ;
+- modifier le code d'une issue que tu clôtures — si elle a besoin d'un correctif,
+  elle repasse `Todo` et retourne dans un lot.
+```
+
+### Pourquoi ce prompt ne développe pas
+
+Séparer PROUVER de ÉCRIRE est délibéré. Une session qui a écrit le code est le
+plus mauvais juge de son propre travail : elle connaît l'intention, donc elle
+lit la preuve avec indulgence. La session de clôture n'a que deux choses — le
+texte de l'issue et des commandes à rejouer — et c'est précisément ce qui la
+rend capable de dire non.
 
 ## Ce que ça a donné
 
