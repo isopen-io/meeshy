@@ -31,6 +31,7 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
+import { searchTokensFor } from '../../utils/search-tokens';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -613,7 +614,15 @@ export async function updateUsername(fastify: FastifyInstance) {
           id: true,
           username: true,
           password: true,
-          usernameHistory: true
+          usernameHistory: true,
+          // Les trois autres composants du nom : ils ne CHANGENT pas ici, mais
+          // les jetons de recherche se recalculent sur les QUATRE à la fois
+          // (#4159). Une projection trop étroite rendrait le recalcul impossible
+          // en aval, et c'est la projection — pas l'appel manquant — qui est le
+          // vrai obstacle dans ce genre de cas.
+          displayName: true,
+          firstName: true,
+          lastName: true
         }
       });
 
@@ -681,7 +690,15 @@ export async function updateUsername(fastify: FastifyInstance) {
         where: { id: userId },
         data: {
           username: body.newUsername,
-          usernameHistory: updatedHistory
+          usernameHistory: updatedHistory,
+          // Recalculés avec le nom qui change : sans cela, l'ancien pseudo
+          // resterait indexé et le nouveau serait introuvable (#4159).
+          searchTokens: searchTokensFor({
+            username: body.newUsername,
+            displayName: user.displayName,
+            firstName: user.firstName,
+            lastName: user.lastName,
+          }),
         },
         select: {
           id: true,

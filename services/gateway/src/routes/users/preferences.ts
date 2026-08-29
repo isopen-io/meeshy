@@ -17,6 +17,7 @@ import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { createDirectoryRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { jetonRecherche } from '../../utils/search-tokens';
 
 
 /**
@@ -513,6 +514,23 @@ export async function getUserStats(fastify: FastifyInstance) {
 /**
  * Search users by query
  */
+/**
+ * `GET /users/search` — ALIAS de `GET /directory/people` (#4159).
+ *
+ * Elle reste montée le temps que les douze sites iOS et les trois sites web
+ * migrent, et jusqu'à extinction des versions installées. Ce qu'elle garde de
+ * l'ancienne route : sa forme de réponse (tableau + `pagination` en offset), que
+ * les clients décodent aujourd'hui.
+ *
+ * Ce qu'elle NE garde pas : le `contains` non ancré sur cinq colonnes. La
+ * recherche passe par les jetons indexés, comme la route cible — un alias qui
+ * conserverait le balayage complet ne corrigerait rien, il déplacerait
+ * seulement l'adresse.
+ *
+ * **Compter les appels Android avant de la retirer** : `apps/android` n'a pas
+ * été inventorié par l'audit, et le cycle 118 a déjà montré qu'il lui manquait
+ * des champs que les deux autres clients avaient.
+ */
 export async function searchUsers(fastify: FastifyInstance) {
   fastify.get('/users/search', {
     onRequest: [fastify.authenticate],
@@ -605,6 +623,10 @@ export async function searchUsers(fastify: FastifyInstance) {
           : [])
       ];
 
+      // Le jeton se replie exactement comme ceux stockés à l'écriture — même
+      // règle, même site (`utils/search-tokens.ts`).
+      const jetonDeRecherche = jetonRecherche(searchTerm);
+
       const whereClause = {
         AND: [
           {
@@ -616,30 +638,15 @@ export async function searchUsers(fastify: FastifyInstance) {
           },
           {
             OR: [
-              {
-                firstName: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                lastName: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                username: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
-              {
-                displayName: {
-                  contains: searchTerm,
-                  mode: 'insensitive' as const
-                }
-              },
+              // Les quatre `contains` NON ancrés sur des colonnes non indexées
+              // sont remplacés par UN test d'appartenance au tableau de jetons
+              // (#4159). Chaque frappe balayait auparavant la collection
+              // entière : c'était le défaut le plus coûteux du module, et le
+              // moins visible — rien ne le signalait à part la latence.
+              //
+              // Un alias qui conserverait le balayage complet ne corrigerait
+              // rien : il déplacerait seulement l'adresse.
+              ...(jetonDeRecherche ? [{ searchTokens: { has: jetonDeRecherche } }] : []),
               ...correspondancesExactes
             ]
           }

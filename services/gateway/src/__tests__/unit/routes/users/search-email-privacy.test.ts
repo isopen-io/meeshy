@@ -70,13 +70,29 @@ async function buildApp(): Promise<FastifyInstance> {
  */
 function clausesOr(): Array<Record<string, any>> {
   const where = findMany.mock.calls[0][0].where;
-  const CHAMPS = ['firstName', 'lastName', 'username', 'displayName', 'email', 'phoneNumber'];
+  // `searchTokens` fait partie des repères depuis #4159 : c'est LUI qui porte
+  // désormais la recherche par nom, et sans lui ce helper ne reconnaît plus le
+  // bloc `OR` qu'il vient chercher — il rendrait alors le tableau VIDE, et
+  // toutes les assertions négatives de ce fichier passeraient au vert en ne
+  // mesurant plus rien.
+  const CHAMPS = ['searchTokens', 'firstName', 'lastName', 'username', 'displayName', 'email', 'phoneNumber'];
   const bloc = (where.AND as Array<Record<string, unknown>>).find(
     (c) => Array.isArray(c.OR) && (c.OR as Array<Record<string, unknown>>).some(
       (clause) => CHAMPS.some((champ) => champ in clause)
     )
   );
-  return (bloc?.OR ?? []) as Array<Record<string, any>>;
+  // LEVER, jamais rendre un vide plausible : plusieurs témoins de ce fichier
+  // sont NÉGATIFS (`expect(...).toBeUndefined()`), et sur un tableau vide ils
+  // sont tous vrais. Un helper de navigation qui replie sur `[]` transforme un
+  // échec de localisation en succès d'assertion, et la garde de
+  // confidentialité disparaîtrait en silence (leçon 308).
+  if (!bloc) {
+    throw new Error(
+      "clausesOr : bloc `OR` introuvable dans le `where`. Les repères ont-ils changé ? " +
+      `Repères cherchés : ${CHAMPS.join(', ')}.`
+    );
+  }
+  return bloc.OR as Array<Record<string, any>>;
 }
 
 describe('GET /users/search — l’adresse e-mail ne se moissonne pas', () => {
@@ -154,16 +170,26 @@ describe('GET /users/search — l’adresse e-mail ne se moissonne pas', () => {
     await app.close();
   });
 
-  it('garde la recherche par sous-chaîne sur les NOMS — c’est l’usage nominal', async () => {
+  it('cherche les NOMS par l’INDEX de jetons, jamais par quatre `contains`', async () => {
     const app = await buildApp();
 
     await app.inject({ method: 'GET', url: '/users/search?q=mar' });
     const clauses = clausesOr();
 
+    // Ce témoin exigeait auparavant quatre `contains` NON ancrés sur des
+    // colonnes que rien n'indexait — chaque frappe balayait la collection
+    // entière. Il gelait donc le défaut le plus coûteux du module (#4159).
+    //
+    // Le compromis du remplacement est assumé et écrit : on perd la
+    // sous-chaîne au MILIEU d'un mot (`ar` ne trouve plus `mar`), on garde le
+    // préfixe de CHAQUE mot. Rétablir la sous-chaîne médiane demanderait Atlas
+    // Search — un changement d'INFRASTRUCTURE, pas de schéma.
+    const parJetons = clauses.find((x) => 'searchTokens' in x);
+    expect(parJetons).toBeDefined();
+    expect(parJetons!.searchTokens).toEqual({ has: 'mar' });
+
     for (const champ of ['firstName', 'lastName', 'username', 'displayName']) {
-      const c = clauses.find((x) => champ in x);
-      expect(c).toBeDefined();
-      expect(c![champ].contains).toBe('mar');
+      expect(clauses.find((x) => champ in x)).toBeUndefined();
     }
     // Un fragment qui n'est ni une adresse ni un numéro n'interroge pas ces
     // deux colonnes : inutile, et cela ferait porter le scan sur des index

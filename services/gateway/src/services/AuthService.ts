@@ -24,6 +24,7 @@ import {
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { recipientLanguage } from '../utils/recipient-language';
+import { searchTokensFor } from '../utils/search-tokens';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
 import {
   isAccountLocked,
@@ -656,6 +657,15 @@ export class AuthService {
           password: hashedPassword,
           firstName: normalizedFirstName,
           lastName: normalizedLastName,
+          // Écrits en MÊME TEMPS que les noms — un compte créé sans jetons
+          // serait introuvable jusqu'à sa prochaine modification de profil
+          // (#4159). Règle unique : `utils/search-tokens.ts`.
+          searchTokens: searchTokensFor({
+            username: normalizedUsername,
+            displayName: normalizedDisplayName,
+            firstName: normalizedFirstName,
+            lastName: normalizedLastName,
+          }),
           email: normalizedEmail,
           phoneNumber: cleanPhoneNumber,
           phoneCountryCode: phoneCountryCode,

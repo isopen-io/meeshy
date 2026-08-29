@@ -108,6 +108,12 @@ model User {
   bio                       String   @default("")
   email                     String   @unique
   phoneNumber               String?
+
+  /// Mots repliés (minuscules, sans diacritiques) de `username`, `displayName`,
+  /// `firstName` et `lastName`, plus les initiales. Recalculés à CHAQUE écriture
+  /// de l'un de ces champs — la règle vit dans `utils/search-tokens.ts`, et une
+  /// garde de source interdit d'écrire un nom sans les recalculer (#4159).
+  searchTokens              String[] @default([])
   /// ISO 3166-1 alpha-2 country code for phone (e.g., "FR", "US", "GB")
   phoneCountryCode          String?
   password                  String
@@ -340,6 +346,20 @@ model User {
   // index manquant sur une route publique est aussi une surface de déni de
   // service, pas seulement une lenteur.
   @@index([phoneNumber])
+  // Recherche de personne par PRÉFIXE de mot (#4159).
+  //
+  // `firstName`, `lastName` et `displayName` n'étaient indexés par rien, et la
+  // recherche y faisait un `contains` NON ancré, insensible à la casse, sur
+  // cinq colonnes : chaque frappe balayait la collection entière. C'est le
+  // défaut le plus coûteux du module, et le moins visible — rien ne le signale
+  // à part la latence.
+  //
+  // `searchTokens` est un tableau de mots repliés (minuscules, sans
+  // diacritiques), indexé en MULTIKEY : la recherche devient une regex ANCRÉE
+  // servie par parcours d'index. Le compromis est assumé — on perd la
+  // sous-chaîne au milieu d'un mot, on garde le préfixe de chaque mot. Règle
+  // unique : `services/gateway/src/utils/search-tokens.ts`.
+  @@index([isActive, searchTokens])
 }
 
 /// Entrée du répertoire d'un utilisateur — un contact de son carnet d'adresses

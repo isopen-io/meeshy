@@ -11,6 +11,7 @@ import {
 } from '@meeshy/shared/types';
 import * as bcrypt from 'bcrypt';
 import { logger, logWarn } from '../../utils/logger';
+import { searchTokensFor } from '../../utils/search-tokens';
 import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
@@ -189,6 +190,14 @@ export class UserManagementService {
         email: data.email,
         password: hashedPassword,
         displayName: data.displayName,
+        // Écrits en même temps que les noms : un compte créé sans jetons serait
+        // introuvable jusqu'à sa prochaine modification de profil (#4159).
+        searchTokens: searchTokensFor({
+          username: data.username,
+          displayName: data.displayName,
+          firstName: data.firstName,
+          lastName: data.lastName,
+        }),
         bio: data.bio || '',
         phoneNumber: data.phoneNumber,
         role: (data.role || 'USER') as UserRole,

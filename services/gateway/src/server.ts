@@ -53,6 +53,7 @@ import { shutdownEncryptionService } from './services/EncryptionService';
 import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
 import { getCacheStore } from './services/CacheStore';
 import { BackgroundJobsManager } from './jobs';
+import { backfillSearchTokens } from './jobs/backfill-search-tokens';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
@@ -285,6 +286,15 @@ class MeeshyServer {
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
     this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService, this.deliveryQueue);
+
+    // Rattrapage des jetons de recherche (#4159), en arrière-plan : une route
+    // de recherche adossée à un index vide ne trouve personne, et le
+    // rattrapage doit donc précéder l'usage. Il n'est PAS derrière une garde de
+    // premier boot — le dépôt a déjà payé ce piège avec `ensurePostGeoIndex`,
+    // restée sous `shouldInitialize()` et jamais exécutée en production.
+    void backfillSearchTokens(this.prisma).catch((error) =>
+      logger.error('[BackfillSearchTokens] rattrapage interrompu', { error })
+    );
 
     // Initialiser le service de nettoyage des uploads tus incomplets
     this.tusCleanup = new TusCleanupService();
