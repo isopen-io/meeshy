@@ -33,6 +33,16 @@ export interface CursorPaginationMeta {
   limit: number;
   hasMore: boolean;
   nextCursor: string | null;
+  /**
+   * Forme de la pagination servie — `keyset` (curseur) ou `offset`.
+   *
+   * Un client qui reçoit `nextCursor` ne peut pas deviner s'il tient un
+   * curseur stable ou un décalage déguisé : les deux se relancent par la même
+   * clé, mais un `offset` saute des lignes dès qu'une insertion survient entre
+   * deux pages. Sans ce champ, la seule façon de le savoir est de lire le code
+   * de la route — donc de ne pas le savoir.
+   */
+  form?: 'keyset' | 'offset';
 }
 
 /**
@@ -66,6 +76,25 @@ export interface ResponseMeta {
    * une couverture complète.
    */
   deletedStoryIdsTruncated?: boolean;
+  /**
+   * Généralisation de `deletedStoryIds` à TOUS les scopes de
+   * `GET /social/posts` (#4149) : mêmes pierres tombales de delta-sync, plus
+   * réservées aux stories.
+   *
+   * La raison est identique et vaut pour chaque scope : un delta ne renvoie que
+   * ce qui existe ENCORE, donc un client qui a manqué l'événement de suppression
+   * (application fermée, hors-ligne) garde indéfiniment le contenu disparu dans
+   * son cache. `deletedStoryIds` reste servi tel quel pour les clients installés.
+   */
+  deletedIds?: string[];
+  /**
+   * `deletedIds` a débordé son plafond serveur : des disparitions plus anciennes
+   * n'ont PAS été rendues. Les pierres tombales n'ont aucun curseur de reprise,
+   * donc il n'existe pas de page suivante à demander — le seul recours est un
+   * chargement complet. Sans ce drapeau, un plafond atteint se lit exactement
+   * comme une couverture complète.
+   */
+  deletedIdsTruncated?: boolean;
 }
 
 /**
