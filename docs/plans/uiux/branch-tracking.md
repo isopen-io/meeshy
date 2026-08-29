@@ -50,6 +50,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
 > résume.
 >
+> ### ⚠️ `ConversationStateStore` est VIVANT — ne pas le prendre pour du code mort
+>
+> Sonde de maintenabilité (256i) sur la duplication d'état, **close par la
+> négative**, et consignée parce que la conclusion FAUSSE était à un pas :
+>
+> - `ConversationStateStore` déclare **35** propriétés, dont **34** portent le
+>   même nom que des `@Published` de `ConversationViewModel`. Ce n'est PAS une
+>   duplication accidentelle : c'est un **échafaudage de migration documenté**
+>   (« Mirror the legacy `@Published var messages` into the new
+>   `ConversationStateStore.messages` … Removed once the migration … is
+>   complete »). Le ViewModel reste propriétaire ; le store est la destination.
+> - Un premier balayage a conclu « **0 lecture** » et j'allais ouvrir une issue
+>   proposant de retirer le miroir. **C'était faux** : les handlers détiennent le
+>   store sous le nom `private let state:` et le lisent en `state.X` — le motif
+>   que le balayage (`stateStore.` / `store.`) ne couvrait pas.
+>
+>   | consommateur réel | usage |
+>   |---|---|
+>   | `ConversationMediaHandler:32` | **lit** `state.messages` |
+>   | `ConversationSearchHandler` | **écrit** `state.searchResults`, `state.currentSearchQuery` |
+>
+> > **Un balayage qui cherche un objet par UN de ses noms d'emprunt rend un zéro
+> > qui veut dire « je n'ai pas regardé là ».** Le miroir `messages` est une
+> > souscription Combine vivante sur le chemin le plus chaud de l'app : conclure
+> > « personne ne lit » sans vérifier les alias aurait proposé de supprimer du
+> > code qui MARCHE. Avant de publier un zéro, chercher l'objet par son TYPE,
+> > pas par le nom qu'on suppose à sa variable.
+>
+> Rien à corriger. La migration est en cours et consommée.
+>
 > ### 255i — sondage « cohérence visuelle » : la dimension est SAINE (une seule prise, #4270)
 >
 > - Base `0f05267c`, après le merge de #4269.
