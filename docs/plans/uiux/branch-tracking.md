@@ -33,6 +33,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
 > - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
 >
+> ### ⚠️ 262i — cinq règles déclarées, quatre sans une seule violation (close par la négative)
+>
+> Balayage des règles du `CLAUDE.md` qui ont une forme MESURABLE. **Rien à
+> corriger sur quatre d'entre elles**, et la seule « prise » du scanner est un
+> faux positif par construction :
+>
+> | règle déclarée | occurrences |
+> |---|---|
+> | `print()` interdit (os.Logger) | **0** |
+> | `try!` interdit | **0** |
+> | `Color.red/.green/…` littéral | **0** |
+> | `as!` (cast forcé) | 1 |
+> | secrets en `UserDefaults` | **0** — E2E met les IDs de pairs en defaults et les `SymmetricKey` au **Keychain** : la bonne séparation |
+> | `[weak self]` sur closures stockées | 211 `.sink` **tous** gardés, 2 observers gardés |
+>
+> - **Le seul `Timer` sans `[weak self]` n'est pas un défaut** :
+>   `UniversalComposerBar` est une **struct** SwiftUI, où `[weak self]` n'est
+>   même pas EXPRIMABLE (il exige un type classe) — et son timer est invalidé en
+>   cinq points, dont la disparition. La classe qui possède vraiment un timer,
+>   `CameraView`, utilise bien `[weak self]`.
+>   **Une règle ARC ne s'applique qu'à ce qui est compté par ARC** : la recopier
+>   sur une vue de valeur produit un faux positif à chaque balayage.
+> - **`AnyView` : 80 occurrences (28 fichiers), et ce ne sont PAS des paresses** —
+>   ce sont des effacements de type à une frontière d'API (`accessory:`,
+>   `toolRowTrailingAccessory:`, `… ? AnyView(x) : nil`). Les retirer demande de
+>   rendre GÉNÉRIQUES les signatures et de toucher tous les appelants : refonte,
+>   pas remplacement. → **#4305** (commencer par `ConversationView`, 25 des 80).
+>
+> Ne pas relancer ces cinq sondes ; la seule piste ouverte est #4305.
+>
 > ### ⚠️ 260i — sondage « cache-first » : la dimension est SAINE (close par la négative)
 >
 > Sonde sur le principe non négociable « **jamais de spinner quand le cache a des
