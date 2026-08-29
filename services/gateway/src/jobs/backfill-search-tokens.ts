@@ -12,6 +12,18 @@ const TAILLE_LOT = 200;
 const TOURS_MAX = 500;
 
 /**
+ * Le NOM de la colonne mal typée, sans jamais rendre sa valeur.
+ *
+ * Prisma formule « Failed to convert '<valeur>' to '<type>' for the field
+ * '<colonne>' ». On n'en extrait que la colonne : elle suffit à diagnostiquer,
+ * et la valeur est une donnée personnelle qui n'a rien à faire dans un journal.
+ */
+function colonneFautive(error: unknown): string {
+  const message = error instanceof Error ? error.message : '';
+  return /for the field '([^']+)'/.exec(message)?.[1] ?? 'inconnue';
+}
+
+/**
  * Remplit `searchTokens` pour les comptes créés avant l'existence de la colonne.
  *
  * ## Pourquoi au DÉMARRAGE, et sans porte de premier boot
@@ -78,7 +90,7 @@ export async function backfillSearchTokens(prisma: PrismaClient): Promise<number
     //
     // Ce n'est pas théorique — mesuré en intégration : un compte dont le
     // `phoneNumber` est stocké en NOMBRE au lieu d'une chaîne fait lever
-    // `prisma.user.update` (« Failed to convert '237650159233' to 'String' »),
+    // `prisma.user.update` (« Failed to convert '<numéro>' to 'String' »),
     // parce que Prisma relit la ligne après l'écriture. Une seule ligne
     // corrompue a laissé 23 comptes non indexés.
     //
@@ -94,9 +106,22 @@ export async function backfillSearchTokens(prisma: PrismaClient): Promise<number
         traites++;
       } catch (error) {
         echecs++;
+        // Le message de Prisma CITE la valeur fautive : « Failed to convert
+        // '<numéro>' to 'String' ». Le journaliser tel quel écrirait un
+        // NUMÉRO DE TÉLÉPHONE — donnée personnelle — dans les journaux
+        // d'accès, qui n'ont ni le même cycle de vie ni les mêmes lecteurs que
+        // la base.
+        //
+        // On garde ce qui sert au diagnostic — l'identifiant du compte, le type
+        // d'erreur, la colonne — et jamais la valeur. Le compte est retrouvable
+        // par son id ; personne n'a besoin de lire le numéro dans un journal
+        // pour le corriger.
         logger.warn(
           `[BackfillSearchTokens] compte ${compte.id} non indexé — ligne probablement corrompue`,
-          { error: error instanceof Error ? error.message : String(error) }
+          {
+            erreur: error instanceof Error ? error.name : typeof error,
+            colonne: colonneFautive(error),
+          }
         );
       }
     }

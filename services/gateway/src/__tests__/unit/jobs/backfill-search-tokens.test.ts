@@ -99,7 +99,7 @@ describe('backfillSearchTokens', () => {
     const { prisma, ecritures } = prismaAvec([lot]);
     (prisma as any).user.update = jest.fn<any>(async ({ where, data }: any) => {
       if (where.id === 'u-corrompu') {
-        throw new Error("Inconsistent column data: Failed to convert '237650159233' to 'String'");
+        throw new Error("Inconsistent column data: Failed to convert '<numéro>' to 'String'");
       }
       ecritures.push({ id: where.id, searchTokens: data.searchTokens });
       return {};
@@ -133,5 +133,34 @@ describe('backfillSearchTokens', () => {
 
     expect(await backfillSearchTokens(prisma)).toBe(0);
     expect(ecritures).toEqual([]);
+  });
+});
+
+describe('Le journal ne recopie jamais la donnée fautive', () => {
+  it('nomme la COLONNE, jamais la valeur', async () => {
+    const avertissements: Array<[string, unknown]> = [];
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { logger } = require('../../../utils/logger');
+    (logger.warn as jest.Mock).mockImplementation((...a: unknown[]) => {
+      avertissements.push([String(a[0]), a[1]]);
+    });
+
+    const { prisma } = prismaAvec([[compte('u-1', 'Jean')]]);
+    (prisma as any).user.update = jest.fn<any>(async () => {
+      // La formulation EXACTE de Prisma : elle cite la valeur.
+      throw new Error(
+        "Inconsistent column data: Failed to convert '<numéro>' to 'String' for the field 'phoneNumber'."
+      );
+    });
+
+    await backfillSearchTokens(prisma);
+
+    const trace = JSON.stringify(avertissements);
+    // Un numéro de téléphone est une donnée personnelle, et les journaux
+    // d'accès n'ont ni le même cycle de vie ni les mêmes lecteurs que la base.
+    expect(trace).not.toContain('<numéro>');
+    // Ce qui reste suffit à diagnostiquer : le compte et la colonne.
+    expect(trace).toContain('u-1');
+    expect(trace).toContain('phoneNumber');
   });
 });
