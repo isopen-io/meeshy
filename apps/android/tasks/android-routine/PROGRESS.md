@@ -2,6 +2,75 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a story draft's on-canvas stickers survive leaving the composer — and the fidelity gate is
+> RETIRED** (slice `story-draft-persist-sticker-elements`, feature-parity E. Stories — the "Draft save/restore …"
+> line, now `[x]`; lifts the SIXTH and LAST rich dimension after the canvas transform, filter, pinned duration,
+> colour/media background and text elements). Before this, a slide's `StoryStickerElement` list (placed, scaled,
+> rotated emoji) was the single remaining dimension the primitive snapshot could not represent, so a deck
+> carrying a sticker was treated as *not yet persistable*: `resolve` PURGED any stored draft rather than
+> restoring lossily. With stickers now carried, **every** dimension of a composer slide round-trips — so the
+> gate itself is gone, not merely satisfied.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4252 (iOS a11y, jcnm) and #4246
+> (gateway Zod, jcnm) — neither a `claude/apps/android/<slice-id>` routine slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`story-draft-persist-text-elements`) is on `main` (#4247, HEAD
+> `46f9961a`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before branching
+> (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — a flat primitive mirror (thinner than text elements) + a RETIRED gate.** (1) `core:model`: new
+> `StoryDraftStickerElementSnapshot` (`@Serializable`, all primitive/defaulted: id/emoji/x/y/scale/rotationDeg)
+> on `StoryDraftSlideSnapshot.stickers: List<…> = emptyList()`. No enums, no backing, no outline/fade/timing —
+> so no sub-value types; the canvas neutrals reuse `StoryDraftTextElementSnapshot.CANVAS_CENTER`/`UNIT_SCALE`
+> so the geometry defaults live in one place. `hasContent` gains `|| stickers.any { it.isPublishable }` (a
+> publishable non-blank-emoji sticker-only slide is worth restoring; a blank one is not). (2) `:feature:stories`
+> `StoryComposerAutosave`: `toDraftSnapshot`/`toDeck` map `StorySlide.stickers` ↔ the list via two private
+> mappers — `StoryStickerElement.toDraftSnapshot()` (scalars verbatim) and
+> `StoryDraftStickerElementSnapshot.toStickerElement()` (scalars verbatim then `.normalised()`, so an
+> out-of-range persisted blob decays into the canvas, exactly as the reader decoders do). (3) **The gate is
+> RETIRED, not left dead:** with every dimension representable `deckHasRichContent` would be constant `false`,
+> so its function, its `resolve` "rich content → purge" first arm and its `deckIsPristine` call are all removed;
+> `resolve` now projects a snapshot unconditionally and decides on `isWorthRestoring` + changed, and
+> `deckIsPristine` checks `it.stickers.isEmpty()` explicitly (so a silently-added sticker still counts as
+> touched). Class + mapper doc-comments rewritten from "fidelity gate" to "full-fidelity round-trip".
+>
+> **Tests: +21 (net, after retiring 6 dead-function tests).** 12 `StoryComposerDraftSnapshotTest` (sticker JSON
+> round-trip; stickers ride a slide through JSON; legacy blob → empty list; sticker blob → every default;
+> publishable×2; publishable-sticker-alone worth restoring; blank-sticker-alone not; changed sticker / added
+> sticker are different content), 7 `StoryComposerAutosaveTest` (toDraftSnapshot carries all fields; toDeck
+> restores all fields; placed sticker survives deck↔snapshot↔deck; toDeck re-normalises an out-of-range blob;
+> blank-sticker slide not pristine; sticker-only slide resolves to Save; adding a sticker to a saved draft
+> resolves to Save not None — plus the flipped `a draft that gained a sticker now saves it over the stale
+> stored draft`, formerly the purge test), 2 `StoryComposerViewModelTest` end-to-end (`persistDraft` saves the
+> selected slide's stickers — flipped from the old `does not save a draft carrying a sticker`; `onEnterComposer`
+> restores them). The six `deckHasRichContent is …` unit tests were removed WITH the function they tested — the
+> underlying "each dimension is persistable" behaviour is already covered by each dimension's own Save +
+> round-trip tests, so no behaviour coverage is lost. **Mutation-RED-proven THREE times**: dropping
+> `|| stickers.any { it.isPublishable }` from `hasContent` reddens EXACTLY `a publishable sticker alone makes a
+> snapshot worth restoring` (1); removing `it.stickers.isEmpty()` from `deckIsPristine` reddens EXACTLY `a
+> single slide carrying even a blank sticker is not pristine` (1); replacing the `toDeck` sticker map with
+> `emptyList()` reddens EXACTLY the 3 restore tests (toDeck restores / round-trip / re-normalise). Restored
+> after each; full gate green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`. compileSdk
+> is now the numeric `37`; AGP resolves it to the auto-installed `platforms;android-37.0` (the bare `android-37`
+> is unpublished — same as CI's best-effort provisioner). The first Gradle run raced the auto-install and failed
+> resolution once; a second run with `android-37.0` already present resolved cleanly.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest` (ALL
+> modules) **BUILD SUCCESSFUL in 4m 39s**, 973 actionable tasks, 0 failed; plus the three touched suites green
+> and all three mutation proofs (1 RED, 1 RED, 3 RED, restored after each). Reviewer **PASS** (diff `apps/android`
+> only — 2 main + 3 test; SDK purity — the snapshot is a `:core:model` primitive bag, the mappers/gate-retirement
+> are `:feature:stories` orchestration; SSOT — `StorySlide.stickers` stays the deck's SSOT, the snapshot projects
+> a flat mirror reusing the text-snapshot's canvas neutrals; no tautological tests; no coverage floor lowered;
+> the flipped/removed tests assert NEW correct behaviour or tested a now-deleted function, not a weakening).
+>
+> **Next**: the story-draft fidelity chain is COMPLETE — every composer dimension round-trips and the gate is
+> gone. Scout `feature-parity.md` E. Stories for the next unchecked box: the `[~]` **Offline publish queue**
+> line still has preview-before-publish and RAW background publish-all pending, and `[ ] thumbHash
+> blur-placeholder generation per slide` is a clean pure-logic slice. Alternatively move to the next build-order
+> area (Calls) if Stories has no high-value pure-core box left. Read the chosen box's iOS audit part read-only
+> before branching.
+
 > On 2026-08-29 **a story draft's on-canvas text elements survive leaving the composer** (slice
 > `story-draft-persist-text-elements`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
 > FIFTH dimension of the fidelity gate, after the canvas transform, the photo filter, the pinned duration and

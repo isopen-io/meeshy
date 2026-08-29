@@ -464,4 +464,122 @@ class StoryComposerDraftSnapshotTest {
         val b = a.copy(slides = a.slides.map { it.copy(elements = listOf(element())) })
         assertThat(a.sameContentAs(b)).isFalse()
     }
+
+    // ---- on-canvas stickers ----
+
+    private fun sticker() = StoryDraftStickerElementSnapshot(
+        id = "k1",
+        emoji = "🎉",
+        x = 0.25f,
+        y = 0.75f,
+        scale = 1.8f,
+        rotationDeg = -40f,
+    )
+
+    @Test
+    fun `a fully populated sticker survives a JSON round-trip unchanged`() {
+        val original = sticker()
+
+        val restored = json.decodeFromString(
+            StoryDraftStickerElementSnapshot.serializer(),
+            json.encodeToString(StoryDraftStickerElementSnapshot.serializer(), original),
+        )
+
+        assertThat(restored).isEqualTo(original)
+    }
+
+    @Test
+    fun `stickers ride a slide snapshot through a JSON round-trip`() {
+        val original = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", stickers = listOf(sticker()))),
+            selectedId = "s1",
+        )
+
+        val restored = json.decodeFromString(
+            StoryComposerDraftSnapshot.serializer(),
+            json.encodeToString(StoryComposerDraftSnapshot.serializer(), original),
+        )
+
+        assertThat(restored.slides.single().stickers).containsExactly(sticker())
+    }
+
+    @Test
+    fun `a legacy blob without stickers decodes to an empty sticker list`() {
+        val legacy = """{"slides":[{"id":"s1","text":"x"}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().stickers).isEmpty()
+    }
+
+    @Test
+    fun `a sticker blob missing every optional field decodes to defaults`() {
+        val legacy = """{"id":"k1"}"""
+
+        val decoded = json.decodeFromString(StoryDraftStickerElementSnapshot.serializer(), legacy)
+
+        assertThat(decoded.emoji).isEmpty()
+        assertThat(decoded.x).isEqualTo(StoryDraftTextElementSnapshot.CANVAS_CENTER)
+        assertThat(decoded.y).isEqualTo(StoryDraftTextElementSnapshot.CANVAS_CENTER)
+        assertThat(decoded.scale).isEqualTo(StoryDraftTextElementSnapshot.UNIT_SCALE)
+        assertThat(decoded.rotationDeg).isEqualTo(0f)
+    }
+
+    @Test
+    fun `a non-blank sticker is publishable`() {
+        assertThat(StoryDraftStickerElementSnapshot(id = "k1", emoji = "🎈").isPublishable).isTrue()
+    }
+
+    @Test
+    fun `a blank sticker is not publishable`() {
+        assertThat(StoryDraftStickerElementSnapshot(id = "k1", emoji = "   ").isPublishable).isFalse()
+    }
+
+    @Test
+    fun `a publishable sticker alone makes a snapshot worth restoring`() {
+        val stickerOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", stickers = listOf(sticker())),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(stickerOnly.isWorthRestoring).isTrue()
+    }
+
+    @Test
+    fun `a blank sticker alone never makes a snapshot worth restoring`() {
+        val blankStickerOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    text = "",
+                    stickers = listOf(StoryDraftStickerElementSnapshot(id = "k1", emoji = "  ")),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(blankStickerOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
+    fun `a changed sticker is different content`() {
+        val a = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "cap", stickers = listOf(sticker()))),
+            selectedId = "s1",
+        )
+        val b = a.copy(
+            slides = a.slides.map { s -> s.copy(stickers = s.stickers.map { it.copy(emoji = "😀") }) },
+        )
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `adding a sticker is different content`() {
+        val a = StoryComposerDraftSnapshot(
+            slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "cap")),
+            selectedId = "s1",
+        )
+        val b = a.copy(slides = a.slides.map { it.copy(stickers = listOf(sticker())) })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
 }

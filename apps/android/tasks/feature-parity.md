@@ -4045,7 +4045,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       EXACTLY the 3 link-carrying tests; the null-default, blank-drop, `withRepostOf` and
       `onRepostSource`-state tests stay green). **Pending**: cloning the source story's slide
       CONTENT (caption/text-elements/effects) into the composer as an editable starting point.
-- [~] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
+- [x] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
       **caption + media + structure + audience + repost persistence done** (slice
       `story-composer-draft-autosave`, 2026-08-26): the composer now survives leaving and
       reopening — iOS `StoryDraftStore.save/load` + `resetLocalState`/`isEmpty` purge parity.
@@ -4183,9 +4183,30 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       5 text-element persistence tests (4 autosave + 1 VM persist); removing the `elements.isEmpty()`
       pristine guard reddens EXACTLY the one pristine test; dropping the `elements.any { isPublishable }`
       arm from `hasContent` reddens EXACTLY the worth-restoring test; everything else stays green.
-      **Pending**: widening the snapshot to carry the LAST rich dimension — stickers (`StoryStickerElement`,
-      one flat `@Serializable` mirror) — collapses the fidelity gate to nothing, at which point
-      `deckHasRichContent` becomes constant `false` and the gate + its purge branch should be retired.
+      **Sticker persistence done — the fidelity gate is RETIRED** (slice `story-draft-persist-sticker-elements`,
+      2026-08-29): the sixth and LAST rich dimension is lifted — a slide's on-canvas emoji stickers
+      (`StoryStickerElement`: id/emoji/normalised x,y/scale/rotation) now round-trip through the snapshot, so a
+      user who placed and transformed a sticker and left the composer gets it back on return. New flat,
+      primitive-only `StoryDraftStickerElementSnapshot` on `StoryDraftSlideSnapshot.stickers` (thinner than a
+      text element — no enums, no backing, no outline/fade/timing; the position/scale/rotation ride as scalars,
+      the canvas-geometry defaults reused from `StoryDraftTextElementSnapshot.CANVAS_CENTER`/`UNIT_SCALE` so the
+      neutrals live in one place); `toDraftSnapshot`/`toDeck` map `StorySlide.stickers` ↔ the list via
+      `toDraftSnapshot()`/`toStickerElement()` (the latter re-`normalised()` so a corrupt out-of-range blob
+      decays into the canvas). A **publishable** (non-blank emoji) sticker makes a slide worth restoring; a blank
+      one carries nothing. With every dimension now representable, `deckHasRichContent` would be constant
+      `false` — so it, its `resolve` "rich content → purge" arm and its `deckIsPristine` call are **retired**
+      (not left as a dead branch): `resolve` now always projects a snapshot and decides purely on
+      `isWorthRestoring` + changed, and `deckIsPristine` checks `stickers.isEmpty()` explicitly. +21 tests (12
+      `StoryComposerDraftSnapshotTest` sticker round-trip/rides-a-slide/legacy-empty/legacy-defaults/
+      publishable×2/worth-restoring×2/changed/added, 7 `StoryComposerAutosaveTest` map-both-ways/round-trip/
+      re-normalise/pristine-false/sticker-only-Save/added-Save + the flipped `a draft that gained a sticker now
+      saves it`, 2 `StoryComposerViewModelTest` persist-stickers/restore-stickers flipped from the old
+      does-not-save; the six retired-function `deckHasRichContent is …` unit tests removed with the function).
+      Mutation-RED-proven three times: dropping the `stickers.any { isPublishable }` arm from `hasContent`
+      reddens EXACTLY the worth-restoring test; removing the `stickers.isEmpty()` pristine guard reddens EXACTLY
+      the one pristine test; dropping the `toDeck` sticker restore reddens EXACTLY the 3 restore tests;
+      everything else stays green. Full local CI-mirror gate (`assembleDebug testDebugUnitTest`, ALL modules)
+      BUILD SUCCESSFUL.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
