@@ -98,7 +98,7 @@ struct DiscoverTab: View {
                 .foregroundColor(theme.textPrimary)
 
             HStack(spacing: 10) {
-                TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numero de telephone", bundle: .main), text: $viewModel.phoneText)
+                TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numéro de téléphone", bundle: .main), text: $viewModel.phoneText)
                     .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.phonePad)
@@ -176,7 +176,7 @@ struct DiscoverTab: View {
     private var contactMatchesSection: some View {
         if !viewModel.contactMatches.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Label(String(localized: "contacts.discover.matches.title", defaultValue: "Deja sur Meeshy", bundle: .main), systemImage: "person.2.wave.2.fill")
+                Label(String(localized: "contacts.discover.matches.title", defaultValue: "Déjà sur Meeshy", bundle: .main), systemImage: "person.2.wave.2.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
 
@@ -275,7 +275,7 @@ struct DiscoverTab: View {
                         .font(.system(.title).weight(.light))
                         .foregroundColor(theme.textMuted.opacity(0.4))
                         .accessibilityHidden(true)
-                    Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
+                    Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouvé", bundle: .main))
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }

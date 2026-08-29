@@ -36,11 +36,11 @@ struct MessageReportDetailView: View {
 
             if selectedReportType != nil {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(String(localized: "message-detail.report.details", defaultValue: "Details (optionnel)", bundle: .main))
+                    Text(String(localized: "message-detail.report.details", defaultValue: "Détails (facultatif)", bundle: .main))
                         .font(.footnote.weight(.medium))
                         .foregroundColor(theme.textSecondary)
 
-                    TextField(String(localized: "message-detail.report.placeholder", defaultValue: "Decrivez le probleme...", bundle: .main), text: $reportReason, axis: .vertical)
+                    TextField(String(localized: "message-detail.report.placeholder", defaultValue: "Décrivez le problème…", bundle: .main), text: $reportReason, axis: .vertical)
                         .font(.subheadline)
                         .lineLimit(3...6)
                         .padding(12)

@@ -396,28 +396,28 @@ struct ParticipantsView: View {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
-                        Label(String(localized: "participants.promote.moderator", defaultValue: "Promouvoir Moderateur", bundle: .main), systemImage: "shield.fill")
+                        Label(String(localized: "participants.promote.moderator", defaultValue: "Promouvoir modérateur", bundle: .main), systemImage: "shield.fill")
                     }
                 }
                 if targetRole != .admin {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                     } label: {
-                        Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir Admin", bundle: .main), systemImage: "crown.fill")
+                        Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir administrateur", bundle: .main), systemImage: "crown.fill")
                     }
                 }
                 if targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
-                        Label(String(localized: "participants.demote.moderator", defaultValue: "Retrograder en Moderateur", bundle: .main), systemImage: "shield")
+                        Label(String(localized: "participants.demote.moderator", defaultValue: "Rétrograder en modérateur", bundle: .main), systemImage: "shield")
                     }
                 }
                 if targetRole == .moderator || targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MEMBER")
                     } label: {
-                        Label(String(localized: "participants.demote.member", defaultValue: "Retrograder en Membre", bundle: .main), systemImage: "person.fill")
+                        Label(String(localized: "participants.demote.member", defaultValue: "Rétrograder en membre", bundle: .main), systemImage: "person.fill")
                     }
                 }
                 Divider()
@@ -427,19 +427,19 @@ struct ParticipantsView: View {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
-                        Label(String(localized: "participants.promote.moderator", defaultValue: "Promouvoir Moderateur", bundle: .main), systemImage: "shield.fill")
+                        Label(String(localized: "participants.promote.moderator", defaultValue: "Promouvoir modérateur", bundle: .main), systemImage: "shield.fill")
                     }
                 }
                 Button {
                     roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                 } label: {
-                    Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir Admin", bundle: .main), systemImage: "crown.fill")
+                    Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir administrateur", bundle: .main), systemImage: "crown.fill")
                 }
                 if targetRole == .moderator {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MEMBER")
                     } label: {
-                        Label(String(localized: "participants.demote.member", defaultValue: "Retrograder en Membre", bundle: .main), systemImage: "person.fill")
+                        Label(String(localized: "participants.demote.member", defaultValue: "Rétrograder en membre", bundle: .main), systemImage: "person.fill")
                     }
                 }
                 Divider()

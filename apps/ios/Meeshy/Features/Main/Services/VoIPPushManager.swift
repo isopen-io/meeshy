@@ -421,7 +421,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         if let username = callerUsername, !username.isEmpty {
             return username
         }
-        return String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+        return String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
     }
 
     /// Resolve caller name asynchronously from the persisted conversations cache.

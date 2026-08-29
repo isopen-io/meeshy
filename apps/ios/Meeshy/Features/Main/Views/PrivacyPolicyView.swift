@@ -97,7 +97,7 @@ struct PrivacyPolicyView: View {
 
             Spacer()
 
-            Text(String(localized: "legal.privacy.title", defaultValue: "Confidentialite", bundle: .main))
+            Text(String(localized: "legal.privacy.title", defaultValue: "Confidentialité", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -137,8 +137,8 @@ struct PrivacyPolicyView: View {
 
     private var languagePicker: some View {
         Picker(String(localized: "legal.privacy.language", defaultValue: "Langue", bundle: .main), selection: $selectedLanguage) {
-            Text(String(localized: "legal.privacy.language.fr", defaultValue: "Francais", bundle: .main)).tag("fr")
-            Text(String(localized: "legal.privacy.language.en", defaultValue: "English", bundle: .main)).tag("en")
+            Text(String(localized: "legal.privacy.language.fr", defaultValue: "Français", bundle: .main)).tag("fr")
+            Text(String(localized: "legal.privacy.language.en", defaultValue: "Anglais", bundle: .main)).tag("en")
         }
         .pickerStyle(.segmented)
         .accessibilityLabel(String(localized: "legal.privacy.language.a11y", defaultValue: "Langue du document", bundle: .main))
@@ -147,7 +147,7 @@ struct PrivacyPolicyView: View {
     // MARK: - Last Updated
 
     private var lastUpdated: some View {
-        Text(selectedLanguage == "fr" ? String(localized: "legal.privacy.lastUpdated.fr", defaultValue: "Derniere mise a jour : 24 fevrier 2026", bundle: .main) : String(localized: "legal.privacy.lastUpdated.en", defaultValue: "Last updated: February 24, 2026", bundle: .main))
+        Text(selectedLanguage == "fr" ? String(localized: "legal.privacy.lastUpdated.fr", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main) : String(localized: "legal.privacy.lastUpdated.en", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main))
             .font(MeeshyFont.relative(12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)

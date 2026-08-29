@@ -982,7 +982,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
+                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Reculer de 5 secondes", bundle: .main))
 
                 Slider(
                     value: Binding(
@@ -992,7 +992,7 @@ private struct PreviewAudioPlayer: View {
                     in: 0...1
                 )
                 .tint(accent)
-                .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
+                .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Position de lecture", bundle: .main))
                 .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
                 // Pourcentage d'avancement
@@ -1010,7 +1010,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
+                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -1071,7 +1071,7 @@ private struct PreviewVideoPlayer: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "media.playVideo", defaultValue: "Play video", bundle: .main))
+                    .accessibilityLabel(String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
                 }
             }
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
@@ -1094,7 +1094,7 @@ private struct PreviewVideoPlayer: View {
                 in: 0...1
             )
             .tint(accent)
-            .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
+            .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Position de lecture", bundle: .main))
             .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
             HStack(spacing: 8) {
@@ -1121,7 +1121,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
+                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Reculer de 5 secondes", bundle: .main))
 
                 Text(LocalizedNumber.percent(player.percentInt))
                     .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
@@ -1137,7 +1137,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
+                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))
 
                 Spacer()
 

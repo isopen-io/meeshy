@@ -167,7 +167,7 @@ struct SecurityView: View {
 
             Spacer()
 
-            Text(String(localized: "settings.security.title", defaultValue: "Securite", bundle: .main))
+            Text(String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main))
                 .font(.headline)
                 .foregroundColor(theme.textPrimary)
 
@@ -242,7 +242,7 @@ struct SecurityView: View {
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
 
-                        Text(user?.email ?? String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main))
+                        Text(user?.email ?? String(localized: "settings.security.not_set", defaultValue: "Non défini", bundle: .main))
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
                     }
@@ -379,7 +379,7 @@ struct SecurityView: View {
                 Image(systemName: "envelope.badge.fill")
                     .font(.subheadline)
                     .foregroundColor(MeeshyColors.success)
-                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "Email de verification envoye", bundle: .main))
+                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "Email de vérification envoyé", bundle: .main))
                     .font(.footnote.weight(.medium))
                     .foregroundColor(MeeshyColors.success)
             }
@@ -404,14 +404,14 @@ struct SecurityView: View {
 
     private var phoneSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Telephone", bundle: .main), icon: "phone.fill", color: "818CF8")
+            sectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Téléphone", bundle: .main), icon: "phone.fill", color: "818CF8")
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     fieldIcon("phone.fill", color: "818CF8")
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "settings.security.phone.current", defaultValue: "Telephone actuel", bundle: .main))
+                        Text(String(localized: "settings.security.phone.current", defaultValue: "Téléphone actuel", bundle: .main))
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
 
@@ -419,7 +419,7 @@ struct SecurityView: View {
                             if let phone = user?.phoneNumber, !phone.isEmpty {
                                 return "\(CountryPicker.flag(forPhoneNumber: phone)) \(phone)"
                             }
-                            return String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main)
+                            return String(localized: "settings.security.not_set", defaultValue: "Non défini", bundle: .main)
                         }())
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
@@ -555,7 +555,7 @@ struct SecurityView: View {
                 Image(systemName: "ellipsis.message.fill")
                     .font(.subheadline)
                     .foregroundColor(MeeshyColors.success)
-                Text(String(localized: "settings.security.phone.code_sent", defaultValue: "Code envoye par SMS", bundle: .main))
+                Text(String(localized: "settings.security.phone.code_sent", defaultValue: "Code envoyé par SMS", bundle: .main))
                     .font(.footnote.weight(.medium))
                     .foregroundColor(MeeshyColors.success)
             }
@@ -564,7 +564,7 @@ struct SecurityView: View {
             HStack(spacing: 12) {
                 fieldIcon("number", color: "818CF8")
 
-                TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code a 6 chiffres", bundle: .main), text: $phoneCode)
+                TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code à 6 chiffres", bundle: .main), text: $phoneCode)
                     .font(.system(.callout, design: .monospaced).weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
@@ -596,7 +596,7 @@ struct SecurityView: View {
                         if phoneVerifying {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
-                        Text(String(localized: "common.verify", defaultValue: "Verifier", bundle: .main))
+                        Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                             .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
@@ -632,7 +632,7 @@ struct SecurityView: View {
                     fieldIcon("lock.shield.fill", color: lockColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(String(localized: "settings.security.master_pin", defaultValue: "Master PIN", bundle: .main))
+                        Text(String(localized: "settings.security.master_pin", defaultValue: "Code PIN principal", bundle: .main))
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
                         Text(hasMasterPIN
@@ -750,7 +750,7 @@ struct SecurityView: View {
         let tfaColor = "6366F1"
         return VStack(alignment: .leading, spacing: 8) {
             sectionHeader(
-                title: String(localized: "2fa_section_title", defaultValue: "Authentification a deux facteurs"),
+                title: String(localized: "2fa_section_title", defaultValue: "Authentification à deux facteurs"),
                 icon: "shield.lefthalf.filled",
                 color: tfaColor
             )
@@ -769,8 +769,8 @@ struct SecurityView: View {
                                 .scaleEffect(0.7)
                         } else {
                             Text(twoFactorViewModel.isEnabled
-                                 ? String(localized: "2fa_enabled", defaultValue: "Active")
-                                 : String(localized: "2fa_disabled", defaultValue: "Desactive"))
+                                 ? String(localized: "2fa_enabled", defaultValue: "Actif")
+                                 : String(localized: "2fa_disabled", defaultValue: "Désactivé"))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(twoFactorViewModel.isEnabled ? MeeshyColors.success : theme.textMuted)
                         }
@@ -779,7 +779,7 @@ struct SecurityView: View {
                     Spacer()
 
                     if twoFactorViewModel.isEnabled {
-                        Text(String(localized: "2fa_badge_active", defaultValue: "Active"))
+                        Text(String(localized: "2fa_badge_active", defaultValue: "Actif"))
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
@@ -815,7 +815,7 @@ struct SecurityView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "shield.slash.fill")
                                     .font(.caption)
-                                Text(String(localized: "2fa_disable_button", defaultValue: "Desactiver"))
+                                Text(String(localized: "2fa_disable_button", defaultValue: "Désactiver"))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
@@ -831,7 +831,7 @@ struct SecurityView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "shield.lefthalf.filled.badge.checkmark")
                                     .font(.caption)
-                                Text(String(localized: "2fa_enable_button", defaultValue: "Activer 2FA"))
+                                Text(String(localized: "2fa_enable_button", defaultValue: "Activer la 2FA"))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(.white)
@@ -927,16 +927,16 @@ struct SecurityView: View {
 
     private func verificationBadge(verified: Bool) -> some View {
         Text(verified
-             ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
-             : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
+             ? String(localized: "settings.security.verified", defaultValue: "Vérifié", bundle: .main)
+             : String(localized: "settings.security.not_verified", defaultValue: "Non vérifié", bundle: .main))
             .font(.caption2.weight(.semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
             .accessibilityLabel(verified
-                                ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
-                                : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
+                                ? String(localized: "settings.security.verified", defaultValue: "Vérifié", bundle: .main)
+                                : String(localized: "settings.security.not_verified", defaultValue: "Non vérifié", bundle: .main))
     }
 
     // MARK: - Actions
@@ -1038,7 +1038,7 @@ struct SecurityView: View {
                 HapticFeedback.error()
                 switch error {
                 case .server(400, _):
-                    phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expire", bundle: .main)
+                    phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expiré", bundle: .main)
                 default:
                     phoneError = error.errorDescription
                 }

@@ -1954,7 +1954,7 @@ struct StoryCommentsOverlayView: View {
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
-            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
+            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
                 .font(MeeshyFont.relative(11))
                 .foregroundColor(.white.opacity(0.65))
         }
@@ -2899,7 +2899,7 @@ struct StoryCommentRowView: View, Equatable {
                 HStack(spacing: 3) {
                     Image(systemName: "arrowshape.turn.up.left")
                         .font(MeeshyFont.relative(11, weight: .semibold))
-                    Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
+                    Text(String(localized: "story.viewer.reply", defaultValue: "Répondre", bundle: .main))
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
                 }
                 .foregroundColor(overlayColor.opacity(0.88))

@@ -261,9 +261,9 @@ class StatusViewModel: ObservableObject {
             )
             do {
                 try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
-                FeedbackToastManager.shared.showSuccess(String(localized: "status.queuedOffline", defaultValue: "Mood en attente d'envoi", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "status.queuedOffline", defaultValue: "Humeur en attente d'envoi", bundle: .main))
             } catch {
-                FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Impossible de publier le statut", bundle: .main))
             }
             return
         }
@@ -277,7 +277,7 @@ class StatusViewModel: ObservableObject {
                 await saveCacheSnapshot()
             }
         } catch {
-            FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Impossible de publier le statut", bundle: .main))
         }
     }
 
@@ -369,7 +369,7 @@ class StatusViewModel: ObservableObject {
         // file où basculer.
         guard !isOffline() else {
             FeedbackToastManager.shared.showError(
-                String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main)
+                String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main)
             )
             return false
         }
@@ -404,7 +404,7 @@ class StatusViewModel: ObservableObject {
             // possède : le catalogue est à sept langues avec un cliquet français
             // à zéro tolérance. Ne pas lire ce toast unique comme un oubli.
             FeedbackToastManager.shared.showError(
-                String(localized: "feed.repost.error", defaultValue: "Error reposting", bundle: .main)
+                String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost", bundle: .main)
             )
             return false
         }
@@ -443,7 +443,7 @@ class StatusViewModel: ObservableObject {
         } catch {
             statuses = snapshot
             myStatus = previousStatus
-            FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Error deleting status", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Impossible de supprimer le statut", bundle: .main))
         }
     }
 
@@ -605,7 +605,7 @@ class StatusViewModel: ObservableObject {
             if let index = statuses.firstIndex(where: { $0.id == statusId }) {
                 statuses[index].reactionSummary = previousSummary
             }
-            FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Error reacting to status", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Impossible de réagir au statut", bundle: .main))
         }
     }
 

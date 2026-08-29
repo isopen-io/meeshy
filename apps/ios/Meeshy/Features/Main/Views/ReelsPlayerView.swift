@@ -1256,7 +1256,7 @@ private struct ReelActionRail: View {
                     Task { await viewModel.pinPost(reel.id) }
                     HapticFeedback.light()
                 } label: {
-                    Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                    Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
                 }
                 Button {
                     onEdit()

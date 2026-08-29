@@ -213,12 +213,12 @@ struct MagicLinkView: View {
             .padding(.bottom, MeeshySpacing.md)
             .accessibilityHidden(true)
 
-            Text(String(localized: "auth.magiclink.sent.title", defaultValue: "Lien envoye !", bundle: .main))
+            Text(String(localized: "auth.magiclink.sent.title", defaultValue: "Lien envoyé !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             VStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a ete envoye a", bundle: .main))
+                Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a été envoyé à", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -265,7 +265,7 @@ struct MagicLinkView: View {
                 .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
             }
             .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
-                                        defaultValue: "Resend magic link", bundle: .main))
+                                        defaultValue: "Renvoyer le lien magique", bundle: .main))
             .disabled(countdownRemaining > 0 || isLoading)
             .padding(.top, MeeshySpacing.md)
 

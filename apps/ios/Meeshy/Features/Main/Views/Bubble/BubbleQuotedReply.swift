@@ -417,7 +417,7 @@ struct BubbleQuotedReply: View, Equatable {
                             // localized short label ("Photo", "Vidéo", ...)
                             // instead of the hardcoded "Media" fallback that
                             // surfaced before the AttachmentKind plumbing fix.
-                            let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Media", bundle: .main)
+                            let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
                             MessageTextRenderer.render(
                                 reply.previewText.isEmpty ? fallback : reply.previewText,
                                 fontSize: 12, color: previewColor,

@@ -142,7 +142,7 @@ struct PrivacySettingsView: View {
                 ),
                 ToggleSpec(
                     id: "hideSearch", icon: "magnifyingglass",
-                    title: String(localized: "settings.privacy.hide_from_search", defaultValue: "Masquer du recherche", bundle: .main),
+                    title: String(localized: "settings.privacy.hide_from_search", defaultValue: "Masquer de la recherche", bundle: .main),
                     color: "FF6B6B", keyPath: \.hideProfileFromSearch
                 ),
             ]
@@ -151,7 +151,7 @@ struct PrivacySettingsView: View {
 
     private var contactsSection: some View {
         section(
-            title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main),
+            title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts et groupes", bundle: .main),
             icon: "person.2.fill",
             color: MeeshyColors.brandPrimaryHex,
             specs: [
@@ -197,11 +197,11 @@ struct PrivacySettingsView: View {
                 ),
                 ToggleSpec(
                     id: "analytics", icon: "chart.bar.fill",
-                    title: String(localized: "settings.privacy.analytics", defaultValue: "Analytics", bundle: .main),
+                    title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),
                     color: MeeshyColors.infoHex, keyPath: \.allowAnalytics,
                     info: SettingsInfo(
                         id: "privacy.analytics",
-                        title: String(localized: "settings.privacy.analytics", defaultValue: "Analytics", bundle: .main),
+                        title: String(localized: "settings.privacy.analytics", defaultValue: "Analytique", bundle: .main),
                         message: String(
                             localized: "settings.privacy.analytics.info",
                             defaultValue: "Mesure d'usage anonyme : écrans ouverts, fonctionnalités utilisées, plantages. Jamais le contenu de vos messages, ni vos contacts. Le réglage prend effet immédiatement.",
@@ -216,7 +216,7 @@ struct PrivacySettingsView: View {
                 ),
                 ToggleSpec(
                     id: "blockScreenshots", icon: "camera.fill",
-                    title: String(localized: "settings.privacy.block_screenshots", defaultValue: "Bloquer captures", bundle: .main),
+                    title: String(localized: "settings.privacy.block_screenshots", defaultValue: "Bloquer les captures", bundle: .main),
                     color: "FF6B6B", keyPath: \.blockScreenshots
                 ),
             ]
