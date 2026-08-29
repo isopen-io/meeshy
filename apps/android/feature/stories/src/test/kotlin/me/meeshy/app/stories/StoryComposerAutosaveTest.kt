@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.model.StoryFilter
 import org.junit.Test
@@ -117,7 +118,7 @@ class StoryComposerAutosaveTest {
     // ---- resolve: rich-content fidelity gate ----
 
     @Test
-    fun `a draft with a text element is not persisted even with a caption`() {
+    fun `a draft with a text element resolves to Save carrying the caption and the element`() {
         val deck = textDeck("caption")
             .addTextElementToSelected(StoryTextElement(id = "e1", text = "on canvas"))
 
@@ -129,7 +130,10 @@ class StoryComposerAutosaveTest {
             previous = null,
         )
 
-        assertThat(action).isEqualTo(StoryDraftPersist.None)
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().text).isEqualTo("caption")
+        assertThat(snap.slides.single().elements.single().text).isEqualTo("on canvas")
     }
 
     @Test
@@ -162,6 +166,12 @@ class StoryComposerAutosaveTest {
     fun `deckHasRichContent is true for a sticker`() {
         val deck = blankDeck().addStickerToSelected(StoryStickerElement(id = "k1", emoji = "🎉"))
         assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isTrue()
+    }
+
+    @Test
+    fun `deckHasRichContent is false for a text element now that it is persistable`() {
+        val deck = blankDeck().addTextElementToSelected(StoryTextElement(id = "e1", text = "on canvas"))
+        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
     }
 
     @Test
@@ -224,6 +234,12 @@ class StoryComposerAutosaveTest {
     fun `a single blank slide with a colour background is not pristine`() {
         val backdropped = blankDeck().setSelectedBackground(StoryBackgroundValue.Hex("2ECC71"))
         assertThat(StoryComposerAutosave.deckIsPristine(backdropped)).isFalse()
+    }
+
+    @Test
+    fun `a single slide carrying even a blank text element is not pristine`() {
+        val withElement = blankDeck().addTextElementToSelected(StoryTextElement(id = "e1"))
+        assertThat(StoryComposerAutosave.deckIsPristine(withElement)).isFalse()
     }
 
     // ---- restore ----
@@ -690,6 +706,181 @@ class StoryComposerAutosaveTest {
 
         val action = StoryComposerAutosave.resolve(
             deck = deck.setSelectedBackground(StoryBackgroundValue.Hex("000000")),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    // ---- on-canvas text element persistence ----
+
+    private fun styledElement() = StoryTextElement(
+        id = "e1",
+        text = "hello",
+        style = StoryTextStyle.NEON,
+        color = "FF00AA",
+        align = StoryTextAlign.LEFT,
+        size = StoryTextSize.LARGE,
+        background = StoryTextBackground.Glass(radius = 24.0),
+        outline = StoryTextOutline(width = 4f, color = "FFFFFF"),
+        fade = StoryTextFade(inSeconds = 1.5f, outSeconds = 2f),
+        timing = StoryElementTiming(startSeconds = 3f, durationSeconds = 5f),
+        x = 0.3f,
+        y = 0.8f,
+        scale = 1.7f,
+        rotationDeg = -30f,
+    )
+
+    @Test
+    fun `toDraftSnapshot carries a text element with all its styled fields`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .addTextElementToSelected(styledElement())
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).slides.single().elements.single()
+
+        assertThat(snap.text).isEqualTo("hello")
+        assertThat(snap.style).isEqualTo("NEON")
+        assertThat(snap.color).isEqualTo("FF00AA")
+        assertThat(snap.align).isEqualTo("LEFT")
+        assertThat(snap.size).isEqualTo("LARGE")
+        assertThat(snap.background).isEqualTo(me.meeshy.sdk.model.StoryTextBackgroundStyle(type = "glass", radius = 24.0))
+        assertThat(snap.outlineWidth).isEqualTo(4f)
+        assertThat(snap.outlineColor).isEqualTo("FFFFFF")
+        assertThat(snap.fadeIn).isEqualTo(1.5f)
+        assertThat(snap.fadeOut).isEqualTo(2f)
+        assertThat(snap.startSeconds).isEqualTo(3f)
+        assertThat(snap.durationSeconds).isEqualTo(5f)
+        assertThat(snap.x).isWithin(1e-4f).of(0.3f)
+        assertThat(snap.y).isWithin(1e-4f).of(0.8f)
+        assertThat(snap.scale).isWithin(1e-4f).of(1.7f)
+        assertThat(snap.rotationDeg).isWithin(1e-4f).of(-30f)
+    }
+
+    @Test
+    fun `toDeck restores a text element with all its styled fields`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    mediaIds = listOf("m1"),
+                    elements = listOf(
+                        StoryDraftTextElementSnapshot(
+                            id = "e1",
+                            text = "resume",
+                            style = "TYPEWRITER",
+                            color = "00FF00",
+                            align = "RIGHT",
+                            size = "XLARGE",
+                            background = me.meeshy.sdk.model.StoryTextBackgroundStyle(type = "solid", hex = "123456"),
+                            outlineWidth = 8f,
+                            outlineColor = "000000",
+                            fadeIn = 0.5f,
+                            fadeOut = 1f,
+                            startSeconds = 2f,
+                            durationSeconds = 4f,
+                            x = 0.25f,
+                            y = 0.75f,
+                            scale = 2.5f,
+                            rotationDeg = 45f,
+                        ),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+
+        val element = snap.toDeck()!!.slides.single().elements.single()
+
+        assertThat(element).isEqualTo(
+            StoryTextElement(
+                id = "e1",
+                text = "resume",
+                style = StoryTextStyle.TYPEWRITER,
+                color = "00FF00",
+                align = StoryTextAlign.RIGHT,
+                size = StoryTextSize.XLARGE,
+                background = StoryTextBackground.Solid(hex = "123456"),
+                outline = StoryTextOutline(width = 8f, color = "000000"),
+                fade = StoryTextFade(inSeconds = 0.5f, outSeconds = 1f),
+                timing = StoryElementTiming(startSeconds = 2f, durationSeconds = 4f),
+                x = 0.25f,
+                y = 0.75f,
+                scale = 2.5f,
+                rotationDeg = 45f,
+            ),
+        )
+    }
+
+    @Test
+    fun `a styled text element survives the deck-snapshot-deck round-trip`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .addTextElementToSelected(styledElement())
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().elements.single()).isEqualTo(styledElement().normalised())
+    }
+
+    @Test
+    fun `toDeck restores an unknown enum name and a blank colour to the element defaults`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    elements = listOf(
+                        StoryDraftTextElementSnapshot(
+                            id = "e1",
+                            text = "x",
+                            style = "ZZZ",
+                            color = "",
+                            align = "sideways",
+                            size = "GIGANTIC",
+                        ),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+
+        val element = snap.toDeck()!!.slides.single().elements.single()
+
+        assertThat(element.style).isEqualTo(StoryTextStyle.BOLD)
+        assertThat(element.color).isEqualTo(StoryTextElement.DEFAULT_COLOR)
+        assertThat(element.align).isEqualTo(StoryTextAlign.CENTER)
+        assertThat(element.size).isEqualTo(StoryTextSize.DEFAULT)
+        assertThat(element.background).isEqualTo(StoryTextBackground.None)
+    }
+
+    @Test
+    fun `a text-element-only slide resolves to Save carrying the element`() {
+        val deck = StorySlideDeck.single("s1")
+            .addTextElementToSelected(StoryTextElement(id = "e1", text = "solo"))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().elements.single().text).isEqualTo("solo")
+    }
+
+    @Test
+    fun `adding a text element to an already-saved draft resolves to Save, not None`() {
+        val deck = StorySlideDeck.single("s1").addMediaToSelected("m1")
+        val previous = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck.addTextElementToSelected(StoryTextElement(id = "e1", text = "added")),
             visibility = StoryVisibility.PUBLIC,
             repostOfId = null,
             nowIso = now,

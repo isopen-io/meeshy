@@ -2,6 +2,77 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a story draft's on-canvas text elements survive leaving the composer** (slice
+> `story-draft-persist-text-elements`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> FIFTH dimension of the fidelity gate, after the canvas transform, the photo filter, the pinned duration and
+> the colour/media background). Before this, a slide's `StoryTextElement` list — the composer's primary rich
+> feature (typed, styled on-canvas text) — counted as unrepresentable "rich content": a user who added and
+> styled a text element and left came back to it gone, or (if it was the only touch) saw the whole draft
+> purged rather than restored lossily. This is the first of the two OBJECT-GRAPH dimensions, so unlike the
+> four scalar/wire-string dimensions before it, it needs a real nested `@Serializable` mirror — but designed to
+> stay primitive-only (no polymorphic serialiser), the deliberate cost being a flat bag reusing existing SSOTs.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4246 (`claude/brave-archimedes-qsuw9k`,
+> a gateway AttachmentReactionHandler Zod slice by jcnm) — not a `claude/apps/android/<slice-id>` routine slice,
+> no `apps/android` collision, nothing of mine to merge. Prior slice (`story-draft-persist-background`) is on
+> `main` (#4244, HEAD `b1eeb470`). Branched off freshly-fetched `origin/main`; local HEAD == origin/main before
+> branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only (6 files: 3 main + 3 test).
+>
+> **The fix — a flat primitive mirror that reuses two existing SSOTs.** (1) `core:model`: new
+> `StoryDraftTextElementSnapshot` (`@Serializable`, all fields primitive/defaulted) on
+> `StoryDraftSlideSnapshot.elements: List<…> = emptyList()`. The three enums (`StoryTextStyle`/`Align`/`Size`,
+> which live in `:feature:stories`, not `:core:model`) ride as their Kotlin `.name` **strings** — keeping
+> `:core:model` free of the composer's enums — and the sealed `StoryTextBackground` rides as the already-
+> `@Serializable` `StoryTextBackgroundStyle` tagged union (reused, not re-spelled). `hasContent` gains
+> `|| elements.any { it.isPublishable }` so a publishable (non-blank) text-element-only slide is worth
+> restoring (iOS parity: a text-element-only slide publishes), a blank one is not. (2) `:feature:stories`
+> `StoryComposerAutosave`: `toDraftSnapshot`/`toDeck` map `StorySlide.elements` ↔ the list via two private
+> mappers — `StoryTextElement.toDraftSnapshot()` (`style.name`/`align.name`/`size.name`, `background.toStyleWire()`,
+> scalars verbatim) and `StoryDraftTextElementSnapshot.toTextElement()` (`entries.firstOrNull { it.name == … } ?:
+> default` for each enum, `color.ifBlank { DEFAULT_COLOR }`, `StoryTextBackground.resolve(background, null)` — all
+> tolerant, decaying to the element's own defaults on a corrupt blob, exactly as the reader decoders do). (3) The
+> gate is DECOUPLED: `deckHasRichContent` drops the elements arm (now holds only `stickers.isNotEmpty()`), and
+> `deckIsPristine` gains `it.elements.isEmpty()` so a silently-added text element still counts as touched. (4) VM
+> `persistDraft` doc-comment narrowed from "rich on-canvas content" to "sticker elements".
+>
+> **Tests: +21.** 10 `StoryComposerDraftSnapshotTest` (element JSON round-trip; elements ride a slide through
+> JSON; legacy blob → empty list; element blob → every default; publishable×2; publishable-element-alone worth
+> restoring; blank-element-alone not; changed element / added element are different content), 9
+> `StoryComposerAutosaveTest` (flipped `a draft with a text element resolves to Save carrying the caption and the
+> element` — was the `None` gate test; `deckHasRichContent` false for a text element; blank-element deck not
+> pristine; `toDraftSnapshot` carries all styled fields; `toDeck` restores all styled fields; styled element
+> survives deck↔snapshot↔deck; tolerant decode of an unknown enum name / blank colour → defaults; a
+> text-element-only slide resolves to Save; adding an element to a saved draft resolves to Save not None), 2
+> `StoryComposerViewModelTest` end-to-end (`persistDraft` saves a styled element; `onEnterComposer` restores it —
+> and the pre-existing VM rich-content purge test retargeted from a text element to a still-gated sticker). Every
+> test drives a real element/deck/snapshot through the mapper/gate and asserts the transformed result (non-
+> tautological). **Mutation-RED-proven THREE times**: re-adding `slide.elements.isNotEmpty()` to
+> `deckHasRichContent` reddens EXACTLY the 5 text-element persistence tests (4 autosave + 1 VM persist); removing
+> `&& it.elements.isEmpty()` from `deckIsPristine` reddens EXACTLY `a single slide carrying even a blank text
+> element is not pristine` (1); dropping `|| elements.any { it.isPublishable }` from `hasContent` reddens EXACTLY
+> `a publishable text element alone makes a snapshot worth restoring` (1). Restored after each; full gate green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`, then
+> `sdkmanager --channel=3 "platforms;android-37.0"` (preview compileSdk 37). Pristine android-37.0 worked this
+> container.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest` (ALL
+> modules) **BUILD SUCCESSFUL in 4m 09s**, 0 failed tasks; plus the three touched suites green in isolation
+> (StoryComposerDraftSnapshotTest, StoryComposerAutosaveTest, StoryComposerViewModelTest) and all three mutation
+> proofs (5 RED, 1 RED, 1 RED, restored after each). Reviewer **PASS** (diff `apps/android` only — 3 main + 3
+> test; SDK purity — the snapshot is a `:core:model` primitive bag, the mappers/gate are `:feature:stories`
+> orchestration; SSOT — `StorySlide.elements` stays the deck's SSOT, the snapshot projects a flat mirror that
+> reuses `StoryTextBackgroundStyle`/`toStyleWire`/`resolve` rather than re-spelling the tagged union; no
+> tautological tests; no coverage floor lowered; the two flipped/retargeted tests assert the NEW correct
+> behaviour, not a weakening).
+>
+> **Next**: the LAST rich dimension is stickers (`StoryStickerElement` — id + emoji + position + scale +
+> rotation, a flat `@Serializable` mirror, thinner than text elements since no sub-value types). Once it lands
+> the fidelity gate collapses to nothing: `deckHasRichContent` becomes constant `false` (every dimension
+> representable) — at which point the gate AND its purge branch should be RETIRED, not left as dead code (the
+> `resolve` "rich content present → purge" arm, the `deckHasRichContent` call in `deckIsPristine`, and the
+> function itself). Scout `feature-parity.md` E. Stories + `StoryStickerElement.kt` read-only before branching.
+
 > On 2026-08-29 **a story draft's colour/media background survives leaving the composer** (slice
 > `story-draft-persist-background`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
 > FOURTH dimension of the fidelity gate, after the canvas transform, the photo filter and the pinned
