@@ -162,7 +162,7 @@ struct LanguageFlagChip: View {
     static func spokenLabel(for code: String,
                             bundle: Bundle = .main,
                             locale: Locale = .current) -> String {
-        let name = LanguageDisplay.from(code: code)?.name ?? Self.rawName(for: code) ?? Self.flag(for: code)
+        let name = Self.spokenName(for: code)
         return String(
             format: String(localized: "a11y.language.show",
                            defaultValue: "Afficher en %@",
@@ -170,6 +170,32 @@ struct LanguageFlagChip: View {
                            locale: locale),
             name
         )
+    }
+
+    /// « Traduit de English vers Français ».
+    ///
+    /// Une paire de drapeaux NON interactive — l'aperçu d'un commentaire dans le
+    /// fil — dit à l'œil « ce texte a été traduit, de là vers ici ». À VoiceOver
+    /// elle disait deux PAYS : « drapeau du Royaume-Uni, drapeau de la France ».
+    /// Les deux glyphes et la pastille qui les suit ne forment qu'UNE
+    /// information ; ils s'annoncent donc en une phrase, et une seule.
+    static func translationSummary(from origin: String,
+                                   to target: String,
+                                   bundle: Bundle = .main,
+                                   locale: Locale = .current) -> String {
+        String(
+            format: String(localized: "a11y.language.translated_from",
+                           defaultValue: "Traduit de %1$@ vers %2$@",
+                           bundle: bundle,
+                           locale: locale),
+            spokenName(for: origin), spokenName(for: target)
+        )
+    }
+
+    /// Le nom NATIF de la langue, ou son code faute de mieux — le même repli que
+    /// `flag(for:)`, pour que l'écrit et le parlé ne divergent jamais.
+    static func spokenName(for code: String) -> String {
+        LanguageDisplay.from(code: code)?.name ?? Self.rawName(for: code) ?? Self.flag(for: code)
     }
 
     /// La valeur du contrôle quand c'est CETTE langue qu'on lit.

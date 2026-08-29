@@ -228,7 +228,7 @@ struct AffiliateView: View {
                     Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
                         .font(MeeshyFont.relative(12))
                         .foregroundColor(theme.textMuted)
-                    Text("·")
+                    MetaSeparator()
                         .foregroundColor(theme.textMuted)
                     Label(String(localized: "affiliate.token.signups", defaultValue: "\(token.referralCount) inscrit(s)", bundle: .main), systemImage: "person.fill.checkmark")
                         .font(MeeshyFont.relative(12))

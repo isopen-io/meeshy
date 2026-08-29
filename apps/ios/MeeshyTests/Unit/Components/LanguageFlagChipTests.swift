@@ -72,6 +72,50 @@ final class LanguageFlagChipTests: XCTestCase {
                        "Afficher en XX")
     }
 
+    // MARK: - Une paire de drapeaux ne dit qu'UNE chose
+
+    /// L'aperçu d'un commentaire traduit montre deux drapeaux et une pastille.
+    /// Lus un par un, VoiceOver annonçait deux PAYS — « drapeau du Royaume-Uni,
+    /// drapeau de la France ». Ils forment une seule information, et s'annoncent
+    /// donc en une phrase.
+    func test_translationSummary_ditLaLangueSourceEtLaCible() throws {
+        let fr = try inLocale("fr") {
+            LanguageFlagChip.translationSummary(from: "en", to: "fr", bundle: $0, locale: $1)
+        }
+        XCTAssertEqual(fr, "Traduit de English vers Français", "obtenu « \(fr) »")
+
+        let en = try inLocale("en") {
+            LanguageFlagChip.translationSummary(from: "de", to: "es", bundle: $0, locale: $1)
+        }
+        XCTAssertEqual(en, "Translated from Deutsch to Español", "obtenu « \(en) »")
+    }
+
+    /// Le nom parlé et le drapeau écrit partagent leur repli : une langue hors
+    /// catalogue s'annonce par son code, jamais par un point d'interrogation.
+    func test_translationSummary_replieSurLeCodeDUneLangueInconnue() throws {
+        let rendered = try inLocale("fr") {
+            LanguageFlagChip.translationSummary(from: "xx", to: "fr", bundle: $0, locale: $1)
+        }
+        XCTAssertEqual(rendered, "Traduit de XX vers Français", "obtenu « \(rendered) »")
+    }
+
+    /// Le piège d'`InterpolatedLocalizationSubstitutionTests` (idiome 242i) —
+    /// la seule négation qui vaille : un placeholder mal apparié ferait entendre
+    /// « Traduit de %1$@ vers %2$@ ».
+    func test_translationSummary_substitueLesDeuxLangues() throws {
+        for code in ["fr", "en", "ar_SA"] {
+            let rendered = try inLocale(code) {
+                LanguageFlagChip.translationSummary(from: "en", to: "fr", bundle: $0, locale: $1)
+            }
+            for specifier in ["%@", "%lld", "%1$", "%2$"] {
+                XCTAssertFalse(
+                    rendered.contains(specifier),
+                    "« \(specifier) » survit brut dans « \(rendered) » (\(code))."
+                )
+            }
+        }
+    }
+
     // MARK: - L'état lu
 
     /// `pt-BR` est volontairement absent : le banc cherche la table sur la seule

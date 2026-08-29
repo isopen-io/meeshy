@@ -2769,11 +2769,11 @@ struct StoryCommentRowView: View, Equatable {
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
+                MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
+            MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
                 .font(MeeshyFont.relative(10))

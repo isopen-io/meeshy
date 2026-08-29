@@ -249,10 +249,9 @@ struct BubbleJoinNoticeView: View, Equatable {
                         }
                         if let rules = presentation.rules {
                             if presentation.handle != nil {
-                                Text("·")
+                                MetaSeparator()
                                     .font(MeeshyFont.relative(10.5))
                                     .foregroundColor(ThemeManager.shared.textMuted.opacity(0.5))
-                                    .accessibilityHidden(true)
                             }
                             JoinNoticeRulesStrip(rules: rules)
                         }

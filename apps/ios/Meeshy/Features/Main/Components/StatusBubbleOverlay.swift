@@ -167,7 +167,7 @@ struct StatusBubbleOverlay: View {
                     .foregroundColor(theme.textMuted)
 
                 if onRepublish != nil {
-                    Text("·")
+                    MetaSeparator()
                         .font(MeeshyFont.relative(10, weight: .medium))
                         .foregroundColor(theme.textMuted)
 

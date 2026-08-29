@@ -635,7 +635,7 @@ struct MessageOverlayMenu: View {
                 .font(MeeshyFont.relative(13, weight: .semibold))
                 .foregroundColor(Color(hex: color))
 
-            Text("·")
+            MetaSeparator()
                 .font(MeeshyFont.relative(13))
                 .foregroundColor(theme.textMuted)
 

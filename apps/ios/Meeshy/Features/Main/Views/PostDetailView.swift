@@ -1071,8 +1071,7 @@ struct PostDetailView: View {
                                 }
                                 if reach.showsStats {
                                     if reach.pseudo != nil {
-                                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
-                                            .accessibilityHidden(true)
+                                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                                     }
                                     HStack(spacing: 3) {
                                         ReachMetricLabel(
@@ -1081,8 +1080,7 @@ struct PostDetailView: View {
                                             label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
                                             tint: theme.textMuted
                                         )
-                                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
-                                            .accessibilityHidden(true)
+                                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                                         ReachMetricLabel(
                                             icon: "chart.bar.fill",
                                             count: post.impressionCount,
@@ -1221,7 +1219,7 @@ struct PostDetailView: View {
                 }
                 if isPostAuthor {
                     if hasUsername {
-                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                     }
                     HStack(spacing: 3) {
                         ReachMetricLabel(
@@ -1230,8 +1228,7 @@ struct PostDetailView: View {
                             label: String(localized: "feed.reel.views", defaultValue: "Vues", bundle: .main),
                             tint: theme.textMuted
                         )
-                        Text("·").font(.caption2).foregroundColor(theme.textMuted)
-                            .accessibilityHidden(true)
+                        MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                         ReachMetricLabel(
                             icon: "chart.bar.fill",
                             count: post.impressionCount,
@@ -1289,7 +1286,7 @@ struct PostDetailView: View {
 
                         let flags = buildAvailableFlags()
                         if !flags.isEmpty || post.translations?.isEmpty == false {
-                            Text("·").font(.caption).foregroundColor(theme.textMuted)
+                            MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
                                 LanguageFlagChip(code: code, isActive: code == secondaryLangCode) {
@@ -1689,7 +1686,7 @@ struct PostDetailView: View {
         }()
 
         if !flags.isEmpty {
-            Text("·").font(.caption2).foregroundColor(theme.textMuted)
+            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
             ForEach(flags, id: \.self) { code in
                 LanguageFlagChip(code: code, isActive: code == repostSecondaryLangCode) {
                     if code == origLang {

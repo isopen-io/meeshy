@@ -971,7 +971,7 @@ struct ReelPageView: View {
     }
 
     private var metaDot: some View {
-        Text("·").font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
     }
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {

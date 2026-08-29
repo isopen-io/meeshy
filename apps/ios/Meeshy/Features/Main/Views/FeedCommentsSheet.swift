@@ -2281,7 +2281,7 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     if hasTranslation {
-                        Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
 
                         LanguageFlagChip(code: comment.originalLanguage ?? "", isActive: showOriginal) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -2320,8 +2320,7 @@ struct CommentRowView: View, Equatable {
                         .meeshyTapTarget(44)
                     }
 
-                    Text("\u{00B7}").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
-                        .accessibilityHidden(true)
+                    MetaSeparator().font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
 
                     Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
                         .font(MeeshyFont.relative(12))
@@ -2446,10 +2445,9 @@ struct CommentRowView: View, Equatable {
                             .accessibilityHint(String(format: String(localized: "a11y.comment.reply.hint", defaultValue: "Répondre à %@", bundle: .main), comment.author))
 
                             if showSeeReplies {
-                                Text("\u{00B7}")
+                                MetaSeparator()
                                     .font(MeeshyFont.relative(12))
                                     .foregroundColor(theme.textMuted)
-                                    .accessibilityHidden(true)
 
                                 Button {
                                     onSeeReplies?()
