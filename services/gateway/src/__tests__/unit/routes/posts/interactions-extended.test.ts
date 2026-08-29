@@ -420,20 +420,6 @@ describe('POST /posts/:postId/share (authenticated)', () => {
   });
 });
 
-// ─── GET /posts/:postId/share ─────────────────────────────────────────────────
-
-describe('GET /posts/:postId/share', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with share link data', async () => {
-    mockGetPostShareLink.mockResolvedValueOnce({ token: 'abc123', shortUrl: 'https://app.example.com/l/abc123', totalClicks: 3 });
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-  });
-});
-
 // ─── POST /posts/:postId/pin ──────────────────────────────────────────────────
 
 describe('POST /posts/:postId/pin', () => {

@@ -80,9 +80,25 @@ jest.mock('@tus/server', () => ({
     async handle(req: any, res: any) {
       const headers = req?.headers || {};
       const headersApi = { get: (k: string) => headers[k.toLowerCase()] };
+      // #4190 — AVANT : ce double n'appelait QUE `onUploadCreate` et rendait
+      // donc 201/401 POUR TOUTE MÉTHODE. Or `onUploadCreate` n'est invoqué en
+      // production que par le gestionnaire POST : GET/HEAD/PATCH/DELETE passent
+      // par `onIncomingRequest`. Le double fabriquait un 401 sur des méthodes
+      // que ce chemin ne garde pas — n'importe quel témoin écrit contre ce
+      // montage mesurait le double, jamais la route. Il aiguille désormais sur
+      // la MÉTHODE, exactement comme `@tus/server`.
+      const method = String(req?.method || 'POST').toUpperCase();
+      // L'identifiant de session est le dernier segment du chemin ; la
+      // collection n'en a pas — seule la CRÉATION y a un sens.
+      const uploadId = String(req?.url || '').split('?')[0].split('/').filter(Boolean).pop() ?? '';
       try {
-        await this.opts?.onUploadCreate?.({ headers: headersApi }, { metadata: {}, size: 0 });
-        res.statusCode = 201;
+        if (method === 'POST') {
+          await this.opts?.onUploadCreate?.({ headers: headersApi }, { metadata: {}, size: 0 });
+          res.statusCode = 201;
+        } else {
+          await this.opts?.onIncomingRequest?.({ headers: headersApi }, uploadId);
+          res.statusCode = 204;
+        }
         res.end();
       } catch (err: any) {
         res.statusCode = (err && err.status_code) || 500;
@@ -94,6 +110,13 @@ jest.mock('@tus/server', () => ({
 jest.mock('@tus/file-store', () => ({
   FileStore: class MockFileStore {
     constructor(_opts: any) {}
+    // #4190 — un upload EXISTANT, appartenant à un tiers : le seul état dans
+    // lequel `onIncomingRequest` exerce réellement sa comparaison d'identité
+    // (401 sans justificatif, 403 pour un autre utilisateur). Sans lui, la
+    // garde revient sur `if (!ownerUserId) return` et ne mesure rien.
+    async getUpload(id: string) {
+      return { id, offset: 0, size: 0, metadata: { userId: 'tus-upload-owner-user-id' } };
+    }
   },
 }));
 
@@ -419,7 +442,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/resend-verification', why: "renvoi d'email de vérification, pré-session" },
   { method: 'POST', url: '/api/v1/auth/send-phone-code', why: 'envoi de code SMS, pré-session (flux de vérification tél.)' },
   { method: 'POST', url: '/api/v1/auth/verify-phone', why: 'vérification de code SMS, pré-session' },
-  { method: 'POST', url: '/api/v1/auth/validate-session', why: 'valide un sessionToken transmis dans le corps — son rôle est justement de fonctionner sans Authorization' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/check', why: 'flux de transfert de numéro, pré-session (rate-limité)' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/initiate', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/phone-transfer/verify', why: 'idem' },
@@ -436,7 +458,6 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/verify-code', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/forgot-password/phone/resend', why: 'idem' },
   { method: 'POST', url: '/api/v1/auth/magic-link/request', why: "demande de lien magique par email, pré-session" },
-  { method: 'GET', url: '/api/v1/auth/magic-link/validate', why: 'consomme un lien magique à usage unique, pré-session' },
   { method: 'POST', url: '/api/v1/auth/magic-link/validate', why: 'idem' },
   { method: 'GET', url: '/api/v1/auth/revoke-all-sessions', why: 'lien signé JWT envoyé par e-mail sur connexion suspecte, vérifié par signature dans le handler. Le segment "auth" était DOUBLÉ jusqu\'à #4141 — la route existait à une adresse que rien n\'appelait, et l\'entrée d\'inventaire le disait en la traitant comme un fait acquis plutôt que comme un défaut à corriger' },
 
@@ -483,8 +504,11 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'POST', url: '/api/v1/affiliate/track-visit', why: "tracking de visite public par design (pollution mineure notée séparément dans l'audit)" },
   { method: 'POST', url: '/api/v1/affiliate/click/:token', why: 'comptage de clic public par design' },
 
-  // --- Voice : sondes publiques, aucune donnée utilisateur ---
-  { method: 'GET', url: '/api/v1/voice/health', why: 'statut agrégé des sous-services, aucune donnée utilisateur' },
+  // --- Voice : sonde publique, aucune donnée utilisateur ---
+  // `GET /api/v1/voice/health` a QUITTÉ cette liste AVEC la route elle-même
+  // (#4190) : aucun appelant côté clients ni côté sondes d'infrastructure, et
+  // une seconde réponse à « le service répond-il ? » vaut moins qu'une seule
+  // qui fait autorité — `GET /health` (racine). Ne la remets pas ici.
   { method: 'GET', url: '/api/v1/voice/languages', why: 'liste statique de langues supportées' },
 
   // --- Posts/Feed : visibilité PUBLIC appliquée côté service pour les
@@ -693,6 +717,11 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
       { method: 'PUT', url: '/api/v1/users/:id' },
       { method: 'DELETE', url: '/api/v1/users/:id' },
       { method: 'GET', url: '/api/v1/users/me/test' },
+      // #4186 — jumelles appauvries de l'identité et de « moi ».
+      { method: 'GET', url: '/api/v1/auth/magic-link/validate' },
+      { method: 'POST', url: '/api/v1/auth/validate-session' },
+      { method: 'DELETE', url: '/api/v1/me/preferences' },
+      { method: 'GET', url: '/api/v1/me/me' },
     ];
 
     const encoreMontees = RETIREES.filter((retiree) =>

@@ -1,5 +1,5 @@
 /**
- * Route tests — POST/GET /posts/:postId/share (LOT 6 tracked share).
+ * Route tests — POST /posts/:postId/share (LOT 6 tracked share).
  *
  * @jest-environment node
  */
@@ -76,30 +76,5 @@ describe('POST /posts/:postId/share', () => {
     shareWithTrackingLink.mockResolvedValueOnce(null);
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/share`, payload: { generateLink: true } });
     expect(res.statusCode).toBe(404);
-  });
-});
-
-describe('GET /posts/:postId/share', () => {
-  let app: FastifyInstance;
-  let unauthApp: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(true); unauthApp = await buildApp(false); });
-  afterAll(async () => { await app.close(); await unauthApp.close(); });
-
-  it('returns the caller share-link analytics', async () => {
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toMatchObject({ token: 'tok123', totalClicks: 8, uniqueClicks: 5 });
-  });
-
-  it('returns null data when the caller has no share link', async () => {
-    getPostShareLink.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data).toBeNull();
-  });
-
-  it('rejects unauthenticated requests with 401', async () => {
-    const res = await unauthApp.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(401);
   });
 });

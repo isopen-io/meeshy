@@ -517,10 +517,36 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
     (_request: any, _payload: any, done: (err: null) => void) => done(null)
   );
 
-  const TUS_METHODS = ['GET', 'HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
+  // #4190 — UN SEUL jeu de six méthodes était déclaré sur CHACUNE des deux URL,
+  // soit douze couples pour un protocole qui en définit quatre. Quatre de ces
+  // couples n'avaient aucun appelant, et trois d'entre eux — `GET`, `PATCH` et
+  // `DELETE` sur la COLLECTION — ne traversaient AUCUNE garde : `onUploadCreate`
+  // n'est invoqué que par le gestionnaire POST, et `onIncomingRequest` relâche
+  // explicitement ce qu'il ne retrouve pas dans le magasin (`if (!ownerUserId)
+  // return`). Une porte ouverte sur la plomberie interne de `@tus/server`,
+  // offerte à personne : le coût n'était pas une fuite mesurée mais une surface
+  // que rien ne justifiait — et qu'aucun inventaire ne pouvait attraper depuis
+  // le CHEMIN seul, puisque `DELETE /api/v1/uploads/*` est, elle, bien vivante.
+  //
+  // Les deux URL portent donc chacune SES méthodes, celles du protocole :
+  //  - la collection CRÉE une session (`POST`, extension Creation) et se décrit
+  //    (`OPTIONS` : Tus-Version / Tus-Extension / Tus-Max-Size) ;
+  //  - une session existante se sonde (`HEAD` — la reprise, seule méthode
+  //    nominale de reprise du protocole, consommée par les trois clients), se
+  //    poursuit (`PATCH`), se termine (`DELETE` — `tus-js-client` l'émet sur
+  //    chaque `abort`/`pauseAll` du web) et se décrit (`OPTIONS`).
+  //
+  // `HEAD /api/v1/uploads` et `POST /api/v1/uploads/*` SURVIVENT volontairement :
+  // l'inventaire qui a produit #4190 croise gateway × clients en ignorant `HEAD`
+  // et n'a jamais énuméré ces deux couples-là. La règle du lot est que la
+  // confirmation précède le retrait, couple par couple — les retirer ici serait
+  // les retirer sur une SUPPOSITION, exactement le raisonnement que ce lot
+  // corrige. Suivi séparé.
+  const TUS_COLLECTION_METHODS = ['HEAD', 'POST', 'OPTIONS'] as const;
+  const TUS_UPLOAD_METHODS = ['HEAD', 'POST', 'PATCH', 'DELETE', 'OPTIONS'] as const;
 
   fastify.route({
-    method: [...TUS_METHODS],
+    method: [...TUS_COLLECTION_METHODS],
     url: '/api/v1/uploads',
     handler: (req, reply) => {
       tusServer.handle(req.raw, reply.raw);
@@ -528,7 +554,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
   });
 
   fastify.route({
-    method: [...TUS_METHODS],
+    method: [...TUS_UPLOAD_METHODS],
     url: '/api/v1/uploads/*',
     handler: (req, reply) => {
       tusServer.handle(req.raw, reply.raw);

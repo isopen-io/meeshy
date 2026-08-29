@@ -3,16 +3,14 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { logger } from '../../utils/logger';
 import {
   voiceAnalysisResultSchema,
   voiceComparisonResultSchema,
   translationHistoryEntrySchema,
-  userStatsSchema,
   systemMetricsSchema,
-  healthStatusSchema,
   supportedLanguageSchema,
   errorResponseSchema,
   getUserId,
@@ -20,8 +18,7 @@ import {
   type AnalyzeBody,
   type CompareBody,
   type FeedbackBody,
-  type HistoryQuery,
-  type StatsQuery
+  type HistoryQuery
 } from './types';
 
 function errorResponse(reply: FastifyReply, error: unknown, statusCode: number = 500) {
@@ -415,64 +412,11 @@ export function registerAnalysisRoutes(
     }
   });
 
-  /**
-   * GET /api/v1/voice/stats
-   * Get user statistics
-   */
-  fastify.get(`${prefix}/stats`, {
-    // SECURITY: authentification obligatoire — voir commentaire sur
-    // POST /analyze ci-dessus. Sans elle, un appelant anonyme pouvait lire
-    // les statistiques d'usage de n'importe quel utilisateur.
-    preHandler: [(req: FastifyRequest, reply: FastifyReply) => fastify.authenticate(req, reply)],
-    schema: {
-      description: 'Get user voice translation statistics for a specified time period. Returns aggregated metrics including total translations, audio minutes processed, languages used, average processing times, and feedback ratings. Useful for usage analytics and billing.',
-      tags: ['voice', 'analytics'],
-      summary: 'Get user statistics',
-      querystring: {
-        type: 'object',
-        properties: {
-          period: {
-            type: 'string',
-            enum: ['day', 'week', 'month', 'all'],
-            default: 'all',
-            description: 'Time period for statistics aggregation'
-          }
-        }
-      },
-      response: {
-        200: {
-          description: 'User statistics retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: userStatsSchema
-          }
-        },
-        401: {
-          description: 'Authentication required',
-          ...errorResponseSchema
-        },
-        500: {
-          description: 'Internal server error',
-          ...errorResponseSchema
-        }
-      }
-    }
-  }, async (request: FastifyRequest<{ Querystring: StatsQuery }>, reply: FastifyReply) => {
-    const userId = getUserId(request);
-    if (!userId) {
-      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
-    }
-
-    try {
-      const { period } = request.query;
-      const result = await audioTranslateService.getUserStats(userId, period);
-      return sendSuccess(reply, result);
-    } catch (error) {
-      logger.error('[VoiceRoutes] Get stats error:', error);
-      return errorResponse(reply, error);
-    }
-  });
+  // #4190 — `GET /api/v1/voice/stats` a été RETIRÉE. Aucun appelant sur les
+  // trois clients : elle rendait une SECONDE famille de statistiques d'usage,
+  // à côté de `GET /users/me/stats`, que rien n'agrégeait jamais ensemble.
+  // Si l'usage vocal redevient nécessaire, il rejoint la famille existante —
+  // il ne rouvre pas une adresse parallèle.
 
   /**
    * GET /api/v1/voice/admin/metrics
@@ -529,45 +473,13 @@ export function registerAnalysisRoutes(
     }
   });
 
-  /**
-   * GET /api/v1/voice/health
-   * Get service health status (public endpoint)
-   */
-  fastify.get(`${prefix}/health`, {
-    schema: {
-      description: 'Check the health and availability of voice translation services. Public endpoint that returns overall status (healthy/degraded/unhealthy), individual service statuses (transcription, translation, TTS, voice cloning), and average latencies. No authentication required.',
-      tags: ['voice', 'monitoring'],
-      summary: 'Get service health status',
-      response: {
-        200: {
-          description: 'Service is healthy or degraded but operational',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: healthStatusSchema
-          }
-        },
-        503: {
-          description: 'Service is unhealthy or unavailable',
-          ...errorResponseSchema,
-          properties: {
-            ...errorResponseSchema.properties,
-            error: { type: 'string', description: 'Error code' },
-            message: { type: 'string', description: 'Error message' },
-          }
-        }
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const result = await audioTranslateService.getHealthStatus();
-      const statusCode = result.status === 'healthy' ? 200 : result.status === 'degraded' ? 200 : 503;
-      return reply.status(statusCode).send({ success: true, data: result });
-    } catch (error) {
-      logger.error('[VoiceRoutes] Get health error:', error);
-      return sendError(reply, 503, 'HEALTH_CHECK_FAILED', { message: error instanceof Error ? error.message : 'Unknown error' });
-    }
-  });
+  // #4190 — `GET /api/v1/voice/health` a été RETIRÉE. Sonde publique sans aucun
+  // appelant : ni les trois clients (iOS SDK + app + extensions, web, Android),
+  // ni `infrastructure/` (healthchecks Docker, Traefik) ne la lisaient. Ce
+  // qu'elle coûtait n'est pas un octet de trop mais une SECONDE réponse à la
+  // question « le service répond-il ? », que `GET /health` (racine, exemptée du
+  // limiteur, déjà consommée par les sondes) rend seule — deux sondes qui
+  // peuvent se contredire valent moins qu'une seule qui fait autorité.
 
   /**
    * GET /api/v1/voice/languages

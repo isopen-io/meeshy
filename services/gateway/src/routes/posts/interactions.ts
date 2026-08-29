@@ -753,30 +753,12 @@ export function registerInteractionRoutes(
     }
   });
 
-  // GET /posts/:postId/share — Analytics of the caller's own tracked share link.
-  //
-  // Returns null data when the caller has not (yet) generated a tracked share
-  // for this post. Otherwise exposes the live click analytics so the UI can
-  // surface "your link got N clicks" without a second tracking-links call.
-  fastify.get('/posts/:postId/share', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const baseUrl = resolveFrontendBaseUrl();
-      const link = await postService.getPostShareLink(postId, authContext.registeredUser.id, baseUrl);
-
-      return sendSuccess(reply, link);
-    } catch (error) {
-      enhancedLogger.error('[GET /posts/:postId/share]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
+  // #4190 — `GET /posts/:postId/share` a été RETIRÉE : aucun appelant sur les
+  // trois clients (le web n'émet que le POST, `posts.service.ts` → `sharePost`).
+  // Le couple homonyme reste vivant en POST juste au-dessus — c'est pourquoi ce
+  // retrait ne pouvait pas se décider depuis le CHEMIN, seulement depuis le
+  // couple méthode+chemin. `postService.getPostShareLink` n'a plus de site
+  // d'appel HTTP ; l'analytique d'un lien suivi se lit sur `/tracking-links`.
 
   // POST /posts/:postId/downloads — Trace le téléchargement des médias d'un poste.
   //

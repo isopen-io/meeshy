@@ -691,15 +691,6 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
     });
     expect(res.statusCode).toBe(500);
   });
-
-  it('GET /posts/:postId/share — returns 500 on service error', async () => {
-    mockGetPostShareLink.mockRejectedValueOnce(new Error('DB error'));
-    const res = await app.inject({
-      method: 'GET',
-      url: `/posts/${POST_ID}/share`,
-    });
-    expect(res.statusCode).toBe(500);
-  });
 });
 
 // ─── Pin/Unpin — unauthenticated paths ───────────────────────────────────────

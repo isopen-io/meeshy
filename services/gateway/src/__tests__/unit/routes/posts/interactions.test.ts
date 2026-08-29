@@ -895,36 +895,15 @@ describe('POST /posts/:id/share — service error', () => {
   });
 });
 
-// ─── GET /posts/:id/share ─────────────────────────────────────────────────────
-
-describe('GET /posts/:id/share — unauthenticated', () => {
-  it('returns 401 when no auth', async () => {
-    const app = await buildApp({ authenticated: false });
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('GET /posts/:id/share — success', () => {
-  it('returns 200 with share link analytics', async () => {
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('GET /posts/:id/share — service error', () => {
-  it('returns 500 when getPostShareLink throws', async () => {
-    mockGetPostShareLink.mockRejectedValueOnce(new Error('DB error'));
-    const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
+// ─── GET /posts/:id/share — RETIRÉE (#4190) ──────────────────────────────────
+// Les trois témoins (401, 200, 500) sont partis avec la route : aucun des trois
+// clients ne l'appelait — le web n'émet que le POST (`posts.service.ts` →
+// `sharePost`), qui reste vivant JUSTE AU-DESSUS sur le MÊME chemin. C'est
+// pourquoi ce retrait ne pouvait pas se décider depuis l'URL, seulement depuis
+// le couple méthode+chemin, et pourquoi le double `mockGetPostShareLink` reste
+// câblé plus haut : `PostService.getPostShareLink` existe toujours, elle n'a
+// simplement plus de porte HTTP. Même forme que chez les deux frères déjà
+// ajustés, `interactions2.test.ts` et `interactions-extended.test.ts`.
 
 // ─── POST /posts/:id/pin ──────────────────────────────────────────────────────
 
