@@ -601,6 +601,19 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
+      // #4157 — la route relit le signalement AVANT de le supprimer, pour refuser
+      // qu'un moderateur efface la preuve d'un signalement qui le VISE. Sans ce
+      // stub, la relecture rend undefined et la route repond 404 : le temoin
+      // tomberait sur une fixture absente, jamais sur le comportement vise.
+      // reportedType 'message' place deliberement le cas HORS de la garde, dont
+      // le temoin dedie vit dans admin-reports.test.ts.
+      mockReportService.getReportById.mockResolvedValueOnce({
+        id: '507f1f77bcf86cd799439020',
+        reportedType: 'message',
+        reportedEntityId: '507f1f77bcf86cd799439099',
+        reportType: 'SPAM',
+        status: 'PENDING',
+      });
       mockReportService.deleteReport.mockResolvedValueOnce(undefined);
 
       const res = await app.inject({ method: 'DELETE', url: '/507f1f77bcf86cd799439020' });
@@ -613,6 +626,16 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
+      // La relecture doit REUSSIR pour que le temoin atteigne le chemin d'erreur
+      // qu'il nomme : sans elle, la route repondrait 404 et le test passerait au
+      // vert pour la mauvaise raison le jour ou l'on attendrait 404.
+      mockReportService.getReportById.mockResolvedValueOnce({
+        id: '507f1f77bcf86cd799439020',
+        reportedType: 'message',
+        reportedEntityId: '507f1f77bcf86cd799439099',
+        reportType: 'SPAM',
+        status: 'PENDING',
+      });
       mockReportService.deleteReport.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await app.inject({ method: 'DELETE', url: '/507f1f77bcf86cd799439020' });

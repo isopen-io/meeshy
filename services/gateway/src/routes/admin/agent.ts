@@ -11,7 +11,7 @@ import { validatePagination, buildPaginationMeta } from '../../utils/pagination'
 import { AgentHttpClient, AgentUnavailableError } from '../../services/AgentHttpClient';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
-import { requirePermission } from '../../middleware/authorize';
+import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
 
 const validateObjectId = (id: string, name: string, reply: FastifyReply): boolean => {
   /* istanbul ignore next -- Fastify schema validates the ObjectId pattern before the handler runs; this branch is defensive dead code */
@@ -26,6 +26,21 @@ const validateObjectId = (id: string, name: string, reply: FastifyReply): boolea
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
 // décide — un seul endroit où lire la loi, un seul où la changer.
 const requireAgentAdmin = requirePermission('canManageAgent');
+
+// #4157 — deux gestes de CE fichier montent en S6 (souverain, BIGBOSS seul),
+// et non `canManageAgent` (ADMIN) comme le reste des routes ci-dessus :
+//   - `PUT /llm` : `baseUrl` est LIBRE (n'importe quelle URL valide) —
+//     l'écrire redirige TOUT le trafic LLM, donc le CONTENU des conversations
+//     envoyé en contexte, vers un hôte arbitraire. Aucune permission de
+//     domaine ne doit pouvoir déléguer ça.
+//   - `DELETE /reset` : efface, sans corps, sans confirmation et sans audit,
+//     TOUTES les configs, rôles, résumés, profils agent et clés Redis
+//     `agent:*` de la PLATEFORME ENTIÈRE — pas un scope, la totalité.
+// Les deux exigent donc `requireSovereign()` (BIGBOSS et lui seul), un motif
+// écrit (imposé au niveau du schéma Fastify/AJV — `body.required: ['reason']`
+// — refusé en 400 avant que le handler ne s'exécute) et une ligne
+// `AdminAuditLog` via `withAudit`, écrite APRÈS le geste réussi.
+const requireAgentSovereign = requireSovereign();
 
 // #4165 — plafond du nombre de rôles agent par conversation, utilisé pour
 // borner explicitement `agentUserRole.findMany` sur une page de
@@ -115,6 +130,14 @@ const llmConfigSchema = z.object({
   fallbackProvider: z.string().nullable().optional(),
   fallbackModel: z.string().nullable().optional(),
   fallbackApiKeyEncrypted: z.string().nullable().optional(),
+});
+
+// #4157 — `PUT /llm` monte en S6 : le motif écrit voyage dans le MÊME corps
+// que la config (pas un second appel), et se retire AVANT `data:` — Prisma
+// n'a pas de colonne `reason` sur `AgentLlmConfig`, `withAudit` la porte dans
+// `AdminAuditLog.metadata` à la place.
+const llmConfigWriteSchema = llmConfigSchema.extend({
+  reason: z.string().trim().min(10),
 });
 
 // ── Reusable JSON Schema fragments ──────────────────────────────────────────
@@ -850,11 +873,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // PUT /llm
+  // PUT /llm — S6 souverain (#4157) : voir la note à côté de `requireAgentSovereign`.
   fastify.put('/llm', {
-    onRequest: [fastify.authenticate, requireAgentAdmin],
+    onRequest: [fastify.authenticate, requireAgentSovereign],
     schema: {
-      description: 'Create or update the LLM provider config (provider, model, API key, budget).',
+      description: 'Create or update the LLM provider config (provider, model, API key, budget). Rang souverain (BIGBOSS) et motif écrit requis — #4157.',
       tags: ['admin-agent'],
       summary: 'Update LLM config',
       security: securityBearerAuth,
@@ -863,10 +886,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const parsed = llmConfigSchema.safeParse(request.body);
+      const parsed = llmConfigWriteSchema.safeParse(request.body);
       if (!parsed.success) {
-        return sendBadRequest(reply, 'Données invalides');
+        return sendBadRequest(reply, 'Données invalides : un motif écrit (10 caractères minimum) est requis pour modifier la configuration LLM');
       }
+      const { reason, ...llmData } = parsed.data;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const existing = await fastify.prisma.agentLlmConfig.findFirst();
@@ -875,17 +899,29 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (existing) {
         config = await fastify.prisma.agentLlmConfig.update({
           where: { id: existing.id },
-          data: parsed.data,
+          data: llmData,
         });
       } else {
         config = await fastify.prisma.agentLlmConfig.create({
           data: {
             configuredBy: authContext.registeredUser.id,
-            apiKeyEncrypted: parsed.data.apiKeyEncrypted ?? '',
-            ...parsed.data,
+            apiKeyEncrypted: llmData.apiKeyEncrypted ?? '',
+            ...llmData,
           },
         });
       }
+
+      // Écrite APRÈS le succès de la persistance : un geste qui a eu lieu
+      // doit laisser sa trace même si l'audit lui-même échoue (`withAudit`
+      // est best-effort, cf. sa doc). Ne PORTE PAS `changes` : `apiKeyEncrypted`
+      // / `fallbackApiKeyEncrypted` n'ont rien à faire dans un second journal.
+      await withAudit(request, {
+        action: 'AGENT_LLM_CONFIG_UPDATED',
+        entity: 'AgentLlmConfig',
+        entityId: config.id,
+        userId: authContext.registeredUser.id,
+        reason,
+      });
 
       const { apiKeyEncrypted, fallbackApiKeyEncrypted, ...safeConfig } = config;
       // Provider/model/temperature/maxTokens/baseUrl changes need the agent
@@ -1036,17 +1072,31 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   });
 
   // DELETE /reset
+  // DELETE /reset — S6 souverain (#4157) : destruction TOTALE de l'état de
+  // l'agent, voir la note à côté de `requireAgentSovereign`.
   fastify.delete('/reset', {
-    onRequest: [fastify.authenticate, requireAgentAdmin],
+    onRequest: [fastify.authenticate, requireAgentSovereign],
     schema: {
-      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache.',
+      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache. Rang souverain (BIGBOSS) et motif écrit requis — #4157.',
       tags: ['admin-agent'],
       summary: 'Reset all agent data',
       security: securityBearerAuth,
-      response: { 200: resetResultResponse, ...stdErrors },
+      body: {
+        type: 'object',
+        required: ['reason'],
+        properties: {
+          reason: { type: 'string', minLength: 10, description: 'Motif écrit du reset complet (10 caractères minimum), consigné dans AdminAuditLog' }
+        }
+      },
+      response: { 200: resetResultResponse, 400: errorResponseSchema, ...stdErrors },
     },
-  }, async (_request: FastifyRequest, reply: FastifyReply) => {
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      // Le schéma ci-dessus REFUSE déjà (400, avant ce handler) un corps sans
+      // `reason` d'au moins 10 caractères — Fastify/AJV valide `body` avant
+      // d'invoquer le handler, ce n'est pas une revérification défensive.
+      const { reason } = request.body as { reason: string };
+
       const [configs, roles, summaries, analytics, globalProfiles] = await fastify.prisma.$transaction([
         fastify.prisma.agentConfig.deleteMany(),
         fastify.prisma.agentUserRole.deleteMany(),
@@ -1067,6 +1117,26 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // only refreshes on pub/sub events or TTL expiry. Notify it so
       // the next scan rebuilds from a clean slate.
       const invalidationStatus = await broadcastInvalidation({ global: true });
+
+      // Écrite APRÈS le succès du reset — un geste de cette taille (toute la
+      // plateforme) ne doit JAMAIS rester sans trace, quel qu'en soit
+      // l'auteur : c'était exactement ce que l'audit constatait manquant.
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      await withAudit(request, {
+        action: 'AGENT_FULL_RESET',
+        entity: 'Agent',
+        entityId: 'ALL',
+        userId: authContext.registeredUser.id,
+        reason,
+        changes: {
+          configs: configs.count,
+          roles: roles.count,
+          summaries: summaries.count,
+          analytics: analytics.count,
+          globalProfiles: globalProfiles.count,
+          redisKeys: redisKeysDeleted,
+        },
+      });
 
       return sendSuccess(reply, {
         deleted: {

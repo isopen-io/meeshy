@@ -9,7 +9,7 @@ import type {
   ReportFilters
 } from '@meeshy/shared/types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { requirePermission } from '../../middleware/authorize';
+import { requirePermission, withAudit } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 
@@ -209,14 +209,43 @@ export async function reportRoutes(fastify: FastifyInstance) {
   /**
    * DELETE /api/admin/reports/:id
    * Supprimer un signalement
+   *
+   * #4157 — la matrice n'a pas d'avis sur CE point précis (« — » dans le
+   * tableau de l'issue) : la question n'est pas « quel rôle ? » (MODERATOR
+   * reste le seuil juste, `canModerateContent`) mais « quel rapport entre
+   * l'appelant et la CIBLE du signalement ? ». Sans garde, un modérateur
+   * SIGNALÉ (reportedType === 'user', reportedEntityId === lui-même) pouvait
+   * effacer la preuve avant qu'un rang supérieur ne l'examine — `deleteReport`
+   * est un DELETE Mongo définitif, pas une corbeille. Deux gestes séparés :
+   * REFUSER l'auto-suppression, et laisser une trace `AdminAuditLog` pour
+   * toute suppression qui a réellement lieu — la seule chose qui survit à la
+   * disparition définitive de la ligne `Report`.
    */
   fastify.delete('/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const moderatorId = authContext.registeredUser.id;
+
+      const report = await reportService.getReportById(id);
+      if (!report) {
+        return sendNotFound(reply, 'Signalement non trouve');
+      }
+      if (report.reportedType === 'user' && report.reportedEntityId === moderatorId) {
+        return sendForbidden(reply, 'Un modérateur ne peut pas supprimer un signalement qui le vise');
+      }
 
       await reportService.deleteReport(id);
+
+      await withAudit(request, {
+        action: 'ADMIN_REPORT_DELETED',
+        entity: 'Report',
+        entityId: id,
+        userId: report.reportedEntityId,
+        changes: { reportedType: report.reportedType, reportType: report.reportType, status: report.status },
+      });
 
       return sendSuccess(reply, { message: 'Signalement supprime' });
     } catch (error) {

@@ -52,6 +52,22 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
       const [anonymousUsers, totalCount] = await Promise.all([
         fastify.prisma.participant.findMany({
           where,
+          // #4157 — deux secrets voyageaient ici SANS AUCUN gate, servis à
+          // MODERATOR/AUDIT (`canViewUsers`, aucun des deux n'a
+          // `canViewSensitiveData`) et jamais consommés par le web (vérifié :
+          // aucune lecture de `anonymousSession`/`sessionTokenHash` dans
+          // apps/web/app/admin/anonymous-users) :
+          //   - `sessionTokenHash` EST le hash comparé par
+          //     `middleware/auth.ts` (`createAnonymousUserContext`) pour
+          //     authentifier CETTE session anonyme — un champ d'IDENTIFIANT,
+          //     pas une donnée d'affichage ;
+          //   - `anonymousSession` (embarqué, sans `select`) porte une
+          //     SECONDE copie de ce hash (`session.sessionTokenHash`), l'IP,
+          //     l'empreinte d'appareil, ET le profil PII complet
+          //     (`profile.email`, `profile.birthday`) d'un participant
+          //     anonyme — exactement ce que `canViewSensitiveData = false`
+          //     masque partout ailleurs pour ces deux rôles.
+          // Ni l'un ni l'autre n'a d'usage produit : on ne les sert plus.
           select: {
             id: true,
             displayName: true,
@@ -63,8 +79,6 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
             joinedAt: true,
             leftAt: true,
             permissions: true,
-            anonymousSession: true,
-            sessionTokenHash: true,
             conversationId: true,
             conversation: {
               select: {
