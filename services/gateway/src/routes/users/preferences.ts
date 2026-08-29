@@ -1,6 +1,4 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { PostType } from '@meeshy/shared/prisma/client';
-import { NOT_DELETED } from '../../services/posts/softDelete';
 import { logError } from '../../utils/logger';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
@@ -21,6 +19,7 @@ import { jetonRecherche } from '../../utils/search-tokens';
 import { permissionsService } from '../../services/admin/permissions.service';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import type { UserRoleEnum } from '@meeshy/shared/types';
+import { computeUserStats, servedUserStats } from '../user-stats';
 
 
 /**
@@ -410,131 +409,45 @@ export async function getUserStats(fastify: FastifyInstance) {
         return sendNotFound(reply, 'User not found');
       }
 
-      const userId = user.id;
-
-      const [
-        totalMessages,
-        totalConversations,
-        totalTranslations,
-        friendRequestsReceived,
-        languagesRaw,
-        postsCount,
-        reelsCount,
-        storiesCount,
-      ] = await Promise.all([
-        fastify.prisma.message.count({
-          where: { sender: { userId }, deletedAt: null },
-        }),
-        // Active memberships only: Participant rows are soft-deactivated on
-        // leave/ban/delete-for-me (isActive: false), never deleted. A bare
-        // `{ userId }` count over-reports `totalConversations` and can falsely
-        // unlock `connecteur`. Matches the `isActive: true` filter used for the
-        // profile-completion counts above and the `/users/me/stats` endpoint.
-        fastify.prisma.participant.count({
-          where: { userId, isActive: true },
-        }),
-        fastify.prisma.$runCommandRaw({
-          count: 'Message',
-          query: {
-            'sender.userId': userId,
-            deletedAt: null,
-            translations: { $ne: null, $exists: true },
-          },
-        }).then((r: any) => r.n ?? 0),
-        fastify.prisma.friendRequest.count({
-          where: { receiverId: userId },
-        }),
-        fastify.prisma.message.groupBy({
-          by: ['originalLanguage'],
-          where: {
-            sender: { userId },
-            deletedAt: null,
-            // NOTE: `originalLanguage: { not: null }` was INVALID here — Prisma+Mongo
-            // rejects `not: null` ("Argument `not` must not be null", spammed prod
-            // logs on every profile-stats request). The field is a required
-            // non-nullable String (@default("fr")) so it can never be null; the
-            // clause was redundant. Downstream `.filter(Boolean)` already drops empties.
-          },
-        }),
-        // Compteurs de contenu du profil (parité stricte avec computeUserStats
-        // dans user-stats.ts — R8 : toute métrique doit vivre dans les DEUX
-        // implémentations). `deletedAt: NOT_DELETED` = champ absent sur Mongo ;
-        // stories comptées SANS filtre d'expiration (archive auteur).
-        fastify.prisma.post.count({
-          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.POST },
-        }),
-        fastify.prisma.post.count({
-          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.REEL },
-        }),
-        fastify.prisma.post.count({
-          where: { authorId: userId, deletedAt: NOT_DELETED, type: PostType.STORY },
-        }),
-      ]);
-
-      const languagesUsed = languagesRaw.length;
-      const memberDays = Math.floor((Date.now() - user.createdAt.getTime()) / (1000 * 60 * 60 * 24));
-      const languages = languagesRaw.map((l) => l.originalLanguage).filter(Boolean);
-
-      const ACHIEVEMENT_THRESHOLDS = {
-        polyglotte: { field: 'languagesUsed', threshold: 5, icon: 'globe', color: '#3498DB', name: 'Polyglotte', description: 'Utiliser 5+ langues' },
-        bavard: { field: 'totalMessages', threshold: 1000, icon: 'bubble.left.and.bubble.right.fill', color: '#FF6B6B', name: 'Bavard', description: 'Envoyer 1000+ messages' },
-        connecteur: { field: 'totalConversations', threshold: 10, icon: 'person.2.fill', color: '#4ECDC4', name: 'Connecteur', description: 'Rejoindre 10+ conversations' },
-        traducteur: { field: 'totalTranslations', threshold: 100, icon: 'character.book.closed.fill', color: '#9B59B6', name: 'Traducteur', description: 'Traduire 100+ messages' },
-        fidele: { field: 'memberDays', threshold: 30, icon: 'calendar.badge.checkmark', color: '#F8B500', name: 'Fidele', description: 'Membre pendant 30+ jours' },
-        populaire: { field: 'friendRequestsReceived', threshold: 50, icon: 'star.fill', color: '#E91E63', name: 'Populaire', description: "Recevoir 50+ demandes d'amis" },
-      } as const;
-
-      const numericStats: Record<string, number> = {
-        totalMessages, totalConversations, totalTranslations, friendRequestsReceived, languagesUsed, memberDays,
-      };
-
-      const achievements = Object.entries(ACHIEVEMENT_THRESHOLDS).map(([key, config]) => {
-        /* istanbul ignore next — all ACHIEVEMENT_THRESHOLDS fields are keys of numericStats */
-        const current = numericStats[config.field] ?? 0;
-        const progress = Math.min(current / config.threshold, 1);
-        return {
-          id: key, name: config.name, description: config.description,
-          icon: config.icon, color: config.color,
-          isUnlocked: current >= config.threshold, progress, threshold: config.threshold, current,
-        };
-      });
+      // LE calcul, pas une copie (#4161).
+      //
+      // Ce handler portait cent lignes qui refaisaient `computeUserStats`
+      // agrégation par agrégation, sous un commentaire annonçant la contrainte
+      // — « parité stricte avec computeUserStats […] toute métrique doit vivre
+      // dans les DEUX implémentations ». Le doc-comment de `computeUserStats`
+      // affirmait de son côté servir « à la fois /users/me/stats et le
+      // /users/:id/stats public », ce qui était faux depuis toujours.
+      //
+      // Les deux exemplaires avaient DÉJÀ divergé, et la mesure est nette —
+      // même compte, même instant, en intégration :
+      //
+      //     GET /users/me/stats        → totalTranslations = 37
+      //     GET /users/<soi>/stats     → totalTranslations = 0
+      //
+      // La copie comptait par `$runCommandRaw` sur `{'sender.userId': …}` :
+      // `sender` est une RELATION Prisma, pas un document imbriqué, si bien que
+      // le filtre ne matchait RIEN. `totalTranslations` valait 0 pour tout le
+      // monde sur cette route depuis sa création, et le succès « Traducteur »
+      // (100 traductions) ne pouvait donc jamais s'y débloquer.
+      const stats = await computeUserStats(fastify.prisma, user.id);
 
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
 
-      // Deux familles de compteurs, et une seule est publique (#4161).
+      // L'AUTORISATION, distincte du calcul, et elle aussi à site unique
+      // (`servedUserStats`) : `?expand=stats` sur `/directory/people/:handle`
+      // sert le même objet et doit appliquer la même loi.
       //
-      // `postsCount`, `reelsCount`, `storiesCount`, `memberDays` et les
-      // `achievements` décrivent une AUDIENCE — ce que la personne publie, et
-      // qui est déjà visible. `totalMessages`, `totalConversations`,
-      // `totalTranslations` et `friendRequestsReceived` décrivent son USAGE
-      // INTIME du produit : combien elle écrit, dans combien de fils elle est
-      // présente, combien de demandes elle reçoit.
-      //
-      // Les quatre partaient à TOUT compte authentifié, sans filtre d'amitié ni
-      // préférence de confidentialité — mesuré en intégration sur un viewer
-      // tiers. Ils ne partent plus qu'à soi et à l'administration.
-      const publics = {
-        languagesUsed, memberDays,
-        postsCount, reelsCount, storiesCount,
-        languages, achievements,
-      };
-
+      // Les quatre compteurs intimes partaient à TOUT compte authentifié, sans
+      // filtre d'amitié ni préférence de confidentialité — mesuré en
+      // intégration sur un viewer tiers.
       const acteur = (request as unknown as UnifiedAuthRequest).authContext;
-      const estSoi = acteur?.userId === userId;
-      const estAdministration = permissionsService.hasPermission(
-        (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
-        'canViewUsers'
-      );
-
-      if (!estSoi && !estAdministration) {
-        return sendSuccess(reply, publics);
-      }
-
-      return sendSuccess(reply, {
-        ...publics,
-        totalMessages, totalConversations, totalTranslations,
-        friendRequestsReceived,
-      });
+      return sendSuccess(reply, servedUserStats(stats, {
+        estSoi: acteur?.userId === user.id,
+        estAdministration: permissionsService.hasPermission(
+          (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
+          'canViewUsers'
+        ),
+      }));
 
     } catch (error) {
       fastify.log.error(`[USER_STATS] Error getting user stats: ${error instanceof Error ? error.message : String(error)}`);

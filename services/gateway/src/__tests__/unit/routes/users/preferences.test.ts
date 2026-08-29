@@ -71,6 +71,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
   return {
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      // `computeUserStats` relit `createdAt` par `findUnique`, DANS le même
+      // `Promise.all` que les comptages : sans cette surface, l'accès lève
+      // pendant la construction du tableau et la route rend 500.
+      findUnique: jest.fn<any>().mockResolvedValue({ createdAt: new Date('2020-01-01') }),
       findMany:  jest.fn<any>().mockResolvedValue([]),
       count:     jest.fn<any>().mockResolvedValue(0),
     },
@@ -87,7 +91,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     post: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
-    $runCommandRaw: jest.fn<any>().mockResolvedValue({ n: 0 }),
+    // `$runCommandRaw` n'est plus appelé : le comptage des traductions passe
+    // par l'API typée depuis que la route délègue à `computeUserStats`.
     ...overrides,
   } as any;
 }

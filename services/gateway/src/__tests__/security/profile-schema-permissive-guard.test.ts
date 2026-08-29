@@ -34,7 +34,9 @@ import path from 'path';
  */
 const FICHIERS_DE_PROFIL = [
   'routes/users/profile.ts',
+  'routes/users/public-profile.ts',
   'routes/directory/people.ts',
+  'routes/directory/person.ts',
 ] as const;
 
 describe('Les schémas de profil déclarent ce qu’ils servent', () => {

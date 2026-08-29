@@ -142,6 +142,49 @@ export async function computeUserStats(
   return { ...numericStats, postsCount, reelsCount, storiesCount, languages, achievements };
 }
 
+/**
+ * Les quatre compteurs INTIMES d'un profil (#4161).
+ *
+ * `postsCount`, `reelsCount`, `storiesCount`, `memberDays`, `languagesUsed`,
+ * `languages` et les `achievements` décrivent une AUDIENCE — ce que la personne
+ * publie, et qui est déjà visible. Ces quatre-là décrivent son USAGE INTIME du
+ * produit : combien elle écrit, dans combien de fils elle est présente, combien
+ * de demandes d'amis elle reçoit.
+ */
+export const COMPTEURS_PRIVES = [
+  'totalMessages',
+  'totalConversations',
+  'totalTranslations',
+  'friendRequestsReceived',
+] as const satisfies ReadonlyArray<keyof UserStats>;
+
+export type StatsAudience = {
+  /** Le lecteur est le sujet des statistiques. */
+  readonly estSoi: boolean;
+  /** Le lecteur a `canViewUsers` — ADMIN, BIGBOSS. */
+  readonly estAdministration: boolean;
+};
+
+/**
+ * Ce qu'un lecteur DONNÉ a le droit de lire d'un jeu de statistiques.
+ *
+ * SITE UNIQUE de la loi, parce que le calcul et l'autorisation doivent voyager
+ * ensemble : `?expand=stats` et `GET /users/:userId/stats` servent le même
+ * objet, et deux applications séparées de « qui voit quoi » divergeraient à la
+ * première évolution — c'est exactement ce qui est arrivé au CALCUL, dont deux
+ * exemplaires cohabitaient (l'un ici, l'autre recopié dans `preferences.ts`)
+ * sous un doc-comment affirmant qu'il n'y en avait qu'un.
+ *
+ * Fail-CLOSED : un lecteur qui n'est ni le sujet ni l'administration reçoit la
+ * part publique. C'est le défaut, pas une branche.
+ */
+export function servedUserStats(stats: UserStats, audience: StatsAudience): Partial<UserStats> {
+  if (audience.estSoi || audience.estAdministration) return stats;
+  const publics: Record<string, unknown> = { ...stats };
+  for (const cle of COMPTEURS_PRIVES) delete publics[cle];
+  return publics as Partial<UserStats>;
+}
+
 export async function userStatsRoutes(fastify: FastifyInstance) {
 
   fastify.get(

@@ -39,6 +39,7 @@ import { anonymousRoutes } from './routes/anonymous';
 import { accountDeletionRoutes } from './routes/account-deletion';
 import { directoryAvailabilityRoutes } from './routes/directory/availability';
 import { directoryPeopleRoutes } from './routes/directory/people';
+import { directoryPersonRoutes } from './routes/directory/person';
 import { communityRoutes } from './routes/communities';
 // import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
 import { dashboardRoutes } from './routes/admin/dashboard';
@@ -280,6 +281,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // forme seulement pour l'adresse et le numéro (#4158).
     await server.register(directoryAvailabilityRoutes, { prefix: `${API_PREFIX}/directory` });
     await server.register(directoryPeopleRoutes, { prefix: `${API_PREFIX}/directory` });
+    await server.register(directoryPersonRoutes, { prefix: `${API_PREFIX}/directory` });
 
     // Register push notification token routes (device registration for APNS/FCM/VoIP)
     await server.register(pushTokenRoutes, { prefix: API_PREFIX });

@@ -23,9 +23,19 @@ function buildPrisma(): PrismaClient {
       findFirst: jest.fn(() =>
         Promise.resolve({ id: 'real-id', createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) })
       ),
+      // La route résout la cible (id OU pseudo) par `findFirst`, puis délègue
+      // le calcul à `computeUserStats`, qui relit `createdAt` par `findUnique`.
+      findUnique: jest.fn(() =>
+        Promise.resolve({ createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000) })
+      ),
     },
     message: {
-      count: jest.fn(() => Promise.resolve(1000)),
+      // Deux comptages distincts passent par `message.count` : les messages
+      // envoyés, et ceux qui portent une traduction. Un stub unique les
+      // confondrait — c'est ce qui distingue le témoin d'un décor.
+      count: jest.fn((args: { where?: { translations?: unknown } }) =>
+        Promise.resolve(args?.where?.translations === undefined ? 1000 : 100)
+      ),
       groupBy: jest.fn(() =>
         Promise.resolve([{ originalLanguage: 'fr' }, { originalLanguage: 'en' }])
       ),
@@ -47,7 +57,7 @@ function buildPrisma(): PrismaClient {
         }
       }),
     },
-    $runCommandRaw: jest.fn(() => Promise.resolve({ n: 100 })),
+    // Plus appelé : `computeUserStats` compte les traductions par l'API typée.
   };
   return prisma as unknown as PrismaClient;
 }

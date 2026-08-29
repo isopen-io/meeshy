@@ -109,7 +109,11 @@ const SURFACES: Record<string, Classification> = {
   'admin/users.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/analytics.ts': { kind: 'exempt', reads: 4, why: 'Surface admin/modération.' },
   'admin/dashboard.ts': { kind: 'exempt', reads: 3, why: 'Surface admin/modération.' },
-  'users/preferences.ts': { kind: 'exempt', reads: 4, why: 'Compteurs de préférences.' },
+  // 4 → 3 (#4161) : `GET /users/:userId/stats` recopiait `computeUserStats`
+  // agrégation par agrégation, l'une d'elles lisant `Message`. Il DÉLÈGUE
+  // désormais, et la lecture a suivi le calcul dans `user-stats.ts`, surface
+  // déjà déclarée. Aucune lecture n'a disparu : elle a changé de fichier.
+  'users/preferences.ts': { kind: 'exempt', reads: 3, why: 'Compteurs de préférences.' },
 };
 
 /**

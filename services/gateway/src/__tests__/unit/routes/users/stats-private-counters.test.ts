@@ -52,6 +52,10 @@ function buildApp() {
         username: 'cible',
         createdAt: new Date('2026-01-01T00:00:00Z'),
       })),
+      // `computeUserStats` relit la ligne pour son `createdAt` (ancienneté).
+      // La route la résout d'abord par `findFirst` (id OU pseudo), puis
+      // délègue le calcul : deux lectures, deux méthodes.
+      findUnique: jest.fn<any>(async () => ({ createdAt: new Date('2026-01-01T00:00:00Z') })),
     },
     message: {
       count: jest.fn<any>(async () => 69),
@@ -61,9 +65,11 @@ function buildApp() {
     participant: { count: jest.fn<any>(async () => 12) },
     friendRequest: { count: jest.fn<any>(async () => 3) },
     post: { count: jest.fn<any>(async () => 7) },
-    // Le handler compte les traductions par une commande brute : sans elle, le
-    // double lève et le témoin mesure une panne de harnais, pas la garde.
-    $runCommandRaw: jest.fn<any>(async () => ({ n: 0, cursor: { firstBatch: [] } })),
+    // `$runCommandRaw` n'est plus appelé : la route délègue à
+    // `computeUserStats`, dont le comptage de traductions passe par l'API
+    // TYPÉE (`translations: { not: { equals: null } }`). La commande brute que
+    // la copie inline utilisait filtrait sur `'sender.userId'` — une RELATION
+    // Prisma, pas un document imbriqué — et rendait donc 0 pour tout le monde.
   };
   return prisma;
 }

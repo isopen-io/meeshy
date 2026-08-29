@@ -363,6 +363,20 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
       'compte : ce serait un oracle, à rebours de la doctrine de /forgot-password et de ' +
       '/magic-link/request (#4158). Bornée à 20/min par IP, plus un coupe-circuit global.',
   },
+  {
+    method: 'GET',
+    url: '/api/v1/directory/people/:handle',
+    why:
+      "L'ADRESSE canonique d'un profil public (S1 anonyme / S2 connecté, #4161). " +
+      'Un profil se consulte depuis un lien partagé, sans compte — comme le faisaient ' +
+      "déjà GET /u/:username, GET /users/:id et GET /users/id/:id, dont elle est " +
+      "l'implémentation UNIQUE, ces trois-là devenant des alias. Elle sert la " +
+      'projection publique et rien de plus : les trois langues du Prisme, isActive, ' +
+      'deactivatedAt et updatedAt ne sont plus ni chargés ni déclarés. La présence ' +
+      "n'est servie que sur ?expand=presence, et toujours sous la loi du 2026-08-25 ; " +
+      'les quatre compteurs intimes de ?expand=stats ne partent qu\'à soi et à ' +
+      "l'administration. Débit : 60/min par IP pour l'anonyme, 240/min par compte.",
+  },
   // --- Récupération de compte ---
   {
     method: 'POST',

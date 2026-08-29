@@ -32,6 +32,26 @@ import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthoriz
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
 import { searchTokensFor } from '../../utils/search-tokens';
+import {
+  publicProfileSchema,
+  publicUserSelect,
+  buildPublicProfile,
+  servirProfilPublic,
+} from './public-profile';
+
+// Ré-EXPORT, jamais copie. La forme publique d'un profil vit désormais dans
+// `public-profile.ts` — les quatre décisions qui doivent voyager ensemble y
+// sont tenues au même endroit (#4161). Ces symboles restent atteignables ici
+// parce que d'autres modules et leurs témoins les importent par ce chemin :
+// un ré-export garde UNE définition, une seconde déclaration en ferait deux.
+export {
+  deriveVoiceFields,
+  withVoiceFields,
+  publicUserSelect,
+  publicProfileSchema,
+  buildPublicProfile,
+} from './public-profile';
+export type { VoiceModelFields, PublicVoiceFields } from './public-profile';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -803,41 +823,16 @@ export async function getUserByUsername(fastify: FastifyInstance) {
     try {
       const { username } = request.params;
 
-      fastify.log.info(`[USER_PROFILE_U] Fetching user profile for: ${username}`);
+      // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
+      //
+      // Cette porte servait une projection PLUS COURTE que ses trois voisines —
+      // une troisième forme de réponse pour la même ligne de base. Elle sert
+      // désormais la même, et les liens `/u/<pseudo>` déjà partagés continuent
+      // de fonctionner.
+      const profil = await servirProfilPublic(fastify, request, reply, username);
+      if (!profil) return reply;
 
-      const user = await fastify.prisma.user.findFirst({
-        where: {
-          username: {
-            equals: username,
-            mode: 'insensitive'
-          }
-        },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          banner: true,
-          bio: true,
-          role: true,
-          isOnline: true,
-          lastActiveAt: true,
-          deactivatedAt: true,
-          createdAt: true,
-          voiceModel: { select: voiceModelSelect }
-        }
-      });
-
-      if (!user) {
-        fastify.log.warn(`[USER_PROFILE_U] User not found: ${username}`);
-        return sendNotFound(reply, 'User not found');
-      }
-
-      fastify.log.info(`[USER_PROFILE_U] User found: ${user.username} (${user.id})`);
-
-      return sendSuccess(reply, await gateProfilePresence(fastify, request, withVoiceFields(user)));
+      return sendSuccess(reply, profil);
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -868,47 +863,22 @@ export async function getUserById(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                id: { type: 'string' },
-                username: { type: 'string' },
-                firstName: { type: 'string' },
-                lastName: { type: 'string' },
-                displayName: { type: 'string' },
-                avatar: { type: 'string', nullable: true },
-                bio: { type: 'string', nullable: true },
-                role: { type: 'string' },
-                banner: { type: 'string', nullable: true },
-                isOnline: { type: ['boolean', 'null'] },
-                lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
-                voicePublic: { type: 'boolean' },
-                voiceSampleUrl: { type: 'string', nullable: true },
-                voiceSampleDurationMs: { type: 'number', nullable: true },
-                voiceQuality: { type: 'number', nullable: true },
-                systemLanguage: { type: 'string' },
-                regionalLanguage: { type: 'string' },
-                customDestinationLanguage: { type: 'string', nullable: true },
-                autoTranslateEnabled: { type: 'boolean' },
-                isActive: { type: 'boolean' },
-                deactivatedAt: { type: 'string', format: 'date-time', nullable: true },
-                createdAt: { type: 'string', format: 'date-time' },
-                updatedAt: { type: 'string', format: 'date-time' },
-                email: { type: 'string', description: 'Masked for security' },
-                phoneNumber: { type: 'string', nullable: true, description: 'Masked for security' },
-                // `permissions` a été RETIRÉ, du schéma comme de la charge
-                // utile. Il n'avait pas de producteur : le handler posait
-                // `permissions: undefined` DÉLIBÉRÉMENT — un profil public ne
-                // porte pas les autorisations de son sujet — si bien que la
-                // clé ne partait jamais sur le fil. Le `{ type: 'object' }` nu
-                // qui la déclarait ne vidait donc rien, mais il occupait
-                // l'inventaire du balayage en promettant un champ qui n'existe
-                // pas. Aucun changement de contrat : ce qui ne sortait pas ne
-                // sort toujours pas.
-                isAnonymous: { type: 'boolean', example: false },
-                isMeeshyer: { type: 'boolean', example: true }
-              }
-            }
+            // Le miroir DÉCLARÉ de `publicUserSelect`, comme les trois autres
+            // portes de profil. Ce bloc énumérait encore, à la main, les six
+            // champs que #4161 retire de la surface — `systemLanguage`,
+            // `regionalLanguage`, `customDestinationLanguage`, `isActive`,
+            // `deactivatedAt`, `updatedAt` — plus `autoTranslateEnabled`,
+            // `email` et `phoneNumber`. Le `select` ne les charge plus, donc
+            // rien ne partait ; une déclaration sans producteur n'est pourtant
+            // pas neutre : elle PROMET un champ, et la première personne qui
+            // le remet au `select` le publie sans qu'un témoin tombe.
+            //
+            // `permissions` a été RETIRÉ, du schéma comme de la charge utile.
+            // Il n'avait pas de producteur : le handler posait
+            // `permissions: undefined` DÉLIBÉRÉMENT — un profil public ne porte
+            // pas les autorisations de son sujet — si bien que la clé ne
+            // partait jamais sur le fil.
+            data: publicProfileSchema
           }
         },
         404: errorResponseSchema,
@@ -919,45 +889,18 @@ export async function getUserById(fastify: FastifyInstance) {
     try {
       const { id } = request.params;
 
-      const isMongoId = isValidObjectId(id);
+      // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
+      //
+      // Ce handler recopiait la projection à la main — c'est lui qui chargeait,
+      // et servait, les six champs privés. Il ne décide plus rien : la lecture,
+      // la projection, la garde de présence et la composition vivent dans
+      // `servirProfilPublic`, et cette adresse reste servie tant que des
+      // versions iOS installées l'appellent. Un profil s'ouvre depuis un lien
+      // partagé : la queue est longue, et une 302 casserait ces clients.
+      const profil = await servirProfilPublic(fastify, request, reply, id);
+      if (!profil) return reply;
 
-      fastify.log.info(`[USER_PROFILE] Fetching user profile for: ${id} (isMongoId: ${isMongoId})`);
-
-      const user = await fastify.prisma.user.findFirst({
-        where: isMongoId
-          ? { id }
-          : {
-              username: {
-                equals: id,
-                mode: 'insensitive'
-              }
-            },
-        // La projection PARTAGÉE, et non une copie à la main. Celle qui vivait
-        // ici chargeait les trois langues du Prisme, `isActive`,
-        // `deactivatedAt` et `updatedAt` — les six champs que #4161 retire de
-        // la surface publique. Une copie ne se corrige pas avec son original.
-        select: publicUserSelect
-      });
-
-      if (!user) {
-        fastify.log.warn(`[USER_PROFILE] User not found: ${id}`);
-        return sendNotFound(reply, 'User not found');
-      }
-
-      fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
-
-      // La MÊME composition que les trois autres portes de profil
-      // (`buildPublicProfile`) : ce site la recopiait, avec son
-      // `autoTranslateEnabled: true` en dur — un champ de contrat qui ne disait
-      // rien de vrai, sous un `TODO` qui l'annonçait depuis toujours — et son
-      // `email: ''` qui prétendait masquer ce qu'il suffit de ne pas charger.
-      // Garder D'ABORD, composer ensuite — l'ordre des trois autres portes de
-      // profil. La garde lit `isOnline` / `lastActiveAt` sur la ligne chargée ;
-      // la composition n'y touche pas.
-      return sendSuccess(
-        reply,
-        buildPublicProfile(await gateProfilePresence(fastify, request, user))
-      );
+      return sendSuccess(reply, profil);
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
@@ -966,147 +909,6 @@ export async function getUserById(fastify: FastifyInstance) {
   });
 }
 
-// Shared Prisma select fragment for a user's public voice profile.
-// Selected via the `voiceModel` relation; `voicePublicAt` gates exposure.
-const voiceModelSelect = {
-  voicePublicAt: true,
-  referenceAudioUrl: true,
-  totalDurationMs: true,
-  qualityScore: true,
-} as const;
-
-export type VoiceModelFields = {
-  voicePublicAt: Date | null;
-  referenceAudioUrl: string | null;
-  totalDurationMs: number | null;
-  qualityScore: number | null;
-};
-
-export type PublicVoiceFields =
-  | { voicePublic: false }
-  | {
-      voicePublic: true;
-      voiceSampleUrl: string;
-      voiceSampleDurationMs: number | null;
-      voiceQuality: number | null;
-    };
-
-/**
- * Maps a user's (optional) voice model to public-safe voice fields and strips
- * the raw `voiceModel` relation so internal columns never leak.
- *
- * A voice profile is exposed only when the user opted in (`voicePublicAt`
- * non-null) AND a reference audio URL exists. Block-relationship ACL is a
- * documented follow-up (see CLAUDE task notes) — this gates purely on opt-in.
- */
-export function deriveVoiceFields(voiceModel: VoiceModelFields | null | undefined): PublicVoiceFields {
-  if (voiceModel && voiceModel.voicePublicAt != null && voiceModel.referenceAudioUrl) {
-    return {
-      voicePublic: true,
-      voiceSampleUrl: voiceModel.referenceAudioUrl,
-      voiceSampleDurationMs: voiceModel.totalDurationMs ?? null,
-      voiceQuality: voiceModel.qualityScore ?? null,
-    };
-  }
-  return { voicePublic: false };
-}
-
-export function withVoiceFields<T extends { voiceModel?: VoiceModelFields | null }>(
-  user: T
-): Omit<T, 'voiceModel'> & PublicVoiceFields {
-  const { voiceModel, ...rest } = user;
-  return { ...rest, ...deriveVoiceFields(voiceModel) };
-}
-
-// Shared Prisma select & profile builder for dedicated lookup endpoints
-/**
- * La forme SERVIE d'un profil public — le miroir déclaré de `publicUserSelect`.
- *
- * Les deux vivent côte à côte pour que l'écart se voie : un champ ajouté à
- * l'un sans l'autre est soit chargé et supprimé (inutile), soit déclaré et
- * absent (menteur).
- */
-const publicProfileSchema = {
-  type: 'object',
-  properties: {
-    id: { type: 'string' },
-    username: { type: 'string' },
-    firstName: { type: 'string', nullable: true },
-    lastName: { type: 'string', nullable: true },
-    displayName: { type: 'string', nullable: true },
-    avatar: { type: 'string', nullable: true },
-    banner: { type: 'string', nullable: true },
-    bio: { type: 'string', nullable: true },
-    role: { type: 'string' },
-    isOnline: { type: ['boolean', 'null'] },
-    lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
-    createdAt: { type: 'string', format: 'date-time' },
-    voicePublic: { type: 'boolean' },
-    voiceSampleUrl: { type: 'string', nullable: true },
-    voiceSampleDurationMs: { type: 'number', nullable: true },
-    voiceQuality: { type: 'number', nullable: true },
-    isAnonymous: { type: 'boolean' },
-    isMeeshyer: { type: 'boolean' },
-  },
-} as const;
-
-/**
- * Ce qu'un profil PUBLIC charge — et rien de plus (#4161).
- *
- * Il chargeait auparavant les TROIS langues du Prisme, `isActive`,
- * `deactivatedAt` et `updatedAt`, que les schémas laissaient sortir par un
- * `additionalProperties: true`. Mesuré en intégration : vingt-trois champs
- * servis à un appelant ANONYME, dont les préférences linguistiques d'un
- * inconnu et l'état de son compte.
- *
- * Le repli est à la SOURCE, pas au schéma : le dépôt l'écrit déjà — « compter
- * sur fast-json-stringify pour retenir une donnée personnelle est un piège
- * armé, pas une garde ». Ce qui ne sort pas de la base ne peut pas fuir par une
- * omission de déclaration, et la première personne qui ajoute le champ au
- * schéma ne publie alors rien.
- *
- * `isOnline` / `lastActiveAt` restent chargés : ils sont la MATIÈRE du gate de
- * présence (`gateProfilePresence`), qui décide ensuite s'ils sortent.
- */
-const publicUserSelect = {
-  id: true,
-  username: true,
-  firstName: true,
-  lastName: true,
-  displayName: true,
-  avatar: true,
-  banner: true,
-  bio: true,
-  role: true,
-  isOnline: true,
-  lastActiveAt: true,
-  createdAt: true,
-  voiceModel: { select: voiceModelSelect }
-} as const;
-
-/**
- * La composition PUBLIQUE d'un profil — voix dérivée, drapeaux d'identité.
- *
- * GÉNÉRIQUE, comme `withVoiceFields`, et pour la même raison : un paramètre
- * `Record<string, unknown>` EFFACE la forme de ce qu'on lui passe. Les
- * appelants recomposent ensuite le résultat avec des gardes qui, elles,
- * exigent des champs nommés (`gateProfilePresence` veut `id`, `isOnline`,
- * `lastActiveAt`) — et l'effacement les leur retire au moment précis où elles
- * en ont besoin. Un cast au site d'appel ferait taire l'erreur en rendant la
- * garde inopérante au typage.
- */
-function buildPublicProfile<T extends { voiceModel?: VoiceModelFields | null }>(user: T) {
-  // `autoTranslateEnabled: true` était écrit EN DUR — un champ de contrat qui
-  // ne disait rien de vrai, et qu'un client pouvait croire refléter la
-  // préférence de la personne. `email: ''` et `phoneNumber: undefined`
-  // prétendaient masquer ce qu'il suffit de ne pas charger. Les trois sont
-  // retirés (#4161).
-  return {
-    ...withVoiceFields(user),
-    isAnonymous: false,
-    isMeeshyer: true,
-  };
-}
 
 export async function getUserByEmail(fastify: FastifyInstance) {
   // AUTHENTIFIÉE, et non plus publique. Cette route confirmait sans compte
@@ -1213,16 +1015,14 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile by ObjectId: ${id}`);
 
-      const user = await fastify.prisma.user.findFirst({
-        where: { id },
-        select: publicUserSelect
-      });
+      // ALIAS de `GET /directory/people/:handle` (#4161, critère 9). Le
+      // paramètre est ici contraint à un ObjectId par le schéma ; le lecteur
+      // partagé accepte les deux formes, ce qui ne change rien à ce que cette
+      // porte-ci laisse entrer.
+      const profil = await servirProfilPublic(fastify, request, reply, id);
+      if (!profil) return reply;
 
-      if (!user) {
-        return sendNotFound(reply, 'User not found');
-      }
-
-      return sendSuccess(reply, buildPublicProfile(await gateProfilePresence(fastify, request, user)));
+      return sendSuccess(reply, profil);
     } catch (error) {
       logError(fastify.log, 'Get user by ID error:', error);
       return sendInternalError(reply, 'Internal server error');
