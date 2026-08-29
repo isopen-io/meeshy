@@ -20,6 +20,12 @@
  * le gateway applique déjà à ses propres scripts CLI.
  */
 
+import { exigerNodeRecent } from '../../../scripts/require-node-runtime';
+
+// AVANT tout autre import : ce qui suit charge undici par transitivite,
+// et un Node trop ancien y echoue sur une pile qui ne nomme pas la cause.
+exigerNodeRecent('packages/shared/scripts/generate-api-endpoints.ts');
+
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

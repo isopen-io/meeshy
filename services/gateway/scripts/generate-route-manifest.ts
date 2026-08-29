@@ -40,6 +40,12 @@
  * viendrait jamais.
  */
 
+import { exigerNodeRecent } from '../../../scripts/require-node-runtime';
+
+// AVANT tout autre import : ce qui suit charge undici par transitivite,
+// et un Node trop ancien y echoue sur une pile qui ne nomme pas la cause.
+exigerNodeRecent('services/gateway/scripts/generate-route-manifest.ts');
+
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
