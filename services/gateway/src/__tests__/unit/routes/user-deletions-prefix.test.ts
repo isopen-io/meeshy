@@ -42,7 +42,26 @@ import userDeletionsRoutes from '../../../routes/user-deletions';
 
 function buildPrisma() {
   return {
-    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'p1' }) },
+    participant: {
+      // #4332 — `role` absent ⇒ traité comme 'member' par
+      // `isMemberCreator(role ?? 'member')` : la branche empruntée par
+      // `DELETE .../delete-for-me` (délégué à `performConversationDeleteForMe`
+      // depuis ce lot) est la plus simple, un seul `participant.update`, sans
+      // `$transaction` ni lecture de `conversation` — exactement ce que ce
+      // double minimal peut servir.
+      findFirst: jest.fn<any>().mockResolvedValue({
+        id: 'p1',
+        isActive: true,
+        // `restore-for-me` lit ces deux champs (#4332) : `deletedForMe: null`
+        // ⇒ 400 propre (« pas supprimé ») plutôt qu'un 500 accidentel par
+        // accès à une propriété absente — ce test ne vérifie que l'ADRESSE,
+        // un statut inattendu masquerait un vrai défaut de câblage.
+        deletedForMe: null,
+        conversation: { isActive: true },
+      }),
+      update: jest.fn<any>().mockResolvedValue({ id: 'p1', isActive: false }),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     userConversationPreferences: { findMany: jest.fn<any>().mockResolvedValue([]) },
   };
 }

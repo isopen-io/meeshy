@@ -20,6 +20,19 @@ import {
   restoreMessageForUser,
 } from '../services/personalMessageVisibilitySync';
 import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
+import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
+import { depreciee } from '../utils/deprecation';
+// #4332 — la corbeille de conversations (delete-for-me / restore-for-me /
+// deleted-conversations) est réalignée sur le geste que la route CANONIQUE
+// (`/api/v1/conversations/:id/delete-for-me`, ci-dessous importée) écrit
+// réellement. `performConversationDeleteForMe` est le corps du geste
+// (extrait de ce fichier canonique pour ce lot) ; l'erreur typée laisse
+// chaque adresse traduire le cas « pas membre » dans SON PROPRE vocabulaire
+// HTTP plutôt que de coller celui de l'autre.
+import {
+  performConversationDeleteForMe,
+  ConversationDeleteForMeNotAParticipantError,
+} from './conversations/delete-for-me';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -91,16 +104,49 @@ export default async function userDeletionsRoutes(
 
   /**
    * DELETE /api/conversations/:conversationId/delete-for-me
-   * Soft-delete a conversation from the user's view only
+   *
+   * ALIAS DÉPRÉCIÉ (#4332) de la route CANONIQUE
+   * `DELETE /api/v1/conversations/:id/delete-for-me`
+   * (`routes/conversations/delete-for-me.ts`). Avant ce lot, cette route
+   * portait sa PROPRE logique — un simple upsert sur
+   * `UserConversationPreferences.deletedForUserAt` — sans transfert de
+   * propriété ni clôture, et écrivant une colonne que RIEN d'autre ne relit
+   * pour ce geste : la corbeille (`restore-for-me`,
+   * `GET .../deleted-conversations`, plus bas dans ce fichier) lit
+   * `Participant.deletedForMe` — la colonne que la route canonique écrit.
+   * Deux implémentations, deux vérités, et seule la canonique avait un
+   * appelant réel (iOS `ConversationService.swift`, Android
+   * `ConversationApi.kt`) — #4317 a tranché en sa faveur. Cette route
+   * délègue désormais intégralement à `performConversationDeleteForMe`, si
+   * bien que les DEUX adresses écrivent la MÊME colonne et que la corbeille
+   * peut enfin contenir ce que l'utilisateur supprime réellement — c'était
+   * le défaut nommé par #4332 : « la corbeille lit une colonne que plus
+   * rien n'écrit ».
+   *
+   * `onRequest: [depreciee(...)]` plutôt qu'un appel dans le handler : une
+   * adresse dépréciée s'annonce quel que soit le verdict (401 compris), et
+   * `onRequest` court avant toute garde — voir le doc-comment de
+   * `utils/deprecation.ts`. Pas de `Sunset` : le retrait est gouverné par le
+   * compteur d'accès (#4275, `services/route-usage.service.ts`), jamais par
+   * une date posée à la main sur une route dont le trafic réel n'a encore
+   * jamais été mesuré (l'ajouter à `ROUTES_SURVEILLEES` est un suivi
+   * séparé — ce fichier n'est pas le territoire de ce compteur).
    */
   fastify.delete<{ Params: ConversationIdParams }>(
     `${basePath}/conversations/:conversationId/delete-for-me`,
     {
+      onRequest: [
+        depreciee({
+          depuis: '2026-08-29',
+          successeur: (req) =>
+            `/api/v1/conversations/${(req.params as ConversationIdParams).conversationId}/delete-for-me`,
+        }),
+      ],
       preValidation: [authMiddleware],
       schema: {
-        description: 'Soft-delete a conversation from the authenticated user\'s view. Other participants will still see the conversation. The conversation can be restored later.',
+        description: 'Deprecated alias of DELETE /api/v1/conversations/:id/delete-for-me. Soft-deletes a conversation from the authenticated user\'s view — transferring ownership or closing the conversation when the caller was its sole/creating member. The conversation can be restored later via restore-for-me, unless it was closed.',
         tags: ['users', 'conversations'],
-        summary: 'Delete conversation for current user',
+        summary: 'Delete conversation for current user (deprecated alias)',
         params: {
           type: 'object',
           required: ['conversationId'],
@@ -116,47 +162,35 @@ export default async function userDeletionsRoutes(
               data: {
                 type: 'object',
                 properties: {
-                  message: { type: 'string', example: 'Conversation deleted from your view' }
+                  conversationId: { type: 'string' },
+                  deletedAt: { type: 'string', format: 'date-time' }
                 }
               }
             }
           },
-          403: errorResponseSchema,
+          404: errorResponseSchema,
           500: errorResponseSchema
         }
       }
     },
     async (request, reply) => {
       try {
-        const { conversationId } = request.params;
+        const { conversationId: rawConversationId } = request.params;
         const authRequest = request as UnifiedAuthRequest;
         const userId = authRequest.authContext.userId;
 
-        // Verify user is a member of this conversation
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId,
-            userId,
-            isActive: true,
-          },
-        });
-
-        if (!membership) {
-          return sendForbidden(reply, 'Not a member of this conversation');
-        }
-
-        // Per-user state: the user's other devices must drop the conversation
-        // too, so this goes through the versioned+broadcast writer.
-        await writeConversationPreferences(fastify, {
+        const result = await performConversationDeleteForMe(fastify, prisma, {
           userId,
-          conversationId,
-          data: { deletedForUserAt: new Date() },
+          rawConversationId,
         });
 
-        logger.info('Conversation deleted', { conversationId });
+        logger.info('Conversation deleted', { conversationId: result.conversationId });
 
-        return sendSuccess(reply, { message: 'Conversation deleted from your view' });
+        return sendSuccess(reply, result);
       } catch (error) {
+        if (error instanceof ConversationDeleteForMeNotAParticipantError) {
+          return sendNotFound(reply, 'Vous ne participez pas a cette conversation');
+        }
         logger.error('Error deleting conversation for user', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
@@ -165,14 +199,26 @@ export default async function userDeletionsRoutes(
 
   /**
    * POST /api/conversations/:conversationId/restore-for-me
-   * Restore a previously deleted conversation for the user
+   * Restore a previously deleted conversation for the user.
+   *
+   * #4332 — lisait AUPARAVANT `UserConversationPreferences.deletedForUserAt`,
+   * une colonne qu'AUCUN appelant réel n'écrivait (le seul écrivain était le
+   * DELETE ci-dessus, avant qu'il ne délègue lui aussi à
+   * `performConversationDeleteForMe`) : cette route répondait donc TOUJOURS
+   * 400 « Conversation is not deleted », y compris pour une conversation que
+   * l'utilisateur venait réellement de supprimer via la route canonique, qui
+   * écrit `Participant.deletedForMe`. Elle lit désormais CETTE colonne — la
+   * même que le DELETE ci-dessus écrit, canonique comme alias.
+   *
+   * Pas de filtre `isActive` sur le `findFirst` : c'est justement l'inverse
+   * qu'on cherche — un participant que « supprimer pour moi » a désactivé.
    */
   fastify.post<{ Params: ConversationIdParams }>(
     `${basePath}/conversations/:conversationId/restore-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
-        description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user.',
+        description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user AND the conversation itself was not closed for everyone in the process.',
         tags: ['users', 'conversations'],
         summary: 'Restore deleted conversation',
         params: {
@@ -206,24 +252,39 @@ export default async function userDeletionsRoutes(
         const authRequest = request as UnifiedAuthRequest;
         const userId = authRequest.authContext.userId;
 
-        // Update preferences to restore conversation
-        const prefs = await prisma.userConversationPreferences.findUnique({
-          where: {
-            userId_conversationId: { userId, conversationId },
+        const participant = await prisma.participant.findFirst({
+          where: { conversationId, userId },
+          select: {
+            id: true,
+            deletedForMe: true,
+            conversation: { select: { isActive: true } },
           },
         });
 
-        if (!prefs || !prefs.deletedForUserAt) {
+        if (!participant || !participant.deletedForMe) {
           return sendBadRequest(reply, 'Conversation is not deleted');
         }
 
-        // Inverse of delete-for-me, and it owes the same broadcast: without it
-        // the other devices keep hiding a conversation the user just restored.
-        await writeConversationPreferences(fastify, {
-          userId,
-          conversationId,
-          data: { deletedForUserAt: null },
+        // Restaurer un participant dont la conversation a été CLOSE (dernier
+        // membre parti, ou DM vide clos — les deux branches de
+        // `performConversationDeleteForMe`) rouvrirait pour tout le monde un
+        // fil que la route canonique a fermé délibérément : un geste
+        // personnel ne doit jamais avoir un effet collectif. La conversation
+        // reste irrécupérable par ce chemin — seule une action
+        // d'administration distincte peut rouvrir une conversation fermée.
+        if (!participant.conversation.isActive) {
+          return sendBadRequest(reply, 'Conversation is closed and cannot be restored');
+        }
+
+        await prisma.participant.update({
+          where: { id: participant.id },
+          data: { deletedForMe: null, isActive: true },
         });
+        // Miroir exact du DELETE ci-dessus : sans cette invalidation, le
+        // cache de lookup continuerait de répondre "inactif" pour CE
+        // participant jusqu'à l'expiration de son TTL, alors que la ligne
+        // vient d'être réactivée.
+        invalidateParticipantLookup(participant.id, conversationId);
 
         logger.info('Conversation restored', { conversationId });
 
@@ -661,12 +722,23 @@ export default async function userDeletionsRoutes(
         const authContext = (request as UnifiedAuthRequest).authContext;
         const userId = authContext.userId;
 
-        const deletedPrefs = await prisma.userConversationPreferences.findMany({
+        // #4332 — lisait AUPARAVANT `UserConversationPreferences`, une table
+        // qu'aucun appelant réel n'écrit pour ce geste (voir le DELETE en
+        // tête de fichier) : cette liste était donc TOUJOURS vide, par
+        // construction. `Participant.deletedForMe` est la colonne que la
+        // route canonique de suppression écrit — c'est elle qui porte la
+        // vérité. Le `select` reste IDENTIQUEMENT celui d'avant sur
+        // `conversation` (mêmes six champs, rien de plus) : élargir la
+        // charge de cette liste est un choix à part, pas un effet de bord
+        // de ce correctif.
+        const deletedParticipants = await prisma.participant.findMany({
           where: {
             userId,
-            deletedForUserAt: { not: null },
+            deletedForMe: { not: null },
           },
-          include: {
+          select: {
+            conversationId: true,
+            deletedForMe: true,
             conversation: {
               select: {
                 id: true,
@@ -678,13 +750,13 @@ export default async function userDeletionsRoutes(
               },
             },
           },
-          orderBy: { deletedForUserAt: 'desc' },
+          orderBy: { deletedForMe: 'desc' },
         });
 
-        return sendSuccess(reply, deletedPrefs.map((p) => ({
+        return sendSuccess(reply, deletedParticipants.map((p) => ({
           conversationId: p.conversationId,
           conversation: p.conversation,
-          deletedAt: p.deletedForUserAt,
+          deletedAt: p.deletedForMe,
         })));
       } catch (error) {
         logger.error('Error fetching deleted conversations', error as Error);
