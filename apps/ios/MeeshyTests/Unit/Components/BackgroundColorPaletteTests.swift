@@ -37,6 +37,13 @@ final class BackgroundColorPaletteTests: XCTestCase {
         }
     }
 
+    /// `LocalizedNumber.exact` ne consulte **aucun catalogue** — c'est du
+    /// formatage Foundation pur. Il ne prend donc qu'un `locale`, et n'est pas
+    /// concerné par le piège `bundle`/`locale` ci-dessus (idiome 242i).
+    private func number(_ value: Int, in code: String) -> String {
+        LocalizedNumber.exact(value, locale: Locale(identifier: code))
+    }
+
     // MARK: - Le nom dit OÙ l'on est
 
     func test_positionLabel_estUnRangHumain_pasUnIndex() throws {
@@ -59,11 +66,49 @@ final class BackgroundColorPaletteTests: XCTestCase {
     /// l'APPAREIL et rend des chiffres latins sur un simulateur américain. La
     /// table, elle, se cherche sur la seule LANGUE (`ar.lproj`) — c'est ce que
     /// fait `inLocale`.
+    ///
+    /// **L'assertion porte sur les nombres SERVIS, jamais sur l'absence d'une
+    /// graphie.** La première écriture de ce test ajoutait
+    /// `XCTAssertFalse(arabic.contains("3"))` pour dire « aucun chiffre latin » :
+    /// elle a rougi en CI pendant que les deux assertions positives passaient, et
+    /// son message ne portait même pas la chaîne obtenue — donc indiagnosticable.
+    /// C'est exactement le piège que le banc de 242i documente : **épingler une
+    /// intention, jamais une graphie** (leçon 272). Le rang et le total attendus
+    /// se DÉRIVENT de `LocalizedNumber.exact`, la source unique du dépôt — un
+    /// glyphe recopié à la main ne pourrait que dériver d'elle.
     func test_positionLabel_ecritSesNombresDansLeSystemeDuLecteur() throws {
         let arabic = try label(2, of: 17, in: "ar_SA")
-        XCTAssertTrue(arabic.contains("٣"), "rang en chiffres arabo-indiens — obtenu « \(arabic) »")
-        XCTAssertTrue(arabic.contains("١٧"), "total en chiffres arabo-indiens — obtenu « \(arabic) »")
-        XCTAssertFalse(arabic.contains("3"), "aucun chiffre latin ne doit subsister")
+        let rank = number(3, in: "ar_SA")
+        let total = number(17, in: "ar_SA")
+
+        XCTAssertTrue(
+            arabic.contains(rank),
+            "le rang doit s'écrire « \(rank) » — obtenu « \(arabic) »"
+        )
+        XCTAssertTrue(
+            arabic.contains(total),
+            "le total doit s'écrire « \(total) » — obtenu « \(arabic) »"
+        )
+    }
+
+    /// Le piège d'`InterpolatedLocalizationSubstitutionTests`, repris de 242i :
+    /// si le placeholder du catalogue ne correspond pas à l'argument interpolé,
+    /// le lecteur entend « Couleur %1$@ sur %2$@ ».
+    ///
+    /// C'est LA négation qui vaut d'être écrite — elle épingle un défaut réel
+    /// (placeholder ↔ argument), là où « pas de chiffre latin » n'épinglait
+    /// qu'une graphie.
+    func test_positionLabel_substituesLesDeuxNombres() throws {
+        for code in ["fr", "en", "ar_SA"] {
+            let rendered = try label(2, of: 17, in: code)
+            for specifier in ["%@", "%lld", "%1$", "%2$"] {
+                XCTAssertFalse(
+                    rendered.contains(specifier),
+                    "« \(specifier) » survit brut dans « \(rendered) » (\(code)) : le "
+                    + "placeholder du catalogue ne correspond pas à l'argument interpolé."
+                )
+            }
+        }
     }
 
     // MARK: - La cible n'est pas le dessin

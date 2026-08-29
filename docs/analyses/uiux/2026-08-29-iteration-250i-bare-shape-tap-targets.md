@@ -222,6 +222,42 @@ aucune autre : **la cible app a compilé**. Le doute n° 1 est donc SOLDÉ.
 > AVANT lui — le lire seulement comme « ça a échoué » perd la moitié de ce qu'on
 > a payé vingt minutes pour apprendre.
 
+### 4.2 Le second run : 1 échec sur 9001, et une graphie épinglée
+
+`2f540290` compile — **doute n° 2 SOLDÉ** : `@MainActor` sur une seule méthode
+d'une classe de test non isolée est correct, et la garde de forme s'exécute.
+**9001 tests, un seul rouge**, et c'est une assertion à moi :
+
+```
+BackgroundColorPaletteTests/test_positionLabel_ecritSesNombresDansLeSystemeDuLecteur()
+  — XCTAssertFalse failed - aucun chiffre latin ne doit subsister
+```
+
+Les DEUX assertions positives du même test passaient : le rang s'écrit bien
+« ٣ » et le total « ١٧ ». Seule la troisième — `XCTAssertFalse(arabic.contains("3"))`
+— rougissait.
+
+Le banc de 242i porte, à cet endroit exact, la mise en garde qui décrit ce
+défaut mot pour mot :
+
+> *« L'assertion porte sur le RANG, pas sur l'absence d'un caractère : écrire
+> `XCTAssertFalse(label.contains("0"))` pour dire "pas 0-indexé" casserait le
+> jour où une 10ᵉ étape ferait apparaître un "0" dans le TOTAL — un faux rouge
+> sur du code juste (leçon 272 : épingler une intention, jamais une graphie). »*
+
+> **J'ai épinglé une graphie là où le banc que je copiais interdit de le faire,
+> dans le doc-comment de la fonction voisine.** Et l'assertion aggravait son cas :
+> **son message ne portait pas la chaîne obtenue** — les deux autres, si. Un
+> rouge indiagnosticable coûte un cycle entier de vingt minutes rien que pour
+> apprendre une chaîne de caractères.
+
+Le test est réécrit sur la forme éprouvée : le rang et le total attendus se
+**dérivent** de `LocalizedNumber.exact` (la source unique) au lieu d'être des
+glyphes recopiés, chaque message porte la valeur obtenue, et la seule négation
+conservée est celle de 242i — **aucun spécificateur brut ne survit**
+(`%@`, `%lld`, `%1$`, `%2$`), qui épingle un défaut RÉEL (placeholder ↔ argument)
+plutôt qu'un caractère.
+
 ---
 
 ## 5. Ce qui change à l'écran

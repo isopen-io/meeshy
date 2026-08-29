@@ -83,6 +83,26 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   passe. Le doute n° 2 (`@MainActor` sur une seule méthode) reste ouvert : la
 >   compile s'est arrêtée sur la résolution de nom, avant tout contrôle d'isolation.
 >   **Un run rouge n'est pas un run muet — lire ce qu'il a QUAND MÊME prouvé.**
+> - **⚠️ SECOND RUN ROUGE : 1 échec sur 9001, et c'est une GRAPHIE épinglée.**
+>   `2f540290` compile — **doute n° 2 SOLDÉ** (`@MainActor` sur une seule méthode
+>   d'une classe de test non isolée est correct). Le seul rouge :
+>   `XCTAssertFalse(arabic.contains("3"))`, pendant que les deux assertions
+>   positives du même test passaient (le rang s'écrit « ٣ », le total « ١٧ »).
+>   **Le banc de 242i porte à cet endroit exact la mise en garde qui décrit ce
+>   défaut mot pour mot** — « épingler une intention, jamais une graphie »
+>   (leçon 272) — dans le doc-comment de la fonction VOISINE de celle que je
+>   copiais. Aggravant : **le message de l'assertion ne portait pas la chaîne
+>   obtenue** (les deux autres, si), donc le rouge était indiagnosticable et
+>   coûtait un cycle entier pour apprendre une chaîne. Réécrit sur la forme
+>   éprouvée : rang et total DÉRIVÉS de `LocalizedNumber.exact`, valeur obtenue
+>   dans chaque message, et la seule négation gardée est celle de 242i — aucun
+>   spécificateur brut ne survit (`%@`, `%lld`, `%1$`, `%2$`), qui épingle un
+>   défaut RÉEL.
+> - **Deux rouges de suite, deux fois la même cause de fond** : copier un banc
+>   éprouvé sans copier ce qu'il DIT. Le premier a manqué son `@testable import`
+>   parce que le modèle n'en avait pas besoin ; le second a écrit l'assertion que
+>   le modèle interdit explicitement. **Lire les doc-comments du fichier qu'on
+>   imite, pas seulement son code.**
 > - **Suites 251i+** : (a) **la garde s'arrête au premier enfant du label** — un
 >   `ZStack { Circle(); Image() }` porte le même défaut et lui échappe ; l'élargir
 >   demande de définir « un label dont la géométrie est décorative », ce qui est
