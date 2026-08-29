@@ -5442,6 +5442,72 @@ describe('MessageReadStatusService', () => {
       expect(result.pagination.total).toBe(1);
     });
 
+    it('getAttachmentStatusDetails: the opt-out consumer is excluded from the served detail', async () => {
+      // Jumelle EXACTE de getMessageStatusDetails, une couche plus bas : un
+      // participant `showReadReceipts = false` ne doit pas reparaître dans la
+      // vue de détail d'une pièce jointe — position d'écoute/visionnage,
+      // couverture des segments, trace et langues comprises. La règle est
+      // serveur-autoritaire, comme pour le texte ; « je vois ma propre ligne »
+      // reste le versant d'équité côté client.
+      const page = [{
+        participantId: 'p-visible',
+        viewedAt: new Date('2024-06-01T11:00:00Z'),
+        downloadedAt: null, listenedAt: null, watchedAt: null,
+        listenCount: 0, watchCount: 0, listenedComplete: false, watchedComplete: false,
+        lastPlayPositionMs: null, lastWatchPositionMs: null,
+        viewCount: 1, viewedLanguages: ['fr'],
+      }];
+      mockPrisma.attachmentStatusEntry.findMany
+        // 1) les consommateurs DISTINCTS de la pièce jointe (avant pagination)
+        .mockResolvedValueOnce([{ participantId: 'p-optout' }, { participantId: 'p-visible' }])
+        // 2) la page, après exclusion de l'opt-out par la requête
+        .mockResolvedValueOnce(page);
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        { id: 'p-optout', userId: 'u-optout', displayName: 'Discret', avatar: null, user: { avatar: null } },
+        { id: 'p-visible', userId: 'u-visible', displayName: 'Alice', avatar: null, user: { avatar: null } },
+      ]);
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.userPreference.findMany.mockResolvedValue(optOutRows('u-optout'));
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+
+      expect(result.statuses.map((s: any) => s.participantId)).toEqual(['p-visible']);
+      // L'exclusion vit dans la REQUÊTE — count ET page — et non dans un tri JS :
+      // sinon `total`, `hasMore` et `languageBreakdown` (calculés sur la page)
+      // resteraient incohérents avec ce qui est servi.
+      const countWhere = mockPrisma.attachmentStatusEntry.count.mock.calls.at(-1)?.[0]?.where;
+      expect(countWhere.participantId).toEqual({ notIn: ['p-optout'] });
+      const pageCall = mockPrisma.attachmentStatusEntry.findMany.mock.calls.at(-1)?.[0];
+      expect(pageCall?.where?.participantId).toEqual({ notIn: ['p-optout'] });
+    });
+
+    it('getAttachmentStatusDetails: does not filter when no consumer opted out', async () => {
+      // Non-régression : sans opt-out, la requête ne porte AUCUN `notIn` et sert
+      // tout le monde — la garde ne se déclenche que sur une préférence réelle.
+      const page = [{
+        participantId: 'p1',
+        viewedAt: new Date('2024-06-01T11:00:00Z'),
+        downloadedAt: null, listenedAt: null, watchedAt: null,
+        listenCount: 0, watchCount: 0, listenedComplete: false, watchedComplete: false,
+        lastPlayPositionMs: null, lastWatchPositionMs: null,
+        viewCount: 0, viewedLanguages: [],
+      }];
+      mockPrisma.attachmentStatusEntry.findMany
+        .mockResolvedValueOnce([{ participantId: 'p1' }])
+        .mockResolvedValueOnce(page);
+      mockPrisma.participant.findMany.mockResolvedValueOnce([
+        { id: 'p1', userId: 'u1', displayName: 'Alice', avatar: null, user: { avatar: null } },
+      ]);
+      mockPrisma.attachmentStatusEntry.count.mockResolvedValue(1);
+      mockPrisma.userPreference.findMany.mockResolvedValue([]);
+
+      const result = await service.getAttachmentStatusDetails(testAttachmentId);
+
+      expect(result.statuses.map((s: any) => s.participantId)).toEqual(['p1']);
+      const countWhere = mockPrisma.attachmentStatusEntry.count.mock.calls.at(-1)?.[0]?.where;
+      expect(countWhere.participantId).toBeUndefined();
+    });
+
     it('getConversationReadStatuses: the opt-out is excluded from the batch counts', async () => {
       mockPrisma.message.findMany.mockResolvedValue([
         { id: testMessageId, createdAt: new Date('2025-01-01T10:00:00Z'), senderId: 'sender-p' }

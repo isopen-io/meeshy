@@ -643,6 +643,50 @@ describe('POST /attachments/:attachmentId/status — with socketIO manager', () 
   });
 });
 
+// ─── POST /attachments/:id/status — read-receipt opt-out gate ─────────────────
+
+describe('POST /attachments/:attachmentId/status — read-receipt opt-out', () => {
+  let app: FastifyInstance;
+  let mockEmit: jest.Mock;
+  beforeAll(async () => {
+    const { mockEmit: emit, manager } = makeMockSocketIO();
+    mockEmit = emit;
+    app = await buildApp({ socketIOManager: manager });
+  });
+  afterAll(async () => { await app.close(); });
+  beforeEach(() => {
+    mockEmit.mockClear();
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+  });
+
+  it('does not broadcast attachment consumption when the actor opted out of read receipts', async () => {
+    // Jumelle de `broadcastReadStatus` (qui tait un `read` sur la même
+    // préférence, même SSOT `PrivacyPreferencesService`) : un utilisateur
+    // `showReadReceipts = false` ne doit pas voir sa consommation média poussée
+    // aux autres membres de la room.
+    mockShouldShowReadReceipts.mockResolvedValue(false);
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', complete: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const broadcast = mockEmit.mock.calls.find(c => c[0] === 'attachment-status:updated');
+    expect(broadcast).toBeUndefined();
+  });
+
+  it('still broadcasts when the actor allows read receipts', async () => {
+    mockShouldShowReadReceipts.mockResolvedValue(true);
+    const res = await app.inject({
+      method: 'POST', url: '/attachments/' + ATTACHMENT_ID + '/status',
+      payload: { action: 'listened', complete: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockEmit).toHaveBeenCalledWith('attachment-status:updated', expect.objectContaining({
+      attachmentId: ATTACHMENT_ID,
+    }));
+  });
+});
+
 // ─── Error paths not covered in messages.test.ts ─────────────────────────────
 
 describe('POST /messages/:messageId/status — DB error', () => {

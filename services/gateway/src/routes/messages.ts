@@ -1337,9 +1337,19 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           break;
       }
 
-      // Diffuser le statut via Socket.IO
+      // Diffuser le statut via Socket.IO — mais taire la consommation d'un
+      // utilisateur qui a désactivé ses accusés de lecture (`showReadReceipts`),
+      // exactement comme `broadcastReadStatus` tait un `read` sur la même
+      // préférence et le même SSOT (`PrivacyPreferencesService`). Sa propre app
+      // connaît déjà son état ; les AUTRES membres de la room ne doivent pas
+      // recevoir sa position d'écoute/visionnage. Un participant anonyme n'a
+      // aucune préférence stockée (`shouldShowReadReceipts` rend le défaut) et
+      // diffuse donc normalement. Jumelle serveur-autoritaire de la vue de
+      // détail `GET /attachments/:id/status-details` — même règle, deux surfaces.
+      const isAnonymous = authRequest.authContext.type === 'anonymous';
+      const mayShareConsumption = await privacyPreferencesService.shouldShowReadReceipts(userId, isAnonymous);
       try {
-        const socketIOManager = socketIOHandler.getManager();
+        const socketIOManager = mayShareConsumption ? socketIOHandler.getManager() : null;
         if (socketIOManager) {
           const room = ROOMS.conversation(attachment.message.conversationId);
           const percentage = playPositionMs !== undefined && durationMs !== undefined && durationMs > 0

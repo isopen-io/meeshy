@@ -2191,7 +2191,41 @@ export class MessageReadStatusService {
     const { offset = 0, limit = 20, filter = "all" } = options;
 
     try {
+      // Jumelle EXACTE de `getMessageStatusDetails` : la consommation d'un
+      // participant `showReadReceipts = false` sort de la vue servie aux
+      // AUTRES — position, couverture, trace et langues comprises. La règle est
+      // serveur-autoritaire (cf. `_loadReadReceiptOptOuts`, appelée par les
+      // quatre autres lecteurs texte), et l'exclusion se pose sur la REQUÊTE
+      // pour que `total`, la page, `hasMore` et `languageBreakdown` (calculé sur
+      // la page) restent cohérents entre eux. Le versant « je vois ma propre
+      // ligne » reste la règle d'équité côté client, comme pour le texte.
+      //
+      // On charge d'abord les consommateurs DISTINCTS de la pièce jointe pour
+      // résoudre l'opt-out, puis on réutilise ces lignes participant pour
+      // l'affichage (mêmes champs que l'ancien `include`) — pas de seconde
+      // requête. Résilient à une entrée orpheline : `include: { participant }`
+      // est évité (même risque que `ConversationReadCursor`).
+      const consumerRows = await this.prisma.attachmentStatusEntry.findMany({
+        where: { attachmentId },
+        select: { participantId: true },
+        distinct: ["participantId"],
+      });
+      const participants = consumerRows.length
+        ? await this.prisma.participant.findMany({
+            where: { id: { in: consumerRows.map(r => r.participantId) } },
+            select: {
+              id: true,
+              userId: true,
+              displayName: true,
+              avatar: true,
+              user: { select: { avatar: true } },
+            },
+          })
+        : [];
+      const optedOut = await this._loadReadReceiptOptOuts(participants);
+
       const whereClause: any = { attachmentId };
+      if (optedOut.size > 0) whereClause.participantId = { notIn: [...optedOut] };
       if (filter === "viewed") whereClause.viewedAt = { not: null };
       else if (filter === "downloaded")
         whereClause.downloadedAt = { not: null };
@@ -2202,9 +2236,6 @@ export class MessageReadStatusService {
         where: whereClause,
       });
 
-      // Avoid `include: { participant }` to stay resilient if a status
-      // entry outlives its participant (same orphan-row risk as
-      // ConversationReadCursor). Fetch participants in bulk and join in JS.
       const statuses = await this.prisma.attachmentStatusEntry.findMany({
         where: whereClause,
         take: limit,
@@ -2228,18 +2259,6 @@ export class MessageReadStatusService {
           viewedLanguages: true,
         },
       });
-
-      const participants = statuses.length
-        ? await this.prisma.participant.findMany({
-            where: { id: { in: statuses.map(s => s.participantId) } },
-            select: {
-              id: true,
-              displayName: true,
-              avatar: true,
-              user: { select: { avatar: true } },
-            },
-          })
-        : [];
 
       const participantById = new Map(
         participants.map(p => [p.id, p])
