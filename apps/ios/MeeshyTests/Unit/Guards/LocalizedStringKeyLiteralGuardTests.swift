@@ -205,7 +205,8 @@ final class LocalizedStringKeyLiteralGuardTests: XCTestCase {
     // MARK: - Bornes
 
     func test_leBalayageVoitBienLeDepot() throws {
-        XCTAssertGreaterThan(try sources().count, 400, "racine attendue : \(appRoot.path)")
+        let files = try sources()
+        XCTAssertGreaterThan(files.count, 400, "racine attendue : \(appRoot.path)")
     }
 
     /// **La borne qui compte.** Les deux règles passeraient au VERT si le
@@ -296,8 +297,12 @@ final class LocalizedStringKeyLiteralGuardTests: XCTestCase {
         let data = try Data(contentsOf: url)
         let strings = (try JSONSerialization.jsonObject(with: data) as? [String: Any])?["strings"]
             as? [String: [String: Any]] ?? [:]
-        return strings.mapValues { entry in
-            Set((entry["localizations"] as? [String: Any])?.keys.map(String.init) ?? [])
+        // `keys` porte DÉJÀ des `String` : un `map(String.init)` y était ambigu
+        // (Swift compte une dizaine d'initialiseurs `String.init` génériques) et
+        // faisait échouer la compile du bundle de tests.
+        return strings.mapValues { entry -> Set<String> in
+            guard let localizations = entry["localizations"] as? [String: Any] else { return [] }
+            return Set(localizations.keys)
         }
     }
 }
