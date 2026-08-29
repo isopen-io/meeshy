@@ -90,6 +90,44 @@ describe('backfillSearchTokens', () => {
     expect(findRaw).toHaveBeenCalledTimes(1);
   });
 
+  it('TOLÈRE une ligne corrompue et rattrape les autres', async () => {
+    // Mesuré en intégration : un compte dont le `phoneNumber` est stocké en
+    // NOMBRE fait lever `prisma.user.update` — Prisma relit la ligne après
+    // l'écriture. Avec un `Promise.all`, cette seule ligne faisait échouer le
+    // lot ENTIER et laissait 23 comptes non indexés.
+    const lot = [compte('u-1', 'Jean'), compte('u-corrompu', 'Bob'), compte('u-3', 'Ana')];
+    const { prisma, ecritures } = prismaAvec([lot]);
+    (prisma as any).user.update = jest.fn<any>(async ({ where, data }: any) => {
+      if (where.id === 'u-corrompu') {
+        throw new Error("Inconsistent column data: Failed to convert '237650159233' to 'String'");
+      }
+      ecritures.push({ id: where.id, searchTokens: data.searchTokens });
+      return {};
+    });
+
+    const traites = await backfillSearchTokens(prisma);
+
+    // Deux rattrapés sur trois : une donnée héritée abîmée n'empêche pas les
+    // autres d'être indexées.
+    expect(traites).toBe(2);
+    expect(ecritures.map((e) => e.id)).toEqual(['u-1', 'u-3']);
+  });
+
+  it('s’ARRÊTE si le lot est ENTIÈREMENT en échec — sinon il boucle sans fin', async () => {
+    const lot = [compte('u-1', 'Jean')];
+    const { prisma } = prismaAvec([lot, lot, lot]);
+    (prisma as any).user.update = jest.fn<any>(async () => {
+      throw new Error('base indisponible');
+    });
+
+    // Sans cette condition, les mêmes lignes reviennent au tour suivant et la
+    // boucle tourne jusqu'au plafond de tours, à chaque démarrage.
+    const traites = await backfillSearchTokens(prisma);
+
+    expect(traites).toBe(0);
+    expect((prisma as any).user.findRaw).toHaveBeenCalledTimes(1);
+  });
+
   it('ne fait RIEN quand tout est déjà indexé', async () => {
     const { prisma, ecritures } = prismaAvec([[]]);
 

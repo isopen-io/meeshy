@@ -73,16 +73,41 @@ export async function backfillSearchTokens(prisma: PrismaClient): Promise<number
 
     if (lot.length === 0) break;
 
-    await Promise.all(
-      lot.map((compte) =>
-        prisma.user.update({
+    // Ligne par ligne, et TOLÉRANT : un `Promise.all` fait échouer le lot
+    // ENTIER dès qu'une écriture rate, et le rattrapage s'arrête là.
+    //
+    // Ce n'est pas théorique — mesuré en intégration : un compte dont le
+    // `phoneNumber` est stocké en NOMBRE au lieu d'une chaîne fait lever
+    // `prisma.user.update` (« Failed to convert '237650159233' to 'String' »),
+    // parce que Prisma relit la ligne après l'écriture. Une seule ligne
+    // corrompue a laissé 23 comptes non indexés.
+    //
+    // Une donnée héritée abîmée ne doit pas empêcher les 199 autres d'être
+    // rattrapées. Le suivi de la ligne elle-même est une issue à part.
+    let echecs = 0;
+    for (const compte of lot) {
+      try {
+        await prisma.user.update({
           where: { id: compte.id },
           data: { searchTokens: searchTokensFor({ ...compte, username: compte.username ?? undefined }) },
-        })
-      )
-    );
+        });
+        traites++;
+      } catch (error) {
+        echecs++;
+        logger.warn(
+          `[BackfillSearchTokens] compte ${compte.id} non indexé — ligne probablement corrompue`,
+          { error: error instanceof Error ? error.message : String(error) }
+        );
+      }
+    }
 
-    traites += lot.length;
+    // Un lot ENTIÈREMENT en échec boucle sans fin : les mêmes lignes
+    // reviennent au tour suivant. C'est la seule condition d'arrêt qui protège
+    // de ce cas.
+    if (echecs === lot.length) {
+      logger.error('[BackfillSearchTokens] lot entièrement en échec — arrêt du rattrapage');
+      break;
+    }
 
     // Un compte dont les quatre champs de nom sont vides rend un tableau vide,
     // et serait donc resélectionné au tour suivant : la boucle tournerait sans
