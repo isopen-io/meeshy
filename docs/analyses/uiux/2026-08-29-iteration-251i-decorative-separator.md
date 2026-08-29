@@ -146,6 +146,39 @@ L'assertion cherche désormais les deux écritures.
 > cherche cette chose par son ancien nom, et que fera-t-il quand il ne la
 > trouvera plus ?*
 
+#### ⚠️ Correction (retour de CI) — le contrôle a été fait, mais pas BALAYÉ
+
+**Le paragraphe ci-dessus s'est révélé faux dans sa portée, et la CI l'a dit :
+`StatusBubbleOverlayLayoutTests` est tombé.** J'avais posé la bonne question et
+ne l'avais posée qu'à UN fichier — celui que je connaissais déjà. Deux autres
+sites cherchaient le séparateur par son ancien nom :
+
+| site | forme | verdict |
+|---|---|---|
+| `StatusBubbleOverlayLayoutTests:161` | `XCTAssertTrue(source.contains("Text(\"·\")"))` | **ROUGE** — 1 échec sur 9008 |
+| `LentilleRowChromeTests:96` | `XCTAssertFalse(header.contains("Text(\"·\")"))` | vert **en cessant de voir** |
+
+Le premier a rougi ; le pied de bulle était pourtant **rigoureusement intact**
+(`Text(status.timeAgo)` → `MetaSeparator()` → l'action, dans le même `HStack`) —
+il épinglait une GRAPHIE là où son propre nom annonce une intention (« sits
+inline with timeAgo »). Il épingle désormais l'ORDRE de la rangée et l'absence
+de `Divider` entre l'ancienneté et l'action : ce qui tombe est une rangée qui se
+disloque, pas un jeton qu'on renomme.
+
+Le second est le plus instructif : c'est une assertion **négative**, donc un
+renommage la fait passer au vert **sans jamais rougir**. Elle est la JUMELLE de
+`LentilleRowSourceGuardTests` (§ 3.4), que j'avais corrigée — j'ai traité un
+fichier et manqué son voisin immédiat, dans le même dossier, sur la même règle.
+
+> **Une garde négative ne signale jamais son propre aveuglement.** Le rouge de
+> `StatusBubbleOverlay` était un cadeau : il a coûté un cycle et rendu visible
+> le site qui, lui, serait resté silencieux. La leçon 272 (« épingler une
+> intention, jamais une graphie ») a une seconde moitié : **un renommage se
+> solde par un BALAYAGE outillé de toutes les graphies, pas par la relecture des
+> fichiers auxquels on pense.** `grep` sur le jeton, dans tout `MeeshyTests` et
+> tout `packages/*/Tests`, avant de pousser — deux commandes, quatre sites, zéro
+> cycle perdu.
+
 ---
 
 ## 4. Preuve
