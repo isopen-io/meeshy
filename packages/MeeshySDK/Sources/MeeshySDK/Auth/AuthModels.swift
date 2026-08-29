@@ -211,13 +211,19 @@ public struct PhoneOwnerMaskedInfo: Decodable, Sendable, Equatable {
 /// le numéro appartient à un compte dormant dont l'identité déclarée matche —
 /// le client oriente alors vers la récupération de compte plutôt que la
 /// création d'un doublon.
+/// La réponse de `POST /auth/phone-transfer/check`.
+///
+/// **`exists` a été RETIRÉ du fil (#4239).** Il confirmait, sans compte, qu'un
+/// numéro appartient à un utilisateur Meeshy — le même oracle que #4158 ferme
+/// sur la porte voisine. `maskedInfo` ne vient plus que lorsque la récupération
+/// est suggérée, c'est-à-dire lorsque l'appelant a déjà prouvé qu'il connaît le
+/// vrai nom du titulaire.
+///
+/// `dormant`, `dormantSince` et `nameSimilarity` n'ont jamais été servis par
+/// cette route — elle les tait délibérément. Les déclarer ici les laissait
+/// paraître disponibles ; ils sont retirés avec `exists`.
 public struct PhoneOwnershipResponse: Decodable, Sendable, Equatable {
-    public let exists: Bool
     public let maskedInfo: PhoneOwnerMaskedInfo?
-    public let dormant: Bool?
-    public let dormantSince: String?
-    /// "exact" | "similar" | "different" | nil
-    public let nameSimilarity: String?
     public let recoverySuggested: Bool?
 }
 

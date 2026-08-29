@@ -50,9 +50,20 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
             data: {
               type: 'object',
               properties: {
-                exists: { type: 'boolean', description: 'Whether the phone belongs to another account' },
+                // `exists` a été RETIRÉ (#4239). Il confirmait, sans compte et
+                // sans contrepartie, qu'un numéro appartient à un utilisateur
+                // Meeshy : le même oracle que #4158 vient de fermer sur
+                // `/auth/check-availability`, par la porte voisine.
+                //
+                // `maskedInfo` ne sort plus QUE lorsque `recoverySuggested` est
+                // vrai — c'est-à-dire lorsque l'appelant a déjà prouvé qu'il
+                // connaît le vrai nom du titulaire. Il sortait auparavant dès
+                // que le compte existait : `j***n` restreint énormément, et sur
+                // une liste de numéros c'est une empreinte. Masqué ne veut pas
+                // dire anodin.
                 maskedInfo: {
                   type: 'object',
+                  nullable: true,
                   properties: {
                     displayName: { type: 'string' },
                     username: { type: 'string' },
@@ -95,10 +106,20 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       // arbitraire (énumérable par numéro) serait une fuite. Seul le booléen
       // final recoverySuggested sort — et il exige déjà de connaître le vrai
       // nom du titulaire, donc ne divulgue aucun état à lui seul.
+      //
+      // Ce raisonnement était juste, et il ne couvrait que trois champs sur
+      // cinq (#4239). `exists` sortait sans condition — l'oracle même que
+      // #4158 ferme sur la porte voisine — et `maskedInfo` avec lui, dès que
+      // le compte existait.
+      //
+      // La réponse est désormais IDENTIQUE qu'un compte existe ou non, sauf
+      // pour qui a prouvé connaître le titulaire. C'est la seule forme qui ne
+      // laisse rien déduire.
+      const recoverySuggested = result.recoverySuggested ?? false;
+
       return sendSuccess(reply, {
-        exists: result.exists,
-        maskedInfo: result.maskedInfo,
-        recoverySuggested: result.recoverySuggested ?? false
+        maskedInfo: recoverySuggested ? result.maskedInfo : null,
+        recoverySuggested
       });
     } catch (error) {
       logger.error('Erreur check phone', error as Error);

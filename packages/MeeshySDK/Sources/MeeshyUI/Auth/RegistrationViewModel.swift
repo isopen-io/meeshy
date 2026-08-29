@@ -479,9 +479,18 @@ public final class RegistrationViewModel: ObservableObject {
         phoneOwnership?.recoverySuggested == true
     }
 
-    /// Vrai dès que le numéro appartient à un compte existant (récupérable ou non).
+    /// Vrai quand une RÉCUPÉRATION est proposable sur ce numéro.
+    ///
+    /// Elle lisait `exists` — « ce numéro appartient à un compte » — un champ
+    /// que le serveur ne sert plus : le rendre à un appelant anonyme était un
+    /// oracle d'existence, et donc une dé-anonymisation de numéro (#4239).
+    ///
+    /// Le seul signal qui reste est légitime par construction : il exige que
+    /// l'appelant ait déjà prouvé connaître le titulaire. L'écran n'affiche
+    /// donc plus « ce numéro est pris » — il propose une récupération à qui a
+    /// de bonnes raisons de la demander.
     public var phoneBelongsToExistingAccount: Bool {
-        phoneOwnership?.exists == true
+        phoneOwnership?.recoverySuggested == true
     }
 
     // MARK: - Username Suggestion
