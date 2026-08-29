@@ -157,34 +157,49 @@ describe('AttachmentReactionHandler', () => {
       expect(cb).toHaveBeenCalledWith({ success: true });
     });
 
-    it('calls callback with error for missing attachmentId', async () => {
+    // Frontière Zod : mêmes refus que les trois jumelles de réaction. Le vrai
+    // schéma est exercé (aucun mock de `validateSocketEvent`), donc ces témoins
+    // tombent si le schéma est débranché ou affaibli.
+    it('rejects missing attachmentId at the Zod boundary', async () => {
       const cb = jest.fn();
-      const { handler } = makeHandler();
+      const { handler, service } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleAdd(socket, { attachmentId: '', messageId: MSG_ID, emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(service.addAttachmentReaction).not.toHaveBeenCalled();
     });
 
-    it('calls callback with error for missing messageId', async () => {
+    it('rejects missing messageId at the Zod boundary', async () => {
       const cb = jest.fn();
       const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: '', emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
-    it('calls callback with error for missing emoji', async () => {
+    it('rejects missing emoji at the Zod boundary', async () => {
       const cb = jest.fn();
       const { handler } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: MSG_ID, emoji: '' }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+    });
+
+    it('rejects an over-long emoji (>10 chars) at the boundary — parity with the reaction twins', async () => {
+      const cb = jest.fn();
+      const { handler, service } = makeHandler();
+      const socket = makeSocket();
+
+      await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: MSG_ID, emoji: 'a'.repeat(11) }, cb);
+
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(service.addAttachmentReaction).not.toHaveBeenCalled();
     });
 
     it('rejects optimistic messageId (cid_* format) — not a valid ObjectId', async () => {
@@ -194,7 +209,7 @@ describe('AttachmentReactionHandler', () => {
 
       await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: 'cid_abc123', emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('rejects non-ObjectId attachmentId', async () => {
@@ -204,7 +219,7 @@ describe('AttachmentReactionHandler', () => {
 
       await handler.handleAdd(socket, { attachmentId: 'not-an-objectid', messageId: MSG_ID, emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when socket is not in socketToUser map', async () => {
@@ -367,14 +382,15 @@ describe('AttachmentReactionHandler', () => {
       expect(cb).toHaveBeenCalledWith({ success: true });
     });
 
-    it('runs same validation guards as handleAdd — missing fields', async () => {
+    it('runs same Zod boundary as handleAdd — missing fields', async () => {
       const cb = jest.fn();
-      const { handler } = makeHandler();
+      const { handler, service } = makeHandler();
       const socket = makeSocket();
 
       await handler.handleRemove(socket, { attachmentId: '', messageId: MSG_ID, emoji: EMOJI }, cb);
 
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
+      expect(service.removeAttachmentReaction).not.toHaveBeenCalled();
     });
 
     it('runs IDOR guard — attachment belongs to different message', async () => {
