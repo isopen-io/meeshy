@@ -85,9 +85,9 @@ import { attachmentRoutes, attachmentLegacyFileRoutes } from './routes/attachmen
 import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
-import { registerVoiceRoutes } from './routes/voice';
+import { voiceRoutesPlugin } from './routes/voice';
 import { registerTusRoutes } from './routes/uploads/tus-handler';
-import { voiceAnalysisRoutes } from './routes/voice-analysis';
+import { voiceAnalysisRoutes, voiceAnalysisLegacyAliasRoutes } from './routes/voice-analysis';
 import { getAudioTranslateService } from './services/AudioTranslateService';
 import { passwordResetRoutes } from './routes/password-reset';
 import { twoFactorRoutes } from './routes/two-factor';
@@ -210,8 +210,14 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // Register magic link routes with /api/auth prefix
     await server.register(magicLinkRoutes, { prefix: `${API_PREFIX}/auth` });
 
-    // Register user deletions routes (delete for me feature)
-    await server.register(userDeletionsRoutes, { prefix: '' });
+    // Register user deletions routes (delete for me feature) — #4277 critère 3 :
+    // `prefix: ''` disparaît, la base vient d'ICI via `basePath` (jamais `prefix`,
+    // qui additionnerait le préfixage natif de Fastify à des URLs déjà absolues).
+    // Reste sous `/api` et non `/api/v1` : `DELETE …/conversations/:id/delete-for-me`
+    // collisionnerait avec `routes/conversations/delete-for-me.ts`, déjà monté là et
+    // plus complet (transfert de propriété, clôture, diffusion). Trancher laquelle
+    // survit est une décision produit, pas un rangement d'adresse.
+    await server.register(userDeletionsRoutes, { basePath: '/api' });
 
     // Register conversation routes with /api prefix
     await server.register(async (fastify) => {
@@ -351,8 +357,11 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // `/api/v1/attachments/*` ne se contourne plus en retirant « v1 ».
     await server.register(attachmentLegacyFileRoutes, { prefix: '/api' });
 
-    // Register tus resumable upload routes (mounted at /api/v1/uploads)
-    await server.register(registerTusRoutes);
+    // Register tus resumable upload routes — la base vient d'ICI (#4277 critère 2 :
+    // le module ne connaît plus `/api/v1`, et `API_VERSION` redevient une constante
+    // unique). `basePath` et non `prefix` : le serveur TUS calcule le `Location`
+    // qu'il renvoie au client à partir de cette même chaîne.
+    await server.register(registerTusRoutes, { basePath: `${API_PREFIX}/uploads` });
     logger.info('✓ TUS resumable upload routes registered');
 
     // Register reaction routes with /api prefix
@@ -373,19 +382,34 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // Register voice profile routes with /api/voice/profile prefix
     await server.register(voiceProfileRoutes, { prefix: `${API_PREFIX}/voice/profile` });
 
-    // Register voice analysis routes with /api/voice-analysis prefix
-    await server.register(voiceAnalysisRoutes);
-    logger.info('✓ Voice Analysis routes registered');
+    // Register voice analysis routes sous `/api/v1` (#4277 critère 1). Les cinq
+    // routes vivaient à la RACINE, et le web les appelait DÉJÀ sous `/api/v1` :
+    // le serveur ne servait donc NI l'une NI l'autre, et la page de réglages
+    // vocaux était cassée en production. Ce n'est pas un rangement, c'est un
+    // correctif.
+    await server.register(voiceAnalysisRoutes, { prefix: API_PREFIX });
+    // L'ancienne adresse racine reste servie en ALIAS DÉPRÉCIÉ — un grep client
+    // ne voit pas une version déjà installée. Ses en-têtes viennent de #4274 ;
+    // son retrait sera gouverné par le compteur de #4275, jamais par une revue.
+    await server.register(voiceAnalysisLegacyAliasRoutes);
+    logger.info('✓ Voice Analysis routes registered (canonical /api/v1 + legacy root alias)');
 
-    // Register voice API routes (transcribe, translate, analyze, etc.)
+    // Register voice API routes (transcribe, translate, analyze, etc.) —
+    // TOUJOURS enregistrées (#4277 critère 4). L'absence de client ZMQ ne fait
+    // plus DISPARAÎTRE `/api/v1/voice/*` en silence : elle sert un 503 explicite
+    // depuis l'intérieur du plugin. Une route absente ne se diagnostique pas —
+    // son 404 est indiscernable d'une adresse qui n'a jamais existé ; un 503, si.
     const zmqClient = deps.translationService.getZmqClient();
-    if (zmqClient) {
-      const audioTranslateService = getAudioTranslateService(deps.prisma, zmqClient);
-      registerVoiceRoutes(server, audioTranslateService, deps.translationService);
-      logger.info('✓ Voice API routes registered');
-    } else {
-      logger.warn('⚠️ ZMQ client not available, voice routes not registered');
+    const audioTranslateService = zmqClient ? getAudioTranslateService(deps.prisma, zmqClient) : null;
+    if (!zmqClient) {
+      logger.warn('⚠️ ZMQ client not available — /api/v1/voice/* will respond 503');
     }
+    await server.register(voiceRoutesPlugin, {
+      prefix: `${API_PREFIX}/voice`,
+      audioTranslateService,
+      translationService: deps.translationService,
+    });
+    logger.info(`✓ Voice API routes registered (ZMQ ${zmqClient ? 'connected' : 'unavailable — 503 stub'})`);
 
     // Register post/feed routes with /api/v1 prefix.
     // Decorate the scoped instance with orphanMediaCleanup so the repost

@@ -37,12 +37,15 @@ import path from 'path';
 const CHAMPS_DE_NOM = ['username', 'displayName', 'firstName', 'lastName'] as const;
 
 /**
- * `routes/admin/roles.ts` n'est monté par personne — vérifié sur
- * `route-registration.ts`. L'audit le classe « code mort, patron dangereux » et
- * son retrait appartient à #4157. L'exclure ici plutôt que de le corriger évite
- * de faire croire qu'il sert.
+ * `routes/admin/roles.ts` — n'était monté par personne, confirmé mort par
+ * cette exclusion elle-même — a été SUPPRIMÉ par #4277 (critère 5) : plus
+ * rien à exclure ici. `CODE_MORT` reste déclaré, VIDE, plutôt que retiré :
+ * la garde-fou du harnais (`ecrituresVues >= 3`, plus bas) exige déjà que
+ * le balayage trouve des écritures RÉELLES, donc une entrée redevenue morte
+ * ferait retomber ce test en rouge — le signal que quelque chose a besoin
+ * d'être regardé, jamais d'être fait taire ici.
  */
-const CODE_MORT = ['routes/admin/roles.ts'];
+const CODE_MORT: string[] = [];
 
 /** Écritures dont le `data` est assemblé ailleurs — la garde ne peut pas les lire. */
 const CONSTRUIT_DYNAMIQUEMENT: string[] = [];
