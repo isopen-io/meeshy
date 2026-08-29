@@ -29,8 +29,40 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 254i | [#4269](https://github.com/isopen-io/meeshy/pull/4269) | `0f05267c` | — |
 > | 255i | [#4271](https://github.com/isopen-io/meeshy/pull/4271) | `b8a30cfd` | — |
 > | 256i | [#4273](https://github.com/isopen-io/meeshy/pull/4273) | `1fbd1f4d` | — |
+> | 257i | [#4290](https://github.com/isopen-io/meeshy/pull/4290) | `9ac93624` | #4286 |
+> | 258i | [#4294](https://github.com/isopen-io/meeshy/pull/4294) | `5e162ed7` | #4292 |
+> | 259i | [#4299](https://github.com/isopen-io/meeshy/pull/4299) | `c96b307b` | #4297 |
+> | 260i | [#4301](https://github.com/isopen-io/meeshy/pull/4301) | `99d6d21c` | — |
+> | 261i | [#4303](https://github.com/isopen-io/meeshy/pull/4303) | `1af3cc38` | #4302 |
+> | 262i | [#4306](https://github.com/isopen-io/meeshy/pull/4306) | `22e6831f` | — |
+> | 263i | [#4310](https://github.com/isopen-io/meeshy/pull/4310) | `a2ce8815` | #4309 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `a2ce8815` — base de 264i.
+>
+> ### 264i — la doctrine des tailles figées avait 36 justifications et zéro instrument (#4311)
+>
+> Deux balayages d'accessibilité, deux résultats de nature différente :
+>
+> | passe | mesure | verdict |
+> |---|---|---|
+> | bouton à glyphe seul sans libellé VoiceOver | 871 `Button`, 6 candidats | **0 défaut** — les six sont agrégés puis ré-exposés en action de rotor (idiome 183i) |
+> | taille de police figée | 247 sites, 88 fichiers, dont **37 sur du TEXTE** | **1 défaut** + le cliquet manquant |
+>
+> - **36 des 37 sites de texte portaient leur justification en commentaire**
+>   (doctrine 53i / 82i / 86i : un cadre fixe qui déborderait s'il scalait). Le
+>   37ᵉ — `ProfileUserPostsList.chip` — gelait son CHIFFRE à 18 pt sous un libellé
+>   en `.caption2`, qui scale, dans une tuile **sans hauteur fixe** : en AX5 le
+>   libellé devenait 1,5× plus gros que le nombre qu'il légende.
+> - **Un site dont les voisins sont justifiés RESSEMBLE à un site justifié** —
+>   l'angle mort exact d'une règle tenue par la relecture plutôt que par un
+>   instrument. C'est la forme de #4302 et #4292.
+> - Cliquet posé (`FixedFontSizeGuardTests`) : liste de 87 fichiers en
+>   **surensemble** (aucune classification en jeu, donc rien ne peut la faire
+>   rougir à tort) + texte ≤ **36** + total ≤ **245** + élagage obligatoire.
+>   Épinglé sur l'APRÈS-correctif → **rouge sur l'état d'où il vient**.
+> - Borne décisive : la classification texte/glyphe doit rendre les DEUX
+>   populations non vides. Un classifieur effondré rendrait 0 texte et laisserait
+>   le cliquet **vert en ne protégeant plus rien**.
 > - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
 >
 > ### ⚠️ 262i — cinq règles déclarées, quatre sans une seule violation (close par la négative)
