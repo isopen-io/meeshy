@@ -56,10 +56,9 @@
  */
 
 import { describe, it, expect, afterAll } from '@jest/globals';
-import Fastify, { FastifyInstance } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import fs from 'fs';
 import path from 'path';
-import { EventEmitter } from 'events';
 
 // `@tus/server`/`@tus/file-store` sont publiés en ESM pur — Jest ne peut pas
 // les transformer (le reste de node_modules est exclu de la transformation,
@@ -136,157 +135,17 @@ jest.mock('../../services/ZmqSingleton', () => {
   return { ZMQSingleton: { getInstance: jest.fn().mockResolvedValue(new EE()) } };
 });
 
-import { registerAllRoutes, type RouteRegistrationDeps } from '../../route-registration';
-import { createUnifiedAuthMiddleware } from '../../middleware/auth';
+import { buildAssembledApp, type CollectedRoute } from '../../route-manifest';
 
-// ---------------------------------------------------------------------------
-// Stub Prisma "profond" : tout accès de propriété renvoie un nouveau proxy
-// chainable, tout appel renvoie une Promise résolue à `[]`. Suffisant pour
-// que le code de CONSTRUCTION de chaque module de routes (ex. `new
-// XxxService(prisma)`, ou du chargement de clés au démarrage) ne plante pas
-// au chargement — aucune des requêtes anonymes de ce test ne doit jamais
-// réellement lire un résultat Prisma signifiant (elles sont rejetées par le
-// hook d'auth avant), donc le contenu renvoyé par le stub n'a pas d'importance,
-// seule sa forme (itérable, chainable) compte.
-// ---------------------------------------------------------------------------
-// Propriétés à ne JAMAIS relayer vers un proxy imbriqué : `then/catch/finally`
-// évitent qu'un `await` traite le proxy comme un thenable ; `getter/setter`
-// évitent un piège Fastify — `fastify.decorate(name, value)` sonde
-// `value.getter`/`value.setter` (typeof === 'function' ?) pour détecter le
-// pattern d'accesseur `{getter, setter}`. Un proxy racine dont TARGET est une
-// fonction (nécessaire pour que `prisma.model.findMany(...)` reste appelable)
-// a `typeof proxy === 'function'` pour CHAQUE propriété relayée, y compris
-// `.getter` — Fastify croit alors définir un accesseur et n'expose plus la
-// valeur telle quelle (perte de référence, `.serverEncryptionKey` redevient
-// `undefined` une fois traversé `fastify.decorate`). Vérifié empiriquement :
-// sans cette exclusion, `fastify.prisma !== prismaStub` à l'intérieur d'un
-// plugin enregistré.
-const STUB_EXCLUDED_PROPS = new Set(['then', 'catch', 'finally', 'getter', 'setter']);
-
-function makeCallableStub(): any {
-  // `[]` plutôt que `undefined` : plusieurs chemins d'enregistrement (ex.
-  // `EncryptionService.ServerKeyVault.initialize()`) font `for (const x of
-  // await prisma.model.findMany(...))` — un stub générique doit rester
-  // itérable pour ne pas faire planter la CONSTRUCTION des routes (aucune
-  // requête anonyme de ce test ne dépend du contenu réel de ce résultat).
-  const fn: any = (..._args: unknown[]) => Promise.resolve([]);
-  return new Proxy(fn, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      if (STUB_EXCLUDED_PROPS.has(prop)) return undefined;
-      return makeCallableStub();
-    },
-    apply() {
-      return Promise.resolve([]);
-    },
-  });
-}
-
-/**
- * Racine du stub Prisma. Doit envelopper un OBJET, pas une fonction : la même
- * sonde Fastify décrite ci-dessus traite `typeof decoratedValue === 'function'`
- * comme un signal de rebind spécial pour les décorateurs-méthodes — un stub
- * racine appelable perdrait sa référence dès `app.decorate('prisma', ...)`.
- * Seuls les niveaux enfants (`prisma.model.method(...)`) doivent être
- * appelables ; eux ne passent jamais par `fastify.decorate`.
- */
-function makeDeepStub(): any {
-  return new Proxy({}, {
-    get(_target, prop) {
-      if (typeof prop === 'symbol') return undefined;
-      if (STUB_EXCLUDED_PROPS.has(prop)) return undefined;
-      return makeCallableStub();
-    },
-  });
-}
-
-interface CollectedRoute {
-  method: string;
-  url: string;
-  bodySchema?: any;
-  querystringSchema?: any;
-}
-
-async function buildAssembledApp(): Promise<{ app: FastifyInstance; routes: CollectedRoute[] }> {
-  const app = Fastify({
-    logger: false,
-    ajv: {
-      customOptions: {
-        strict: 'log' as const,
-        keywords: ['example'],
-      },
-    },
-  });
-
-  const prismaStub = makeDeepStub();
-
-  // `fastify.authenticate` = EXACT même middleware que la production
-  // (`createUnifiedAuthMiddleware(prisma, {requireAuth:true,
-  // allowAnonymous:false})`, voir `server.ts` `createAuthMiddleware()`).
-  // On utilise la VRAIE fonction, pas un mock — pour un appelant sans
-  // `Authorization` ni `X-Session-Token`, `createAuthContext()` retourne
-  // `createUnauthenticatedContext()` sans jamais toucher Prisma, donc le
-  // stub ci-dessus n'est pas sollicité sur ce chemin.
-  app.decorate('authenticate', createUnifiedAuthMiddleware(prismaStub, {
-    requireAuth: true,
-    allowAnonymous: false,
-  }));
-
-  app.decorate('prisma', prismaStub);
-  app.decorate('redis', undefined);
-  app.decorate('mentionService', {} as any);
-  app.decorate('socketIOHandler', {} as any);
-  app.decorate('jobMappingCache', {} as any);
-  app.decorate('emailService', {} as any);
-  app.decorate('mutationLogService', {} as any);
-  app.decorate('callService', {} as any);
-  app.decorate('notificationService', {} as any);
-  app.decorate('socialEvents', {} as any);
-  app.decorate('presenceChecker', {
-    isOnline: () => false,
-    bulk: () => new Map(),
-    listOnlineAmong: () => [],
-  } as any);
-
-  const routes: CollectedRoute[] = [];
-  app.addHook('onRoute', (routeOptions) => {
-    const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
-    const schema = (routeOptions as any).schema;
-    for (const method of methods) {
-      if (method === 'HEAD' || method === 'OPTIONS') continue; // miroir mécanique de GET, pas une route distincte à garder
-      routes.push({
-        method,
-        url: routeOptions.url,
-        bodySchema: schema?.body,
-        querystringSchema: schema?.querystring,
-      });
-    }
-  });
-
-  const deps: RouteRegistrationDeps = {
-    prisma: prismaStub,
-    translationService: {
-      healthCheck: async () => true,
-      // Valeur non-null pour forcer l'enregistrement de
-      // `registerVoiceRoutes` (voir `route-registration.ts` : "if
-      // (zmqClient) { ... }") — sans ça, tout `routes/voice/*` ne serait
-      // jamais enregistré et échapperait totalement à ce test.
-      // `AudioTranslateService`/`AttachmentTranslateService` appellent
-      // `zmqClient.on(...)` à la construction (écoute d'évènements) : un vrai
-      // EventEmitter, pas un objet nu, pour que ces constructions ne plantent
-      // pas au chargement des routes.
-      getZmqClient: () => new EventEmitter() as any,
-    } as any,
-    messagingService: {} as any,
-    mentionService: {} as any,
-    orphanMediaCleanup: {} as any,
-  };
-
-  await registerAllRoutes(app, deps);
-  await app.ready();
-
-  return { app, routes };
-}
+// Le montage jetable (stub Prisma profond + assemblage du VRAI serveur Fastify
+// via `registerAllRoutes`) vivait ici même, lignes ~141-266. Il est parti dans
+// `route-manifest/collect.ts` (#4276), qui en fait un ARTEFACT régénérable
+// (`route-manifest.json` + `scripts/generate-route-manifest.ts`) plutôt qu'une
+// pièce jetable de CE seul test — deux montages divergeraient tôt ou tard,
+// exactement la classe de défaut que ce dépôt referme sans relâche. Ce test
+// consomme désormais `buildAssembledApp()` depuis ce module partagé ; son
+// comportement observable (mêmes routes, mêmes décorations, mêmes stubs) est
+// inchangé au caractère près — seul l'endroit où le montage est ÉCRIT a bougé.
 
 /**
  * Remplace les segments `:param`/`*` d'un patron de route Fastify par une
