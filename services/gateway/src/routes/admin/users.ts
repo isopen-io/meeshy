@@ -23,6 +23,9 @@ import {
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
 import { requirePermission, requireHierarchy } from '../../middleware/authorize';
+// #4157 c.4 — la MÊME garde que l'éventail de notifications, jamais une copie :
+// une seconde écriture de « ce média est-il masqué ? » ne peut que diverger.
+import { maskedAttachment } from '../../services/notifications/NotificationService';
 import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
@@ -409,7 +412,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            linkId: true,
+            // #4157 c.3 — `linkId` EST le secret qui permet de REJOINDRE la
+            // conversation. Le même lot l'a retiré de `GET /admin/share-links`
+            // et lui a dédié un geste souverain tracé (`POST …/reveal`) ; il
+            // continuait de sortir ICI, dans un autre fichier, à des rôles pour
+            // qui `canViewSensitiveData` est `false`. Une protection posée sur
+            // une porte et pas sur sa voisine ne protège rien : `id` suffit à
+            // désigner le lien, et le geste dédié reste la seule façon de le
+            // révéler.
             identifier: true,
             name: true,
             description: true,
@@ -432,7 +442,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            token: true,
+            // #4157 c.3 — jeton d'accès retiré, même raison que `linkId`
+            // ci-dessus : `shortUrl` suffit à désigner le lien pour une revue.
             name: true,
             campaign: true,
             source: true,
@@ -454,7 +465,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            token: true,
+            // #4157 c.3 — jeton d'affiliation retiré, même raison.
             name: true,
             maxUses: true,
             currentUses: true,
@@ -645,6 +656,25 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         id: true, originalName: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
         fileSize: true, width: true, height: true, duration: true, createdAt: true
       } as const;
+      /**
+       * #4157 c.4 — la protection d'un média se lit aux DEUX niveaux qui la
+       * déclarent, et pas seulement à celui qui porte le fichier : le MESSAGE
+       * (`isViewOnce`/`isBlurred`/`effectFlags`, plus `expiresAt` et
+       * `deletedAt`) et la PIÈCE JOINTE elle-même. C'est la forme exacte que
+       * `messageNotificationFanOut` applique déjà — `protectedOverride` au
+       * niveau message, `maskedAttachment` au niveau pièce jointe — et la
+       * raison pour laquelle une seule des deux lectures ne suffit pas : un
+       * message à vue unique peut porter une pièce jointe qui, elle, ne
+       * déclare rien.
+       *
+       * `PostMedia` n'a AUCUNE de ces colonnes (vérifié au schéma) : un post
+       * n'est pas éphémère. Ce n'est donc pas un oubli si seul le versant
+       * `messageAttachment` les demande.
+       */
+      const protectionSelect = {
+        isViewOnce: true, isBlurred: true, effectFlags: true,
+        message: { select: { isViewOnce: true, isBlurred: true, effectFlags: true, expiresAt: true, deletedAt: true } },
+      } as const;
 
       const [postMedia, attachments, postCount, attCount] = await Promise.all([
         fastify.prisma.postMedia.findMany({
@@ -655,7 +685,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         }),
         fastify.prisma.messageAttachment.findMany({
           where: attWhere,
-          select: { ...mediaSelect, messageId: true },
+          select: { ...mediaSelect, messageId: true, ...protectionSelect },
           orderBy: { createdAt: 'desc' },
           take: window
         }),
@@ -663,20 +693,44 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.messageAttachment.count({ where: attWhere })
       ]);
 
-      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => ({
-        id: m.id,
-        originalName: m.originalName,
-        mimeType: m.mimeType,
-        fileUrl: m.fileUrl,
-        thumbnailUrl: m.thumbnailUrl,
-        fileSize: m.fileSize,
-        width: m.width,
-        height: m.height,
-        duration: m.duration,
-        createdAt: m.createdAt as string | Date,
-        source,
-        contextId
-      });
+      /**
+       * Un média protégé reste LISTÉ — un administrateur doit pouvoir constater
+       * qu'il existe, sa taille, sa date, le message qui le porte — mais son
+       * CONTENU ne voyage pas : `fileUrl` et `thumbnailUrl` tombent à `null` et
+       * `isProtected` dit pourquoi la ligne est amputée, plutôt que de laisser
+       * croire à un média sans fichier. Masquer la ligne entière priverait la
+       * modération d'un fait qu'elle a le droit de connaître ; servir l'URL la
+       * ferait sortir du produit par une porte que le reste du produit ferme.
+       */
+      const estProtege = (m: Record<string, unknown>): boolean => {
+        const message = m.message as Record<string, unknown> | null | undefined;
+        if (message) {
+          if (maskedAttachment(message as Parameters<typeof maskedAttachment>[0])) return true;
+          if (message.deletedAt) return true;
+          const expiresAt = message.expiresAt as Date | string | null | undefined;
+          if (expiresAt && new Date(expiresAt).getTime() <= Date.now()) return true;
+        }
+        return maskedAttachment(m as Parameters<typeof maskedAttachment>[0]);
+      };
+
+      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => {
+        const protege = source === 'message' && estProtege(m);
+        return {
+          id: m.id,
+          originalName: m.originalName,
+          mimeType: m.mimeType,
+          fileUrl: protege ? null : m.fileUrl,
+          thumbnailUrl: protege ? null : m.thumbnailUrl,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          duration: m.duration,
+          createdAt: m.createdAt as string | Date,
+          source,
+          contextId,
+          isProtected: protege
+        };
+      };
 
       const merged = [
         ...postMedia.map((m) => toMedia(m as Record<string, unknown>, 'post', (m as Record<string, unknown>).postId)),
@@ -706,7 +760,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     Params: { userId: string };
     Querystring: { offset?: string; limit?: string; status?: string };
   }>('/admin/users/:userId/reports', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
+    // #4157 — DEUX seuils gouvernaient la même table : `GET /admin/reports`
+    // exige `canModerateContent` (MODERATOR, ADMIN, BIGBOSS) quand celle-ci se
+    // contentait de `canViewUsers`, qui admet AUDIT en plus. Deux seuils sur
+    // une même donnée, c'est le plus bas qui décide — et le filtre par
+    // `reporterId` ne change pas la nature de ce qui est lu.
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canModerateContent')]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
