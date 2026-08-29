@@ -401,8 +401,38 @@ function hookSource(fn: unknown): string {
  */
 function hasAuthenticateHook(route: CollectedRoute, authenticateRef: unknown): boolean {
   const hooks = [...asHookList(route.onRequest), ...asHookList(route.preHandler)];
-  return hooks.some((fn) => fn === authenticateRef || hookSource(fn).includes('.authenticate('));
+  return hooks.some(
+    (fn) =>
+      fn === authenticateRef ||
+      hookSource(fn).includes('.authenticate(') ||
+      hookSource(fn).includes(UNIFIED_AUTH_CALL_MARKER)
+  );
 }
+
+/**
+ * La TROISIÈME forme d'authentification du dépôt — celle qui manquait.
+ *
+ * `createUnifiedAuthMiddleware(prisma, …)` (`middleware/auth.ts`) rend une
+ * fonction `unifiedAuth` qui n'est NI `fastify.authenticate` par référence, NI
+ * une fonction dont la source contient `.authenticate(`. Elle échappait donc aux
+ * deux détections précédentes, et **trente-deux modules l'emploient**.
+ *
+ * Le coût de cet angle mort n'était pas cosmétique : le manifeste classait
+ * 304 routes sur 524 en `no-standard-auth-hook`, c'est-à-dire « public par
+ * construction, donc S0 ou S1 ». Mesuré sur staging le 2026-08-29, dix de ces
+ * routes tirées au hasard : SEPT rendent 401 sans jeton, trois rendent 400,
+ * AUCUNE n'est publique. Une table qui annonce « public » sur une route gardée
+ * est pire qu'une table absente — le critère 3 de #4276 veut qu'elle serve aux
+ * gardes de contrat client, et un lecteur s'y fierait.
+ *
+ * Le marqueur est un appel INTERNE (comme les trois marqueurs de permission
+ * ci-dessous), jamais un nom de fonction : un nom se renomme, l'appel que la
+ * fermeture exécute beaucoup moins. Et il est purement ASCII, pour la raison
+ * donnée au § des marqueurs de permission — `Function.prototype.toString()`
+ * échappe les caractères non-ASCII sous `tsx` et les préserve sous `ts-jest`,
+ * ce qui ferait rougir le cliquet entre deux régénérations d'une MÊME route.
+ */
+const UNIFIED_AUTH_CALL_MARKER = 'authMiddleware.createAuthContext(';
 
 /** Vrai si un hook contient l'appel INTERNE distinctif d'une des trois gardes nommées de `middleware/authorize.ts`. */
 function hasHookMarker(route: CollectedRoute, marker: string): boolean {

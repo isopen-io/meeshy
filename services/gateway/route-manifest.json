@@ -225,10 +225,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -435,10 +435,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -757,10 +757,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -771,10 +771,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -897,10 +897,10 @@
       "mountPrefix": "/api/v1/voice/profile",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -1933,10 +1933,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -1947,10 +1947,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2283,10 +2283,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2591,10 +2591,10 @@
       "mountPrefix": "/api/v1/directory",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2703,10 +2703,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2731,10 +2731,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2745,10 +2745,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2759,10 +2759,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2773,10 +2773,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2787,10 +2787,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -2801,10 +2801,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3613,10 +3613,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3627,10 +3627,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3641,10 +3641,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3655,10 +3655,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3697,10 +3697,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3711,10 +3711,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3725,10 +3725,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3739,10 +3739,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -3753,10 +3753,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4075,10 +4075,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4131,10 +4131,10 @@
       "mountPrefix": "/api/v1/voice/profile",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4145,10 +4145,10 @@
       "mountPrefix": "/api/v1/voice/profile",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4159,10 +4159,10 @@
       "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4201,10 +4201,10 @@
       "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4481,10 +4481,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4495,10 +4495,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4509,10 +4509,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4691,10 +4691,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -4705,10 +4705,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5265,10 +5265,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5293,10 +5293,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5307,10 +5307,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5321,10 +5321,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5335,10 +5335,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -5349,10 +5349,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6161,10 +6161,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6623,10 +6623,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6637,10 +6637,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6889,10 +6889,10 @@
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6945,10 +6945,10 @@
       "mountPrefix": "/api/v1/voice/profile",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -6959,10 +6959,10 @@
       "mountPrefix": "/api/v1/voice/profile",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -7015,10 +7015,10 @@
       "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -7029,10 +7029,10 @@
       "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -7043,10 +7043,10 @@
       "mountPrefix": "",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -7351,10 +7351,10 @@
       "mountPrefix": "/api/v1/voice/profile",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
-        "S0",
-        "S1"
+        "S2",
+        "S3"
       ],
-      "securityBasisKey": "no-standard-auth-hook",
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     }
