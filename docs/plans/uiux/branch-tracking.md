@@ -14,6 +14,101 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 250i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **249i est MERGÉE** — PR [#4249](https://github.com/isopen-io/meeshy/pull/4249), squash `ce9ebfc6`, issue #4248 fermée. **CI `Build app + tests unitaires` : 8989 passés / 0 échec / 5 sautés sur 8994**, `COMPILE_ONLY: false`, 17 checks verts (Trivy neutre, Voice E2E sauté). Les trois doutes de compile publiés par 249i sont donc SOLDÉS : le ternaire `.isSelected` sur un `Button`, `Font` comparé entre deux `MeeshyFont.relative`, et `Font.weight(_:)` sur un `Font` déjà construit compilent tous les trois.
+> - **Synchronisation 250i** : branche `claude/intelligent-noether-6zxsbz` **repartie de `origin/main` `ce9ebfc6`** (la branche désignée redémarre du main après merge, elle ne s'empile pas sur de l'histoire déjà mergée).
+>
+> ### 250i — quand la cible tactile EST le dessin
+>
+> 249i laissait `InteractiveProgressBar` en suivi comme « la seule cible sub-44
+> connue ». **La chercher par sa FORME plutôt que par son écran en a rendu
+> trois.**
+>
+> - **La forme** : quand le label d'un `Button` COMMENCE par une forme nue
+>   (`Circle`, `RoundedRectangle`…), la zone sensible du bouton est exactement le
+>   cadre de cette forme. Rien ne l'élargit — pas de texte qui pousse, pas de
+>   `Label` qui impose sa hauteur, pas de `padding` qu'un glyphe hériterait.
+>   **Le dessin devient la cible**, et un dessin décoratif est presque toujours
+>   sous les 44 pt.
+> - **Les trois sites** : la barre d'étapes de l'inscription (8 boutons, trait de
+>   5 à 8 pt → **205 pt²**, un dixième du minimum HIG, et c'est le seul chemin
+>   direct vers une étape déjà remplie) ; les DEUX bandes de couleurs du composeur
+>   (17 pastilles de 28 pt chacune, code recopié à l'identique).
+> - **⚠️ UN ESPACE QUI AÈRE N'EST PAS UN ESPACE QUI RÉPOND.** Les deux palettes
+>   portaient 8 pt de marge verticale — **posée sur le `HStack` PARENT, donc hors
+>   du bouton**. La bande mesurait déjà 44 pt de haut et n'en écoutait que 28.
+>   C'est ce qui les a tenues hors des revues : une capture, un Accessibility
+>   Inspector posé sur le conteneur, une mesure au doigt montrent tous 44 pt.
+>   **La question n'est pas « la rangée est-elle assez haute ? » mais « qui, dans
+>   cette rangée, RÉPOND ? »** — pendant géométrique du défaut de 249i, où un
+>   modificateur déclarait une cible sans la faire respecter.
+> - **⚠️ ET LE COMMENTAIRE DÉCLARAIT LE PARTAGE AU MAUVAIS NIVEAU.**
+>   `ComposerSceneBand.palette` était surmontée de « c'est le même contrôle, servi
+>   à deux endroits » — vrai, et vrai **de la CLÉ**, pendant que la VUE était
+>   recopiée. Troisième occurrence en trois lots de « un commentaire ne fait pas
+>   d'une copie une source unique » (248i), et la variante la plus trompeuse : le
+>   commentaire ne se trompe pas, il nomme un partage à un niveau et laisse croire
+>   au niveau au-dessus.
+> - **Correctif** : rangée de 44 pt autour du trait (modèle `UIPageControl` — la
+>   cible n'est pas le dessin), cadre et `contentShape` DANS le label (leçon
+>   249i) ; `BackgroundColorPalette`, source unique des deux bandes, cible
+>   44 × 44, dessin inchangé à 28 pt, marge du parent retirée — **la bande fait
+>   exactement la même hauteur qu'avant** ; nom POSITIONNEL « Couleur 3 sur 17 »
+>   (précédent 242i) là où dix-sept boutons portaient tous « Arrière-plan ».
+>   Coût en hauteur de la barre d'étapes : **+12 pt, pas +36**, les marges de
+>   l'hôte ayant été absorbées.
+> - **⚠️ UNE EXTRACTION DE VUE DÉPLACE DU TEXTE QUE DES GARDES CHERCHENT.**
+>   `ComposerSceneActivationTests` lit la SOURCE de `ComposerDocumentSurface.swift`
+>   et y exige `StoryBackgroundPalette.colors`, `onPickBackground?(` et
+>   `private var backgroundStrip`. Les trois survivent — **vérifié à la main avant
+>   commit, pas espéré**. Avant toute extraction, chercher les gardes qui NOMMENT
+>   le fichier d'origine, pas seulement celles qui testent son comportement
+>   (leçon 248i, appliquée en amont cette fois).
+> - **Preuve hors toolchain** : règle neuve répliquée et exécutée sur les deux
+>   arbres — **3 → 0** ; les trois règles de 249i restent à 0 ; clés orphelines 0 ;
+>   backlog non traduit **121 → 121** (la clé neuve est traduite dans les sept
+>   locales) ; catalogue 3406 → 3407.
+> - **⚠️ PREMIER RUN ROUGE, et sa leçon.** `470bf5f8` : `** TEST BUILD FAILED **`,
+>   exit 65, **trois erreurs de compile, toutes dans le fichier de garde neuf** —
+>   `cannot find 'InteractiveProgressBar' / 'BackgroundColorPalette' in scope`. Il
+>   manquait `@testable import Meeshy`. Le fichier avait été modelé sur
+>   `MediaLabelSourceGuardTests`, qui n'importe que `XCTest` parce qu'il ne fait que
+>   LIRE du texte. **Copier le squelette d'une garde, c'est hériter de ses IMPORTS,
+>   donc de son PÉRIMÈTRE** : dès qu'une garde de forme ajoute une assertion sur une
+>   VALEUR, elle change de nature et son en-tête doit suivre. L'analyse annonçait
+>   pourtant le mélange en toutes lettres, sans en tirer la conséquence.
+> - **Le run rouge a néanmoins SOLDÉ le doute n° 1** : les 3 erreurs sont dans le
+>   bundle de TESTS et la liste complète n'en contient aucune autre — **la cible app
+>   a compilé**, donc `ForEach(colors.indices) { index in let hex = colors[index] … }`
+>   passe. Le doute n° 2 (`@MainActor` sur une seule méthode) reste ouvert : la
+>   compile s'est arrêtée sur la résolution de nom, avant tout contrôle d'isolation.
+>   **Un run rouge n'est pas un run muet — lire ce qu'il a QUAND MÊME prouvé.**
+> - **⚠️ SECOND RUN ROUGE : 1 échec sur 9001, et c'est une GRAPHIE épinglée.**
+>   `2f540290` compile — **doute n° 2 SOLDÉ** (`@MainActor` sur une seule méthode
+>   d'une classe de test non isolée est correct). Le seul rouge :
+>   `XCTAssertFalse(arabic.contains("3"))`, pendant que les deux assertions
+>   positives du même test passaient (le rang s'écrit « ٣ », le total « ١٧ »).
+>   **Le banc de 242i porte à cet endroit exact la mise en garde qui décrit ce
+>   défaut mot pour mot** — « épingler une intention, jamais une graphie »
+>   (leçon 272) — dans le doc-comment de la fonction VOISINE de celle que je
+>   copiais. Aggravant : **le message de l'assertion ne portait pas la chaîne
+>   obtenue** (les deux autres, si), donc le rouge était indiagnosticable et
+>   coûtait un cycle entier pour apprendre une chaîne. Réécrit sur la forme
+>   éprouvée : rang et total DÉRIVÉS de `LocalizedNumber.exact`, valeur obtenue
+>   dans chaque message, et la seule négation gardée est celle de 242i — aucun
+>   spécificateur brut ne survit (`%@`, `%lld`, `%1$`, `%2$`), qui épingle un
+>   défaut RÉEL.
+> - **Deux rouges de suite, deux fois la même cause de fond** : copier un banc
+>   éprouvé sans copier ce qu'il DIT. Le premier a manqué son `@testable import`
+>   parce que le modèle n'en avait pas besoin ; le second a écrit l'assertion que
+>   le modèle interdit explicitement. **Lire les doc-comments du fichier qu'on
+>   imite, pas seulement son code.**
+> - **Suites 251i+** : (a) **la garde s'arrête au premier enfant du label** — un
+>   `ZStack { Circle(); Image() }` porte le même défaut et lui échappe ; l'élargir
+>   demande de définir « un label dont la géométrie est décorative », ce qui est
+>   une itération, pas une ligne ; (b) rangée méta du fil en Dynamic Type XXL
+>   (suivi 249i) ; (c) `FeedPostCard:1364` (suivi 249i) ; (d) carry-over SDK.
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 249i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 > - **Synchronisation 249i** : branche `claude/intelligent-noether-6zxsbz` **repartie de `origin/main` `b1eeb470`** · itération **249i**. Une seule PR ouverte au départ (**#4246**, gateway) — aucun fichier commun, aucun conflit possible.
 > - **248i est MERGÉE** (`MediaKindLabel`, neuf tables d'étiquettes de média → une).

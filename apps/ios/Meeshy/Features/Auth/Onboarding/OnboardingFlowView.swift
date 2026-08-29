@@ -30,12 +30,15 @@ struct OnboardingFlowView: View {
                         }
                     }
                 )
+                // La barre porte désormais une rangée de 44 pt (cible tactile
+                // HIG) autour d'un trait de 5 à 8 pt : les marges qui
+                // l'entouraient sont DANS la cible, où elles servent à quelque
+                // chose. Les reposer ici doublerait l'espacement — l'entête
+                // reste à ~18 pt sous le trait, comme avant.
                 .padding(.horizontal, 16)
-                .padding(.top, 8)
 
                 stepHeader
                     .padding(.horizontal, 20)
-                    .padding(.top, 16)
 
                 TabView(selection: $viewModel.currentStep) {
                     StepPseudoView(viewModel: viewModel)
