@@ -56,7 +56,12 @@ async function buildApp(prisma: PrismaClient): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma);
   app.decorate('authenticate', async (req: any) => {
-    req.authContext = { isAuthenticated: true, registeredUser: { id: 'me-id' }, userId: 'me-id' };
+    // Le viewer est le PROPRIÉTAIRE de la cible (`real-id`, ce que la
+    // recherche rend). Ce témoin porte sur le SÉRIALISEUR — « le schéma ne
+    // supprime aucun champ calculé » — pas sur l'autorisation ; depuis #4161,
+    // un viewer tiers ne reçoit plus les quatre compteurs privés, et le témoin
+    // mesurerait alors une charge amputée en croyant mesurer un schéma.
+    req.authContext = { isAuthenticated: true, registeredUser: { id: 'real-id' }, userId: 'real-id' };
   });
   await getUserStats(app);
   await app.ready();

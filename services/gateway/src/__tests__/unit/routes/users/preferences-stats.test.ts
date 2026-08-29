@@ -30,7 +30,6 @@ import { getUserStats } from '../../../../routes/users/preferences';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CURRENT_USER_ID = '507f1f77bcf86cd799439011';
 const TARGET_USER_ID  = '507f1f77bcf86cd799439022';
 
 // ─── App factory ──────────────────────────────────────────────────────────────
@@ -62,11 +61,22 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
+  // Le viewer est le PROPRIÉTAIRE de la cible.
+  //
+  // Ces témoins portent sur le CALCUL des compteurs, pas sur leur autorisation :
+  // depuis #4161, les quatre compteurs privés (`totalMessages`,
+  // `totalConversations`, `totalTranslations`, `friendRequestsReceived`) ne
+  // partent qu'à soi et à l'administration. Un viewer TIERS — ce qu'ils
+  // utilisaient — ne les reçoit plus, et ces témoins mesuraient alors une
+  // charge amputée sans le dire.
+  //
+  // La garde d'autorisation a ses propres témoins :
+  // `stats-private-counters.test.ts`, qui exerce précisément le cas tiers.
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      userId: CURRENT_USER_ID,
-      registeredUser: { id: CURRENT_USER_ID },
+      userId: TARGET_USER_ID,
+      registeredUser: { id: TARGET_USER_ID },
     };
   });
 

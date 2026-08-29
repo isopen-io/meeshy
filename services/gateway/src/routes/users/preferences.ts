@@ -18,6 +18,9 @@ import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpe
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { createDirectoryRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { jetonRecherche } from '../../utils/search-tokens';
+import { permissionsService } from '../../services/admin/permissions.service';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import type { UserRoleEnum } from '@meeshy/shared/types';
 
 
 /**
@@ -497,11 +500,40 @@ export async function getUserStats(fastify: FastifyInstance) {
       });
 
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
-      return sendSuccess(reply, {
-        totalMessages, totalConversations, totalTranslations,
-        friendRequestsReceived, languagesUsed, memberDays,
+
+      // Deux familles de compteurs, et une seule est publique (#4161).
+      //
+      // `postsCount`, `reelsCount`, `storiesCount`, `memberDays` et les
+      // `achievements` décrivent une AUDIENCE — ce que la personne publie, et
+      // qui est déjà visible. `totalMessages`, `totalConversations`,
+      // `totalTranslations` et `friendRequestsReceived` décrivent son USAGE
+      // INTIME du produit : combien elle écrit, dans combien de fils elle est
+      // présente, combien de demandes elle reçoit.
+      //
+      // Les quatre partaient à TOUT compte authentifié, sans filtre d'amitié ni
+      // préférence de confidentialité — mesuré en intégration sur un viewer
+      // tiers. Ils ne partent plus qu'à soi et à l'administration.
+      const publics = {
+        languagesUsed, memberDays,
         postsCount, reelsCount, storiesCount,
         languages, achievements,
+      };
+
+      const acteur = (request as unknown as UnifiedAuthRequest).authContext;
+      const estSoi = acteur?.userId === userId;
+      const estAdministration = permissionsService.hasPermission(
+        (acteur?.registeredUser?.role ?? 'USER') as UserRoleEnum,
+        'canViewUsers'
+      );
+
+      if (!estSoi && !estAdministration) {
+        return sendSuccess(reply, publics);
+      }
+
+      return sendSuccess(reply, {
+        ...publics,
+        totalMessages, totalConversations, totalTranslations,
+        friendRequestsReceived,
       });
 
     } catch (error) {
