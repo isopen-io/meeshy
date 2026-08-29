@@ -101,17 +101,27 @@ class UserRepository @Inject constructor(
     suspend fun updateBanner(url: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.updateBanner(UpdateBannerRequest(url)) }.map { it.user }
 
+    /**
+     * Lit UN profil public — identifiant ou pseudo, indifferemment (#4250).
+     *
+     * Trois methodes visaient ici trois ALIAS de la meme route de passerelle :
+     * celle-ci (`users/{idOrUsername}`), `getPublicProfile` (`u/{username}`) et
+     * `getProfileById` (`users/id/{id}`). Les deux dernieres n'avaient AUCUN
+     * appelant dans l'application — ni ecran, ni cas d'usage — et repointer
+     * trois noms sur `directory/people/{handle}` les aurait rendues
+     * rigoureusement identiques : trois jumelles pour une seule regle, que la
+     * prochaine main aurait fait diverger. Elles sont supprimees ; le nom qui
+     * reste est celui que `ProfileViewModel.loadProfile` appelle deja.
+     *
+     * Le parametre s'appelle toujours `idOrUsername` parce que c'est ce que
+     * l'appelant en sait : un lien de partage `meeshy://u/<pseudo>` et un
+     * identifiant de navigation arrivent tous deux ici sans etre distingues.
+     */
     suspend fun getProfile(idOrUsername: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getProfile(idOrUsername) }
-
-    suspend fun getPublicProfile(username: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getPublicProfile(username) }
+        apiCall { userApi.getPerson(idOrUsername) }
 
     suspend fun getProfileByEmail(email: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.getProfileByEmail(email) }
-
-    suspend fun getProfileById(id: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getProfileById(id) }
 
     suspend fun getProfileByPhone(phone: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.getProfileByPhone(phone.replace("+", "")) }

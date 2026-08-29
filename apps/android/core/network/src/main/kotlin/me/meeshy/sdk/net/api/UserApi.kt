@@ -66,17 +66,68 @@ interface UserApi {
     @PATCH("users/me/banner")
     suspend fun updateBanner(@Body body: UpdateBannerRequest): ApiResponse<UpdateProfileResponse>
 
-    @GET("users/{idOrUsername}")
-    suspend fun getProfile(@Path("idOrUsername") idOrUsername: String): ApiResponse<MeeshyUser>
-
-    @GET("u/{username}")
-    suspend fun getPublicProfile(@Path("username") username: String): ApiResponse<MeeshyUser>
+    /**
+     * LE profil public, a UNE adresse — `GET /directory/people/:handle` (#4161, #4250).
+     *
+     * ## Ce que cette methode remplace, et ce que l'inventaire manquant coutait
+     *
+     * Android appelait TROIS alias de cette meme route : `users/{idOrUsername}`
+     * (l'ouverture de profil, seule reellement branchee), `u/{username}` et
+     * `users/id/{id}` (deux jumelles mortes). Le commentaire qui garde ces alias
+     * cote passerelle ne parle que des « versions iOS installees » — Android n'a
+     * ete compte par aucun audit du chantier. Retirer les alias sur cet
+     * inventaire a trois clients aurait coupe l'ouverture de profil sur Android,
+     * y compris depuis un lien partage `meeshy://u/<pseudo>`, dont la queue de
+     * versions installees est longue.
+     *
+     * ## `expand=presence` n'est pas un confort : c'est ce qui evite une PERTE SILENCIEUSE
+     *
+     * La route canonique SUPPRIME `isOnline` et `lastActiveAt` par defaut, la ou
+     * les trois alias les servaient. Migrer sans ce parametre n'aurait produit
+     * aucune erreur de decodage — `MeeshyUser` porte les deux champs en
+     * nullable — mais `ProfileHeaderPresentation.from` aurait lu deux absents,
+     * `isOnline == true` aurait valu faux pour tout le monde, et la pastille de
+     * presence aurait disparu de chaque profil consulte, avec la ligne « vu il y
+     * a X ». Une regression qu'aucun temoin de decodage ne peut voir : le
+     * document decode parfaitement, il est seulement plus pauvre.
+     *
+     * Le parametre ne LEVE aucune garde. `servirProfilPublic` a deja applique la
+     * loi de visibilite du 2026-08-25 quand il compose la charge ; `expand`
+     * decide seulement si l'on POSE la question. Un lecteur non-ami recoit donc
+     * toujours l'absence, et le client ne fabrique rien : pas de champ, pas de
+     * pastille.
+     *
+     * ## Le decodage, champ par champ
+     *
+     * Le modele Kotlin est plus STRICT que le fil — un champ inconnu ou un champ
+     * requis absent fait echouer le document ENTIER (kotlinx), la ou le decodeur
+     * Swift tolere. Trois proprietes du `Json` de [me.meeshy.sdk.net.MeeshyApi]
+     * tiennent ensemble ce contrat, et il n'en faut pas moins :
+     * `ignoreUnknownKeys` absorbe les quatre champs de voix que la route sert et
+     * que `MeeshyUser` ignore (`voicePublic`, `voiceSampleUrl`,
+     * `voiceSampleDurationMs`, `voiceQuality`) plus les trois blocs d'expansion
+     * (`stats`, `relation`, `isSelf`) ; les valeurs par defaut absorbent les
+     * dix-huit champs que le profil public ne sert plus depuis #4161 ;
+     * `explicitNulls = false` absorbe les nuls. Restent `id` et `username`, les
+     * deux SEULES proprietes sans defaut de `MeeshyUser` — donc les deux seules
+     * dont l'absence casserait tout, et la route les sert toujours.
+     *
+     * [handle] accepte un ObjectId ou un pseudo : c'est la detection de
+     * `/users/:id` (`isValidObjectId`), inchangee. Aucune resolution nouvelle
+     * n'est donc a faire ici — un lien de partage se transmet verbatim.
+     *
+     * [expand] a une valeur par defaut, et c'est delibere : laisser le choix a
+     * chaque site d'appel rendrait la perte silencieuse ci-dessus reproductible
+     * par simple oubli.
+     */
+    @GET("directory/people/{handle}")
+    suspend fun getPerson(
+        @Path("handle") handle: String,
+        @Query("expand") expand: String = "presence",
+    ): ApiResponse<MeeshyUser>
 
     @GET("users/email/{email}")
     suspend fun getProfileByEmail(@Path("email") email: String): ApiResponse<MeeshyUser>
-
-    @GET("users/id/{id}")
-    suspend fun getProfileById(@Path("id") id: String): ApiResponse<MeeshyUser>
 
     @GET("users/phone/{phone}")
     suspend fun getProfileByPhone(@Path("phone") phone: String): ApiResponse<MeeshyUser>

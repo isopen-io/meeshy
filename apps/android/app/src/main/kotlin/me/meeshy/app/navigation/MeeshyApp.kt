@@ -210,7 +210,7 @@ object Routes {
      * matching intent-filter (manifest) or `navDeepLink` (here) until this pair,
      * so a shared/QR profile link opened nothing on Android. `{userId}` doubles
      * as the argument name for a username value: `ProfileViewModel.loadProfile`
-     * already forwards it verbatim to `UserApi.getProfile(idOrUsername)`, which
+     * already forwards it verbatim to `UserApi.getPerson(handle)`, which
      * resolves either — no new resolution step needed on this route.
      */
     const val PROFILE_SHARE_APP_DEEP_LINK =
