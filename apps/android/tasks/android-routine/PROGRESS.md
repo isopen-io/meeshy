@@ -2,6 +2,54 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a dim in-call video frame now carries a pure, exact-parity low-light-boost decision, folded
+> straight from the frame's luma** (slice `call-low-light-boost`, feature-parity H. Calls — the "In-call video
+> filters … low-light boost" `[~]` line; closes the "the low-light boost pass (folding `FrameLuminance`)"
+> pending clause at the policy layer). Before this, the automatic low-light pass iOS runs first in its
+> `VideoFilterPipeline` (§14.2.4) had no Android analogue at all — the two halves it needs (the per-frame luma
+> average `FrameLuminance`, and the boost-strength maths) existed apart, with nothing composing them. This is a
+> pure instant-app win for a dark scene (dimensions 4/8/13) and a strict SOTA upgrade on iOS (the clamp below).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4269 (iOS docs, jcnm) and #4267
+> (gateway Zod, jcnm) — neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of
+> mine to merge. Prior slice (`story-publish-queue-media-only`) is on `main` (#4262). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified
+> `apps/android` only (1 new main + 1 new test).
+>
+> **The change — one pure policy + one folding seam.** (1) `:core:model` new `LowLightBoost` data class
+> (exposureEv/noiseReductionLevel/noiseReductionSharpness/saturation — the CIExposureAdjust/CINoiseReduction/
+> CIColorControls params the actuator writes). (2) `LowLightBoostPolicy.plan(averageBrightness: Float?)` returns
+> `null` (forward untouched) for no reading or normalized brightness `≥ 0.3`, else scales every param by
+> `boostFactor = (0.3 − normalized)/0.3` at exact iOS numeric parity (EV×1.5, noise×0.02, sharpness 0.4 constant,
+> saturation 1+×0.2). **SOTA hardening:** `boostFactor` is **clamped to 0..1** so a degenerate negative reading
+> never over-boosts (iOS never clamps — its Y-plane luma is always 0..255). (3) `planForFrame(yPlane,…)` is the
+> actuator's one-call seam that folds `FrameLuminance.averageOfYPlane` straight into `plan` — literally the
+> "folding `FrameLuminance`" clause, composing the two existing pure cores instead of leaving them apart.
+>
+> **Tests: +13** `LowLightBoostPolicyTest` (behaviour via the public API, no Android/GPU/I-O): gate — null
+> reading / fully-bright / just-above-threshold (77) → no boost, just-below (76) → small boost; strength anchors
+> — pitch-black → full (EV 1.5, noise 0.02, sharpness 0.4, saturation 1.2), half-dark (38.25) → half (EV 0.75,
+> noise 0.01, saturation 1.1); behaviour — darker boosts more, sharpness constant across strengths, any active
+> boost raises saturation; hardening — negative reading clamps to full not over; folding — dark Y plane → boost,
+> bright Y plane → null, degenerate geometry → null. **Mutation-RED-proven**: dropping `.coerceIn(0f,1f)` reddens
+> EXACTLY the negative-reading test (13 tests, 1 failed, no collateral), restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 5m 25s**, 973 actionable tasks, 0 failed. Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — a pure `:core:model` policy, no orchestration; SSOT — reuses
+> `FrameLuminance`, pins constants to iOS, no luma re-impl; no tautological tests; no floor lowered).
+>
+> **Next**: the video-filter box's remaining pure boxes are largely exhausted (config/preset/degrade/low-light
+> all landed) — what's left there is the WebRTC `VideoProcessor`/`VideoSink` actuator (needs an emulator/GPU,
+> not JVM-testable). Candidate pure-core slices still open in H. Calls: the thermal-source mapping
+> (`PowerManager.THERMAL_STATUS_*` → `ThermalState`, a pure int→enum collapse the sender-cap plan already
+> consumes) or the "In-call translation data channel (dual-stream clean audio)" model layer. Otherwise the
+> Stories write-path thumbHash **generation** box (needs `Bitmap`→RGBA glue, lower JVM yield). Read the chosen
+> box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **a media-only (RAW background) story queued offline now surfaces its optimistic self-ring
 > and its failure-recovery strip, instead of being silently dropped** (slice `story-publish-queue-media-only`,
 > feature-parity E. Stories — the "Offline publish queue … RAW background publish-all" clause of the `[~]` line).
