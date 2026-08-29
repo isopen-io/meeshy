@@ -2454,3 +2454,26 @@ was faithful the day it was written and silently drifted when iOS moved. Reusabl
   `platforms/android-37 → android-37.0` symlink (SDK is local-only, never committed). The two notes are both
   true — AGP's willingness to auto-map `37 → 37.0` is version/cache-sensitive; if pristine errors, symlink
   rather than assume the repo is broken. CI is unaffected (its `setup-android` step documents the same quirk).
+
+## 2026-08-29 — a "needs an emulator" pending item often has a PURE half worth extracting first (slice `call-stats-reduce`)
+The prior run's "Next" named "the live WebRTC stats source (`RTCStatsReport → CallQualitySample`)" as device-only.
+That is half true. The FRAMEWORK half (reading `RTCStatsReport`'s `NSObject`/value graph) is device-bound; the
+ARITHMETIC half (per-kind packet sums, codec-id→name resolution, the audio-jitter mean, and — critically — the
+cumulative-counter → interval-loss-**ratio** conversion) is pure and was already factored out on iOS exactly so
+it is unit-testable (`CallStats.reduce` + `WebRTCService.adjustBitrate`, `WebRTCTypes.swift` §5.7). Lesson:
+before shelving a pending item as "emulator only", ask **which slice of it is the decision and which is the I/O**
+— port the decision as `:core:model` now, leave only the thin adapter for the device run. This is the same
+building-blocks-vs-orchestration grain the whole Calls area has followed (the reducer is the input SSOT the
+existing `VideoQualityLevel`/`CallQualitySample` ladder consumes).
+
+Two porting specifics worth keeping:
+- **A cumulative counter is never a fraction.** libwebrtc's `packetsLost`/`packetsReceived` only grow. A tick's
+  loss ratio is `Δlost/(Δlost+Δreceived)` between two snapshots, and each delta must be **clamped ≥ 0** —
+  otherwise an ICE-restart counter reset (current < previous) reads as negative loss when ONLY one axis resets
+  while the other grows (both-axes reset is already caught by `denom > 0`, so a full-reset test does NOT exercise
+  the clamp — a loss-counter-only-reset test does; that's the discriminating case that makes the clamp
+  load-bearing). Watch the denominator: iOS's is `Δlost + Δreceived`, not `Δreceived`.
+- **Fraction vs percent are two consumers.** iOS emits BOTH a `lossRatio` (fraction, feeds `VideoQualityLevel.from`)
+  and a `packetLossPercent` (×100, feeds the gateway call-quality report) from the same deltas. Android's
+  `CallQualitySample.packetLoss` is the FRACTION — porting the ×100 value here would silently pin every call to
+  critical. Document which one you ported so the next reader doesn't "fix" it.

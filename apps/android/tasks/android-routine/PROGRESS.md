@@ -2,6 +2,59 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **the pure WebRTC stats reducer + interval loss-ratio landed — the JVM-testable half of the
+> "live WebRTC stats source" the prior run named as next** (slice `call-stats-reduce`, feature-parity
+> "Connection-quality indicator" `[~]` line). Until now Android had `CallQualitySample(rttMs, packetLoss)` and
+> the tier ladder that consumes it, but nothing that turns a raw WebRTC stats report into that sample — the
+> `NoopCallQualitySampler` seam emitted nothing. iOS keeps this arithmetic in a pure, tested `CallStats.reduce`
+> (`WebRTCTypes.swift` §5.7) precisely so it is unit-testable without a live `RTCPeerConnection`; the framework
+> half is only `NSObject → Double` adaptation. So the reducer is pure `:core:model`, not device-bound
+> (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4307/#4300/#4291/#4267 (all jcnm:
+> shared/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`call-quality-rtt-longhaul-parity`) is on `main` (#4304). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (2 new files: 1 main + 1 test).
+>
+> **The change — two pure functions, one data class.** `:core:model` `CallStats` (rtt/packetsLost/bandwidth/
+> bytesReceived/codec/inbound-audio+video/outbound/availableOutgoingBitrate/jitter) + nested `CallStats.RawEntry`
+> (the framework-agnostic projection of one `RTCStatistics` entry) + `CallStats.reduce(entries)` (candidate-pair
+> rtt×1000 + BWE; inbound-rtp per-kind sums, audio-jitter mean, first-inbound codecId → `codec.mimeType` name
+> resolution `"audio/opus"`→`"opus"`; outbound-rtp sent/bandwidth sums; unknown types ignored; never throws).
+> `CallStats.intervalQualitySample(previous)` derives `CallQualitySample(rttMs, packetLoss)` where packetLoss is
+> the DELTA ratio `Δlost/(Δlost+Δreceived)` (a fraction, the input `VideoQualityLevel.from` wants — NOT iOS's
+> ×100 `packetLossPercent` which is only for the gateway report), each delta **clamped ≥ 0** so an ICE-restart
+> counter reset never reads as negative or spurious loss.
+>
+> **Tests: +25, RED-proven.** `CallStatsTest`: empty/defaults, unknown-type ignore, candidate-pair rtt-ms &
+> BWE-truncation & rtt-absent, inbound audio/video per-kind (video never contributes jitter), audio+video
+> totals, multi-stream loss sum, audio-jitter mean, outbound sums, codec resolution (present/first-wins/
+> unknown-id→null/no-inbound→null), interval sample (clean first tick, cumulative-first-tick ratio, delta ratio,
+> denom-0→0, full reset clamp, loss-counter-only reset never negative, total loss), and two end-to-end
+> reduce→sample→`.level()` classifications (EXCELLENT / CRITICAL). **RED**: three targeted mutations each fail
+> EXACTLY one test, no collateral — drop the reset clamp → the loss-counter-only-reset negative-loss test;
+> drop rtt×1000 → the ms test; codec last-wins instead of first → the first-inbound-wins test.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`
+> (AGP 8.13 does not auto-map a bare `android-37`; CI's `setup-android` handles the same quirk itself).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 5m 53s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 2 new files, no `local.properties`; SDK purity — pure `:core:model` value type +
+> stateless reducer, no `android.*`, no orchestration; SSOT — the reducer/sample ARE the single input the
+> existing `VideoQualityLevel`/`CallQualitySample` ladder consumes, no re-implementation; no tautological tests;
+> no coverage floor lowered — new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the only remaining piece of the connection-quality box is the DEVICE WebRTC stats-report adapter
+> (`RTCStatsReport → List<CallStats.RawEntry>` inside a real `CallQualitySampler`, then `reduce` +
+> `intervalQualitySample` → emit), which needs an emulator/WebRTC and is not JVM-testable — it waits for a
+> device-capable run. Other pure-core Calls candidates: the video-filter / dark-frame / thermal ACTUATOR seams
+> are all likewise device-bound. Consider stepping back to an earlier build-order area (Feed/Stories) for the
+> next pure slice — e.g. the Stories thumbHash **generation** write-path (needs `Bitmap`→RGBA, so structure the
+> pure part around the already-ported `ThumbHash.encode`). Read the chosen box's iOS audit part read-only first.
+
 > On 2026-08-29 **the Android call-quality RTT ladder now classifies a healthy intercontinental call at iOS
 > parity — it had been ported at iOS's PRE-recalibration boundaries and never followed the move** (slice
 > `call-quality-rtt-longhaul-parity`, feature-parity H. Calls — the "Connection-quality indicator" `[~]` line).

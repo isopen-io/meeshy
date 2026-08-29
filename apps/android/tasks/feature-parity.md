@@ -5836,8 +5836,21 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       VIDEO_POOR_RTT_MS,POOR_RTT_MS}` are now at exact iOS `WebRTCTypes.QualityThresholds` parity;
       packet-loss bands (the true congestion signal) were already correct and unchanged. +9 tests
       (both-sides-of-boundary re-pins at 300/500/800 + three named intercontinental regressions),
-      RED-proven (9 fail against the stale constants, compile healthy). **Pending:** the WebRTC stats
-      source that feeds real quality samples.
+      RED-proven (9 fail against the stale constants, compile healthy). The **WebRTC stats reducer +
+      interval loss-ratio landed** (slice `call-stats-reduce`, 2026-08-29): the pure `core:model`
+      `CallStats` + `CallStats.RawEntry` + `CallStats.reduce(entries)` is the SSOT projection of a WebRTC
+      stats report — a faithful port of iOS `CallStats.reduce` (`WebRTCTypes.swift` §5.7): `candidate-pair`
+      sets rtt (`currentRoundTripTime`×1000) + `availableOutgoingBitrate`; `inbound-rtp` sums packetsLost/
+      bytesReceived, splits `packetsReceived` into audio/video by `kind`, means the audio jitter, and resolves
+      the primary codec via the FIRST inbound entry's `codecId → codec.mimeType` (`"audio/opus"`→`"opus"`);
+      `outbound-rtp` sums sent packets + bandwidth. `CallStats.intervalQualitySample(previous)` derives the
+      loss FRACTION `Δlost/(Δlost+Δreceived)` from two cumulative snapshots (port of `WebRTCService.adjustBitrate`)
+      — never the raw cumulative count (the P1-4 >100 %-loss bug), and **clamps each delta at 0** so a counter
+      reset (ICE restart) never yields negative/spurious loss. This is the pure half of the "live WebRTC stats
+      source" — the device actuator now only adapts `RTCStatsReport → List<RawEntry>` then calls `reduce` +
+      `intervalQualitySample`. +25 tests, RED-proven (drop the reset clamp → exactly the negative-loss test
+      fails; drop rtt×1000 → exactly the ms test; make codec last-wins → exactly the first-wins test; each 1
+      failed, no collateral). **Pending:** only the device WebRTC stats-report adapter that feeds `reduce`.
       The **identity-aware active-call teardown** landed (slice
       `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
       `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
