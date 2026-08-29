@@ -277,7 +277,7 @@ struct FloatingCallPillView: View {
             ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
             : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
         .accessibilityHint(String(localized: "call.control.mute.hint", defaultValue: "Coupe votre micro pour le correspondant", bundle: .main))
-        .callToggleAccessibility(isToggle: true, isActive: callManager.isMuted)
+        .toggleStateAccessibility(isToggle: true, isActive: callManager.isMuted)
     }
 
     private var speakerButton: some View {
@@ -301,7 +301,7 @@ struct FloatingCallPillView: View {
             ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
             : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
         .accessibilityHint(String(localized: "call.control.speaker.hint", defaultValue: "Bascule la sortie audio vers le haut-parleur du téléphone", bundle: .main))
-        .callToggleAccessibility(isToggle: true, isActive: callManager.isSpeaker)
+        .toggleStateAccessibility(isToggle: true, isActive: callManager.isSpeaker)
     }
 
     private var hangupButton: some View {

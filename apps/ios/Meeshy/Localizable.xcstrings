@@ -34653,7 +34653,7 @@
         }
       }
     },
-    "call.control.state.on": {
+    "a11y.toggle.on": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
@@ -34700,7 +34700,7 @@
         }
       }
     },
-    "call.control.state.off": {
+    "a11y.toggle.off": {
       "extractionState": "manual",
       "localizations": {
         "ar": {

@@ -2868,6 +2868,22 @@ struct StoryCommentRowView: View, Equatable {
             .buttonStyle(.plain)
             .disabled(isInFlight)
             .frame(minHeight: 44)
+            // Ce « j'aime » n'avait AUCUNE étiquette : VoiceOver n'en tirait
+            // que le cœur et le compteur. Sa JUMELLE de `FeedCommentsSheet` —
+            // le même contrôle, sur la même entité — porte le vocabulaire
+            // complet depuis toujours ; il est repris ici à l'identique plutôt
+            // que réinventé (253i, #4266).
+            //
+            // Un « j'aime » n'est PAS un `.isToggle` : son nom dit l'ACTION
+            // (« J'aime » / « Je n'aime plus ») et sa valeur porte le COMPTE,
+            // pas un « Activé ». C'est le patron que la jumelle a établi.
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(isLiked
+                ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
+                : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
+            .accessibilityValue(LocalizedNumber.exact(likeCount))
+            .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
             Button(action: onReply) {
                 HStack(spacing: 3) {

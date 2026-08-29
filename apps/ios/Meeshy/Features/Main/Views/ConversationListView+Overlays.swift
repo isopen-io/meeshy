@@ -1325,6 +1325,9 @@ struct ConversationListBottomBar: View {
             }
             .accessibilityLabel(String(localized: "accessibility.search", defaultValue: "Rechercher"))
             .accessibilityHint(String(localized: "accessibility.search.hint", defaultValue: "Ouvre les filtres et la recherche de conversations"))
+            // La recherche déjà ouverte ne se disait que par un dégradé et un
+            // `scaleEffect` — rien pour VoiceOver (253i, #4266).
+            .toggleStateAccessibility(isToggle: true, isActive: isActive)
 
             TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $conversationViewModel.searchText)
                 .focused(isSearching)

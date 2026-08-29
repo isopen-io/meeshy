@@ -4,6 +4,18 @@ import XCTest
 @MainActor
 final class CallViewAccessibilityTests: XCTestCase {
 
+    /// La source unique du vocabulaire de bascule, depuis qu'elle a quitté
+    /// `CallView.swift` (253i, #4266).
+    private func toggleModifierSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/ToggleStateAccessibility.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
     private func callViewSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -122,17 +134,29 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    func test_callToggleAccessibility_isNotFilePrivate() throws {
-        // FloatingCallPillView (a different file) reuses this modifier for its
-        // mute/speaker buttons so both call surfaces expose identical toggle
-        // semantics to VoiceOver. `private extension View { ... }` at top level
-        // is file-scoped in Swift and would make the modifier invisible outside
-        // CallView.swift.
-        let source = try callViewSource()
+    /// **Le modificateur a DÉMÉNAGÉ, et cette garde l'a suivi (253i, #4266).**
+    ///
+    /// Son intention n'a pas changé d'un mot : ce modificateur doit rester
+    /// visible hors du fichier qui le déclare. Ce qui a changé, c'est le
+    /// fichier — `toggleStateAccessibility` vivait dans `CallView.swift`, et
+    /// c'est précisément ce nom et ce lieu qui l'avaient enfermé dans les cinq
+    /// surfaces d'appel pendant que quatre bascules ailleurs ne disaient leur
+    /// état que par une couleur.
+    ///
+    /// **Laissée sur `CallView.swift`, cette garde serait passée au VERT en
+    /// cessant de voir** : le fichier ne contient plus le motif interdit. Une
+    /// garde qui suit un renommage sans changer de cible est une garde morte.
+    func test_toggleStateAccessibility_isNotFilePrivate() throws {
+        let source = try toggleModifierSource()
         XCTAssertFalse(
-            source.contains("private extension View {\n    @ViewBuilder\n    func callToggleAccessibility"),
-            "callToggleAccessibility must not be declared in a `private extension View` — " +
-            "that restricts it to CallView.swift and FloatingCallPillView could not reuse it."
+            source.contains("private extension View"),
+            "toggleStateAccessibility ne doit pas être déclaré dans une `private extension " +
+            "View` — cela le restreindrait à son fichier, et les six surfaces qui " +
+            "l'appliquent (appels, composer, liste, story) ne pourraient plus le réutiliser."
+        )
+        XCTAssertTrue(
+            source.contains("func toggleStateAccessibility(isToggle: Bool, isActive: Bool)"),
+            "la source unique du vocabulaire de bascule doit porter ce modificateur"
         )
     }
 
@@ -269,13 +293,13 @@ final class CallViewAccessibilityTests: XCTestCase {
         )
     }
 
-    // MARK: - callToggleAccessibility compound modifier
+    // MARK: - toggleStateAccessibility compound modifier
 
-    func test_callControlButton_usesCallToggleAccessibilityModifier() throws {
+    func test_callControlButton_usesToggleStateAccessibilityModifier() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains("callToggleAccessibility"),
-            "callControlButton must apply the callToggleAccessibility modifier to bundle " +
+            source.contains("toggleStateAccessibility"),
+            "callControlButton must apply the toggleStateAccessibility modifier to bundle " +
             "label, hint, trait, and value into a single reusable modifier — avoids " +
             "repeated .accessibilityLabel/.accessibilityHint chains that drift out of sync."
         )
@@ -377,9 +401,9 @@ final class CallViewAccessibilityTests: XCTestCase {
             "the visual highlight state."
         )
         XCTAssertTrue(
-            source.contains("callToggleAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)"),
+            source.contains("toggleStateAccessibility(isToggle: isToggle, isActive: toggleValue ?? isActive)"),
             "callControlButton must feed toggleValue (falling back to isActive) into " +
-            "callToggleAccessibility — callers that don't pass toggleValue must keep " +
+            "toggleStateAccessibility — callers that don't pass toggleValue must keep " +
             "today's behaviour (mute/speaker/PiP), only the video button overrides it."
         )
     }
