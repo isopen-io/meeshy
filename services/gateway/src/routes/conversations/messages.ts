@@ -183,18 +183,10 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-type CurrentUserConsumption = {
-  lastPlayPositionMs: number | null;
-  listenedComplete: boolean;
-  lastWatchPositionMs: number | null;
-  watchedComplete: boolean;
-};
-
 function cleanAttachmentsForApi(
   attachments: any[],
   languageFilter?: readonly string[],
-  currentParticipantId?: string,
-  consumptionMap?: Map<string, CurrentUserConsumption>
+  currentParticipantId?: string
 ): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
@@ -220,11 +212,11 @@ function cleanAttachmentsForApi(
     cleaned.currentUserReactions = __reactions.currentUserReactions;
     delete cleaned.reactions;
 
-    // Phase 2 — progression de consommation PERSONNELLE (sync cross-device) :
-    // position/complétion du participant courant, pour seeder le tint waveform
-    // (audio) et la progress-bar (vidéo) dès l'ouverture. `null` = jamais
-    // consommé par ce participant. Miroir de currentUserReactions.
-    cleaned.currentUserConsumption = consumptionMap?.get(att.id) ?? null;
+    // #4177 — `currentUserConsumption` (progression PERSONNELLE de lecture,
+    // par pièce jointe) retiré : ni déclaré dans `messageAttachmentSchema`
+    // ni lu par aucun client — fast-json-stringify le retirait depuis
+    // toujours. Réintroduire cette projection exige de la déclarer d'abord
+    // au schéma partagé (hors territoire de ce correctif).
 
     // Nettoyer la transcription
     if (cleaned.transcription && cleaned.transcription.segments) {
@@ -382,7 +374,8 @@ export function registerMessagesRoutes(
           before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' },
           after: { type: 'string', description: 'Forward watermark (ISO8601): get messages created strictly after this instant, ascending. For local-first incremental gap backfill.' },
           around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
-          include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
+          replyToId: { type: 'string', description: "#4177 — filtre la collection aux réponses de CE message (fil de réponses), côté serveur. Absent jusqu'ici : AJV retirait silencieusement le paramètre, et ThreadRepliesLoader (iOS) recevait le fil ENTIER de la conversation." },
+          include_reactions: { type: 'string', enum: ['true', 'false'], description: "#4177 — Accepté pour compatibilité, SANS EFFET : le détail brut des réactions n'a jamais atteint aucun client (messageSchema ne le déclare pas, fast-json-stringify le retirait). reactionSummary et reactionCount, seuls champs réellement servis, sont toujours inclus." },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Accepté pour compatibilité, sans effet. Les accusés NOMINATIFS par participant ne sont pas servis par cette liste — `messageSchema` ne les déclare pas, donc fast-json-stringify les a toujours retirés, et les charger revenait à payer une relation par page pour un tableau jeté. Les coches se peignent avec les compteurs agrégés déjà présents sur chaque message (deliveredCount / readCount / recipientCount), qui appliquent le gate showReadReceipts. Pour le détail nominatif, utiliser GET /conversations/:id/statuses, qui applique ce même gate.' },
           include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
@@ -459,7 +452,7 @@ export function registerMessagesRoutes(
         before,
         after,
         around,
-        include_reactions: includeReactionsStr = 'false',
+        replyToId,
         include_translations: includeTranslationsStr = 'true',
         include_replies: includeRepliesStr = 'true',
         languages: languagesStr
@@ -468,7 +461,6 @@ export function registerMessagesRoutes(
       const userId = authRequest.authContext.userId;
 
       // Parser les paramètres optionnels d'inclusion
-      const includeReactions = includeReactionsStr === 'true';
       const includeTranslations = includeTranslationsStr === 'true';
       const includeReplies = includeRepliesStr === 'true';
 
@@ -592,6 +584,20 @@ export function registerMessagesRoutes(
         deletedAt: null
       };
 
+      // Fil de réponses (#4177) : filtrage CÔTÉ SERVEUR de `?replyToId=`, qui
+      // n'existait ni dans ce schéma ni dans `MessagesQuery` avant ce
+      // correctif — AJV (`removeAdditional`, réglage par défaut de Fastify)
+      // retirait le paramètre de `request.query` AVANT que ce handler ne
+      // s'exécute. `ThreadRepliesLoader.swift` l'envoie depuis toujours en
+      // expliquant, dans son doc-comment, que « the gateway filters
+      // server-side » : c'était faux jusqu'ici. Ouvrir un fil de réponses sur
+      // iOS chargeait en réalité les 50 derniers messages de LA CONVERSATION
+      // ENTIÈRE, filtrés après-coup côté client — le chemin le plus chaud du
+      // produit rendait la mauvaise collection.
+      if (replyToId) {
+        whereClause.replyToId = replyToId;
+      }
+
       // Apply history restriction if share link disallows viewing history
       if (historyStartDate) {
         whereClause.createdAt = { gte: historyStartDate };
@@ -603,9 +609,18 @@ export function registerMessagesRoutes(
       }
 
       if (before) {
-        // Pagination par curseur (pour défilement historique)
+        // Pagination par curseur (pour défilement historique).
+        //
+        // Oracle d'horodatage fermé (#4177) : sans scope de conversation, un
+        // `messageId` volé à un AUTRE fil — accessible ou non à l'appelant —
+        // était accepté comme curseur, et son `createdAt` RÉEL bornait cette
+        // page : la route révélait ainsi l'instant d'un message qu'elle n'a
+        // jamais autorisé à lire. Le mode `around`, plus bas dans ce même
+        // handler, scope déjà correctement sa résolution
+        // (`applyHistoryFloor({ id: around, conversationId }, …)`) — les deux
+        // curseurs de la même route doivent se comporter pareil ici.
         const beforeMessage = await prisma.message.findFirst({
-          where: { id: before },
+          where: { id: before, conversationId },
           select: { createdAt: true }
         });
 
@@ -777,22 +792,6 @@ export function registerMessagesRoutes(
         messageSelect.translations = true;
       }
 
-      if (includeReactions) {
-        messageSelect.reactions = {
-          select: {
-            id: true,
-            emoji: true,
-            userId: true,
-            participantId: true,
-            createdAt: true
-          },
-          orderBy: {
-            createdAt: 'desc'
-          },
-          take: 20
-        };
-      }
-
       if (includeReplies) {
         // Charger les détails du message de réponse
         messageSelect.replyTo = {
@@ -850,7 +849,14 @@ export function registerMessagesRoutes(
           ? Promise.resolve(0)
           : prisma.message.count({
               where: applyPersonalHistoryHiding(
-                applyHistoryFloor({ conversationId: conversationId, deletedAt: null }, historyStartDate),
+                applyHistoryFloor(
+                  // Même filtre de fil que la page (#4177) : sans lui, le
+                  // total d'un `?replyToId=` comptait TOUTE la conversation
+                  // au lieu des seules réponses — `hasMore` aurait promis des
+                  // pages de plus qu'aucune requête suivante ne peut servir.
+                  { conversationId: conversationId, deletedAt: null, ...(replyToId ? { replyToId } : {}) },
+                  historyStartDate
+                ),
                 personalHiding
               )
             }),
@@ -886,65 +892,20 @@ export function registerMessagesRoutes(
       ]);
       timings.mainQuery = performance.now() - t0;
 
-      // ===== RÉCUPÉRER LES RÉACTIONS DE L'UTILISATEUR CONNECTÉ =====
-      // Permet d'afficher les réactions de l'utilisateur sans requête de sync Socket.IO
-      let userReactionsMap: Map<string, string[]> = new Map();
-
-      t0 = performance.now();
-      if (authRequest.authContext.isAuthenticated && messages.length > 0) {
-        const messageIds: string[] = (messages as any[]).map(m => m.id);
-
-        // Requête pour obtenir les réactions de l'utilisateur sur ces messages
-        const userReactions = currentParticipantId ? await prisma.reaction.findMany({
-          where: {
-            messageId: { in: messageIds },
-            participantId: currentParticipantId
-          },
-          select: {
-            messageId: true,
-            emoji: true
-          }
-        }) : [];
-
-        // Grouper par messageId
-        for (const reaction of userReactions) {
-          const existing = userReactionsMap.get(reaction.messageId) || [];
-          existing.push(reaction.emoji);
-          userReactionsMap.set(reaction.messageId, existing);
-        }
-      }
-      timings.userReactions = performance.now() - t0;
-
-      // Phase 2 — progression de consommation média du participant courant
-      // (sync cross-device). Une seule requête bornée à la page, scopée au
-      // participant : on n'élargit pas les `select` partagés (cf.
-      // attachmentIncludes) ni les broadcasts socket.
-      const consumptionMap = new Map<string, CurrentUserConsumption>();
-      if (currentParticipantId && messages.length > 0) {
-        const attachmentIds: string[] = (messages as any[]).flatMap(m =>
-          Array.isArray(m.attachments) ? m.attachments.map((a: any) => a.id) : []
-        );
-        if (attachmentIds.length > 0) {
-          const consumptionRows = await prisma.attachmentStatusEntry.findMany({
-            where: { attachmentId: { in: attachmentIds }, participantId: currentParticipantId },
-            select: {
-              attachmentId: true,
-              lastPlayPositionMs: true,
-              listenedComplete: true,
-              lastWatchPositionMs: true,
-              watchedComplete: true,
-            },
-          });
-          for (const row of consumptionRows) {
-            consumptionMap.set(row.attachmentId, {
-              lastPlayPositionMs: row.lastPlayPositionMs ?? null,
-              listenedComplete: row.listenedComplete ?? false,
-              lastWatchPositionMs: row.lastWatchPositionMs ?? null,
-              watchedComplete: row.watchedComplete ?? false,
-            });
-          }
-        }
-      }
+      // #4177 — travail mort retiré : ce bloc calculait `currentUserReactions`
+      // (message-level, via `reaction.findMany`) ET `currentUserConsumption`
+      // (par pièce jointe, via `attachmentStatusEntry.findMany`) — deux
+      // requêtes Prisma PAR PAGE — puis les deux valeurs étaient
+      // SUPPRIMÉES À LA SÉRIALISATION : ni `messageSchema` ni
+      // `messageAttachmentSchema` ne les déclarent, donc fast-json-stringify
+      // les retirait avant que le moindre client ne les reçoive. Même sort
+      // pour `messageSelect.reactions` (bloc `include_reactions`, retiré plus
+      // haut) : un TROISIÈME travail — jusqu'à 20 réactions brutes par
+      // message — payé pour un champ tout aussi non déclaré. Les trois
+      // partaient à la même sérialisation, invisibles depuis toujours.
+      // Réintroduire l'un de ces trois calculs exige de le déclarer AUSSI
+      // dans le schéma partagé (`packages/shared/types/api-schemas.ts`,
+      // hors territoire de ce correctif) — sans quoi il reste mort.
 
       // Déterminer la langue préférée de l'utilisateur
       const userPreferredLanguage = userPrefs
@@ -1145,8 +1106,12 @@ export function registerMessagesRoutes(
           // Réactions (dénormalisées - toujours incluses)
           reactionSummary: message.reactionSummary,
           reactionCount: message.reactionCount,
-          // Réactions de l'utilisateur connecté (pour affichage instantané sans sync Socket.IO)
-          currentUserReactions: userReactionsMap.get(message.id) || [],
+          // #4177 — `currentUserReactions` (message-level) retiré : ni
+          // déclaré dans `messageSchema` ni lu par aucun client, il payait
+          // un `reaction.findMany` par page pour rien depuis toujours. Son
+          // miroir PAR PIÈCE JOINTE (`attachments[].currentUserReactions`,
+          // via `aggregateAttachmentReactions`) reste servi — lui EST
+          // déclaré et lu.
 
           // Chiffrement
           isEncrypted: message.isEncrypted,
@@ -1187,7 +1152,7 @@ export function registerMessagesRoutes(
               { onMissingEntry: listMissingEntry },
             );
           })() : null,
-          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId, consumptionMap),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter, currentParticipantId),
           _count: message._count
         };
 
@@ -1199,9 +1164,6 @@ export function registerMessagesRoutes(
             message.translations as Record<string, any>,
             hasLanguageFilter ? { languages: languageFilter } : undefined
           );
-        }
-        if (includeReactions && message.reactions) {
-          mappedMessage.reactions = message.reactions;
         }
         if (includeReplies && message.replyTo) {
           const replySender = (message as any).replyTo.sender;
@@ -2350,7 +2312,24 @@ export function registerMessagesRoutes(
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            data: { type: 'array', items: messageSchema }
+            data: { type: 'array', items: messageSchema },
+            // #4177 — le handler calcule et ENVOIE `pagination` depuis
+            // toujours (`sendSuccess(reply, formattedMessages, {
+            // pagination })`) ; non déclarée ici, fast-json-stringify la
+            // retirait AVANT le fil — même défaut que celui documenté sur
+            // `cursorPagination` de `GET .../messages` un peu plus haut dans
+            // ce fichier. Aucun client ne pouvait lire `total`/`hasMore`,
+            // qu'ils soient justes ou fautifs (cf. le plancher appliqué
+            // ci-dessous au calcul du total).
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'integer' },
+                offset: { type: 'integer' },
+                limit: { type: 'integer' },
+                hasMore: { type: 'boolean' }
+              }
+            }
           }
         },
         401: errorResponseSchema,
@@ -2450,13 +2429,22 @@ export function registerMessagesRoutes(
         }
       });
 
+      // #4177 — le total DOIT appliquer le même plancher que la page
+      // (`pinnedFloor`, quelques lignes plus haut) : il ne l'appliquait pas,
+      // seulement `applyPersonalHistoryHiding`. Un arrivant tardif (plancher
+      // non nul) voyait donc un total qui COMPTE les épingles d'avant son
+      // arrivée — la pagination lui promettait des pages que la page réelle,
+      // elle correctement planchée, ne pouvait jamais servir.
       const total = await prisma.message.count({
         where: applyPersonalHistoryHiding(
-          {
-            conversationId,
-            pinnedAt: { not: null },
-            deletedAt: null
-          },
+          applyHistoryFloor(
+            {
+              conversationId,
+              pinnedAt: { not: null },
+              deletedAt: null
+            },
+            pinnedFloor
+          ),
           pinnedHiding
         )
       });
@@ -2477,7 +2465,13 @@ export function registerMessagesRoutes(
         return {
           id: message.id,
           conversationId: message.conversationId,
-          senderId: message.senderId,
+          // #4177 — `Message.senderId` est en base une FK vers
+          // `Participant.id`, jamais vers `User.id` : servi brut, cette
+          // porte donnait au MÊME message un `senderId` différent de celui
+          // de `GET .../messages`, qui résout depuis toujours vers
+          // `User.id` (les clients comparent `senderId` à LEUR `userId` pour
+          // décider « est-ce moi qui l'ai envoyé ? »). Même résolution ici.
+          senderId: sender?.userId ?? sender?.user?.id ?? message.senderId,
           content: message.content,
           originalLanguage: message.originalLanguage,
           messageType: message.messageType,
@@ -2772,8 +2766,12 @@ export function registerMessagesRoutes(
       };
 
       if (cursor) {
+        // Oracle d'horodatage fermé (#4177) — même défaut, même correctif que
+        // sur `GET .../messages?before=` : sans `conversationId`, un id volé
+        // à un AUTRE fil faisait fuiter son `createdAt` RÉEL, qui bornait
+        // ensuite CETTE recherche.
         const cursorMsg = await prisma.message.findFirst({
-          where: { id: cursor },
+          where: { id: cursor, conversationId },
           select: { createdAt: true }
         });
         if (cursorMsg) {
@@ -2899,6 +2897,13 @@ export function registerMessagesRoutes(
         // top-level — un résultat de recherche géolocalisé le perdait sinon.
         return hoistLocationOnto({
           ...msg,
+          // #4177 — même résolution que `GET .../messages` : `msg.senderId`
+          // (spread ci-dessus) est le `Participant.id` BRUT stocké en base,
+          // jamais le `User.id` que les clients comparent à LEUR `userId`.
+          // Servi tel quel, un résultat de recherche répondait FAUX à « est-ce
+          // moi qui ai envoyé ce message ? » pour le même message que la
+          // liste principale identifie correctement.
+          senderId: sender?.userId ?? sender?.user?.id ?? msg.senderId,
           sender: sender ? applyPresenceVisibilityAsOffline(
             {
               id: sender.id,

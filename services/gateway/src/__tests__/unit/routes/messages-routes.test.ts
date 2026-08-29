@@ -896,12 +896,18 @@ describe('GET /conversations/:id/messages', () => {
     expect(whereArg.createdAt?.gte).toEqual(joinedAt);
   });
 
-  it('includeReactions=true adds reactions field to message select', async () => {
+  // #4177 — ce témoin affirmait l'inverse : `include_reactions=true` chargeait
+  // bien `reactions` dans le `select`, mais `messageSchema` ne le déclare pas
+  // — fast-json-stringify le retirait avant tout client, sur TOUTE la
+  // production. Le calcul était payé (jusqu'à 20 réactions par message) pour
+  // un champ qu'aucun client n'a jamais reçu. Retiré : le paramètre reste
+  // accepté (compatibilité de schéma), mais ne charge plus rien.
+  it("includeReactions=true ne charge PAS reactions — la réponse ne les a jamais portées", async () => {
     prisma.message.findMany.mockResolvedValue([]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest({ query: { include_reactions: 'true' } }), reply);
     const selectArg = (prisma.message.findMany.mock.calls[0][0] as any).select;
-    expect(selectArg.reactions).toBeDefined();
+    expect(selectArg.reactions).toBeUndefined();
   });
 
   // `include_status=true` ne charge RIEN de plus : les entrées de statut
@@ -1129,14 +1135,22 @@ describe('GET /conversations/:id/messages', () => {
     expect(body.data[0].recipientCount).toBe(0);
   });
 
-  it('with user reactions: currentUserReactions populated from reaction.findMany', async () => {
+  // #4177 — ce témoin prouvait que `reaction.findMany` alimentait
+  // `currentUserReactions` (message-level) — vrai, et c'est justement le
+  // travail mort de l'issue : `messageSchema` ne déclare PAS ce champ au
+  // niveau message (son miroir PAR PIÈCE JOINTE, lui, est déclaré et reste
+  // servi), donc fast-json-stringify le retirait avant tout client depuis
+  // toujours. Le calcul est retiré ; ce témoin prouve maintenant qu'il ne se
+  // produit plus, plutôt que de continuer à attester un contrat que personne
+  // ne respectait.
+  it("sans consommateur possible, reaction.findMany n'est plus appelé pour le message-level currentUserReactions", async () => {
     const msg = makeMessage();
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
-    prisma.reaction.findMany.mockResolvedValue([{ messageId: MSG_ID, emoji: '👍' }]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(reply._body.data[0].currentUserReactions).toContain('👍');
+    expect(prisma.reaction.findMany).not.toHaveBeenCalled();
+    expect(reply._body.data[0].currentUserReactions).toBeUndefined();
   });
 
   it('before cursor: hasMore=true when findMany returns more than limit', async () => {
@@ -1216,24 +1230,23 @@ describe('GET /conversations/:id/messages', () => {
     }
   });
 
-  it('with attachment consumption: currentUserConsumption set from attachmentStatusEntry', async () => {
+  // #4177 — même famille que le témoin `reaction.findMany` ci-dessus :
+  // `currentUserConsumption` n'est déclaré dans AUCUN schéma
+  // (`messageAttachmentSchema` ne le porte pas), donc jamais servi — le
+  // `attachmentStatusEntry.findMany` qui l'alimentait était payé pour rien à
+  // CHAQUE page portant une pièce jointe. Retiré ; ce témoin prouve
+  // maintenant l'absence de la requête et du champ.
+  it("sans consommateur possible, attachmentStatusEntry.findMany n'est plus appelé", async () => {
     const msg = makeMessage({
       attachments: [{ id: 'att-1', mimeType: 'audio/mp3', fileUrl: 'http://x.com/a.mp3', reactions: [], translations: null, transcription: null }],
     });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
-    prisma.attachmentStatusEntry.findMany.mockResolvedValue([{
-      attachmentId: 'att-1',
-      lastPlayPositionMs: 1500,
-      listenedComplete: true,
-      lastWatchPositionMs: null,
-      watchedComplete: false,
-    }]);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
+    expect(prisma.attachmentStatusEntry.findMany).not.toHaveBeenCalled();
     const att = reply._body.data[0].attachments[0];
-    expect(att.currentUserConsumption).not.toBeNull();
-    expect(att.currentUserConsumption.lastPlayPositionMs).toBe(1500);
+    expect(att.currentUserConsumption).toBeUndefined();
   });
 });
 
@@ -2066,8 +2079,11 @@ describe('GET /conversations/:id/messages/search', () => {
       .mockResolvedValueOnce([]); // translation candidates
     const reply = makeReply();
     await getHandler_()(makeSearchReq('hello', { cursor: 'cursor-msg-id' }), reply);
+    // #4177 — scopé à la conversation courante : sans `conversationId`, un
+    // `messageId` d'un AUTRE fil était accepté comme curseur et son
+    // `createdAt` réel fuitait à travers la borne appliquée à cette page.
     expect(prisma.message.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'cursor-msg-id' } }),
+      expect.objectContaining({ where: { id: 'cursor-msg-id', conversationId: 'resolved-conv-id' } }),
     );
   });
 
@@ -2274,13 +2290,19 @@ describe('GET /conversations/:id/messages — coverage extension', () => {
     expect(reply._body.data).toHaveLength(1);
   });
 
-  it('includeReactions=true: reactions field mapped when present on message', async () => {
+  // #4177 — même famille que le témoin `includeStatus` juste en dessous, et
+  // pour la même raison écrite dans SON commentaire : ce double n'a pas de
+  // sérialiseur, donc il voyait un champ que la production retire depuis
+  // toujours (`messageSchema` ne déclare pas `reactions`). Le calcul en
+  // amont est désormais retiré à la source : plus rien à mapper, même si
+  // `message.reactions` était présent sur la ligne brute.
+  it("includeReactions=true : le mapping ne recopie plus reactions, que le sérialiseur retirait déjà", async () => {
     const msg = makeMessage({ reactions: [{ emoji: '👍', count: 2 }] });
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest({ query: { include_reactions: 'true' } }), reply);
-    expect(reply._body.data[0].reactions).toEqual([{ emoji: '👍', count: 2 }]);
+    expect(reply._body.data[0].reactions).toBeUndefined();
   });
 
   // Ce témoin affirmait l'inverse, et c'est LUI qui a masqué le défaut : ce
@@ -3198,34 +3220,25 @@ describe('GET /conversations/:id/messages — deep branch coverage pass 2', () =
     expect(seg?.voiceSimilarityScore).toBeNull();
   });
 
-  it('authenticated user with participant not found: empty userReactions (line 829 false)', async () => {
+  // #4177 — la branche que ce témoin ciblait (`currentParticipantId` falsy →
+  // `userReactionsMap` reste vide → `.get(...) || []`) n'existe plus : tout
+  // le calcul de `currentUserReactions` message-level est retiré. Le champ
+  // est désormais absent INCONDITIONNELLEMENT, participant résolu ou non.
+  it('authenticated user with participant not found: currentUserReactions reste absent', async () => {
     prisma.participant.findFirst.mockResolvedValue(null);
     const msg = makeMessage();
     prisma.message.findMany.mockResolvedValue([msg]);
     prisma.message.count.mockResolvedValue(1);
     const reply = makeReply();
     await getMessagesHandler()(makeRequest(), reply);
-    expect(reply._body.data[0].currentUserReactions).toEqual([]);
+    expect(reply._body.data[0].currentUserReactions).toBeUndefined();
   });
 
-  it('consumption entry with watchedComplete=null: ?? false fallback (lines 871-874)', async () => {
-    const msg = makeMessage({
-      attachments: [{ id: 'att-c', mimeType: 'audio/mp3', fileUrl: 'http://x.com/a.mp3', reactions: [], translations: null, transcription: null }],
-    });
-    prisma.message.findMany.mockResolvedValue([msg]);
-    prisma.message.count.mockResolvedValue(1);
-    prisma.attachmentStatusEntry.findMany.mockResolvedValue([{
-      attachmentId: 'att-c',
-      lastPlayPositionMs: 4000,
-      listenedComplete: true,
-      lastWatchPositionMs: null,
-      watchedComplete: null,
-    }]);
-    const reply = makeReply();
-    await getMessagesHandler()(makeRequest(), reply);
-    expect(prisma.attachmentStatusEntry.findMany).toHaveBeenCalled();
-    expect(reply.send).toHaveBeenCalled();
-  });
+  // #4177 — le témoin `watchedComplete=null: ?? false fallback` qui vivait
+  // ici ciblait le repli `row.watchedComplete ?? false` DANS le calcul de
+  // `consumptionMap` : ce calcul entier est retiré (travail mort, cf. le
+  // témoin `attachmentStatusEntry.findMany n'est plus appelé` plus haut). Il
+  // n'y a plus de repli à couvrir.
 
   it('laisse à zéro un message que le service ne décrit pas', async () => {
     // Le service ne renvoie une entrée que pour les messages qu'il a retrouvés.
