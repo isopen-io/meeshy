@@ -23,12 +23,14 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import Fastify from 'fastify';
+import Fastify, { type FastifyReply } from 'fastify';
 
 import {
   depreciee,
   annoncerDepreciation,
   enTetesDeDepreciation,
+  dateDeRetrait,
+  FENETRE_DE_RETRAIT_JOURS,
 } from '../../../utils/deprecation';
 
 const DEPUIS = '2026-08-29';
@@ -173,5 +175,37 @@ describe('L’annonce se pose aussi depuis un handler', () => {
     expect(res.headers.link).toBe('</api/v1/reports>; rel="successor-version"');
 
     await app.close();
+  });
+});
+
+describe("L'échéance se dérive d'une règle écrite, et son ancre ne bouge pas", () => {
+  it('rend EXACTEMENT depuis + 180 jours — la seule règle de retrait CHIFFRÉE du dépôt', () => {
+    expect(FENETRE_DE_RETRAIT_JOURS).toBe(180);
+    expect(dateDeRetrait('2026-08-29T00:00:00.000Z')).toBe('2027-02-25T00:00:00.000Z');
+  });
+
+  it('accepte une fenêtre propre à une adresse, sans date en dur au site d’appel', () => {
+    expect(dateDeRetrait('2026-08-29T00:00:00.000Z', 30)).toBe('2026-09-28T00:00:00.000Z');
+  });
+
+  it("ne bouge PAS d'un appel à l'autre — une échéance ancrée sur « maintenant » recule chaque jour et n'arrive jamais", () => {
+    const premier = dateDeRetrait('2026-08-29T00:00:00.000Z');
+    const second = dateDeRetrait('2026-08-29T00:00:00.000Z');
+    expect(second).toBe(premier);
+  });
+});
+
+describe("L'annonce COMPOSE, elle ne conclut pas", () => {
+  it('ne touche ni status() ni send() — sendSuccess/sendError restent l’unique site d’envoi', () => {
+    const touche: string[] = [];
+    const reply = {
+      header: () => reply,
+      getHeader: () => undefined,
+      status: () => { touche.push('status'); return reply; },
+      send: () => { touche.push('send'); return reply; },
+    } as unknown as FastifyReply;
+
+    annoncerDepreciation(reply, { depuis: '2026-08-29', successeur: '/api/v1/reports' });
+    expect(touche).toEqual([]);
   });
 });

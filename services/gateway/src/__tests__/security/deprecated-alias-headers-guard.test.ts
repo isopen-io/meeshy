@@ -85,25 +85,25 @@ function limiteDeBloc(texte: string, depart: number): number {
 
 const SITES: readonly Site[] = [
   // `users/profile.ts` — trois alias de `GET /directory/people/:handle` (#4161, critère 9)
-  { file: 'users/profile.ts', marker: "fastify.get('/u/:username'", label: 'GET /u/:username', via: 'applyDeprecationHeaders(' },
-  { file: 'users/profile.ts', marker: "fastify.get('/users/:id'", label: 'GET /users/:id', via: 'applyDeprecationHeaders(' },
-  { file: 'users/profile.ts', marker: "fastify.get('/users/id/:id'", label: 'GET /users/id/:id', via: 'applyDeprecationHeaders(' },
+  { file: 'users/profile.ts', marker: "fastify.get('/u/:username'", label: 'GET /u/:username', via: 'annoncerDepreciation(' },
+  { file: 'users/profile.ts', marker: "fastify.get('/users/:id'", label: 'GET /users/:id', via: 'annoncerDepreciation(' },
+  { file: 'users/profile.ts', marker: "fastify.get('/users/id/:id'", label: 'GET /users/id/:id', via: 'annoncerDepreciation(' },
 
   // `admin/reports.ts` — un adaptateur mince de `POST /reports` (#4155)
-  { file: 'admin/reports.ts', marker: "fastify.post('/', {", label: 'POST /admin/reports', via: 'applyDeprecationHeaders(' },
+  { file: 'admin/reports.ts', marker: "fastify.post('/', {", label: 'POST /admin/reports', via: 'depreciee(' },
 
   // `admin/users-write.ts` — neuf alias d'écriture de compte (#4154), tous via
   // le helper local `marquerAliasHistorique` (dont la fermeture — qu'il
   // appelle bien `applyDeprecationHeaders` — est vérifiée séparément plus bas).
-  { file: 'admin/users-write.ts', marker: "fastify.patch('/admin/users/:userId/role'", label: 'PATCH .../role', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.patch('/admin/users/:userId/status'", label: 'PATCH .../status', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/unlock'", label: 'POST .../unlock', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/enable-2fa'", label: 'POST .../enable-2fa', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/disable-2fa'", label: 'POST .../disable-2fa', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/verify-email'", label: 'POST .../verify-email', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/verify-phone'", label: 'POST .../verify-phone', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/verify-age'", label: 'POST .../verify-age', via: 'marquerAliasHistorique(' },
-  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/voice-consent'", label: 'POST .../voice-consent', via: 'marquerAliasHistorique(' },
+  { file: 'admin/users-write.ts', marker: "fastify.patch('/admin/users/:userId/role'", label: 'PATCH .../role', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.patch('/admin/users/:userId/status'", label: 'PATCH .../status', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/unlock'", label: 'POST .../unlock', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/enable-2fa'", label: 'POST .../enable-2fa', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/disable-2fa'", label: 'POST .../disable-2fa', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/verify-email'", label: 'POST .../verify-email', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/verify-phone'", label: 'POST .../verify-phone', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/verify-age'", label: 'POST .../verify-age', via: 'depreciee(' },
+  { file: 'admin/users-write.ts', marker: "fastify.post('/admin/users/:userId/voice-consent'", label: 'POST .../voice-consent', via: 'depreciee(' },
 
   // `users/blocking.ts` — les TROIS vrais alias de blocage (#4164). L'issue
   // #4274 les ancrait sur `directory/blocks.ts:250`, qui ne porte que les
@@ -112,9 +112,9 @@ const SITES: readonly Site[] = [
   // forme générique `fastify.post<{…}>(` — d'où l'élargissement de
   // `limiteDeBloc` ci-dessus, sans lequel leur bloc courait jusqu'à EOF et un
   // seul appel aurait satisfait les trois sites.
-  { file: 'users/blocking.ts', marker: "fastify.post<{ Params: { userId: string } }>('/users/:userId/block'", label: 'POST /users/:userId/block', via: 'applyDeprecationHeaders(' },
-  { file: 'users/blocking.ts', marker: "fastify.delete<{ Params: { userId: string } }>('/users/:userId/block'", label: 'DELETE /users/:userId/block', via: 'applyDeprecationHeaders(' },
-  { file: 'users/blocking.ts', marker: "fastify.get('/users/me/blocked-users'", label: 'GET /users/me/blocked-users', via: 'applyDeprecationHeaders(' },
+  { file: 'users/blocking.ts', marker: "fastify.post<{ Params: { userId: string } }>('/users/:userId/block'", label: 'POST /users/:userId/block', via: 'depreciee(' },
+  { file: 'users/blocking.ts', marker: "fastify.delete<{ Params: { userId: string } }>('/users/:userId/block'", label: 'DELETE /users/:userId/block', via: 'depreciee(' },
+  { file: 'users/blocking.ts', marker: "fastify.get('/users/me/blocked-users'", label: 'GET /users/me/blocked-users', via: 'depreciee(' },
 ];
 
 describe('Partie 1 — chaque route ALIAS de ce lot marque son sursis dans SON bloc', () => {
@@ -133,14 +133,17 @@ describe('Partie 1 — chaque route ALIAS de ce lot marque son sursis dans SON b
     expect(bloc).toContain(site.via);
   });
 
-  it('le helper local `marquerAliasHistorique` (admin/users-write.ts) appelle bien applyDeprecationHeaders — ferme l’indirection que les neuf sites ci-dessus utilisent', () => {
-    const texte = fs.readFileSync(path.join(RACINE_ROUTES, 'admin/users-write.ts'), 'utf8');
-    const marker = 'const marquerAliasHistorique = ';
-    const debut = texte.indexOf(marker);
-    expect(debut).toBeGreaterThanOrEqual(0);
-    const fin = limiteDeBloc(texte, debut);
-    expect(texte.slice(debut, fin)).toContain('applyDeprecationHeaders(');
-  });
+  it.each(['admin/users-write.ts', 'users/blocking.ts'])(
+    '%s n’annonce AUCUN successeur en gabarit — un `Link` que le client ne peut pas suivre n’indique aucune migration',
+    (relatif) => {
+      const texte = fs.readFileSync(path.join(RACINE_ROUTES, relatif), 'utf8');
+      const bloc = texte.slice(texte.indexOf('const ANNONCE = {'), texte.indexOf('} as const;', texte.indexOf('const ANNONCE = {')));
+      expect(bloc.length).toBeGreaterThan(0);
+      // Un `:param` dans une chaîne de successeur = le gabarit part tel quel sur
+      // le fil. Les successeurs paramétrés se déclarent en FONCTION de la requête.
+      expect(bloc).not.toMatch(/successeur: '[^']*:[a-zA-Z]/);
+    }
+  );
 
   it('directory/blocks.ts expose BLOCKS_SUCCESSOR_PATH — la plomberie que `users/blocking.ts` doit consommer (hors territoire de ce lot, voir edits_hors_territoire)', async () => {
     const { BLOCKS_SUCCESSOR_PATH } = await import('../../routes/directory/blocks');
@@ -202,7 +205,16 @@ function fichiersAvecAutoDeclaration(): string[] {
 
 describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', () => {
   // Fichiers de CE lot (#4274) : auto-déclarés ET tenus de porter le mécanisme.
-  const MON_TERRITOIRE = ['admin/reports.ts', 'users/profile.ts', 'users/blocking.ts'].sort();
+  const MON_TERRITOIRE = [
+    'admin/reports.ts',
+    // Les neuf alias d'écriture de compte (#4154) se déclarent désormais un par
+    // un, chacun dans ses options de route : l'indirection par un helper local
+    // les rendait invisibles à ce balayage — un fichier portant neuf alias n'y
+    // apparaissait pas du tout.
+    'admin/users-write.ts',
+    'users/profile.ts',
+    'users/blocking.ts',
+  ].sort();
 
   // Fichiers HORS territoire (autres sessions/issues du même lot). Cliquet :
   // une entrée EN TROP = un fichier nouvellement muet à router vers ce
@@ -228,7 +240,8 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
     const texte = fs.readFileSync(path.join(RACINE_ROUTES, relatif), 'utf8');
     expect(texte).toContain("from '../../utils/deprecation'");
     const nbDeclarations = texte.split('\n').filter(declareUnAlias).length;
-    const nbAppels = texte.split('applyDeprecationHeaders(').length - 1;
+    const nbAppels =
+      texte.split('depreciee(').length - 1 + (texte.split('annoncerDepreciation(').length - 1);
     // Autant d'appels que de routes qui se déclarent alias — pas moins :
     // une régression partielle (huit sur neuf) ferait toujours passer un
     // simple test de présence, jamais un test de COMPTE.
@@ -296,7 +309,7 @@ describe('Partie 3 — POST /admin/reports (adaptateur mince, #4155) sert les tr
     });
 
     expect(res.statusCode).toBe(201);
-    expect(res.headers['deprecation']).toBe('true');
+    expect(res.headers['deprecation']).toMatch(/^@\d+$/);
     expect(res.headers['link']).toBe('</api/v1/reports>; rel="successor-version"');
 
     const sunset = res.headers['sunset'];
@@ -310,7 +323,7 @@ describe('Partie 3 — POST /admin/reports (adaptateur mince, #4155) sert les tr
     const res = await app.inject({ method: 'POST', url: '/', payload: {} });
 
     expect(res.statusCode).toBe(400);
-    expect(res.headers['deprecation']).toBe('true');
+    expect(res.headers['deprecation']).toMatch(/^@\d+$/);
     expect(res.headers['link']).toBe('</api/v1/reports>; rel="successor-version"');
   });
 });

@@ -89,7 +89,7 @@ describe('voiceAnalysisRoutes — migration /api/v1 + alias déprécié (#4277)'
     });
 
     expect(res.statusCode).toBe(200);
-    expect(res.headers['deprecation']).toBe('true');
+    expect(res.headers['deprecation']).toMatch(/^@\d+$/);
     expect(res.headers['sunset']).toBeDefined();
     expect(res.headers['link']).toBe('</api/v1/voice/analysis>; rel="successor-version"');
 
@@ -121,7 +121,7 @@ describe('voiceAnalysisRoutes — migration /api/v1 + alias déprécié (#4277)'
     // Même sur l'échec d'auth, l'en-tête de dépréciation est posé — un alias
     // reste en sursis même sur sa branche d'erreur (doc-comment de
     // `applyDeprecationHeaders`).
-    expect(res.headers['deprecation']).toBe('true');
+    expect(res.headers['deprecation']).toMatch(/^@\d+$/);
 
     await app.close();
   });

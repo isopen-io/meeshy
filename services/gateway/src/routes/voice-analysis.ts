@@ -23,7 +23,9 @@ import { voiceQualityAnalysisSchema } from './voice/types';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
-import { applyDeprecationHeaders } from '../utils/deprecation';
+import { dateDeRetrait, depreciee } from '../utils/deprecation';
+
+const DEPUIS_VOICE_LEGACY = '2026-08-29';
 
 const logger = enhancedLogger.child({ module: 'VoiceAnalysis' });
 
@@ -537,7 +539,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
  * elle reçoit quand même son alias, par symétrie avec les quatre autres.
  *
  * MÊME implémentation que sous `/api/v1` — ce plugin ne réécrit RIEN, il pose
- * les trois en-têtes de dépréciation (`applyDeprecationHeaders`, #4274) puis
+ * les trois en-têtes de dépréciation (`depreciee`, #4274) puis
  * délègue à `voiceAnalysisRoutes`. Le succeseur annoncé est calculé depuis
  * `request.url` (déjà résolu, params compris) plutôt qu'un gabarit `:param` —
  * l'ancienne adresse n'a AUCUN segment `/api` : `/api/v1` + le chemin brut
@@ -545,13 +547,17 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
  * dont l'ancienne adresse porte déjà un `/api`).
  *
  * @deprecated Chemin de compatibilité, fenêtre de retrait par défaut
- * (`DEPRECATION_WINDOW_DAYS`, #4274). Sunset gouverné par le compteur d'accès
- * (#4275) — ne pas fixer de date calendaire en dur ici.
+ * (`FENETRE_DE_RETRAIT_JOURS`, #4274), ancrée sur `depuis`. Le retrait RÉEL
+ * reste gouverné par le compteur d'accès nul (#4275).
  */
 export async function voiceAnalysisLegacyAliasRoutes(fastify: FastifyInstance): Promise<void> {
-  fastify.addHook('onSend', async (request, reply, payload) => {
-    applyDeprecationHeaders(reply, { successorPath: `/api/v1${request.url}` });
-    return payload;
-  });
+  fastify.addHook(
+    'onRequest',
+    depreciee({
+      depuis: DEPUIS_VOICE_LEGACY,
+      successeur: (request) => `/api/v1${request.url}`,
+      retraitLe: dateDeRetrait(DEPUIS_VOICE_LEGACY),
+    })
+  );
   await voiceAnalysisRoutes(fastify);
 }

@@ -62,7 +62,7 @@ import { broadcastRoutes } from './routes/admin/broadcasts';
 import { adminPostRoutes } from './routes/admin/posts';
 import { agentAdminRoutes } from './routes/admin/agent';
 import { agentTopicsRoutes } from './routes/admin/agent-topics';
-import { routeUsageRoutes } from './routes/admin/route-usage';
+import { routeUsageAdminRoutes } from './routes/admin/route-usage';
 import { userRoutes } from './routes/users';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
@@ -97,7 +97,6 @@ import { pushTokenRoutes } from './routes/push-tokens';
 import { postRoutes } from './routes/posts';
 import { appRoutes } from './routes/app';
 import { healthProbeRoutes } from './routes/health';
-import { routeUsageAdminRoutes } from './routes/admin/route-usage';
 
 // API versioning
 const API_VERSION = 'v1';
@@ -286,10 +285,14 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     await server.register(agentAdminRoutes, { prefix: `${API_PREFIX}/admin/agent` });
     await server.register(agentTopicsRoutes, { prefix: `${API_PREFIX}/admin/agent` });
 
-    // #4275 — la lecture du compteur d'acces (S5). Elle vit avec les autres
-    // routes d'administration : c'est la seule facon de lire le compte sans
-    // acces SSH, et donc de prouver qu'une adresse est morte avant de la retirer.
-    await server.register(routeUsageRoutes, { prefix: `${API_PREFIX}/admin` });
+    // #4275 — la lecture du compteur d'acces (S5 : `canAccessAdmin` ET
+    // `canViewAnalytics`). Elle vit avec les autres routes d'administration :
+    // c'est la seule facon de lire le compte sans acces SSH, et donc de prouver
+    // qu'une adresse est morte avant de la retirer. Et elle est montee ICI, dans
+    // le graphe assemble, jamais dans le plugin qui pose le hook — une route
+    // montee hors de `registerAllRoutes` echapperait a la garde de couverture
+    // d'authentification, qui reassemble exactement ce graphe.
+    await server.register(routeUsageAdminRoutes, { prefix: `${API_PREFIX}/admin` });
 
     // Register user routes
     await server.register(userRoutes, { prefix: API_PREFIX });
@@ -435,13 +438,6 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     await server.register(healthProbeRoutes, { prefix: `${API_PREFIX}/health` });
     logger.info('✓ Health probe routes registered');
 
-    // La lecture du compteur d'acces (#4275), S5 comme `/health/metrics` :
-    // `canAccessAdmin` ET `canViewAnalytics`. Elle est ici, dans le graphe
-    // assemble, et non dans le plugin qui pose le hook — une route montee hors
-    // de `registerAllRoutes` echapperait a la garde de couverture
-    // d'authentification, qui reassemble exactement ce graphe.
-    await server.register(routeUsageAdminRoutes, { prefix: `${API_PREFIX}/admin` });
-    logger.info('✓ Route usage admin route registered');
 
     logger.info('✓ REST API routes configured successfully');
 }

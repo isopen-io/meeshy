@@ -47,9 +47,7 @@
     "release:local": "pnpm version && git add -A && git commit -m 'chore: version packages' || true",
     "fix:notification-dates": "tsx scripts/migrations/fix-notification-dates.ts",
     "fix:notification-context-null": "tsx scripts/migrations/fix-notification-context-null.ts",
-    "test:notification-serialization": "tsx scripts/test-notification-serialization.ts",
-    "api:manifest": "tsx scripts/route-manifest.ts",
-    "api:manifest:check": "tsx scripts/route-manifest.ts --check"
+    "test:notification-serialization": "tsx scripts/test-notification-serialization.ts"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
