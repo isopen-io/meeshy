@@ -7,6 +7,8 @@ import { submittedKeysOnly } from '../../utils/partial-update';
 import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData } from '@meeshy/shared/types/socketio-events';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { requirePermission } from '../../middleware/authorize';
+import type { UnifiedAuthRequest } from '../../middleware/auth';
+import { certifyPatterns, countMatchesOffLoop, type PatternRefusal } from '../../utils/safe-regex';
 
 /**
  * Routes admin CRUD pour le catalogue de topics dynamiques utilisé par le
@@ -31,11 +33,11 @@ const TopicInputSchema = z.object({
   slug: z.string().regex(/^[a-z0-9_-]+$/, 'kebab_case requis').min(2).max(40),
   label: z.string().min(1).max(80),
   description: z.string().max(280).optional().nullable(),
-  keywordPatterns: z.array(
-    z.string().refine((s) => {
-      try { new RegExp(s); return true; } catch { return false; }
-    }, 'Regex invalide')
-  ).min(1).max(10),
+  // `new RegExp(s)` ne lève pas sur `(a+)+$` : COMPILER un motif ne dit rien
+  // de ce qu'il coûte à EXÉCUTER. Ce schéma ne garde donc plus que la forme
+  // (une chaîne, bornée) ; la sûreté se prouve dans le handler, par
+  // `certifyPatterns`, qui mesure hors boucle d'événements. Cf. `utils/safe-regex`.
+  keywordPatterns: z.array(z.string().min(1).max(200)).min(1).max(10),
   instructionTemplate: z.string().min(20).max(1000),
   searchHintTemplate: z.string().min(5).max(200),
   examples: z.array(z.string().max(300)).max(5).default([]),
@@ -82,6 +84,53 @@ function notifyAdminDashboards(fastify: FastifyInstance): void {
   getCacheStore().publish(AGENT_ADMIN_EVENT_CHANNEL, JSON.stringify(payload)).catch((err) =>
     fastify.log.warn({ err }, '[TopicCatalog] admin-event publish failed'));
 }
+
+/**
+ * Rend le 400 d'un motif refusé en NOMMANT le motif et la raison.
+ *
+ * Un « Regex invalide » nu — le message que rendait l'ancien `refine` de Zod —
+ * n'apprend rien à qui vient d'écrire dix motifs : il faut deviner lequel, et
+ * pourquoi. Le refus dit les deux.
+ */
+function refuseUnsafePatterns(reply: FastifyReply, refusals: readonly PatternRefusal[]): void {
+  const detail = refusals
+    .map((r) => `${r.pattern} → [${r.code}] ${r.message}`)
+    .join(' ; ');
+  sendBadRequest(reply, `keywordPatterns: motif refusé — ${detail}`);
+}
+
+/**
+ * Débit de `POST /topics/:id/test` : 10 par minute et PAR UTILISATEUR.
+ *
+ * La route reste la plus chère du fichier même après le déport hors boucle
+ * d'événements — chaque appel démarre un fil de travail et lui donne un
+ * budget de temps. Sans plafond, dix appels concurrents deviennent dix fils,
+ * et le déport se contente de déplacer la saturation d'un fil vers la machine.
+ *
+ * Le `keyGenerator` EXPLICITE est capital, et pour une raison plus brutale que
+ * la seule propreté : `mergeParams` du plugin est un `Object.assign`, donc une
+ * config de route qui n'en pose pas HÉRITE de celui du limiteur global —
+ * `global:${request.ip}`, LA MÊME CLÉ que les 300/min de toute la plateforme
+ * (`middleware/rate-limiter.ts`). Un `max: 10` posé sur ce seau-là ne borne pas
+ * cette route : il RABAISSE à 10/min tout ce que cette adresse demande au
+ * gateway. Le seau est donc nommé (`agent-topics:test:`) et compté par COMPTE,
+ * là où l'appelant est enfin connu — même forme que
+ * `createPostRouteRateLimitConfig`.
+ */
+const TEST_ROUTE_RATE_LIMIT = {
+  max: 10,
+  timeWindow: '1 minute',
+  keyGenerator: (request: FastifyRequest) => {
+    const authContext = (request as UnifiedAuthRequest).authContext;
+    const id = authContext?.userId ?? `ip:${request.ip}`;
+    return `agent-topics:test:${id}`;
+  },
+  errorResponseBuilder: () => ({
+    success: false,
+    error: 'Trop de tests de motifs (agent-topics/test). Veuillez patienter.',
+    statusCode: 429,
+  }),
+};
 
 export async function agentTopicsRoutes(fastify: FastifyInstance) {
   // GET /admin/agent/topics
@@ -133,6 +182,14 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
       sendBadRequest(reply, parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
       return;
     }
+    // Un motif à retour arrière catastrophique se refuse À L'ÉCRITURE : une
+    // fois en base, il est exécuté par `/test` ET par le strategist, et le
+    // seul moment où on peut encore l'arrêter sans coût est celui-ci.
+    const refusals = await certifyPatterns(parsed.data.keywordPatterns);
+    if (refusals.length > 0) {
+      refuseUnsafePatterns(reply, refusals);
+      return;
+    }
     try {
       // parsed.data has all required fields filled (Zod .default() applies at
       // parse-time) ; cast to satisfy Prisma's strict input typing.
@@ -165,6 +222,15 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
     if (!parsed.success) {
       sendBadRequest(reply, parsed.error.issues.map((e) => `${e.path.join('.')}: ${e.message}`).join('; '));
       return;
+    }
+    // Le PATCH est le chemin le plus facile à oublier : garder la création et
+    // laisser passer le renommage rouvrirait la porte en un coup de `PATCH`.
+    if (parsed.data.keywordPatterns) {
+      const refusals = await certifyPatterns(parsed.data.keywordPatterns);
+      if (refusals.length > 0) {
+        refuseUnsafePatterns(reply, refusals);
+        return;
+      }
     }
     try {
       // `partial()` ne retire pas les `default()` de `examples`,
@@ -224,6 +290,7 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
   // POST /admin/agent/topics/:id/test
   fastify.post('/topics/:id/test', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
+    config: { rateLimit: TEST_ROUTE_RATE_LIMIT },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const { id } = request.params as { id: string };
     if (!OBJECT_ID_REGEX.test(id)) {
@@ -241,17 +308,18 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
         sendNotFound(reply, 'Topic introuvable');
         return;
       }
-      const matches: Record<string, number> = {};
-      for (const src of topic.keywordPatterns) {
-        try {
-          const re = new RegExp(src, 'gi');
-          const found = parsed.data.sampleText.match(re) ?? [];
-          matches[src] = found.length;
-        } catch {
-          matches[src] = -1;
-        }
-      }
-      sendSuccess(reply, { matches });
+      // Cette boucle exécutait des motifs d'appelant DANS la boucle
+      // d'événements, sur 5 000 caractères d'appelant. `(a+)+$` y figeait le
+      // gateway ENTIER — sockets, ZMQ, healthcheck — jusqu'au kill de Docker.
+      // Les motifs en base datent d'avant `certifyPatterns` : garder la porte
+      // sans garder la salle laisserait figer avec un motif écrit hier.
+      // `matches[src] = -1` conserve la forme du fil (le testeur web l'affiche
+      // déjà) ; `refused` dit ce que ce -1 recouvre.
+      const { matches, refused } = await countMatchesOffLoop(
+        topic.keywordPatterns,
+        parsed.data.sampleText,
+      );
+      sendSuccess(reply, { matches, refused });
     } catch (err) {
       sendInternalError(reply, 'Erreur test regex', err);
     }
