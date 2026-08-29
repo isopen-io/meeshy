@@ -972,8 +972,14 @@ internal struct _FullscreenRenderer: View {
 
     private func reportWatch(complete: Bool) {
         guard let start = watchStartTime else { return }
-        let watched = Date().timeIntervalSince(start)
-        guard complete || watched >= 3 else { return }
+        // Règle et raison : `VideoDismissWatchReport`. En deux mots — un player
+        // détaché a déjà rapporté ET persisté sa position ; le relire ici
+        // effacerait ce qu'il vient d'écrire (#3908).
+        guard VideoDismissWatchReport.shouldReport(
+            complete: complete,
+            watchedSeconds: Date().timeIntervalSince(start),
+            playerStillHoldsAttachment: isActive
+        ) else { return }
         let currentSec = manager.currentTime
         let totalSec = manager.duration
         let attId = player.attachment.id
