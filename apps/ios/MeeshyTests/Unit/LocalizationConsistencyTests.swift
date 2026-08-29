@@ -223,6 +223,33 @@ final class LocalizationConsistencyTests: XCTestCase {
         )
     }
 
+    /// **Borne du scanner — il voit les DEUX écritures d'un appel (258i, #4292).**
+    ///
+    /// Le marqueur a été un littéral pendant huit itérations, et un appel réparti sur
+    /// plusieurs lignes lui était invisible. Le cliquet ci-dessus repose entièrement
+    /// sur ce que le scanner VOIT : rétréci à nouveau, il ne rougirait pas — il
+    /// compterait simplement moins, et le plafond deviendrait franchissable sans que
+    /// rien ne le signale.
+    ///
+    /// Cette borne épingle donc les deux formes contre un échantillon dont la réponse
+    /// est connue, plutôt que contre le dépôt, dont le contenu bouge.
+    func test_leScannerVoitLesAppelsRepartisSurPlusieursLignes() {
+        let source = """
+        let a = String(localized: "une.ligne", defaultValue: "A", bundle: .main)
+        let b = String(
+            localized: "plusieurs.lignes",
+            defaultValue: "B",
+            bundle: .main
+        )
+        """
+        let keys = localizedCalls(in: source).map(\.key).sorted()
+        XCTAssertEqual(
+            keys, ["plusieurs.lignes", "une.ligne"],
+            "le scanner doit voir l'appel sur une ligne ET l'appel réparti — sinon le "
+            + "plafond du cliquet borne une mesure partielle"
+        )
+    }
+
     /// Keys with at least one locale expressed as plural variations.
     private func pluralizedKeys(_ url: URL) throws -> [String] {
         let json = try JSONSerialization.jsonObject(with: try Data(contentsOf: url)) as? [String: Any]
@@ -251,17 +278,26 @@ final class LocalizationConsistencyTests: XCTestCase {
             }
         }
 
-        // Pinned at the 226i measurement: 1669 at 220i, −63 for the onboarding step
-        // flow (225i), then −54 for share-link creation and −7 once pluralized keys
-        // stopped being miscounted (226i). RE-MEASURED at 224i when the scan became
-        // per-target: unchanged, because the five share-extension keys are currently
-        // duplicated into the app catalog as well, so they were already counted as
-        // translated — the per-target scan and the 226i gains therefore compose.
+        // History: 1669 at 220i, −63 for the onboarding step flow (225i), then −54 for
+        // share-link creation and −7 once pluralized keys stopped being miscounted
+        // (226i) — pinned at 1545. RE-MEASURED at 224i when the scan became per-target:
+        // unchanged, because the five share-extension keys are currently duplicated
+        // into the app catalog as well, so they were already counted as translated.
+        //
+        // RE-PINNED at 258i (#4292) — 1545 → 114. The ceiling had stopped bounding
+        // anything: the catalog filled up over the intervening iterations (3397 of
+        // 3408 entries translated in all six required locales), so the real backlog had
+        // fallen to 102 while the pin stayed at 1545. A ratchet that admits 1443 new
+        // untranslated keys is a comment, not a ratchet. The +12 on top of 102 are keys
+        // the scanner could not SEE until this iteration widened its marker to
+        // multi-line calls — they were always untranslated, merely uncountable, and
+        // making them countable is the precondition for ever clearing them (#4293).
+        //
         // The number must only ever go DOWN: a failure means a new key was introduced
         // with a `defaultValue` alone, which ships the source language to every other
         // locale. Add the catalog entry — with its translations, to the catalog of
         // the target that OWNS the key — instead of raising the ceiling.
-        let backlogCeiling = 1545
+        let backlogCeiling = 114
         XCTAssertLessThanOrEqual(
             untranslated.count, backlogCeiling,
             "\(untranslated.count) identifier keys are untranslated in at least one shipped "
@@ -633,16 +669,29 @@ final class LocalizationConsistencyTests: XCTestCase {
     /// whether the call carries a `defaultValue:` and/or `bundle: .module`.
     /// The call segment is delimited by a string-aware balanced-paren scan so
     /// parentheses inside string literals don't end it prematurely.
+    ///
+    /// **The marker is a pattern, not a literal (258i, #4292).** It used to be the
+    /// exact string `"String(localized:"`, which a call broken over several lines —
+    /// `String(\n    localized: "…"` — does not contain. 226i measured that blind
+    /// spot at 92 calls over 46 files and deliberately left it, for a reason that was
+    /// sound at the time: widening the marker reveals keys and so RAISES the backlog,
+    /// which the ratchet forbids. It was sound against a ceiling believed tight. The
+    /// ceiling was 1545 against a real backlog of 102, so the answer was to widen AND
+    /// re-pin — the blind spot had meanwhile grown to 185 calls over 61 files, because
+    /// nothing stopped new ones being written.
+    ///
+    /// `\s*` after the paren matches both shapes at once. The `openParen` arithmetic
+    /// below is unaffected: `(` still immediately follows `String` in every call,
+    /// single-line or not.
     private func localizedCalls(in source: String) -> [LocalizedCall] {
-        let marker = "String(localized:"
+        guard let marker = try? NSRegularExpression(pattern: #"String\(\s*localized:"#) else { return [] }
         let ns = source as NSString
         let stringPrefixLength = ("String" as NSString).length
         var calls: [LocalizedCall] = []
         var searchStart = 0
         while searchStart < ns.length {
-            let found = ns.range(
-                of: marker,
-                options: [],
+            let found = marker.rangeOfFirstMatch(
+                in: source,
                 range: NSRange(location: searchStart, length: ns.length - searchStart)
             )
             if found.location == NSNotFound { break }

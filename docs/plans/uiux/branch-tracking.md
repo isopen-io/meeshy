@@ -33,7 +33,30 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
 > - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
 >
-> ### 257i — les boucles perpétuelles de STATUT (#4286, en cours)
+> ### 258i — le cliquet i18n avait cessé de cliqueter (#4292, en cours)
+>
+> Plafond épinglé **1545**, backlog réel **102** : le cliquet admettait 1443 clés
+> neuves non traduites. Le catalogue s'était rempli (3397/3408 traduites en 6
+> locales) sans que le pin suive. Re-piqué à **114**, marqueur du scanner élargi
+> aux appels multi-lignes (185 appels / 61 fichiers, contre 92/46 au 226i).
+> Détail : `docs/analyses/uiux/2026-08-29-iteration-258i-i18n-ratchet.md`.
+>
+> - **226i avait vu le trou et renoncé, pour une raison JUSTE devenue fausse** :
+>   « élargir fait monter le backlog, or le plafond ne doit que descendre ». Vrai
+>   contre un plafond serré — il ne l'était plus. **Avant de renoncer à une
+>   amélioration qu'un cliquet interdit, mesurer le cliquet.**
+> - **Répliquer une règle, c'est répliquer ses FILTRES** : deux erreurs
+>   (`!isModuleBundle` oublié, `isIdentifier` trop strict) ont donné 1024 puis 93
+>   avant 102. Ce qui a attesté la fidélité : en marqueur ÉTROIT, la réplication
+>   reproduit l'état vert actuel des trois règles sœurs (0/0/0).
+> - **Un chiffre peut mesurer ce que le dépôt ne mesure pas** : mes « 133 → 23
+>   orphelines » étaient hors sujet — le test des orphelines lit `combinedSource`,
+>   pas `localizedCalls`, et est insensible à ce correctif.
+> - Backlog **102 ≠ 114** : les 12 de plus sont les clés que le marqueur étroit ne
+>   pouvait pas voir. Elles n'ont jamais été traduites ; elles étaient
+>   incomptables → #4293.
+>
+> ### 257i — les boucles perpétuelles de STATUT (#4286, MERGÉE `9ac93624`)
 >
 > Sept `repeatForever` sur 68 n'avaient aucun portillon Reduce Motion, et
 > c'étaient toutes des animations de **statut** (frappe, enregistrement,
