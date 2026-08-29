@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
 import bcrypt from 'bcryptjs';
-import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneNumber, normalizePhoneWithCountry } from '../../utils/normalize';
+import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneWithCountry } from '../../utils/normalize';
 import { buildPaginationMeta } from '../../utils/pagination';
 import {
   updateUserProfileSchema,
@@ -97,7 +97,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
   fastify.patch('/users/me', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Update the authenticated user profile. Allows updating personal information, language preferences, and translation settings. Email and phone number uniqueness is enforced.',
+      description: 'Update the authenticated user profile. Allows updating personal information, language preferences, and translation settings. Email and phone number are NOT accepted here (#4184) — use POST /users/me/change-email and /change-phone, which require proof of possession before writing.',
       tags: ['users'],
       summary: 'Update user profile',
       body: updateUserRequestSchema,
@@ -145,12 +145,15 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       if (body.firstName !== undefined) updateData.firstName = SecuritySanitizer.sanitizeText(capitalizeName(body.firstName));
       if (body.lastName !== undefined) updateData.lastName = SecuritySanitizer.sanitizeText(capitalizeName(body.lastName));
       if (body.displayName !== undefined) updateData.displayName = SecuritySanitizer.sanitizeText(normalizeDisplayName(body.displayName));
-      if (body.email !== undefined) updateData.email = normalizeEmail(body.email);
-      if (body.phoneNumber !== undefined) {
-        updateData.phoneNumber = (body.phoneNumber === '' || body.phoneNumber === null)
-          ? null
-          : normalizePhoneNumber(body.phoneNumber);
-      }
+      // `email` et `phoneNumber` NE SONT PLUS lisibles sur `body` — retirés du
+      // schéma (#4184) précisément pour qu'aucune ligne ne puisse plus les
+      // écrire ici. Cette route les acceptait autrefois SANS preuve de
+      // possession et les posait directement en base sans jamais remettre
+      // `emailVerifiedAt`/`phoneVerifiedAt` à `null` : une session courte
+      // suffisait à un attaquant pour prendre le compte en un seul appel.
+      // Le bon geste — `POST /users/me/change-email` / `/change-phone`
+      // (`contact-change.ts`) — prouve la possession avant d'écrire quoi que
+      // ce soit ; ne pas recréer ce raccourci ici.
       if (body.bio !== undefined) updateData.bio = SecuritySanitizer.sanitizeText(body.bio);
 
       if (body.systemLanguage !== undefined) updateData.systemLanguage = body.systemLanguage;
@@ -161,37 +164,6 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       }
       if (body.customDestinationLanguage !== undefined) {
         updateData.customDestinationLanguage = body.customDestinationLanguage === '' ? null : body.customDestinationLanguage;
-      }
-
-      if (body.email) {
-        const normalizedEmail = normalizeEmail(body.email);
-        const existingUser = await fastify.prisma.user.findFirst({
-          where: {
-            email: {
-              equals: normalizedEmail,
-              mode: 'insensitive'
-            },
-            id: { not: userId }
-          }
-        });
-
-        if (existingUser) {
-          return sendBadRequest(reply, 'This email address is already in use');
-        }
-      }
-
-      if (body.phoneNumber && body.phoneNumber !== null && body.phoneNumber.trim() !== '') {
-        const normalizedPhone = normalizePhoneNumber(body.phoneNumber);
-        const existingUser = await fastify.prisma.user.findFirst({
-          where: {
-            phoneNumber: normalizedPhone,
-            id: { not: userId }
-          }
-        });
-
-        if (existingUser) {
-          return sendBadRequest(reply, 'This phone number is already in use');
-        }
       }
 
       const updatedUser = await withMutationLog({

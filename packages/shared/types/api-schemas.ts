@@ -3695,21 +3695,58 @@ export const magicLinkValidateErrorResponseSchema = {
 
 /**
  * Update user profile request body schema
+ *
+ * #4184 — ce contrat AJV doit décrire EXACTEMENT le même jeu de champs que le
+ * validateur Zod frère, `updateUserProfileSchema`
+ * (`packages/shared/utils/validation.ts`). Avant ce correctif les deux
+ * divergeaient dans les DEUX sens : `avatar`/`timezone` figuraient ici sans
+ * exister côté Zod — un client qui LIT ce schéma (doc OpenAPI générée) croit
+ * ces deux champs acceptés par `PATCH /users/me`, et se fait rejeter en 400 à
+ * l'exécution ; `email`/`phoneNumber`, eux, ne figuraient PAS ici mais
+ * existaient côté Zod, qui les acceptait et les écrivait en base SANS aucune
+ * preuve de possession — le vecteur de prise de contrôle de compte que #4184
+ * ferme. `avatar` a sa route dédiée (`PATCH /users/me/avatar`) ; `timezone`
+ * n'est lu par aucun handler de cette route ; `email`/`phoneNumber` passent
+ * désormais exclusivement par `POST /users/me/change-email` / `/change-phone`
+ * (`contact-change.ts`), qui prouvent la possession avant d'écrire.
+ *
+ * PAS de `additionalProperties: false` ici — décision mesurée, pas un oubli.
+ * Fastify configure son AJV avec `removeAdditional: true`
+ * (`@fastify/ajv-compiler`, défaut NON désactivé par `server.ts`), qui
+ * SUPPRIME silencieusement toute clé interdite AVANT que le `preValidation`/
+ * handler ne s'exécute — mesuré empiriquement sur la config AJV exacte de
+ * `server.ts` : `additionalProperties: false` change une requête portant
+ * `email` d'un statut 200 (SANS le champ) à... un statut 200 identique, la clé
+ * ayant simplement disparu avant que quiconque ne s'en aperçoive. Le refus
+ * EXPLICITE (400) qu'exige #4184 vient du `.strict()` de la couche Zod, qui
+ * voit encore la clé — AJV ne la lui a pas retirée puisqu'elle n'est déclarée
+ * NULLE PART ici, condition sous laquelle `removeAdditional` ne retire rien
+ * (vérifié : seule la présence explicite de `additionalProperties: false`
+ * déclenche la suppression silencieuse). Poser ce mot-clé ICI retirerait le
+ * signal AVANT que Zod ne le voie et transformerait le refus en silence —
+ * l'inverse du but recherché.
  */
 export const updateUserRequestSchema = {
   type: 'object',
   properties: {
     firstName: { type: 'string', minLength: 1, maxLength: 50, description: 'First name' },
     lastName: { type: 'string', minLength: 1, maxLength: 50, description: 'Last name' },
-    displayName: { type: 'string', minLength: 1, maxLength: 100, description: 'Display name' },
+    // PAS de `minLength` : `''` est une valeur PRODUIT valide (EFFACER le nom
+    // d'affichage, cf. le handler `updateUserProfile`). `minLength: 1`
+    // rejetait cette requête au niveau AJV — AVANT que Zod (sans borne basse
+    // ici) n'ait la moindre chance de l'accepter. Divergence de la même
+    // FAMILLE que celle d'`email`/`phoneNumber`/`avatar`/`timezone` ci-dessus
+    // (#4184 § critère 2), révélée en corrigeant l'anti-témoin de
+    // `profile.test.ts` qui la masquait depuis le début : le double
+    // `additionalProperties: true` qu'il posait remplaçait CE schéma en bloc,
+    // sans aucune borne, donc `displayName: ''` n'avait jamais traversé le
+    // VRAI contrat AJV avant ce lot.
+    displayName: { type: 'string', maxLength: 100, description: 'Display name (empty string clears it)' },
     bio: { type: 'string', maxLength: 500, description: 'User biography' },
-    avatar: { type: 'string', format: 'uri', description: 'Avatar image URL' },
-    phoneNumber: { type: 'string', description: 'Phone number' },
     systemLanguage: { type: 'string', minLength: 2, maxLength: 5, description: 'System language code' },
     regionalLanguage: { type: 'string', maxLength: 5, description: 'Regional language code (empty string clears)' },
     customDestinationLanguage: { type: 'string', maxLength: 5, nullable: true, description: 'Custom destination language (empty string allowed)' },
     autoTranslateEnabled: { type: 'boolean', description: 'Enable auto-translation' },
-    timezone: { type: 'string', description: 'User timezone (IANA format)' },
     voicePublic: { type: 'boolean', description: 'Expose the cloned voice sample on the public profile' }
   }
 } as const;
