@@ -320,7 +320,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
       const fileSize = upload.size || 0;
       const relPath = path.join(year, month, userId, storedName);
-      const fileUrl = `${publicUrl}${apiPath(`/attachments/file/${relPath}`)}`;
+      // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
+      // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
+      // et une donnée qui les porte devient fausse dès que l'une d'elles change.
+      // Les trois clients posent la route : `buildAttachmentUrl` (web),
+      // `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
+      // (Android).
+      const fileUrl = relPath;
 
       const attachmentType = getAttachmentType(mimeType, filename);
       let metadata: Record<string, any> = {};
@@ -345,7 +351,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           thumbnailRelPath = await metadataManager.generateVideoThumbnail(relPath) ?? undefined;
         }
         if (thumbnailRelPath) {
-          thumbnailUrl = `${publicUrl}${apiPath(`/attachments/file/${thumbnailRelPath}`)}`;
+          thumbnailUrl = thumbnailRelPath;
         }
       } catch (err) {
         logger.warn('[TUS] Thumbnail generation failed:', err);

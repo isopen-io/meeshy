@@ -368,7 +368,7 @@ export class UploadProcessor {
    * Génère le chemin API relatif (sans domaine)
    */
   getAttachmentPath(filePath: string): string {
-    return `/api/v1/attachments/file/${encodeURIComponent(filePath)}`;
+    return apiPath(`/attachments/file/${encodeURIComponent(filePath)}`);
   }
 
   /**
