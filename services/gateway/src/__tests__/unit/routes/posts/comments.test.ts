@@ -1545,7 +1545,7 @@ describe('POST /posts/:postId/comments/:commentId/like — invalid emoji trigger
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
-      payload: { emoji: 'x'.repeat(11) }, // exceeds max(10) → LikeSchema fails → fallback '❤️'
+      payload: { emoji: 'x'.repeat(40) }, // exceeds EMOJI_MAX_LENGTH → LikeSchema fails → fallback '❤️'
     });
     expect(res.statusCode).toBe(200);
     await app.close();
@@ -1560,7 +1560,7 @@ describe('DELETE /posts/:postId/comments/:commentId/like — invalid emoji trigg
     const res = await app.inject({
       method: 'DELETE', url: `/posts/${POST_ID}/comments/${COMMENT_ID}/like`,
       headers: { 'content-type': 'application/json' },
-      payload: JSON.stringify({ emoji: 'x'.repeat(11) }), // exceeds max(10) → LikeSchema fails → fallback '❤️'
+      payload: JSON.stringify({ emoji: 'x'.repeat(40) }), // exceeds EMOJI_MAX_LENGTH → LikeSchema fails → fallback '❤️'
     });
     expect(res.statusCode).toBe(200);
     await app.close();
