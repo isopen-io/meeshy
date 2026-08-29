@@ -2,6 +2,56 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **the pure freehand-drawing board landed — the JVM-testable heart of the Stories drawing
+> layer** (slice `story-drawing-board`, feature-parity §Stories "Freehand drawing layer (pen/marker/eraser,
+> colour, width, undo/redo/clear)" `[ ]`→`[~]`). Android had NO drawing model at all; iOS keeps the
+> committed-strokes state + undo/redo/clear/delete/select/recolour/resize/smooth in a pure reducer
+> (`StoryComposerViewModel+DrawingEditing`) precisely so it is unit-testable without a live PencilKit canvas.
+> So the board is a pure `:feature:stories` value type, not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4326/#4267 (both jcnm: web/gateway),
+> none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior
+> slice (`thumbhash-source-plan`) is on `main` (#4321). Branched off freshly-fetched `origin/main`; local HEAD
+> == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only
+> (1 new main file + 1 new test file + tracking docs).
+>
+> **The change — one immutable value type + a pure reducer.** `:feature:stories` `StoryDrawingBoard(strokes,
+> redoStack, selectedStrokeId)` with `commit` (append + clear redo), `undo` (last stroke → redo stack;
+> deselect if it was selected), `redo` (LIFO re-append; selection untouched), `clear` (empty both + deselect),
+> `delete(id)` (remove + clear redo + deselect; a genuine no-op on an absent id), `select(id?)` (inert on an
+> unknown id, matching iOS), and per-stroke `recolorSelected`/`resizeSelected`/`smoothSelected` (mutate the
+> selected stroke, redo untouched — a property tweak is not a new stroke). `StoryDrawingStroke` /
+> `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line) mirror the
+> iOS models with the exact gateway wire strings. `createdAt` deliberately omitted (reducer never reads it →
+> clock-free). Two deliberate improvements over iOS: no-ops return the same board; `delete` of an absent id
+> keeps redo (iOS clears it unconditionally). Blast radius: all-new files, zero existing call sites touched.
+>
+> **Tests: +33, RED-proven.** `StoryDrawingBoardTest`: model defaults + wire strings; fresh-board emptiness;
+> commit order + redo-invalidation; undo (move-to-redo, empty no-op, selected-deselect, non-selected-keep);
+> redo (LIFO re-append, empty no-op, undo↔redo round-trip, multi-undo/multi-redo order); clear (empties both +
+> deselect); delete (remove + redo-invalidate, selected-deselect, non-selected-keep, unknown-id no-op keeps
+> redo); select (mark, null-deselect, unknown-id inert); per-stroke edits (recolour/resize/smooth only the
+> selected, inert when nothing selected, redo untouched). **RED**: dropping `commit`'s `redoStack = emptyList()`
+> → BUILD FAILED on EXACTLY the "commit invalidates the redo stack" test, no collateral (9s incremental rerun).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL** (0 failed). Reviewer **PASS** (diff `apps/android` only — 1 main +
+> 1 test + tracking docs, no `local.properties`; SDK purity — pure `:feature:stories` reducer, no `android.*`,
+> no orchestration; SSOT — the board is the single home for the drawing edit-state the composer VM will hold,
+> no re-implementation; no tautological tests; no coverage floor lowered — new pure logic, near-total branch
+> coverage, RED-proven).
+>
+> **Next**: the drawing layer's remaining pieces are `StoryEffects.drawingStrokes` wire serialization (needs
+> the gateway drawing-object wire shape confirmed + `CanvasV3Projection` plumbing) and the Compose capture
+> surface (a `detectDragGestures`/`Canvas` drawing overlay with pressure → variable-width render, an eraser
+> hit-test, and composer VM wiring holding a `StoryDrawingBoard` per slide) — the latter device/Compose-bound,
+> so it waits for a Compose-instrumented or device-capable run. Other pure-core Stories candidates: the
+> `StoryEffects.drawingStrokes` serialization is JVM-testable and could be the next slice (a `toWire()` on the
+> board + `CanvasV3Projection` drop-in). Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **the pure ThumbHash source-downscale planner landed — the JVM-testable half of the story
 > thumbHash write-path the prior run named as next** (slice `thumbhash-source-plan`, feature-parity
 > "thumbHash blur-placeholder per slide" `[~]` line, and the media `[~]` line at §P). `ThumbHash.encode`

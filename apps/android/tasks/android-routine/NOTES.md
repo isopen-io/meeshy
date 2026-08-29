@@ -5,6 +5,23 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — an undo/redo reducer's ONE invariant is "what repopulates the redo stack", and every op is judged by it (slice `story-drawing-board`)
+Porting iOS's drawing undo/redo (`StoryComposerViewModel+DrawingEditing`) to a pure immutable
+`StoryDrawingBoard`, the whole correctness story reduces to a single rule: **`redoStack` is populated ONLY by
+`undo`; every other user action decides whether it invalidates redo.** Enumerate the ops against that rule and
+the branches fall out — `commit`/`delete` clear redo (a new action makes "redo forward" caduc); `redo` consumes
+its own stack (LIFO); a property tweak (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact;
+`clear` nukes both. The single RED mutation that proves the suite is dropping `commit`'s `redoStack = emptyList()`
+— it fails EXACTLY the redo-invalidation test, nothing else, because that one line IS the invariant.
+Two deliberate improvements over iOS worth keeping as a pattern for ported reducers: (1) a no-op returns the SAME
+instance (`return this`) rather than a fresh copy — cheaper, and lets a test assert `op(x) == x` to pin
+inertness; (2) `delete` of an ABSENT id is a genuine no-op that keeps redo, whereas iOS's `deleteStroke` calls
+`removeAll` then clears redo unconditionally (so deleting a non-existent stroke silently discarded the redo
+history). Faithful parity is the default, but a user-invisible iOS quirk that throws away state is worth
+diverging from — document the divergence in the doc-comment so the next reader knows it's chosen, not missed.
+Also: omit iOS's `createdAt: Date` from a ported value type when the reducer never reads it (draw order is the
+list order) — it keeps the type pure and its tests clock-free with zero behavioural loss.
+
 ## 2026-08-29 — porting an inlined-constant formula: pin the boundary behaviourally, and give the "fold two cores" clause a real seam (slice `call-low-light-boost`)
 Two reusable moves from porting iOS `applyLowLightBoost`:
 - **Boundary tests must not depend on float-exactness.** iOS gates on `normalizedBrightness < 0.3` where
