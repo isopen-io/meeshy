@@ -11,6 +11,7 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
+import { applyDeprecationHeaders } from '../../utils/deprecation';
 
 // Schemas de validation Zod
 const updateReportSchema = z.object({
@@ -50,7 +51,13 @@ export async function reportRoutes(fastify: FastifyInstance) {
   fastify.post('/', {
     onRequest: [fastify.authenticate],
     preHandler: limiteursDeSignalement(fastify)
-  }, (request: FastifyRequest, reply: FastifyReply) => signaler(fastify, request, reply));
+  }, (request: FastifyRequest, reply: FastifyReply) => {
+    // Posé AVANT `signaler` : le sursis reste vrai même sur sa branche
+    // d'erreur (400/404/500) — c'est l'ADRESSE qui est dépréciée, pas
+    // seulement sa réponse de succès (#4274).
+    applyDeprecationHeaders(reply, { successorPath: '/api/v1/reports' });
+    return signaler(fastify, request, reply);
+  });
 
   /**
    * GET /api/admin/reports

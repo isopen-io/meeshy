@@ -3,8 +3,9 @@ import { logError } from '../../utils/logger';
 import { sendSuccess, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import {
-  bloquer, debloquer, listerBloques, repondreBlocage, LIMITE_MAX_BLOCAGES,
+  bloquer, debloquer, listerBloques, repondreBlocage, LIMITE_MAX_BLOCAGES, BLOCKS_SUCCESSOR_PATH,
 } from '../directory/blocks';
+import { applyDeprecationHeaders } from '../../utils/deprecation';
 
 /**
  * Les trois ALIAS des routes de blocage (#4164).
@@ -49,6 +50,7 @@ export async function blockUser(fastify: FastifyInstance) {
     },
   }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
     try {
+      applyDeprecationHeaders(reply, { successorPath: BLOCKS_SUCCESSOR_PATH.item(request.params.userId) });
       const resultat = await bloquer(fastify, request, request.params.userId);
       if ('refus' in resultat) return repondreBlocage(reply, resultat);
 
@@ -91,6 +93,7 @@ export async function unblockUser(fastify: FastifyInstance) {
     },
   }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
     try {
+      applyDeprecationHeaders(reply, { successorPath: BLOCKS_SUCCESSOR_PATH.item(request.params.userId) });
       return repondreBlocage(reply, await debloquer(fastify, request, request.params.userId));
     } catch (error) {
       logError(fastify.log, '[BLOCKING] Error unblocking user', error);
@@ -131,6 +134,7 @@ export async function getBlockedUsers(fastify: FastifyInstance) {
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
+      applyDeprecationHeaders(reply, { successorPath: BLOCKS_SUCCESSOR_PATH.list });
       // L'alias sert la PREMIÈRE page au plafond, et un tableau NU — sa forme
       // historique, que les clients installés décodent. Il ne rendait aucune
       // pagination : en ajouter une ici ne changerait rien pour eux, et

@@ -11,6 +11,7 @@ import { requireUserModifyAccess } from '../../middleware/admin-user-auth.middle
 import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response';
+import { applyDeprecationHeaders } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 
 /**
@@ -472,7 +473,19 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
 
   const messageSeul = (message: string): Rendu => () => ({ data: { message }, message });
 
+  /**
+   * Sursis d'une adresse historique (#4274) — posé AVANT la traduction du
+   * corps, donc présent même sur une branche d'erreur. La cible successeur
+   * porte l'id RÉSOLU (`request.params.userId`), jamais le gabarit `:userId`
+   * que le client ne peut pas suivre tel quel.
+   */
+  const marquerAliasHistorique = (request: FastifyRequest, reply: FastifyReply, suffixe: string): void => {
+    const { userId } = request.params as { userId: string };
+    applyDeprecationHeaders(reply, { successorPath: `/api/v1/admin/users/${userId}${suffixe}` });
+  };
+
   fastify.patch('/admin/users/:userId/role', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '');
     const corps = corpsDe(request);
     return ecrireCompte(request, reply, { role: corps.role, reason: corps.reason }, ({ servi, corps: c }) => ({
       data: servi,
@@ -481,6 +494,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
   });
 
   fastify.patch('/admin/users/:userId/status', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '');
     const corps = corpsDe(request);
     return ecrireCompte(request, reply, { isActive: corps.isActive, reason: corps.reason }, ({ servi, corps: c }) => ({
       data: servi,
@@ -488,34 +502,38 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
     }));
   });
 
-  fastify.post('/admin/users/:userId/unlock', { preHandler: gardes }, (request, reply) =>
-    ecrireSecurite(
+  fastify.post('/admin/users/:userId/unlock', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/security');
+    return ecrireSecurite(
       request,
       reply,
       { unlock: true, reason: corpsDe(request).reason },
       messageSeul('Account unlocked successfully')
-    )
-  );
+    );
+  });
 
-  fastify.post('/admin/users/:userId/enable-2fa', { preHandler: gardes }, (request, reply) =>
-    ecrireSecurite(
+  fastify.post('/admin/users/:userId/enable-2fa', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/security');
+    return ecrireSecurite(
       request,
       reply,
       { twoFactorEnabled: true, reason: corpsDe(request).reason },
       messageSeul('2FA enabled successfully')
-    )
-  );
+    );
+  });
 
-  fastify.post('/admin/users/:userId/disable-2fa', { preHandler: gardes }, (request, reply) =>
-    ecrireSecurite(
+  fastify.post('/admin/users/:userId/disable-2fa', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/security');
+    return ecrireSecurite(
       request,
       reply,
       { twoFactorEnabled: false, reason: corpsDe(request).reason },
       messageSeul('2FA disabled successfully')
-    )
-  );
+    );
+  });
 
   fastify.post('/admin/users/:userId/verify-email', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/verifications');
     const corps = corpsDe(request);
     return ecrireVerifications(
       request,
@@ -526,6 +544,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
   });
 
   fastify.post('/admin/users/:userId/verify-phone', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/verifications');
     const corps = corpsDe(request);
     return ecrireVerifications(
       request,
@@ -536,6 +555,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
   });
 
   fastify.post('/admin/users/:userId/verify-age', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/verifications');
     const corps = corpsDe(request);
     return ecrireVerifications(
       request,
@@ -554,6 +574,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
    * conserver une porte que l'issue ferme.
    */
   fastify.post('/admin/users/:userId/voice-consent', { preHandler: gardes }, (request, reply) => {
+    marquerAliasHistorique(request, reply, '/consents');
     const corps = corpsDe(request);
     const type = typeof corps.consentType === 'string' ? corps.consentType : '__inconnu__';
     return ecrireConsentements(
