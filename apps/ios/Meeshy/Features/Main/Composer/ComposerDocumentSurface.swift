@@ -1986,26 +1986,9 @@ struct ComposerDocumentSurface: View {
         // Repliée par défaut — dépliée par l'icône « couleur de fond » de la
         // toolRow (#4031). Ne s'affiche plus en permanence.
         if onPickBackground != nil && showColorPalette {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                        Button {
-                            onPickBackground?(hex)
-                        } label: {
-                            Circle()
-                                .fill(Color(hex: hex))
-                                .frame(width: 28, height: 28)
-                                .overlay(Circle().stroke(
-                                    MeeshyColors.textSecondary(isDark: true).opacity(0.25), lineWidth: 1))
-                        }
-                        .accessibilityLabel(Text(ComposerDocumentCopy.background))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+            BackgroundColorPalette(colors: StoryBackgroundPalette.colors) { hex in
+                onPickBackground?(hex)
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerDocumentCopy.background))
         }
     }
 

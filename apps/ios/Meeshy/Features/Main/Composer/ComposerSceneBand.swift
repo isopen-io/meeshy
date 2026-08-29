@@ -93,27 +93,16 @@ struct ComposerSceneBandView: View {
     /// (`ComposerDocumentCopy.background`), et pas une clé neuve : c'est le même
     /// contrôle, servi à deux endroits. Une clé jumelle aurait dédoublé sept
     /// traductions pour la même phrase.
+    ///
+    /// **Et « le même contrôle » a fini par être le même CODE.** Ce
+    /// doc-comment déclarait le partage au niveau de la CLÉ pendant que la vue,
+    /// elle, était recopiée à l'identique dans `ComposerDocumentSurface` — avec
+    /// sa pastille de 28 pt, sa marge posée sur le parent, et son libellé
+    /// répété sur chaque bouton. Un commentaire ne fait pas d'une copie une
+    /// source unique (leçon 248i). `BackgroundColorPalette` l'est.
     private var palette: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(colors, id: \.self) { hex in
-                    Button {
-                        onPickColor?(hex)
-                    } label: {
-                        Circle()
-                            .fill(Color(hex: hex))
-                            .frame(width: 28, height: 28)
-                            .overlay(Circle().stroke(
-                                MeeshyColors.textSecondary(isDark: true).opacity(0.25),
-                                lineWidth: 1))
-                    }
-                    .accessibilityLabel(Text(ComposerDocumentCopy.background))
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+        BackgroundColorPalette(colors: colors) { hex in
+            onPickColor?(hex)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(ComposerDocumentCopy.background))
     }
 }
