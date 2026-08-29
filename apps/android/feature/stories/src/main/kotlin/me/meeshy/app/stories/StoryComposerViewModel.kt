@@ -320,8 +320,8 @@ class StoryComposerViewModel @Inject constructor(
      * Persists (or purges) the current composer draft — iOS's save-on-dismiss. Called
      * when the screen leaves. The pure [StoryComposerAutosave] decides: a restorable
      * simple draft is saved, an emptied or no-longer-persistable draft purges any stored
-     * one, and an unchanged draft writes nothing. Rich on-canvas content is not yet
-     * persistable, so a draft carrying it purges rather than restores lossily.
+     * one, and an unchanged draft writes nothing. Sticker elements are not yet persistable,
+     * so a draft carrying one purges rather than restores lossily.
      */
     fun persistDraft() {
         viewModelScope.launch {

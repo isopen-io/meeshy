@@ -5,6 +5,32 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — a durable "object-graph" snapshot can stay primitive-only by riding EXISTING wire SSOTs, not re-spelling them (slice `story-draft-persist-text-elements`)
+The first object-graph dimension of the story fidelity gate (on-canvas `StoryTextElement`, ~13 styled
+fields incl. a sealed `StoryTextBackground` and three enums) looked like it needed a polymorphic
+serialiser. It didn't. Two reuse moves kept the durable `StoryDraftTextElementSnapshot` a flat
+primitive bag:
+- **A sealed value that already projects to a `@Serializable` wire type rides as THAT type — don't
+  invent `{type,hex,radius}` fields.** `StoryTextBackground` already had `toStyleWire(): StoryTextBackgroundStyle?`
+  and `resolve(style, textBg)` as the single source for its tagged-union encoding (the gateway/reader
+  path). The snapshot stores `background: StoryTextBackgroundStyle?` and maps through those exact two
+  functions, so the tagged union is spelled in ONE place and the round-trip is provably the reader's own.
+- **An enum defined in a DOWNSTREAM module (`:feature:stories`) rides a `:core:model` snapshot as its
+  Kotlin `.name` string**, resolved back with `entries.firstOrNull { it.name == s } ?: default`. This
+  keeps the durable-model module free of the composer's enums (no upward dependency) AND is tolerant by
+  construction — an unknown/blank name from a legacy or corrupt blob decays to the element's own default,
+  exactly like every other story restore decoder. `color.ifBlank { DEFAULT_COLOR }` closes the same gap
+  for the one free-form string field.
+- **Same decouple-the-gate discipline as the four scalar dimensions before it**: `deckHasRichContent`
+  dropped its `elements` arm (now representable, gate holds only `stickers`), `deckIsPristine` gained an
+  explicit `elements.isEmpty()` so a silently-added element still counts as touched. And `hasContent`
+  (worth-restoring) counts a **publishable** element only — a blank on-canvas text box carries nothing to
+  restore, matching iOS's "a text-element-only slide publishes iff the text is non-blank".
+- **One flip, one retarget, both genuine behaviour changes not weakenings**: the old `a draft with a text
+  element is not persisted` autosave test now asserts `Save` (the whole point of the slice); the VM
+  rich-content purge test retargeted from a text element to a still-gated sticker so it keeps proving the
+  gate for what's still gated. Mutation-RED-proven three ways (gate arm, pristine guard, hasContent arm).
+
 ## 2026-08-27 — a "fidelity gate" over a field that's actually primitive was never a real gate; decouple the gate from pristine before lifting one dimension (slice `story-draft-persist-canvas-transform`)
 The story autosave slice installed a fidelity gate: any slide carrying rich on-canvas content
 (elements/stickers/filter/background/duration/**transform**) was treated as "not persistable" and its

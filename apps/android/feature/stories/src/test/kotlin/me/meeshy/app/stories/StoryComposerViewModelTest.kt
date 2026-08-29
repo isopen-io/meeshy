@@ -30,6 +30,7 @@ import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
@@ -2684,15 +2685,54 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `persistDraft does not save a draft carrying rich on-canvas content`() = runTest {
+    fun `persistDraft does not save a draft carrying a sticker`() = runTest {
         val store = InMemoryStoryComposerDraftStore()
         val vm = viewModel(draftStore = store)
         vm.onTextChange("caption")
-        vm.onAddTextElement() // rich content the snapshot can't represent
+        vm.onAddSticker("🎉") // a sticker is rich content the snapshot can't yet represent
 
         vm.persistDraft()
 
         assertThat(store.load()).isNull()
+    }
+
+    @Test
+    fun `persistDraft saves the selected slide's on-canvas text elements`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onAddTextElement()
+        vm.onTextChange("on canvas") // rewrites the editing element, not the caption
+        vm.onTextElementStyle(vm.state.value.selectedTextElement!!.id, StoryTextStyle.NEON)
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        val element = saved!!.slides.single().elements.single()
+        assertThat(element.text).isEqualTo("on canvas")
+        assertThat(element.style).isEqualTo("NEON")
+    }
+
+    @Test
+    fun `onEnterComposer restores persisted on-canvas text elements`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    elements = listOf(
+                        StoryDraftTextElementSnapshot(id = "e1", text = "resumed", style = "HANDWRITING"),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.text).isEqualTo("resumed")
+        assertThat(element.style).isEqualTo(StoryTextStyle.HANDWRITING)
     }
 
     @Test

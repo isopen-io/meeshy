@@ -4159,9 +4159,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation-RED-proven twice: re-adding the background to the rich-content gate reddens EXACTLY the 5
       background gate/save tests (4 autosave + 1 VM persist); removing the `background/backgroundMediaId ==
       null` pristine guards reddens EXACTLY the one pristine test; everything else stays green.
-      **Pending**: widening the snapshot to carry the remaining rich on-canvas content — text elements
-      (`StoryTextElement`) and stickers (`StoryStickerElement`), the two object-graph dimensions, one slice
-      each — lifts the rest of the fidelity gate.
+      **Text-element persistence done** (slice `story-draft-persist-text-elements`, 2026-08-29): the fifth
+      fidelity-gate dimension is lifted — a slide's on-canvas text elements (`StoryTextElement`, with every
+      styled field: text, style, colour, alignment, size, backing, outline, fade, timing, position/scale/
+      rotation) now round-trip through the snapshot, so a user who typed and styled on-canvas text and left
+      the composer gets it back on return. New flat, primitive-only `StoryDraftTextElementSnapshot` on
+      `StoryDraftSlideSnapshot.elements` (the three enums ride as their Kotlin `.name`, tolerant to an
+      unknown name at restore; the sealed `StoryTextBackground` rides as the already-`@Serializable`
+      `StoryTextBackgroundStyle` tagged union via the single-source `toStyleWire()`/`resolve()` — no new
+      tagged-union spelling, no polymorphic serialiser; the outline/fade/timing pairs and the position ride
+      as scalars); `toDraftSnapshot`/`toDeck` map `StorySlide.elements` ↔ the list via `toDraftSnapshot()`/
+      `toTextElement()`; `deckHasRichContent` no longer counts text elements (now representable — the gate
+      now holds only stickers), while `deckIsPristine` gained an explicit `elements.isEmpty()` check so a
+      silently-added text element still counts as touched and a restore never clobbers it. A **publishable**
+      (non-blank) text element makes a slide worth restoring (a text-element-only slide publishes, iOS
+      parity); a blank one carries nothing to restore. +21 tests (10 `StoryComposerDraftSnapshotTest`
+      element round-trip/rides-a-slide/legacy-empty/legacy-defaults/publishable×2/worth-restoring×2/
+      changed-element/added-element, 9 `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways×2/
+      round-trip/tolerant-decode + 2 resolve Save + the flipped `a draft with a text element resolves to
+      Save`, 2 `StoryComposerViewModelTest` persist-elements/restore-elements; the pre-existing VM
+      rich-content purge test retargeted from a (now-liftable) text element to a still-gated sticker).
+      Mutation-RED-proven three times: re-adding the elements arm to `deckHasRichContent` reddens EXACTLY the
+      5 text-element persistence tests (4 autosave + 1 VM persist); removing the `elements.isEmpty()`
+      pristine guard reddens EXACTLY the one pristine test; dropping the `elements.any { isPublishable }`
+      arm from `hasContent` reddens EXACTLY the worth-restoring test; everything else stays green.
+      **Pending**: widening the snapshot to carry the LAST rich dimension — stickers (`StoryStickerElement`,
+      one flat `@Serializable` mirror) — collapses the fidelity gate to nothing, at which point
+      `deckHasRichContent` becomes constant `false` and the gate + its purge branch should be retired.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
