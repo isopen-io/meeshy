@@ -520,16 +520,21 @@ describe('useUserPreferencesStore', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('reads key status from the encryption endpoint, not from the user object', async () => {
-      // `GET /auth/me` cannot carry these: `userSchema` (the response schema
-      // fast-json-stringify serializes through) declares no signal field, so any
-      // the handler puts there is stripped before the body is written.
+    it('reads key status from GET /me?expand=security — #4178, la seule lecture de soi', async () => {
+      // `GET /me/preferences/encryption` est désormais un ALIAS déprécié de
+      // `GET /me?expand=security` (#4178) : la forme sert `security` NICHÉ
+      // sous `data.user`, pas à plat sous `data` — c'est ce que
+      // `?expand=security` ajoute à la lecture de soi, exactement la forme
+      // que servait déjà l'ancienne route.
       mockGetAuthToken.mockReturnValue('tok');
       mockFetch.mockResolvedValue(makeOkResponse({
-        encryptionPreference: 'always',
-        hasSignalKeys: true,
-        signalRegistrationId: 4242,
-        lastKeyRotation: '2026-03-04T05:06:07.000Z',
+        user: {
+          security: {
+            hasSignalKeys: true,
+            signalRegistrationId: 4242,
+            lastKeyRotation: '2026-03-04T05:06:07.000Z',
+          },
+        },
       }));
 
       await act(async () => {
@@ -537,7 +542,7 @@ describe('useUserPreferencesStore', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.meeshy.test/api/v1/me/preferences/encryption',
+        'https://api.meeshy.test/api/v1/me?expand=security',
         expect.anything(),
       );
       const { encryptionKeys } = useUserPreferencesStore.getState();
@@ -552,16 +557,33 @@ describe('useUserPreferencesStore', () => {
         encryptionKeys: { hasSignalKeys: true, signalRegistrationId: 1, lastKeyRotation: 'x' },
       });
       mockFetch.mockResolvedValue(makeOkResponse({
-        encryptionPreference: 'optional',
-        hasSignalKeys: false,
-        signalRegistrationId: null,
-        lastKeyRotation: null,
+        user: { security: { hasSignalKeys: false, signalRegistrationId: null, lastKeyRotation: null } },
       }));
 
       await act(async () => {
         await useUserPreferencesStore.getState().syncEncryptionKeys();
       });
 
+      expect(useUserPreferencesStore.getState().encryptionKeys).toEqual({
+        hasSignalKeys: false,
+        signalRegistrationId: null,
+        lastKeyRotation: null,
+      });
+    });
+
+    it('data.user sans security ne lève pas — les trois champs retombent à leur valeur "aucune clé"', async () => {
+      // Cohérent avec le contrat générique des sync* (§ plus bas) : une
+      // enveloppe qui PORTE des données rend `true`, même incomplète — seule
+      // l'ABSENCE de `data` (§ « enveloppe sans données ») rend `false`.
+      mockGetAuthToken.mockReturnValue('tok');
+      mockFetch.mockResolvedValue(makeOkResponse({ user: {} }));
+
+      let result: boolean | undefined;
+      await act(async () => {
+        result = await useUserPreferencesStore.getState().syncEncryptionKeys();
+      });
+
+      expect(result).toBe(true);
       expect(useUserPreferencesStore.getState().encryptionKeys).toEqual({
         hasSignalKeys: false,
         signalRegistrationId: null,
@@ -1123,8 +1145,11 @@ describe('useUserPreferencesStore', () => {
 
     it("syncAll rend true dès qu'une lecture aboutit", async () => {
       mockGetAuthToken.mockReturnValue('tok');
+      // #4178 : syncEncryptionKeys lit désormais GET /me?expand=security,
+      // plus /me/preferences/encryption — seule requête qu'on laisse aboutir
+      // pour prouver que syncAll ne dépend d'AUCUNE lecture en particulier.
       mockFetch.mockImplementation((url: string) =>
-        url.includes('/preferences/encryption') ? makeOkResponse({}) : makeErrorResponse(),
+        url.includes('/me?expand=security') ? makeOkResponse({}) : makeErrorResponse(),
       );
 
       await act(async () => {

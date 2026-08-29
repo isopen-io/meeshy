@@ -179,8 +179,34 @@ function construirePrisma() {
 }
 
 async function construireAppMe(): Promise<FastifyInstance> {
+  // Depuis #4178, la racine du module (`GET /`) passe par
+  // `createUnifiedAuthMiddleware` — MOCKÉ ici comme pour le reste du fichier
+  // — au lieu de `fastify.authenticate` : elle doit donc obtenir SON
+  // `authContext` de CE mock, avec la forme que `handleGetMe`
+  // (`routes/me/get-me.ts`) attend (`type: 'user'`, `registeredUser`), et pas
+  // seulement `req.auth` (que lisent encore les routes de préférences).
   mockCreateAuth.mockImplementation(() => async (req: FastifyRequest) => {
     (req as any).auth = { userId: USER_ID, isAuthenticated: true };
+    (req as any).authContext = {
+      isAuthenticated: true,
+      isAnonymous: false,
+      type: 'user',
+      userId: USER_ID,
+      displayName: 'Alice',
+      userLanguage: 'fr',
+      hasFullAccess: true,
+      canSendMessages: true,
+      registeredUser: {
+        id: USER_ID,
+        username: 'alice',
+        email: 'alice@example.com',
+        role: 'USER',
+        systemLanguage: 'fr',
+        regionalLanguage: 'en',
+        isOnline: true,
+        lastActiveAt: new Date(),
+      },
+    };
   });
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
@@ -280,6 +306,9 @@ describe('Préférences et compte — les jumelles sans appelant ont été retir
     expect(app.hasRoute({ method: 'GET', url: PREFIXE_ME })).toBe(true);
     const res = await app.inject({ method: 'GET', url: PREFIXE_ME });
     expect(res.statusCode).toBe(200);
-    expect(res.json().data.id).toBe(USER_ID);
+    // #4178 : la forme est désormais `data.user` (nichée), pas `data` — la
+    // même que sert l'alias `GET /auth/me`, puisque les deux partagent
+    // désormais UN SEUL calcul (`handleGetMe`, `routes/me/get-me.ts`).
+    expect(res.json().data.user.id).toBe(USER_ID);
   });
 });

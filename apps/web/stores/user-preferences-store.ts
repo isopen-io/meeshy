@@ -70,12 +70,15 @@ export interface StoryPreferences {
 
 /**
  * Server state, not a preference: whether a `SignalPreKeyBundle` row exists for
- * this user. Written by `POST /signal/keys`, reported by
- * `GET /me/preferences/encryption`.
+ * this user. Written by `POST /signal/keys`, read via
+ * `GET /me?expand=security` (#4178 — `GET /me/preferences/encryption` is now
+ * a deprecated alias of the same computation, `routes/me/get-me.ts` on the
+ * gateway).
  *
- * It cannot ride on the user object: `userSchema` — the response schema
- * fast-json-stringify serializes `GET /auth/me` through — declares no signal
- * field, so any the handler sets is dropped before the body is written.
+ * It cannot ride on the base user object: `userSchema` (`@meeshy/shared`,
+ * still the shared response schema for `id`/`username`/… on every `/me*`
+ * route) declares no signal field — `security` is a LOCAL addition of the
+ * `/me` route's own schema, sent only when `?expand=security` is requested.
  */
 export interface EncryptionKeyStatus {
   hasSignalKeys: boolean;
@@ -437,7 +440,13 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return false;
 
         try {
-          const response = await fetch(buildApiUrl('/me/preferences/encryption'), {
+          // #4178 : `GET /me/preferences/encryption` devient un alias
+          // déprécié de la seule lecture de soi — `GET /me?expand=security`
+          // sert EXACTEMENT la même forme (`hasSignalKeys`,
+          // `signalRegistrationId`, `lastKeyRotation`), nichée sous
+          // `data.user.security` puisque `security` est un des trois
+          // développements possibles de `/me`, pas une réponse à elle seule.
+          const response = await fetch(buildApiUrl('/me?expand=security'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -446,7 +455,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           const data = await response.json();
           if (!data.success || !data.data) return false;
 
-          const { hasSignalKeys, signalRegistrationId, lastKeyRotation } = data.data;
+          const { hasSignalKeys, signalRegistrationId, lastKeyRotation } = data.data.user?.security ?? {};
 
           set({
             encryptionKeys: {

@@ -15,17 +15,44 @@ import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} fr
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
-import { resolveAutoTranslateEnabled } from '../../utils/auto-translate-preference';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
 import {
   legacyTokenRefusal,
   type SessionBoundTokenPayload,
 } from '../../services/auth/session-jwt';
+import { depreciee, dateDeRetrait } from '../../utils/deprecation';
+import { handleGetMe, meRouteSharedOptions } from '../me/get-me';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
 
+/**
+ * L'ALIAS déprécié de la lecture de soi (#4178, critère 3).
+ *
+ * `depuis` est le jour où `GET /api/v1/me` est devenue l'adresse cible ;
+ * `retraitLe` en dérive par la fenêtre par défaut de 180 jours
+ * (`identity.md` § « Ordre des étapes », point 5 — `dateDeRetrait`). Le
+ * retrait RÉEL reste gouverné par le compteur d'accès par route
+ * (`ROUTES_SURVEILLEES`, `services/route-usage.service.ts`, qui surveille
+ * déjà `GET /api/v1/auth/me` sous ce numéro d'issue) — cette date INFORME,
+ * elle ne décide pas (`utils/deprecation.ts`, § « Pourquoi `Sunset` est
+ * OPTIONNEL »).
+ *
+ * L'issue #4178 (critère 3) écrit « `Deprecation: true` » : c'est la forme du
+ * brouillon RFC de 2019, PAS celle que `utils/deprecation.ts` sert — le
+ * fichier documente explicitement avoir corrigé cette attribution
+ * (RFC 9745, `Deprecation: @<epoch>`, une date structurée plutôt qu'un
+ * booléen sans information). Suivre l'énoncé de l'issue à la lettre aurait
+ * réécrit une deuxième forme de l'en-tête à côté de celle déjà choisie pour
+ * les quinze autres alias du dépôt (#4154, #4155, #4161, #4164) — la
+ * divergence exacte que ce site unique existe pour fermer.
+ */
+const ALIAS_LECTURE_DE_SOI = {
+  depuis: '2026-08-29',
+  successeur: '/api/v1/me',
+  retraitLe: dateDeRetrait('2026-08-29'),
+} as const;
 
 /**
  * Register magic link, email/phone verification, session management, and /me routes
@@ -33,86 +60,26 @@ const logger = enhancedLogger.child({ module: 'magic-link' });
 export function registerMagicLinkRoutes(context: AuthRouteContext) {
   const { fastify, authService } = context;
 
-  // GET /me - Get current authenticated user profile
+  // GET /me — ALIAS de GET /api/v1/me (#4178). Le calcul est PARTAGÉ
+  // (`handleGetMe`, `routes/me/get-me.ts`) : aucune réponse propre à cette
+  // adresse, seulement l'annonce de dépréciation en plus.
+  //
+  // `allowAnonymous: true` CORRIGE un défaut préexistant, pas seulement une
+  // unification : l'ancien montage (`{ requireAuth: true }` sans
+  // `allowAnonymous`) faisait REFUSER en 403, par `createUnifiedAuthMiddleware`
+  // lui-même, tout porteur de `X-Session-Token` — avant d'atteindre le
+  // handler. La branche anonyme du handler ci-dessous existait et était
+  // TESTÉE, mais la suite mockait `createUnifiedAuthMiddleware` et injectait
+  // `authContext` directement : elle ne pouvait pas voir que la vraie garde
+  // ne laissait jamais passer cette branche en production. C'est exactement
+  // le témoin que le critère 6 de #4178 demande : « au rang JWT, une route
+  // régressée vers "authentifié seulement" rendrait le même verdict qu'une
+  // route juste » — sauf qu'ici la régression précédait le correctif.
   fastify.get('/me', {
-    schema: {
-      description: 'Get the current authenticated user profile. Works with both JWT tokens (registered users) and session tokens (anonymous users).',
-      tags: ['auth', 'user'],
-      summary: 'Get current user profile',
-      response: {
-        200: {
-          description: 'User profile retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                user: userSchema
-              }
-            }
-          }
-        },
-        401: errorResponseSchema,
-        404: errorResponseSchema
-      },
-      security: [{ bearerAuth: [] }]
-    },
-    preValidation: [createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true })]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-
-      if (!authContext.isAuthenticated) {
-        return sendUnauthorized(reply, 'Non authentifié');
-      }
-
-      // Registered user (JWT)
-      if (authContext.type === 'user' && authContext.registeredUser) {
-        const user = authContext.registeredUser;
-        const permissions = authService.getUserPermissions(user as any);
-
-        return sendSuccess(reply, {
-          user: formatUserResponse(user, permissions)
-        });
-      }
-
-      // Anonymous user (Session)
-      if (authContext.type === 'anonymous' && authContext.anonymousUser) {
-        const anonymousUser = authContext.anonymousUser;
-
-        return sendSuccess(reply, {
-          user: {
-            id: authContext.userId,
-            username: anonymousUser.username,
-            email: null,
-            firstName: anonymousUser.firstName,
-            lastName: anonymousUser.lastName,
-            displayName: authContext.displayName,
-            avatar: null,
-            role: 'ANONYMOUS',
-            systemLanguage: anonymousUser.language,
-            regionalLanguage: anonymousUser.language,
-            customDestinationLanguage: null,
-            // Un participant anonyme n'a pas de ligne UserPreferences : le défaut partagé s'applique.
-            autoTranslateEnabled: resolveAutoTranslateEnabled(null),
-            isOnline: true,
-            lastActiveAt: new Date(),
-            isActive: true,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            permissions: anonymousUser.permissions
-          }
-        });
-      }
-
-      return sendNotFound(reply, 'Utilisateur non trouvé');
-
-    } catch (error) {
-      logger.error('Error in /auth/me', error);
-      sendInternalError(reply, 'Erreur lors de la récupération du profil');
-    }
-  });
+    ...meRouteSharedOptions,
+    onRequest: depreciee(ALIAS_LECTURE_DE_SOI),
+    preValidation: [createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true, allowAnonymous: true })],
+  }, handleGetMe);
 
   // POST /refresh - Refresh JWT token
   fastify.post('/refresh', {

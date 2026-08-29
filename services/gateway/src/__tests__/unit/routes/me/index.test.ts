@@ -22,7 +22,15 @@ jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 
 jest.mock('../../../../utils/socket-broadcast', () => ({ broadcastToUser: jest.fn() }));
 
+// `jest.requireActual` PAR DÉFAUT (CLAUDE.md « un double partiel d'un module
+// perd en silence tout ce que le module GAGNE ») : `get-me.ts` importe
+// `userSchema` depuis ce même module pour composer son schéma de réponse
+// (`...userSchema.properties`) — un double qui ne renvoyait QUE
+// `errorResponseSchema` faisait échouer le CHARGEMENT du module au lieu de
+// simplement omettre un champ, ce qui aurait pu passer inaperçu plus
+// longtemps sous une forme plus permissive.
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
+  ...(jest.requireActual('@meeshy/shared/types/api-schemas') as object),
   errorResponseSchema: { type: 'object', properties: { success: { type: 'boolean' } } },
 }));
 
@@ -71,7 +79,9 @@ jest.mock('../../../../services/ConsentValidationService', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import meRoutes from '../../../../routes/me/index';
-import type { UnifiedAuthRequest } from '../../../../middleware/auth';
+import { createUnifiedAuthMiddleware } from '../../../../middleware/auth';
+
+const mockCreateAuth = createUnifiedAuthMiddleware as jest.MockedFunction<any>;
 
 // Le plugin est monté sous le préfixe RÉEL de la production
 // (`route-registration.ts` : `${API_PREFIX}/me`). C'est le seul montage qui
@@ -98,35 +108,58 @@ function makePrisma(overrides: Record<string, unknown> = {}) {
     user: {
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
     },
+    signalPreKeyBundle: {
+      findUnique: jest.fn<any>().mockResolvedValue(null),
+    },
     ...overrides,
   } as any;
 }
 
 type AuthState = 'authenticated' | 'unauthenticated';
 
+// Depuis #4178, la racine (`GET /`) passe par `createUnifiedAuthMiddleware`
+// (mocké au niveau du module, comme le reste de ce fichier) au lieu de
+// `fastify.authenticate` — c'est précisément ce qui permet à la MÊME route
+// de servir un porteur de session anonyme (critère 1). `authContext` doit
+// donc porter la forme que `handleGetMe` (`routes/me/get-me.ts`) attend :
+// `type: 'user'` et `registeredUser` au grain que `formatUserResponse` lit.
 async function buildApp(opts: {
   prisma?: ReturnType<typeof makePrisma>;
   auth?: AuthState;
 } = {}): Promise<FastifyInstance> {
   const { prisma = makePrisma(), auth = 'authenticated' } = opts;
 
+  mockCreateAuth.mockImplementation(() => async (req: FastifyRequest) => {
+    if (auth === 'authenticated') {
+      (req as any).authContext = {
+        isAuthenticated: true,
+        isAnonymous: false,
+        type: 'user',
+        userId: USER_ID,
+        displayName: mockUser.displayName,
+        userLanguage: 'fr',
+        hasFullAccess: true,
+        canSendMessages: true,
+        registeredUser: {
+          id: USER_ID,
+          username: mockUser.username,
+          email: mockUser.email,
+          role: mockUser.role,
+          systemLanguage: 'fr',
+          regionalLanguage: 'en',
+          isOnline: true,
+          lastActiveAt: new Date(),
+        },
+      };
+    } else {
+      (req as any).authContext = { isAuthenticated: false, isAnonymous: true };
+    }
+  });
+
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   // Decorate fastify.prisma
   app.decorate('prisma', prisma);
-
-  // Stub fastify.authenticate so preValidation runs without JWT verification
-  app.decorate('authenticate', async (req: FastifyRequest) => {
-    if (auth === 'authenticated') {
-      (req as any).authContext = {
-        isAuthenticated: true,
-        userId: USER_ID,
-        registeredUser: { id: USER_ID },
-      };
-    } else {
-      (req as any).authContext = { isAuthenticated: false };
-    }
-  });
 
   await app.register(meRoutes, { prefix: PREFIXE_PRODUCTION });
   await app.ready();
@@ -140,13 +173,13 @@ describe('GET /me — authenticated user', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(() => app.close());
 
-  it('returns 200 with user data', async () => {
+  it('returns 200 with user data nested under data.user — la forme UNIFIÉE (#4178), partagée avec GET /auth/me', async () => {
     const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.success).toBe(true);
-    expect(body.data.id).toBe(USER_ID);
-    expect(body.data.username).toBe('alice');
+    expect(body.data.user.id).toBe(USER_ID);
+    expect(body.data.user.username).toBe('alice');
   });
 });
 
@@ -155,17 +188,6 @@ describe('GET /me — unauthenticated', () => {
     const app = await buildApp({ auth: 'unauthenticated' });
     const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
     expect(res.statusCode).toBe(401);
-    await app.close();
-  });
-});
-
-describe('GET /me — user not found in DB', () => {
-  it('returns 404 when user is not in database', async () => {
-    const prisma = makePrisma();
-    prisma.user.findUnique = jest.fn<any>().mockResolvedValue(null);
-    const app = await buildApp({ prisma });
-    const res = await app.inject({ method: 'GET', url: `${PREFIXE_PRODUCTION}` });
-    expect(res.statusCode).toBe(404);
     await app.close();
   });
 });

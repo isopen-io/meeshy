@@ -38,9 +38,21 @@ import {
   PRIVACY_PREFERENCE_DEFAULTS,
 } from '@meeshy/shared/types/preferences';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { depreciee } from '../../../utils/deprecation';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
+
+// #4178 -- GET /me/preferences/encryption sert EXACTEMENT la forme que rend
+// desormais GET /me?expand=security, qui la calcule depuis la meme source unique
+// (le bundle SignalPreKeyBundle actif). Deux adresses pour une meme lecture, c'est
+// deux contrats qui divergeront au prochain changement : celle-ci passe en sursis.
+// Aucun Sunset -- le retrait est gouverne par le compteur d'adoption de #4275,
+// jamais par une date posee a la main.
+const ANNONCE_ENCRYPTION = {
+  depuis: '2026-08-29',
+  successeur: '/api/v1/me?expand=security',
+} as const;
 
 export async function userPreferencesRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
@@ -122,7 +134,8 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
           401: errorResponseSchema,
           500: errorResponseSchema
         }
-      }
+      },
+      onRequest: depreciee(ANNONCE_ENCRYPTION),
     },
     async (request, reply) => {
       const userId = request.auth?.userId;
