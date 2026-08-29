@@ -7,9 +7,22 @@
  * - SWR-like avec déduplication automatique via React Query
  * - Optimistic updates pour UX réactive
  * - Gestion des erreurs 403 CONSENT_REQUIRED
- * - Support PATCH (partiel) et PUT (complet)
+ * - Support PATCH (`mode=merge`, partiel) et PATCH (`mode=replace`, complet)
  * - TypeScript strict avec types inférés
  * - i18n pour tous les messages d'erreur
+ *
+ * ## Une seule route, un contrat public inchangé (#4181)
+ *
+ * Les trois appels réseau de ce hook parlaient chacun à leur propre alias
+ * `/me/preferences/{catégorie}` — sept fois GET, PATCH, PUT. La route unifiée
+ * `/me/preferences` les remplace TOUS : `?categories=` sélectionne la
+ * catégorie de CE hook, et `PATCH` (avec `mode=replace` pour l'ancien PUT)
+ * porte un corps `{ [catégorie]: … }`. La réponse range désormais le document
+ * sous le NOM de la catégorie plutôt que de l'être elle-même — c'est le seul
+ * déballage qui change ici. Le contrat PUBLIC du hook (par catégorie,
+ * `data`/`updatePreferences`/`replacePreferences`) reste identique : aucun de
+ * ses appelants (`ApplicationSettings`, `PrivacySettings`, `MessageSettings`…)
+ * n'a besoin de changer une ligne.
  */
 
 import { useState, useCallback, useEffect, useMemo } from 'react';
@@ -114,9 +127,11 @@ export function usePreferences<C extends PreferenceCategory>(
     queryKey,
     queryFn: async () => {
       try {
-        const response = await apiService.get<PreferenceResponse<PreferenceDataType<C>>>(
-          `/api/v1/me/preferences/${category}`
-        );
+        // `?categories=` sélectionne LA catégorie de ce hook — la réponse
+        // range son document sous son propre nom (§ en-tête du fichier).
+        const response = await apiService.get<
+          PreferenceResponse<Record<string, PreferenceDataType<C>>>
+        >('/api/v1/me/preferences', { categories: category });
 
         // Gérer les erreurs de réponse
         if (isPreferenceErrorResponse(response.data)) {
@@ -130,7 +145,7 @@ export function usePreferences<C extends PreferenceCategory>(
         // Réinitialiser les violations en cas de succès
         setConsentViolations(null);
 
-        return response.data.data;
+        return response.data.data[category];
       } catch (err) {
         // Vérifier si c'est une erreur de consentement
         const violations = checkConsentError(err);
@@ -167,10 +182,12 @@ export function usePreferences<C extends PreferenceCategory>(
     Partial<PreferenceDataType<C>>
   >({
     mutationFn: async (updates) => {
-      const response = await apiService.patch<PreferenceResponse<PreferenceDataType<C>>>(
-        `/api/v1/me/preferences/${category}`,
-        updates
-      );
+      // `mode=merge` (défaut) : la réponse reprend la forme du GET, complétée
+      // par les défauts — un rejeu (outbox, double-clic) reste sûr, à
+      // l'identique de l'ancien PATCH par catégorie.
+      const response = await apiService.patch<
+        PreferenceResponse<Record<string, PreferenceDataType<C>>>
+      >('/api/v1/me/preferences', { [category]: updates });
 
       if (isPreferenceErrorResponse(response.data)) {
         // Vérifier si c'est une erreur de consentement
@@ -185,7 +202,7 @@ export function usePreferences<C extends PreferenceCategory>(
         throw new Error('Invalid response format');
       }
 
-      return response.data.data;
+      return response.data.data[category];
     },
     onMutate: async (updates) => {
       // Annuler les queries en cours pour éviter les conflits
@@ -236,10 +253,15 @@ export function usePreferences<C extends PreferenceCategory>(
     PreferenceDataType<C>
   >({
     mutationFn: async (newData) => {
-      const response = await apiService.put<PreferenceResponse<PreferenceDataType<C>>>(
-        `/api/v1/me/preferences/${category}`,
-        newData
-      );
+      // `mode=replace` : la route unifiée n'a plus de PUT (#4181, critère 1).
+      // `replacePreferences` envoie toujours un document COMPLET (son type
+      // est `PreferenceDataType<C>`, jamais `Partial<...>`) : aucune clé n'y
+      // est absente, donc `replace` — qui laisse une clé absente du corps
+      // ABSENTE plutôt que remise à son `default()` Zod — rend exactement ce
+      // que rendait l'ancien PUT pour un appelant qui respecte ce contrat.
+      const response = await apiService.patch<
+        PreferenceResponse<Record<string, PreferenceDataType<C>>>
+      >('/api/v1/me/preferences?mode=replace', { [category]: newData });
 
       if (isPreferenceErrorResponse(response.data)) {
         if (response.data.violations) {
@@ -253,7 +275,7 @@ export function usePreferences<C extends PreferenceCategory>(
         throw new Error('Invalid response format');
       }
 
-      return response.data.data;
+      return response.data.data[category];
     },
     onMutate: async (newData) => {
       await queryClient.cancelQueries({ queryKey });

@@ -24,6 +24,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
+import { depreciee, type AdresseDepreciee } from '../../../utils/deprecation';
 import {
   applyCategoryWriteEffects,
   readJsonPreferenceColumn,
@@ -38,16 +39,26 @@ import {
 export type { CategoryStorage };
 
 /**
- * En-tête posé sur CHAQUE réponse d'un alias (RFC 8594 / draft-deprecation).
+ * L'annonce de sursis d'un alias — déléguée au site UNIQUE (`utils/deprecation`,
+ * #4274), jamais réimplémentée ici.
  *
- * Il n'y a volontairement pas de `Sunset` : la date de retrait n'est pas connue,
- * elle est CONDITIONNÉE au compteur d'accès. Annoncer une date qu'on ne tiendra
- * pas serait pire que n'en annoncer aucune — un client qui la lit et cesse
- * d'appeler perdrait ses écritures hors ligne le jour où elle passe.
+ * Ce module en portait sa PROPRE version (`Deprecation: 'true'` posé à la main
+ * par un hook `onSend`) : le brouillon 2019, écrit avant que le site unique
+ * n'existe. Le jour où il a existé, les deux ont coexisté JUMELLES et
+ * DIVERGENTES — exactement ce que la dimension 11 (maintenabilité, UNE source
+ * de vérité) interdit, et exactement ce qu'un correctif de #4181 ne peut pas
+ * laisser derrière lui : sept catégories × quatre verbes auraient été la SEULE
+ * famille d'adresses dépréciées du dépôt à ne pas porter la forme RFC 9745
+ * (`Deprecation: @<secondes-epoch>`, une date structurée) que portent déjà
+ * `reports.ts`, `users-write.ts`, `profile.ts`, `register.ts`, `sharing.ts`,
+ * `feed.ts`, `friends.ts`. Pas de `retraitLe` : la date de retrait n'est pas
+ * connue, elle est CONDITIONNÉE au compteur d'accès de #4275. L'annoncer avant
+ * qu'il ne l'établisse serait pire que le silence — un client qui la lit et
+ * cesse d'appeler perdrait ses écritures hors ligne le jour où elle passe.
  */
-const DEPRECATION_HEADERS: Readonly<Record<string, string>> = {
-  Deprecation: 'true',
-  Link: '</api/v1/me/preferences>; rel="successor-version"',
+const ALIAS_DEPRECIE: AdresseDepreciee = {
+  depuis: '2026-08-29',
+  successeur: '/api/v1/me/preferences',
 };
 
 /**
@@ -69,12 +80,10 @@ export function createPreferenceRouter(
     // Instancier le service de validation de consentement
     const consentService = new ConsentValidationService(fastify.prisma);
 
-    fastify.addHook('onSend', async (_request, reply, payload) => {
-      for (const [name, value] of Object.entries(DEPRECATION_HEADERS)) {
-        reply.header(name, value);
-      }
-      return payload;
-    });
+    // `onRequest`, pas `onSend` : c'est le choix documenté par
+    // `utils/deprecation.ts` lui-même — l'annonce doit sortir AVANT toute
+    // garde (auth, débit, rôle), quel que soit le verdict rendu ensuite.
+    fastify.addHook('onRequest', depreciee(ALIAS_DEPRECIE));
 
     /**
      * L'UNIQUE lecture de l'état stocké — partagée par le `GET` et par la base

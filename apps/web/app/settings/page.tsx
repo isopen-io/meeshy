@@ -264,8 +264,19 @@ export default function SettingsPage() {
 
     for (const cat of categoriesToPrefetch) {
       queryClient.prefetchQuery({
+        // Même clé, même forme de valeur que `usePreferences` (#4181) — sous
+        // l'ancien alias, ce préchargement posait l'ENVELOPPE `{success,data}`
+        // dans le cache que `usePreferences` lit comme un DOCUMENT nu :
+        // `staleTime: Infinity` aurait servi cette forme fausse à l'écran
+        // ouvert juste après, sans jamais la corriger.
         queryKey: queryKeys.preferences.category(cat),
-        queryFn: () => apiService.get(`/api/v1/me/preferences/${cat}`).then(r => r.data),
+        queryFn: () =>
+          apiService
+            .get<{ success: boolean; data?: Record<string, unknown> }>(
+              '/api/v1/me/preferences',
+              { categories: cat }
+            )
+            .then(r => r.data?.data?.[cat]),
       });
     }
   }, [activeTab, tabs, queryClient, TAB_TO_CATEGORY]);

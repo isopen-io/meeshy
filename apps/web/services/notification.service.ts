@@ -326,22 +326,38 @@ export const NotificationService = {
   },
 
   /**
-   * Récupère les préférences de notifications
-   * Migré de /notifications/preferences vers /me/preferences/notification (système unifié UserPreferences)
+   * Récupère les préférences de notifications.
+   *
+   * Migré une seconde fois (#4181) : de l'alias `/me/preferences/notification`
+   * (déprécié, RFC 9745 — reste servi, mais compte pour le compteur d'adoption
+   * de #4275) vers la route UNIQUE `/me/preferences`. `?categories=` cible la
+   * catégorie de ce service, et la réponse la range sous son NOM
+   * (`{ notification: {...} }`) — déballée ici pour que ce service garde EXACTEMENT
+   * le même contrat de sortie qu'avant : `response.data` reste le document,
+   * jamais l'enveloppe multi-catégories.
    */
   async getPreferences(): Promise<ApiResponse<any>> {
     return withRetry(async () => {
-      return apiService.get('/me/preferences/notification');
+      const response = await apiService.get<{ notification?: unknown }>(
+        '/api/v1/me/preferences',
+        { categories: 'notification' }
+      );
+      return { ...response, data: response.data?.notification };
     });
   },
 
   /**
-   * Met à jour les préférences de notifications
-   * Migré de /notifications/preferences vers /me/preferences/notification (système unifié UserPreferences)
+   * Met à jour les préférences de notifications — route unique de #4181.
+   * `mode=merge` (défaut) : une clé absente du corps garde sa valeur stockée,
+   * jamais remise à son `default()` Zod. Même déballage qu'au-dessus.
    */
   async updatePreferences(preferences: any): Promise<ApiResponse<any>> {
     return withRetry(async () => {
-      return apiService.patch('/me/preferences/notification', preferences);
+      const response = await apiService.patch<{ notification?: unknown }>(
+        '/api/v1/me/preferences',
+        { notification: preferences }
+      );
+      return { ...response, data: response.data?.notification };
     });
   },
 };

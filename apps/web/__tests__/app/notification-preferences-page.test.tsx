@@ -132,11 +132,11 @@ describe('écran des préférences de notification — ce qui part au serveur', 
       expect(writeCall().init.method).toBe('PATCH');
     });
 
-    it('ne nomme que la clé basculée', () => {
+    it('ne nomme que la clé basculée — rangée sous sa catégorie (#4181)', () => {
       toggle('sound');
       save();
 
-      expect(writeCall().body).toEqual({ soundEnabled: false });
+      expect(writeCall().body).toEqual({ notification: { soundEnabled: false } });
     });
 
     it('ne nomme aucun des champs que l’écran ne rend pas', () => {
@@ -144,20 +144,23 @@ describe('écran des préférences de notification — ce qui part au serveur', 
       save();
 
       const { body } = writeCall();
-      expect(body).not.toHaveProperty('callsEnabled');
-      expect(body).not.toHaveProperty('dndUtcOffsetMinutes');
-      expect(body).not.toHaveProperty('dndDays');
-      expect(body).not.toHaveProperty('showPreview');
-      expect(body).not.toHaveProperty('showSenderName');
-      expect(body).not.toHaveProperty('vibrationEnabled');
+      expect(body.notification).not.toHaveProperty('callsEnabled');
+      expect(body.notification).not.toHaveProperty('dndUtcOffsetMinutes');
+      expect(body.notification).not.toHaveProperty('dndDays');
+      expect(body.notification).not.toHaveProperty('showPreview');
+      expect(body.notification).not.toHaveProperty('showSenderName');
+      expect(body.notification).not.toHaveProperty('vibrationEnabled');
     });
   });
 
   describe('quand le chargement a abouti', () => {
     beforeEach(async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
+        // La route unique range chaque catégorie sous son NOM (#4181) — plus
+        // jamais l'alias `/me/preferences/notification`, dont la réponse
+        // était le document nu.
         ok: true,
-        json: async () => ({ success: true, data: storedDocument }),
+        json: async () => ({ success: true, data: { notification: storedDocument } }),
       });
       await renderLoaded();
     });
@@ -167,10 +170,10 @@ describe('écran des préférences de notification — ce qui part au serveur', 
       save();
 
       const { body } = writeCall();
-      expect(body).not.toHaveProperty('id');
-      expect(body).not.toHaveProperty('userId');
-      expect(body).not.toHaveProperty('createdAt');
-      expect(body).not.toHaveProperty('updatedAt');
+      expect(body.notification).not.toHaveProperty('id');
+      expect(body.notification).not.toHaveProperty('userId');
+      expect(body.notification).not.toHaveProperty('createdAt');
+      expect(body.notification).not.toHaveProperty('updatedAt');
     });
 
     it('n’émet AUCUNE écriture quand rien n’a été touché', () => {
@@ -186,14 +189,16 @@ describe('écran des préférences de notification — ce qui part au serveur', 
     it('ne réaffirme pas un réglage déjà enregistré au geste suivant', async () => {
       toggle('sound');
       save();
-      await waitFor(() => expect(writeCall().body).toEqual({ soundEnabled: false }));
+      await waitFor(() =>
+        expect(writeCall().body).toEqual({ notification: { soundEnabled: false } }),
+      );
 
       (global.fetch as jest.Mock).mockClear();
       toggle('email');
       save();
 
       await waitFor(() =>
-        expect(writeCall().body).toEqual({ emailEnabled: false }),
+        expect(writeCall().body).toEqual({ notification: { emailEnabled: false } }),
       );
     });
 
@@ -223,7 +228,7 @@ describe('écran des préférences de notification — ce qui part au serveur', 
       save();
 
       await waitFor(() =>
-        expect(writeCall().body).toEqual({ emailEnabled: false }),
+        expect(writeCall().body).toEqual({ notification: { emailEnabled: false } }),
       );
     });
 
@@ -235,8 +240,7 @@ describe('écran des préférences de notification — ce qui part au serveur', 
       save();
 
       expect(writeCall().body).toEqual({
-        dndEnabled: true,
-        dndStartTime: '23:30',
+        notification: { dndEnabled: true, dndStartTime: '23:30' },
       });
     });
   });

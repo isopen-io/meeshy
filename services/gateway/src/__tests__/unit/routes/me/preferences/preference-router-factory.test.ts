@@ -199,6 +199,47 @@ describe('GET / — preference-router-factory', () => {
   });
 });
 
+// ─── Deprecation — RFC 9745, pas le brouillon 2019 (#4181) ────────────────────
+
+/**
+ * La factory posait SA PROPRE annonce (`Deprecation: 'true'`, un hook
+ * `onSend` manuscrit) — écrite avant `utils/deprecation.ts` (#4274), et restée
+ * JUMELLE et DIVERGENTE de lui après coup. Ce bloc garde la délégation au site
+ * unique, au niveau où elle doit vivre : la factory elle-même, PARAMÉTRÉE par
+ * catégorie — si une seule catégorie régressait vers un hook local, ce serait
+ * ici que ça se verrait, pas seulement sur `audio` via `index.ts`.
+ */
+describe('Deprecation — factory (#4181)', () => {
+  it('pose la forme RFC 9745 sur les QUATRE verbes, sans Sunset codé en dur', async () => {
+    const app = await buildApp();
+
+    for (const method of ['GET', 'PUT', 'PATCH', 'DELETE'] as const) {
+      const res = await app.inject({
+        method,
+        url: '/',
+        headers: { 'content-type': 'application/json' },
+        payload: method === 'GET' || method === 'DELETE'
+          ? undefined
+          : { pushEnabled: false, soundEnabled: false },
+      });
+      expect(res.headers.deprecation).toMatch(/^@\d+$/);
+      expect(res.headers.deprecation).not.toBe('true');
+      expect(res.headers.link).toContain('rel="successor-version"');
+      expect(res.headers.sunset).toBeUndefined();
+    }
+
+    await app.close();
+  });
+
+  it('annonce le sursis même sur un 401 — le hook court avant la garde', async () => {
+    const anonApp = await buildApp({ auth: 'no-user-id' });
+    const res = await anonApp.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers.deprecation).toMatch(/^@\d+$/);
+    await anonApp.close();
+  });
+});
+
 // ─── PUT / ────────────────────────────────────────────────────────────────────
 
 describe('PUT / — preference-router-factory', () => {

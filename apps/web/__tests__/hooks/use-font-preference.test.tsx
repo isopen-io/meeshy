@@ -103,7 +103,7 @@ describe('useFontPreference', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true,
-        data: { key: 'font-family', value: 'inter' },
+        data: { application: { fontFamily: 'inter' } },
       }),
     });
 
@@ -151,7 +151,7 @@ describe('useFontPreference', () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          data: { key: 'font-family', value: 'roboto' },
+          data: { application: { fontFamily: 'roboto' } },
         }),
       });
 
@@ -184,7 +184,7 @@ describe('useFontPreference', () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          data: { key: 'font-family', value: 'roboto' },
+          data: { application: { fontFamily: 'roboto' } },
         }),
       });
 
@@ -195,7 +195,7 @@ describe('useFontPreference', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/user-preferences/font-family',
+        'https://api.example.com/me/preferences?categories=application',
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer auth-token-123',
@@ -211,7 +211,7 @@ describe('useFontPreference', () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          data: { key: 'font-family', value: 'roboto' },
+          data: { application: { fontFamily: 'roboto' } },
         }),
       });
 
@@ -279,21 +279,13 @@ describe('useFontPreference', () => {
       expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
     });
 
-    // Ce témoin exigeait auparavant un `POST /user-preferences`. Il verrouillait
-    // une URL qui n'existe pas côté gateway : il est resté VERT pendant que
-    // chaque changement de police partait en 404 avalé par un `console.warn`,
-    // et la préférence ne quittait jamais le navigateur (#4189).
-    //
-    // C'est la forme d'erreur que l'issue nommait : un test qui asserte sur un
-    // mock verrouille l'URL FAUSSE aussi bien que la juste — il ne peut pas
-    // tomber. La garde qui, elle, peut tomber vit côté gateway, où la table de
-    // routes du serveur assemblé fait foi.
-    //
-    // Ce que le témoin affirme désormais est ce qui est VRAI : le choix de
-    // police vit dans `localStorage`, et rien ne part vers une route
-    // d'écriture de préférence — il n'en existe aucune (`/me/preferences` ne
-    // sert que GET et DELETE). La persistance serveur se rebranchera avec #4181.
-    it('ne poste vers AUCUNE route de préférence — il n’en existe pas', async () => {
+    // Ce témoin exigeait un temps un `POST /user-preferences` (404 avalé,
+    // #4189) puis, `#4181` n'ayant pas encore de route d'écriture, RIEN du
+    // tout — le choix de police ne quittait jamais le navigateur, sur aucun
+    // AUTRE appareil du même compte. #4181 fournit enfin cette route : ce
+    // témoin garde qu'elle est désormais APPELÉE, avec la forme exacte que la
+    // route unifiée attend (`fontFamily` sous la catégorie `application`).
+    it('synchronise le changement sur /me/preferences (catégorie application, #4181)', async () => {
       const { result } = renderHook(() => useFontPreference());
 
       await waitFor(() => {
@@ -301,13 +293,39 @@ describe('useFontPreference', () => {
       });
 
       mockFetch.mockClear();
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
 
       await act(async () => {
         await result.current.changeFontFamily('roboto');
       });
 
+      // Plus JAMAIS l'adresse morte de #4189.
       const urlsAppelées = mockFetch.mock.calls.map((appel: unknown[]) => String(appel[0]));
       expect(urlsAppelées.filter((url) => url.includes('user-preferences'))).toEqual([]);
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.example.com/me/preferences',
+        expect.objectContaining({
+          method: 'PATCH',
+          headers: expect.objectContaining({ Authorization: 'Bearer auth-token-123' }),
+          body: JSON.stringify({ application: { fontFamily: 'roboto' } }),
+        })
+      );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
+    });
+
+    it('reste local — sans jeton, aucune synchronisation serveur ne part', async () => {
+      const { result } = renderHook(() => useFontPreference());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      mockGetAuthToken.mockReturnValue(null as any);
+      mockFetch.mockClear();
+
+      await act(async () => {
+        await result.current.changeFontFamily('roboto');
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
       expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
     });
 

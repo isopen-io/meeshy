@@ -634,16 +634,44 @@ describe('les vingt-huit alias par catégorie', () => {
     await app.close();
   });
 
-  it('portent `Deprecation` et le lien vers leur successeur — les unifiées, non', async () => {
+  it('portent `Deprecation` (RFC 9745) et le lien vers leur successeur — les unifiées, non', async () => {
+    // `Deprecation: 'true'` était le brouillon 2019 — une SECONDE
+    // implémentation, écrite ici avant que `utils/deprecation.ts` (#4274)
+    // n'existe, et restée JUMELLE ET DIVERGENTE de lui après coup (dimension
+    // 11 : une seule source de vérité). La forme correcte, RFC 9745, est une
+    // date structurée : `@<secondes-epoch>`, jamais un booléen. Tous les
+    // autres sites du dépôt qui déprécient une adresse aujourd'hui (reports,
+    // profile, register, sharing, feed, friends…) la produisent déjà par
+    // `depreciee()` — un alias de préférences qui reste sur son propre format
+    // serait la SEULE adresse dépréciée du dépôt qu'un client ne peut pas
+    // dater.
     const { app } = await buildApp();
 
     const alias = await app.inject({ method: 'GET', url: '/me/preferences/audio' });
     expect(alias.statusCode).toBe(200);
-    expect(alias.headers.deprecation).toBe('true');
+    expect(alias.headers.deprecation).toMatch(/^@\d+$/);
+    expect(alias.headers.deprecation).not.toBe('true');
     expect(alias.headers.link).toContain('/api/v1/me/preferences');
+    expect(alias.headers.link).toContain('rel="successor-version"');
+    // Pas de `retraitLe` codé en dur : le retrait est gouverné par le
+    // compteur d'adoption de #4275, jamais par une date posée à la main.
+    expect(alias.headers.sunset).toBeUndefined();
 
     const unifiee = await app.inject({ method: 'GET', url: '/me/preferences' });
     expect(unifiee.headers.deprecation).toBeUndefined();
+    await app.close();
+  });
+
+  it('annonce le sursis quel que soit le verdict — même sur un 401', async () => {
+    // `onRequest` court AVANT l'authentification de ce module (un hook
+    // `preHandler`) : l'annonce doit donc apparaître même quand la requête
+    // est refusée. C'est justement l'appelant dont le jeton a expiré, ou dont
+    // le binaire est trop vieux pour renouveler l'auth, qui a le plus besoin
+    // d'apprendre qu'il parle à une adresse en sursis.
+    const { app } = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: '/me/preferences/audio' });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers.deprecation).toMatch(/^@\d+$/);
     await app.close();
   });
 
