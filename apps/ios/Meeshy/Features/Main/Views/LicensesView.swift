@@ -69,7 +69,7 @@ struct LicensesView: View {
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 12) {
-                sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open Source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
+                sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
 
                 Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))

@@ -40,8 +40,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 265i | [#4315](https://github.com/isopen-io/meeshy/pull/4315) | `24c556b8` | #4313 |
 > | 266i | [#4320](https://github.com/isopen-io/meeshy/pull/4320) | `6fc9486c` | #4319 |
 > | 267i | [#4323](https://github.com/isopen-io/meeshy/pull/4323) | `a9b5ee8c` | #4322 |
+> | 268i | [#4326](https://github.com/isopen-io/meeshy/pull/4326) | `d110653a` | #4308 (avancée) |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `a9b5ee8c` — base de 268i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `d110653a` — base de 269i.
+>
+> ### 269i — solder la réconciliation, et nommer ce qu'elle ne peut pas atteindre (#4328, #4329)
+>
+> | mesure | valeur |
+> |---|---|
+> | littéraux réconciliés | **186** dans 40 fichiers (+186 / −186) |
+> | divergences réconciliables dans TOUT le dépôt | **0** |
+> | épinglés (inchangé) | 240 écrans · 2 761 clés · règle A **0** / règle B **0** |
+>
+> - **Ce lot ne débloque aucun écran, et c'est assumé** : les 40 fichiers sont
+>   tous retenus par la règle A. Sa valeur est que le code cesse de mentir, et
+>   qu'ils deviendront épinglables dès l'arrivée de leurs traductions.
+> - **#4328 — 29 chaînes s'affichent en FRANÇAIS dans les six autres langues.**
+>   Leur clé est absente du catalogue, donc aucune localisation : le
+>   `defaultValue` est rendu tel quel partout — et en français NON ACCENTUÉ
+>   (« Repertoire vide », « Lui ecrire »). **Sept sont des libellés VoiceOver.**
+>   → *Un `defaultValue` rend INVISIBLE l'absence de sa clé* : la garde des clés
+>   non résolues ne regarde que les appels SANS `defaultValue`, parce qu'un repli
+>   garantit qu'on n'affichera pas l'identifiant brut. Vrai pour le CRASH, faux
+>   pour la LANGUE.
+> - **17 des 26 chaînes non traduites ne sont PAS produites ici** : 102 chaînes
+>   neuves en six langues dont l'arabe, invérifiables depuis cet environnement.
+>   Une traduction arabe approximative est pire que le repli français honnête.
+>   9 se réutilisent depuis le catalogue (table dans #4328).
+> - **#4329 — la règle B ne peut pas être satisfaite par une clé plurielle** :
+>   elle lit le `stringUnit` PLAT, qu'un pluriel n'a pas. Trois écrans
+>   inépinglables par construction. Moitié oubliée du correctif 226i.
 >
 > ### 268i — le code disait « Reply » là où l'app affiche « Répondre » (#4308, avancée)
 >

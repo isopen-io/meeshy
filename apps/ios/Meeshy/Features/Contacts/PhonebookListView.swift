@@ -41,7 +41,7 @@ struct PhonebookListView: View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 ContactsSearchField(
-                    placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le repertoire", bundle: .main),
+                    placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le répertoire", bundle: .main),
                     query: $viewModel.searchQuery
                 )
                 syncButton
@@ -78,7 +78,7 @@ struct PhonebookListView: View {
             .background(Circle().fill(MeeshyColors.indigo500))
         }
         .disabled(viewModel.isSyncing)
-        .accessibilityLabel(String(localized: "contacts.phonebook.sync-a11y", defaultValue: "Synchroniser le repertoire", bundle: .main))
+        .accessibilityLabel(String(localized: "contacts.phonebook.sync-a11y", defaultValue: "Synchroniser le répertoire", bundle: .main))
     }
 
     private func filterChip(_ filter: DirectoryFilter) -> some View {
@@ -193,7 +193,7 @@ struct PhonebookListView: View {
             icon: "person.crop.circle.badge.questionmark",
             title: viewModel.isEmpty
                 ? String(localized: "contacts.phonebook.empty", defaultValue: "Repertoire vide", bundle: .main)
-                : String(localized: "contacts.phonebook.no-results", defaultValue: "Aucun resultat", bundle: .main),
+                : String(localized: "contacts.phonebook.no-results", defaultValue: "Aucun résultat", bundle: .main),
             subtitle: viewModel.isEmpty
                 ? String(localized: "contacts.phonebook.empty-hint", defaultValue: "Synchronise ton carnet d'adresses pour retrouver tes contacts sur Meeshy", bundle: .main)
                 : ""

@@ -59,7 +59,7 @@ extension UniversalComposerBar {
                         Circle().fill(style == .dark ? Color.white.opacity(0.15) : theme.textMuted.opacity(0.15))
                     )
             }
-            .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pi\u{00E8}ce jointe", bundle: .main))
+            .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -124,7 +124,7 @@ extension UniversalComposerBar {
             (style == .dark ? Color.black.opacity(0.18) : theme.inputBackground.opacity(0.6))
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "composer.a11y.attachCarousel", defaultValue: "Types de pi\u{00E8}ces jointes", bundle: .main))
+        .accessibilityLabel(String(localized: "composer.a11y.attachCarousel", defaultValue: "Types de pièces jointes", bundle: .main))
     }
 
     // MARK: - Grab Handle
@@ -157,11 +157,11 @@ extension UniversalComposerBar {
                 // n'arrive jamais jusqu'ici.
                 .highPriorityGesture(mediaPanelHandleDrag)
                 .accessibilityElement()
-                .accessibilityLabel(String(localized: "composer.a11y.panelHandle", defaultValue: "Poign\u{00E9}e du panneau", bundle: .main))
-                .accessibilityHint(String(localized: "composer.a11y.panelHandleHint", defaultValue: "Glisser vers le haut pour ouvrir toute la phototh\u{00E8}que", bundle: .main))
+                .accessibilityLabel(String(localized: "composer.a11y.panelHandle", defaultValue: "Poignée du panneau", bundle: .main))
+                .accessibilityHint(String(localized: "composer.a11y.panelHandleHint", defaultValue: "Glisser vers le haut pour ouvrir toute la photothèque", bundle: .main))
                 // VoiceOver ne peut pas produire le drag : il lui faut l'action
                 // nommée, sinon le raccourci n'existe que pour la souris/doigt.
-                .accessibilityAction(named: Text(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la phototh\u{00E8}que", bundle: .main))) {
+                .accessibilityAction(named: Text(String(localized: "composer.a11y.openFullLibrary", defaultValue: "Ouvrir toute la photothèque", bundle: .main))) {
                     openFullPhotoLibrary(preselecting: recentStripSelectionIds)
                 }
         } else {
@@ -254,7 +254,7 @@ extension UniversalComposerBar {
         if onCamera != nil {
             tiles.append(CarouselTile(
                 id: "camera", icon: "camera.fill", color: "F8B500",
-                label: String(localized: "composer.attach.camera", defaultValue: "Cam\u{00E9}ra", bundle: .main)
+                label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main)
             ) { fire { onCamera?() } })
         }
         if onFilePicker != nil {
@@ -378,7 +378,7 @@ extension UniversalComposerBar {
         }
         .accessibilityLabel(showAttachOptions
             ? String(localized: "composer.a11y.showKeyboard", defaultValue: "Afficher le clavier", bundle: .main)
-            : String(localized: "composer.a11y.openAttachMenu", defaultValue: "Ouvrir le menu des pi\u{00E8}ces jointes", bundle: .main))
+            : String(localized: "composer.a11y.openAttachMenu", defaultValue: "Ouvrir le menu des pièces jointes", bundle: .main))
     }
 
     // MARK: - Carousel <-> Keyboard switching
@@ -457,7 +457,7 @@ extension UniversalComposerBar {
                 .foregroundColor(MeeshyColors.indigo500)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papier", bundle: .main))
+                Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papiers", bundle: .main))
                     .font(.caption2.weight(.bold))
                     .foregroundColor(style == .dark ? .white : theme.textPrimary)
 

@@ -501,7 +501,7 @@ struct UniversalComposerBar: View {
                             .font(.title3.weight(.semibold))
                             .foregroundColor(.white)
                     }
-                    Text(String(localized: "composer.minimized.write", defaultValue: "\u{00C9}crire", bundle: .main))
+                    Text(String(localized: "composer.minimized.write", defaultValue: "Écrire", bundle: .main))
                         .font(.caption2).fontWeight(.semibold)
                         .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
                 }
@@ -1296,7 +1296,7 @@ struct UniversalComposerBar: View {
                         showEphemeralPicker = false
                     }
                 } label: {
-                    Text(String(localized: "composer.ephemeral.off", defaultValue: "Off", bundle: .main))
+                    Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
                         .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
                         .padding(.horizontal, 14)

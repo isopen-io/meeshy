@@ -45,7 +45,7 @@ final class LoadMoreRepliesCell: UICollectionViewCell {
         accessibilityLabel = text
         accessibilityHint = String(
             localized: "comments.load-more-replies.hint",
-            defaultValue: "Shows the remaining replies in this thread",
+            defaultValue: "Affiche les réponses restantes de ce fil",
             bundle: .main
         )
     }

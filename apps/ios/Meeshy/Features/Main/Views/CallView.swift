@@ -245,8 +245,8 @@ struct CallView: View {
                                 .frame(width: 44, height: 44)
                                 .contentShape(Rectangle())
                         }
-                        .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
-                        .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
+                        .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Réduire l'appel", bundle: .main))
+                        .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une bannière flottante", bundle: .main))
 
                         // Ouvrir la conversation (DM) de l'interlocuteur tout en
                         // gardant l'appel actif (minimisé en pilule). Masqué quand
@@ -960,10 +960,10 @@ struct CallView: View {
                     statusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
                 }
                 if callManager.isMuted {
-                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: MeeshyColors.error)
+                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
                 }
                 if !callManager.isRemoteAudioEnabled {
-                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact muet", bundle: .main), color: .white.opacity(0.7))
+                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(0.7))
                 }
                 if callManager.isRemoteScreenCapturing {
                     statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
@@ -1218,7 +1218,7 @@ struct CallView: View {
                         .accessibilityHidden(true)
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
-                        : String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
+                        : String(localized: "call.video.connecting", defaultValue: "Connexion vidéo...", bundle: .main))
                         .font(.footnote.weight(.medium))
                         .foregroundColor(.white.opacity(videoConnectSlow ? 0.7 : 0.4))
                         .multilineTextAlignment(.center)
@@ -1340,14 +1340,14 @@ struct CallView: View {
                             }
                             pipFrameButton(
                                 icon: "camera.filters",
-                                label: String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main),
-                                hint: String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main)
+                                label: String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main),
+                                hint: String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main)
                             ) {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                     showEffectsToolbar.toggle()
                                 }
                             }
-                            .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main))
+                            .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main))
                         }
                         .padding(.bottom, 6)
                     }
@@ -1529,7 +1529,7 @@ struct CallView: View {
         let localName = AuthManager.shared.currentUser?.displayName ?? AuthManager.shared.currentUser?.username ?? String(localized: "call.transcript.you", defaultValue: "Vous", bundle: .main)
         let remoteName = callManager.remoteUsername
             ?? segment.speakerDisplayName
-            ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Appel entrant", bundle: .main)
+            ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main)
         let speakerName = isLocal ? localName : remoteName
         let speakerColor = isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
         let showsTranslation = !isLocal && !showOriginalText && segment.translatedText != nil
@@ -2091,8 +2091,8 @@ struct CallView: View {
             }
         }
         .pressable()
-        .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main))
-        .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres video", bundle: .main))
+        .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres vidéo", bundle: .main))
+        .accessibilityHint(String(localized: "call.filters.hint", defaultValue: "Ouvre ou ferme la barre de filtres vidéo", bundle: .main))
         // L'indice disait « ouvre OU ferme » — ambigu précisément parce que
         // l'état n'était pas exposé : le glyphe passe de `camera.filters` à
         // `xmark` et rien ne le disait (253i, #4266). L'état porté ici est celui
