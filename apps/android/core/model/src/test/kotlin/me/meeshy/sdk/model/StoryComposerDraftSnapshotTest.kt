@@ -23,6 +23,9 @@ class StoryComposerDraftSnapshotTest {
                 transform = StoryDraftTransformSnapshot(scale = 2.5f, offsetX = 12f, offsetY = -8f),
                 filter = StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f),
                 durationSecondsPin = 15.0,
+                background = "gradient:FF2E63:08D9D6",
+                backgroundMediaId = "m1",
+                backgroundLoop = false,
             ),
             StoryDraftSlideSnapshot(id = "s2", text = "two"),
         ),
@@ -47,9 +50,15 @@ class StoryComposerDraftSnapshotTest {
         assertThat(restored.slides.first().filter)
             .isEqualTo(StoryDraftFilterSnapshot(filter = StoryFilter.VINTAGE, intensity = 0.7f))
         assertThat(restored.slides.first().durationSecondsPin).isEqualTo(15.0)
+        assertThat(restored.slides.first().background).isEqualTo("gradient:FF2E63:08D9D6")
+        assertThat(restored.slides.first().backgroundMediaId).isEqualTo("m1")
+        assertThat(restored.slides.first().backgroundLoop).isFalse()
         assertThat(restored.slides[1].transform).isNull()
         assertThat(restored.slides[1].filter).isNull()
         assertThat(restored.slides[1].durationSecondsPin).isNull()
+        assertThat(restored.slides[1].background).isNull()
+        assertThat(restored.slides[1].backgroundMediaId).isNull()
+        assertThat(restored.slides[1].backgroundLoop).isTrue()
     }
 
     @Test
@@ -77,6 +86,17 @@ class StoryComposerDraftSnapshotTest {
         val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
 
         assertThat(decoded.slides.single().durationSecondsPin).isNull()
+    }
+
+    @Test
+    fun `a legacy blob without a background decodes to no backdrop and a looping default`() {
+        val legacy = """{"slides":[{"id":"s1","mediaIds":["m1"]}],"selectedId":"s1"}"""
+
+        val decoded = json.decodeFromString(StoryComposerDraftSnapshot.serializer(), legacy)
+
+        assertThat(decoded.slides.single().background).isNull()
+        assertThat(decoded.slides.single().backgroundMediaId).isNull()
+        assertThat(decoded.slides.single().backgroundLoop).isTrue()
     }
 
     @Test
@@ -175,6 +195,17 @@ class StoryComposerDraftSnapshotTest {
     }
 
     @Test
+    fun `a colour background alone never makes a snapshot worth restoring`() {
+        val backgroundOnly = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "", background = "2ECC71"),
+            ),
+            selectedId = "s1",
+        )
+        assertThat(backgroundOnly.isWorthRestoring).isFalse()
+    }
+
+    @Test
     fun `a structurally invalid snapshot is never worth restoring even with content`() {
         val invalid = StoryComposerDraftSnapshot(
             slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "content")),
@@ -263,6 +294,34 @@ class StoryComposerDraftSnapshotTest {
     fun `clearing a pinned duration is different content`() {
         val a = sample()
         val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(durationSecondsPin = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed colour background is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(background = "000000") else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `clearing a colour background is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(background = null) else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed background media id is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(backgroundMediaId = "m2") else s })
+        assertThat(a.sameContentAs(b)).isFalse()
+    }
+
+    @Test
+    fun `a changed background loop is different content`() {
+        val a = sample()
+        val b = a.copy(slides = a.slides.mapIndexed { i, s -> if (i == 0) s.copy(backgroundLoop = true) else s })
         assertThat(a.sameContentAs(b)).isFalse()
     }
 }

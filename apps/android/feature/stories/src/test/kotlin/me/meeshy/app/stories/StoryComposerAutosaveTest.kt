@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
@@ -164,9 +165,15 @@ class StoryComposerAutosaveTest {
     }
 
     @Test
-    fun `deckHasRichContent is true for a background`() {
-        val deck = blankDeck().setSelectedBackground(me.meeshy.sdk.model.StoryBackgroundValue.Hex("FF0000"))
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isTrue()
+    fun `deckHasRichContent is false for a colour background now that it is persistable`() {
+        val deck = blankDeck().setSelectedBackground(StoryBackgroundValue.Hex("FF0000"))
+        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
+    }
+
+    @Test
+    fun `deckHasRichContent is false for a background media designation now that it is persistable`() {
+        val deck = blankDeck().addMediaToSelected("m1").toggleSelectedBackgroundMedia("m1")
+        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
     }
 
     @Test
@@ -211,6 +218,12 @@ class StoryComposerAutosaveTest {
     @Test
     fun `a single blank slide with a pinned duration is not pristine`() {
         assertThat(StoryComposerAutosave.deckIsPristine(blankDeck().setSelectedDuration(12.0))).isFalse()
+    }
+
+    @Test
+    fun `a single blank slide with a colour background is not pristine`() {
+        val backdropped = blankDeck().setSelectedBackground(StoryBackgroundValue.Hex("2ECC71"))
+        assertThat(StoryComposerAutosave.deckIsPristine(backdropped)).isFalse()
     }
 
     // ---- restore ----
@@ -540,6 +553,143 @@ class StoryComposerAutosaveTest {
 
         val action = StoryComposerAutosave.resolve(
             deck = deck.setSelectedDuration(20.0),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    // ---- background persistence (colour + media + loop) ----
+
+    @Test
+    fun `toDraftSnapshot carries a colour background as its wire string and maps none to null`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedBackground(StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+            .addSlide("s2")
+            .updateSelectedText("plain")
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+
+        assertThat(snap.slides.first().background).isEqualTo("gradient:FF2E63:08D9D6")
+        assertThat(snap.slides[1].background).isNull()
+    }
+
+    @Test
+    fun `toDraftSnapshot carries a designated background media and its loop flag`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("v1")
+            .toggleSelectedBackgroundMedia("v1")
+            .setSelectedBackgroundLoop(false)
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+
+        assertThat(snap.slides.single().backgroundMediaId).isEqualTo("v1")
+        assertThat(snap.slides.single().backgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `an undesignated slide snapshot carries no background media and a looping default`() {
+        val snap = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .toDraftSnapshot(StoryVisibility.PUBLIC, null, now)
+
+        assertThat(snap.slides.single().backgroundMediaId).isNull()
+        assertThat(snap.slides.single().backgroundLoop).isTrue()
+    }
+
+    @Test
+    fun `toDeck restores a persisted colour background and a null background to no backdrop`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", mediaIds = listOf("m1"), background = "9B59B6"),
+                StoryDraftSlideSnapshot(id = "s2", text = "plain"),
+            ),
+            selectedId = "s1",
+        )
+
+        val deck = snap.toDeck()
+
+        assertThat(deck).isNotNull()
+        assertThat(deck!!.slides.first().background).isEqualTo(StoryBackgroundValue.Hex("9B59B6"))
+        assertThat(deck.slides[1].background).isNull()
+    }
+
+    @Test
+    fun `toDeck restores a designated background media and its loop flag`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    mediaIds = listOf("v1"),
+                    backgroundMediaId = "v1",
+                    backgroundLoop = false,
+                ),
+            ),
+            selectedId = "s1",
+        )
+
+        val deck = snap.toDeck()
+
+        assertThat(deck).isNotNull()
+        assertThat(deck!!.slides.single().backgroundMediaId).isEqualTo("v1")
+        assertThat(deck.slides.single().backgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `a colour background survives the deck-snapshot-deck round-trip`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedBackground(StoryBackgroundValue.Gradient("F8B500", "FF2E63"))
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().background)
+            .isEqualTo(StoryBackgroundValue.Gradient("F8B500", "FF2E63"))
+    }
+
+    @Test
+    fun `a designated background media and its loop flag survive the deck-snapshot-deck round-trip`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("v1")
+            .toggleSelectedBackgroundMedia("v1")
+            .setSelectedBackgroundLoop(false)
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().backgroundMediaId).isEqualTo("v1")
+        assertThat(rebuilt.slides.single().backgroundLoop).isFalse()
+    }
+
+    @Test
+    fun `a media slide with a colour background resolves to Save carrying it`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .setSelectedBackground(StoryBackgroundValue.Hex("3498DB"))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().background).isEqualTo("3498DB")
+    }
+
+    @Test
+    fun `choosing a background on an already-saved draft resolves to Save, not None`() {
+        val deck = StorySlideDeck.single("s1").addMediaToSelected("m1")
+        val previous = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck.setSelectedBackground(StoryBackgroundValue.Hex("000000")),
             visibility = StoryVisibility.PUBLIC,
             repostOfId = null,
             nowIso = now,

@@ -38,16 +38,20 @@ data class StoryDraftFilterSnapshot(
  * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
  * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), its
  * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), its photo [filter]
- * (`null` = none), and its pinned on-screen [durationSecondsPin] (`null` = duration derived
- * from content, not pinned by the author). Richer on-canvas content (text/sticker elements,
- * backgrounds) is deliberately **absent** here — a draft that carries any of it is not yet
- * persistable (see [me.meeshy] `StoryComposerAutosave`), so a restore from this snapshot
- * is never lossy.
+ * (`null` = none), its pinned on-screen [durationSecondsPin] (`null` = duration derived
+ * from content, not pinned by the author), its colour/gradient [background] (the wire
+ * string of [StoryBackgroundValue], `null` = no author backdrop), the [backgroundMediaId]
+ * designated as its looping backdrop (`null` = none) and whether that backdrop
+ * [backgroundLoop]s (defaults `true`, matching the reader's `loop ?: true`). Richer
+ * on-canvas content (text/sticker elements) is deliberately **absent** here — a draft that
+ * carries any of it is not yet persistable (see [me.meeshy] `StoryComposerAutosave`), so a
+ * restore from this snapshot is never lossy.
  *
  * Every field is a primitive, a list of primitives, or a primitive-only nested value
- * ([StoryDraftTransformSnapshot], [StoryDraftFilterSnapshot]), so the snapshot serialises
- * with no deep object graph and no polymorphic serialiser — the deliberate cost of keeping
- * this cut thin and its round-trip trivially total.
+ * ([StoryDraftTransformSnapshot], [StoryDraftFilterSnapshot]) — the [background] rides as
+ * its already-serialisable [StoryBackgroundValue] wire string rather than a polymorphic
+ * value — so the snapshot serialises with no deep object graph and no polymorphic
+ * serialiser, the deliberate cost of keeping this cut thin and its round-trip trivially total.
  */
 @Serializable
 data class StoryDraftSlideSnapshot(
@@ -57,13 +61,18 @@ data class StoryDraftSlideSnapshot(
     val transform: StoryDraftTransformSnapshot? = null,
     val filter: StoryDraftFilterSnapshot? = null,
     val durationSecondsPin: Double? = null,
+    val background: String? = null,
+    val backgroundMediaId: String? = null,
+    val backgroundLoop: Boolean = true,
 ) {
     /**
      * True once the slide carries content worth restoring: a caption or attached media. A
-     * canvas [transform], a photo [filter] and a pinned [durationSecondsPin] are fidelity
-     * that ride along with such content — a pan/zoom, a filter, or a duration pin with no
-     * media to frame, tint or time is meaningless — so they deliberately do **not** make a
-     * slide worth restoring on their own.
+     * canvas [transform], a photo [filter], a pinned [durationSecondsPin] and a colour
+     * [background] are fidelity that ride along with such content — a pan/zoom, a filter, a
+     * duration pin or a backdrop with no media to frame, tint, time or sit behind is
+     * meaningless — so they deliberately do **not** make a slide worth restoring on their
+     * own. ([backgroundMediaId] can only ever name an attached media, so it never appears
+     * without a [mediaIds] entry that already makes the slide worth restoring.)
      */
     val hasContent: Boolean get() = text.isNotBlank() || mediaIds.isNotEmpty()
 }

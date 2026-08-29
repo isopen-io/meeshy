@@ -2654,6 +2654,36 @@ class StoryComposerViewModelTest {
     }
 
     @Test
+    fun `persistDraft saves the selected slide's colour background`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("backdropped")
+        vm.onSlideBackgroundChange(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.slides.single().background).isEqualTo("gradient:FF2E63:08D9D6")
+    }
+
+    @Test
+    fun `onEnterComposer restores a persisted colour background`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "resume", background = "9B59B6"),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.selectedSlideBackground)
+            .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Hex("9B59B6"))
+    }
+
+    @Test
     fun `persistDraft does not save a draft carrying rich on-canvas content`() = runTest {
         val store = InMemoryStoryComposerDraftStore()
         val vm = viewModel(draftStore = store)

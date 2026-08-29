@@ -4135,8 +4135,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation-RED-proven twice: re-adding the duration to the rich-content gate reddens EXACTLY the 4
       duration gate/save tests (3 autosave + 1 VM persist); removing the `durationSecondsPin == null`
       pristine guard reddens EXACTLY the one pristine test; everything else stays green.
-      **Pending**: widening the snapshot to carry the remaining rich on-canvas content — text/sticker
-      elements, background (+loop/media) — lifts the rest of the fidelity gate.
+      **Background persistence done** (slice `story-draft-persist-background`, 2026-08-29): the fourth
+      fidelity-gate dimension is lifted — a slide's author-chosen colour/gradient backdrop
+      (`StorySlide.background: StoryBackgroundValue?`) and its designated looping-background media
+      (`backgroundMediaId: String?` / `backgroundLoop: Boolean`) now round-trip through the snapshot, so a
+      user who picked a backdrop (or set a video-background loop) and left the composer gets it back on
+      return. The backdrop rides as its already-total `StoryBackgroundValue.serialized()` wire string — no
+      polymorphic serialiser — restored through the tolerant `StoryBackgroundValue.parse` (a malformed value
+      decays to a solid colour, never throws). New fields `StoryDraftSlideSnapshot.background: String? = null`
+      / `backgroundMediaId: String? = null` / `backgroundLoop: Boolean = true` (legacy blobs and fresh slides
+      decode to no-backdrop + looping default); `toDraftSnapshot`/`toDeck` map the three ↔ the deck fields;
+      `deckHasRichContent` no longer counts a background (now representable — the gate now holds only
+      text/sticker elements), while `deckIsPristine` gained explicit `background == null && backgroundMediaId
+      == null` checks so a silently-picked backdrop on an empty canvas still counts as touched and a restore
+      never clobbers it (`backgroundLoop` needs no check — it can only leave its `true` default once a
+      background media is designated, which the media check already rejects). A backdrop is *fidelity* not
+      *content* — it never makes a draft worth restoring on its own (a colour with no other content is not
+      publishable; a background media always rides an existing `mediaIds` entry). +18 tests (6
+      `StoryComposerDraftSnapshotTest` round-trip/legacy-defaults/worth-restoring/changed-bg/cleared-bg/
+      changed-media-id/changed-loop, 10 `StoryComposerAutosaveTest` gate-false×2/pristine-false/map-both-ways
+      ×3/round-trip×2 + 2 resolve Save, 2 `StoryComposerViewModelTest` persist-bg/restore-bg; the pre-existing
+      `deckHasRichContent is true for a background` test flipped to assert the new persistable behaviour).
+      Mutation-RED-proven twice: re-adding the background to the rich-content gate reddens EXACTLY the 5
+      background gate/save tests (4 autosave + 1 VM persist); removing the `background/backgroundMediaId ==
+      null` pristine guards reddens EXACTLY the one pristine test; everything else stays green.
+      **Pending**: widening the snapshot to carry the remaining rich on-canvas content — text elements
+      (`StoryTextElement`) and stickers (`StoryStickerElement`), the two object-graph dimensions, one slice
+      each — lifts the rest of the fidelity gate.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
       surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
