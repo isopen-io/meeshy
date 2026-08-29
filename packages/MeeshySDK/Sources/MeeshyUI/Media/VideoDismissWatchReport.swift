@@ -14,7 +14,13 @@ import Foundation
 ///
 /// La règle tient donc en une question posée AVANT toute lecture du player :
 /// *décrit-il encore l'attachement dont je parle ?* Sinon, il a déjà tout dit.
-enum VideoDismissWatchReport {
+/// `nonisolated` parce que c'est une DÉCISION PURE : deux booléens et une durée,
+/// aucun état, aucune vue. `MeeshyUI` bascule tout le module en `@MainActor` par
+/// défaut (SE-0466, `Package.swift`), si bien qu'un helper sans état hérite
+/// d'une isolation dont il n'a que faire — et devient inappelable depuis un
+/// témoin synchrone, ce qui a cassé la CI du SDK. Même forme que
+/// `StoryCanvasFraming` et `StoryCameraCapture`.
+nonisolated enum VideoDismissWatchReport {
 
     /// Durée minimale d'un visionnage partiel digne d'un rapport.
     static let minimumPartialWatch: TimeInterval = 3
