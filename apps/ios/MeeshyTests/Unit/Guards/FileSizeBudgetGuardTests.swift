@@ -58,7 +58,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "FeedViewModel.swift",
         "MeeshyApp.swift",
-        "MeeshyComposerHost.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
         "MyStoriesView.swift",
@@ -91,7 +90,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// PAYÉE dans le même lot : `AnimatedWaveformBar` et `AudioLevelBar` sont sorties
     /// de `ConversationMediaViews.swift` vers `RecordingWaveformBars.swift`
     /// (−93 lignes, relocalisation pure), ce qui ramène le cumul à 88 245.
-    private static let legacyLineCeiling = 88_268
+    /// **85 271 depuis #4102.** `MeeshyComposerHost.swift` a QUITTÉ la dette : ses
+    /// 3 018 lignes sont découpées par responsabilité — le type, `+Surfaces`,
+    /// `+Intake`, `+Socle`, plus les règles pures sorties en
+    /// `ComposerHostRules.swift` — toutes sous le budget. Le plafond baisse de
+    /// tout ce que le fichier pesait, et non de sa seule part au-dessus de 1100 :
+    /// un nom qui sort de la liste en sort ENTIER, sinon le cliquet garderait du
+    /// mou au nom d'un fichier qu'il ne mesure plus.
+    private static let legacyLineCeiling = 85_271
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

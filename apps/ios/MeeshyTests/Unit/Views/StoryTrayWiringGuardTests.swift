@@ -104,7 +104,7 @@ final class StoryTrayWiringGuardTests: XCTestCase {
     /// arrêter de le passer.
     func test_composerCover_handsThePendingDraftToTheHost_whichAdoptsIt_andResetsOnDismiss() throws {
         let actions = try source("Meeshy/Features/Main/Views/StoryTrayActions.swift")
-        let host = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+        let host = try AppSourceGuard.composerHostSource()
 
         XCTAssertTrue(
             actions.contains("draftId: viewModel.pendingDraftId"),

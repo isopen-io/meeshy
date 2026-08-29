@@ -22,13 +22,7 @@ import MeeshyUI
 final class MeeshyComposerHostGuardTests: XCTestCase {
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.composerHostSource()
     }
 
     private func hostCode() throws -> String {
@@ -60,6 +54,41 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         let code = try hostCode()
         XCTAssertGreaterThan(code.count, 400, "La source du host est introuvable ou vide — les gardes ci-dessous ne mesureraient RIEN")
         XCTAssertTrue(code.contains("struct MeeshyComposerHost"), "Le fichier lu n'est pas celui du host")
+    }
+
+    /// **Le fusible du fusible (#4102) — l'adresse est une UNITÉ, pas un fichier.**
+    ///
+    /// Le meuble est découpé en quatre fichiers plus ses règles. Toutes les
+    /// gardes de cette suite, et de dix-huit autres, lisent la CONCATÉNATION.
+    /// Le mode de panne qu'elles couvraient jusqu'ici était le chemin FAUX
+    /// (source vide) ; celui-ci est le chemin devenu PARTIEL — une source bien
+    /// remplie, mais amputée de la moitié qui contenait l'interdit. Une garde
+    /// négative y passe au vert sans qu'aucun symptôme n'apparaisse.
+    ///
+    /// Le témoin ne compte donc pas les fichiers : il exige de chaque partie un
+    /// symbole qui n'existe QUE chez elle. Un compte se satisferait d'un
+    /// cinquième fichier quelconque tombé dans le répertoire.
+    func test_lAdresseDuMeuble_estLUnite_etChaquePartieYEstLue() throws {
+        let source = try AppSourceGuard.composerHostSource()
+        let empreintes = [
+            "struct MeeshyComposerHost": "le type",
+            "var composerSurface: some View": "+Surfaces",
+            "func ingestPhotoLibraryItems": "+Intake",
+            "var audienceChip: some View": "+Socle",
+            "enum ComposerSocleCopy": "ComposerHostRules"
+        ]
+        for (empreinte, partie) in empreintes {
+            XCTAssertTrue(
+                source.contains(empreinte),
+                "La partie « \(partie) » du meuble n'est PAS lue par les gardes : "
+                + "`\(empreinte)` est absent de l'unité. Toute garde négative portant "
+                + "sur cette partie est verte par omission."
+            )
+        }
+        XCTAssertGreaterThanOrEqual(
+            AppSourceGuard.composerHostURLs().count, empreintes.count,
+            "l'unité doit adresser au moins autant de fichiers qu'elle a d'empreintes"
+        )
     }
 
     private func rootViewComponentsCompact() throws -> String {
@@ -205,7 +234,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             }
 
         XCTAssertEqual(
-            unOeilEstPeint, code.contains("private var previewButton"),
+            unOeilEstPeint, code.contains("var previewButton"),
             unOeilEstPeint
                 ? "Le socle peint un œil que le meuble n'assemble pas : la règle promet une commande "
                     + "qui n'existe pas."
@@ -217,7 +246,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         guard unOeilEstPeint else { return }
         let compacted = code.components(separatedBy: .whitespacesAndNewlines).joined()
         XCTAssertTrue(
-            compacted.contains("privatevarpreviewButton:someView{Button{onPreview("),
+            compacted.contains("varpreviewButton:someView{Button{onPreview("),
             "L'œil doit REMETTRE les slides au rappel `onPreview` sans rien rendre lui-même. Tout autre "
                 + "corps est un quatrième chemin d'aperçu, et il mentira sur ce qui est publié (loi 6)."
         )
@@ -349,7 +378,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// les zones cessaient d'être gouvernées par la règle — le cas où une
     /// condition ad hoc redeviendrait invisible aux tests.
     func test_socle_isNeverHiddenNorConditionallyRemoved() throws {
-        // **Ancre RENDUE EXACTE au #4057.** Elle était `"private var socle"`, un
+        // **Ancre RENDUE EXACTE au #4057.** Elle était `"var socle:"`, un
         // PRÉFIXE : la première propriété nommée `socleQuelqueChose` déclarée
         // au-dessus la détournait sur son corps. C'est arrivé — `socleShowsLabels`,
         // trois lignes qui ne contiennent aucune zone — et la garde a rougi sur
@@ -358,7 +387,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // Le piège est le même que celui de `StoryComposerView` / `…ViewModel` :
         // une ancre qui est le préfixe d'un autre symbole ne garde pas ce qu'elle
         // croit. Le type de retour la referme.
-        guard let socleBody = declarationBody(startingAt: "private var socle: some View",
+        guard let socleBody = declarationBody(startingAt: "var socle: some View",
                                               in: try hostCode()) else {
             return XCTFail("Le socle doit être une propriété nommée `socle` — la garde s'ancre dessus")
         }
@@ -577,7 +606,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// liste de niveaux recopiée divergerait de celle du SDK ; un `ONLY` sans
     /// sélecteur nominatif partirait vide, et le gateway le rejetterait.
     func test_lAudienceDuSocle_estUnVraiSelecteur_etEcritSaMemoire() throws {
-        guard let bloc = declarationBody(startingAt: "private var audienceChip", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var audienceChip", in: try hostCode()) else {
             return XCTFail("L'audience du socle doit être une propriété nommée `audienceChip` — la garde s'ancre dessus")
         }
         let corps = compact(bloc)
@@ -604,7 +633,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "ONLY/EXCEPT ouvrent le sélecteur nominatif — sans lui, le gateway rejette la publication."
         )
 
-        guard let choix = declarationBody(startingAt: "private func chooseAudience", in: try hostCode()) else {
+        guard let choix = declarationBody(startingAt: "func chooseAudience", in: try hostCode()) else {
             return XCTFail("Le geste de choix doit être une fonction nommée `chooseAudience` — la garde s'ancre dessus")
         }
         let geste = compact(choix)
@@ -658,7 +687,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "occasions de la corriger à moitié."
         )
 
-        guard let mood = declarationBody(startingAt: "private var moodSurface", in: try hostCode()) else {
+        guard let mood = declarationBody(startingAt: "var moodSurface", in: try hostCode()) else {
             return XCTFail("`moodSurface` est introuvable — la garde ne mesurerait RIEN")
         }
         XCTAssertTrue(
@@ -706,7 +735,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// écran ne le dise. C'est la moitié qui manquait au sélecteur ci-dessus —
     /// un contrôle existe s'il a un EFFET (loi 4).
     func test_leBrouillonDuDocument_litLAudienceCourante_jamaisCelleDeLaPorte() throws {
-        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
             return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus")
         }
         let corps = compact(bloc)
@@ -928,7 +957,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// MUET que faux, et la condition est lue par la règle ci-dessus plutôt que
     /// réécrite dans la vue.
     func test_lIndiceDeLaFleche_seTait_quandLeBlocageNestPasLaMatiere() throws {
-        guard let bloc = declarationBody(startingAt: "private var publishBlockedHint", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var publishBlockedHint", in: try hostCode()) else {
             return XCTFail("`publishBlockedHint` est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
@@ -1074,7 +1103,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// affordance sans effet, un gate écrit à la main serait une seconde règle à
     /// faire diverger.
     func test_laFlecheDuSocle_estUnBouton_gateEtBranche() throws {
-        guard let bloc = declarationBody(startingAt: "private var publishButton", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var publishButton", in: try hostCode()) else {
             return XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
@@ -1116,7 +1145,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// tentation naîtra — la flèche est branchée, appeler le service depuis son
     /// action est le raccourci évident.
     func test_lEnvoiDuSocle_neTouchAucunService() throws {
-        guard let bloc = declarationBody(startingAt: "private func publishDocument", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "func publishDocument", in: try hostCode()) else {
             return XCTFail("`publishDocument` est introuvable dans le meuble — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
@@ -1150,7 +1179,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// pas non plus VIDER sa saisie sur le chemin du refus. Fermer et effacer
     /// perdent la même chose par deux portes différentes.
     func test_lEnvoiDuSocle_neFermeQueSurUneAcceptation_etNeJettePasLaSaisie() throws {
-        guard let bloc = declarationBody(startingAt: "private func publishDocument", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "func publishDocument", in: try hostCode()) else {
             return XCTFail("`publishDocument` est introuvable dans le meuble — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
@@ -1467,7 +1496,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// désormais ce que celle-ci ne mesure pas : le NOM que la flèche garde
     /// pendant l'envoi.
     func test_laFlecheDuSocle_porteSonEtatAccessible() throws {
-        guard let bloc = declarationBody(startingAt: "private var publishButton", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var publishButton", in: try hostCode()) else {
             return XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(bloc)
@@ -1531,7 +1560,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Elle nomme donc le bloc qui gouverne réellement la capture aujourd'hui,
     /// la rangée d'outils de la surface document.
     func test_host_gatesCaptureOnTheProfile() throws {
-        guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
             return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
         }
         let compacte = compact(corps)
@@ -1563,7 +1592,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// d'icônes ni de libellés d'accessibilité qu'il n'a de boutons pour les
     /// actionner. Elle rougirait si l'on recollait l'un des trois pictogrammes.
     func test_host_lePlateau_neMonteAucuneAffordanceInerte() throws {
-        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var plateauTools", in: try hostCode()) else {
             return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
         }
         let compacte = compact(corps)
@@ -1885,7 +1914,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// et c'est assumé — le jour où le meuble a une matière à servir, la
     /// question devient celle du câblage, pas celle de cette garde.
     private func leMeubleSertLaRangeeDuDocument() throws -> Bool {
-        guard declarationBody(startingAt: "private var servedDocumentTools", in: try hostCode()) != nil else {
+        guard declarationBody(startingAt: "var servedDocumentTools", in: try hostCode()) != nil else {
             XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN")
             return true
         }
@@ -1902,7 +1931,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// nommé : la garde n'a pas à deviner PAR OÙ le texte partira.
     private func laSaisieDuDocumentAUneIssue() throws -> Bool {
         let code = try hostCode()
-        guard compact(code).contains(compact("@State private var documentText")) else {
+        guard compact(code).contains(compact("@State var documentText")) else {
             XCTFail("L'état `documentText` est introuvable dans le meuble — la garde ne mesurerait RIEN")
             return true
         }
@@ -1929,7 +1958,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     private func leDocumentAUnPublieurAtteignable() throws -> Bool {
         let chrome = try chromeOwnerDeclareParLeMeuble()
         guard !chrome.assembles(.publish) else { return false }
-        guard let bloc = declarationBody(startingAt: "private var publishButton", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var publishButton", in: try hostCode()) else {
             XCTFail("La zone de publication du socle est introuvable — la garde ne mesurerait RIEN")
             return false
         }
@@ -2083,7 +2112,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// doc-comments de la source, et le socle est verrouillé par ailleurs sur
     /// ses trois zones.
     func test_host_lEventail_vitDansLePlateau_pasDansLeSocle() throws {
-        guard let corps = declarationBody(startingAt: "private var plateauTools", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var plateauTools", in: try hostCode()) else {
             return XCTFail("Le plateau doit être une propriété nommée `plateauTools` — la garde s'ancre dessus")
         }
         let compacte = compact(corps)
@@ -2118,7 +2147,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             code.contains(compact("documentDestinationSelector")),
             "Le sélecteur de destination contextuel est retiré (B3) — l'éventail est le seul sélecteur de mode."
         )
-        guard let corps = declarationBody(startingAt: "private var reelGate", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var reelGate", in: try hostCode()) else {
             return XCTFail("`reelGate` doit être une propriété calculée — la garde s'ancre sur son bloc.")
         }
         XCTAssertTrue(
@@ -2134,7 +2163,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// prédicat : il appelle `qualifiesAsReel` et ne contient aucune
     /// comparaison numérique recopiée.
     func test_host_laQualification_appelleLaRegleSDK_neRecopiePasLeSeuil() throws {
-        guard let corps = declarationBody(startingAt: "private var documentComposesReel", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentComposesReel", in: try hostCode()) else {
             return XCTFail("`documentComposesReel` doit être une propriété calculée — la garde s'ancre sur son bloc.")
         }
         let compacte = compact(corps)
@@ -2197,7 +2226,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// même fichier l'applique déjà à `forcePlainPost` (T2.4). Constat de revue
     /// Opus T2.5. Garde ancrée sur le bloc de `chooseAudience`.
     func test_host_resserrerLAudienceHorsPublic_reArmeLaDecouvrabilite() throws {
-        guard let corps = declarationBody(startingAt: "private func chooseAudience", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "func chooseAudience", in: try hostCode()) else {
             return XCTFail("`chooseAudience` doit être une fonction — la garde s'ancre sur son bloc.")
         }
         XCTAssertTrue(
@@ -2338,7 +2367,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// d'occurrences (`plateauTools == 2`, dans `ComposerDocumentSurfaceTests`)
     /// en est le verrou ; celle-ci nomme le site interdit le plus tentant.
     func test_host_laSurfaceDocument_neMontePasELLE_MEME_lePlateau() throws {
-        guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
             return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
         }
 
@@ -2364,7 +2393,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// soit. Elle compte un symbole nommé plutôt que le littéral
     /// `onClose: onDismiss`, qu'un retour à la ligne suffirait à contourner.
     func test_host_donneSaSortie_aLaSurfaceDocument() throws {
-        guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
             return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
         }
         let compacte = compact(corps)
@@ -2391,7 +2420,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// rougirait sur des symboles que la garde de fichier ne connaît pas
     /// (`documentText`, le rappel de publication du host).
     func test_host_laSurfaceDocument_nOuvreAucunCheminDePublication() throws {
-        guard let corps = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
             return XCTFail("La surface document doit être une propriété nommée `documentSurface` — la garde s'ancre dessus")
         }
         let compacte = compact(corps)
@@ -2685,7 +2714,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// Deux faits, donc, qu'aucune valeur ne peut dire : la surface reçoit un
     /// `onTool`, et ce que ce rappel déclenche existe.
     func test_leMeuble_cableLaRangeeQuIlSert_sansQuoiLIconeSeraitInerte() throws {
-        guard let surface = declarationBody(startingAt: "private var documentSurface", in: try hostCode()) else {
+        guard let surface = declarationBody(startingAt: "var documentSurface", in: try hostCode()) else {
             return XCTFail("`documentSurface` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         XCTAssertTrue(
@@ -2694,7 +2723,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 + "bouton dont le tap ne fait rien (loi 4)."
         )
         XCTAssertNotNil(
-            declarationBody(startingAt: "private func handleDocumentTool", in: try hostCode()),
+            declarationBody(startingAt: "func handleDocumentTool", in: try hostCode()),
             "Le rappel `onTool` ne mène à aucun geste nommé dans le meuble."
         )
     }
@@ -2704,7 +2733,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// lui donner un `effect` ; une énumération recopiée dans le meuble aurait
     /// exigé de penser aux DEUX endroits, et le second est celui qu'on oublie.
     func test_laListeServie_projetteLaRegle_elleNeLaRecopiePas() throws {
-        guard let bloc = declarationBody(startingAt: "private var servedDocumentTools", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var servedDocumentTools", in: try hostCode()) else {
             return XCTFail("`servedDocumentTools` est introuvable — la garde ne mesurerait RIEN.")
         }
         let corps = compact(bloc)
@@ -2730,7 +2759,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// phrase.
     func test_lEmojiInsere_ecritDansLeTexte_jamaisDansLEmojiDuMood() throws {
         let code = try hostCode()
-        guard let bloc = declarationBody(startingAt: "private var emojiPickerSheet", in: code) else {
+        guard let bloc = declarationBody(startingAt: "var emojiPickerSheet", in: code) else {
             return XCTFail("Le sélecteur d'emoji du meuble est introuvable — la garde ne mesurerait RIEN.")
         }
         let corps = compact(bloc)
@@ -2798,7 +2827,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// remplace le porte aussi) : une garde qui ne chercherait que la présence
     /// du mot serait passée au vert avant comme après ce lot.
     func test_leBrouillonDuDocument_porteLaLangueDeclareeParLaCapsule_pasUnLitteral() throws {
-        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let corps = compact(bloc)
@@ -2869,7 +2898,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// une conséquence nulle — exactement ce que la loi 4 interdit, une couche
     /// plus bas que le bouton.
     func test_lesPersonnesNommees_atteignentLeBrouillonDuDocument() throws {
-        guard let bloc = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+        guard let bloc = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable — la garde ne mesurerait RIEN")
         }
         XCTAssertTrue(

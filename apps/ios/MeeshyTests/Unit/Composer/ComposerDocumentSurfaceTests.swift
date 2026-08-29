@@ -443,10 +443,10 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         )
 
         let source = try sourceDuMeuble()
-        guard let plateau = corpsDeDeclaration(commencantPar: "private var plateauTools", dans: source),
+        guard let plateau = corpsDeDeclaration(commencantPar: "var plateauTools", dans: source),
               let corpsDuMeuble = corpsDeDeclaration(commencantPar: "var body: some View", dans: source),
-              let mood = corpsDeDeclaration(commencantPar: "private var moodSurface", dans: source),
-              let document = corpsDeDeclaration(commencantPar: "private var documentSurface", dans: source) else {
+              let mood = corpsDeDeclaration(commencantPar: "var moodSurface", dans: source),
+              let document = corpsDeDeclaration(commencantPar: "var documentSurface", dans: source) else {
             return XCTFail("Les quatre blocs du meuble sont introuvables — la garde ne mesurerait RIEN.")
         }
 
@@ -888,13 +888,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// `ComposerFormatFan` sont nommés dans plusieurs doc-comments de ce
     /// fichier, et un `.contains` qui matche un commentaire ne prouve rien.
     private func sourceDuMeuble() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     /// Le corps d'un BLOC par appariement d'accolades. `nil` quand l'ancre a
@@ -1297,7 +1291,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// posé sur le bloc entier serait vert grâce au mood seul.
     func test_leMeuble_semeLaSourceDeLaPORTE_dansLeBrouillonDuDocument() throws {
         guard let bloc = corpsDeDeclaration(
-            commencantPar: "private var documentDraft",
+            commencantPar: "var documentDraft",
             dans: try sourceDuMeuble()
         ) else {
             return XCTFail("Le brouillon doit être une propriété nommée `documentDraft` — la garde s'ancre dessus.")
@@ -2639,7 +2633,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
         // Ancre déplacée au #4030 : l'envoi du DOCUMENT est `publishDocument`,
         // `publish` n'étant plus qu'un aiguillage sur le format.
         guard let envoi = corpsDeDeclaration(
-            commencantPar: "private func publishDocument(_ draft: ComposerDocumentDraft)",
+            commencantPar: "func publishDocument(_ draft: ComposerDocumentDraft)",
             dans: porte
         ) else {
             return XCTFail("L'envoi de la porte du document est introuvable — la garde ne mesurerait RIEN.")

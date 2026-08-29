@@ -42,7 +42,13 @@ final class ComposerDescriptionLayerTests: XCTestCase {
     }
 
     private func composer(_ fichier: String) throws -> String {
-        try source("Meeshy/Features/Main/Composer/\(fichier)")
+        // **Le meuble est DÉCOUPÉ (#4102) : son adresse est l'UNITÉ.** Lire le
+        // seul fichier principal rendrait vertes, en silence, toutes les gardes
+        // négatives dont l'interdit a suivi une extension.
+        if fichier == "MeeshyComposerHost.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        }
+        return try source("Meeshy/Features/Main/Composer/\(fichier)")
     }
 
     private func compact(_ t: String) -> String {

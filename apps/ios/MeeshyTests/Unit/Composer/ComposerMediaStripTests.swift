@@ -88,7 +88,7 @@ final class ComposerMediaStripTests: XCTestCase {
 
     // 3 — le meuble CÂBLE son média à la surface, et le retrait ôte du modèle.
     func test_leMeuble_cableSonMediaEtLeRetrait() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(src.contains("structMeeshyComposerHost"), "MeeshyComposerHost introuvable ou vide")
         XCTAssertTrue(
             src.contains("localMedia:documentLocalMedia"),
@@ -105,7 +105,7 @@ final class ComposerMediaStripTests: XCTestCase {
     // offre RÉEL dès que le média du document qualifie — plus de sélecteur de
     // destination séparé (loi 4 : un seul contrôle, jamais deux).
     func test_leType_respireAvecLaComposition_viaLEventail() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
             src.contains("varreelGate:Bool") && src.contains("documentComposesReel"),
             "Le gate du réel de l'éventail respire sur la composition du DOCUMENT (`documentComposesReel`), "

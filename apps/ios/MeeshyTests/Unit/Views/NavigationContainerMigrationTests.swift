@@ -81,7 +81,12 @@ final class NavigationContainerMigrationTests: XCTestCase {
         let hostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
 
         for path in [surfacePath, hostPath] {
-            let source = try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
+            // Le meuble est découpé (#4102) : lire son seul fichier principal
+            // laisserait ses trois extensions libres d'y ramener le conteneur
+            // déprécié — une garde négative verte pour n'avoir lu qu'une moitié.
+            let source = path == hostPath
+                ? try AppSourceGuard.composerHostSource()
+                : try String(contentsOf: iosRoot.appendingPathComponent(path), encoding: .utf8)
             XCTAssertFalse(
                 source.contains("NavigationView {"),
                 "\(path) must not use the deprecated NavigationView container: with its default " +
