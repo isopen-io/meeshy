@@ -1736,6 +1736,11 @@ struct StoryCommentsOverlayView: View {
                 expiredStoryBanner
             }
             commentsList
+                // Les médias de TOUS les commentaires de la story (racines +
+                // réponses dépliées) se feuillettent ensemble en plein écran.
+                .commentMediaGallery(
+                    topLevel: topLevelComments, replies: storyCommentRepliesMap
+                )
                 .frame(maxHeight: listMaxHeight)
                 // Bord supérieur RÉEL de la zone défilante, remonté au viewer :
                 // c'est lui qui sépare « geste né dans la liste » (au scroll) de
@@ -2698,6 +2703,7 @@ struct StoryCommentRowView: View, Equatable {
                         media: media,
                         accentColor: comment.authorColor,
                         commentId: comment.id,
+                        carrierText: comment.displayContent,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,

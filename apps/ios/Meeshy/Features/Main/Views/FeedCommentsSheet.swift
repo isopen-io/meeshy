@@ -636,6 +636,13 @@ struct CommentsSheetView: View {
     }
 
     var body: some View {
+        sheetBody
+            // Les médias de TOUS les commentaires du post (racines + réponses
+            // chargées) se feuillettent ensemble en plein écran.
+            .commentMediaGallery(topLevel: topLevelComments, replies: repliesMap)
+    }
+
+    private var sheetBody: some View {
         NavigationStack {
             ZStack {
                 // Translucent sheet: no opaque fill on 16.4+ (the translucent
@@ -2355,6 +2362,7 @@ struct CommentRowView: View, Equatable {
                         media: media,
                         accentColor: accentColor,
                         commentId: comment.id,
+                        carrierText: comment.displayContent,
                         authorName: comment.author,
                         authorAvatarURL: comment.authorAvatarURL,
                         authorColor: comment.authorColor,

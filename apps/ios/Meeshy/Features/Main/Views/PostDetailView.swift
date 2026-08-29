@@ -1023,6 +1023,9 @@ struct PostDetailView: View {
                     allAttachments: attachments,
                     startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                     accentColor: accentColor,
+                    captionMap: SocialMediaCaption.map(
+                        for: post.media, carrierText: post.displayContent
+                    ),
                     senderInfoMap: senderMap
                 )
             }
