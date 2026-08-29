@@ -28,7 +28,11 @@ final class ContactDirectoryBatchCodableTests: XCTestCase {
 
         XCTAssertNil(json["syncStartedAt"], "une gateway antérieure au contrat de lots ne doit voir aucune clé nouvelle")
         XCTAssertNil(json["isFinalBatch"])
-        XCTAssertEqual(json["mode"] as? String, "replace")
+        // `mode` n'est PLUS encodé (#4163) : il choisit le VERBE — `PUT`
+        // remplace, `PATCH` fusionne — et le corps n'a plus à le porter. Un
+        // champ qu'aucun intermédiaire ne peut lire rendait indiscernables deux
+        // requêtes dont l'une PURGE.
+        XCTAssertNil(json["mode"], "le mode est porté par le verbe, jamais par le corps")
         XCTAssertEqual(json["defaultCountry"] as? String, "SN")
     }
 
@@ -45,7 +49,7 @@ final class ContactDirectoryBatchCodableTests: XCTestCase {
 
         XCTAssertEqual(json["syncStartedAt"] as? String, "2026-08-25T10:00:00.000Z")
         XCTAssertEqual(json["isFinalBatch"] as? Bool, true)
-        XCTAssertEqual(json["mode"] as? String, "merge")
+        XCTAssertNil(json["mode"], "le mode est porté par le verbe, jamais par le corps")
     }
 
     func test_encode_isFinalBatchFalse_isStillWritten_neverConfusedWithAbsence() throws {

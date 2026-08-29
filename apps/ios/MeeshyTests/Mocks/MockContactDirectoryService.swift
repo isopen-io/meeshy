@@ -15,6 +15,10 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
     var lastSyncRequest: DirectorySyncRequest?
     var lastListFilter: DirectoryFilter?
     var lastListQuery: String?
+    var lastListCursor: String?
+    /// Le delta demandé — c'est lui qui distingue une première lecture d'un
+    /// rattrapage borné (#4163).
+    var lastListUpdatedSince: Date?
 
     func sync(_ request: DirectorySyncRequest) async throws -> DirectorySyncResult {
         syncCallCount += 1
@@ -22,22 +26,26 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
         return try syncResult.get()
     }
 
-    func list(
-        offset: Int,
+    func page(
+        cursor: String?,
         limit: Int,
         filter: DirectoryFilter,
-        query: String?
-    ) async throws -> OffsetPaginatedAPIResponse<[DirectoryContact]> {
+        query: String?,
+        updatedSince: Date?
+    ) async throws -> PaginatedAPIResponse<[DirectoryContact]> {
         listCallCount += 1
         lastListFilter = filter
         lastListQuery = query
+        lastListCursor = cursor
+        lastListUpdatedSince = updatedSince
         let contacts = try listResult.get()
-        // `OffsetPagination` n'expose pas d'init public (type purement
-        // `Decodable`) : le ViewModel ne lit que `data`, un bloc nul suffit.
-        return OffsetPaginatedAPIResponse(
+        // Une SEULE page, sans suite : `nextCursor` nul clôt la lecture. Les
+        // témoins de pagination ont leur propre double (`PagedDirectoryStub`),
+        // qui sert plusieurs pages.
+        return PaginatedAPIResponse(
             success: true,
             data: contacts,
-            pagination: nil,
+            pagination: CursorPagination(nextCursor: nil, hasMore: false, limit: limit),
             error: nil
         )
     }
@@ -58,6 +66,8 @@ final class MockContactDirectoryService: ContactDirectoryServiceProviding, @unch
         clearCallCount = 0
         lastSyncRequest = nil
         lastListFilter = nil
+        lastListCursor = nil
+        lastListUpdatedSince = nil
         lastListQuery = nil
     }
 }

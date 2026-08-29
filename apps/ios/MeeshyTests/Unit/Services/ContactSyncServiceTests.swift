@@ -50,13 +50,14 @@ private final class RecordingDirectoryService: ContactDirectoryServiceProviding,
         )
     }
 
-    func list(
-        offset: Int,
+    func page(
+        cursor: String?,
         limit: Int,
         filter: DirectoryFilter,
-        query: String?
-    ) async throws -> OffsetPaginatedAPIResponse<[DirectoryContact]> {
-        OffsetPaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
+        query: String?,
+        updatedSince: Date?
+    ) async throws -> PaginatedAPIResponse<[DirectoryContact]> {
+        PaginatedAPIResponse(success: true, data: [], pagination: nil, error: nil)
     }
 
     func clear() async throws -> DirectoryClearResult {

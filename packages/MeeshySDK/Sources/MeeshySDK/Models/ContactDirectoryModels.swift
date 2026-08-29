@@ -107,10 +107,14 @@ public enum DirectorySyncMode: String, Encodable, Sendable {
 /// LOTS : les deux champs optionnels ci-dessous portent le contrat de lot.
 ///
 /// Aucune `CodingKeys` ici — l'encodage synthétisé écrit les clés en camelCase,
-/// exactement ce qu'attend `POST /users/me/contacts/sync`, et il OMET les
-/// optionnels nuls (`encodeIfPresent`). Une gateway antérieure au contrat de
-/// lots ne voit donc littéralement aucun champ nouveau tant que le client
-/// n'envoie qu'un seul lot.
+/// exactement ce qu'attend la route, et il OMET les optionnels nuls
+/// (`encodeIfPresent`). Une gateway antérieure au contrat de lots ne voit donc
+/// littéralement aucun champ nouveau tant que le client n'envoie qu'un lot.
+///
+/// `mode` ne fait plus partie de l'ENCODAGE (#4163) : il choisit le VERBE
+/// — `PUT` remplace, `PATCH` fusionne — et le corps n'a plus à le porter. Il
+/// reste sur ce type parce que c'est l'appelant qui décide, et qu'un service
+/// qui devinerait le verbe depuis le contenu se tromperait sur le lot vide.
 public struct DirectorySyncRequest: Encodable, Sendable {
     public let contacts: [ContactMatchEntry]
     public let defaultCountry: String?
@@ -124,6 +128,11 @@ public struct DirectorySyncRequest: Encodable, Sendable {
     /// cette synchronisation n'a pas touché (`lastSyncedAt < syncStartedAt`),
     /// au lieu de comparer au seul lot reçu. `nil` partout ailleurs.
     public let isFinalBatch: Bool?
+
+    /// `mode` est EXCLU de l'encodage : il porte le verbe, pas le corps.
+    private enum CodingKeys: String, CodingKey {
+        case contacts, defaultCountry, syncStartedAt, isFinalBatch
+    }
 
     public init(
         contacts: [ContactMatchEntry],
@@ -152,6 +161,12 @@ public struct DirectorySyncResult: Decodable, Sendable, Equatable {
     /// unique historique plutôt que d'entamer une découpe qu'aucune purge par
     /// filigrane ne viendrait clore.
     public let syncStartedAt: String?
+    /// Horloge SERVEUR APRÈS l'écriture — le filigrane de RELECTURE (#4163).
+    ///
+    /// Une synchronisation était toujours suivie d'une relecture COMPLÈTE du
+    /// carnet. Repassé en `updatedSince`, ce filigrane ne rend que ce qui a
+    /// bougé. `nil` quand la gateway ne le connaît pas encore.
+    public let appliedAt: String?
 
     public init(
         totalContacts: Int,
@@ -159,7 +174,8 @@ public struct DirectorySyncResult: Decodable, Sendable, Equatable {
         syncedCount: Int,
         matchedCount: Int,
         removedCount: Int,
-        syncStartedAt: String? = nil
+        syncStartedAt: String? = nil,
+        appliedAt: String? = nil
     ) {
         self.totalContacts = totalContacts
         self.processedContacts = processedContacts
@@ -167,6 +183,7 @@ public struct DirectorySyncResult: Decodable, Sendable, Equatable {
         self.matchedCount = matchedCount
         self.removedCount = removedCount
         self.syncStartedAt = syncStartedAt
+        self.appliedAt = appliedAt
     }
 }
 

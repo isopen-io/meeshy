@@ -405,6 +405,11 @@ model UserContact {
   @@index([ownerId, matchedUserId])
   @@index([ownerId, displayName])
   @@index([matchedUserId])
+  /// La lecture par DELTA (#4163) : `updatedSince` ne rend que ce qui a bougé.
+  /// Sans cet index, le filtre chronologique balaie tout le carnet du
+  /// propriétaire — c'est-à-dire exactement ce que le delta évite de
+  /// retélécharger.
+  @@index([ownerId, updatedAt])
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)

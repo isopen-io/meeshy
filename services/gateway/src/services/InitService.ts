@@ -358,6 +358,27 @@ export class InitService {
   }
 
   /**
+   * Garantit l'index de DELTA de `UserContact` (#4163).
+   *
+   * Même raison que ses voisins : sur le connecteur MongoDB, une déclaration
+   * `@@index` du `schema.prisma` ne devient réelle qu'au `prisma db push`, que
+   * le déploiement n'exécute pas. Sans cet index, `?updatedSince=` balaie tout
+   * le carnet du propriétaire — exactement ce que le delta évite de
+   * retélécharger.
+   */
+  async ensureContactDeltaIndex(): Promise<void> {
+    try {
+      await this.prisma.$runCommandRaw({
+        createIndexes: 'UserContact',
+        indexes: [{ key: { ownerId: 1, updatedAt: 1 }, name: 'UserContact_owner_updatedAt' }],
+      });
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la création de l\'index delta UserContact', error);
+      throw error;
+    }
+  }
+
+  /**
    * Réinitialise complètement la base de données
    */
   private async resetDatabase(): Promise<void> {

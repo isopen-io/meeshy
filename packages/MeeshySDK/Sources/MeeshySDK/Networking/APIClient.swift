@@ -188,6 +188,17 @@ public struct CursorPagination: Decodable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool?
     public let limit: Int?
+
+    /// Init PUBLIC : les doubles de l'app (`apps/ios/MeeshyTests`) importent le
+    /// SDK sans `@testable` et ne voient donc pas l'init mémoire synthétisée,
+    /// interne. Sans lui, un double ne peut pas fabriquer une page à curseur —
+    /// il doit rendre `pagination: nil`, et le témoin cesse alors de pouvoir
+    /// mesurer la propagation du curseur, qui est justement ce qu'il garde.
+    public init(nextCursor: String?, hasMore: Bool?, limit: Int?) {
+        self.nextCursor = nextCursor
+        self.hasMore = hasMore
+        self.limit = limit
+    }
 }
 
 public struct OffsetPagination: Decodable, Sendable {
