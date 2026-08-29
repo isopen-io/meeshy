@@ -54,6 +54,7 @@ import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache'
 import { getCacheStore } from './services/CacheStore';
 import { BackgroundJobsManager } from './jobs';
 import { backfillSearchTokens } from './jobs/backfill-search-tokens';
+import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
@@ -176,6 +177,9 @@ class MeeshyServer {
   private orphanMediaCleanup: OrphanMediaCleanupService;
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
+
+  /** Sonde de dérive de typage (#4243) — démarrée avec les crons, arrêtée avec eux. */
+  private sondeDeTypage: SondeDeTypage | null = null;
 
   constructor() {
     // Check if HTTPS mode is enabled
@@ -1133,6 +1137,23 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredStoriesCleanup.start();
       logger.info('✓ Expired stories cleanup service started');
 
+      // Sonde de DÉRIVE DE TYPAGE (#4243) : une passe au démarrage, puis toutes
+      // les 12 h. MongoDB n'impose aucun type et le schéma Prisma ne décrit
+      // qu'une INTENTION — une écriture passée hors Prisma a posé un NOMBRE dans
+      // `User.phoneNumber`, et comme Prisma relit la ligne après CHAQUE écriture,
+      // ce compte ne pouvait plus rien écrire sur lui-même : ni présence, ni
+      // `lastLoginIp`, ni compteur d'échecs d'authentification, ni profil. Rien
+      // ne le signalait — le défaut n'est sorti qu'en cassant le rattrapage de
+      // #4159, des mois après l'écriture fautive.
+      //
+      // PAS derrière une garde de premier boot : le dépôt a déjà payé ce piège
+      // avec `ensurePostGeoIndex`, restée sous `shouldInitialize()` donc jamais
+      // exécutée en production jusqu'à ce que `/posts/nearby` rende 500. Un
+      // contrôle RÉTROACTIF sur une base qui contient déjà des données est par
+      // définition incompatible avec une porte « base vide ».
+      this.sondeDeTypage = demarrerSondeDeTypage(this.prisma);
+      logger.info('✓ Schema drift probe started');
+
       // Start expired-messages sweep (per-minute): erase content + ciphertext
       // of self-destructing messages whose expiresAt has lapsed.
       this.expiredMessagesCleanup.start();
@@ -1195,6 +1216,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.expiredStoriesCleanup) {
         this.expiredStoriesCleanup.stop();
         logger.info('✓ Expired stories cleanup service stopped');
+      }
+
+      // Stop schema drift probe (#4243)
+      if (this.sondeDeTypage) {
+        this.sondeDeTypage.arreter();
+        logger.info('✓ Schema drift probe stopped');
       }
 
       // Stop expired-messages sweep
