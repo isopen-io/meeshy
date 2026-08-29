@@ -16,31 +16,12 @@ import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
-import { resolveFrontendBaseUrl } from '../../services/TrackingLinkService';
 import { validatePagination } from '../../utils/pagination';
-import { NOT_DELETED } from '../../services/posts/postIncludes';
 import { withMentions } from '../../services/posts/postReferences';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
-
-/**
- * Surfaces qui peuvent produire une impression. Déclaré UNE fois et partagé par
- * la route unitaire et la route batch : les deux enums avaient divergé du client
- * — iOS envoie `story` à chaque slide de story révélé
- * (`StoryViewModel.recordStoryImpression`), valeur absente des deux listes, donc
- * 400 systématique et `impressionCount` figé à 0 sur toutes les stories malgré
- * des vues réelles. Toute nouvelle surface cliente s'ajoute ICI, pas dans un
- * seul des deux schémas.
- */
-const IMPRESSION_SOURCES = [
-  'feed',
-  'profile',
-  'search',
-  'shared_link',
-  'notification',
-  'detail',
-  'story',
-  'status',
-] as const;
+import { registerBookmarkRoutes } from './bookmarks';
+import { registerImpressionRoutes } from './impressions';
+import { registerShareRoutes } from './share';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -53,6 +34,21 @@ export function registerInteractionRoutes(
   // argument is the default — passed explicitly so the constructor chain
   // is readable.
   const postService = new PostService(prisma, new MediaService(), orphanCleanup);
+
+  // Trois familles ont quitté ce fichier (issue #4146), par RESPONSABILITÉ et
+  // non par tranche : le favori, l'impression et le partage. Elles partagent
+  // désormais la même porte d'audience (`postConsumptionGate`) et n'avaient
+  // plus rien à faire au milieu des réactions, des vues et du repost. Le
+  // fichier pesait 1165 lignes, au-dessus du budget 800-1100 : on n'ajoute pas
+  // à un fichier hors budget, on extrait d'abord.
+  //
+  // Elles restent montées ICI, sur la même instance et le même `postService`,
+  // pour qu'aucun chemin, aucun ordre d'enregistrement et aucun appelant ne
+  // bouge : `registerInteractionRoutes` demeure le point d'entrée unique du
+  // module, celui qu'`index.ts` et les suites de tests connaissent.
+  registerBookmarkRoutes(fastify, prisma, requiredAuth, postService);
+  registerImpressionRoutes(fastify, prisma, requiredAuth);
+  registerShareRoutes(fastify, prisma, requiredAuth, postService);
 
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
@@ -319,63 +315,6 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/bookmark
-  fastify.post('/posts/:postId/bookmark', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const result = await postService.bookmarkPost(postId, authContext.registeredUser.id);
-      // Sync temps réel (perso) : le feed et le reel viewer réhydratent
-      // `isBookmarkedByMe` + le `bookmarkCount` absolu → le favori et son
-      // compteur survivent à la fermeture/réouverture, sans reload.
-      // Le favori est ÉCRIT : plus rien de ce qui suit n'a le droit de faire
-      // échouer la requête. Sans cette porte, une panne d'émission rendait 500
-      // sur une opération réussie, et le client effaçait de l'écran un favori
-      // bien présent en base.
-      safeBroadcast('post:bookmarked', () => {
-        fastify.socialEvents?.broadcastPostBookmarked(
-          { postId, bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 },
-          authContext.registeredUser.id,
-        );
-      });
-      return sendSuccess(reply, { bookmarked: true, bookmarkCount: result?.bookmarkCount ?? 0 });
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/:postId/bookmark]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // DELETE /posts/:postId/bookmark
-  fastify.delete('/posts/:postId/bookmark', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const result = await postService.unbookmarkPost(postId, authContext.registeredUser.id);
-      safeBroadcast('post:unbookmarked', () => {
-        fastify.socialEvents?.broadcastPostBookmarked(
-          { postId, bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 },
-          authContext.registeredUser.id,
-        );
-      });
-      return sendSuccess(reply, { bookmarked: false, bookmarkCount: result?.bookmarkCount ?? 0 });
-    } catch (error) {
-      enhancedLogger.error('[DELETE /posts/:postId/bookmark]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
   // POST /posts/:postId/view
   fastify.post('/posts/:postId/view', {
     preValidation: [requiredAuth],
@@ -476,176 +415,6 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/impression — Track a feed impression
-  fastify.post('/posts/:postId/impression', {
-    schema: {
-      params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
-      body: {
-        type: 'object',
-        properties: {
-          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
-        }
-      }
-    },
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const source = (request.body as any)?.source ?? 'feed';
-
-      await prisma.postImpression.create({
-        data: { postId, userId: authContext.registeredUser.id, source }
-      });
-
-      // Ouvrir le Détail d'un post (`source: 'detail'`) est à la fois une
-      // impression ET une vue (totale, jamais dédupliquée) comptée IMMÉDIATEMENT
-      // — chaque ouverture compte, sans seuil ni gating engagement. Les autres
-      // sources (apparition feed, etc.) ne comptent qu'une impression.
-      // Note : `postOpenCount` n'est PLUS alimenté par l'engagement sur la surface
-      // `detail` (cf. engagementAggregateIncrements) pour éviter le double comptage.
-      const counters: Record<string, { increment: number }> = { impressionCount: { increment: 1 } };
-      if (source === 'detail') {
-        counters.postOpenCount = { increment: 1 };
-      }
-
-      // Résout repostOfId/originalRepostOfId depuis le RETOUR de `update` —
-      // pas une lecture séparée : un repost doit créditer son original du
-      // même impressionCount en plus de son propre compteur (chantier
-      // reposts cohérents & watermark, tâche 1), sans ajouter de requête sur
-      // ce chemin chaud (chaque impression, majoritairement des non-reposts).
-      const target = await prisma.post.update({
-        where: { id: postId },
-        data: counters,
-        select: { repostOfId: true, originalRepostOfId: true },
-      });
-
-      const rootId = target?.originalRepostOfId ?? target?.repostOfId;
-      if (rootId && rootId !== postId) {
-        await prisma.post.updateMany({
-          where: { id: rootId, deletedAt: NOT_DELETED },
-          data: { impressionCount: { increment: 1 } },
-        });
-      }
-
-      return sendSuccess(reply, { recorded: true });
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/:postId/impression]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // POST /posts/impressions/batch — Track multiple feed impressions at once
-  fastify.post('/posts/impressions/batch', {
-    schema: {
-      body: {
-        type: 'object',
-        required: ['postIds'],
-        properties: {
-          postIds: { type: 'array', items: { type: 'string' } },
-          source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
-        }
-      }
-    },
-    preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('impression') },
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postIds, source = 'feed' } = request.body as any;
-
-      if (!Array.isArray(postIds) || postIds.length === 0) {
-        return sendSuccess(reply, { recorded: 0 });
-      }
-
-      const capped = postIds.slice(0, 50);
-
-      await prisma.postImpression.createMany({
-        data: capped.map((postId: string) => ({
-          postId,
-          userId: authContext.registeredUser!.id,
-          source
-        }))
-      });
-
-      // Une impression par APPARITION : le même post peut légitimement revenir
-      // plusieurs fois dans un lot (aller-retour de scroll). `createMany` insère
-      // bien une ligne par occurrence, mais `updateMany({ id: { in: [...] } })`
-      // n'incrémente chaque post qu'UNE fois — le `in` est dédupliqué côté base.
-      // On regroupe donc par nombre d'occurrences : un `updateMany` par valeur
-      // d'incrément distincte (en pratique 1 à 3), et non un par post.
-      const occurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
-        acc.set(postId, (acc.get(postId) ?? 0) + 1);
-        return acc;
-      }, new Map());
-
-      const idsByIncrement = [...occurrences].reduce<Map<number, string[]>>((acc, [postId, count]) => {
-        acc.set(count, [...(acc.get(count) ?? []), postId]);
-        return acc;
-      }, new Map());
-
-      // Reposts du batch : résout repostOfId/originalRepostOfId de tous les
-      // posts DISTINCTS en UNE requête — jamais une par post — pour créditer
-      // la racine de chaque repost du même impressionCount (chantier reposts
-      // cohérents & watermark, tâche 1).
-      const repostSources = await prisma.post.findMany({
-        where: { id: { in: [...occurrences.keys()] }, repostOfId: { not: null } },
-        select: { id: true, repostOfId: true, originalRepostOfId: true },
-      });
-      const rootByPostId = new Map<string, string>(
-        repostSources
-          .map((p: { id: string; repostOfId: string | null; originalRepostOfId: string | null }) =>
-            [p.id, p.originalRepostOfId ?? p.repostOfId] as [string, string | null])
-          .filter((entry: [string, string | null]): entry is [string, string] =>
-            Boolean(entry[1]) && entry[1] !== entry[0]),
-      );
-
-      // Chaque OCCURRENCE d'un repost dans le batch crédite sa racine — deux
-      // reposts distincts (ou 2 occurrences du même repost) du même original
-      // doivent créditer l'original de +2, jamais +1. Même piège `in`
-      // dédupliqué que ci-dessus, appliqué ici au crédit de la racine.
-      const rootOccurrences = capped.reduce<Map<string, number>>((acc, postId: string) => {
-        const rootId = rootByPostId.get(postId);
-        if (!rootId) return acc;
-        acc.set(rootId, (acc.get(rootId) ?? 0) + 1);
-        return acc;
-      }, new Map());
-
-      const rootIdsByIncrement = [...rootOccurrences].reduce<Map<number, string[]>>((acc, [rootId, count]) => {
-        acc.set(count, [...(acc.get(count) ?? []), rootId]);
-        return acc;
-      }, new Map());
-
-      await Promise.all([
-        ...[...idsByIncrement].map(([increment, ids]) =>
-          prisma.post.updateMany({
-            where: { id: { in: ids } },
-            data: { impressionCount: { increment } }
-          })
-        ),
-        ...[...rootIdsByIncrement].map(([increment, ids]) =>
-          prisma.post.updateMany({
-            where: { id: { in: ids }, deletedAt: NOT_DELETED },
-            data: { impressionCount: { increment } }
-          })
-        ),
-      ]);
-
-      return sendSuccess(reply, { recorded: capped.length });
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/impressions/batch]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
   // POST /posts/engagement/batch — Ingest durable engagement sessions (dwell + actions)
   //
   // Append-only ingestion of finalized consumption sessions captured client-side
@@ -682,83 +451,6 @@ export function registerInteractionRoutes(
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
-
-  // POST /posts/:postId/share — Track a share, optionally mint a tracking link
-  //
-  // Body (all optional):
-  //   - platform: marketing tag forwarded to PostService.sharePost
-  //   - generateLink: when truthy, mint a TrackingLink owned by the caller so
-  //     they can paste an attributable `meeshy.me/l/<token>` URL into any
-  //     external share sheet. The link points at the post detail route on the
-  //     web frontend (`FRONTEND_URL`/feeds/post/<postId>`); subsequent
-  //     redirects are counted into the existing `trackingLinkClick` analytics.
-  //     The same `/feeds/post/<postId>` path is also claimed by the iOS app via
-  //     Universal Links, so the recipient lands directly inside the native
-  //     PostDetailView when the app is installed.
-  //
-  // Response always carries `{ shared, shareCount }`; if `generateLink` was
-  // requested the same payload also exposes `shortUrl` (absolute, ready for
-  // sharing) and `token` (6-char id) so the client can deep-link / display
-  // analytics later.
-  fastify.post('/posts/:postId/share', {
-    preValidation: [requiredAuth],
-  }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      if (!authContext?.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
-      }
-
-      const { postId } = request.params;
-      const body = (request.body as any) ?? {};
-      const platform: string | undefined = body.platform;
-      const generateLink: boolean = Boolean(body.generateLink);
-      const baseUrl = resolveFrontendBaseUrl();
-
-      const payload: {
-        shared: boolean;
-        shareCount: number;
-        shortUrl?: string;
-        token?: string;
-      } = { shared: true, shareCount: 0 };
-
-      if (generateLink) {
-        // Tracked share: upsert one link per (post, sharer). Reusing an existing
-        // link does NOT re-increment shareCount — the counter tracks unique
-        // sharers, not repeated taps of the share button.
-        const result = await postService.shareWithTrackingLink(
-          postId,
-          authContext.registeredUser.id,
-          { baseUrl, platform },
-        );
-        if (!result) {
-          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
-        }
-        payload.shareCount = result.shareCount;
-        payload.token = result.token;
-        payload.shortUrl = result.shortUrl;
-      } else {
-        // Plain share (no tracked link) — increment the counter as before.
-        const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
-        if (!post) {
-          return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
-        }
-        payload.shareCount = post.shareCount;
-      }
-
-      return sendSuccess(reply, payload);
-    } catch (error) {
-      enhancedLogger.error('[POST /posts/:postId/share]', error);
-      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
-    }
-  });
-
-  // #4190 — `GET /posts/:postId/share` a été RETIRÉE : aucun appelant sur les
-  // trois clients (le web n'émet que le POST, `posts.service.ts` → `sharePost`).
-  // Le couple homonyme reste vivant en POST juste au-dessus — c'est pourquoi ce
-  // retrait ne pouvait pas se décider depuis le CHEMIN, seulement depuis le
-  // couple méthode+chemin. `postService.getPostShareLink` n'a plus de site
-  // d'appel HTTP ; l'analytique d'un lien suivi se lit sur `/tracking-links`.
 
   // POST /posts/:postId/downloads — Trace le téléchargement des médias d'un poste.
   //

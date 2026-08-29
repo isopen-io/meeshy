@@ -12,6 +12,21 @@ import {
   updateUsernameSchema
 } from '@meeshy/shared/utils/validation';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { depreciee } from '../../utils/deprecation';
+
+/**
+ * Le sursis des trois portes de profil (#4274).
+ *
+ * `depuis` est la date de fermeture de #4161 — le jour ou
+ * `/directory/people/:handle` est devenue l'adresse unique. Aucun `retraitLe` :
+ * #4161 c.9 et c.10 exigent l'extinction des versions iOS INSTALLEES et le
+ * comptage des appels Android. Un profil s'ouvre depuis un lien partage, et
+ * cette queue est longue ; le compteur est #4275.
+ */
+const ANNONCE_PROFIL = {
+  depuis: '2026-08-29',
+  successeur: '/api/v1/directory/people/:handle',
+} as const;
 import {
   userSchema,
   userMinimalSchema,
@@ -764,6 +779,7 @@ export async function updateUsername(fastify: FastifyInstance) {
  */
 export async function getUserByUsername(fastify: FastifyInstance) {
   fastify.get('/u/:username', {
+    onRequest: depreciee(ANNONCE_PROFIL),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by username. Returns public information only (excludes email, phone, password). Case-insensitive username matching.',
@@ -835,6 +851,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
  */
 export async function getUserById(fastify: FastifyInstance) {
   fastify.get('/users/:id', {
+    onRequest: depreciee(ANNONCE_PROFIL),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ID or username. Returns public information including language settings. Automatically detects whether ID is MongoDB ObjectId or username.',
@@ -966,6 +983,7 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
 export async function getUserByIdDedicated(fastify: FastifyInstance) {
   fastify.get('/users/id/:id', {
+    onRequest: depreciee(ANNONCE_PROFIL),
     preValidation: [getOptionalAuth(fastify.prisma)],
     schema: {
       description: 'Get public user profile by MongoDB ObjectId',

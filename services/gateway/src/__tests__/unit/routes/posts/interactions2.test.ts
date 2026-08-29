@@ -137,10 +137,36 @@ function makePrisma() {
       // batch d'impressions (chantier reposts cohérents, tâche 1) — par
       // défaut aucun repost dans le batch. L'unitaire replie sa résolution
       // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      // Le même délégué porte la passe d'audience du lot (#4146).
+      findMany: aclAwareFindMany(),
     },
   } as any;
 }
+
+/**
+ * Tranche ACL d'un post PUBLIC — ce que `loadPostAcl` rend au verdict
+ * d'audience posé sur le favori, l'impression et le partage (issue #4146).
+ */
+const publicAcl = (id: string) => ({
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+});
+
+/**
+ * `post.findMany` répond désormais à DEUX questions : la passe d'audience du
+ * lot d'impressions (`where.id.in`) et la résolution des racines de repost
+ * (`where.repostOfId`). Ce double branche sur la seconde et rend, pour la
+ * première, un post PUBLIC par id demandé — l'audience elle-même est le sujet
+ * de `interactions-consumption-audience.test.ts`, pas de ce fichier.
+ */
+function aclAwareFindMany(repostRows: unknown[] = []) {
+  return jest.fn<any>().mockImplementation(({ where }: any) => {
+    if (where?.repostOfId !== undefined) return Promise.resolve(repostRows);
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+  });
+}
+
+const aclAwareFindFirst = () =>
+  jest.fn<any>().mockImplementation(({ where }: any) => Promise.resolve(publicAcl(where.id)));
 
 function makeAuth(authenticated: boolean) {
   return async (req: FastifyRequest) => {

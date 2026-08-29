@@ -104,6 +104,31 @@ function makePreValidationAuth(authenticated: boolean) {
   };
 }
 
+/**
+ * Tranche ACL d'un post PUBLIC — ce que `loadPostAcl` rend au verdict
+ * d'audience posé sur le favori, l'impression et le partage (issue #4146).
+ */
+const publicAcl = (id: string) => ({
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+});
+
+/**
+ * `post.findMany` répond désormais à DEUX questions : la passe d'audience du
+ * lot d'impressions (`where.id.in`) et la résolution des racines de repost
+ * (`where.repostOfId`). Ce double branche sur la seconde et rend, pour la
+ * première, un post PUBLIC par id demandé — l'audience elle-même est le sujet
+ * de `interactions-consumption-audience.test.ts`, pas de ce fichier.
+ */
+function aclAwareFindMany(repostRows: unknown[] = []) {
+  return jest.fn<any>().mockImplementation(({ where }: any) => {
+    if (where?.repostOfId !== undefined) return Promise.resolve(repostRows);
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+  });
+}
+
+const aclAwareFindFirst = () =>
+  jest.fn<any>().mockImplementation(({ where }: any) => Promise.resolve(publicAcl(where.id)));
+
 async function buildApp(opts: {
   authenticated?: boolean;
   withNotifications?: boolean;
@@ -130,8 +155,9 @@ async function buildApp(opts: {
       // batch d'impressions (chantier reposts cohérents, tâche 1). Défaut :
       // aucun repost dans le batch — même comportement qu'avant. L'unitaire
       // replie sa résolution dans le `select` de `update` (Important #2,
-      // revue), aucun `findUnique` séparé n'est plus nécessaire.
-      findMany: jest.fn<any>().mockResolvedValue([]),
+      // revue), aucun `findUnique` séparé n'est plus nécessaire. Le même
+      // délégué porte la passe d'audience du lot (#4146).
+      findMany: aclAwareFindMany(),
     },
   };
 
@@ -618,6 +644,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
         update: jest.fn<any>().mockResolvedValue({ repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID }),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
         findUnique: jest.fn<any>(),
+        findFirst: aclAwareFindFirst(),
       },
     };
     const app = await buildApp({ prisma });
@@ -644,6 +671,7 @@ describe('POST /posts/:id/impression — on a repost, credits the root impressio
         update: jest.fn<any>().mockResolvedValue({}),
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
         findUnique: jest.fn<any>(),
+        findFirst: aclAwareFindFirst(),
       },
     };
     const app = await buildApp({ prisma });
@@ -659,7 +687,7 @@ describe('POST /posts/:id/impression — service error', () => {
   it('returns 500 when prisma.postImpression.create throws', async () => {
     const prisma = {
       postImpression: { create: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
-      post: { update: jest.fn<any>().mockResolvedValue({}) },
+      post: { update: jest.fn<any>().mockResolvedValue({}), findFirst: aclAwareFindFirst() },
     };
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/posts/${POST_ID}/impression`, payload: { source: 'feed' } });
@@ -708,7 +736,7 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
       postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 2 }) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-        findMany: jest.fn<any>().mockResolvedValue([
+        findMany: aclAwareFindMany([
           { id: REPOST_A, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
           { id: REPOST_B, repostOfId: ROOT_ID, originalRepostOfId: ROOT_ID },
         ]),
@@ -723,7 +751,12 @@ describe('POST /posts/impressions/batch — 2 reposts of the same original credi
     expect(res.statusCode).toBe(200);
 
     // UNE requête pour résoudre repostOf/originalRepostOfId de tout le batch.
-    expect(prisma.post.findMany).toHaveBeenCalledTimes(1);
+    // Comptée PARMI les appels au même délégué : depuis #4146 il porte aussi la
+    // passe d'audience, et un `toHaveBeenCalledTimes(1)` nu ne dirait plus
+    // laquelle des deux a été économisée.
+    const repostResolutionCalls = prisma.post.findMany.mock.calls
+      .filter(([args]: any[]) => args.where?.repostOfId !== undefined);
+    expect(repostResolutionCalls).toHaveLength(1);
     expect(prisma.post.findMany).toHaveBeenCalledWith({
       where: { id: { in: [REPOST_A, REPOST_B] }, repostOfId: { not: null } },
       select: { id: true, repostOfId: true, originalRepostOfId: true },
@@ -748,7 +781,7 @@ describe('POST /posts/impressions/batch — caps at 50 entries', () => {
       },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 50 }),
-        findMany: jest.fn<any>().mockResolvedValue([]),
+        findMany: aclAwareFindMany(),
       },
     };
     const app = await buildApp({ prisma });
@@ -765,7 +798,7 @@ describe('POST /posts/impressions/batch — service error', () => {
       postImpression: { createMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
       post: {
         updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
-        findMany: jest.fn<any>().mockResolvedValue([]),
+        findMany: aclAwareFindMany(),
       },
     };
     const app = await buildApp({ prisma });

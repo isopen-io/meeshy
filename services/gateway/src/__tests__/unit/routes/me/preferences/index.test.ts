@@ -1,7 +1,11 @@
 /**
  * Unit tests for userPreferencesRoutes (routes/me/preferences/index.ts)
- * Tests GET / (all prefs) and sub-route registration. Le DELETE / global a été
- * retiré (#4186) — son absence est gardée par identity-twins-retired.test.ts.
+ * Tests GET / (all prefs) and sub-route registration.
+ *
+ * Les TROIS routes racine (`GET`/`PATCH`/`DELETE /me/preferences`) ont leur
+ * propre témoin depuis #4181 : `unified-routes.test.ts`. Ce fichier ne garde
+ * plus que le MONTAGE — que le plugin monte bien ses sous-routes, et qu'il ne
+ * plante pas sans Prisma.
  *
  * @jest-environment node
  */
@@ -189,14 +193,15 @@ describe('GET / — get all preferences', () => {
   });
 });
 
-// ─── DELETE / — RETIRÉE (#4186) ──────────────────────────────────────────────
+// ─── DELETE / — RETIRÉE (#4186), puis ROUVERTE sous un autre contrat (#4181) ──
 //
-// La remise à zéro GLOBALE n'avait aucun appelant sur les trois clients, et
-// tout ce qu'elle faisait est fait par le DELETE d'une CATÉGORIE (retrait des
-// lignes héritées, purge du cache de confidentialité, diffusion). L'absence de
-// la route est gardée ailleurs, par un témoin NÉGATIF monté sous le préfixe de
-// production : `__tests__/unit/routes/identity-twins-retired.test.ts`. Ne rien
-// tester ici ne remarquerait pas son retour.
+// La remise à zéro GLOBALE n'avait aucun appelant sur les trois clients : elle
+// a été retirée au lot précédent. #4181 reprend l'adresse pour la forme qui la
+// mérite — `DELETE /me/preferences?categories=` (absent = tout), qui absorbe du
+// même coup les SEPT `DELETE` par catégorie. Le retrait n'était donc pas un
+// aller-retour : c'est lui qui a libéré l'adresse.
+//
+// Son témoin vit avec ses deux sœurs, dans `unified-routes.test.ts`.
 
 // ─── Sub-routes registration ──────────────────────────────────────────────────
 

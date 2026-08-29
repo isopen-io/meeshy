@@ -609,15 +609,18 @@ describe('registerBanRoutes', () => {
       expect(mockedSendSuccess).toHaveBeenCalled();
     });
 
-    it('handles unknown role (defaults to 0) — member cannot ban unknown role == 0', async () => {
+    // Le rang illisible vaut 0, donc la seule comparaison des rangs laissait un
+    // MEMBRE (niveau 10) bannir cette ligne. Bannir est un geste de MODÉRATION :
+    // il exige le TITRE, puis la portée (#4176).
+    it('un simple membre n\'atteint pas une ligne au rang illisible — le plancher passe avant la comparaison', async () => {
       const { prisma, banRoute, reply } = setup();
       prisma.participant.findFirst
         .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'member' }) // level 10
         .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'unknown-role', bannedAt: null, displayName: 'X' }); // level 0
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await banRoute.handler(request, reply);
-      // 10 > 0 → ban succeeds
-      expect(mockedSendSuccess).toHaveBeenCalled();
+      expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+      expect(prisma.participant.update).not.toHaveBeenCalled();
     });
 
     it('bans multiple sockets leave room', async () => {
@@ -644,13 +647,30 @@ describe('registerBanRoutes', () => {
       expect(mockedSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
     });
 
-    it('returns 403 when current user is a moderator (below admin)', async () => {
+    // Décision du 2026-08-29 (#4176) : on lève un bannissement qu'on aurait pu
+    // poser. Le modérateur qui bannit un membre le relève — sans quoi la moitié
+    // destructrice du geste lui est ouverte et la moitié réparatrice fermée.
+    it('le modérateur lève le bannissement qu\'il aurait pu poser', async () => {
       const { prisma, unbanRoute, reply } = setup();
       prisma.participant.findFirst
-        .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'moderator' });
+        .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'moderator' })
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'member', bannedAt: new Date('2026-08-01T00:00:00.000Z') });
+      const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
+      await unbanRoute.handler(request, reply);
+      expect(prisma.participant.update).toHaveBeenCalled();
+    });
+
+    // Le pendant : la loi vaut dans les deux sens. Seul le CRÉATEUR pouvait
+    // bannir un ADMIN ; lui seul le relève.
+    it('mais un ADMIN ne libère pas un ADMIN banni', async () => {
+      const { prisma, unbanRoute, reply } = setup();
+      prisma.participant.findFirst
+        .mockResolvedValueOnce({ id: PARTICIPANT_ID, role: 'admin' })
+        .mockResolvedValueOnce({ id: TARGET_PARTICIPANT_ID, userId: TARGET_USER_ID, role: 'admin', bannedAt: new Date('2026-08-01T00:00:00.000Z') });
       const request = makeRequest({ id: VALID_CONV_ID, userId: TARGET_USER_ID }, VALID_USER_ID);
       await unbanRoute.handler(request, reply);
       expect(mockedSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+      expect(prisma.participant.update).not.toHaveBeenCalled();
     });
 
     it('returns 403 when current user is a member', async () => {

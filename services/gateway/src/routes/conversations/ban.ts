@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify'
-import { memberRoleLevel, MemberRole } from '@meeshy/shared/types/role-types'
-import { actorHasMinimumRole, actorRoleLevel } from '../../utils/conversation-authority'
+import { MemberRole } from '@meeshy/shared/types/role-types'
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas'
+import { actorHasMinimumRole } from '../../utils/conversation-authority'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound } from '../../utils/response'
@@ -9,6 +10,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { resolveBanWrite, resolveUnbanWrite } from '../../services/conversations/conversationBanState'
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant'
+import { participantActionRefusal } from './utils/participant-authority'
 import { enhancedLogger } from '../../utils/logger-enhanced.js'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
@@ -37,8 +39,41 @@ export function registerBanRoutes(
           required: ['id', 'userId'],
           properties: {
             id: { type: 'string' },
-            userId: { type: 'string' },
+            userId: { type: 'string', description: 'User ID — or Participant ID, la seule identite d\'un visiteur sans compte' },
           },
+        },
+        // La charge n'etait gouvernee par RIEN : sans bloc `response`, Fastify
+        // serialise l'objet tel quel, donc tout champ ajoute un jour a l'objet
+        // rendu part sur le fil sans qu'aucune declaration ne l'ait autorise.
+        // C'est la meme famille de defaut que #4009 vue de l'autre bout : la
+        // ou un champ non declare CASSE un decodeur strict, un champ non
+        // declare ici en FABRIQUE un que personne n'a relu.
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  // `participantId` TOUJOURS, `userId` NUL sans compte : ce
+                  // champ declare un `User.id`, et y recopier un
+                  // `Participant.id` est ce que le CLAUDE.md interdit.
+                  participantId: { type: 'string' },
+                  userId: { type: 'string', nullable: true },
+                  bannedAt: { type: 'string', format: 'date-time' },
+                  // Nomme plutot que devine : l'ecran des liens doit pouvoir
+                  // marquer CE lien ferme sans relire toute la liste.
+                  closedShareLinkId: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
         },
       },
       preValidation: [requiredAuth],
@@ -57,6 +92,20 @@ export function registerBanRoutes(
 
       if (!currentParticipant) {
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
+      }
+
+      const actor = {
+        conversationRole: currentParticipant.role,
+        platformRole: authRequest.authContext.registeredUser?.role,
+      }
+
+      // Le PLANCHER, opposé avant de chercher la cible. Il n'existait pas : la
+      // seule comparaison était celle des rangs, si bien qu'un simple MEMBRE
+      // bannissait toute ligne dont le rang était illisible (niveau 0) — une
+      // graphie inconnue, une ligne héritée. Bannir est un geste de MODÉRATION ;
+      // il exige le titre, puis la portée.
+      if (!actorHasMinimumRole(actor, MemberRole.MODERATOR)) {
+        return sendForbidden(reply, 'Vous n\'avez pas les droits pour bannir un participant')
       }
 
       // La cible se résout sous les DEUX colonnes. `:userId` porte un `User.id`
@@ -81,14 +130,22 @@ export function registerBanRoutes(
       // décision porteur dit ce qu'un administrateur peut FAIRE, pas ce qui
       // le protège. Au NIVEAU du créateur et jamais au-dessus, donc aucun
       // des deux ne bannit l'autre.
-      const currentLevel = actorRoleLevel({
-        conversationRole: currentParticipant.role,
-        platformRole: authRequest.authContext.registeredUser?.role,
+      //
+      // La comparaison vit maintenant dans `participant-authority.ts`, d'où
+      // `DELETE …/participants/:key` et `PATCH …/role` la lisent aussi : elle
+      // était ÉCRITE ici, en clair, et les deux autres gestes s'en passaient.
+      const refusal = participantActionRefusal({
+        actor,
+        targetRole: targetParticipant.role,
+        floor: MemberRole.MODERATOR,
       })
-      const targetLevel = memberRoleLevel(targetParticipant.role ?? 'member')
-
-      if (currentLevel <= targetLevel) {
-        return sendForbidden(reply, 'Vous ne pouvez pas bannir un participant de rang égal ou supérieur')
+      if (refusal) {
+        return sendForbidden(
+          reply,
+          refusal === 'below-floor'
+            ? 'Vous n\'avez pas les droits pour bannir un participant'
+            : 'Vous ne pouvez pas bannir un participant de rang égal ou supérieur',
+        )
       }
 
       const now = new Date()
@@ -214,8 +271,28 @@ export function registerBanRoutes(
           required: ['id', 'userId'],
           properties: {
             id: { type: 'string' },
-            userId: { type: 'string' },
+            userId: { type: 'string', description: 'User ID — or Participant ID, la seule identite d\'un visiteur sans compte' },
           },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean', example: true },
+              data: {
+                type: 'object',
+                properties: {
+                  participantId: { type: 'string' },
+                  userId: { type: 'string', nullable: true },
+                },
+              },
+            },
+          },
+          400: errorResponseSchema,
+          401: errorResponseSchema,
+          403: errorResponseSchema,
+          404: errorResponseSchema,
+          500: errorResponseSchema,
         },
       },
       preValidation: [requiredAuth],
@@ -236,14 +313,39 @@ export function registerBanRoutes(
         return sendNotFound(reply, 'Vous ne participez pas à cette conversation')
       }
 
-      if (!actorHasMinimumRole(
-        {
-          conversationRole: currentParticipant.role,
-          platformRole: authRequest.authContext.registeredUser?.role,
-        },
-        MemberRole.ADMIN,
-      )) {
-        return sendForbidden(reply, 'Seul un admin ou le créateur peut débannir un participant')
+      const actor = {
+        conversationRole: currentParticipant.role,
+        platformRole: authRequest.authContext.registeredUser?.role,
+      }
+
+      // ─── Décision produit du 2026-08-29 : lever un bannissement s'autorise
+      // comme le poser ────────────────────────────────────────────────────────
+      //
+      // Cette porte exigeait `ADMIN` pendant que `/ban` se contentait d'un rang
+      // supérieur à la cible. **Un modérateur posait donc un bannissement qu'il
+      // ne pouvait pas lever** : la moitié destructrice du geste était à sa
+      // portée, la moitié réparatrice non. Ce n'est pas une précaution, c'est un
+      // piège — le seul recours de la personne bannie devenait de trouver un
+      // administrateur, et le modérateur qui s'était trompé ne pouvait pas se
+      // corriger lui-même.
+      //
+      // Tranché dans le sens qui SUPPRIME l'asymétrie sans retirer de pouvoir :
+      // **on lève un bannissement qu'on aurait pu poser**, exactement. C'est la
+      // règle des outils de modération du marché (une même permission couvre
+      // ban et unban), et surtout elle n'élargit RIEN — toute personne qu'un
+      // modérateur peut désormais débannir est une personne qu'il peut, dans la
+      // seconde, bannir de nouveau. Le rang qu'il franchit ici, il le franchit
+      // déjà dans l'autre sens.
+      //
+      // Conséquence assumée, et elle va dans le sens de la protection : un
+      // ADMIN ne libère plus un ADMIN banni (rang égal). Seul le CRÉATEUR
+      // pouvait bannir cet admin ; lui seul le relève. Une décision reste à la
+      // main de qui avait l'autorité de la prendre.
+      //
+      // Le plancher est opposé AVANT la lecture de la cible : un simple membre
+      // n'a rien à apprendre de l'existence d'un bannissement.
+      if (!actorHasMinimumRole(actor, MemberRole.MODERATOR)) {
+        return sendForbidden(reply, 'Vous n\'avez pas les droits pour lever un bannissement')
       }
 
       // Mêmes deux colonnes qu'au bannissement — sans quoi on saurait bannir un
@@ -264,6 +366,22 @@ export function registerBanRoutes(
 
       if (!targetParticipant) {
         return sendNotFound(reply, 'Participant banni introuvable')
+      }
+
+      // La MÊME loi que le bannissement, au mot près — c'est tout l'objet de la
+      // décision ci-dessus.
+      const unbanRefusal = participantActionRefusal({
+        actor,
+        targetRole: targetParticipant.role,
+        floor: MemberRole.MODERATOR,
+      })
+      if (unbanRefusal) {
+        return sendForbidden(
+          reply,
+          unbanRefusal === 'below-floor'
+            ? 'Vous n\'avez pas les droits pour lever un bannissement'
+            : 'Vous ne pouvez pas lever le bannissement d\'un participant de rang égal ou supérieur',
+        )
       }
 
       const unban = resolveUnbanWrite(targetParticipant)

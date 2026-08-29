@@ -335,10 +335,17 @@ son corps. La cible l'étend, elle ne l'invente pas.
 | `historyVisibleFrom` (date ≤ maintenant, `null` = retirer) | **ADMIN** | jamais diffusé en salle |
 | `role` | ADMIN **et** rang > rang de la cible **et** cible ≠ créateur | diffusion salle seule, sans présence |
 | `bannedAt: <date>` | rang **strictement** supérieur à la cible | ferme le lien d'ENTRÉE, `endConversationMembership` |
-| `bannedAt: null` | ADMIN | re-`join` des sockets si l'appartenance est restaurée |
+| `bannedAt: null` | rang **strictement** supérieur à la cible (identique à la pose) | re-`join` des sockets si l'appartenance est restaurée |
 
 Un corps qui mêle deux champs de rangs différents est refusé en bloc (`400 MIXED_AUTHORITY`) : une
 mutation ne se juge jamais sur son champ le moins gardé.
+
+**Décision du 2026-08-29 (#4176)** : lever un bannissement s'autorise comme le poser. L'asymétrie
+précédente (poser = rang supérieur, lever = ADMIN) rendait irréversible, pour un modérateur, un geste
+qu'il avait le droit de faire. La règle retenue n'élargit rien — toute cible qu'il peut débannir, il
+peut la re-bannir dans la seconde — et elle protège : un ADMIN ne libère plus un ADMIN banni par le
+créateur. Un plancher MODERATOR est de plus opposé aux deux sens, sans quoi un simple membre
+atteignait une ligne au rang illisible (niveau 0).
 
 #### `POST /links/:key/members` — requête et réponse
 

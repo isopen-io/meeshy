@@ -39,7 +39,22 @@ const noAuth = (_req: any, _reply: unknown, done: () => void) => done();
 
 async function buildApp(authed: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  const prisma = {} as unknown as PrismaClient;
+  // #4146 — le partage verifie l'audience du post avant de frapper le lien
+  // trace : `loadPostAcl` lit `post.findFirst`. Le double rend un post PUBLIC,
+  // donc les trois cas mesures ici restent ceux d'avant la garde ; le refus
+  // hors audience a son temoin dans
+  // `unit/routes/posts/interactions-consumption-audience.test.ts`.
+  const prisma = {
+    post: {
+      findFirst: (args: { where: { id: string } }) => Promise.resolve({
+        id: args.where.id,
+        authorId: 'author-1',
+        visibility: 'PUBLIC',
+        visibilityUserIds: [] as string[],
+        expiresAt: null,
+      }),
+    },
+  } as unknown as PrismaClient;
   const mw = authed ? auth : noAuth;
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');
   app.register(async (instance) => {

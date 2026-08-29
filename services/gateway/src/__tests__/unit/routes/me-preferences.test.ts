@@ -4,7 +4,11 @@
  * Covers:
  *   index.ts  (userPreferencesRoutes)
  *     GET  /me/preferences      — fetch all, defaults, auth error, db error
- *     DELETE /me/preferences    — reset all, auth error, db error
+ *
+ *   Les trois routes RACINE unifiées (#4181) — `GET`/`PATCH`/`DELETE`, avec
+ *   `?categories=`, `?fields=`, `?mode=`, `If-None-Match` et leur débit par
+ *   compte — ont leur témoin dédié : `me/preferences/unified-routes.test.ts`.
+ *   Les routes testées ici sont désormais des ALIAS marqués `Deprecation`.
  *
  *   preference-router-factory.ts  (createPreferenceRouter)
  *     GET    /me/preferences/privacy   — fetch, defaults, auth, db error

@@ -1,0 +1,4731 @@
+{
+  "generePar": "scripts/route-manifest.ts",
+  "commande": "npx tsx scripts/route-manifest.ts",
+  "prefixeApi": "/api/v1",
+  "comptes": {
+    "routes": 519,
+    "modules": 123,
+    "parNiveau": {
+      "S0": 51,
+      "S1": 3,
+      "S2": 371,
+      "S4": 9,
+      "S5": 82,
+      "S6": 0,
+      "inconnu": 3
+    }
+  },
+  "anomalies": {
+    "horsPrefixeApi": [
+      "POST /api/conversations/:conversationId/clear-history  ← services/gateway/src/routes/user-deletions.ts",
+      "DELETE /api/conversations/:conversationId/delete-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "POST /api/conversations/:conversationId/restore-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "DELETE /api/messages/:messageId/delete-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "POST /api/messages/:messageId/restore-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "DELETE /api/messages/bulk/delete-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "GET /api/user/deleted-conversations  ← services/gateway/src/routes/user-deletions.ts",
+      "GET /attachments/:attachmentId/analysis  ← services/gateway/src/routes/voice-analysis.ts",
+      "POST /attachments/:attachmentId/analysis  ← services/gateway/src/routes/voice-analysis.ts",
+      "POST /attachments/batch/analysis  ← services/gateway/src/routes/voice-analysis.ts",
+      "GET /voice/analysis  ← services/gateway/src/routes/voice-analysis.ts",
+      "POST /voice/analysis  ← services/gateway/src/routes/voice-analysis.ts"
+    ],
+    "prefixeCodeDansLeModule": [
+      "POST /api/conversations/:conversationId/clear-history  ← services/gateway/src/routes/user-deletions.ts",
+      "DELETE /api/conversations/:conversationId/delete-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "POST /api/conversations/:conversationId/restore-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "DELETE /api/messages/:messageId/delete-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "POST /api/messages/:messageId/restore-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "DELETE /api/messages/bulk/delete-for-me  ← services/gateway/src/routes/user-deletions.ts",
+      "GET /api/user/deleted-conversations  ← services/gateway/src/routes/user-deletions.ts",
+      "POST /api/v1/uploads  ← services/gateway/src/routes/uploads/tus-handler.ts",
+      "DELETE /api/v1/uploads/*  ← services/gateway/src/routes/uploads/tus-handler.ts",
+      "PATCH /api/v1/uploads/*  ← services/gateway/src/routes/uploads/tus-handler.ts",
+      "POST /api/v1/uploads/*  ← services/gateway/src/routes/uploads/tus-handler.ts",
+      "GET /api/v1/voice/admin/metrics  ← services/gateway/src/routes/voice/analysis.ts",
+      "POST /api/v1/voice/analyze  ← services/gateway/src/routes/voice/analysis.ts",
+      "POST /api/v1/voice/compare  ← services/gateway/src/routes/voice/analysis.ts",
+      "POST /api/v1/voice/feedback  ← services/gateway/src/routes/voice/analysis.ts",
+      "GET /api/v1/voice/history  ← services/gateway/src/routes/voice/analysis.ts",
+      "DELETE /api/v1/voice/job/:jobId  ← services/gateway/src/routes/voice/translation.ts",
+      "GET /api/v1/voice/job/:jobId  ← services/gateway/src/routes/voice/translation.ts",
+      "GET /api/v1/voice/languages  ← services/gateway/src/routes/voice/analysis.ts",
+      "POST /api/v1/voice/transcribe  ← services/gateway/src/routes/voice/translation.ts",
+      "POST /api/v1/voice/translate  ← services/gateway/src/routes/voice/translation.ts",
+      "POST /api/v1/voice/translate/async  ← services/gateway/src/routes/voice/translation.ts"
+    ]
+  },
+  "routes": [
+    {
+      "methode": "GET",
+      "chemin": "/api/attachments/file/*",
+      "prefixeMontage": "/api",
+      "module": "services/gateway/src/routes/attachments/download.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→404 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/conversations/:conversationId/clear-history",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/conversations/:conversationId/delete-for-me",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/conversations/:conversationId/restore-for-me",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/messages/:messageId/delete-for-me",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/messages/:messageId/restore-for-me",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/messages/bulk/delete-for-me",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/user/deleted-conversations",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/user-deletions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/account/deletion/resolve",
+      "prefixeMontage": "/api/v1/account/deletion",
+      "module": "services/gateway/src/routes/account-deletion.ts",
+      "garde": "—",
+      "niveau": "S1",
+      "preuve": "anonyme→410 · aucune identité exigée, config.rateLimit déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/archetypes",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/live",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/messages",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/roles",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/schedule",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/stop",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/summary",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/agent/configs/:conversationId/trigger",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/delivery-queue",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/agent/delivery-queue/:id",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/agent/delivery-queue/:id",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/global-config",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/admin/agent/global-config",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/llm",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/admin/agent/llm",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/recent-activity",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/agent/reset",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/agent/reset/conversation/:conversationId",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/agent/reset/user/:userId",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/agent/roles/:conversationId/:userId/assign",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/agent/roles/:conversationId/:userId/unlock",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/scan-logs",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/scan-logs/:logId",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/scan-logs/stats",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/stats",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/topics",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent-topics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/agent/topics",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent-topics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/agent/topics/:id",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent-topics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/agent/topics/:id",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent-topics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/agent/topics/:id",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent-topics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/agent/topics/:id/test",
+      "prefixeMontage": "/api/v1/admin/agent",
+      "module": "services/gateway/src/routes/admin/agent-topics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageAgent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/calls",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/hourly-activity",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/kpis",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/language-distribution",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/message-types",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/realtime",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/user-distribution",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/analytics/volume-timeline",
+      "prefixeMontage": "/api/v1/admin/analytics",
+      "module": "services/gateway/src/routes/admin/analytics.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/anonymous-users",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/anonymous-users.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/broadcasts",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/broadcasts",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/broadcasts/:id",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/broadcasts/:id",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/admin/broadcasts/:id",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/broadcasts/:id/preview",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/broadcasts/:id/send",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/broadcasts/:id/send-inapp",
+      "prefixeMontage": "/api/v1/admin/broadcasts",
+      "module": "services/gateway/src/routes/admin/broadcasts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canManageNotifications)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/communities",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/content.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/conversations/:conversationId/messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/conversations/:conversationId/participants",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/dashboard",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/dashboard.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/dashboard/invalidate-cache",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/dashboard.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/invitations",
+      "prefixeMontage": "/api/v1/admin/invitations",
+      "module": "services/gateway/src/routes/admin/invitations.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canCreateUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/invitations/:id",
+      "prefixeMontage": "/api/v1/admin/invitations",
+      "module": "services/gateway/src/routes/admin/invitations.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canCreateUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/invitations/:id",
+      "prefixeMontage": "/api/v1/admin/invitations",
+      "module": "services/gateway/src/routes/admin/invitations.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canCreateUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/invitations/stats",
+      "prefixeMontage": "/api/v1/admin/invitations",
+      "module": "services/gateway/src/routes/admin/invitations.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canCreateUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/invitations/timeline/daily",
+      "prefixeMontage": "/api/v1/admin/invitations",
+      "module": "services/gateway/src/routes/admin/invitations.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canCreateUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/languages/stats",
+      "prefixeMontage": "/api/v1/admin/languages",
+      "module": "services/gateway/src/routes/admin/languages.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/languages/timeline",
+      "prefixeMontage": "/api/v1/admin/languages",
+      "module": "services/gateway/src/routes/admin/languages.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/languages/translation-accuracy",
+      "prefixeMontage": "/api/v1/admin/languages",
+      "module": "services/gateway/src/routes/admin/languages.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/me/permissions",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/me-permissions.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/messages",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/content.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/messages/engagement",
+      "prefixeMontage": "/api/v1/admin/messages",
+      "module": "services/gateway/src/routes/admin/messages.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/messages/stats",
+      "prefixeMontage": "/api/v1/admin/messages",
+      "module": "services/gateway/src/routes/admin/messages.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/messages/trends",
+      "prefixeMontage": "/api/v1/admin/messages",
+      "module": "services/gateway/src/routes/admin/messages.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/posts",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/posts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/posts/:postId",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/posts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/posts/:postId",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/posts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/posts/stats",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/posts.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/ranking",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/system-rankings.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/reports",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/reports",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/reports/:id",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/reports/:id",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/reports/:id",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/reports/:id/assign",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/reports/entity/:type/:id",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/reports/moderator/mine",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/reports/recent",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/reports/stats",
+      "prefixeMontage": "/api/v1/admin/reports",
+      "module": "services/gateway/src/routes/admin/reports.ts",
+      "niveau": "S4",
+      "garde": "requirePermission(canModerateContent)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/route-usage",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/route-usage.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin, canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/share-links",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/content.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/translations",
+      "prefixeMontage": "/api/v1/admin",
+      "module": "services/gateway/src/routes/admin/content.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canCreateUsers)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/admin/users/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewUserDetails)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/users/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users/:userId/activity",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/users/:userId/consents",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users/:userId/conversations",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/disable-2fa",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/enable-2fa",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users/:userId/media",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users/:userId/reported-messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/admin/users/:userId/reports",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/reset-password",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canResetPasswords) + requireHierarchy(:userId)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/users/:userId/role",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/users/:userId/security",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/users/:userId/status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/unlock",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/admin/users/:userId/verifications",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/verify-age",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/verify-email",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/verify-phone",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/admin/users/:userId/voice-consent",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/admin/users-write.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/affiliate/click/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/affiliate/register",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/affiliate/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/affiliate/tokens",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/affiliate/tokens",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/affiliate/tokens/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/affiliate/track-visit",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/affiliate/validate/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/affiliate.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/anonymous/join/:linkId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/anonymous.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→410 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/anonymous/leave",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/anonymous.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/anonymous/link/:identifier",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/anonymous.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→410 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/anonymous/refresh",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/anonymous.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/app/min-version",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/app.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/attachments/:attachmentId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/metadata.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/attachments/:attachmentId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/download.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/attachments/:attachmentId/metadata",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/metadata.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/attachments/:attachmentId/status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/attachments/:attachmentId/status-details",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/attachments/:attachmentId/thumbnail",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/download.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/attachments/:attachmentId/transcribe",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/attachments/:attachmentId/translate",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/attachments/file/*",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/download.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→404 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/attachments/upload",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/upload.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/attachments/upload-text",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/upload.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/2fa/backup-codes",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/2fa/cancel",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/2fa/disable",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/2fa/enable",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/2fa/setup",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/auth/2fa/status",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/2fa/verify",
+      "prefixeMontage": "/api/v1/auth/2fa",
+      "module": "services/gateway/src/routes/two-factor.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/auth/check-availability",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/register.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/forgot-password",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/forgot-password/phone/lookup",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/forgot-password/phone/resend",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/forgot-password/phone/verify-code",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/forgot-password/phone/verify-identity",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/login",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/login.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/login/2fa",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/login.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/logout",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/login.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/magic-link/request",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/magic-link.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/magic-link/validate",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/magic-link.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/auth/me",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/cancel",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/check",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/initiate",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/initiate-registration",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/resend",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/verify",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/phone-transfer/verify-registration",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/phone-transfer.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/refresh",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/register",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/register.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/resend-verification",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/reset-password",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/auth/reset-password/verify-token",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/password-reset.ts",
+      "garde": "—",
+      "niveau": "inconnu",
+      "preuve": "anonyme→500 · la sonde n'a pas atteint de verdict ; un plantage ne dit rien du niveau"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/auth/revoke-all-sessions",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/revoke-all-sessions.ts",
+      "garde": "—",
+      "niveau": "S1",
+      "preuve": "anonyme→400 · aucune identité exigée, config.rateLimit déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/send-phone-code",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/auth/sessions",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/auth/sessions",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/auth/sessions/:sessionId",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/verify-email",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/auth/verify-phone",
+      "prefixeMontage": "/api/v1/auth",
+      "module": "services/gateway/src/routes/auth/magic-link.ts",
+      "garde": "—",
+      "niveau": "inconnu",
+      "preuve": "anonyme→500 · la sonde n'a pas atteint de verdict ; un plantage ne dit rien du niveau"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/calls",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/calls/:callId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/calls/:callId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/calls/:callId/participants",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/calls/:callId/participants/:participantId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/calls/:callId/transcript",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/calls/active",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/calls/history",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/cleanup",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/maintenance.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/core.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/communities",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/core.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/communities/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/settings.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/core.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/communities/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/settings.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities/:id/conversations",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/core.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/communities/:id/conversations/:conversationId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/core.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/communities/:id/invite",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/membership.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/communities/:id/join",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/membership.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/communities/:id/leave",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/membership.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities/:id/members",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/members.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/communities/:id/members",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/members.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/communities/:id/members/:memberId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/members.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/communities/:id/members/:memberId/role",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/members.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities/check-identifier/:identifier",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/core.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities/mine",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/membership.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/communities/search",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/communities/search.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversation/:identifier",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation-non-blocking.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:conversationId/active-call",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/calls.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:conversationId/attachments",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/attachments/metadata.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:conversationId/encryption",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-encryption.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:conversationId/encryption-status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-encryption.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:conversationId/links",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/sharing.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:conversationId/mark-as-read",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/message-read-status.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:conversationId/mark-as-received",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/message-read-status.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:conversationId/messages/:messageId/delivery-receipt",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/message-read-status.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:conversationId/read-statuses",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/message-read-status.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/conversations/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/conversations/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/conversations/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/analysis",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/conversations/:id/delete-for-me",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/delete-for-me.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/invite",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/sharing.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/leave",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/leave.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/mark-read",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/mark-unread",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/conversations/:id/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages-advanced.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/conversations/:id/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages-advanced.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/messages/:messageId/consume",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/conversations/:id/messages/:messageId/pin",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/conversations/:id/messages/:messageId/pin",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/messages/search",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/new-link",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/sharing.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/participants",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/participants.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/:id/participants",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/participants.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/participants/:participantId/profile",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/participants.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/conversations/:id/participants/:participantId/rights",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/participants.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/conversations/:id/participants/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/participant-removal.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/conversations/:id/participants/:userId/ban",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/ban.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/conversations/:id/participants/:userId/role",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/participant-role.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/conversations/:id/participants/:userId/unban",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/ban.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/pinned-messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/reactions",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages-advanced.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/stats.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages-advanced.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/:id/threads/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/threads.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/check-identifier/:identifier",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/conversations/join/:linkId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/sharing.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/conversations/search",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/search.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/detect-language",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/availability",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/availability.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/blocks",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/blocks.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/directory/blocks/:userId",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/blocks.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/directory/blocks/:userId",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/blocks.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/directory/contacts",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/contacts.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/contacts",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/contacts.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/directory/contacts",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/contacts.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/directory/contacts",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/contacts.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/friend-requests",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/friend-requests.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/directory/friend-requests",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/friend-requests.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/directory/friend-requests/:id",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/friend-requests.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/people",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/people.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/people/:handle",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/person.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/directory/presence",
+      "prefixeMontage": "/api/v1/directory",
+      "module": "services/gateway/src/routes/directory/presence.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/friend-requests",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/friends.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/friend-requests/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/friends.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/friend-requests/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/friends.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/friend-requests/received",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/friends.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/friend-requests/sent",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/friends.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/hashtags/trending",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/hashtag.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/health/circuit-breakers",
+      "prefixeMontage": "/api/v1/health",
+      "module": "services/gateway/src/routes/health/index.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin, canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/health/metrics",
+      "prefixeMontage": "/api/v1/health",
+      "module": "services/gateway/src/routes/health/index.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canAccessAdmin, canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/health/ready",
+      "prefixeMontage": "/api/v1/health",
+      "module": "services/gateway/src/routes/health/index.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/invitations/email",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/invitations.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/l/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→410 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/languages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/links",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/user.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/links",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/links/:identifier",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/retrieval.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/links/:identifier/messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/messages-retrieval.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→403 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/links/:identifier/messages",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/messages.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/links/:linkId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/admin.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/links/:linkId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/management.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/links/:linkId/extend",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/admin.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/links/:linkId/toggle",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/admin.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/links/check-identifier/:identifier",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/validation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/links/my-links",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/admin.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/links/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/links/user.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/index.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/account/deletion",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/delete-account.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/me/account/deletion",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/delete-account.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/delete-account",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/delete-account.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/delete-account/cancel",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/delete-account.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/delete-account/confirm",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/delete-account.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/delete-account/delete-now",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/delete-account.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/export",
+      "prefixeMontage": "/api/v1/me",
+      "module": "services/gateway/src/routes/me/export.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences",
+      "prefixeMontage": "/api/v1/me/preferences",
+      "module": "services/gateway/src/routes/me/preferences/unified-routes.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences",
+      "prefixeMontage": "/api/v1/me/preferences",
+      "module": "services/gateway/src/routes/me/preferences/unified-routes.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences",
+      "prefixeMontage": "/api/v1/me/preferences",
+      "module": "services/gateway/src/routes/me/preferences/unified-routes.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/application",
+      "prefixeMontage": "/api/v1/me/preferences/application",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/application",
+      "prefixeMontage": "/api/v1/me/preferences/application",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/application",
+      "prefixeMontage": "/api/v1/me/preferences/application",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/application",
+      "prefixeMontage": "/api/v1/me/preferences/application",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/audio",
+      "prefixeMontage": "/api/v1/me/preferences/audio",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/audio",
+      "prefixeMontage": "/api/v1/me/preferences/audio",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/audio",
+      "prefixeMontage": "/api/v1/me/preferences/audio",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/audio",
+      "prefixeMontage": "/api/v1/me/preferences/audio",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/categories",
+      "prefixeMontage": "/api/v1/me/preferences/categories",
+      "module": "services/gateway/src/routes/me/preferences/categories.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/me/preferences/categories",
+      "prefixeMontage": "/api/v1/me/preferences/categories",
+      "module": "services/gateway/src/routes/me/preferences/categories.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/categories/:categoryId",
+      "prefixeMontage": "/api/v1/me/preferences/categories",
+      "module": "services/gateway/src/routes/me/preferences/categories.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/categories/:categoryId",
+      "prefixeMontage": "/api/v1/me/preferences/categories",
+      "module": "services/gateway/src/routes/me/preferences/categories.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/categories/:categoryId",
+      "prefixeMontage": "/api/v1/me/preferences/categories",
+      "module": "services/gateway/src/routes/me/preferences/categories.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/me/preferences/categories/reorder",
+      "prefixeMontage": "/api/v1/me/preferences/categories",
+      "module": "services/gateway/src/routes/me/preferences/categories.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/document",
+      "prefixeMontage": "/api/v1/me/preferences/document",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/document",
+      "prefixeMontage": "/api/v1/me/preferences/document",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/document",
+      "prefixeMontage": "/api/v1/me/preferences/document",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/document",
+      "prefixeMontage": "/api/v1/me/preferences/document",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/encryption",
+      "prefixeMontage": "/api/v1/me/preferences",
+      "module": "services/gateway/src/routes/me/preferences/index.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/message",
+      "prefixeMontage": "/api/v1/me/preferences/message",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/message",
+      "prefixeMontage": "/api/v1/me/preferences/message",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/message",
+      "prefixeMontage": "/api/v1/me/preferences/message",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/message",
+      "prefixeMontage": "/api/v1/me/preferences/message",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/notification",
+      "prefixeMontage": "/api/v1/me/preferences/notification",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/notification",
+      "prefixeMontage": "/api/v1/me/preferences/notification",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/notification",
+      "prefixeMontage": "/api/v1/me/preferences/notification",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/notification",
+      "prefixeMontage": "/api/v1/me/preferences/notification",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/privacy",
+      "prefixeMontage": "/api/v1/me/preferences/privacy",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/privacy",
+      "prefixeMontage": "/api/v1/me/preferences/privacy",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/privacy",
+      "prefixeMontage": "/api/v1/me/preferences/privacy",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/privacy",
+      "prefixeMontage": "/api/v1/me/preferences/privacy",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/me/preferences/video",
+      "prefixeMontage": "/api/v1/me/preferences/video",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/me/preferences/video",
+      "prefixeMontage": "/api/v1/me/preferences/video",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/me/preferences/video",
+      "prefixeMontage": "/api/v1/me/preferences/video",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/me/preferences/video",
+      "prefixeMontage": "/api/v1/me/preferences/video",
+      "module": "services/gateway/src/routes/me/preferences/preference-router-factory.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/mentions/me",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/mentions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/mentions/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/mentions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/mentions/suggestions",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/mentions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversations/messages-advanced.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/messages/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/messages/:messageId/read-status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/message-read-status.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/messages/:messageId/status-details",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/messages/:messageId/translations",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/messages.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/notifications",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/notifications/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/notifications/:id/read",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/notifications/admin/clear-all",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/notifications/conversation/:conversationId/read",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/notifications/counts",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/notifications/post/:postId/read",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/notifications/read",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/notifications/read-all",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/notifications/read-by-types",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/notifications/unread-count",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/notifications.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/:postId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/:postId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/posts/:postId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/anonymous-view",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S1",
+      "preuve": "anonyme→400 · aucune identité exigée, config.rateLimit déclaré sur la route"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/:postId/bookmark",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/bookmarks.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/bookmark",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/bookmarks.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/:postId/comments",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/comments",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/:postId/comments/:commentId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/posts/:postId/comments/:commentId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/:postId/comments/:commentId/like",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/comments/:commentId/like",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/:postId/comments/:commentId/replies",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/comments/:commentId/translate",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/comments.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/downloads",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/impression",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/impressions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/:postId/interactions",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/:postId/like",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/like",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/:postId/pin",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/pin",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/repost",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/republish",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/share",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/share.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/translate",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/:postId/view",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/:postId/views",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/bookmarks",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/community/:communityId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/engagement/batch",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/interactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/feed",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/feed/reels",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/feed/statuses",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/feed/statuses/discover",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/feed/stories",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/from-attachment",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/core.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/hashtag/:tag",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/hashtag.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/posts/impressions/batch",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/impressions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/posts/media/:mediaId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/media.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/nearby",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/nearby.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/nearby/density",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/nearby.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/stories/mine",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/posts/user/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/feed.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/reactions",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/reactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/reactions/:messageId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/reactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/reactions/:messageId/:emoji",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/reactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/reactions/user/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/reactions.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/reports",
+      "prefixeMontage": "/api/v1/reports",
+      "module": "services/gateway/src/routes/reports/index.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/signal/keys",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/signal-protocol.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/signal/keys/:userId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/signal-protocol.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/signal/session/establish",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/signal-protocol.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/sounds/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/sounds.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/sounds/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/sounds.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/sounds/:id/posts",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/sounds.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/sounds/mine",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/sounds.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/static/:filename",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/audio.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/maintenance.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/status-metrics",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/maintenance.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/status-metrics/reset",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/maintenance.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/status/:messageId/:language",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation-non-blocking.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/stories/audio",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/posts/audio.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/sync",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/sync.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/test",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/tracking-links",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→400 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/tracking-links/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/tracking-links/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/tracking-links/:token/click",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→410 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/:token/clicks",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/tracking-links/:token/deactivate",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/tracking-links/:token/redirect-status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/:token/resolve",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/:token/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/admin/:token/clicks",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/admin/all",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "niveau": "S5",
+      "garde": "requirePermission(canViewAnalytics)",
+      "preuve": "garde nommée · anonyme→401"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/check-token/:token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/conversation/:conversationId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/tracking.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/tracking-links/user/me",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/tracking-links/creation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/translate",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation-non-blocking.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/translate-blocking",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/translate/jobs/:jobId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation-jobs.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/translate/jobs/:jobId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/translation-jobs.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/u/:username",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/uploads",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/uploads/tus-handler.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/uploads/*",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/uploads/tus-handler.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/uploads/*",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/uploads/tus-handler.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/uploads/*",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/uploads/tus-handler.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/user-preferences/communities",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/community-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/user-preferences/communities/:communityId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/community-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/user-preferences/communities/:communityId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/community-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/user-preferences/communities/:communityId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/community-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/user-preferences/communities/reorder",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/community-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/user-preferences/conversations",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/user-preferences/conversations/:conversationId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/user-preferences/conversations/:conversationId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/user-preferences/conversations/:conversationId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/user-preferences/reorder",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/conversation-preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/user-status",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/maintenance.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/:userId/affiliate-token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/devices.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/users/:userId/block",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/blocking.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/:userId/block",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/blocking.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/:userId/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/email/:email",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/friend-requests",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/devices.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/id/:id",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/users/me",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/users/me/avatar",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/users/me/banner",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/blocked-users",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/blocking.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/change-email",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contact-change.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/change-phone",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contact-change.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/users/me/contacts",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contacts-directory.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/contacts",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contacts-directory.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/contacts/match",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contacts-match.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/contacts/sync",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contacts-directory.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/dashboard-stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/devices",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/push-tokens.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/users/me/devices/:deviceId",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/push-tokens.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/users/me/password",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/resend-email-change-verification",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contact-change.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/stats",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/user-stats.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/stats/achievements",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/user-stats.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/me/stats/timeline",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/user-stats.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PATCH",
+      "chemin": "/api/v1/users/me/username",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/verify-email-change",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contact-change.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/me/verify-phone-change",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/contact-change.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/phone/:phone",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/profile.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/presence",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/presence.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/users/register-device-token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/push-tokens.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/users/register-device-token",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/push-tokens.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/users/search",
+      "prefixeMontage": "/api/v1",
+      "module": "services/gateway/src/routes/users/preferences.ts",
+      "garde": "fastify.authenticate",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/voice/admin/metrics",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/analyze",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/compare",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/feedback",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/voice/history",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/voice/job/:jobId",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/voice/job/:jobId",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/voice/languages",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/analysis.ts",
+      "garde": "—",
+      "niveau": "inconnu",
+      "preuve": "anonyme→500 · la sonde n'a pas atteint de verdict ; un plantage ne dit rien du niveau"
+    },
+    {
+      "methode": "DELETE",
+      "chemin": "/api/v1/voice/profile",
+      "prefixeMontage": "/api/v1/voice/profile",
+      "module": "services/gateway/src/routes/voice-profile.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/voice/profile",
+      "prefixeMontage": "/api/v1/voice/profile",
+      "module": "services/gateway/src/routes/voice-profile.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "PUT",
+      "chemin": "/api/v1/voice/profile/:profileId",
+      "prefixeMontage": "/api/v1/voice/profile",
+      "module": "services/gateway/src/routes/voice-profile.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/api/v1/voice/profile/consent",
+      "prefixeMontage": "/api/v1/voice/profile",
+      "module": "services/gateway/src/routes/voice-profile.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/profile/consent",
+      "prefixeMontage": "/api/v1/voice/profile",
+      "module": "services/gateway/src/routes/voice-profile.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/profile/register",
+      "prefixeMontage": "/api/v1/voice/profile",
+      "module": "services/gateway/src/routes/voice-profile.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/transcribe",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/translate",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/api/v1/voice/translate/async",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice/translation.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/attachments/:attachmentId/analysis",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice-analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/attachments/:attachmentId/analysis",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice-analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/attachments/batch/analysis",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice-analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/health",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/route-registration.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/info",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/route-registration.ts",
+      "garde": "—",
+      "niveau": "S0",
+      "preuve": "anonyme→200 · aucune identité exigée, aucun limiteur déclaré sur la route"
+    },
+    {
+      "methode": "GET",
+      "chemin": "/voice/analysis",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice-analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    },
+    {
+      "methode": "POST",
+      "chemin": "/voice/analysis",
+      "prefixeMontage": "",
+      "module": "services/gateway/src/routes/voice-analysis.ts",
+      "garde": "—",
+      "niveau": "S2",
+      "preuve": "anonyme→401 · identité exigée ; l'appartenance, si elle existe, vit dans le handler (plancher prouvé)"
+    }
+  ]
+}

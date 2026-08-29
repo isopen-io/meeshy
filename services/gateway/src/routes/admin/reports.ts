@@ -11,6 +11,7 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
+import { depreciee } from '../../utils/deprecation';
 
 // Schemas de validation Zod
 const updateReportSchema = z.object({
@@ -25,11 +26,29 @@ const updateReportSchema = z.object({
 // décide — un seul endroit où lire la loi, un seul où la changer.
 const requireModeratorPermission = requirePermission('canModerateContent');
 
+/**
+ * Le sursis de `POST /admin/reports`.
+ *
+ * `depuis` est la date de fermeture de #4155 — le jour où `POST /api/v1/reports`
+ * est devenue l'adresse du geste. Aucun `retraitLe` : la règle de retrait du
+ * dépôt (#4155 c.5) exige de COMPTER les appels des trois clients, Android
+ * compris, et ce compteur est l'objet de #4275. Une date posée ici serait
+ * inventée, et un client la croirait.
+ */
+const ADAPTATEUR_SIGNALEMENT = { depuis: '2026-08-29', successeur: '/api/v1/reports' } as const;
+
 export async function reportRoutes(fastify: FastifyInstance) {
   const reportService = getReportService(fastify.prisma);
 
   /**
    * `POST /admin/reports` — ADAPTATEUR MINCE vers `POST /reports` (#4155).
+   *
+   * Et il le DIT désormais (#4274) : `Deprecation`, et un `Link` qui nomme le
+   * successeur. Un adaptateur muet oblige chaque client à apprendre sa propre
+   * obsolescence en lisant le code du serveur — ce qu'un binaire mobile déjà
+   * installé ne peut pas faire. L'annonce est posée en `onRequest`, AVANT
+   * `authenticate` : un appelant dont le jeton a expiré reçoit 401 et apprend
+   * quand même par quoi migrer.
    *
    * Signaler n'est pas un geste d'administration : c'était pourtant la seule
    * route de ce répertoire ouverte à un utilisateur ordinaire, et la seule que
@@ -48,7 +67,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * l'audit qui a ouvert cette issue.
    */
   fastify.post('/', {
-    onRequest: [fastify.authenticate],
+    onRequest: [depreciee(ADAPTATEUR_SIGNALEMENT), fastify.authenticate],
     preHandler: limiteursDeSignalement(fastify)
   }, (request: FastifyRequest, reply: FastifyReply) => signaler(fastify, request, reply));
 

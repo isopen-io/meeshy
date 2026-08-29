@@ -246,15 +246,24 @@ function repondre<T>(reply: FastifyReply, resultat: Resultat<T>): FastifyReply |
   return sendNotFound(reply, message);
 }
 
+// Un ALIAS D'EXPORT, pas une route : `routes/users/blocking.ts` rend ses refus
+// par cette fonction. #4274 avait pris cette ligne pour l'alias HTTP du
+// blocage — les trois vraies adresses en sursis sont là-bas, pas ici.
 export { repondre as repondreBlocage };
 
 /**
  * `/directory/blocks` — le blocage comme un ENSEMBLE (S3).
  *
- * `PUT` pose l'appartenance, `DELETE` la retire, `GET` la liste. Les trois
- * anciennes adresses restent servies en alias : la file d'attente hors ligne
- * rejoue des mutations enregistrées AVANT une mise à jour, et un alias qui
- * disparaît fait échouer un blocage que l'utilisateur croit posé.
+ * `PUT` pose l'appartenance, `DELETE` la retire, `GET` la liste. Ce sont les
+ * adresses CANONIQUES : aucune n'est dépréciée, aucune ne porte d'annonce.
+ *
+ * Les trois anciennes adresses restent servies en alias — `POST/DELETE
+ * /users/:userId/block` et `GET /users/me/blocked-users`, dans
+ * `routes/users/blocking.ts` — parce que la file d'attente hors ligne rejoue
+ * des mutations enregistrées AVANT une mise à jour, et qu'un alias qui
+ * disparaît fait échouer un blocage que l'utilisateur croit posé. Ce sont
+ * ELLES qui doivent annoncer leur sursis (#4274) ; elles ne le font pas encore,
+ * et la garde `alias-deprecation-headers-guard` les nomme comme dette.
  */
 export async function directoryBlocksRoutes(fastify: FastifyInstance) {
   const parEcrivain = createCustomRateLimiter(

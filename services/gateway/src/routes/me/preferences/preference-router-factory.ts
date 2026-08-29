@@ -1,39 +1,53 @@
 /**
- * Preference Router Factory
- * Génère automatiquement les routes CRUD pour chaque catégorie de préférences
- * Inclut la validation automatique des consentements GDPR
+ * Preference Router Factory — les VINGT-HUIT alias par catégorie.
+ *
+ * Génère `GET`/`PUT`/`PATCH`/`DELETE` pour une catégorie de préférences. Depuis
+ * #4181, ces routes sont des ALIAS : la surface vivante est
+ * `GET`/`PATCH`/`DELETE /me/preferences` (`unified-routes.ts`), qui fait tout ce
+ * qu'elles font, en un appel, avec un débit par compte et un `If-None-Match`.
+ * Elles restent montées, marquées `Deprecation`, tant que le compteur d'accès
+ * par route n'est pas tombé à zéro sur deux versions publiées de CHAQUE client —
+ * iOS (dont l'outbox porte des mutations écrites HORS LIGNE), web et Android.
+ *
+ * Ce qu'elles gardent en propre : leur `schema` et leurs `defaults` viennent de
+ * leurs PARAMÈTRES, pas du registre. Un témoin qui monte un routeur `audio` sur
+ * le schéma de `privacy` doit obéir à ce qu'on lui passe. Ce qu'elles ne gardent
+ * PAS en propre : les RÈGLES — complétion par défauts, réduction aux clés
+ * soumises, lecture de la colonne JSON, et les trois gestes d'après-écriture.
+ * Toutes vivent dans `preference-registry.ts` et sont partagées avec les routes
+ * unifiées. C'est la seule forme où une fusion ne peut pas faire diverger les
+ * deux surfaces pendant la période d'alias.
  */
 
 import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ZodSchema } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { withMutationLog } from '../../../utils/withMutationLog';
-import { submittedKeysOnly } from '../../../utils/partial-update';
-import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
-import { emitPreferenceCategoryUpdated } from '../../../services/preferences/preferences-broadcast';
-import { sendSuccess, sendForbidden, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
-import type { PreferenceCategory } from '../../../services/preferences/preferences-broadcast';
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
+import {
+  applyCategoryWriteEffects,
+  readJsonPreferenceColumn,
+  resolveComplete,
+  submittedFrom,
+  type CategoryStorage,
+  type PreferenceCategory,
+  type PreferenceDocument,
+  type PreferenceSchema,
+} from './preference-registry';
+
+export type { CategoryStorage };
 
 /**
- * Où vit l'état d'une catégorie, quand ce n'est pas seulement son champ JSON.
+ * En-tête posé sur CHAQUE réponse d'un alias (RFC 8594 / draft-deprecation).
  *
- * Une seule catégorie a besoin de le dire : `privacy` possède, en plus de son
- * document, les lignes clé/valeur héritées de janvier 2026 que les six portes
- * de diffusion obéissent encore (`services/preferences/privacy-storage`).
- * Tant que la factory lisait le seul document, la route et les portes se
- * contredisaient — et le `PATCH`, reconstruisant sa base sur ce que la route
- * lisait, écrasait un opt-out que personne n'avait demandé de lever.
- *
- * Injecté plutôt que testé sur `category` : la factory n'a pas à connaître
- * l'histoire d'une catégorie, seulement à demander à qui la connaît.
+ * Il n'y a volontairement pas de `Sunset` : la date de retrait n'est pas connue,
+ * elle est CONDITIONNÉE au compteur d'accès. Annoncer une date qu'on ne tiendra
+ * pas serait pire que n'en annoncer aucune — un client qui la lit et cesse
+ * d'appeler perdrait ses écritures hors ligne le jour où elle passe.
  */
-export type CategoryStorage<T> = {
-  /** Ce que le serveur tient pour stocké — au-delà du seul document JSON. */
-  readStored: (prisma: PrismaClient, userId: string) => Promise<Partial<T> | null>;
-  /** Après CHAQUE écriture réussie, une fois le document autoritatif. */
-  afterWrite?: (prisma: PrismaClient, userId: string) => Promise<void>;
+const DEPRECATION_HEADERS: Readonly<Record<string, string>> = {
+  Deprecation: 'true',
+  Link: '</api/v1/me/preferences>; rel="successor-version"',
 };
 
 /**
@@ -45,19 +59,22 @@ export type CategoryStorage<T> = {
  * @param defaults - Valeurs par défaut si aucune préférence n'est settée
  * @param storage - Rangement de la catégorie ; le document JSON par défaut
  */
-export function createPreferenceRouter<T>(
+export function createPreferenceRouter(
   category: PreferenceCategory,
-  schema: ZodSchema<T>,
-  defaults: T,
-  storage?: CategoryStorage<T>
+  schema: PreferenceSchema,
+  defaults: PreferenceDocument,
+  storage?: CategoryStorage
 ) {
   return async function (fastify: FastifyInstance) {
     // Instancier le service de validation de consentement
     const consentService = new ConsentValidationService(fastify.prisma);
 
-    const isEmpty = (obj: any): boolean => {
-      return !obj || (typeof obj === 'object' && Object.keys(obj).length === 0);
-    };
+    fastify.addHook('onSend', async (_request, reply, payload) => {
+      for (const [name, value] of Object.entries(DEPRECATION_HEADERS)) {
+        reply.header(name, value);
+      }
+      return payload;
+    });
 
     /**
      * L'UNIQUE lecture de l'état stocké — partagée par le `GET` et par la base
@@ -65,49 +82,28 @@ export function createPreferenceRouter<T>(
      * document brut, le `PATCH` le complétait par les défauts. Un document
      * partiel se lisait donc différemment selon le verbe qui le regardait.
      */
-    const readStored = async (userId: string): Promise<Partial<T> | null> => {
-      if (storage) return storage.readStored(fastify.prisma, userId);
-
-      const prefs = await fastify.prisma.userPreferences.findUnique({
-        where: { userId },
-        select: { [category]: true }
-      });
-
-      return isEmpty(prefs?.[category]) ? null : (prefs[category] as Partial<T>);
-    };
-
-    /** L'état complet servi au client : les défauts, comblés par le stocké. */
-    const resolveComplete = async (userId: string): Promise<T> => ({
-      ...defaults,
-      ...((await readStored(userId)) ?? {})
-    });
+    const readStored = async (userId: string): Promise<PreferenceDocument | null> =>
+      storage
+        ? storage.readStored(fastify.prisma, userId)
+        : readJsonPreferenceColumn(fastify.prisma, userId, category);
 
     /**
-     * Le rangement hérité disparaît dès qu'une écriture rend le document
-     * autoritatif. Une panne ici rend 500 sans diffuser : sur la remise à zéro,
-     * des lignes de janvier survivantes RESSUSCITERAIENT le réglage effacé —
-     * annoncer un succès partiel serait annoncer l'inverse de ce qui s'est
-     * passé. Les trois verbes sont idempotents, le client peut retenter.
+     * L'état complet servi au client : les défauts, comblés par le stocké.
+     * La complétion elle-même est le SITE UNIQUE du registre — l'agrégat la
+     * réimplémentait, et un défaut ajouté n'apparaissait alors que d'un côté.
      */
-    const retireSupersededStorage = (userId: string) =>
-      storage?.afterWrite ? storage.afterWrite(fastify.prisma, userId) : Promise.resolve();
+    const resolveCompleteFor = async (userId: string): Promise<PreferenceDocument> =>
+      resolveComplete(defaults, await readStored(userId));
 
     /**
-     * Six portes de diffusion mémoïsent la confidentialité pendant cinq minutes
-     * (`services/preferences/privacy-cache`). Sans cette purge, couper ses
-     * accusés de lecture ne prenait effet qu'après ce délai — le serveur
-     * continuait de diffuser ce que l'utilisateur venait de demander de taire,
-     * l'écran lui confirmant l'inverse.
-     *
-     * Seule la confidentialité a une mémoire côté serveur : les autres
-     * catégories ne sont relues que par le `GET` de cette même porte.
+     * Les TROIS gestes d'après-écriture, en UN appel : retrait des lignes
+     * héritées de janvier 2026, purge du cache des portes de diffusion,
+     * diffusion `preferences:updated`. Partagés avec les routes unifiées
+     * (`preference-registry.ts`) — en perdre un d'un seul côté est le défaut le
+     * plus silencieux du module.
      */
-    const invalidateServerCache = (userId: string) => {
-      if (category === 'privacy') invalidatePrivacyPreferences(userId);
-    };
-
-    const emitPreferencesUpdated = (userId: string) =>
-      emitPreferenceCategoryUpdated(fastify, userId, category);
+    const afterWrite = (userId: string) =>
+      applyCategoryWriteEffects(fastify, userId, [category]);
     // GET /me/preferences/{category}
     fastify.get(
       '/',
@@ -138,7 +134,7 @@ export function createPreferenceRouter<T>(
         }
 
         try {
-          return sendSuccess(reply, await resolveComplete(userId));
+          return sendSuccess(reply, await resolveCompleteFor(userId));
         } catch (error: any) {
           fastify.log.error({ error, category }, 'Error fetching preferences');
           return sendInternalError(reply, 'FETCH_ERROR', { message: 'Failed to fetch preferences' });
@@ -147,7 +143,7 @@ export function createPreferenceRouter<T>(
     );
 
     // PUT /me/preferences/{category} - Remplacement complet
-    fastify.put<{ Body: T }>(
+    fastify.put<{ Body: PreferenceDocument }>(
       '/',
       {
         schema: {
@@ -228,10 +224,10 @@ export function createPreferenceRouter<T>(
                 where: { userId },
                 create: {
                   userId,
-                  [category]: validated as any
+                  [category]: validated
                 },
                 update: {
-                  [category]: validated as any
+                  [category]: validated
                 },
                 select: { [category]: true, id: true }
               });
@@ -246,11 +242,9 @@ export function createPreferenceRouter<T>(
             },
           });
 
-          await retireSupersededStorage(userId);
-          invalidateServerCache(userId);
-          emitPreferencesUpdated(userId);
+          await afterWrite(userId);
 
-          return sendSuccess(reply, (updated as any)[category] as T);
+          return sendSuccess(reply, (updated as Record<string, unknown> | null)?.[category]);
         } catch (error: any) {
           if (error.name === 'ZodError') {
             return sendBadRequest(reply, 'VALIDATION_ERROR');
@@ -263,7 +257,7 @@ export function createPreferenceRouter<T>(
     );
 
     // PATCH /me/preferences/{category} - Mise à jour partielle
-    fastify.patch<{ Body: Partial<T> }>(
+    fastify.patch<{ Body: PreferenceDocument }>(
       '/',
       {
         schema: {
@@ -306,15 +300,14 @@ export function createPreferenceRouter<T>(
           // Validation partielle Zod, réduite aux clés que le corps nomme :
           // `partial()` ne retire pas les `default()`, et sans cette réduction
           // la fusion ci-dessous serait inerte (cf. `utils/partial-update`).
-          const validated = submittedKeysOnly(
-            (schema as any).partial().parse(request.body) as Record<string, unknown>,
-            request.body
-          );
+          // Même site que le `mode=merge` unifié — l'`any` qui traînait ici
+          // était le seul endroit du module où le schéma perdait son type.
+          const validated = submittedFrom(schema, request.body);
 
           // La base de fusion est CE QUE LE SERVEUR OBÉIT, pas ce que le seul
           // document dit : sinon une clé absente du document repart au défaut,
           // et un réglage qu'on ne touchait pas se trouve levé en silence.
-          const merged = { ...(await resolveComplete(userId)), ...validated };
+          const merged = { ...(await resolveCompleteFor(userId)), ...validated };
 
           // Validation des consentements GDPR sur les données mergées
           const consentViolations = await consentService.validatePreferences(
@@ -345,10 +338,10 @@ export function createPreferenceRouter<T>(
                 where: { userId },
                 create: {
                   userId,
-                  [category]: merged as any
+                  [category]: merged
                 },
                 update: {
-                  [category]: merged as any
+                  [category]: merged
                 },
                 select: { [category]: true, id: true }
               });
@@ -363,11 +356,9 @@ export function createPreferenceRouter<T>(
             },
           });
 
-          await retireSupersededStorage(userId);
-          invalidateServerCache(userId);
-          emitPreferencesUpdated(userId);
+          await afterWrite(userId);
 
-          return sendSuccess(reply, (updated as any)[category] as T);
+          return sendSuccess(reply, (updated as Record<string, unknown> | null)?.[category]);
         } catch (error: any) {
           if (error.name === 'ZodError') {
             return sendBadRequest(reply, 'VALIDATION_ERROR');
@@ -422,9 +413,7 @@ export function createPreferenceRouter<T>(
             data: { [category]: null }
           });
 
-          await retireSupersededStorage(userId);
-          invalidateServerCache(userId);
-          emitPreferencesUpdated(userId);
+          await afterWrite(userId);
 
           return sendSuccess(reply, undefined, { message: `${category} preferences reset to defaults` });
         } catch (error: any) {

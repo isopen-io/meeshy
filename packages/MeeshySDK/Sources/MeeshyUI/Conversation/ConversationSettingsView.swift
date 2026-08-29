@@ -504,9 +504,18 @@ public struct ConversationSettingsView: View {
         Button(role: .destructive) { Task { await viewModel.expelParticipant(key: targetKey) } } label: {
             Label(String(localized: "conversation.settings.member.expel", defaultValue: "Expulser", bundle: .module), systemImage: "person.fill.xmark")
         }
-        if viewModel.currentUserRole.hasMinimumRole(.admin) {
-            Button(role: .destructive) { Task { await viewModel.banParticipant(key: targetKey) } } label: {
-                Label(String(localized: "conversation.settings.member.ban", defaultValue: "Bannir", bundle: .module), systemImage: "hand.raised.fill")
+        // Bannir ET lever, sous la MÊME condition de rang : depuis #4176 la
+        // passerelle applique une seule loi aux deux sens. Offrir l'un sans
+        // l'autre laissait un geste sans marche arrière.
+        if viewModel.currentUserRole.hasMinimumRole(.moderator) {
+            if participant.bannedAt == nil {
+                Button(role: .destructive) { Task { await viewModel.banParticipant(key: targetKey) } } label: {
+                    Label(String(localized: "conversation.settings.member.ban", defaultValue: "Bannir", bundle: .module), systemImage: "hand.raised.fill")
+                }
+            } else {
+                Button { Task { await viewModel.unbanParticipant(key: targetKey) } } label: {
+                    Label(String(localized: "conversation.settings.member.unban", defaultValue: "Lever le bannissement", bundle: .module), systemImage: "hand.raised.slash.fill")
+                }
             }
         }
     }
@@ -833,6 +842,24 @@ public final class ConversationSettingsViewModel: ObservableObject {
                 key: key
             )
             postToast(message: String(localized: "conversation.settings.toast.memberBanned", defaultValue: "Membre banni", bundle: .module), isSuccess: true)
+            await loadMembers()
+        } catch {
+            errorMessage = error.localizedDescription
+            showError = true
+        }
+    }
+
+    /// Le pendant EXACT de `banParticipant` : depuis #4176 la passerelle autorise
+    /// la levée à qui pouvait poser le bannissement, pas seulement aux admins.
+    /// Sans ce geste, bannir restait irréversible depuis l'app — la moitié
+    /// destructrice offerte, la moitié réparatrice absente.
+    public func unbanParticipant(key: String) async {
+        do {
+            try await ConversationService.shared.unbanParticipant(
+                conversationId: conversationId,
+                key: key
+            )
+            postToast(message: String(localized: "conversation.settings.toast.memberUnbanned", defaultValue: "Bannissement leve", bundle: .module), isSuccess: true)
             await loadMembers()
         } catch {
             errorMessage = error.localizedDescription

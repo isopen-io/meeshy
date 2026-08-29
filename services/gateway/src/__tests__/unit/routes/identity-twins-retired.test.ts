@@ -13,12 +13,12 @@
  *     en QUERY STRING — journalisé par tout proxy, gardé dans l'historique.
  *
  *   • `DELETE /api/v1/me/preferences` — la remise à zéro globale, sans aucun
- *     appelant sur les trois clients. Rien n'est perdu : le DELETE par
- *     CATÉGORIE (`preference-router-factory.ts:383`) fait exactement les trois
- *     mêmes gestes — retrait des lignes héritées (`afterWrite`), purge du cache
- *     de confidentialité, diffusion `preferences:updated`. L'agrégat revient au
- *     lot L3 sous un AUTRE contrat (`?categories=`, absent = tout) : le retirer
- *     ici n'est donc pas un aller-retour, c'est faire de la place.
+ *     appelant sur les trois clients, retirée ici. **Le lot L3 (#4181) a depuis
+ *     REPRIS l'adresse** sous un AUTRE contrat — `?categories=`, absent = tout —
+ *     qui absorbe les sept DELETE par catégorie. Le retrait n'était donc pas un
+ *     aller-retour : c'est lui qui a libéré l'adresse. Son témoin de FORME vit
+ *     plus bas, et le témoin de comportement dans
+ *     `unit/routes/me/preferences/unified-routes.test.ts`.
  *
  *   • `GET /api/v1/me/me` — déjà morte (#4141 a ramené la route à la racine du
  *     module). Le témoin la garde sous surveillance : rien n'empêchait de la
@@ -239,13 +239,20 @@ describe('Préférences et compte — les jumelles sans appelant ont été retir
   beforeAll(async () => { app = await construireAppMe(); });
   afterAll(async () => { await app.close(); });
 
-  it("n'a plus de DELETE /api/v1/me/preferences (remise à zéro globale sans appelant)", () => {
-    expect(app.hasRoute({ method: 'DELETE', url: `${PREFIXE_ME}/preferences` })).toBe(false);
-  });
-
-  it('rend 404 sur la remise à zéro globale', async () => {
-    const res = await app.inject({ method: 'DELETE', url: `${PREFIXE_ME}/preferences` });
-    expect(res.statusCode).toBe(404);
+  // #4181 a ROUVERT l'adresse sous un AUTRE contrat — `?categories=` (absent =
+  // tout), qui absorbe les SEPT DELETE par catégorie. Le retrait de #4186
+  // n'était donc pas un aller-retour : c'est lui qui a libéré l'adresse. Le
+  // témoin d'ABSENCE devient un témoin de FORME, qui rougit si l'ancienne
+  // remise à zéro globale revient — elle ne connaissait pas `?categories=` et
+  // aurait rendu 200 sur une catégorie inconnue.
+  it('sert la remise à zéro par CATÉGORIES sur DELETE /api/v1/me/preferences (#4181)', async () => {
+    expect(app.hasRoute({ method: 'DELETE', url: `${PREFIXE_ME}/preferences` })).toBe(true);
+    const res = await app.inject({
+      method: 'DELETE',
+      url: `${PREFIXE_ME}/preferences?categories=inconnue`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('UNKNOWN_CATEGORY');
   });
 
   it("n'a plus de GET /api/v1/me/me — le segment doublé de #4141 ne revient pas", () => {

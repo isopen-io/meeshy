@@ -720,7 +720,10 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
       // #4186 — jumelles appauvries de l'identité et de « moi ».
       { method: 'GET', url: '/api/v1/auth/magic-link/validate' },
       { method: 'POST', url: '/api/v1/auth/validate-session' },
-      { method: 'DELETE', url: '/api/v1/me/preferences' },
+      // `DELETE /api/v1/me/preferences` a quitté cette liste : #4181 a ROUVERT
+      // l'adresse sous un AUTRE contrat (`?categories=`, absent = tout), qui
+      // absorbe les sept DELETE par catégorie. Le retrait de #4186 n'était pas
+      // un aller-retour — c'est lui qui a libéré l'adresse.
       { method: 'GET', url: '/api/v1/me/me' },
     ];
 

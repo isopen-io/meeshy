@@ -96,6 +96,7 @@ import { pushTokenRoutes } from './routes/push-tokens';
 import { postRoutes } from './routes/posts';
 import { appRoutes } from './routes/app';
 import { healthProbeRoutes } from './routes/health';
+import { routeUsageAdminRoutes } from './routes/admin/route-usage';
 
 // API versioning
 const API_VERSION = 'v1';
@@ -403,6 +404,14 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // `{ status }`) ; `/health/metrics` et `/health/circuit-breakers` sont S5.
     await server.register(healthProbeRoutes, { prefix: `${API_PREFIX}/health` });
     logger.info('✓ Health probe routes registered');
+
+    // La lecture du compteur d'acces (#4275), S5 comme `/health/metrics` :
+    // `canAccessAdmin` ET `canViewAnalytics`. Elle est ici, dans le graphe
+    // assemble, et non dans le plugin qui pose le hook — une route montee hors
+    // de `registerAllRoutes` echapperait a la garde de couverture
+    // d'authentification, qui reassemble exactement ce graphe.
+    await server.register(routeUsageAdminRoutes, { prefix: `${API_PREFIX}/admin` });
+    logger.info('✓ Route usage admin route registered');
 
     logger.info('✓ REST API routes configured successfully');
 }

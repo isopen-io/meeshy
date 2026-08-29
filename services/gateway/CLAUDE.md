@@ -208,6 +208,24 @@ function registerSubRoutes(ctx: Context) {
 }
 ```
 
+## La table des routes est PUBLIÉE, et un cliquet la tient
+
+`docs/api/route-manifest.{json,md}` liste les routes réellement SERVIES — méthode,
+chemin complet, préfixe de montage, module déclarant, niveau S0–S6 et sa preuve —
+produites depuis le serveur ASSEMBLÉ (`registerAllRoutes`), jamais par `grep`.
+C'est la source qui fait foi pour les catalogues clients (#4276).
+
+**Ajouter, retirer ou déplacer une route rend `src/__tests__/route-manifest-ratchet.test.ts`
+ROUGE tant que le manifeste n'est pas régénéré** — c'est voulu :
+
+```bash
+npx tsx scripts/route-manifest.ts        # régénère (à commiter avec la route)
+npx tsx scripts/route-manifest.ts --check # vérifie sans écrire
+```
+
+Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
+préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
+
 ## Service Pattern
 ```typescript
 export class ServiceName {

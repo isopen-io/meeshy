@@ -408,6 +408,34 @@ export function registerCommentRoutes(
   // PATCH /posts/:postId/comments/:commentId — Edit own comment (content
   // and/or visual effects). isEdited passe à true ; un contenu modifié purge
   // les traductions et relance le pipeline (elles décrivaient l'ANCIEN texte).
+  //
+  // DÉCISION D'AUDIENCE (issue #4146), tranchée et écrite plutôt que constatée.
+  // Cette route et son jumeau `DELETE` en bas de fichier sont les deux seules
+  // routes de commentaire SANS garde d'audience du post, et c'est VOULU. Leurs
+  // six voisines en portent une (quatre via `loadCommentPostAcl`, deux via
+  // `resolveConsumptionTarget` / `resolveInteractionTarget`) ; l'écart était
+  // jusqu'ici visible sans être motivé, donc indistinguable d'un oubli — et un
+  // écart qu'on ne sait pas expliquer finit toujours par être « corrigé ».
+  //
+  // La ressource visée ici n'est pas le post : c'est le COMMENTAIRE, adressé
+  // par son seul `commentId` (le `:postId` du chemin n'est lu par personne),
+  // et le contrôle d'auteur du service — `PostCommentService.updateComment` /
+  // `deleteComment` lèvent `FORBIDDEN` hors auteur — est la garde S3 COMPLÈTE
+  // de cette ressource-là.
+  //
+  // Y ajouter l'audience du post rendrait ses propres mots IRRÉVOCABLES par la
+  // décision d'un AUTRE : l'auteur du post rompt l'amitié, bascule en `ONLY`
+  // ou en `PRIVATE`, et le commentaire reste affiché sous le nom de qui l'a
+  // écrit — sans qu'il puisse ni le corriger ni le retirer. Le droit de retirer
+  // ce qu'on a publié ne peut pas dépendre de quelqu'un d'autre.
+  //
+  // Rien ne fuit pour autant, et c'est ce qui rend la décision tenable : ni
+  // `PATCH` ni `DELETE` ne RENDENT le post ; la réponse ne porte que le
+  // commentaire de l'appelant, et le fan-out socket reste borné par l'audience
+  // du post (`broadcastCommentUpdated` / `broadcastCommentDeleted` reçoivent
+  // `authorId`, `visibility`, `visibilityUserIds`). Même règle que
+  // `DELETE /posts/:postId/bookmark` : on peut toujours défaire ce qu'on a
+  // fait. Témoin : `comments-retraction-decision.test.ts`.
   fastify.patch('/posts/:postId/comments/:commentId', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
@@ -712,6 +740,12 @@ export function registerCommentRoutes(
   });
 
   // DELETE /posts/:postId/comments/:commentId — Delete a comment
+  //
+  // SANS garde d'audience du post, DÉLIBÉRÉMENT : retirer ses propres mots ne
+  // peut pas dépendre de l'accès qu'un autre nous laisse au post qui les
+  // porte. La motivation complète est écrite une fois, au-dessus du `PATCH`
+  // jumeau (issue #4146) ; le contrôle d'auteur de
+  // `PostCommentService.deleteComment` reste la garde de cette ressource.
   fastify.delete('/posts/:postId/comments/:commentId', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {

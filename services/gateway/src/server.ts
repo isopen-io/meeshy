@@ -34,6 +34,7 @@ import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { registerRouteUsageHook } from './plugins/route-usage.plugin';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
@@ -616,6 +617,17 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       done();
     });
     logger.info('✅ Request timing hook registered');
+
+    // Compteur d'acces par route et par version cliente (#4275). Quatre issues
+    // — #4178, #4181, #4182, #4184 — font d'un compteur a ZERO le critere de
+    // retrait d'une adresse depreciee et INTERDISENT de le prouver par revue de
+    // code client : sans cette ligne, elles restent inatteignables par
+    // construction. Appel DIRECT sur la racine, jamais `register` — un hook pose
+    // dans un contexte encapsule ne verrait aucune des routes de production, et
+    // le compteur rendrait un tapis de zeros credible. Cout mesure : 0,32 a
+    // 0,65 us par requete, aucune E/S, aucune promesse.
+    registerRouteUsageHook(this.server);
+    logger.info('✅ Route usage counter hook registered');
 
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
