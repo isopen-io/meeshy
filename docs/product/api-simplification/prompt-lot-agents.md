@@ -25,6 +25,104 @@ projet « Meeshy — pilotage » + un commentaire de réservation daté. Vérifi
 d'abord que l'issue **est** dans le projet : une issue absente du projet est
 invisible aux autres agents, donc ni réservable ni réservée.
 
+## Le bail — ce qu'il verrouille, et ce qu'il ne verrouille pas
+
+> Établi le 2026-08-29T18:00Z, après qu'une session distante a composé un lot dont
+> deux volets allaient découper `conversations/messages.ts` et
+> `conversations/messages-advanced.ts` — **cinquante-cinq minutes** après qu'une
+> autre session les ait réécrits (`16420a92`, issue #4188 : −346 et −94 lignes).
+> Le lot a été arrêté avant la première écriture, mais rien dans la procédure
+> d'alors ne l'avait signalé : les deux sessions avaient chacune un bail valide,
+> sur deux issues sans aucun lien, dans deux milestones différents.
+
+La règle en une phrase : **on réserve une ISSUE, mais on entre en collision sur un
+FICHIER.** Le bail par issue est nécessaire et il ne suffit pas. Trois défauts
+mesurés, et leur correctif :
+
+### 1. Le champ qui fait foi n'est pas écrivable par une session distante
+
+`Status = In Progress` vit dans Projects v2, qui ne se sert qu'en **GraphQL**. Une
+session `claude.ai/code` n'a droit qu'à un jeu épinglé d'opérations de revue de
+PR : ni `gh`, ni `project item-edit`, ni la mutation de champ. Elle ne peut donc
+**pas** poser le statut sur lequel toute la procédure s'appuie.
+
+> Une procédure dont le verrou n'est pas actionnable par tous ses participants
+> n'a pas de verrou : elle a une convention, et une convention ne bloque personne.
+
+**Correctif — le bail se pose là où TOUT LE MONDE peut écrire, en REST :**
+
+- un **commentaire de réservation** sur l'issue, portant le bloc du § suivant ;
+- `Status = In Progress` **en plus**, par les sessions qui le peuvent, jamais à la
+  place ;
+- une session qui ne peut pas poser le statut **le dit dans son commentaire**, en
+  toutes lettres, pour qu'une session locale le pose pour elle.
+
+### 2. La réservation doit énoncer des CHEMINS, pas seulement un numéro
+
+Un numéro d'issue ne dit rien des fichiers qu'elle va toucher. C'est ce qui a
+laissé #4188 et #4284 se croiser : deux issues, deux milestones, aucun lien
+visible, et les deux mêmes fichiers.
+
+**Correctif — tout commentaire de réservation porte ce bloc, verbatim :**
+
+```
+RESERVATION
+  session   : <identifiant court de la session>
+  issue     : #<n>
+  ouvert    : <horodatage ISO 8601 UTC>
+  chemins   :
+    - services/gateway/src/routes/<...>
+    - apps/web/<...>
+  carrefours: <les fichiers-carrefour que ce lot devra faire modifier a l'integrateur>
+```
+
+Les chemins sont ceux qu'on va **écrire**, pas ceux qu'on va lire. Un répertoire
+se déclare avec `/**`. Une réservation sans bloc `chemins` ne vaut pas
+réservation : elle n'oppose rien à personne.
+
+### 3. Rien ne consultait git — alors que git est la seule mémoire partagée
+
+Le tableau et les commentaires disent ce que les autres *ont annoncé*. Git dit ce
+qu'ils ont **fait**, et il est déjà synchronisé entre toutes les sessions.
+
+**Correctif — deux commandes, obligatoires avant la première ligne écrite :**
+
+```bash
+git fetch origin dev
+
+# (a) Qui a touche MES fichiers recemment ? Un fichier touche par une autre
+#     session dans les 2 dernieres heures n'est PAS libre, quel que soit l'etat
+#     de son issue.
+git log --since="2 hours ago" --oneline --name-only origin/dev -- <chemins revendiques>
+
+# (b) L'issue est-elle DEJA livree ? Le sujet de commit du depot porte le
+#     resultat attendu, donc la recherche par titre attrape ce que la recherche
+#     par numero rate.
+git log --oneline origin/dev --grep "#<n>"
+git log --format=%s -40 origin/dev | grep -i "<quelques mots du titre de l'issue>"
+```
+
+`(a)` est la commande qui aurait arrêté le lot ci-dessus, en une ligne :
+
+```
+$ git log --since="2 hours ago" --oneline origin/dev -- services/gateway/src/routes/conversations/messages-advanced.ts
+16420a92  fix(gateway): aucune porte morte ne subsiste sur les messages ni sur les liens de partage
+```
+
+### Ce que ces trois règles ne couvrent pas, et qu'il faut savoir
+
+Elles réduisent la fenêtre de collision ; elles ne la ferment pas. Entre le moment
+où l'on lit les baux et celui où l'on pose le sien, une autre session peut poser
+le sien. **La fenêtre restante se referme par la relecture** : juste avant de
+lancer les agents — donc après avoir posé le bail —, rejouer `(a)` sur les chemins
+du lot. C'est bon marché, et c'est le seul moment où l'on tient une photo
+cohérente.
+
+Et une règle de prudence qui vaut mieux que toutes les autres : **quand deux lots
+se disputent un fichier, celui qui n'a rien écrit cède.** Un lot arrêté avant sa
+première écriture ne coûte que le temps de lecture de ses agents. Un conflit de
+rebase sur un fichier de trois mille lignes coûte la journée des deux sessions.
+
 ## Les fichiers-carrefour, réservés à l'intégrateur
 
 ```
@@ -227,13 +325,20 @@ tout le monde. Les gates passent AVANT le push, le pipeline commence APRÈS.
 
 Le bail rend la file partageable, et le dépôt est la seule mémoire commune :
 
-- une session prend un lot en posant `Status = In Progress` + son commentaire de
-  réservation ; elle ne touche jamais une issue déjà `In Progress` ;
+- une session prend un lot en posant son **commentaire de réservation** — bloc
+  `RESERVATION` complet, chemins inclus (§ « Le bail ») — et, si elle le peut,
+  `Status = In Progress` **en plus** ; elle ne touche jamais une issue déjà
+  réservée ;
+- **avant d'écrire une ligne**, elle rejoue les deux commandes git du § « Le
+  bail » sur les chemins qu'elle revendique : un fichier touché par une autre
+  session dans les 2 dernières heures n'est PAS libre, quel que soit l'état de
+  son issue ;
 - un bail sans commit depuis **2 h** est reprenable — le dire dans le
   commentaire de reprise, avec l'horodatage de l'ancien ;
 - tout part sur `dev` par des commits **par chemins explicites**, jamais `-a` ;
 - avant de composer un lot, `git pull --rebase` puis relire les territoires :
-  une session voisine a pu livrer un fichier qu'on croyait libre.
+  une session voisine a pu livrer un fichier qu'on croyait libre ;
+- **quand deux lots se disputent un fichier, celui qui n'a rien écrit cède.**
 
 ## Lancer une session DISTANTE (claude.ai/code, ou une autre machine)
 
@@ -263,7 +368,24 @@ milestone ni par numéro. Deux issues qui touchent le même fichier ne partent p
 ensemble. Pour chacune, lis le corps ET les commentaires (`gh issue view <n>
 --json body,comments`) : les commentaires portent les corrections de prémisse.
 
-Réserve-les : `Status = In Progress` + un commentaire daté nommant ta session.
+Réserve-les : un commentaire daté portant le bloc `RESERVATION` du § « Le bail »
+— **avec la liste des CHEMINS que tu vas écrire**, sans quoi la réservation
+n'oppose rien à personne — et `Status = In Progress` si ton accès te le permet.
+Si tu ne peux pas poser le statut (Projects v2 n'est servi qu'en GraphQL, hors de
+portée d'une session distante), DIS-LE dans le commentaire : une session locale
+le posera pour toi.
+
+Puis, AVANT de lancer le moindre agent, vérifie dans git ce que le tableau ne dit
+pas — c'est la seule mémoire partagée entre les sessions :
+
+    git fetch origin dev
+    git log --since="2 hours ago" --oneline --name-only origin/dev -- <tes chemins>
+    git log --oneline origin/dev --grep "#<n>"
+
+Un fichier touché par une autre session dans les 2 dernières heures n'est PAS
+libre, quel que soit l'état de son issue : retire-le du lot. Un commit dont le
+sujet porte le résultat attendu de ton issue signifie qu'elle est DÉJÀ livrée :
+ne la refais pas, commente-la.
 
 === 2. FAIS ÉCRIRE TES AGENTS ===
 
@@ -330,7 +452,26 @@ Chaque itération = UN LOT. Tu ne t'arrêtes pas entre deux lots.
    sans gate. Si tu en prends une quand même, tu le DIS dans le commit et tu
    laisses l'issue ouverte pour qu'une session locale passe le gate.
 
-4. Réserve : `Status = In Progress` + un commentaire daté nommant ta session.
+4. Réserve : un commentaire daté portant le bloc `RESERVATION` du § « Le bail »
+   — **avec la liste des CHEMINS que tu vas écrire** — et `Status = In Progress`
+   si ton accès te le permet. Si tu ne peux pas poser le statut, DIS-LE dans le
+   commentaire plutôt que de faire comme si.
+
+4bis. **AVANT de lancer le moindre agent, demande à git ce que le tableau ignore.**
+   C'est la seule mémoire partagée entre les sessions, et elle est déjà à jour :
+
+       git fetch origin dev
+       git log --since="2 hours ago" --oneline --name-only origin/dev -- <tes chemins>
+       git log --oneline origin/dev --grep "#<n>"
+
+   Un fichier touché par une autre session dans les 2 dernières heures n'est PAS
+   libre, quel que soit l'état de son issue : RETIRE-LE du lot. Un commit dont le
+   sujet porte le résultat attendu de ton issue veut dire qu'elle est DÉJÀ livrée :
+   ne la refais pas.
+   Deux issues sans aucun lien — deux milestones différents — peuvent réécrire le
+   même fichier : c'est arrivé le 2026-08-29 entre #4188 et #4284, et seul ce
+   contrôle-là l'aurait vu. **Quand deux lots se disputent un fichier, celui qui
+   n'a rien écrit cède.**
 
 ═══ ÉCRITURE ═══
 
