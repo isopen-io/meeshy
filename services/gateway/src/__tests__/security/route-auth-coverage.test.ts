@@ -352,6 +352,17 @@ function synthesizeQueryString(schema: any): string {
 // lisibilité ; la justification vaut pour tout le groupe qu'elle chapeaute.
 // ---------------------------------------------------------------------------
 const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
+  // --- Annuaire ---
+  {
+    method: 'GET',
+    url: '/api/v1/directory/availability',
+    why:
+      "porte PUBLIQUE de l'annuaire (S1) : elle dit si un PSEUDO est libre — une clé " +
+      'publique, déjà énumérable par GET /u/:username — et si une adresse ou un numéro ' +
+      'est BIEN FORMÉ. Elle ne dit JAMAIS si un identifiant de contact appartient à un ' +
+      'compte : ce serait un oracle, à rebours de la doctrine de /forgot-password et de ' +
+      '/magic-link/request (#4158). Bornée à 20/min par IP, plus un coupe-circuit global.',
+  },
   // --- Récupération de compte ---
   {
     method: 'POST',
@@ -411,11 +422,17 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/u/:username', why: 'profil public consultable sans compte (optionalAuth, email/téléphone jamais renvoyés)' },
   { method: 'GET', url: '/api/v1/users/:id', why: 'idem, par id' },
   { method: 'GET', url: '/api/v1/users/id/:id', why: 'idem, lookup par ObjectId opaque' },
-  { method: 'GET', url: '/api/v1/users/email/:email', why: "lookup public par email (primitive d'énumération notée séparément dans l'audit, pas un défaut de garde)" },
-  { method: 'GET', url: '/api/v1/users/phone/:phone', why: "lookup public par téléphone (idem)" },
-  { method: 'GET', url: '/api/v1/users', why: "stub no-op aujourd'hui (message statique, aucune donnée) — À RETIRER de cette liste si un jour implémenté avec de vraies données" },
-  { method: 'PUT', url: '/api/v1/users/:id', why: "stub no-op aujourd'hui malgré une doc \"admin-only\" — À RETIRER de cette liste et gardé avant toute implémentation réelle" },
-  { method: 'DELETE', url: '/api/v1/users/:id', why: 'idem' },
+  // `/users/email/:email` et `/users/phone/:phone` ont QUITTÉ cette liste : elles
+  // sont désormais AUTHENTIFIÉES (#4160). Elles confirmaient sans compte qu'une
+  // adresse ou un numéro appartient à un utilisateur Meeshy — et rendaient son
+  // profil : un annuaire INVERSÉ. Cette liste les tolérait au motif que
+  // l'énumération était « notée séparément dans l'audit, pas un défaut de
+  // garde » — mais une primitive d'énumération EST un défaut de garde, et la
+  // note ne la refermait pas.
+  //
+  // `GET /users`, `PUT` et `DELETE /users/:id` en ont été retirées avec les
+  // routes elles-mêmes (#4185). Leur commentaire disait « à retirer de cette
+  // liste si un jour implémenté » : c'est le retrait qui est arrivé d'abord.
 
   // --- Liens de partage anonymes / participation anonyme (mécanisme de
   //     token de session dédié, vérifié dans le handler — catégorie
@@ -738,17 +755,15 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
 
     // Signale les entrées d'exception devenues obsolètes (route renommée/supprimée)
     // — pas un échec dur, mais un indice que la liste doit être mise à jour.
-    if (unusedPublic.size > 0) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[route-auth-coverage] Entrées PUBLIC_ROUTES obsolètes (route introuvable) : ${[...unusedPublic].join(', ')}`
-      );
-    }
-    if (unusedGaps.size > 0) {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[route-auth-coverage] Entrées KNOWN_GAPS obsolètes (route introuvable, corrigée ou renommée ?) : ${[...unusedGaps].join(', ')}`
-      );
-    }
+    // Une exception PÉRIMÉE ne se contente pas d'être inutile : elle attend.
+    // Le jour où une route réapparaît à la même adresse — un renommage, une
+    // refonte, un copier-coller — elle est accueillie comme « publique par
+    // conception » sans que personne n'ait tranché. C'est une garde qui meurt
+    // en silence, et un `console.warn` dans un flot de milliers de lignes de
+    // sortie de test n'est lu par personne.
+    //
+    // Ces deux listes ne survivent donc pas à leur propre résolution.
+    expect([...unusedPublic]).toEqual([]);
+    expect([...unusedGaps]).toEqual([]);
   });
 });

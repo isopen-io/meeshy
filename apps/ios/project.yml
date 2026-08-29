@@ -84,7 +84,7 @@ settings:
   # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
   # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
   # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
-  CURRENT_PROJECT_VERSION: "1802"
+  CURRENT_PROJECT_VERSION: "1805"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a

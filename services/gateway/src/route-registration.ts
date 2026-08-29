@@ -37,6 +37,7 @@ import { linksRoutes } from './routes/links';
 import { trackingLinksRoutes } from './routes/tracking-links';
 import { anonymousRoutes } from './routes/anonymous';
 import { accountDeletionRoutes } from './routes/account-deletion';
+import { directoryAvailabilityRoutes } from './routes/directory/availability';
 import { communityRoutes } from './routes/communities';
 // import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
 import { dashboardRoutes } from './routes/admin/dashboard';
@@ -273,6 +274,10 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // pas authentifiée par nature — la personne qui annule sa suppression peut
     // avoir perdu l'accès à son compte, c'est même le cas nominal (#4183).
     await server.register(accountDeletionRoutes, { prefix: `${API_PREFIX}/account/deletion` });
+
+    // La porte PUBLIQUE de l'annuaire (S1) — pseudo seulement pour l'existence,
+    // forme seulement pour l'adresse et le numéro (#4158).
+    await server.register(directoryAvailabilityRoutes, { prefix: `${API_PREFIX}/directory` });
 
     // Register push notification token routes (device registration for APNS/FCM/VoIP)
     await server.register(pushTokenRoutes, { prefix: API_PREFIX });

@@ -333,6 +333,13 @@ model User {
   @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
   @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
   @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
+  // `phoneNumber` était la SEULE colonne d'identifiant de contact sans index —
+  // `username` et `email` sont `@unique`, donc indexées de fait. La recherche
+  // « qui est derrière ce numéro » balayait donc la collection entière, et le
+  // faisait pour un appelant ANONYME jusqu'à ce que #4160 ferme la porte. Un
+  // index manquant sur une route publique est aussi une surface de déni de
+  // service, pas seulement une lenteur.
+  @@index([phoneNumber])
 }
 
 /// Entrée du répertoire d'un utilisateur — un contact de son carnet d'adresses

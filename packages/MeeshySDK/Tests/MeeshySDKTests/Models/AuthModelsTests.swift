@@ -172,31 +172,48 @@ final class AuthModelsTests: XCTestCase {
 
     // MARK: - AvailabilityResponse
 
+    /// Le contrat a CHANGÉ (#4158) : l'adresse et le numéro ne rendent plus
+    /// qu'un verdict de FORME. `emailAvailable` et `phoneNumberAvailable` ne
+    /// sont plus décodés — les décoder serait décoder un oracle.
     func testAvailabilityResponseDecodable() throws {
         let json = """
         {
             "usernameAvailable": true,
-            "emailAvailable": false,
+            "emailValid": true,
             "suggestions": ["user123", "user456"]
         }
         """.data(using: .utf8)!
         let response = try JSONDecoder().decode(AvailabilityResponse.self, from: json)
         XCTAssertEqual(response.usernameAvailable, true)
-        XCTAssertEqual(response.emailAvailable, false)
-        XCTAssertNil(response.phoneNumberAvailable)
+        XCTAssertEqual(response.emailValid, true)
+        XCTAssertNil(response.phoneNumberValid)
         XCTAssertEqual(response.suggestions, ["user123", "user456"])
         XCTAssertTrue(response.available)
     }
 
-    func testAvailabilityResponseAvailableComputed() throws {
-        let json = """
-        {
-            "usernameAvailable": false,
-            "emailAvailable": true
-        }
-        """.data(using: .utf8)!
-        let response = try JSONDecoder().decode(AvailabilityResponse.self, from: json)
-        XCTAssertFalse(response.available)
+    /// `available` ne parle QUE du pseudo.
+    ///
+    /// Elle retombait sur `emailAvailable ?? phoneNumberAvailable`, des champs
+    /// que le serveur ne sert plus : la laisser ainsi ferait rendre `false` à
+    /// chaque adresse, et l'écran d'inscription dirait « déjà utilisée » à tout
+    /// le monde. C'est la moitié SILENCIEUSE de la bascule, et celle qui
+    /// casserait le produit sans qu'aucun test de la route ne rougisse.
+    func testAvailabilityResponseAvailableNeParleQueDuPseudo() throws {
+        let pseudoPris = try JSONDecoder().decode(
+            AvailabilityResponse.self,
+            from: #"{"usernameAvailable": false, "emailValid": true}"#.data(using: .utf8)!
+        )
+        XCTAssertFalse(pseudoPris.available)
+        XCTAssertTrue(pseudoPris.wellFormed)
+
+        // Sans pseudo soumis, `available` ne peut rien affirmer — et ne doit
+        // surtout pas emprunter la réponse de l'adresse.
+        let adresseSeule = try JSONDecoder().decode(
+            AvailabilityResponse.self,
+            from: #"{"emailValid": true}"#.data(using: .utf8)!
+        )
+        XCTAssertFalse(adresseSeule.available)
+        XCTAssertTrue(adresseSeule.wellFormed)
     }
 
     // MARK: - MagicLinkResponse

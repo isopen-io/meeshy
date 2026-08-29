@@ -83,29 +83,23 @@ export function useRegistrationValidation({
   const checkEmailAvailability = useCallback(async (email: string) => {
     if (!email || !isValidEmail(email)) return;
 
+    // L'adresse ne répond plus QUE SUR SA FORME (#4158). Le serveur ne dit
+    // plus si un compte existe : le confirmer sans authentification faisait de
+    // cette route un oracle, pendant que `/forgot-password` et
+    // `/magic-link/request` répondent délibérément « succès » dans tous les cas
+    // pour ne rien révéler. C'est désormais la SOUMISSION qui le dit.
+    //
+    // La branche `data.data.accountInfo` qui vivait ici est supprimée : le
+    // gateway n'a JAMAIS émis ce champ — l'aperçu de compte masqué était une
+    // branche morte depuis son écriture, ce qui rend le coût de la bascule nul.
     try {
       const response = await fetch(
         buildApiUrl(`/auth/check-availability?email=${encodeURIComponent(email)}`)
       );
       if (response.ok) {
         const data = await response.json();
-        if (data.data.emailAvailable === false) {
-          setEmailValidationStatus('exists');
-          if (data.data.accountInfo) {
-            setExistingAccount({
-              type: 'email',
-              maskedDisplayName: data.data.accountInfo.maskedDisplayName,
-              maskedUsername: data.data.accountInfo.maskedUsername,
-              maskedPhone: data.data.accountInfo.maskedPhone,
-              avatar: data.data.accountInfo.avatar,
-            });
-          } else {
-            setExistingAccount({ type: 'email' });
-          }
-        } else {
-          setEmailValidationStatus('valid');
-          setExistingAccount(prev => prev?.type === 'email' ? null : prev);
-        }
+        setEmailValidationStatus(data.data.emailValid === false ? 'invalid' : 'valid');
+        setExistingAccount(prev => prev?.type === 'email' ? null : prev);
       }
     } catch {
       // Silent fail
@@ -122,23 +116,9 @@ export function useRegistrationValidation({
       );
       if (response.ok) {
         const data = await response.json();
-        if (data.data.phoneNumberAvailable === false) {
-          setPhoneValidationStatus('exists');
-          if (data.data.accountInfo) {
-            setExistingAccount({
-              type: 'phone',
-              maskedDisplayName: data.data.accountInfo.maskedDisplayName,
-              maskedUsername: data.data.accountInfo.maskedUsername,
-              maskedEmail: data.data.accountInfo.maskedEmail,
-              avatar: data.data.accountInfo.avatar,
-            });
-          } else {
-            setExistingAccount({ type: 'phone' });
-          }
-        } else {
-          setPhoneValidationStatus('valid');
-          setExistingAccount(prev => prev?.type === 'phone' ? null : prev);
-        }
+        // Forme seulement — voir la note de la validation d'adresse ci-dessus.
+        setPhoneValidationStatus(data.data.phoneNumberValid === false ? 'invalid' : 'valid');
+        setExistingAccount(prev => prev?.type === 'phone' ? null : prev);
       }
     } catch {
       // Silent fail

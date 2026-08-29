@@ -457,9 +457,8 @@ final class AuthServiceTests: XCTestCase {
 
     func testCheckAvailabilityUsernameAvailable() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: true, emailAvailable: nil,
-            phoneNumberAvailable: nil, phoneNumberValid: nil,
-            suggestions: nil
+            usernameAvailable: true, suggestions: nil,
+            emailValid: nil, phoneNumberValid: nil, phoneNumberE164: nil
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
@@ -475,9 +474,8 @@ final class AuthServiceTests: XCTestCase {
 
     func testCheckAvailabilityUsernameTaken() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: false, emailAvailable: nil,
-            phoneNumberAvailable: nil, phoneNumberValid: nil,
-            suggestions: ["newuser1", "newuser2"]
+            usernameAvailable: false, suggestions: ["newuser1", "newuser2"],
+            emailValid: nil, phoneNumberValid: nil, phoneNumberE164: nil
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
@@ -491,32 +489,36 @@ final class AuthServiceTests: XCTestCase {
 
     func testCheckAvailabilityEmail() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: nil, emailAvailable: true,
-            phoneNumberAvailable: nil, phoneNumberValid: nil,
-            suggestions: nil
+            usernameAvailable: nil, suggestions: nil,
+            emailValid: true, phoneNumberValid: nil, phoneNumberE164: nil
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
 
         let result = try await service.checkAvailability(email: "new@test.com")
 
-        XCTAssertEqual(result.emailAvailable, true)
-        XCTAssertTrue(result.available)
+        // L'adresse ne répond plus que sur sa FORME (#4158) : dire si elle
+        // appartient à un compte, sans authentification, faisait de cette route
+        // un oracle. `available` ne parle donc plus QUE du pseudo — la laisser
+        // retomber sur l'adresse ferait rendre `false` à toutes.
+        XCTAssertEqual(result.emailValid, true)
+        XCTAssertTrue(result.wellFormed)
+        XCTAssertFalse(result.available)
     }
 
     func testCheckAvailabilityPhone() async throws {
         let availData = AvailabilityResponse(
-            usernameAvailable: nil, emailAvailable: nil,
-            phoneNumberAvailable: true, phoneNumberValid: true,
-            suggestions: nil
+            usernameAvailable: nil, suggestions: nil,
+            emailValid: nil, phoneNumberValid: true, phoneNumberE164: "+33612345678"
         )
         let response = APIResponse(success: true, data: availData, error: nil)
         mock.stub("/auth/check-availability", result: response)
 
         let result = try await service.checkAvailability(phone: "+33612345678")
 
-        XCTAssertEqual(result.phoneNumberAvailable, true)
         XCTAssertEqual(result.phoneNumberValid, true)
+        XCTAssertEqual(result.phoneNumberE164, "+33612345678")
+        XCTAssertTrue(result.wellFormed)
     }
 
     func testCheckAvailabilityThrowsOnError() async {

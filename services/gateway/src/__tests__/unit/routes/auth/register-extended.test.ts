@@ -257,73 +257,9 @@ describe('POST /register — INVALID_USERNAME error branch', () => {
 
 // ─── GET /check-availability — username taken → suggestions loop ──────────────
 
-describe('GET /check-availability — username taken, suggestions generated', () => {
-  it('returns 200 with usernameAvailable false and suggestions array', async () => {
-    const prisma = makePrisma();
-    // First call: username taken; second call: candidate available
-    prisma.user.findFirst = jest.fn<any>()
-      .mockResolvedValueOnce({ id: 'other-user' })
-      .mockResolvedValue(null);
-
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: '/check-availability?username=alice',
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.usernameAvailable).toBe(false);
-    expect(Array.isArray(body.data.suggestions)).toBe(true);
-    expect(body.data.suggestions.length).toBeGreaterThan(0);
-    await app.close();
-  });
-});
-
 // ─── GET /check-availability — phone validation failure (lines 289-290) ───────
 
-describe('GET /check-availability — phone number fails validation', () => {
-  it('returns 200 with phoneNumberAvailable false and phoneNumberValid false', async () => {
-    mockNormalizePhoneWithCountry.mockReturnValueOnce({ phoneNumber: '', isValid: false });
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'GET', url: '/check-availability?phoneNumber=invalid',
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.phoneNumberAvailable).toBe(false);
-    expect(body.data.phoneNumberValid).toBe(false);
-    await app.close();
-  });
-});
-
-describe('GET /check-availability — normalizePhoneWithCountry returns null', () => {
-  it('returns 200 with phoneNumberAvailable false when normalizer returns null', async () => {
-    mockNormalizePhoneWithCountry.mockReturnValueOnce(null);
-    const { app } = await buildApp();
-    const res = await app.inject({
-      method: 'GET', url: '/check-availability?phoneNumber=000',
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.phoneNumberAvailable).toBe(false);
-    expect(body.data.phoneNumberValid).toBe(false);
-    await app.close();
-  });
-});
-
 // ─── GET /check-availability — DB error → 500 (lines 296-297) ────────────────
-
-describe('GET /check-availability — prisma throws → 500', () => {
-  it('returns 500 when prisma.user.findFirst throws', async () => {
-    const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockRejectedValue(new Error('DB connection lost'));
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'GET', url: '/check-availability?username=alice',
-    });
-    expect(res.statusCode).toBe(500);
-    await app.close();
-  });
-});
 
 // ─── POST /force-init — route retirée ────────────────────────────────────────
 
@@ -340,3 +276,20 @@ describe('POST /force-init — retirée', () => {
     await app.close();
   });
 });
+
+
+// ─── `GET /check-availability` — le contrat a CHANGÉ (#4158) ─────────────────
+//
+// Les témoins qui vivaient ici exigeaient `emailAvailable` et
+// `phoneNumberAvailable` : ils asseyaient l'ORACLE. Cette route confirmait sans
+// compte qu'une adresse ou un numéro appartient à un utilisateur Meeshy, alors
+// que `/forgot-password` et `/magic-link/request` répondent délibérément
+// « succès » dans tous les cas pour ne rien révéler.
+//
+// L'adresse et le numéro ne rendent plus qu'un verdict de FORME. Le pseudo,
+// lui, répond toujours sur l'existence — c'est une clé publique, déjà
+// énumérable par `GET /u/:username`.
+//
+// Le contrat de la porte cible est couvert par
+// `directory-availability.test.ts` ; ce qui suit garde l'ALIAS, y compris
+// l'assertion NÉGATIVE qui empêche l'oracle de revenir.

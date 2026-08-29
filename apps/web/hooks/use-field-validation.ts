@@ -83,17 +83,27 @@ export function useFieldValidation({ value, disabled, t, type }: UseFieldValidat
         const result = await response.json();
         if (controller.signal.aborted) return;
         if (result.success) {
-          const availableKey = type === 'username' ? 'usernameAvailable' :
-                               type === 'email' ? 'emailAvailable' : 'phoneNumberAvailable';
-
-          if (result.data?.[availableKey]) {
-            setStatus(type === 'username' ? 'available' : 'valid');
-            setErrorMessage('');
+          // Le PSEUDO répond sur l'existence — c'est une clé publique, déjà
+          // énumérable par `GET /u/:username`. L'ADRESSE et le NUMÉRO ne
+          // répondent plus que sur leur FORME (#4158) : confirmer sans compte
+          // qu'un identifiant de contact appartient à quelqu'un faisait de
+          // cette route un oracle, à rebours de la doctrine appliquée par
+          // `/forgot-password` et `/magic-link/request`.
+          if (type === 'username') {
+            if (result.data?.usernameAvailable) {
+              setStatus('available');
+              setErrorMessage('');
+            } else {
+              setStatus('taken');
+              setErrorMessage(t('register.errors.usernameExists'));
+            }
           } else {
-            setStatus('taken');
-            const errorKey = type === 'username' ? 'usernameExists' :
-                             type === 'email' ? 'emailExists' : 'phoneExists';
-            setErrorMessage(t(`register.errors.${errorKey}`));
+            const bienForme = type === 'email'
+              ? result.data?.emailValid !== false
+              : result.data?.phoneNumberValid !== false;
+
+            setStatus(bienForme ? 'valid' : 'invalid');
+            setErrorMessage(bienForme ? '' : t(`register.errors.${type === 'email' ? 'emailInvalid' : 'phoneInvalid'}`));
           }
         }
       } else {

@@ -127,6 +127,43 @@ async function inBatches<T>(items: T[], size: number, run: (item: T) => Promise<
   }
 }
 
+/**
+ * La portée d'une recherche de personne par IDENTIFIANT DE CONTACT.
+ *
+ * Cette loi vivait uniquement dans `ContactDirectoryService.match()`, la
+ * jumelle AUTHENTIFIÉE. Ses deux sœurs publiques — `GET /users/email/:email` et
+ * `GET /users/phone/:phone` — répondaient à la même question sans aucun de ces
+ * filtres : un compte désactivé restait consultable, et un utilisateur bloqué
+ * retrouvait le profil de qui l'avait bloqué (#4160).
+ *
+ * Le blocage vaut dans les DEUX sens, et c'est le point : écarter seulement
+ * « les comptes que j'ai bloqués » laisserait celui que j'ai bloqué me
+ * retrouver. La symétrie n'est pas une politesse, c'est la protection.
+ */
+export function contactLookupScope(options: {
+  viewerId: string;
+  blockedByViewer: readonly string[];
+}): Record<string, unknown> {
+  return {
+    isActive: true,
+    deletedAt: null,
+    id: { notIn: [...options.blockedByViewer] },
+    NOT: { blockedUserIds: { has: options.viewerId } },
+  };
+}
+
+/** Les identifiants que `viewerId` a bloqués. Lecture unique, réutilisable. */
+export async function blockedIdsOfViewer(
+  prisma: { user: { findUnique: (args: unknown) => Promise<{ blockedUserIds?: string[] } | null> } },
+  viewerId: string
+): Promise<string[]> {
+  const owner = await prisma.user.findUnique({
+    where: { id: viewerId },
+    select: { blockedUserIds: true },
+  } as never);
+  return owner?.blockedUserIds ?? [];
+}
+
 export class ContactDirectoryService {
   constructor(private readonly prisma: PrismaClient) {}
 

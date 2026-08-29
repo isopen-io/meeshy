@@ -14,6 +14,7 @@ import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../ut
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { candidatsDePseudo } from '../directory/availability';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -239,8 +240,33 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
   });
 
   // GET /check-availability - Check username/email/phone availability
+  // ALIAS rétro-compatible vers `GET /directory/availability` (#4158).
+  //
+  // Ce que l'ancienne route faisait, et qui ne peut pas être conservé : elle
+  // confirmait **sans compte** qu'un pseudo, une adresse OU un numéro
+  // appartient à un utilisateur Meeshy — pendant que `/forgot-password` et
+  // `/magic-link/request` répondent délibérément « succès » dans tous les cas
+  // pour ne rien révéler. La même plateforme appliquait deux doctrines opposées
+  // à la même question.
+  //
+  // C'est la SEULE bascule de ce lot qui change une réponse et pas seulement
+  // une adresse, et le coût est nommé : le formulaire d'inscription ne peut
+  // plus dire « vous avez déjà un compte » avant la soumission. C'est la
+  // soumission qui le dit. Coût réel côté web : NUL — la branche qui affichait
+  // cet avertissement (`use-registration-validation.ts:94`) lit
+  // `data.data.accountInfo`, un champ que le gateway n'émet nulle part.
+  //
+  // `usernameAvailable` et `suggestions` restent servis à l'identique : un
+  // pseudo est une clé publique, déjà énumérable par `GET /u/:username`.
+  // `emailAvailable` et `phoneNumberAvailable` deviennent des verdicts de
+  // FORME, ce que porte `phoneNumberValid` — déjà présent dans l'ancienne
+  // réponse.
   fastify.get('/check-availability', {
     schema: {
+      deprecated: true,
+      description:
+        'DEPRECATED — use GET /directory/availability. Email and phone no longer reveal whether an account exists (#4158).',
+      tags: ['auth'],
       querystring: {
         type: 'object',
         properties: {
@@ -248,107 +274,75 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
           email: { type: 'string' },
           phoneNumber: { type: 'string' }
         }
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            data: {
+              type: 'object',
+              properties: {
+                usernameAvailable: { type: 'boolean' },
+                suggestions: { type: 'array', items: { type: 'string' } },
+                // Verdicts de FORME. Ils ne disent plus l'existence.
+                emailValid: { type: 'boolean' },
+                phoneNumberValid: { type: 'boolean' },
+                phoneNumberE164: { type: 'string', nullable: true }
+              }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        500: errorResponseSchema
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const { username, email, phoneNumber } = request.query as {
+      username?: string;
+      email?: string;
+      phoneNumber?: string;
+    };
+
+    if (!username && !email && !phoneNumber) {
+      return sendBadRequest(reply, 'Username, email ou numéro de téléphone requis');
+    }
+
     try {
-      const { username, email, phoneNumber } = request.query as {
-        username?: string;
-        email?: string;
-        phoneNumber?: string;
-      };
+      const result: Record<string, unknown> = {};
 
-      if (!username && !email && !phoneNumber) {
-        return sendBadRequest(reply, 'Username, email ou numéro de téléphone requis');
-      }
-
-      const prisma = fastify.prisma;
-      const { normalizePhoneNumber } = await import('../../utils/normalize');
-      const result: {
-        usernameAvailable?: boolean;
-        suggestions?: string[];
-        emailAvailable?: boolean;
-        phoneNumberAvailable?: boolean;
-        phoneNumberValid?: boolean;
-      } = {};
-
-      // Check username (case-insensitive)
       if (username) {
-        const normalizedUsername = username.trim();
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            username: {
-              equals: normalizedUsername,
-              mode: 'insensitive'
-            }
-          }
+        const demande = username.trim();
+        const pris = await fastify.prisma.user.findFirst({
+          where: { username: { equals: demande, mode: 'insensitive' } },
+          select: { id: true }
         });
-        result.usernameAvailable = !existingUser;
+        result.usernameAvailable = !pris;
 
-        if (existingUser) {
-          const suggestions: string[] = [];
-          let attempts = 0;
-          while (suggestions.length < 3 && attempts < 10) {
-            const suffix = Math.floor(Math.random() * 9999) + 1;
-            const candidate = `${normalizedUsername}${suffix}`;
-
-            const check = await prisma.user.findFirst({
-              where: {
-                username: {
-                  equals: candidate,
-                  mode: 'insensitive'
-                }
-              }
-            });
-
-            if (!check && !suggestions.includes(candidate)) {
-              suggestions.push(candidate);
-            }
-            attempts++;
-          }
-
-          if (suggestions.length > 0) {
-            result.suggestions = suggestions;
-          }
+        if (pris) {
+          const candidats = candidatsDePseudo(demande);
+          const dejaPris = await fastify.prisma.user.findMany({
+            where: { username: { in: candidats, mode: 'insensitive' } },
+            select: { username: true }
+          });
+          const occupes = new Set(
+            (dejaPris as Array<{ username: string }>).map((u) => u.username.toLowerCase())
+          );
+          result.suggestions = candidats.filter((c) => !occupes.has(c.toLowerCase())).slice(0, 3);
         }
       }
 
-      // Check email (case-insensitive)
       if (email) {
-        const normalizedEmail = email.trim().toLowerCase();
-        const existingUser = await prisma.user.findFirst({
-          where: {
-            email: {
-              equals: normalizedEmail,
-              mode: 'insensitive'
-            }
-          }
-        });
-        result.emailAvailable = !existingUser;
+        result.emailValid = /^[^@\s]+@[^@\s]+\.[^@\s]{2,}$/.test(email.trim());
       }
 
-      // Check phone number (E.164 format)
       if (phoneNumber) {
         const requestContext = await getRequestContext(request);
-
-        // Priorité: 1) Pays de la géoloc, 2) Défaut FR
         const defaultCountry = requestContext?.geoData?.country || 'FR';
-
         const { normalizePhoneWithCountry } = await import('../../utils/normalize');
-        const phoneResult = normalizePhoneWithCountry(phoneNumber, defaultCountry);
-
-        if (phoneResult && phoneResult.isValid) {
-          const existingUser = await prisma.user.findFirst({
-            where: {
-              phoneNumber: phoneResult.phoneNumber
-            }
-          });
-          result.phoneNumberAvailable = !existingUser;
-          result.phoneNumberValid = true;
-        } else {
-          result.phoneNumberAvailable = false;
-          result.phoneNumberValid = false;
-        }
+        const normalise = normalizePhoneWithCountry(phoneNumber, defaultCountry);
+        result.phoneNumberValid = Boolean(normalise && normalise.isValid);
+        result.phoneNumberE164 = normalise && normalise.isValid ? normalise.phoneNumber : null;
       }
 
       return sendSuccess(reply, result);

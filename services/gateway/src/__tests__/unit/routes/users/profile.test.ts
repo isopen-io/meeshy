@@ -184,8 +184,17 @@ function makeSelectAwareUserUpdate(fullUser: Record<string, any>) {
 
 // ─── Prisma Mock Factory ───────────────────────────────────────────────────────
 
+/**
+ * Les surcharges FUSIONNENT au niveau du modèle, elles ne le remplacent pas.
+ *
+ * Un `{ user: { findFirst } }` écrasait tout le bloc `user`, faisant
+ * disparaître `findUnique` — que la lecture de la liste de blocage exige depuis
+ * #4160. Le témoin tombait alors en 500, et le défaut ressemblait à un défaut
+ * de la route plutôt qu'à un défaut du double. Fusionner ferme la classe entière
+ * plutôt que ses deux instances du jour.
+ */
 function makePrisma(overrides: Record<string, any> = {}) {
-  return {
+  const base: Record<string, any> = {
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(mockUser),
       findUnique: jest.fn<any>().mockResolvedValue(mockUser),
@@ -195,8 +204,16 @@ function makePrisma(overrides: Record<string, any> = {}) {
     userVoiceModel: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
-    ...overrides,
   };
+
+  const fusionne: Record<string, any> = { ...base };
+  for (const [modele, methodes] of Object.entries(overrides)) {
+    fusionne[modele] =
+      base[modele] && methodes && typeof methodes === 'object'
+        ? { ...base[modele], ...methodes }
+        : methodes;
+  }
+  return fusionne;
 }
 
 // ─── App Builder ─────────────────────────────────────────────────────────────

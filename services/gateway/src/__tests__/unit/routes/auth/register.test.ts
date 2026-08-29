@@ -388,59 +388,19 @@ describe('POST /register — valid phone transfer token', () => {
 
 // ─── GET /check-availability ──────────────────────────────────────────────────
 
-describe('GET /check-availability — missing params', () => {
-  it('returns 400 when no params provided', async () => {
-    const { app } = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/check-availability' });
-    expect(res.statusCode).toBe(400);
-    await app.close();
-  });
-});
 
-describe('GET /check-availability — username available', () => {
-  it('returns 200 with usernameAvailable: true when username is free', async () => {
-    const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue(null);
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=newuser' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.usernameAvailable).toBe(true);
-    await app.close();
-  });
-});
-
-describe('GET /check-availability — username taken', () => {
-  it('returns 200 with usernameAvailable: false when username is taken', async () => {
-    const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue({ id: 'other-user' });
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=taken' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.usernameAvailable).toBe(false);
-    await app.close();
-  });
-});
-
-describe('GET /check-availability — email available', () => {
-  it('returns 200 with emailAvailable: true when email is free', async () => {
-    const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue(null);
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({ method: 'GET', url: '/check-availability?email=new@test.com' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.emailAvailable).toBe(true);
-    await app.close();
-  });
-});
-
-describe('GET /check-availability — phone available', () => {
-  it('returns 200 with phoneNumberAvailable: true when phone is free', async () => {
-    const prisma = makePrisma();
-    prisma.user.findFirst = jest.fn<any>().mockResolvedValue(null);
-    const { app } = await buildApp({ prisma });
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=0612345678' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.phoneNumberAvailable).toBe(true);
-    await app.close();
-  });
-});
+// ─── `GET /check-availability` — le contrat a CHANGÉ (#4158) ─────────────────
+//
+// Les témoins qui vivaient ici exigeaient `emailAvailable` et
+// `phoneNumberAvailable` : ils asseyaient l'ORACLE. Cette route confirmait sans
+// compte qu'une adresse ou un numéro appartient à un utilisateur Meeshy, alors
+// que `/forgot-password` et `/magic-link/request` répondent délibérément
+// « succès » dans tous les cas pour ne rien révéler.
+//
+// L'adresse et le numéro ne rendent plus qu'un verdict de FORME. Le pseudo,
+// lui, répond toujours sur l'existence — c'est une clé publique, déjà
+// énumérable par `GET /u/:username`.
+//
+// Le contrat de la porte cible est couvert par
+// `directory-availability.test.ts` ; ce qui suit garde l'ALIAS, y compris
+// l'assertion NÉGATIVE qui empêche l'oracle de revenir.

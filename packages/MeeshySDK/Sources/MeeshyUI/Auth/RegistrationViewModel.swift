@@ -391,8 +391,13 @@ public final class RegistrationViewModel: ObservableObject {
                 let result = try await AuthService.shared.checkAvailability(email: trimmed)
                 guard !Task.isCancelled else { return }
 
-                emailAvailable = result.available
-                emailError = result.available ? nil : String(localized: "auth.registration.emailTaken", defaultValue: "Cet email est deja utilise!", bundle: .module)
+                // Le serveur ne dit plus si l'adresse appartient à un compte
+                // (#4158) : il n'en juge que la FORME. C'est la soumission de
+                // l'inscription qui tranchera, avec une réponse générique.
+                emailAvailable = result.wellFormed
+                emailError = result.wellFormed
+                    ? nil
+                    : String(localized: "auth.registration.emailInvalid", defaultValue: "Cette adresse ne semble pas valide", bundle: .module)
             } catch {
                 guard !Task.isCancelled else { return }
                 emailAvailable = true
@@ -417,18 +422,25 @@ public final class RegistrationViewModel: ObservableObject {
                 guard !Task.isCancelled else { return }
 
                 phoneNumberValid = result.phoneNumberValid
-                phoneAvailable = result.available
+                // Le serveur ne dit plus si le NUMÉRO appartient à un compte
+                // (#4158) — le dire sans authentification était une
+                // dé-anonymisation de numéro de téléphone.
+                phoneAvailable = result.wellFormed
                 if result.phoneNumberValid == false {
                     phoneError = String(localized: "auth.registration.phoneInvalid", defaultValue: "Ce numero semble invalide", bundle: .module)
                     phoneOwnership = nil
-                } else if !result.available {
-                    phoneError = String(localized: "auth.registration.phoneTaken", defaultValue: "Ce numero est deja utilise!", bundle: .module)
-                    // Numéro pris : sonde le compte propriétaire pour proposer une
-                    // récupération si c'est un compte dormant à l'identité proche.
-                    await probePhoneOwnership(fullPhone: fullPhone, country: country, firstName: first, lastName: last)
                 } else {
+                    // La RÉCUPÉRATION de compte survit sans l'oracle : elle passe
+                    // par `/auth/phone-transfer/check`, qui n'ouvre sa réponse
+                    // qu'à un appelant sachant déjà le vrai nom
+                    // (`recoverySuggested`). On la sonde donc sur tout numéro
+                    // BIEN FORMÉ, au lieu d'attendre un « déjà pris » que le
+                    // serveur ne dit plus.
+                    await probePhoneOwnership(fullPhone: fullPhone, country: country, firstName: first, lastName: last)
+                    // `phoneOwnership` n'est PAS remis à nil ici : la sonde
+                    // vient de le renseigner, et l'effacer annulerait le seul
+                    // signal de récupération qui reste.
                     phoneError = nil
-                    phoneOwnership = nil
                 }
             } catch {
                 guard !Task.isCancelled else { return }

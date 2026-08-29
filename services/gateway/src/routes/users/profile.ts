@@ -30,6 +30,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
+import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -1051,8 +1052,15 @@ function buildPublicProfile(user: Record<string, unknown>) {
 }
 
 export async function getUserByEmail(fastify: FastifyInstance) {
+  // AUTHENTIFIÉE, et non plus publique. Cette route confirmait sans compte
+  // qu'une adresse appartient à un utilisateur Meeshy — et rendait son profil.
+  // Avec `/users/phone/:phone`, ce sont les deux seules routes du dépôt qui
+  // joignent « cet identifiant de contact » à « cette personne » : un annuaire
+  // INVERSÉ, à partir duquel une liste d'adresses devient une liste d'identités
+  // civiles (#4160). La jumelle `POST /users/me/contacts/match` posait déjà
+  // cette garde ; ces deux-là ne l'avaient jamais eue.
   fastify.get('/users/email/:email', {
-    preValidation: [getOptionalAuth(fastify.prisma)],
+    preValidation: [fastify.authenticate],
     schema: {
       description: 'Get public user profile by email address (case-insensitive)',
       tags: ['users'],
@@ -1082,8 +1090,15 @@ export async function getUserByEmail(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile by email`);
 
+      const viewerId = (request as unknown as { user?: { userId?: string } }).user?.userId ?? '';
       const user = await fastify.prisma.user.findFirst({
-        where: { email },
+        where: {
+          email,
+          ...contactLookupScope({
+            viewerId,
+            blockedByViewer: await blockedIdsOfViewer(fastify.prisma, viewerId),
+          }),
+        },
         select: publicUserSelect
       });
 
@@ -1155,8 +1170,12 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
 }
 
 export async function getUserByPhone(fastify: FastifyInstance) {
+  // AUTHENTIFIÉE — voir `/users/email/:email`. Celle-ci est la plus lourde des
+  // deux : `User` ne porte AUCUN index sur `phoneNumber`, si bien qu'un
+  // appelant anonyme faisait balayer la collection entière à chaque essai. Un
+  // index manquant est ici aussi une surface de déni de service (#4160).
   fastify.get('/users/phone/:phone', {
-    preValidation: [getOptionalAuth(fastify.prisma)],
+    preValidation: [fastify.authenticate],
     schema: {
       description: 'Get public user profile by phone number. Accepts digits with optional country code prefix (e.g. 336199909344 or +336199909344). Normalizes to E.164 format for lookup.',
       tags: ['users'],
@@ -1194,8 +1213,15 @@ export async function getUserByPhone(fastify: FastifyInstance) {
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile by phone: ${normalized.countryCode}`);
 
+      const viewerId = (request as unknown as { user?: { userId?: string } }).user?.userId ?? '';
       const user = await fastify.prisma.user.findFirst({
-        where: { phoneNumber: normalized.phoneNumber },
+        where: {
+          phoneNumber: normalized.phoneNumber,
+          ...contactLookupScope({
+            viewerId,
+            blockedByViewer: await blockedIdsOfViewer(fastify.prisma, viewerId),
+          }),
+        },
         select: publicUserSelect
       });
 
