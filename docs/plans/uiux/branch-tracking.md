@@ -33,7 +33,28 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
 > - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
 >
-> ### 258i — le cliquet i18n avait cessé de cliqueter (#4292, en cours)
+> ### 259i — le SIGNE d'un glissement, troisième famille RTL (#4297, en cours)
+>
+> SwiftUI retourne les piles et les marges ; `RightToLeftLayoutGuardTests` garde les
+> symboles nommés par un côté. **Personne ne gardait le signe d'un `DragGesture`** —
+> « `dx < -60` ⇒ suivant » veut dire « glisser à gauche avance », faux en arabe.
+> Détail : `docs/analyses/uiux/2026-08-29-iteration-259i-reading-direction.md`.
+>
+> - **25 comparaisons de `translation.width`, dont 16 ne doivent PAS se retourner** :
+>   9 n'encodent aucun sens (`abs()`, dominance d'axe) et 7 déplacent un objet qui
+>   suit le doigt. Le tri fait partie de la mesure.
+> - **Forme sûre** : un helper qui est l'IDENTITÉ en LTR ; les sites gardent leurs
+>   comparaisons, seul l'opérande change. Le comportement actuel est préservé par
+>   construction, pas par vérification.
+> - **`.offset(x:)` n'est PAS retourné par SwiftUI** (contrairement aux marges et
+>   alignements). C'est le discriminant entre les deux cas : `ReelsPlayerView` a pu
+>   être retourné (son visuel tient en UN `.offset`), **le cube des stories NON**.
+> - **Retournement du cube TENTÉ puis ANNULÉ** : `horizontalDrag`, `groupSlide`,
+>   `totalSlideX`, `exitX` et l'orientation des faces vivent en espace écran.
+>   Retourner la seule décision aurait envoyé la face de commit à l'opposé du doigt —
+>   **pire que le défaut**, où l'arabe est au moins cohérent. → #4298 (simulateur).
+>
+> ### 258i — le cliquet i18n avait cessé de cliqueter (#4292, MERGÉE `5e162ed7`)
 >
 > Plafond épinglé **1545**, backlog réel **102** : le cliquet admettait 1443 clés
 > neuves non traduites. Le catalogue s'était rempli (3397/3408 traduites en 6

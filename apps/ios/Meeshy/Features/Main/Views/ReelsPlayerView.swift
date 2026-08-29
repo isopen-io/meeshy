@@ -90,6 +90,8 @@ struct ReelsPlayerView: View {
     /// RootView — the single source of truth the feed avatars read.
     var authorHasStory: ((_ userId: String) -> Bool)? = nil
 
+    @Environment(\.layoutDirection) private var layoutDirection
+
     @StateObject private var viewModel = ReelsViewModel()
     @State private var commentsReel: FeedPost?
     /// Réel en édition via le menu « … » du rail d'actions — parité avec le
@@ -125,7 +127,14 @@ struct ReelsPlayerView: View {
 
             backControls
         }
-        .offset(x: max(0, edgeDrag))
+        // `edgeDrag` est désormais exprimé dans le sens de la LECTURE ; `.offset`,
+        // lui, est en espace ÉCRAN et n'est PAS retourné par SwiftUI (contrairement
+        // aux marges et aux alignements). Le helper est sa propre réciproque : on
+        // repasse donc en espace écran ici, pour que le contenu suive le doigt.
+        // Sans cette ligne, l'arabe aurait un contenu qui part à droite pendant que
+        // le doigt va à gauche — l'incohérence qui a fait renoncer au même
+        // retournement sur le cube des stories (#4297).
+        .offset(x: ReadingDirection.readingDelta(max(0, edgeDrag), layoutDirection: layoutDirection))
         .task {
             viewModel.seed(posts: seedPosts, startId: startId)
             // Le réel affiché est CONSOMMÉ : ses notifications (nouveau réel,
@@ -393,10 +402,22 @@ struct ReelsPlayerView: View {
                 .gesture(
                     DragGesture(minimumDistance: 12)
                         .onChanged { value in
-                            edgeDrag = max(0, value.translation.width)
+                            // `ZStack(alignment: .topLeading)` place la bande au
+                            // bord de DÉBUT DE LECTURE : SwiftUI la déplace donc
+                            // à droite en arabe. Le signe brut, lui, ne bougeait
+                            // pas — il aurait fallu pousser vers la droite pour
+                            // fermer, c'est-à-dire à l'OPPOSÉ du bord qui porte
+                            // le geste. Identité en LTR (#4297).
+                            edgeDrag = max(0, ReadingDirection.readingDelta(
+                                value.translation.width,
+                                layoutDirection: layoutDirection
+                            ))
                         }
                         .onEnded { value in
-                            if value.translation.width > 70 {
+                            if ReadingDirection.readingDelta(
+                                value.translation.width,
+                                layoutDirection: layoutDirection
+                            ) > 70 {
                                 onClose()
                             }
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { edgeDrag = 0 }
