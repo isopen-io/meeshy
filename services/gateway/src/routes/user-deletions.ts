@@ -14,6 +14,8 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { writeConversationPreferences } from '../services/conversationPreferencesSync';
+import { depreciee, dateDeRetrait } from '../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { retractNotificationsForClearedHistory } from '../services/messaging/retractHiddenMessageNotifications';
 import {
   hideMessagesForUser,
@@ -45,6 +47,36 @@ interface ClearHistoryBody {
  * routes internes déjà absolues sert `/api/v1/api/v1/user/deleted-conversations`,
  * jamais `/api/v1/user/deleted-conversations`.
  */
+/**
+ * Le jour où la décision de #4317 est prise — pas celui où l'alias est né.
+ * `Deprecation` est une date STRUCTURÉE (RFC 9745) : elle dit depuis quand
+ * l'adresse est en sursis, et cette date est le verdict, pas le montage.
+ */
+const DEPUIS_ALIAS_SUPPRESSION_CONVERSATION = '2026-08-30';
+
+/**
+ * L'annonce servie par `DELETE /api/conversations/:conversationId/delete-for-me`.
+ *
+ * Le successeur est CALCULÉ par requête, pour deux raisons qui tiennent
+ * ensemble. D'abord il porte l'id RÉEL de la conversation appelée, jamais le
+ * motif `:conversationId` : un `Link` qu'on ne peut pas suivre sans le
+ * réécrire n'a rendu qu'une moitié de service — c'est la forme retenue pour
+ * l'alias des pièces jointes, vérifiée sur staging. Ensuite il passe par
+ * `apiPath()`, source unique du préfixe : le jour où la version d'API bouge,
+ * l'annonce bouge avec elle au lieu de désigner une adresse morte.
+ *
+ * `retraitLe` s'en dérive par la fenêtre du dépôt (`identity.md` § 5,
+ * 180 jours). Elle INFORME d'une échéance stable ; le retrait réel reste
+ * gouverné par le compteur d'accès nul (#4275). Ici le compteur devrait
+ * tomber vite : aucun des trois clients n'appelle cette adresse.
+ */
+const ALIAS_SUPPRESSION_CONVERSATION = {
+  depuis: DEPUIS_ALIAS_SUPPRESSION_CONVERSATION,
+  successeur: (request: FastifyRequest) =>
+    apiPath(`/conversations/${(request.params as ConversationIdParams).conversationId}/delete-for-me`),
+  retraitLe: dateDeRetrait(DEPUIS_ALIAS_SUPPRESSION_CONVERSATION),
+} as const;
+
 export type UserDeletionsRoutesOptions = {
   readonly basePath?: string;
 };
@@ -70,13 +102,44 @@ export type UserDeletionsRoutesOptions = {
  * diffusion Socket.IO) que celle-ci n'a jamais reçue. Faire remonter CETTE
  * route à `/api/v1` ferait lever Fastify au démarrage
  * (`FST_ERR_DUPLICATED_ROUTE`) — mesuré sur le manifeste (#4276) :
- * `DELETE /api/v1/conversations/:id/delete-for-me` y figure déjà. Les six
- * AUTRES routes de ce fichier n'ont AUCUN doublon (vérifié :
- * `grep -rn` sur `services/gateway/src/routes` ne rend qu'un hit HORS
- * commentaire, celui-ci) et pourraient migrer sans risque — mais un fichier
- * scindé en deux conventions d'adressage reproduirait exactement le défaut
- * que ce critère referme. Suivi à part : quelle implémentation du
- * « delete-for-me » de conversation doit rester ?
+ * `DELETE /api/v1/conversations/:id/delete-for-me` y figure déjà.
+ *
+ * ## La décision de #4317 est PRISE, et elle se mesure
+ *
+ * #4317 demandait « laquelle des deux implémentations survit ? » en la
+ * classant décision produit. Ce n'en était pas une : les deux moitiés
+ * n'écrivent pas dans la même colonne, et une seule des deux écritures est
+ * LUE par la liste.
+ *
+ * - La moitié riche écrit `Participant.deletedForMe` — la colonne sur
+ *   laquelle `routes/conversations/core.ts` construit son `whereClause` de
+ *   liste, celle que `utils/delta-tombstones.ts` et `routes/sync/conversations.ts`
+ *   interrogent pour les deltas.
+ * - CETTE moitié écrit `UserConversationPreferences.deletedForUserAt` —
+ *   qu'AUCUNE requête de liste ne consulte ; `core.ts` la sélectionne pour
+ *   la projeter en `isDeletedForUser`, et rien d'autre.
+ *
+ * Et les trois clients tranchent dans le même sens : iOS
+ * (`ConversationService.deleteForMe`, endpoint relatif sur `apiBaseURL`,
+ * donc `/api/v1`) et Android (`ConversationApi.deleteForMe`, même base)
+ * appellent la moitié RICHE ; le web n'appelle ni l'une ni l'autre. Cette
+ * route-ci n'a, mesuré, AUCUN appelant.
+ *
+ * Verdict : `routes/conversations/delete-for-me.ts` survit. Cette adresse
+ * devient un ALIAS EN SURSIS et le DIT (`depreciee`, #4274) plutôt que de
+ * disparaître d'un coup — la queue des versions installées est longue, et le
+ * retrait reste gouverné par le compteur d'accès nul (#4275), jamais par une
+ * revue de code client.
+ *
+ * ## Ce qui RESTE, et qui est un bogue, pas un rangement
+ *
+ * Les six AUTRES routes de ce fichier n'ont aucun doublon ET aucun appelant
+ * (mesuré sur les trois clients). Deux d'entre elles — `restore-for-me` et
+ * `GET /user/deleted-conversations` — LISENT `deletedForUserAt`, dont le seul
+ * écrivain serveur est la route ci-dessus, celle que personne n'appelle : la
+ * corbeille de conversations ne peut donc rien contenir. Suivi en bogue à
+ * part, référencé depuis #4317 — pas ici, parce qu'y toucher n'est plus une
+ * question d'adresse.
  */
 export default async function userDeletionsRoutes(
   fastify: FastifyInstance,
@@ -96,6 +159,10 @@ export default async function userDeletionsRoutes(
   fastify.delete<{ Params: ConversationIdParams }>(
     `${basePath}/conversations/:conversationId/delete-for-me`,
     {
+      // Seule route de ce fichier à porter l'annonce : c'est la seule dont le
+      // successeur EXISTE (cf. le bloc de tête). `onRequest` et non le
+      // handler — un appelant refusé doit apprendre qu'il migre, lui d'abord.
+      onRequest: depreciee(ALIAS_SUPPRESSION_CONVERSATION),
       preValidation: [authMiddleware],
       schema: {
         description: 'Soft-delete a conversation from the authenticated user\'s view. Other participants will still see the conversation. The conversation can be restored later.',

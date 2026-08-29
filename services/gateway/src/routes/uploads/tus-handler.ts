@@ -30,13 +30,21 @@ const TUS_TEMP_PATH = path.join(UPLOAD_PATH, '.tus-resumable');
 /**
  * Repli DÉFENSIF, jamais la source de vérité (#4277, critère 2). Sert
  * UNIQUEMENT si l'appelant ne fournit aucune `basePath` — un
- * `buildFakeFastify()` de test (aucune option) ou, TRANSITOIREMENT, l'ancien
- * appel `server.register(registerTusRoutes)` de `route-registration.ts` tant
- * que son édit d'enregistrement (#4277) n'est pas appliqué. Valeur IDENTIQUE
- * à l'ancienne adresse codée en dur : aucun comportement ne change tant que
- * l'enregistrement ne fournit rien.
+ * `buildFakeFastify()` de test (aucune option). L'enregistrement réel fournit
+ * la sienne depuis `route-registration.ts` (`${API_PREFIX}/uploads`), ce que
+ * le manifeste confirme.
+ *
+ * CALCULÉ, plus littéral (#4317, point 3). Il restait le dernier module du
+ * gateway à porter la chaîne `/api/v1` en dur, ce que le critère 2 de #4277
+ * voulait précisément supprimer : la version d'API est une CONFIGURATION —
+ * elle peut devenir `/api/v2`, ou se déplacer vers `api.domaine.tld/v2/` —
+ * et un littéral la fige à l'insu de son module. Le repli suit désormais
+ * `apiPath()`, source unique du préfixe, donc il suit la version partout où
+ * elle bouge. La valeur RENDUE est identique tant que la version vaut `v1` :
+ * ce point ne change aucun comportement, il retire la dernière déclaration
+ * indépendante du préfixe.
  */
-const DEFAULT_UPLOADS_PATH = '/api/v1/uploads';
+const DEFAULT_UPLOADS_PATH = apiPath('/uploads');
 
 /**
  * Options du plugin. `basePath` est volontairement PAS nommée `prefix` :
