@@ -2,7 +2,7 @@
  * Unit tests for auth magic-link routes (magic-link.ts)
  * Tests GET /me, POST /refresh, POST /verify-email, POST /resend-verification,
  * POST /send-phone-code, POST /verify-phone, GET /sessions,
- * DELETE /sessions/:sessionId, DELETE /sessions, POST /validate-session.
+ * DELETE /sessions/:sessionId, DELETE /sessions.
  *
  * @jest-environment node
  */
@@ -20,9 +20,19 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
   },
 }));
 
+// Depuis #4264 un JWT porte `sid` — l'identifiant de la ligne `UserSession`
+// qui l'a émis. Le double sert donc par défaut un jeton NOMMÉ : c'est la forme
+// nominale d'après le lot. Les témoins de la fenêtre de transition surchargent
+// ce retour pour rendre un jeton HÉRITÉ (sans `sid`).
 jest.mock('jsonwebtoken', () => ({
-  verify: jest.fn().mockReturnValue({ userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER' }),
-  decode: jest.fn().mockReturnValue({ userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER' }),
+  verify: jest.fn().mockReturnValue({
+    userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER',
+    sid: 'sess-courante', iat: Math.floor(Date.now() / 1000),
+  }),
+  decode: jest.fn().mockReturnValue({
+    userId: '507f1f77bcf86cd799439011', username: 'alice', role: 'USER',
+    sid: 'sess-courante', iat: Math.floor(Date.now() / 1000),
+  }),
 }));
 
 jest.mock('@meeshy/shared/utils/validation', () => ({
@@ -84,10 +94,16 @@ jest.mock('../../../../routes/auth/types', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerMagicLinkRoutes } from '../../../../routes/auth/magic-link';
+import { LEGACY_SID_WINDOW_CLOSES_AT } from '../../../../services/auth/session-jwt';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const USER_ID = '507f1f77bcf86cd799439011';
+
+// #4264 — le témoin du critère 5 exige DEUX sessions : avec une seule, la
+// garde de compte de #4213 suffit déjà et le témoin ne prouverait rien de neuf.
+const SID_COURANTE = 'sess-courante';   // le téléphone qu'on garde en main
+const SID_REVOQUEE = 'sess-revoquee';   // l'appareil qu'on vient de couper
 
 const mockUser = {
   id: USER_ID,
@@ -143,10 +159,32 @@ function makeAuthService(overrides: Record<string, any> = {}) {
   };
 }
 
+/**
+ * Double de `userSession.findFirst` qui répond selon le `where` reçu.
+ *
+ * Un double qui ignore le `where` ne teste pas la requête — or c'est la
+ * requête qui PORTE la garde de #4264 : `{ id: sid, userId, isValid: true }`.
+ * Rendre inconditionnellement une session ferait passer un `sid` révoqué, un
+ * `sid` d'un autre compte et un `sid` inventé, sur une suite verte.
+ */
+function makeFindFirst(sessionsValides: Set<string>) {
+  return jest.fn<any>().mockImplementation(async (args: any) => {
+    const where = args?.where ?? {};
+    if (typeof where.id === 'string') {
+      const idValide = sessionsValides.has(where.id);
+      const bonProprietaire = where.userId === undefined || where.userId === USER_ID;
+      const exigeValide = where.isValid !== true || idValide;
+      return idValide && bonProprietaire && exigeValide ? { id: where.id } : null;
+    }
+    return null;
+  });
+}
+
 function makePrisma(overrides: Record<string, any> = {}) {
+  const { sessionsValides = new Set([SID_COURANTE]), ...rest } = overrides as any;
   return {
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: makeFindFirst(sessionsValides as Set<string>),
       update: jest.fn<any>().mockResolvedValue({}),
       // Depuis #4213, `/refresh` REFUSE quand l'utilisateur n'a plus AUCUNE
       // session valide : c'est ce qui fait que la révocation atteint enfin
@@ -154,11 +192,13 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // obtenir un JWT neuf, si bien que couper les sockets ne servait à rien
       // — le porteur d'un jeton volé se reconnectait dans la seconde.
       //
+      // Depuis #4264 ce compte ne gouverne PLUS que le régime de transition
+      // (jeton hérité, sans `sid`) ; un jeton nommé est jugé par `findFirst`.
       // Le double en déclare une : ces témoins portent sur le RENOUVELLEMENT,
       // pas sur la révocation, qui a les siens.
       count: jest.fn<any>().mockResolvedValue(1),
     },
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -461,15 +501,7 @@ describe('POST /refresh — signature forgée', () => {
 describe('POST /refresh — with trusted session', () => {
   it('returns 200 and slides session TTL', async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue({}),
-        // Une surcharge REMPLACE la clé entière : sans ce rappel, elle perd le
-        // `count` du double de base et la garde de révocation (#4213) refuse.
-        count: jest.fn<any>().mockResolvedValue(1),
-      },
-    });
+    const prisma = makePrisma();
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST',
@@ -488,14 +520,8 @@ describe('POST /refresh — with trusted session', () => {
   /// leur TTL initial malgré l'activité de l'utilisateur.
   it('slides the session using the SCHEMA field lastActivityAt (not User.lastActiveAt)', async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const update = jest.fn<any>().mockResolvedValue({});
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update,
-        count: jest.fn<any>().mockResolvedValue(1),
-      },
-    });
+    const prisma = makePrisma();
+    const update = prisma.userSession.update as jest.Mock<any>;
     const app = await buildApp({ prisma });
     await app.inject({
       method: 'POST',
@@ -519,15 +545,7 @@ describe('POST /refresh — with trusted session', () => {
   // ne dépend donc jamais du User-Agent de la requête en cours.
   it("une session de confiance ne discrimine plus par application — connecté depuis plusieurs apps jamais pénalisé (round 6)", async () => {
     mockFindTrustedSession.mockResolvedValueOnce({ id: 'sess-1' });
-    const prisma = makePrisma({
-      userSession: {
-        findFirst: jest.fn<any>().mockResolvedValue(null),
-        update: jest.fn<any>().mockResolvedValue({}),
-        // Une surcharge REMPLACE la clé entière : sans ce rappel, elle perd le
-        // `count` du double de base et la garde de révocation (#4213) refuse.
-        count: jest.fn<any>().mockResolvedValue(1),
-      },
-    });
+    const prisma = makePrisma();
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST',
@@ -543,6 +561,196 @@ describe('POST /refresh — with trusted session', () => {
       prisma,
       { userId: USER_ID, sessionToken: 'my-session-token' }
     );
+    await app.close();
+  });
+});
+
+// ─── POST /refresh — la révocation atteint LA session nommée (#4264) ─────────
+
+/** Sert un jeton dont la charge est exactement celle passée — signature réputée valide. */
+async function servirJeton(charge: Record<string, unknown>) {
+  const jwt = await import('jsonwebtoken');
+  (jwt.verify as jest.Mock<any>).mockReturnValueOnce(charge);
+  (jwt.decode as jest.Mock<any>).mockReturnValueOnce(charge);
+}
+
+const jetonNomme = (sid: string) => ({
+  userId: USER_ID, username: 'alice', role: 'USER',
+  sid, iat: Math.floor(Date.now() / 1000),
+});
+
+describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', () => {
+  // LE témoin du lot. La subtilité est dans le COMPTE : le double déclare
+  // qu'il reste UNE session valide (`count` → 1), donc la garde de #4213 —
+  // « au moins une session valide pour ce compte » — laisse passer les deux
+  // jetons. Avec une seule session, ce témoin ne prouverait rien de neuf.
+  //
+  // Ce que le défaut coûtait : révoquer une session tierce se fait TOUJOURS
+  // depuis un appareil qu'on garde, donc le compte garde une session valide,
+  // donc le jeton volé passait `refresh` — la révocation ne révoquait rien.
+
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  const compteApresRevocation = () => makePrisma({
+    sessionsValides: new Set([SID_COURANTE]), // SID_REVOQUEE vient d'être coupée
+  });
+
+  it('REFUSE le jeton émis par la session révoquée, alors qu\'une autre session reste valide', async () => {
+    const prisma = compteApresRevocation();
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_REVOQUEE));
+
+    const res = await app.inject({
+      method: 'POST', url: '/refresh', payload: { token: 'jwt-de-l-appareil-coupe' },
+    });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data?.token).toBeUndefined();
+    // Preuve que le refus vient de la SESSION NOMMÉE et non du compte : le
+    // compte, lui, a toujours une session valide.
+    expect(await prisma.userSession.count()).toBe(1);
+    await app.close();
+  });
+
+  it('ACCEPTE le jeton de la session restée valide, dans le MÊME état du compte', async () => {
+    const app = await buildApp({ prisma: compteApresRevocation() });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({
+      method: 'POST', url: '/refresh', payload: { token: 'jwt-du-telephone-garde' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.token).toBe('new-jwt-token');
+    await app.close();
+  });
+
+  it('interroge la session par son id ET par son propriétaire — un `sid` d\'un autre compte ne passe pas', async () => {
+    // Sans `userId` dans le `where`, un `sid` parfaitement valide APPARTENANT
+    // À QUELQU\'UN D\'AUTRE suffirait : la garde vérifierait qu\'une session
+    // existe, jamais qu\'elle est celle du porteur. Le double refuse tout
+    // `where.userId` étranger, ce qui rend le témoin sensible à son retrait.
+    const prisma = makePrisma({ sessionsValides: new Set([SID_COURANTE]) });
+    const app = await buildApp({ prisma });
+    await servirJeton({ ...jetonNomme(SID_COURANTE), userId: USER_ID });
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    const where = (prisma.userSession.findFirst as jest.Mock<any>).mock.calls[0][0].where;
+    expect(where).toEqual({ id: SID_COURANTE, userId: USER_ID, isValid: true });
+    await app.close();
+  });
+
+  it('le jeton RENOUVELÉ garde le nom de sa session — `refresh` est le cinquième site d\'émission', async () => {
+    // Critère 1, « `refresh` lui-même ». Si le renouvellement rendait un jeton
+    // anonyme, une seule rotation suffirait à ressortir du régime nominal et à
+    // retomber dans la fenêtre de transition : la garde s\'auto-désarmerait.
+    const authService = makeAuthService();
+    const app = await buildApp({ authService, prisma: makePrisma() });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), SID_COURANTE);
+    await app.close();
+  });
+});
+
+// ─── POST /refresh — fenêtre de transition d\'un jeton hérité (#4264, critère 3) ─
+
+/**
+ * Fige l\'horloge SANS toucher aux timers : `doNotFake` laisse `setTimeout` &
+ * consorts réels, dont Fastify dépend. Un témoin de butoir daté comparé à
+ * l\'horloge RÉELLE serait une bombe — vert aujourd\'hui, rouge le jour où la
+ * fenêtre se ferme, sur un code inchangé.
+ */
+function figerHorloge(instant: Date) {
+  jest.useFakeTimers({
+    doNotFake: [
+      'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+      'setImmediate', 'clearImmediate', 'nextTick', 'queueMicrotask',
+      'performance', 'hrtime',
+    ],
+    now: instant,
+  });
+}
+
+const jetonHerite = (iatMs: number) => ({
+  userId: USER_ID, username: 'alice', role: 'USER', iat: Math.floor(iatMs / 1000),
+});
+
+describe('POST /refresh — jeton hérité, sans `sid`', () => {
+  // Un `mockResolvedValueOnce` laissé NON CONSOMMÉ par un témoin précédent
+  // (celui de la signature forgée prouve justement que le rattrapage n'est
+  // plus TENTÉ) reste en file et coifferait le nôtre. On vide la file.
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  it('reste accepté DANS la fenêtre quand le compte garde une session valide', async () => {
+    // La transition explicite du critère 3 : refuser d\'emblée déconnecterait
+    // tout le parc installé pour fermer un cas étroit — le compromis que #4213
+    // avait déjà écarté.
+    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
+    const app = await buildApp({ prisma: makePrisma() });
+    await servirJeton(jetonHerite(dedans.getTime()));
+    figerHorloge(dedans);
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-hérité' } });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('retombe sur la règle de compte de #4213 : zéro session valide ⇒ refus', async () => {
+    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
+    const prisma = makePrisma();
+    (prisma.userSession.count as jest.Mock<any>).mockResolvedValue(0);
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonHerite(dedans.getTime()));
+    figerHorloge(dedans);
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-hérité' } });
+
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it('est REFUSÉ une fois la fenêtre fermée — le repli n\'est pas permanent', async () => {
+    // Sans ce butoir, `{ ignoreExpiration: true }` rendait un jeton hérité
+    // rafraîchissable INDÉFINIMENT : la garde du critère 2 n\'aurait jamais
+    // atteint personne, puisqu\'il suffit de ne pas porter `sid` pour l\'éviter.
+    const apres = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() + 1000);
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonHerite(apres.getTime()));
+    figerHorloge(apres);
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-hérité' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data?.token).toBeUndefined();
+    // Et le refus précède la question du compte : on ne compte même plus.
+    expect(prisma.userSession.count).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('SORT de la fenêtre : le jeton renouvelé prend le nom de la session de confiance présentée', async () => {
+    // La porte de sortie silencieuse. Un client hérité qui envoie son
+    // `sessionToken` repart avec un jeton NOMMÉ et ne voit rien — c\'est ce qui
+    // vide la fenêtre avant qu\'elle ne se ferme.
+    const dedans = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 3600 * 1000);
+    mockFindTrustedSession.mockResolvedValueOnce({ id: SID_COURANTE });
+    const authService = makeAuthService();
+    const app = await buildApp({ authService, prisma: makePrisma() });
+    await servirJeton(jetonHerite(dedans.getTime()));
+    figerHorloge(dedans);
+
+    await app.inject({
+      method: 'POST', url: '/refresh',
+      payload: { token: 'jwt-hérité', sessionToken: 'jeton-de-session' },
+    });
+
+    expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), SID_COURANTE);
     await app.close();
   });
 });
@@ -783,48 +991,6 @@ describe('DELETE /sessions — revoke all', () => {
   });
 });
 
-// ─── POST /validate-session ───────────────────────────────────────────────────
-
-describe('POST /validate-session — invalid session', () => {
-  it('returns 200 with valid: false when session not found', async () => {
-    const app = await buildApp();
-    const res = await app.inject({
-      method: 'POST',
-      url: '/validate-session',
-      payload: { sessionToken: 'unknown-token' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    await app.close();
-  });
-});
-
-describe('POST /validate-session — valid session', () => {
-  it('returns 200 with valid: true when session is found', async () => {
-    const authService = makeAuthService({
-      validateSessionToken: jest.fn<any>().mockResolvedValue({
-        id: 'sess-1',
-        userId: USER_ID,
-        deviceType: 'desktop',
-        browserName: 'Chrome',
-        osName: 'Linux',
-        location: null,
-        isMobile: false,
-        createdAt: new Date(),
-        lastActivityAt: new Date(),
-        isTrusted: true,
-      }),
-    });
-    const app = await buildApp({ authService });
-    const res = await app.inject({
-      method: 'POST',
-      url: '/validate-session',
-      payload: { sessionToken: 'valid-token' },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    await app.close();
-  });
-});
+// Les deux cas de `POST /validate-session` sont partis avec la route (#4186).
+// Son absence est gardée par un témoin NÉGATIF monté sous le préfixe de
+// production : `__tests__/unit/routes/identity-twins-retired.test.ts`.

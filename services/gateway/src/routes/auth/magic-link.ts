@@ -2,17 +2,15 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import jwt from 'jsonwebtoken';
 import {
   userSchema,
-  sessionSchema,
   errorResponseSchema,
   sessionsListResponseSchema,
   refreshTokenRequestSchema,
   verifyEmailRequestSchema,
   resendVerificationRequestSchema,
   sendPhoneCodeRequestSchema,
-  verifyPhoneRequestSchema,
-  validateSessionRequestSchema
+  verifyPhoneRequestSchema
 } from '@meeshy/shared/types';
-import { AuthSchemas, SessionSchemas, validateSchema } from '@meeshy/shared/utils/validation';
+import { AuthSchemas, validateSchema } from '@meeshy/shared/utils/validation';
 import { createUnifiedAuthMiddleware, findTrustedSession, UnifiedAuthRequest} from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -20,6 +18,10 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendIntern
 import { resolveAutoTranslateEnabled } from '../../utils/auto-translate-preference';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import { hashSessionToken } from '../../utils/session-token';
+import {
+  legacyTokenRefusal,
+  type SessionBoundTokenPayload,
+} from '../../services/auth/session-jwt';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -149,7 +151,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // Try to decode the JWT — accept expired tokens (ignoreExpiration) so that
       // the client can rotate a valid-but-stale JWT without a sessionToken round-trip.
       // If the signature itself is invalid (tampered), jwt.verify will still throw.
-      let decoded: { userId?: string; username?: string; role?: string } | null = null;
+      let decoded: Partial<SessionBoundTokenPayload> | null = null;
       // Signature réellement vérifiée, ou simple lecture du contenu ? La
       // distinction est TOUT : `jwt.decode` ne vérifie rien, il désérialise.
       // Sans ce drapeau, un jeton forgé avec une signature quelconque suffisait
@@ -157,7 +159,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // garde en aval ne testait que la PRÉSENCE de `userId`.
       let signatureVerified = false;
       try {
-        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as { userId?: string; username?: string; role?: string };
+        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as Partial<SessionBoundTokenPayload>;
         signatureVerified = true;
       } catch {
         // Signature invalide : le contenu n'est plus qu'une prétention.
@@ -169,7 +171,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         // AUCUN recours, qu'une session de confiance existe ou non. On décode
         // quand même pour distinguer « aucun userId du tout » (401 générique
         // ci-dessous) d'une signature invalide (401 explicite juste après).
-        decoded = jwt.decode(token) as { userId?: string; username?: string; role?: string } | null;
+        decoded = jwt.decode(token) as Partial<SessionBoundTokenPayload> | null;
       }
 
       if (!decoded?.userId) {
@@ -205,34 +207,80 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         }
       }
 
-      // La RÉVOCATION doit atteindre cette route (#4213, note de #4141).
+      // La RÉVOCATION doit atteindre cette route (#4213), et elle doit
+      // atteindre LA session révoquée, pas seulement le compte vidé (#4264).
       //
-      // Jusqu'ici, un JWT authentique mais EXPIRÉ suffisait à obtenir un JWT
-      // neuf, sans jeton de session ni consultation d'aucune liste de
-      // révocation. Couper les sockets ne servait donc à rien : le porteur d'un
-      // JWT volé se reconnectait dans la seconde. Les deux ensemble seulement
-      // font une révocation.
+      // Jusqu'à #4213, un JWT authentique mais EXPIRÉ suffisait à obtenir un
+      // JWT neuf, sans jeton de session ni consultation d'aucune liste de
+      // révocation : couper les sockets ne servait à rien, le porteur d'un
+      // jeton volé se reconnectait dans la seconde.
       //
-      // La garde est posée sur l'EXISTENCE d'une session valide, et non sur la
-      // présentation d'un jeton de session : exiger le jeton refuserait les
-      // clients installés qui n'en envoient pas, alors que le cas qui compte —
-      // « ce n'était pas moi », la réinitialisation de mot de passe — invalide
-      // TOUTES les sessions et laisse donc l'utilisateur sans aucune ligne
-      // valide.
+      // #4213 ne pouvait garder que l'EXISTENCE d'une session valide pour le
+      // compte, faute de pouvoir dire de QUELLE session ce jeton provenait —
+      // sa charge ne portait que `userId`, `username`, `role`. Révoquer UNE
+      // session laissait donc le jeton volé passer tant que son propriétaire
+      // restait connecté ailleurs, ce qui est le cas NOMINAL : on révoque une
+      // session tierce depuis un appareil qu'on garde.
       //
-      // Ce qu'elle NE ferme PAS : la révocation d'UNE session laisse les autres
-      // valides, donc un JWT volé passe encore tant que son propriétaire reste
-      // connecté ailleurs. La fermer complètement demande que le JWT porte son
-      // identifiant de session — un changement de forme du jeton, suivi à part.
-      const sessionsValides = await context.prisma.userSession.count({
-        where: { userId: decoded.userId, isValid: true },
-      });
+      // Le claim `sid` (voir `services/auth/session-jwt.ts`) permet enfin de
+      // NOMMER au lieu de compter. Deux régimes, et un seul est permanent :
+      const sid = decoded.sid;
 
-      if (sessionsValides === 0) {
-        logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
-          userId: decoded.userId,
+      if (sid) {
+        // Régime NOMINAL — le jeton dit sa session ; c'est celle-là, et aucune
+        // autre, qui décide. `userId` est dans le `where` : sans lui, un `sid`
+        // valide appartenant à un AUTRE compte suffirait à passer la garde.
+        //
+        // Le filtre s'arrête à `isValid`, comme la règle de compte qu'il
+        // remplace : y ajouter `expiresAt` resserrerait au-delà de l'issue et
+        // déconnecterait des porteurs que #4213 laissait passer. Ce
+        // durcissement se mesure à part.
+        const sessionNommee = await context.prisma.userSession.findFirst({
+          where: { id: sid, userId: decoded.userId, isValid: true },
+          select: { id: true },
         });
-        return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+
+        if (!sessionNommee) {
+          logger.warn('Refus de refresh : la session nommée par le jeton n\'est plus valide', {
+            userId: decoded.userId,
+            sid,
+          });
+          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+        }
+      } else {
+        // Régime de TRANSITION — un jeton émis avant #4264 ne nomme rien.
+        //
+        // Le refuser d'emblée déconnecterait tout le parc installé pour fermer
+        // un cas étroit : c'est le compromis que #4213 avait déjà écarté. Mais
+        // cette route vérifie avec `{ ignoreExpiration: true }` — sa raison
+        // d'être — si bien qu'un tel jeton resterait rafraîchissable
+        // INDÉFINIMENT : « jusqu'à son expiration naturelle » est faux ici,
+        // puisque l'expiration est précisément ignorée. Sans butoir, le repli
+        // devient permanent et la garde ci-dessus n'atteint jamais personne.
+        //
+        // Le butoir est daté et double (âge du jeton + fermeture de la
+        // fenêtre) — voir `legacyTokenRefusal`, qui porte le raisonnement.
+        const refus = legacyTokenRefusal(decoded, new Date());
+
+        if (refus) {
+          logger.warn('Refus de refresh : jeton hérité hors de la fenêtre de transition (#4264)', {
+            userId: decoded.userId,
+            motif: refus,
+          });
+          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+        }
+
+        // Dans la fenêtre, la règle de #4213 s'applique telle quelle.
+        const sessionsValides = await context.prisma.userSession.count({
+          where: { userId: decoded.userId, isValid: true },
+        });
+
+        if (sessionsValides === 0) {
+          logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
+            userId: decoded.userId,
+          });
+          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
+        }
       }
 
       const user = await authService.getUserById(decoded.userId);
@@ -241,7 +289,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
-      const newToken = authService.generateToken(user);
+      // Le jeton renouvelé garde le nom de SA session (#4264, critère 1 :
+      // « `refresh` lui-même »). Pour un jeton hérité, la session de confiance
+      // présentée sert de porte de sortie de la fenêtre de transition : le
+      // client bascule silencieusement sur un jeton nommé dès qu'il envoie son
+      // `sessionToken`. S'il n'en envoie aucun, le jeton reste anonyme et le
+      // butoir daté reste sa seule échéance — il ne se ré-arme pas, la
+      // fermeture de fenêtre ne dépendant pas du jeton.
+      const newToken = authService.generateToken(user, sid ?? activeSession?.id);
 
       // Sliding window: extend the trusted session another full cycle on every
       // successful refresh and bump lastActiveAt. As long as the user opens the
@@ -703,65 +758,13 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     }
   });
 
-  // POST /validate-session - Validate session token
-  fastify.post('/validate-session', {
-    schema: {
-      description: 'Validate a session token and get session info',
-      tags: ['auth', 'sessions'],
-      summary: 'Validate session token',
-      body: validateSessionRequestSchema,
-      response: {
-        200: {
-          description: 'Session validation result',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                valid: { type: 'boolean' },
-                session: { ...sessionSchema, nullable: true }
-              }
-            }
-          }
-        },
-        500: errorResponseSchema
-      },
-      security: []
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const validatedData = validateSchema(SessionSchemas.validateToken, request.body, 'validate-session');
-      const { sessionToken } = validatedData;
-
-      const session = await authService.validateSessionToken(sessionToken);
-
-      if (!session) {
-        return sendSuccess(reply, {
-          valid: false,
-          session: null
-        });
-      }
-
-      return sendSuccess(reply, {
-        valid: true,
-        session: {
-          id: session.id,
-          userId: session.userId,
-          deviceType: session.deviceType,
-          browserName: session.browserName,
-          osName: session.osName,
-          location: session.location,
-          isMobile: session.isMobile,
-          createdAt: session.createdAt,
-          lastActivityAt: session.lastActivityAt,
-          isTrusted: session.isTrusted
-        }
-      });
-
-    } catch (error) {
-      logger.error('[AUTH] ❌ Erreur validation session', error);
-      return sendInternalError(reply, 'Erreur lors de la validation de la session');
-    }
-  });
+  // ─── POST /validate-session a été RETIRÉE (#4186) ───
+  // Un oracle pur, sans débit et sans appelant sur les trois clients (mesuré :
+  // zéro occurrence de `validate-session` hors gateway, iOS/SDK, web et Android
+  // compris). Elle rendait la session ENTIÈRE — appareil, navigateur, OS,
+  // LOCALISATION — à un appelant sans `Authorization`, sur simple présentation
+  // d'un sessionToken. Ce que la validité d'une session doit produire, c'est un
+  // ACTE (une lecture, une écriture) qui échoue en 401 ; pas un verdict servi à
+  // qui le demande.
+  // Témoin d'absence : `__tests__/unit/routes/identity-twins-retired.test.ts`.
 }

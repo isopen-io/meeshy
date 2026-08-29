@@ -73,6 +73,16 @@ jest.mock('../../../../services/InitService', () => ({
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
+// #4264 — l'inscription crée désormais une SESSION, comme la connexion : sans
+// elle, le JWT d'un compte frais ne nommait rien, et depuis #4213 son premier
+// `POST /auth/refresh` rendait 401 « Session révoquée » à quelqu'un qui n'avait
+// rien révoqué (`count({ userId, isValid: true })` valait zéro).
+const mockCreateSession = jest.fn<any>().mockResolvedValue({ id: 'session-inscription' });
+jest.mock('../../../../services/SessionService', () => ({
+  createSession: (...args: any[]) => mockCreateSession(...args),
+  generateSessionToken: jest.fn(() => 'session-token-inscription'),
+}));
+
 import { registerRegistrationRoutes } from '../../../../routes/auth/register';
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────

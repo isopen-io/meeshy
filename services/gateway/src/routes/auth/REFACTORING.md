@@ -68,7 +68,7 @@ src/routes/auth/
 - `GET /sessions` - Liste sessions actives
 - `DELETE /sessions/:sessionId` - Révocation session spécifique
 - `DELETE /sessions` - Révocation toutes sessions sauf courante
-- `POST /validate-session` - Validation token de session
+- ~~`POST /validate-session`~~ — retirée (#4186) : oracle pur, sans appelant.
 
 **Fonctionnalités:**
 - Support utilisateurs anonymes (Session) et enregistrés (JWT)

@@ -10,6 +10,7 @@ import { MeeshyError } from '@meeshy/shared/utils/errors';
 import { ErrorCode } from '@meeshy/shared/types/errors';
 import { RegisterData } from '../../services/AuthService';
 import { getRequestContext } from '../../services/GeoIPService';
+import { createSession, generateSessionToken } from '../../services/SessionService';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -53,6 +54,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                 // Branche « compte créé »
                 user: userSchema,
                 token: { type: 'string', description: 'JWT access token for API authentication (absent on a phone-ownership conflict)' },
+                // Déclaré parce qu'un champ non déclaré est RETIRÉ à la
+                // sérialisation — le piège que la branche du conflit de numéro
+                // a déjà payé juste en dessous.
+                sessionToken: { type: 'string', description: 'Session token of the device that created the account — presentable to POST /auth/refresh (absent on a phone-ownership conflict)' },
                 expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
 
                 // Branche « numéro déjà détenu » — aucun compte n'a été créé
@@ -187,12 +192,36 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         }
       }
 
-      const token = authService.generateToken(user);
+      // #4264 — CHANGEMENT DE COMPORTEMENT ASSUMÉ : l'inscription crée
+      // désormais une session, comme la connexion.
+      //
+      // `AuthService.register` n'appelait JAMAIS `createSession` : un compte
+      // frais repartait avec un JWT rattaché à RIEN. Depuis #4213 cela n'était
+      // plus seulement incohérent, c'était cassé — sa garde refuse
+      // `POST /refresh` quand `count({ userId, isValid: true })` vaut zéro,
+      // ce qui est exactement l'état d'un compte qui vient d'être créé et ne
+      // s'est pas encore connecté. Le premier renouvellement, 24 h plus tard,
+      // rendait 401 « Session révoquée » à quelqu'un qui n'avait rien révoqué.
+      //
+      // Nommer la session dans le jeton IMPOSAIT donc d'en créer une ; on y
+      // gagne au passage que le premier appareil d'un compte devient
+      // révocable et visible dans `GET /auth/sessions`, comme tous les autres.
+      // Le `sessionToken` est renvoyé pour que le client puisse le présenter
+      // (fenêtre glissante), sur la même clé que `POST /login`.
+      const sessionToken = generateSessionToken();
+      const session = await createSession({
+        userId: user.id,
+        token: sessionToken,
+        requestContext
+      });
+
+      const token = authService.generateToken(user, session.id);
       const permissions = authService.getUserPermissions(user);
 
       return sendSuccess(reply, {
         user: formatUserResponse(user, permissions),
         token,
+        sessionToken,
         expiresIn: 24 * 60 * 60
       });
 

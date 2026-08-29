@@ -204,7 +204,12 @@ describe('POST /login — success', () => {
     expect(body.success).toBe(true);
     expect(body.data.token).toBe('jwt-access-token');
     expect(body.data.sessionToken).toBe('session-token');
-    expect(authService.generateToken).toHaveBeenCalledWith(mockUser);
+    // #4264 — le jeton NOMME la session qui vient de naître. Sans ce second
+    // argument, `POST /refresh` ne pouvait que COMPTER les sessions valides du
+    // compte : révoquer CET appareil-ci depuis un autre laissait son JWT passer
+    // tant qu'une seule session restait valide — le cas nominal, puisqu'on
+    // révoque toujours depuis un appareil qu'on garde.
+    expect(authService.generateToken).toHaveBeenCalledWith(mockUser, mockSession.id);
     await app.close();
   });
 });
@@ -356,6 +361,20 @@ describe('POST /login/2fa — success', () => {
     expect(body.success).toBe(true);
     expect(body.data.token).toBe('jwt-access-token');
     expect(authService.completeAuthWith2FA).toHaveBeenCalledWith('tok', '123456', expect.any(Object));
+    await app.close();
+  });
+
+  it('NOMME lui aussi la session dans le jeton — la seconde porte n\'émet pas un jeton plus pauvre (#4264)', async () => {
+    // La 2FA est le second des CINQ sites d'émission. Un site oublié rouvre
+    // toute la garde : il suffit d'entrer par lui pour obtenir un jeton
+    // anonyme, que `POST /refresh` ne pourra plus rattacher à rien.
+    const { app, authService } = await buildApp();
+    await app.inject({
+      method: 'POST', url: '/login/2fa',
+      payload: { twoFactorToken: 'tok', code: '123456' },
+    });
+
+    expect(authService.generateToken).toHaveBeenCalledWith(mockUser, mockSession.id);
     await app.close();
   });
 });
