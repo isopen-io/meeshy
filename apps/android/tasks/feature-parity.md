@@ -5734,10 +5734,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       stateful `nonisolated` class with unbounded `Int` counters (untestable without a live GPU); Android
       is a total reducer whose two counters are **clamped** so state is O(1) over a multi-minute call.
       +30 behavioural tests. Mutation (RED proof): removing the over-budget clamp fails **exactly** the
-      unbounded-counter test (17 tests, 1 failed, no collateral). **Pending:** the WebRTC `VideoProcessor`/
-      `VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-detect smoothing)
-      that applies `effectiveConfig` per captured frame, the low-light boost pass (folding `FrameLuminance`),
-      and the accent-coherent filter panel UI (preset chips + advanced toggles).
+      unbounded-counter test (17 tests, 1 failed, no collateral). **Low-light-boost decision core landed**
+      (slice `call-low-light-boost`): the pure `core:model` `LowLightBoostPolicy` is the SSOT for the
+      automatic low-light pass — a total, side-effect-free port of iOS `VideoFilterPipeline.applyLowLightBoost`
+      (§14.2.4). `plan(averageBrightness)` decides whether to lift a dim frame and by how much: `null` (forward
+      untouched) for no reading or any normalized brightness `≥ 0.3`, else a `LowLightBoost`
+      (exposureEv/noiseReductionLevel/noiseReductionSharpness/saturation) scaled by
+      `boostFactor = (0.3 − normalized)/0.3` at exact iOS numeric parity (EV×1.5, noise×0.02, sharpness 0.4,
+      saturation 1+×0.2). **SOTA hardening over iOS:** `boostFactor` is **clamped to 0..1** so a degenerate
+      negative reading can never over-boost (iOS never clamps — its luma is always 0..255). `planForFrame(...)`
+      is the actuator's one-call seam that **folds `FrameLuminance.averageOfYPlane`** straight into `plan` —
+      literally the "folding `FrameLuminance`" clause. +13 behavioural tests. Mutation (RED proof): dropping
+      the clamp fails **exactly** the negative-reading test (13 tests, 1 failed, no collateral). **Pending:**
+      the WebRTC `VideoProcessor`/`VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation
+      blur + face-detect smoothing) that applies `effectiveConfig` per captured frame, the actuator glue that
+      applies the `LowLightBoost` filters to the frame, and the accent-coherent filter panel UI (preset
+      chips + advanced toggles).
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [~] Camera-covered ("dark frame") detection during video calls — **pure detection
       core landed** (slice `call-dark-frame-detection`): the `core:model`

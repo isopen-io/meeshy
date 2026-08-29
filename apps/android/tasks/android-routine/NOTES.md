@@ -5,6 +5,21 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — porting an inlined-constant formula: pin the boundary behaviourally, and give the "fold two cores" clause a real seam (slice `call-low-light-boost`)
+Two reusable moves from porting iOS `applyLowLightBoost`:
+- **Boundary tests must not depend on float-exactness.** iOS gates on `normalizedBrightness < 0.3` where
+  `normalized = avg/255`. Testing the exact boundary (`avg = 76.5`) is fragile — `76.5f/255f` may land on
+  either side of `0.3f` (neither is exactly representable). Pin the behaviour with values *clearly* on each
+  side instead: `77f` (≈0.302 → no boost) and `76f` (≈0.298 → small boost). The threshold is proven without
+  ever asserting a float equality on the boundary itself.
+- **Avoid tautology on a ported formula by anchoring concrete outputs, not re-deriving it.** Assert the two
+  fixed points — pitch-black → full strength (EV 1.5, saturation 1.2, …) and bright → `null` — plus monotonic
+  relations (darker boosts more), never `expected = boostFactor * gain` recomputed in the test.
+- **When the parity note says "fold core A into core B", ship the fold as a real one-call seam.** Here
+  `planForFrame(yPlane,…) = plan(FrameLuminance.averageOfYPlane(…))`. It turns two cores that existed apart
+  into a composition the actuator calls in one line, and a degenerate geometry (FrameLuminance → null) flows
+  through to "no boost" for free — the clause becomes code, not a comment.
+
 ## 2026-08-29 — SDK bootstrap for compileSdk 37 needs `platforms;android-35` + `build-tools;35.0.0` ALONGSIDE `android-37.0` (slice `story-publish-queue-media-only`)
 Installing only `platforms;android-37.0` (the sole published API-37 platform — no bare `android-37` exists) is
 NOT enough: AGP 8.13.0 resolves `compileSdk = 37` to the target hash `android-37`, and Gradle dies with
