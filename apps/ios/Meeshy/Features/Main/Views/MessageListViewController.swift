@@ -3250,7 +3250,13 @@ struct TypingIndicatorBubble: View {
                     .frame(width: 5, height: 5)
                     .scaleEffect(animating ? 1.0 : 0.5)
                     .opacity(animating ? 1.0 : 0.4)
-                    .animation(
+                    // Ici le repos EST la cible (`animating == true` : pleine
+                    // taille, pleine opacité) — l'inverse du point d'appel juste
+                    // à côté. En tenue plate il n'y a aucun libellé : ce qui dit
+                    // « quelqu'un écrit » est la PRÉSENCE des trois points, pas
+                    // leur mouvement. Les rendre à demi-taille et à 40 %
+                    // d'opacité les ferait passer pour une décoration éteinte.
+                    .meeshyAnimation(
                         .easeInOut(duration: 0.5)
                             .repeatForever(autoreverses: true)
                             .delay(Double(i) * 0.18),

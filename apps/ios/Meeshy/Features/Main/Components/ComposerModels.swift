@@ -228,6 +228,15 @@ struct ComposerWaveformBar: View {
 
     @State private var height: CGFloat = 4
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
+    private static let restingMin: CGFloat = 4
+    private static let restingMax: CGFloat = 24
+
     var body: some View {
         RoundedRectangle(cornerRadius: 2)
             .fill(
@@ -251,6 +260,22 @@ struct ComposerWaveformBar: View {
 
     private func animate() {
         guard isRecording else { return }
+        // Sous Reduce Motion la barre se POSE au lieu de battre. Elle ne se pose
+        // NI sur la cible (tirée au hasard, donc instable d'un rendu à l'autre)
+        // NI sur `minHeight` (toutes les barres à la même hauteur = un trait
+        // plat, qui se lit « enregistreur cassé »). Le chrono d'enregistrement
+        // continue de dire que c'est en cours ; la forme d'onde doit seulement
+        // rester lisible comme une forme d'onde.
+        guard !reduceMotion else {
+            withTransaction(Transaction(animation: nil)) {
+                height = RestingWaveform.height(
+                    index: index,
+                    minHeight: Self.restingMin,
+                    maxHeight: Self.restingMax
+                )
+            }
+            return
+        }
         let delay = Double(index) * 0.05
         withAnimation(
             .easeInOut(duration: Double.random(in: 0.3...0.6))

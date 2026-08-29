@@ -1124,6 +1124,12 @@ struct AnimatedWaveformBar: View {
     let isRecording: Bool
     @State private var barHeight: CGFloat = 8
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private let minHeight: CGFloat = 6
     private let maxHeight: CGFloat = 26
 
@@ -1158,6 +1164,19 @@ struct AnimatedWaveformBar: View {
     }
 
     private func startAnimating() {
+        // Second exemplaire de la forme d'onde d'enregistrement (l'autre est
+        // `ComposerWaveformBar`) : même valeur de repos, par le même calcul, et
+        // pour la même raison — un trait plat se lit « cassé ».
+        guard !reduceMotion else {
+            withTransaction(Transaction(animation: nil)) {
+                barHeight = RestingWaveform.height(
+                    index: index,
+                    minHeight: minHeight,
+                    maxHeight: maxHeight
+                )
+            }
+            return
+        }
         let randomDuration = Double.random(in: 0.3...0.6)
         let randomDelay = Double(index) * 0.04
         withAnimation(

@@ -38,6 +38,16 @@ struct BubbleCallNoticeView: View, Equatable {
     /// Timer). Pure presentation state, excluded from Equatable by nature.
     @State private var livePulse = false
 
+    // `Equatable` est MANUEL sur cette vue (voir `==` juste dessous), donc deux
+    // propriétés `@Environment` ne cassent rien ici — contrairement à
+    // `BubbleEditedIndicator`, `Equatable` par synthèse, qui passe par
+    // `.meeshyAnimation` pour rester sans état.
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     static func == (lhs: BubbleCallNoticeView, rhs: BubbleCallNoticeView) -> Bool {
         lhs.notice == rhs.notice && lhs.accentHex == rhs.accentHex && lhs.isDark == rhs.isDark
     }
@@ -159,8 +169,13 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(tint)
                 .frame(width: 7, height: 7)
                 .opacity(livePulse ? 0.3 : 1)
-                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
-                .onAppear { livePulse = true }
+                .meeshyAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: livePulse)
+                // Le repos est `false`, donc **opacité 1** — l'INVERSE de la
+                // cible de l'animation. Se poser sur la cible (0.3), ce que
+                // fait le portillon d'ambiance de l'onboarding, laisserait un
+                // point d'appel en cours presque invisible : le remède rendrait
+                // l'indicateur moins lisible que le défaut (#4286).
+                .onAppear { livePulse = !reduceMotion }
                 .accessibilityHidden(true)
             Text(subtitle)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))

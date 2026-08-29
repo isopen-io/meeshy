@@ -1170,6 +1170,12 @@ struct SplashScreen: View {
     @State private var backgroundScale: CGFloat = 1.2
     @ObservedObject private var theme = ThemeManager.shared
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var forcedReduceMotion
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: forcedReduceMotion)
+    }
+
     private var isDark: Bool { theme.mode.isDark }
 
     var body: some View {
@@ -1272,8 +1278,16 @@ struct SplashScreen: View {
                 showSubtitle = true
             }
 
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
-                glowPulse = true
+            // Le halo est DÉCORATIF : sous Reduce Motion il ne se pose sur
+            // aucune valeur, il n'existe pas. `glowPulse` reste `false`, donc
+            // les trois orbes gardent leur échelle de repos. Avec le halo de
+            // `LoginView`, ce sont les deux seuls des sept sites de #4286 où
+            // « ne rien faire » est le bon repos — les cinq autres portent un
+            // STATUT, et devaient choisir une valeur qui le dit encore.
+            if !reduceMotion {
+                withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                    glowPulse = true
+                }
             }
 
             withAnimation(.easeInOut(duration: 1.0)) {
