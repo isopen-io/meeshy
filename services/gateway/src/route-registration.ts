@@ -80,7 +80,7 @@ import mentionRoutes from './routes/mentions';
 import { notificationRoutes } from './routes/notifications';
 import { friendRequestRoutes } from './routes/friends';
 import { invitationRoutes as publicInvitationRoutes } from './routes/invitations';
-import { attachmentRoutes } from './routes/attachments';
+import { attachmentRoutes, attachmentLegacyFileRoutes } from './routes/attachments';
 import reactionRoutes from './routes/reactions';
 import callRoutes from './routes/calls';
 import { voiceProfileRoutes } from './routes/voice-profile';
@@ -337,9 +337,13 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // Register attachment routes with /api/v1 prefix
     await server.register(attachmentRoutes, { prefix: API_PREFIX });
 
-    // LEGACY: Register attachment routes with /api prefix (without v1) for backward compatibility
-    // Existing data in DB uses /api/attachments/file/... URLs without v1
-    await server.register(attachmentRoutes, { prefix: '/api' });
+    // LEGACY, et RESTREINT : sous `/api` (sans v1) seule la lecture d'octets par
+    // chemin est servie — des `fileUrl` de cette forme sont persistees en base
+    // depuis des annees et voyagent dans des notifications deja livrees, et une
+    // URL en base ne se migre pas par un deploiement. Les neuf autres couples
+    // n'ont plus de second chemin (#4187) : une regle de proxy/WAF ecrite pour
+    // `/api/v1/attachments/*` ne se contourne plus en retirant « v1 ».
+    await server.register(attachmentLegacyFileRoutes, { prefix: '/api' });
 
     // Register tus resumable upload routes (mounted at /api/v1/uploads)
     await server.register(registerTusRoutes);
