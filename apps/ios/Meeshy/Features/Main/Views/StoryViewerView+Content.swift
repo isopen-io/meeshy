@@ -2785,53 +2785,23 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var languageSwitcher: some View {
-        let origCode = comment.originalLanguage
-        let origDisplay = LanguageDisplay.from(code: origCode)
-        let targetDisplay = LanguageDisplay.from(code: userLang)
-
-        return HStack(spacing: 4) {
-            languageFlag(
-                flag: origDisplay?.flag ?? "?",
-                color: origDisplay?.color ?? LanguageDisplay.defaultColor,
-                isActive: showOriginal
-            )
-            .onTapGesture {
+        HStack(spacing: 4) {
+            LanguageFlagChip(code: comment.originalLanguage ?? "",
+                             isActive: showOriginal,
+                             metrics: .overlay) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showOriginal = true
                 }
-                HapticFeedback.light()
             }
 
-            languageFlag(
-                flag: targetDisplay?.flag ?? "?",
-                color: targetDisplay?.color ?? LanguageDisplay.defaultColor,
-                isActive: !showOriginal
-            )
-            .onTapGesture {
+            LanguageFlagChip(code: userLang, isActive: !showOriginal, metrics: .overlay) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showOriginal = false
                 }
-                HapticFeedback.light()
             }
 
-            Image(systemName: "translate")
-                .font(MeeshyFont.relative(9, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo400.opacity(0.85))
+            TranslationsBadge(metrics: .overlay)
         }
-    }
-
-    private func languageFlag(flag: String, color: String, isActive: Bool) -> some View {
-        VStack(spacing: 1) {
-            Text(flag)
-                .font(MeeshyFont.relative(isActive ? 12 : 10))
-                .scaleEffect(isActive ? 1.05 : 1.0)
-            if isActive {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color(hex: color))
-                    .frame(width: 10, height: 1.5)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: isActive)
     }
 
     private var contentText: some View {

@@ -233,33 +233,20 @@ struct BubbleFooter: View, Equatable {
         }
     }
 
+    /// Le pied de bulle sert la MÊME puce que le fil, le détail, les
+    /// commentaires, la story et les reels — `LanguageFlagChip`, en registre
+    /// `.compact`.
+    ///
+    /// Ce que le registre préserve de la version qui vivait ici : un `Button`
+    /// (et non un `onTapGesture`, dont le tap serait avalé par le
+    /// `.simultaneousGesture(LongPressGesture(0.35))` que `BubbleSwipeContainer`
+    /// pose sur la bulle), un `contentShape` À L'INTÉRIEUR du label, et la cible
+    /// de 22 pt qui tient même quand le drapeau est inactif — sans soulignement,
+    /// le `VStack` retomberait à ~12 pt.
     private func footerFlagPill(_ flag: FooterFlag) -> some View {
-        let display = LanguageDisplay.from(code: flag.code)
-        // `Button + .buttonStyle(.plain)` au lieu de `.onTapGesture` : sans ça
-        // le tap est avalé par le `.simultaneousGesture(LongPressGesture(0.35))`
-        // que `BubbleSwipeContainer` pose sur la bulle. C'est le même pattern
-        // que pour la coche delivery (read receipt) qui marche déjà, et que
-        // pour le bouton translate juste à côté. `.contentShape(Rectangle())`
-        // garde la hit-area de 22pt mini même quand le drapeau n'est pas actif
-        // (pas de soulignement → VStack collapse à ~12pt).
-        return Button {
+        LanguageFlagChip(code: flag.code, isActive: flag.isActive, metrics: .compact) {
             actions.onFlagTap?(flag.code)
-        } label: {
-            VStack(spacing: 1) {
-                Text(display?.flag ?? flag.code.uppercased())
-                    .font(flag.isActive ? .caption : .caption2)
-                if flag.isActive {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                        .frame(width: 10, height: 1.5)
-                }
-            }
-            .frame(minWidth: 22, minHeight: 22)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(display?.name ?? flag.code)
-        .accessibilityAddTraits(flag.isActive ? [.isSelected] : [])
     }
 
     @ViewBuilder
