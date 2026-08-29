@@ -5,6 +5,17 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — a model field + a decoder + a painter all shipping does NOT mean a surface consumes them (slice `story-slide-thumbhash-placeholder`)
+The ThumbHash blur placeholder was "half-built and invisible": the field was on the model
+(`StoryEffects.thumbHash`, `FeedMedia.thumbHash`), the decoder (`ThumbHash.decodeBase64`) and the Compose
+painter (`rememberThumbHashPainter`) were ported a month ago AND already wired in the feed — yet the story
+viewer's background `AsyncImage` still painted black on cold load, because nobody had passed the hash to it.
+A feature-parity box that reads "ThumbHash decoder shipped" is about the BUILDING BLOCK, not every SURFACE
+that should use it. **Grep the consumer, not the block:** when a placeholder/decoder/resolver exists, search
+every `AsyncImage`/image surface for whether it actually passes the value — an unconsumed capability is a
+cold-load flash the user sees, exactly the instant-app gap (dim. 2/4/8) the block was meant to close. The
+cheap win is wiring the last mile, and it is easy to miss precisely because the parts all look "done".
+
 ## 2026-08-29 — when the LAST case a gate guarded goes away, RETIRE the gate; don't leave it as a constant-`false` branch (slice `story-draft-persist-sticker-elements`)
 The story-draft fidelity gate (`deckHasRichContent`) existed to catch content the primitive snapshot could
 not yet represent, purging a stale draft rather than restoring lossily. Six slices lifted its dimensions one

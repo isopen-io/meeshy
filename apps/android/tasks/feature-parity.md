@@ -4213,7 +4213,16 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       RAW background publish-all still pending.
 - [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
       in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
-- [ ] thumbHash blur-placeholder generation per slide
+- [~] thumbHash blur-placeholder per slide — **display/read path DONE** (slice
+      `story-slide-thumbhash-placeholder`, 2026-08-29): the viewer now decodes a slide's ThumbHash into an
+      instant blur behind the loading background image (no black flash on cold load), mirroring iOS
+      `StorySlideRenderer`. Pure `StorySlidePlaceholder` resolver (`:feature:stories`) picks the hash — slide-level
+      `StoryEffects.thumbHash` (modern composer) → the flat background `FeedMedia.thumbHash` (legacy/RAW), first
+      non-blank trimmed wins, else null — carried on `StorySlideView.backgroundThumbHash` and painted via the
+      already-shipped `rememberThumbHashPainter` (the exact idiom the feed's `AsyncImage` uses). +13 tests,
+      mutation-RED-proven (reversing the cascade reddens exactly the priority test). Pending: write-path
+      **generation** (encode a ThumbHash from the composed slide bitmap into `effects.thumbHash` at publish) —
+      needs `Bitmap`→RGBA, so it is a separate follow-up using the already-ported `ThumbHash.encode`.
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
 - [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
