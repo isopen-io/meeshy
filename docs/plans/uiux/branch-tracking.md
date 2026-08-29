@@ -19,10 +19,58 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 252i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 257i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 >
-> - **251i est MERGÉE** — PR [#4257](https://github.com/isopen-io/meeshy/pull/4257), squash `9286ce92`, issue #4256 fermée, 17 checks verts, gate `Build app + tests unitaires` vert sur `ec96244c` (**9008 tests, 0 échec**). Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
-> - **Synchronisation 252i** : branche repartie de `origin/main` `9286ce92`.
+> | itération | PR | squash sur `main` | issue |
+> |---|---|---|---|
+> | 251i | [#4257](https://github.com/isopen-io/meeshy/pull/4257) | `9286ce92` | #4256 |
+> | 252i | [#4261](https://github.com/isopen-io/meeshy/pull/4261) | `cd9aa95b` | #4260 |
+> | 253i | [#4268](https://github.com/isopen-io/meeshy/pull/4268) | `e087f501` | #4266 |
+> | 254i | [#4269](https://github.com/isopen-io/meeshy/pull/4269) | `0f05267c` | — |
+> | 255i | [#4271](https://github.com/isopen-io/meeshy/pull/4271) | `b8a30cfd` | — |
+> | 256i | [#4273](https://github.com/isopen-io/meeshy/pull/4273) | `1fbd1f4d` | — |
+>
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
+> - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
+>
+> ### 257i — les boucles perpétuelles de STATUT (#4286, en cours)
+>
+> Sept `repeatForever` sur 68 n'avaient aucun portillon Reduce Motion, et
+> c'étaient toutes des animations de **statut** (frappe, enregistrement,
+> sauvegarde, appel) — elles ressemblaient à de l'information. Détail :
+> `docs/analyses/uiux/2026-08-29-iteration-257i-perpetual-motion.md`.
+>
+> **Trois choses à ne pas refaire mesurer :**
+>
+> - **La valeur de repos n'est pas la cible de l'animation.** Copier
+>   `settleWithoutMotion` (onboarding) aurait rendu le point d'appel en cours
+>   presque invisible (cible = `opacity 0.3`) et les formes d'onde plates.
+> - **Une garde par FICHIER rend « gardé » dès qu'une autre partie du fichier
+>   décide** : rejouée sur `main`, elle attrape 5 des 7 défauts. Les deux
+>   manqués (`SplashScreen`, `TypingIndicatorBubble`) sont épinglés nommément.
+> - **Le `@propertyWrapper` `DynamicProperty` a été écrit puis RETIRÉ** : aucun
+>   précédent dans le dépôt, cible en `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`,
+>   et pas de toolchain Apple ici pour le prouver → #4289. La cible de TESTS,
+>   elle, est `nonisolated` : une suite qui touche du code app pose `@MainActor`.
+>
+> ### ⚠️ Le répertoire courant persiste — et un zéro peut vouloir dire « nulle part » (256i, revu 257i)
+>
+> Un `cd apps/ios/Meeshy` d'un appel d'outil précédent a fait chercher
+> `apps/ios/Meeshy` **sous** `apps/ios/Meeshy` : la sonde a rendu
+> **« 0 occurrence »** sur tout le dépôt, un résultat parfaitement plausible.
+> Ce qui l'a attrapé n'est pas la relecture du script mais la **borne** —
+> « combien de `.swift` cette racine voit-elle ? ». Toujours passer un chemin
+> ABSOLU, et toujours accompagner un zéro d'une mesure dont la réponse est connue.
+>
+> ### ⚠️ Les leçons vivent dans `tasks/lessons.md` à la RACINE (256i)
+>
+> `cd apps/ios` persiste d'un appel d'outil au suivant : un `cat >> tasks/lessons.md`
+> écrit alors dans `apps/ios/tasks/lessons.md`, un fichier qui n'existe pas et que
+> personne ne lit. Effet de bord mesuré : le chemin `apps/ios/**` est le filtre du
+> workflow `iOS Tests`, donc une PR annoncée « docs uniquement » a fait tourner le
+> gate iOS complet. **Vérifier le répertoire courant avant toute écriture par
+> redirection shell** — les outils `Write`/`Edit` prennent un chemin absolu et n'ont
+> pas ce piège.
 >
 > ### ⚠️ La branche de travail se RÉINITIALISE, elle ne se SUPPRIME pas (mesuré au 251i)
 >
