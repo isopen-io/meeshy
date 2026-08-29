@@ -13,7 +13,7 @@
  * are managed in the Profile tab via UserSettings component and stored in the User model.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -51,6 +51,7 @@ import { API_CONFIG } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { useReducedMotion, SoundFeedback } from '@/hooks/use-accessibility';
 import { useI18n } from '@/hooks/use-i18n';
+import { pickSubmitted } from '@/lib/preferences/submitted-preference-keys';
 type ApplicationPreference = Record<string, unknown>;
 
 // Accent colors configuration
@@ -120,6 +121,15 @@ export function ApplicationSettings() {
   const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
 
+  /**
+   * Les clés que L'UTILISATEUR a touchées depuis le dernier enregistrement.
+   *
+   * `hasChanges` répondait « quelque chose a bougé », pas « quoi » — et
+   * l'amorce ci-dessus est indiscernable d'un chargement raté, où elle EST
+   * l'état rendu. Une `ref` : rien ne se rend d'après cette liste.
+   */
+  const submittedKeys = useRef(new Set<string>());
+
   // Load preferences from API
   useEffect(() => {
     const loadPreferences = async () => {
@@ -163,18 +173,40 @@ export function ApplicationSettings() {
         return;
       }
 
+      // `PATCH` du seul SOUMIS, jamais `PUT` de l'état entier : cet écran
+      // n'amorce que 17 des 22 champs du schéma `application`, et la passerelle
+      // traite le `PUT` en REMPLACEMENT. Les cinq absents sont
+      // `autoTranslateEnabled` — dont ce document est l'UNIQUE store, remis à
+      // son défaut `true` : la traduction automatique se rallumait toute seule —
+      // et les horodatages de consentement, `.nullable().optional()` SANS
+      // `default()`, donc omis par Zod et purement EFFACÉS. Un consentement
+      // accordé par la seule API préférences (chemin popup iOS) n'a pas de
+      // colonne `User` de repli : il disparaissait pour de bon.
+      const body = pickSubmitted(preferences, submittedKeys.current);
+      if (Object.keys(body).length === 0) {
+        setHasChanges(false);
+        return;
+      }
+
+      // Ce que CET envoi porte, retenu avant de partir : les contrôles restent
+      // vivants pendant le vol, et tout oublier au retour effacerait un réglage
+      // touché entre-temps — `setHasChanges(false)` le faisait déjà, en pire :
+      // le bouton d'enregistrement disparaissait avec lui.
+      const inFlight = Object.keys(body);
+
       const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/application`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(preferences),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
+        for (const key of inFlight) submittedKeys.current.delete(key);
         toast.success(t('success.settingsUpdated', 'Application settings saved'));
-        setHasChanges(false);
+        setHasChanges(submittedKeys.current.size > 0);
       } else {
         const errorData = await response.json();
         toast.error(errorData.message || t('errors.updateSettings', 'Error saving settings'));
@@ -191,6 +223,7 @@ export function ApplicationSettings() {
     key: K,
     value: ApplicationPreference[K]
   ) => {
+    submittedKeys.current.add(key as string);
     setPreferences((prev: unknown) => ({ ...prev, [key]: value }));
     setHasChanges(true);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -13,6 +13,7 @@ import { AuthGuard } from '@/components/auth/AuthGuard';
 import { toast } from 'sonner';
 import { API_CONFIG } from '@/lib/config';
 import { useI18n } from '@/hooks/use-i18n';
+import { pickSubmitted } from '@/lib/preferences/submitted-preference-keys';
 
 /**
  * Interface des préférences de notifications
@@ -68,6 +69,19 @@ function NotificationPreferencesContent() {
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState<NotificationPreferences>(DEFAULT_PREFERENCES);
 
+  /**
+   * Les clés que L'UTILISATEUR a touchées depuis le dernier enregistrement.
+   *
+   * L'état ci-dessus ne peut pas répondre à cette question : quand le
+   * chargement échoue — hors ligne, 5xx, jeton expiré — il EST
+   * `DEFAULT_PREFERENCES`, et rien ne l'en distingue. Une écriture construite
+   * sur lui estampait donc les défauts de cet écran sur le document du serveur.
+   *
+   * Une `ref` plutôt qu'un état : rien ne se rend d'après cette liste, et un
+   * rendu de plus par bascule serait payé pour rien.
+   */
+  const submittedKeys = useRef(new Set<string>());
+
   // Charger les préférences depuis l'API unifiée
   useEffect(() => {
     const loadPreferences = async () => {
@@ -85,8 +99,11 @@ function NotificationPreferencesContent() {
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data) {
-            // Exclure les champs non nécessaires pour l'état local (id, userId, isDefault, timestamps)
-            const { ...prefs } = data.data;
+            // Les métadonnées de la LIGNE ne sont pas des réglages : les garder
+            // dans un état typé `NotificationPreferences` était une dérive que
+            // le commentaire précédent annonçait sans l'appliquer — `const
+            // { ...prefs } = data.data` ne retire rien.
+            const { id, userId, createdAt, updatedAt, ...prefs } = data.data;
             setPreferences(prev => ({ ...prev, ...prefs }));
           }
         }
@@ -110,17 +127,40 @@ function NotificationPreferencesContent() {
         return;
       }
 
+      // `PATCH` du seul SOUMIS, jamais `PUT` de l'état entier : cet écran
+      // n'amorce que 15 des 33 champs du schéma, et la passerelle traite le
+      // `PUT` en REMPLACEMENT (`schema.parse` puis `update: { notification }`,
+      // Zod comblant l'absent par ses `default()`). Un enregistrement fait
+      // après un chargement raté rallumait donc `callsEnabled` (les appels
+      // entrants, catégorie délibérément indépendante de `pushEnabled`),
+      // remettait `dndUtcOffsetMinutes` à 0 — la fenêtre « ne pas déranger »
+      // repassant en UTC, neuf heures de décalage pour Tokyo — et rendait
+      // `showPreview` à son défaut `true`, le contenu des messages revenant sur
+      // l'écran verrouillé de qui l'avait masqué.
+      const body = pickSubmitted(preferences, submittedKeys.current);
+      if (Object.keys(body).length === 0) {
+        toast.success(t('notifPrefs.saved'));
+        return;
+      }
+
+      // Ce que CET envoi porte, retenu avant de partir : les interrupteurs
+      // restent vivants pendant le vol, et un `clear()` au retour effacerait
+      // une bascule faite entre-temps — elle ne partirait ni maintenant ni au
+      // geste suivant, l'écran affichant une valeur que le serveur ignore.
+      const inFlight = Object.keys(body);
+
       // Utilise le nouvel endpoint unifié /me/preferences/notification
       const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/notification`, {
-        method: 'PUT',
+        method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(preferences),
+        body: JSON.stringify(body),
       });
 
       if (response.ok) {
+        for (const key of inFlight) submittedKeys.current.delete(key);
         toast.success(t('notifPrefs.saved'));
       } else {
         const errorData = await response.json();
@@ -135,6 +175,7 @@ function NotificationPreferencesContent() {
   };
 
   const updatePreference = (key: keyof NotificationPreferences, value: boolean | string) => {
+    submittedKeys.current.add(key);
     setPreferences((prev) => ({ ...prev, [key]: value }));
   };
 

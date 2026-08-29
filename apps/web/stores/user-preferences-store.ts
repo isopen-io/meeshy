@@ -4,6 +4,11 @@ import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
 import { trackPreferenceWrite } from '@/lib/preferences/preference-write-lock';
+// Ce qu'une écriture a le droit d'envoyer : les clés que L'APPELANT a soumises,
+// et rien d'autre. La loi et son motif vivent en UN site, partagé avec les deux
+// écrans de réglages qui tiennent leur propre état local et portaient la MÊME
+// classe de défaut sans jamais passer par ce store.
+import { submittedKeys } from '@/lib/preferences/submitted-preference-keys';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type {
   NotificationPreference,
@@ -196,39 +201,6 @@ const DEFAULT_STORY_PREFERENCES: StoryPreferences = {
   defaultVisibility: DEFAULT_PUBLICATION_VISIBILITY,
   storyNotificationsEnabled: true,
 };
-
-/**
- * Ce qu'une écriture a le droit d'envoyer : les clés que L'APPELANT a soumises,
- * et rien d'autre.
- *
- * Les trois écritures envoyaient un instantané de DOCUMENT ENTIER
- * (`get().privacy`, `get().notifications`) sur un `PUT` que la passerelle traite
- * en REMPLACEMENT — `update: { [category]: validated }`, Zod comblant les clés
- * absentes par leurs `default()`. Or chaque tranche du store est un
- * SOUS-ENSEMBLE STRICT de son document, et la tranche `privacy` ne peut pas même
- * en porter le bloc chiffrement : `syncPrivacy` l'en retire, `EncryptionPreferences`
- * en est le seul porteur. Basculer un réglage de confidentialité remettait donc
- * les quatre réglages de chiffrement aux défauts — plus d'auto-chiffrement des
- * conversations neuves, sans un signe.
- *
- * Envoyer le SOUMIS retire la dépendance à la fidélité de la tranche : le
- * serveur fusionne par `submittedKeysOnly` sur ce qu'il obéit déjà, donc ce
- * qu'on ne nomme pas ne bouge pas. C'est la forme qu'Android applique déjà et
- * qu'il documente (`PrivacyPreferenceSyncBody` : « a body that omits the
- * encryption keys leaves the server's encryption preferences untouched instead
- * of silently stamping the device defaults over a value the user may have set on
- * web/iOS »). Elle ferme au passage l'écrasement concurrent : un voisin changé
- * sur un AUTRE appareil n'est plus annulé par une bascule sans rapport.
- *
- * `undefined` est retiré parce que `JSON.stringify` le retire de toute façon —
- * sans quoi la garde « aucune clé » compterait une clé que le serveur ne verra
- * jamais, et paierait un aller-retour, un journal de mutation et une diffusion
- * `preferences:updated` pour zéro changement.
- */
-const submittedKeys = <T extends object>(prefs: T): Partial<T> =>
-  Object.fromEntries(
-    Object.entries(prefs).filter(([, value]) => value !== undefined),
-  ) as Partial<T>;
 
 const DEFAULT_STATE: UserPreferencesState = {
   notifications: DEFAULT_NOTIFICATION_PREFERENCES,
