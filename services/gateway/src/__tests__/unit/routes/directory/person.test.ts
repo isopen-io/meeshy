@@ -112,9 +112,14 @@ async function monter(viewerId: string | null, role = 'USER'): Promise<FastifyIn
   // substitue une identité posée directement, comme le font les autres témoins
   // de route de ce répertoire.
   app.addHook('onRequest', async (req: any) => {
+    // Le contexte ANONYME est celui de la PRODUCTION, sentinelle comprise :
+    // `createUnauthenticatedContext` pose `userId: 'anonymous'`, une chaîne non
+    // vide. Un double qui laissait ce champ absent rendait le témoin plus
+    // FAVORABLE que la réalité — et c'est exactement ce qui a laissé passer un
+    // `Cache-Control: private` servi à un anonyme, mesuré en intégration.
     req.authContext = viewerId
       ? { isAuthenticated: true, userId: viewerId, registeredUser: { id: viewerId, role } }
-      : { isAuthenticated: false };
+      : { isAuthenticated: false, isAnonymous: true, type: 'anonymous', userId: 'anonymous' };
   });
   await app.register(directoryPersonRoutes, { prefix: `${PREFIXE}/directory` });
   await app.ready();

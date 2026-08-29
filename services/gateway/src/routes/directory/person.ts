@@ -24,6 +24,30 @@ const logger = enhancedLogger.child({ module: 'DirectoryPerson' });
  */
 const CHAMPS_PRESENCE = ['isOnline', 'lastActiveAt'] as const;
 
+/**
+ * L'identifiant du lecteur INSCRIT, ou `undefined`.
+ *
+ * `authContext.userId` ne peut pas servir de test de connexion : pour un
+ * appelant sans aucune identité, `createUnauthenticatedContext` y pose la
+ * SENTINELLE `'anonymous'` — une chaîne non vide, donc vraie. Mesuré en
+ * intégration : un appelant anonyme recevait `Cache-Control: private` (le
+ * cache partagé, seul intérêt d'un profil public, était perdu), était compté
+ * sur le seau du CONNECTÉ — `user:anonymous`, partagé par tous les anonymes de
+ * la Terre, donc épuisable par n'importe lequel d'entre eux — et `?expand=
+ * relation` aurait interrogé `friendRequest` avec un identifiant que MongoDB
+ * refuse.
+ *
+ * Le dépôt le dit déjà d'un autre côté : ce champ porte un `Participant.id`
+ * pour un invité de lien partagé. Il NOMME une room personnelle, il n'atteste
+ * pas une identité de compte. `registeredUser.id` est un `User.id` par
+ * construction — et un invité de lien, qui n'a pas de compte, ne peut être ni
+ * ami ni propriétaire : il lit ce que lit un anonyme, ce qui est juste.
+ */
+function lecteurInscrit(request: FastifyRequest): string | undefined {
+  const acteur = (request as unknown as UnifiedAuthRequest).authContext;
+  return acteur?.isAuthenticated ? acteur.registeredUser?.id : undefined;
+}
+
 /** Ce qu'un `expand` peut demander. Tout autre jeton est ignoré, jamais refusé. */
 type Expansion = 'stats' | 'presence' | 'relation';
 const EXPANSIONS: readonly Expansion[] = ['stats', 'presence', 'relation'] as const;
@@ -141,10 +165,8 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
    * (`clientRateKey`). Poser les deux crochets en parallèle ferait payer les
    * deux seaux au connecté.
    */
-  const debit = async (request: FastifyRequest, reply: FastifyReply) => {
-    const viewerId = (request as unknown as UnifiedAuthRequest).authContext?.userId;
-    return viewerId ? connecte(request, reply) : anonyme(request, reply);
-  };
+  const debit = async (request: FastifyRequest, reply: FastifyReply) =>
+    lecteurInscrit(request) ? connecte(request, reply) : anonyme(request, reply);
 
   fastify.get('/people/:handle', {
     onRequest: [getOptionalAuth(fastify.prisma)],
@@ -231,7 +253,7 @@ export async function directoryPersonRoutes(fastify: FastifyInstance) {
       const { fields, expand } = request.query as { fields?: string; expand?: string };
 
       const acteur = (request as unknown as UnifiedAuthRequest).authContext;
-      const viewerId = acteur?.userId;
+      const viewerId = lecteurInscrit(request);
 
       const profil = await servirProfilPublic(fastify, request, reply, handle);
       if (!profil) return reply;

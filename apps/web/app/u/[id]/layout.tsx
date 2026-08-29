@@ -30,15 +30,22 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
 
-    // `/users/:id` et non `/users/profile/:id` : cette seconde adresse n'a
-    // JAMAIS existé côté gateway, si bien que la génération de métadonnées de
-    // toute page de profil publique retombait silencieusement sur le libellé
-    // générique — le `if (response.ok)` ci-dessous avalant le 404 (#4189).
-    // La route réelle accepte indifféremment un ObjectId ou un nom
-    // d'utilisateur, ce qui couvre les deux formes que `[id]` peut prendre, et
-    // s'ouvre à un appelant NON authentifié (`getOptionalAuth`) — ce dont le
-    // rendu serveur a besoin, n'ayant pas de jeton.
-    const response = await fetch(buildApiUrl(`/users/${id}`), {
+    // `/directory/people/:handle`, l'ADRESSE canonique d'un profil (#4161).
+    //
+    // Ce site visait `/users/profile/:id`, une adresse qui n'a JAMAIS existé
+    // côté gateway : la génération de métadonnées de toute page de profil
+    // publique retombait silencieusement sur le libellé générique, le
+    // `if (response.ok)` ci-dessous avalant le 404 (#4189). Elle est passée par
+    // `/users/:id` — l'un des trois alias — puis par celle-ci, qui est
+    // l'implémentation.
+    //
+    // Elle accepte indifféremment un ObjectId ou un pseudo, ce qui couvre les
+    // deux formes que `[id]` peut prendre, et sert un appelant NON authentifié
+    // — ce dont le rendu serveur a besoin, n'ayant pas de jeton. Elle déclare
+    // en prime `Cache-Control: public, max-age=60, stale-while-revalidate=600`
+    // pour l'anonyme, ce que le `revalidate: 300` de Next complète au lieu de
+    // le contredire.
+    const response = await fetch(buildApiUrl(`/directory/people/${id}`), {
       next: { revalidate: 300 }, // Cache 5 minutes
       signal: controller.signal,
       headers: {

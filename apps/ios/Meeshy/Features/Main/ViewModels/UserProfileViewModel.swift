@@ -74,7 +74,17 @@ final class UserProfileViewModel: ObservableObject {
     private func refreshProfile(idOrUsername: String) async {
         defer { isLoading = false }
         do {
-            let user = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
+            // UN aller-retour, pas deux (#4161). Cet écran demandait
+            // systématiquement le profil PUIS les statistiques, à deux
+            // adresses. `?expand=stats` les sert ensemble, pour le même coût
+            // serveur, et la garde des compteurs intimes reste celle de la
+            // route dédiée — soi et l'administration.
+            let profil = try await UserService.shared.getProfile(handle: idOrUsername, expand: [.stats])
+            let user = profil.user
+            if let stats = profil.stats {
+                userStats = stats
+                try? await CacheCoordinator.shared.stats.save([stats], for: user.id)
+            }
             try? await CacheCoordinator.shared.profiles.save([user], for: user.id)
             if idOrUsername != user.id {
                 try? await CacheCoordinator.shared.profiles.save([user], for: idOrUsername)

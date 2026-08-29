@@ -50,7 +50,12 @@ import { buildApiUrl } from '@/lib/config';
  * ```
  */
 export const getUserById = cache(async (userId: string) => {
-  const response = await fetch(buildApiUrl(`/users/${userId}`), {
+  // `/directory/people/:handle`, l'ADRESSE canonique d'un profil (#4161).
+  // `/users/:id` reste servie en alias pour les clients installés ; le web,
+  // lui, n'appelle plus que l'implémentation. Le paramètre accepte aussi bien
+  // un ObjectId qu'un pseudo, ce que le nom `userId` ne dit pas et que le site
+  // d'appel exploite déjà.
+  const response = await fetch(buildApiUrl(`/directory/people/${userId}`), {
     next: { revalidate: 300 }, // Cache 5 minutes
   });
 

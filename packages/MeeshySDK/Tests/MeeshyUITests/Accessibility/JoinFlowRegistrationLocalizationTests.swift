@@ -118,9 +118,18 @@ final class JoinFlowRegistrationLocalizationTests: XCTestCase {
 
         XCTAssertTrue(source.contains(#"String(localized: "auth.registration.usernameTaken", defaultValue: "Ce pseudo est deja pris!", bundle: .module)"#))
         XCTAssertTrue(source.contains(#"String(localized: "auth.registration.verificationFailed", defaultValue: "Verification non effectuee", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.emailTaken", defaultValue: "Cet email est deja utilise!", bundle: .module)"#))
+        // `emailTaken` et `phoneTaken` ont DISPARU du produit avec #4158, et
+        // c'est le correctif, pas une régression : dire à un appelant NON
+        // authentifié qu'une adresse ou un numéro appartient à un compte est un
+        // oracle d'énumération — la dé-anonymisation d'un numéro de téléphone à
+        // partir d'un carnet d'adresses. Le serveur n'en juge plus que la
+        // FORME, et l'écran ne parle plus que de forme.
+        //
+        // Ce témoin épinglait les deux anciennes clés et RESTAIT DONC ROUGE
+        // depuis ce lot : une garde de source qui exige un texte que le produit
+        // ne dit plus n'atteste rien — elle réclame le retour du défaut.
+        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.emailInvalid", defaultValue: "Cette adresse ne semble pas valide", bundle: .module)"#))
         XCTAssertTrue(source.contains(#"String(localized: "auth.registration.phoneInvalid", defaultValue: "Ce numero semble invalide", bundle: .module)"#))
-        XCTAssertTrue(source.contains(#"String(localized: "auth.registration.phoneTaken", defaultValue: "Ce numero est deja utilise!", bundle: .module)"#))
         XCTAssertTrue(source.contains(#"String(localized: "auth.registration.registrationFailed", defaultValue: "Erreur lors de l'inscription", bundle: .module)"#))
 
         // Regression guard: the old bare-literal assignments must be gone.
@@ -132,5 +141,15 @@ final class JoinFlowRegistrationLocalizationTests: XCTestCase {
         XCTAssertFalse(source.contains(#"phoneError = "Ce numero est deja utilise!""#))
         XCTAssertFalse(source.contains(#"phoneError = "Verification non effectuee""#))
         XCTAssertFalse(source.contains(#"?? "Erreur lors de l'inscription""#))
+
+        // Et l'ORACLE lui-même, sous quelque forme qu'il revienne (#4158) :
+        // aucune erreur de disponibilité ne doit dire qu'un identifiant de
+        // contact APPARTIENT à un compte. Ce sont les deux clés de catalogue et
+        // les deux phrases, la garde survivant donc à une reformulation comme à
+        // un retour au littéral nu.
+        XCTAssertFalse(source.contains("auth.registration.emailTaken"))
+        XCTAssertFalse(source.contains("auth.registration.phoneTaken"))
+        XCTAssertFalse(source.contains("Cet email est deja utilise"))
+        XCTAssertFalse(source.contains("Ce numero est deja utilise"))
     }
 }

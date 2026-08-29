@@ -27791,6 +27791,53 @@
         }
       }
     },
+    "account.delete.password.prompt": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أدخل كلمة المرور لتأكيد هويتك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib dein Passwort ein, um deine Identität zu bestätigen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter your password to confirm your identity"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduce tu contraseña para confirmar tu identidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saisissez votre mot de passe pour confirmer votre identité"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inserisci la password per confermare la tua identità"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digite sua senha para confirmar sua identidade"
+          }
+        }
+      }
+    },
     "account.delete.confirmation.prompt": {
       "extractionState": "manual",
       "localizations": {
