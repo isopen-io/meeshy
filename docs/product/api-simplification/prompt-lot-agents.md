@@ -142,6 +142,20 @@ et elle seule, qui rend le parallélisme sûr.
 
 Remplacer `{{ISSUE}}`, `{{TERRITOIRE}}` et `{{CONSIGNES}}`. Le reste est invariant.
 
+**Et choisir `{{MODELE}}` — un champ de la fiche, pas une option qu'on peut omettre.**
+Le critère est l'ARBITRAGE que la tâche demande, jamais l'importance du lot :
+
+| verbe de la tâche | arbitrage | modèle |
+|---|---|---|
+| énumérer, grepper, extraire d'un log, relever un état, compter | aucun | **haiku** |
+| écrire le correctif d'une issue cadrée — territoire donné, critère de fin écrit, témoins à prouver rouges | borné | **sonnet** |
+| trancher entre deux conceptions, arbitrer deux sources qui font également foi, composer le lot | ouvert | **opus** |
+
+Un agent lancé sans que son verbe ait été nommé est un agent dont le modèle n'a pas
+été choisi : l'omission retombe sur le modèle par défaut, et un relevé fait par le
+modèle le plus lourd est *juste* — simplement payé dix fois son prix, sans aucun
+témoin pour le dire. Détail : `tasks/lessons.md` § 323.
+
 ```
 Dépôt : /Users/smpceo/Documents/v2_meeshy. Branche courante : dev (locale).
 NE CHANGE PAS DE BRANCHE.
