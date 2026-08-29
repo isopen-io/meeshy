@@ -3734,7 +3734,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       depends on this same `TusUploadRepository`/`TusUploadContext.POST` building block rather
       than the `MediaRepository` pipeline the routine had assumed reusable.
 - [ ] Audio elements (≤5/slide): voice recording (60s), audio file import, on-canvas player widget
-- [ ] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+- [~] Freehand drawing layer (pen/marker/eraser, colour, width, undo/redo/clear)
+      **Pure board core done** (`story-drawing-board`): a pure, immutable `StoryDrawingBoard`
+      (`:feature:stories`) porting the iOS `StoryComposerViewModel+DrawingEditing` reducer —
+      committed `strokes` + a `redoStack` + a `selectedStrokeId`, with `commit` / `undo` / `redo` /
+      `clear` / `delete` / `select` and per-stroke `recolorSelected` / `resizeSelected` /
+      `smoothSelected`. The redo-invariant lives in one place: `redoStack` is populated only by
+      `undo`, and any fresh action (`commit`, a real `delete`) invalidates it, while a property tweak
+      (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact. `StoryDrawingStroke` /
+      `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line)
+      mirror the iOS models with the exact gateway wire strings; `createdAt` is deliberately omitted
+      (the reducer never reads it — draw order is the list order — so the value type stays clock-free).
+      Two deliberate improvements over iOS: `undo`/`delete`/`select`/mutate no-ops return the same board
+      unchanged, and `delete` of an absent id keeps the redo history (iOS clears it unconditionally).
+      +33 tests, RED-proven (dropping `commit`'s `redoStack = emptyList()` fails exactly the
+      redo-invalidation test). Pending: `StoryEffects.drawingStrokes` wire serialization + the Compose
+      capture surface (variable-width pressure render) + composer VM wiring — device/Compose-bound.
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
       `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/
       symbols/flags, ~16 keyworded emojis each, every glyph in exactly one category) owns the emoji
