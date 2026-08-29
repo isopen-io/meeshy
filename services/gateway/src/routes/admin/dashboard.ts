@@ -14,7 +14,14 @@ const DASHBOARD_CACHE_TTL = 600; // 10 minutes
 // `requireDashboardPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
 // décide — un seul endroit où lire la loi, un seul où la changer.
-const requireDashboardPermission = requirePermission('canViewAnalytics');
+//
+// #4157 — `canViewAnalytics` admettait ANALYST (qui n'a PAS `canAccessAdmin`
+// dans la matrice centrale) et EXCLUAIT MODERATOR (qui l'a) : une contradiction
+// dans les DEUX sens sur la même route. Le tableau de bord est la PORTE
+// D'ENTRÉE de l'administration, pas une vue analytique parmi d'autres — sa
+// garde est donc `canAccessAdmin`, le laissez-passer que la matrice donne
+// exactement à BIGBOSS/ADMIN/MODERATOR/AUDIT, ni plus ni moins.
+const requireDashboardPermission = requirePermission('canAccessAdmin');
 
 /**
  * Les quatre drapeaux que le tableau de bord affiche — DÉRIVÉS de la matrice.

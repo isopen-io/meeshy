@@ -53,6 +53,11 @@ const mockPrisma: any = {
   conversationShareLink: {
     findMany: jest.fn<any>(),
     count: jest.fn<any>(),
+    findUnique: jest.fn<any>(),
+  },
+  // #4157 — POST /share-links/:id/reveal (S6) écrit sa trace ici.
+  adminAuditLog: {
+    create: jest.fn<any>(),
   },
 };
 
@@ -207,6 +212,22 @@ describe('Admin content routes — GET /translations', () => {
     expect(body.success).toBe(true);
   });
 
+  // #4157 — la table de l'issue documentait `canManageTranslations` LOCALE ⇒
+  // BIGBOSS seul, contre `ADMIN: true` au central : « accès refusé à un rôle
+  // qui l'a ». Vérifié PÉRIMÉ — #4152 (routes/admin/services/PermissionsService.ts)
+  // a fait de la matrice locale une PROJECTION pure de la centrale, où
+  // `ADMIN.canManageTranslations = true` (schema.prisma-adjacent :
+  // services/admin/permissions.service.ts). Ce témoin verrouille le résultat.
+  it('returns 200 when role is ADMIN — prémisse de la ligne #4157 déjà corrigée par #4152', async () => {
+    app = buildApp('ADMIN');
+    await app.ready();
+
+    const response = await app.inject({ method: 'GET', url: '/translations' });
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.success).toBe(true);
+  });
+
   it('returns 500 when DB throws', async () => {
     mockPrisma.message.findMany.mockRejectedValue(new Error('DB error'));
 
@@ -257,6 +278,114 @@ describe('Admin content routes — GET /share-links', () => {
     expect(response.statusCode).toBe(500);
     const body = JSON.parse(response.body);
     expect(body.success).toBe(false);
+  });
+
+  // #4157 — `linkId` EST le secret qui permet de REJOINDRE la conversation ;
+  // il partait en LISTE sous `canManageConversations` (MODERATOR compris).
+  // Témoin de PROJECTION : assert sur la REQUÊTE envoyée à Prisma, pas sur le
+  // rendu — un `select` qui le redéclarerait romprait ce témoin AVANT même
+  // qu'une ligne n'atteigne le sérialiseur (`additionalProperties: true`
+  // laisserait passer n'importe quel champ présent, y compris celui-ci).
+  it('ne demande plus linkId à Prisma, même pour BIGBOSS (#4157)', async () => {
+    app = buildApp('BIGBOSS');
+    await app.ready();
+
+    const response = await app.inject({ method: 'GET', url: '/share-links' });
+    expect(response.statusCode).toBe(200);
+
+    expect(mockPrisma.conversationShareLink.findMany).toHaveBeenCalledTimes(1);
+    const { select } = mockPrisma.conversationShareLink.findMany.mock.calls[0][0];
+    expect(select).not.toHaveProperty('linkId');
+    expect(select).toHaveProperty('id', true);
+    expect(select).toHaveProperty('identifier', true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /share-links/:id/reveal — S6, motif écrit, tracé (#4157)
+// ---------------------------------------------------------------------------
+
+describe('Admin content routes — POST /share-links/:id/reveal', () => {
+  const LINK_ID = '507f1f77bcf86cd799439099';
+  let app: FastifyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockPrisma.conversationShareLink.findUnique.mockResolvedValue({
+      id: LINK_ID,
+      linkId: 'secret-join-token-abc123',
+    });
+    mockPrisma.adminAuditLog.create.mockResolvedValue({});
+  });
+
+  afterAll(async () => {
+    if (app) await app.close();
+  });
+
+  it('refuse ADMIN — le rang souverain (BIGBOSS) est requis, pas une permission de domaine', async () => {
+    app = buildApp('ADMIN');
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/share-links/${LINK_ID}/reveal`,
+      payload: { reason: 'Enquête sur un signalement utilisateur' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('refuse un motif absent ou trop court (400, avant tout accès Prisma)', async () => {
+    app = buildApp('BIGBOSS');
+    await app.ready();
+
+    const sansMotif = await app.inject({ method: 'POST', url: `/share-links/${LINK_ID}/reveal`, payload: {} });
+    expect(sansMotif.statusCode).toBe(400);
+
+    const motifCourt = await app.inject({
+      method: 'POST',
+      url: `/share-links/${LINK_ID}/reveal`,
+      payload: { reason: 'court' }, // 5 caractères < minLength: 10
+    });
+    expect(motifCourt.statusCode).toBe(400);
+    expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('révèle le linkId pour BIGBOSS avec un motif écrit, et écrit la trace d\'audit', async () => {
+    app = buildApp('BIGBOSS');
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/share-links/${LINK_ID}/reveal`,
+      payload: { reason: 'Enquête sur un signalement utilisateur' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.success).toBe(true);
+    expect(body.data.linkId).toBe('secret-join-token-abc123');
+
+    expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledTimes(1);
+    const auditData = mockPrisma.adminAuditLog.create.mock.calls[0][0].data;
+    expect(auditData.action).toBe('ADMIN_SHARE_LINK_REVEALED');
+    expect(auditData.entity).toBe('ConversationShareLink');
+    expect(auditData.entityId).toBe(LINK_ID);
+    expect(JSON.parse(auditData.metadata).reason).toBe('Enquête sur un signalement utilisateur');
+  });
+
+  it('rend 404 sans écrire de trace quand le lien est introuvable', async () => {
+    mockPrisma.conversationShareLink.findUnique.mockResolvedValue(null);
+    app = buildApp('BIGBOSS');
+    await app.ready();
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/share-links/${LINK_ID}/reveal`,
+      payload: { reason: 'Enquête sur un signalement utilisateur' },
+    });
+    expect(response.statusCode).toBe(404);
+    expect(mockPrisma.adminAuditLog.create).not.toHaveBeenCalled();
   });
 });
 

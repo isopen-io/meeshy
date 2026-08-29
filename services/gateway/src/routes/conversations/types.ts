@@ -66,6 +66,14 @@ export interface MessagesQuery {
   before?: string; // messageId pour pagination
   after?: string; // ISO8601 watermark: messages créés strictement après cet instant (backfill incrémental local-first)
   around?: string; // messageId pour charger les messages autour d'un message spécifique
+  // #4177 — fil de réponses : filtre CÔTÉ SERVEUR aux réponses de CE message.
+  // Absent du schéma de route jusqu'ici, AJV (`removeAdditional`, réglage par
+  // défaut de Fastify) le retirait de `request.query` avant que le handler ne
+  // s'exécute — `ThreadRepliesLoader.swift` l'envoie depuis toujours en
+  // croyant, comme le dit son doc-comment, que le filtrage est déjà
+  // server-side. Il ne l'était pas : ouvrir un fil chargeait les 50 derniers
+  // messages de la conversation ENTIÈRE.
+  replyToId?: string;
   include_reactions?: string;
   include_translations?: string;
   include_status?: string;

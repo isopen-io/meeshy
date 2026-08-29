@@ -2,8 +2,6 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { memberRoleCasings, MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '../../utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SecuritySanitizer } from '../../utils/sanitize';
-import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
@@ -12,11 +10,12 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
-import { resolveConversationId } from '../../utils/conversation-id-cache';
-import {
-  generateUniqueShareLinkId,
-  ensureUniqueShareLinkIdentifier
-} from './utils/identifier-generator';
+// #4169 — `resolveConversationId`, la génération d'identifiants, la garde 410
+// et la garde de RANG ne vivent plus ici : `mintConversationShareLink` est
+// désormais la porte UNIQUE de création d'un lien, partagée avec `POST
+// /links` (`routes/links/creation.ts`). Ce fichier n'en est plus qu'un
+// ADAPTATEUR mince — voir le commentaire du handler `/new-link` plus bas.
+import { mintConversationShareLink } from '../links/utils/share-link-mint';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
@@ -28,6 +27,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
+import { depreciee } from '../../utils/deprecation';
 const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
@@ -101,8 +101,10 @@ export function registerSharingRoutes(
       allowAnonymousFiles?: boolean;
       allowAnonymousImages?: boolean;
       allowViewHistory?: boolean;
+      requireAccount?: boolean;
       requireNickname?: boolean;
       requireEmail?: boolean;
+      requireBirthday?: boolean;
       allowedCountries?: string[];
       allowedLanguages?: string[];
       allowedIpRanges?: string[];
@@ -132,8 +134,13 @@ export function registerSharingRoutes(
           allowAnonymousFiles: { type: 'boolean', description: 'Allow anonymous users to send files' },
           allowAnonymousImages: { type: 'boolean', description: 'Allow anonymous users to send images' },
           allowViewHistory: { type: 'boolean', description: 'Allow viewing message history' },
+          // #4169 — parité de police avec `POST /links` : ces deux champs
+          // étaient ACCEPTÉS par la route cible et silencieusement IGNORÉS
+          // ici, sans que rien ne le signale à l'appelant.
+          requireAccount: { type: 'boolean', description: 'Require a registered account for anonymous users' },
           requireNickname: { type: 'boolean', description: 'Require nickname for anonymous users' },
           requireEmail: { type: 'boolean', description: 'Require email for anonymous users' },
+          requireBirthday: { type: 'boolean', description: 'Require birthday for anonymous users' },
           allowedCountries: { type: 'array', items: { type: 'string' }, description: 'Allowed country codes' },
           allowedLanguages: { type: 'array', items: { type: 'string' }, description: 'Allowed language codes' },
           allowedIpRanges: { type: 'array', items: { type: 'string' }, description: 'Allowed IP ranges' }
@@ -145,9 +152,19 @@ export function registerSharingRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        // #4169 — l'adaptateur applique désormais la garde 410 (fil clos) de
+        // `POST /links` : la déclarer ici évite qu'un statut réel du contrat
+        // sorte non documenté, comme `/links` le fait déjà pour ce même code.
+        410: errorResponseSchema,
         500: errorResponseSchema
       }
     },
+    // #4169 critère de fin #6 — l'adresse reste un ALIAS FONCTIONNEL (le web
+    // l'appelle encore, `links.service.ts:53`) mais n'est plus la porte
+    // canonique : `POST /links` l'est. `onRequest` court avant TOUTE garde
+    // (auth, rang) pour que l'annonce parte même sur un refus — l'appelant
+    // qui échoue est celui qui a le plus besoin de savoir migrer.
+    onRequest: [depreciee({ depuis: '2026-08-29', successeur: '/api/v1/links' })],
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {
@@ -156,36 +173,10 @@ export function registerSharingRoutes(
       const authRequest = request as UnifiedAuthRequest;
       const currentUserId = authRequest.authContext.userId;
 
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Récupérer les informations de la conversation et du membre
-      const [conversation, membership] = await Promise.all([
-        prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { id: true, type: true, title: true }
-        }),
-        prisma.participant.findFirst({
-          where: {
-            conversationId: conversationId,
-            userId: currentUserId,
-            isActive: true
-          }
-        })
-      ]);
-
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation not found');
-      }
-
-      if (!membership) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Récupérer le rôle de l'utilisateur
+      // Résout l'acteur (rôle de PLATEFORME) avant de déléguer : cette route
+      // n'appelle pas `isRegisteredUser`, elle relit directement la ligne
+      // `User` et échoue fermé si elle n'existe pas — comportement inchangé
+      // par #4169, préservé tel quel.
       const user = await prisma.user.findUnique({
         where: { id: currentUserId },
         select: { role: true }
@@ -195,87 +186,52 @@ export function registerSharingRoutes(
         return sendForbidden(reply, 'User not found');
       }
 
-      // Vérifier les permissions pour créer des liens de partage
-      const conversationType = conversation.type;
-      const userRole = user.role as UserRoleEnum;
-
-      // Interdire la création de liens pour les conversations directes
-      if (conversationType === 'direct') {
-        return sendForbidden(reply, 'Cannot create share links for direct conversations');
-      }
-
-      // Pour les conversations globales, seuls les BIGBOSS peuvent créer des liens
-      if (conversationType === 'global') {
-        if (userRole !== UserRoleEnum.BIGBOSS) {
-          return sendForbidden(reply, 'You do not have the necessary rights to perform this operation');
-        }
-      }
-
-      // Pour tous les autres types de conversations (group, public, etc.),
-      // n'importe qui ayant accès à la conversation peut créer des liens
-      // L'utilisateur doit juste être membre de la conversation (déjà vérifié plus haut)
-
-      // Identifiant PUBLIC du lien — compact, opaque, vérifié libre sur les
-      // deux colonnes publiques AVANT l'écriture (cf. `generateShareLinkId`).
-      const linkId = await generateUniqueShareLinkId(prisma);
-
-      // Identifiant LISIBLE — dérivé du nom, sinon de la description. Sans ni
-      // l'un ni l'autre, le repli est compact et opaque, plus horodaté.
-      let baseIdentifier = '';
-      if (body.name) {
-        baseIdentifier = `mshy_${body.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`;
-      } else if (body.description) {
-        // Utiliser la description comme base si pas de nom
-        baseIdentifier = `mshy_${body.description.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 30)}`;
-      }
-      const uniqueIdentifier = await ensureUniqueShareLinkIdentifier(prisma, baseIdentifier);
-
-      // Créer le lien avec toutes les options configurables
-      const shareLink = await prisma.conversationShareLink.create({
-        data: {
-          linkId,
-          conversationId: conversationId,
-          createdBy: currentUserId,
-          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
-          maxUses: body.maxUses ?? undefined,
-          maxConcurrentUsers: body.maxConcurrentUsers ?? undefined,
-          maxUniqueSessions: body.maxUniqueSessions ?? undefined,
-          expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
-          allowAnonymousMessages: body.allowAnonymousMessages ?? true,
-          allowAnonymousFiles: body.allowAnonymousFiles ?? false,
-          allowAnonymousImages: body.allowAnonymousImages ?? true,
-          allowViewHistory: body.allowViewHistory ?? true,
-          requireNickname: body.requireNickname ?? true,
-          requireEmail: body.requireEmail ?? false,
-          allowedCountries: body.allowedCountries ?? [],
-          allowedLanguages: body.allowedLanguages ?? [],
-          allowedIpRanges: body.allowedIpRanges ?? [],
-          identifier: uniqueIdentifier
-        }
+      // #4169 — tout le reste (résolution de l'identifiant de conversation,
+      // garde 410 sur fil clos, refus des conversations `direct`, BIGBOSS ou
+      // ADMIN sur `global`, et — la garde qui MANQUAIT ici — au moins
+      // MODERATOR sur les autres types, génération des identifiants,
+      // écriture du lien, notification aux admins/créateur) est désormais LA
+      // SEULE responsabilité de `mintConversationShareLink`, partagée avec
+      // `POST /links` (`routes/links/creation.ts:179`). Cette route n'en est
+      // plus qu'un ADAPTATEUR : elle traduit sa forme de requête (l'id de
+      // conversation arrive en PARAMÈTRE, pas au corps) et restitue sa forme
+      // de réponse historique (`{link, code, shareLink}`), que
+      // `apps/web/services/conversations/links.service.ts:53` consomme
+      // encore — durcir cette porte ne casse donc aucun appelant existant,
+      // il ne fait que refuser ce qu'elle n'aurait jamais dû accepter.
+      const result = await mintConversationShareLink({
+        prisma,
+        reply,
+        log: logger,
+        notificationService: fastify.notificationService,
+        socketIOHandler: fastify.socketIOHandler,
+        userId: currentUserId,
+        userRole: user.role,
+        input: { conversationId: id, ...body }
       });
+      if (!result) return; // La réponse d'erreur est déjà partie.
 
       // Retour compatible avec le frontend de service conversations (string du lien complet).
       // `/chat/:linkId` est l'URL canonique (la page qui ouvre la conversation
       // dans la vue courante) ; `/join/:linkId` ne survit qu'en 308 pour les
       // liens déjà en circulation — un lien neuf ne prend pas le détour.
-      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${linkId}`;
+      const inviteLink = `${process.env.FRONTEND_URL || 'http://localhost:3100'}/chat/${result.linkId}`;
       return sendSuccess(reply, {
         link: inviteLink,
-        code: linkId,
+        code: result.linkId,
         shareLink: {
-          id: shareLink.id,
-          linkId,
-          name: shareLink.name,
-          description: shareLink.description,
-          maxUses: shareLink.maxUses,
-          expiresAt: shareLink.expiresAt,
-          allowAnonymousMessages: shareLink.allowAnonymousMessages,
-          allowAnonymousFiles: shareLink.allowAnonymousFiles,
-          allowAnonymousImages: shareLink.allowAnonymousImages,
-          allowViewHistory: shareLink.allowViewHistory,
-          requireNickname: shareLink.requireNickname,
-          requireEmail: shareLink.requireEmail
+          id: result.shareLink.id,
+          linkId: result.linkId,
+          name: result.shareLink.name,
+          description: result.shareLink.description,
+          maxUses: result.shareLink.maxUses,
+          expiresAt: result.shareLink.expiresAt,
+          allowAnonymousMessages: result.shareLink.allowAnonymousMessages,
+          allowAnonymousFiles: result.shareLink.allowAnonymousFiles,
+          allowAnonymousImages: result.shareLink.allowAnonymousImages,
+          allowViewHistory: result.shareLink.allowViewHistory,
+          requireNickname: result.shareLink.requireNickname,
+          requireEmail: result.shareLink.requireEmail
         }
       });
 

@@ -77,10 +77,17 @@ jest.mock('bcryptjs', () => ({
   hash: (...args: any[]) => mockBcryptHash(...args),
 }));
 
+// `updateUserProfileSchema` est le SCHÉMA RÉEL (#4184), pas un passe-plat.
+//
+// Un `parse: jest.fn((b) => b)` rend VERT n'importe quel témoin qui envoie
+// `email`/`phoneNumber` à `PATCH /users/me` : la validation n'existe plus, le
+// témoin ne peut jamais tomber quel que soit l'état du défaut qu'il prétend
+// garder — c'est l'anti-témoin signalé sur #4184 (commentaire du 2026-08-29).
+// Les quatre AUTRES schémas (avatar/banner/password/username) restent des
+// passe-plats : cette issue ne touche ni leur forme ni leur comportement, et
+// les remplacer par le réel élargirait le lot bien au-delà de son territoire.
 jest.mock('@meeshy/shared/utils/validation', () => ({
-  updateUserProfileSchema: {
-    parse: jest.fn((b: any) => b),
-  },
+  updateUserProfileSchema: (jest.requireActual('@meeshy/shared/utils/validation') as any).updateUserProfileSchema,
   updateAvatarSchema: {
     parse: jest.fn((b: any) => b),
   },
@@ -95,10 +102,18 @@ jest.mock('@meeshy/shared/utils/validation', () => ({
   },
 }));
 
+// `updateUserRequestSchema` (AJV) est le SCHÉMA RÉEL pour la même raison : sous
+// `additionalProperties: true`, Fastify ne rejette jamais rien au niveau AJV,
+// et le lot #4184 dépend justement de ce que ce schéma ne DÉCLARE plus
+// `email`/`phoneNumber`/`avatar`/`timezone` pour que la couche Zod voie encore
+// la clé interdite et la refuse (voir le doc-comment du schéma réel pour le
+// détail de l'interaction avec `removeAdditional`). Les trois autres clés
+// restent des stubs : ce lot ne touche ni `userSchema`, ni `userMinimalSchema`,
+// ni `errorResponseSchema`.
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   userSchema: {},
   userMinimalSchema: {},
-  updateUserRequestSchema: { type: 'object', additionalProperties: true },
+  updateUserRequestSchema: (jest.requireActual('@meeshy/shared/types/api-schemas') as any).updateUserRequestSchema,
   errorResponseSchema: { type: 'object' },
 }));
 
@@ -312,40 +327,76 @@ describe('PATCH /users/me — success', () => {
   });
 });
 
-describe('PATCH /users/me — email already in use', () => {
-  it('returns 400 when email is taken by another user', async () => {
+// #4184 — `email`/`phoneNumber` ne sont plus des champs de cette route, POINT.
+//
+// Ces deux describe portaient autrefois « déjà utilisé par un autre compte » :
+// la route acceptait le champ, le VÉRIFIAIT contre les autres utilisateurs, et
+// refusait sur conflit — mais l'ACCEPTAIT et l'ÉCRIVAIT sans aucune preuve de
+// possession dès qu'il n'y avait pas conflit. Ce n'est pas un défaut d'unicité,
+// c'est une absence totale de vérification : n'importe quelle session peut
+// poser N'IMPORTE QUELLE adresse libre, puis déclencher une réinitialisation
+// de mot de passe dessus. Le témoin ci-dessous prouve le VRAI invariant :
+// `findFirst` renvoie `null` (aucun conflit, donc — sous l'ancien code — la
+// requête aurait ABOUTI) et l'écriture n'a malgré tout jamais lieu.
+//
+// Rouge sous la mutation qu'il nomme : réintroduire `email`/`phoneNumber` dans
+// `updateUserProfileSchema` (packages/shared/utils/validation.ts) fait
+// repasser ce test au VERT — c'est-à-dire repasse `prisma.user.update` à
+// « appelé », ce que l'assertion `not.toHaveBeenCalled()` détecte aussitôt.
+describe('PATCH /users/me — email/phoneNumber are not writable via this route (#4184)', () => {
+  it('rejects a request carrying email with an explicit 400 — never reaches prisma.update', async () => {
+    const update = jest.fn<any>().mockResolvedValue(mockUser);
     const prisma = makePrisma({
       user: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
-        update: jest.fn<any>().mockResolvedValue(mockUser),
+        findFirst: jest.fn<any>().mockResolvedValue(null), // aucun conflit — l'ancien code aurait écrit
+        update,
       },
     });
     const app = await buildApp({ routes: [updateUserProfile], prisma });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me',
-      payload: { email: 'taken@example.com' },
+      payload: { firstName: 'Bob', email: 'attacker@evil.com' },
     });
     expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
     await app.close();
   });
-});
 
-describe('PATCH /users/me — phone already in use', () => {
-  it('returns 400 when phone is taken by another user', async () => {
+  it('rejects a request carrying phoneNumber with an explicit 400 — never reaches prisma.update', async () => {
+    const update = jest.fn<any>().mockResolvedValue(mockUser);
     const prisma = makePrisma({
       user: {
-        findFirst: jest.fn<any>().mockResolvedValue({ id: OTHER_USER_ID }),
-        update: jest.fn<any>().mockResolvedValue(mockUser),
+        findFirst: jest.fn<any>().mockResolvedValue(null),
+        update,
       },
     });
     const app = await buildApp({ routes: [updateUserProfile], prisma });
     const res = await app.inject({
       method: 'PATCH',
       url: '/users/me',
-      payload: { phoneNumber: '+33611111111' },
+      payload: { firstName: 'Bob', phoneNumber: '+33611111111' },
     });
     expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('rejects avatar/timezone the same way — AJV and Zod now describe the same field set', async () => {
+    // Deux champs qu'AJV déclarait autrefois sans que Zod les reconnaisse :
+    // le contrat MENTAIT (accepté à la lecture du schéma, refusé à
+    // l'exécution). Ils sont désormais retirés des DEUX côtés, donc rejetés
+    // par le même mécanisme que email/phoneNumber — cohérence du contrat.
+    const update = jest.fn<any>().mockResolvedValue(mockUser);
+    const prisma = makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null), update } });
+    const app = await buildApp({ routes: [updateUserProfile], prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/users/me',
+      payload: { firstName: 'Bob', avatar: 'https://example.com/a.jpg', timezone: 'Europe/Paris' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
     await app.close();
   });
 });

@@ -101,14 +101,26 @@ describe('GET /dashboard — forbidden (USER role)', () => {
   });
 });
 
-describe('GET /dashboard — forbidden (MODERATOR role)', () => {
+// #4157 — ANTI-TÉMOIN corrigé. Ce bloc affirmait `403` pour MODERATOR alors
+// que la matrice centrale (`canAccessAdmin`) le laisse toujours passer : la
+// contradiction était double sur cette route (MODERATOR exclu à tort, ANALYST
+// admis à tort, voir le bloc suivant) et CE témoin gelait la première moitié
+// du défaut au lieu de le garder. La garde était `canViewAnalytics`
+// (`MODERATOR.canViewAnalytics = false`) ; elle est désormais `canAccessAdmin`
+// (`MODERATOR.canAccessAdmin = true`) — MODERATOR administre, il doit pouvoir
+// ouvrir le tableau de bord.
+describe('GET /dashboard — success (MODERATOR role)', () => {
   let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp('MODERATOR'); });
+  beforeAll(async () => {
+    mockCacheGet.mockResolvedValue(null);
+    app = await buildApp('MODERATOR');
+  });
   afterAll(async () => { await app.close(); });
 
-  it('returns 403 when user has MODERATOR role', async () => {
+  it('returns 200 when user has MODERATOR role (canAccessAdmin, #4157)', async () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
   });
 });
 
@@ -128,7 +140,13 @@ describe('GET /dashboard — success (ADMIN)', () => {
   });
 });
 
-describe('GET /dashboard — success (ANALYST)', () => {
+// #4157 — ANTI-TÉMOIN corrigé. « ANALYST admis » était le défaut le PLUS
+// PARLANT de ce fichier : la matrice centrale donne `canAccessAdmin = false`
+// à ANALYST — un rôle SANS accès administrateur ouvrait pourtant le tableau
+// de bord au complet (comptes, communautés, signalements). Ce témoin
+// attestait exactement ce que l'issue nomme « accès accordé à un rôle qui
+// n'a pas d'accès administrateur ».
+describe('GET /dashboard — forbidden (ANALYST)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
     mockCacheGet.mockResolvedValue(null);
@@ -136,10 +154,9 @@ describe('GET /dashboard — success (ANALYST)', () => {
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 for ANALYST role', async () => {
+  it('returns 403 for ANALYST role — pas de canAccessAdmin (#4157)', async () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
+    expect(res.statusCode).toBe(403);
   });
 });
 

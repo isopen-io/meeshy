@@ -210,9 +210,63 @@ describe('POST /links — global conversation with admin role', () => {
   });
 });
 
+// #4169 — la garde de RANG qui manquait aux DEUX portes. Le témoin qui compte
+// n'est pas seulement « cette porte refuse » mais « l'AUTRE porte refuse
+// aussi » : son jumeau vit dans `conversation-sharing.test.ts`
+// (`POST /conversations/:id/new-link`), sur le MÊME prédicat
+// (`mayMintShareLink`, `routes/links/utils/share-link-mint.ts`).
+describe('POST /links — simple member on a group conversation', () => {
+  it('returns 403 when a member (role: member) tries to mint a link', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'member' });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+// #4169 critère de fin #3 — un anonyme muni du seul lien ne naît plus plus
+// privilégié qu'un inscrit invité par un admin (`canViewHistory: false` par
+// défaut sur `POST /conversations/:id/invite`,
+// `routes/conversations/sharing.ts`). Ce témoin traverse le VRAI pipeline
+// Fastify (`app.inject`, pas un appel direct au handler) : `createLinkBodySchema`
+// active `useDefaults` d'AJV (server.ts ne le désactive pas), et un `default`
+// de schéma de REQUÊTE matérialise la valeur AVANT que le handler ne
+// s'exécute (§ CLAUDE.md « Un default dans un schéma de REQUÊTE est une
+// ÉCRITURE ») — le seul type de témoin qui puisse voir ce piège.
+describe('POST /links — allowViewHistory default', () => {
+  it('defaults allowViewHistory to false in the created row when the body omits it', async () => {
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    const { app } = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'POST', url: '/links',
+      payload: { conversationId: CONV_ID },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(prisma.conversationShareLink.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ allowViewHistory: false }) })
+    );
+    await app.close();
+  });
+});
+
 describe('POST /links — success with existing conversation', () => {
   it('returns 201 with linkId when creating link for group conversation', async () => {
-    const { app } = await buildApp();
+    // #4169 — `makePrisma()` par défaut ne pose aucun `role` sur la ligne
+    // `Participant` : sous la garde de rang qui manquait avant ce lot, un
+    // acteur sans rang lisible tombe SOUS le plancher MODERATOR (§
+    // `conversation-authority.ts`, un rang illisible vaut 0). Ce test exerce
+    // la MÉCANIQUE de création pour un acteur DÉJÀ autorisé — le témoin
+    // négatif dédié (`role: 'member' ⇒ 403`) vit plus bas dans ce fichier.
+    const prisma = makePrisma();
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    const { app } = await buildApp({ prisma });
     const res = await app.inject({
       method: 'POST', url: '/links',
       payload: { conversationId: CONV_ID, name: 'My Link' },
@@ -279,6 +333,9 @@ describe('POST /links — creates legacy conversation without conversationId', (
 describe('POST /links — DB error', () => {
   it('returns 500 when conversationShareLink.create throws', async () => {
     const prisma = makePrisma();
+    // #4169 — atteindre l'écriture qui lève exige d'abord de franchir la
+    // garde de rang (§ commentaire du témoin de succès ci-dessus).
+    prisma.participant.findFirst = jest.fn<any>().mockResolvedValue({ id: 'part-1', role: 'moderator' });
     prisma.conversationShareLink.create = jest.fn<any>().mockRejectedValue(new Error('DB failure'));
     const { app } = await buildApp({ prisma });
     const res = await app.inject({

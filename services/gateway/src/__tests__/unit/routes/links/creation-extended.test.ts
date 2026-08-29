@@ -135,6 +135,34 @@ describe('POST /links — conversationId=meeshy (global conversation path)', () 
   });
   afterAll(async () => { await app.close(); });
 
+  // #4169 — cette DOIT s'exécuter AVANT le témoin « 201 for BIGBOSS » ci-dessous.
+  // `mintConversationShareLink` résout désormais "meeshy" par
+  // `resolveConversationId`, dont le cache identifiant→ObjectId est un
+  // singleton de MODULE (`utils/conversation-id-cache.ts`) — il survit d'un
+  // test à l'autre DANS ce fichier. Si le témoin de succès s'exécute en
+  // premier, il met "meeshy" en cache ; `mockResolvedValueOnce(null)` ci-
+  // dessous ne serait alors JAMAIS consulté (le cache répond avant la
+  // requête), et ce test resterait vert pour la mauvaise raison — la garde
+  // de RANG (§ plus bas dans ce lot), pas la résolution d'identifiant qu'il
+  // nomme. Une résolution en échec n'est jamais mise en cache
+  // (`resolveConversationId`), donc l'ordre inverse est sans risque.
+  it('returns 404 when meeshy global conversation is not found', async () => {
+    prisma.conversation.findFirst.mockResolvedValueOnce(null);
+    const res = await app.inject({
+      method: 'POST',
+      url: '/links',
+      payload: { conversationId: 'meeshy', name: 'Test Link' },
+    });
+    // #4169 — avant ce lot : `member` restait `undefined` (branche spéciale
+    // "meeshy" jamais entrée) ⇒ 403 « pas membre ». `resolveConversationId`
+    // uniformise la résolution d'identifiant pour LES DEUX portes : un
+    // identifiant qui ne résout à RIEN est un « je ne trouve pas », pas un
+    // refus d'accès — c'est le verdict que `POST /links` rend déjà pour un
+    // ObjectId syntaxiquement valide mais absent de la base
+    // (§ « conversation not found » dans creation.test.ts).
+    expect(res.statusCode).toBe(404);
+  });
+
   it('returns 201 for BIGBOSS creating a link for meeshy conversation', async () => {
     const res = await app.inject({
       method: 'POST',
@@ -143,16 +171,6 @@ describe('POST /links — conversationId=meeshy (global conversation path)', () 
     });
     // The global conversation might succeed or fail based on DB mock setup
     expect([201, 403]).toContain(res.statusCode);
-  });
-
-  it('returns 403 when meeshy global conversation is not found', async () => {
-    prisma.conversation.findFirst.mockResolvedValueOnce(null);
-    const res = await app.inject({
-      method: 'POST',
-      url: '/links',
-      payload: { conversationId: 'meeshy', name: 'Test Link' },
-    });
-    expect(res.statusCode).toBe(403);
   });
 });
 
@@ -204,7 +222,12 @@ describe('POST /links — newConversation with memberIds', () => {
 describe('POST /links — description-based identifier (no name)', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    ({ app } = await buildApp());
+    // #4169 — `makePrisma()` par défaut ne pose aucun `role` : sans lui,
+    // l'acteur retombe sous le plancher MODERATOR désormais exigé sur un
+    // `group`. Ce bloc teste la dérivation d'identifiant, pas le rang.
+    const prisma = makePrisma();
+    prisma.participant.findFirst.mockResolvedValue({ id: 'part-1', role: 'moderator' });
+    ({ app } = await buildApp({ prisma }));
   });
   afterAll(async () => { await app.close(); });
 
@@ -232,6 +255,11 @@ describe('POST /links — notificationService sends notifications to admins', ()
       createSystemNotification: jest.fn<any>().mockResolvedValue(undefined),
     };
     prisma = makePrisma();
+    // #4169 — `findMany` liste les ADMINS À NOTIFIER ; `findFirst` porte le
+    // rang de L'APPELANT lui-même, que la garde de rang exige désormais au
+    // moins MODERATOR sur un `group`. Deux requêtes distinctes, deux mocks
+    // distincts — ne pas confondre l'un pour l'autre.
+    prisma.participant.findFirst.mockResolvedValue({ id: 'part-1', role: 'moderator' });
     prisma.participant.findMany.mockResolvedValue([
       { userId: 'admin-user-1' },
       { userId: 'admin-user-2' },

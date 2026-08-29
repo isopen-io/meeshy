@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendPaginatedSuccess, sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   type UserRole,
@@ -14,7 +14,7 @@ import { attachmentMediaSelect } from '../../services/attachments/attachmentIncl
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
-import { requirePermission } from '../../middleware/authorize';
+import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
@@ -691,9 +691,17 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const [shareLinks, totalCount] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({
           where,
+          // #4157 — `linkId` EST le secret qui permet de REJOINDRE la
+          // conversation (`middleware`/résolution de lien, cf. `content.ts`
+          // ligne ~ci-dessous pour son homologue de recherche) : le servir en
+          // LISTE à tout rôle `canManageConversations` (MODERATOR compris)
+          // revient à distribuer autant d'invitations que de lignes de cette
+          // page. `id` (l'ObjectId, déjà servi) reste la référence OPAQUE sur
+          // laquelle la liste agit ; le secret lui-même ne se lit plus qu'au
+          // travers du geste dédié `POST /share-links/:id/reveal` (S6, motif
+          // écrit, tracé — voir plus bas).
           select: {
             id: true,
-            linkId: true,
             identifier: true,
             name: true,
             description: true,
@@ -744,6 +752,87 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin share links error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  /**
+   * POST /api/admin/share-links/:id/reveal
+   *
+   * Le GESTE dédié qui révèle le `linkId` retiré de la liste ci-dessus (#4157,
+   * critère 3). Rang SOUVERAIN (BIGBOSS seul — `requireSovereign`, pas
+   * `canManageConversations` : une permission de domaine ne doit pas pouvoir
+   * délivrer, en série, le secret de jointure de CHAQUE conversation de la
+   * plateforme) ; motif écrit obligatoire, imposé par le schéma de requête
+   * (`minLength: 10`, Fastify/AJV rejette AVANT que le handler ne s'exécute —
+   * la garde du corps n'est donc pas redondante à réécrire ici) ; trace
+   * d'audit écrite APRÈS la lecture réussie, jamais avant (`withAudit` est
+   * best-effort et ne doit pas conditionner un geste qui a déjà eu lieu).
+   */
+  fastify.post('/share-links/:id/reveal', {
+    onRequest: [fastify.authenticate, requireSovereign()],
+    schema: {
+      description: 'Révèle le linkId (secret de jointure) d\'un lien de partage. Rang souverain, motif écrit obligatoire, geste tracé — #4157.',
+      tags: ['admin'],
+      summary: 'Reveal a share link secret',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } }
+      },
+      body: {
+        type: 'object',
+        required: ['reason'],
+        properties: {
+          reason: { type: 'string', minLength: 10, description: 'Motif écrit de la révélation (10 caractères minimum), consigné dans AdminAuditLog' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Secret révélé',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: { id: { type: 'string' }, linkId: { type: 'string' } }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const { reason } = request.body as { reason: string };
+
+      const shareLink = await fastify.prisma.conversationShareLink.findUnique({
+        where: { id },
+        select: { id: true, linkId: true }
+      });
+
+      if (!shareLink) {
+        return sendNotFound(reply, 'Lien de partage non trouvé');
+      }
+
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      await withAudit(request, {
+        action: 'ADMIN_SHARE_LINK_REVEALED',
+        entity: 'ConversationShareLink',
+        entityId: shareLink.id,
+        userId: authContext.registeredUser.id,
+        reason,
+      });
+
+      return sendSuccess(reply, { id: shareLink.id, linkId: shareLink.linkId });
+    } catch (error) {
+      logError(fastify.log, 'Reveal admin share link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

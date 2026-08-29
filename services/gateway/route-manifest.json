@@ -20,7 +20,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 524,
+  "routeCount": 526,
   "routes": [
     {
       "method": "DELETE",
@@ -97,12 +97,11 @@
       "path": "/api/v1/admin/agent/reset",
       "module": "agentAdminRoutes",
       "mountPrefix": "/api/v1/admin/agent",
-      "securityLevel": "inconnu",
+      "securityLevel": "S6",
       "securityLevelCandidates": [
-        "S4",
-        "S5"
+        "S6"
       ],
-      "securityBasisKey": "permission-gated",
+      "securityBasisKey": "sovereign",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -3468,6 +3467,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/social/posts",
+      "module": "anonyme~10",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S0",
+        "S1"
+      ],
+      "securityBasisKey": "no-standard-auth-hook",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/sounds/:id",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
@@ -5031,6 +5044,19 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/admin/share-links/:id/reveal",
+      "module": "registerContentRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "S6",
+      "securityLevelCandidates": [
+        "S6"
+      ],
+      "securityBasisKey": "sovereign",
       "hierarchyGated": false,
       "adminPrefixed": true
     },
@@ -7083,12 +7109,11 @@
       "path": "/api/v1/admin/agent/llm",
       "module": "agentAdminRoutes",
       "mountPrefix": "/api/v1/admin/agent",
-      "securityLevel": "inconnu",
+      "securityLevel": "S6",
       "securityLevelCandidates": [
-        "S4",
-        "S5"
+        "S6"
       ],
-      "securityBasisKey": "permission-gated",
+      "securityBasisKey": "sovereign",
       "hierarchyGated": false,
       "adminPrefixed": true
     },

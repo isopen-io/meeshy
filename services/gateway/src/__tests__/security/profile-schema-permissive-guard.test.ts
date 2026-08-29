@@ -37,6 +37,14 @@ const FICHIERS_DE_PROFIL = [
   'routes/users/public-profile.ts',
   'routes/directory/people.ts',
   'routes/directory/person.ts',
+  // #4184 — witness (d) : la réponse d'un changement de contact ne doit
+  // porter AUCUN champ non déclaré (jeton, ancienne adresse, ou tout champ
+  // voisin que le handler composerait par accident). Chaque schéma de réponse
+  // de ce fichier déclare `properties` explicitement (`message`,
+  // `pendingEmail`/`newEmail`/`pendingPhoneNumber`/`newPhoneNumber`) — aucun
+  // `additionalProperties: true` : ce balayage le PROUVE, et gèle le fichier
+  // contre toute régression future.
+  'routes/users/contact-change.ts',
 ] as const;
 
 describe('Les schémas de profil déclarent ce qu’ils servent', () => {

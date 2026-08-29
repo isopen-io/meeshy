@@ -374,6 +374,24 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   //     appelants anonymes (vérifié par lecture de PostFeedService/PostService) ---
   { method: 'GET', url: '/api/v1/posts/user/:userId', why: 'optionalAuth ; PostFeedService.getUserPosts applique buildVisibilityFilter — un anonyme ne voit que le PUBLIC' },
   { method: 'GET', url: '/api/v1/posts/community/:communityId', why: 'idem' },
+  // #4149 — `GET /api/v1/social/posts` remplace neuf routes de fil social.
+  // Elle est ici pour la MEME raison que les deux lignes ci-dessus : optionalAuth,
+  // et PostFeedService applique `buildVisibilityFilter`, donc un anonyme ne voit
+  // que le PUBLIC. Mais elle mérite un mot de plus, parce que la sonde n'observe
+  // pas d'elle-même ce qui la protège : cette route ne déclare AUCUN
+  // `schema.querystring` Fastify (elle valide son `scope` par une union
+  // discriminée Zod DANS le gestionnaire), donc la synthèse de querystring de ce
+  // test ne s'y applique pas — la sonde l'appelle SANS aucun `?scope=` et reçoit
+  // un 400 avant même que la route sache QUELLE ressource est demandée, donc
+  // avant qu'une autorisation ait un sens.
+  //
+  // Ce que cette ligne fait perdre à ce test, un autre le garde : les six scopes
+  // qui exigent une identité (home, stories, stories.mine, reels, statuses,
+  // bookmarks) rendent 401 à un anonyme, et c'est
+  // `unit/routes/posts/social-posts-scope.test.ts` qui le prouve, scope par
+  // scope. Si cette garantie tombe un jour, c'est LUI qui rougira — pas ce
+  // balayage. Ne retire pas ce témoin en croyant qu'il fait doublon.
+  { method: 'GET', url: '/api/v1/social/posts', why: 'optionalAuth ; scope=author/community publics par conception, les six autres rendent 401 (prouvé par unit/routes/posts/social-posts-scope.test.ts)' },
   { method: 'POST', url: '/api/v1/posts/:postId/anonymous-view', why: "comptage de vue anonyme, PostService.recordAnonymousOpen filtre explicitement au PUBLIC" },
 
   // --- Attachments : fichiers statiques servis par nom de fichier UUIDv4
