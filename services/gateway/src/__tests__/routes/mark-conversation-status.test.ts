@@ -121,8 +121,33 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     const body = response.json();
     expect(body.success).toBe(true);
     expect(typeof body.data.markedCount).toBe('number');
-    expect(body.data.markedCount).toBe(UNREAD_COUNT);
     expect(body.data.message).toBeUndefined();
+  });
+
+  // #4179 — `markedCount` a une SEULE définition : le nombre d'entrées
+  // RÉELLEMENT figées par ce marquage, jamais le compte de non-lus D'AVANT.
+  // Les deux ensembles diffèrent (un message peut être livré depuis
+  // longtemps et rester non lu) : ce témoin les met délibérément en désaccord
+  // (`UNREAD_COUNT` = 5, deux entrées nouvellement livrées) pour prouver la
+  // SOURCE — un mock `message.count` inchangé n'aurait pas fait tomber la
+  // porte d'avant #4179, qui servait `UNREAD_COUNT` sans jamais regarder ce
+  // qui a été figé.
+  it('mark-as-received: markedCount is the frozen delivery count, decoupled from the pre-mark unread count', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([
+      { id: 'msg-newly-delivered-1' },
+      { id: 'msg-newly-delivered-2' }
+    ]);
+    mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 2 });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-received`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.markedCount).toBe(2);
+    expect(body.data.markedCount).not.toBe(UNREAD_COUNT);
   });
 
   it('mark-as-read returns a numeric data.markedCount, never a message string', async () => {

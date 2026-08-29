@@ -9,6 +9,13 @@ import { MarkReadBodySchema } from '../validation/messages-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
 import { resolveCallerParticipant } from './conversations/utils/access-control.js';
 import { broadcastReadStatus } from '../socketio/broadcastReadStatus.js';
+// #4179 — le plancher d'historique bornait déjà `GET /conversations/:id/status`
+// (messages-advanced.ts) mais aucune des DEUX lectures de ce fichier : un
+// accusé NOMINATIF (qui a reçu/lu un message, et quand) est de l'historique au
+// même titre que le texte du message lui-même — une métadonnée qui fuit ce que
+// le contenu tait. Réutilise la même fonction pure que `/status` et
+// `threads.ts`, jamais une réécriture locale de la règle.
+import { loadReaderHistoryFloor, historyReaderFromAuthContext } from '../services/historyFloor.js';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { createCustomRateLimiter } from '../utils/rate-limiter.js';
@@ -30,6 +37,19 @@ interface DeliveryReceiptRouteParams {
   conversationId: string;
   messageId: string;
 }
+
+/**
+ * #4179 — `ReadStatusesQuerySchema` (validation/message-read-status-schemas.ts)
+ * valide chaque id de la liste CSV mais ne borne jamais leur NOMBRE : un appel
+ * pouvait en demander des milliers, chacun déclenchant en aval un aller-retour
+ * `MessageStatusEntry`/`ConversationReadCursor`. Plafond aligné sur celui déjà
+ * en vigueur côté ÉCRITURE (`MarkReadBodySchema.messageIds`, 200) tout en
+ * restant strictement inférieur : une lecture porte plus d'appelants
+ * potentiels par requête (un client peut redemander le statut de tout ce qui
+ * vient d'apparaître à l'écran) qu'une écriture, qui ne porte que ce qu'UN
+ * lecteur vient réellement de voir.
+ */
+const MAX_READ_STATUSES_MESSAGE_IDS = 100;
 
 export default async function messageReadStatusRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
@@ -65,10 +85,17 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
   });
 
   // Rate limiter for write operations that broadcast to conversation rooms.
-  // 30 req/min per user — generous enough for normal tab-switching / reconnect
-  // patterns while blocking tight loops that would spam read-receipt broadcasts.
+  // #4179 — relevé de 30 à 120 req/min par utilisateur. À 30, une conversation
+  // active épuisait SEULE le quota que `mark-as-received` et `mark-as-read`
+  // PARTAGENT (le doc-comment de `ConversationSyncEngine._markAsReceivedTasks`,
+  // iOS, l'explique : la coalescence côté client à 1s existe justement à cause
+  // de ce partage) — au point de faire rejeter des accusés de LECTURE par un
+  // flot d'accusés de RÉCEPTION que rien ne rejoue jamais. 120 est ce qui
+  // permet à iOS de cesser d'étrangler ses accusés de lecture pour protéger son
+  // propre quota de réception. `isLocalIp` n'intervient plus ici depuis #4137 —
+  // la clé `user:` ci-dessous porte tout l'effet du limiteur.
   const readReceiptWriteLimiter = createCustomRateLimiter({
-    max: 30,
+    max: 120,
     windowMs: 60 * 1000,
     keyPrefix: 'read-receipt',
     message: 'Too many read-receipt updates. Please slow down.',
@@ -97,7 +124,10 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Vérifier que le message existe
       const message = await prisma.message.findUnique({
         where: { id: messageId },
-        select: { id: true, conversationId: true }
+        // `createdAt` : plancher d'historique ci-dessous. Absent avant #4179 —
+        // cette porte n'avait alors aucun moyen de savoir si le message datait
+        // d'avant l'arrivée de l'appelant.
+        select: { id: true, conversationId: true, createdAt: true }
       });
 
       if (!message) {
@@ -116,6 +146,23 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
 
       if (!membership) {
         return sendForbidden(reply, 'Accès non autorisé à ce message');
+      }
+
+      // #4179 — cette porte rendait déjà un accusé NOMINATIF (qui a reçu/lu, et
+      // quand — `getMessageReadStatus`) sans jamais consulter le plancher
+      // d'historique, alors que `GET /conversations/:id/status` l'applique pour
+      // la même donnée. Un membre pouvait ainsi interroger le statut d'un
+      // message envoyé avant son arrivée (ou avant la date que son lien de
+      // partage autorise) — l'accusé de lecture fuyant une information sur un
+      // contenu que le message lui-même lui reste caché. Traité comme le
+      // message ci-dessus : « pas trouvé », pour ne pas distinguer, depuis
+      // l'extérieur, une absence réelle d'une absence de droit.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+      if (historyFloor && message.createdAt < historyFloor) {
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // Récupérer le statut de lecture
@@ -170,10 +217,35 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         return sendBadRequest(reply, 'Au moins un messageId requis');
       }
 
+      // #4179 — `ReadStatusesQuerySchema` valide chaque id un par un mais ne
+      // borne jamais leur NOMBRE (voir MAX_READ_STATUSES_MESSAGE_IDS
+      // ci-dessus) : une chaîne CSV de plusieurs milliers d'ids passait la
+      // validation Zod intacte et se traduisait en autant de lignes lues côté
+      // service. Contrôle posé ICI, dans la route, plutôt que dans le schéma
+      // partagé (hors du territoire de ce correctif) — un `messageIds` déjà
+      // découpé est le format le plus simple pour vérifier une CARDINALITÉ.
+      if (messageIdArray.length > MAX_READ_STATUSES_MESSAGE_IDS) {
+        return sendBadRequest(reply, `Trop de messageIds (maximum ${MAX_READ_STATUSES_MESSAGE_IDS})`);
+      }
+
+      // #4179 — même plancher d'historique que `GET /messages/:id/read-status`
+      // ci-dessus : cette porte rend des comptes agrégés (combien ont reçu/lu),
+      // mais ils dérivent des MÊMES curseurs/entrées figées que les vues
+      // nominatives, sur des `messageIds` que l'APPELANT choisit — sans
+      // plancher, interroger un message antérieur à son arrivée révélait déjà
+      // qu'il existe et combien de destinataires l'ont eu, quand `GET
+      // /conversations/:id/status` protège la même donnée pour la même
+      // conversation.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext)
+      });
+
       // Récupérer les statuts
       const statusMap = await readStatusService.getConversationReadStatuses(
         conversationId,
-        messageIdArray
+        messageIdArray,
+        historyFloor
       );
 
       // Convertir Map en objet pour JSON
@@ -327,11 +399,18 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
-      // Compteur AVANT marquage — uniforme avec POST /conversations/:id/mark-read.
-      const markedCount = await readStatusService.getUnreadCount(membership.id, conversationId);
-
-      // Marquer comme reçu (participantId, pas userId)
-      await readStatusService.markMessagesAsReceived(membership.id, conversationId);
+      // #4179 — `markedCount` a désormais UNE définition dans tout ce fichier :
+      // le nombre d'entrées RÉELLEMENT figées. Cette porte servait jusqu'ici le
+      // compte de non-lus D'AVANT marquage (`getUnreadCount`) sous ce nom — or
+      // « non lu » et « non reçu » sont deux ensembles distincts (un message
+      // peut être livré depuis longtemps sans être lu), donc ce nombre pouvait
+      // aussi bien sur-compter (aucune nouvelle livraison, mais des non-lus
+      // déjà anciens restaient) que sous-compter (peu de non-lus, mais tout un
+      // arriéré de livraison venait d'être rattrapé d'un coup). Il suffit de
+      // relayer ce que `markMessagesAsReceived` a réellement figé — la requête
+      // `getUnreadCount` qui précédait ce marquage est retirée, elle ne servait
+      // plus qu'à produire ce nombre faux.
+      const markedCount = await readStatusService.markMessagesAsReceived(membership.id, conversationId);
 
       // Les « received » (accusés de livraison) suivent aussi la préférence
       // `showReadReceipts` — c'est l'unité partagée qui la consulte, et qui

@@ -3,7 +3,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { AttachmentService } from '../services/attachments/index.js';
 import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { hoistLocationOnto } from '../services/location/sharedPlace';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, type HistoryFloorJoin } from '../services/historyFloor';
+import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloor, loadReaderHistoryFloor, historyReaderFromAuthContext, type HistoryFloorJoin } from '../services/historyFloor';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { validatePagination } from '../utils/pagination';
@@ -1030,10 +1030,25 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       // `MessageStatusDetailsQuerySchema`, no numeric coercion), so a malformed
       // value would otherwise reach the service as `NaN` skip/take → HTTP 500.
       const { offset: pageOffset, limit: pageLimit } = validatePagination(offset, limit, { defaultLimit: 20, maxLimit: 100 });
+
+      // #4179 -- le plancher d'historique s'applique ICI, pas seulement dans le
+      // service. Un accuse de lecture est NOMINATIF (qui a lu, et quand) : c'est
+      // de l'historique au meme titre que le texte du message, et un membre
+      // arrive apres coup ne doit pas apprendre qui lisait avant lui. Le service
+      // sait deja refuser -- il accepte `historyFloor` depuis ce lot -- mais tant
+      // que cette route ne le lui PASSE pas, la garde est ecrite, testee, et
+      // n'atteint personne en production. Les deux autres lectures nominatives
+      // du meme service le posent deja ; celle-ci etait la derniere sans.
+      const historyFloor = await loadReaderHistoryFloor(prisma, {
+        conversationId: message.conversationId,
+        reader: historyReaderFromAuthContext(authRequest.authContext),
+      });
+
       const statusDetails = await readStatusService.getMessageStatusDetails(messageId, {
         offset: pageOffset,
         limit: pageLimit,
-        filter
+        filter,
+        historyFloor
       });
 
       return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
