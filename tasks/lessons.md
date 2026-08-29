@@ -19236,3 +19236,68 @@ HEAD..origin/main` doit rendre 0) ; regate ; pousser.
 pas re-prise à chaque appel retombe sur son défaut. Ici le défaut était `--rebase`,
 correct dix fois de suite, destructeur la onzième — et rien dans la commande ne
 distingue les deux cas.
+
+## Leçon 325
+
+**Une « décision produit » peut n'en être pas une — demander d'abord quelle MESURE la trancherait.**
+
+#4317 demandait, en la classant `décision-produit` : « laquelle des deux implémentations de
+"supprimer pour moi" survit ? ». Formulée ainsi, la question appelait un arbitrage de goût, et
+l'issue a attendu. Trois mesures l'ont close en vingt minutes :
+
+1. **Les deux moitiés n'écrivent pas dans la même colonne.** La riche écrit
+   `Participant.deletedForMe` ; la pauvre `UserConversationPreferences.deletedForUserAt`.
+2. **Une seule des deux colonnes est LUE par la liste.** `conversations/core.ts` construit son
+   `whereClause` sur `deletedForMe` ; `deletedForUserAt` n'est consultée par aucune requête de
+   liste.
+3. **Les trois clients appellent la même moitié.** iOS et Android la riche, le web ni l'une ni
+   l'autre. L'adresse perdante n'a, mesuré, aucun appelant.
+
+Après ça il ne restait aucune décision — seulement un constat et un alias à mettre en sursis.
+
+> **Le test :** devant une étiquette `décision-produit`, demander *« quelle observation rendrait
+> cette question sans objet ? »* avant de demander *« que préfère-t-on ? »*. Si la réponse existe
+> dans le code, dans le schéma ou dans les clients, l'étiquette est un diagnostic manquant déguisé
+> en question ouverte. C'est la forme du § 277 (« un corps VIDE n'est pas un autre choix de
+> produit ») portée un cran plus haut : là on contestait la réponse, ici on contestait que ce soit
+> une question.
+
+**Et ce que la mesure trouve À CÔTÉ vaut souvent plus que la décision.** En comptant les lecteurs
+de `deletedForUserAt`, on découvre que ses deux SEULS lecteurs — `restore-for-me` et
+`GET /user/deleted-conversations` — lisent une colonne dont l'unique écrivain serveur est la route
+que personne n'appelle. La corbeille de conversations ne peut rien contenir : elle rend une liste
+vide par construction et refuse toute restauration. Devenu #4332.
+
+## Leçon 326
+
+**Une protection posée sur une porte manque à sa voisine — et la voisine est dans un AUTRE fichier.**
+
+#4157 a retiré `conversationShareLink.linkId` — le secret qui permet de REJOINDRE une conversation —
+de `GET /admin/share-links`, et lui a dédié un geste souverain tracé (`POST …/reveal`). Travail
+juste, documenté, testé. Le même secret continuait de sortir par
+`GET /admin/users/:id/activity`, écrit dans `routes/admin/users.ts`, à des rôles pour qui
+`canViewSensitiveData` vaut `false` — avec `trackingLink.token` et `affiliateToken.token` au
+passage.
+
+Le lot ne l'avait pas manqué par négligence : il travaillait `content.ts`, et rien dans ce fichier
+ne mentionne son jumeau. **Une correction de fuite se cherche par la DONNÉE, jamais par le
+fichier** — `grep` sur le nom de la colonne, pas sur la route qu'on corrige.
+
+C'est le § 275 (« une protection se mesure sur tout ce que la charge TRANSPORTE ») avec l'axe
+tourné : là on balayait la charge d'UN site ; ici on balaie les SITES d'une même donnée.
+
+**Le corollaire de garde, trouvé au même endroit.** `GET /admin/users/:id/media` servait
+`fileUrl` + `thumbnailUrl` sans lire `isViewOnce`, `isBlurred` ni `effectFlags` : un média à vue
+unique sortait entier par une porte d'administration, pendant que l'éventail de notifications le
+retenait avec la MÊME garde (`maskedAttachment`), à quatre fichiers de là. Le témoin qui tient ça
+n'est pas celui de la charge — c'est celui du `select` :
+
+> **Une garde sans sa colonne ne garde rien.** Retirer les trois champs du `select` en gardant le
+> filtre le fait lire `undefined` partout et laisser tout passer, sans qu'aucune assertion de
+> charge ne tombe — le fixture, lui, porte toujours les champs. Il faut donc un témoin qui affirme
+> que les colonnes de protection sont DEMANDÉES, à côté de celui qui affirme que la charge est
+> amputée.
+
+Et le double de Prisma doit **honorer le `select`**, sinon le témoin de charge ne peut tomber que
+sur une fuite à la sérialisation, jamais sur celle qu'on corrige : une colonne secrète effectivement
+demandée à la base. Même famille que le mock qui ignore le `where`.
