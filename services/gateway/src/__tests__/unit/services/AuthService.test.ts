@@ -15,6 +15,19 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 // Mock @meeshy/shared/types BEFORE importing AuthService
+/**
+ * Le double de l'énumération — et il doit dire ce que la PRODUCTION dit.
+ *
+ * Il posait `MODERATOR: 'MODO'`, une valeur que le vrai `GlobalUserRole` ne
+ * porte pas : `MODERATOR = 'MODERATOR'`, et `MODO` est l'ancien nom qu'une
+ * migration a converti. Tant que le code testé comparait ce double à
+ * lui-même — un `switch` sur `UserRoleEnum.MODERATOR` — la fiction était
+ * invisible. Elle est apparue au premier appel à la matrice RÉELLE, qui n'a
+ * pas de clé `MODO` et retombe donc sur USER (#4152).
+ *
+ * Un double qui ment sur une valeur de production ne ment que jusqu'au jour où
+ * le code cesse de le croire sur parole.
+ */
 const MockUserRoleEnum = {
   BIGBOSS: 'BIGBOSS',
   ADMIN: 'ADMIN',
@@ -22,7 +35,7 @@ const MockUserRoleEnum = {
   AUDIT: 'AUDIT',
   ANALYST: 'ANALYST',
   USER: 'USER',
-  MODERATOR: 'MODO',
+  MODERATOR: 'MODERATOR',
   CREATOR: 'ADMIN',
   MEMBER: 'USER'
 };
@@ -936,7 +949,9 @@ describe('AuthService', () => {
         canModerateContent: true,
         canViewAuditLogs: false,
         canManageNotifications: true,
-        canManageTranslations: false
+        // La matrice UNIQUE accorde ce droit à ADMIN (#4152). Ce témoin gelait
+        // la valeur de la copie manuscrite qu'il exerçait.
+        canManageTranslations: true
       });
     });
 
@@ -956,7 +971,7 @@ describe('AuthService', () => {
         canModerateContent: true,
         canViewAuditLogs: false, // ADMIN doesn't have audit logs
         canManageNotifications: true,
-        canManageTranslations: false
+        canManageTranslations: true
       });
     });
 
@@ -968,7 +983,9 @@ describe('AuthService', () => {
       expect(permissions).toEqual({
         canAccessAdmin: true,
         canManageUsers: false,
-        canManageGroups: false,
+        // La matrice unique accorde les communautés à MODERATOR — la copie
+        // manuscrite ne le faisait pas (#4152).
+        canManageGroups: true,
         canManageConversations: true,
         canViewAnalytics: false,
         canModerateContent: true,
@@ -996,13 +1013,21 @@ describe('AuthService', () => {
       });
     });
 
-    it('should return analyst permissions for ANALYST role', () => {
+    it("n'accorde PAS l'accès administration à un ANALYST — le témoin de rang du lot", () => {
+      // C'est le défaut le plus visible de #4152 : cette méthode servait
+      // `canAccessAdmin: true` à un ANALYST, quand les DEUX matrices disent
+      // `false`. L'ANALYST se connectait, le web lui peignait la console
+      // d'administration, et le serveur lui refusait la moitié des routes.
+      //
+      // Un témoin de RANG s'écrit sur le rang qui DISCRIMINE : au rang
+      // BIGBOSS, la copie et la matrice rendaient le même verdict, et un
+      // témoin posé là n'aurait pas pu tomber.
       const analystUser = { ...mockSocketIOUser, role: UserRoleEnum.ANALYST };
 
       const permissions = authService.getUserPermissions(analystUser as any);
 
       expect(permissions).toEqual({
-        canAccessAdmin: true,
+        canAccessAdmin: false,
         canManageUsers: false,
         canManageGroups: false,
         canManageConversations: false,

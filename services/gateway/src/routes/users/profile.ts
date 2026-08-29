@@ -32,6 +32,7 @@ import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthoriz
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
 import { searchTokensFor } from '../../utils/search-tokens';
+import { servedUserPermissions } from '../../services/admin/served-permissions';
 import {
   publicProfileSchema,
   publicUserSelect,
@@ -245,18 +246,14 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         fastify.socketIOHandler?.getManager?.()?.refreshUserTypingIdentity(userId!);
       }
 
-      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
-      const permissions = {
-        canAccessAdmin: isAdmin,
-        canManageUsers: isAdmin,
-        canManageGroups: isAdmin,
-        canManageConversations: isAdmin,
-        canViewAnalytics: isAdmin,
-        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
-        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
-        canManageNotifications: isAdmin,
-        canManageTranslations: isAdmin,
-      };
+      // La MATRICE, jamais une copie (#4152).
+      //
+      // Ces trois sites composaient les permissions à la main, sur le seul
+      // prédicat `role === 'ADMIN' || role === 'BIGBOSS'` : un MODERATOR qui
+      // changeait son avatar recevait `canAccessAdmin: false` et voyait la
+      // console d'administration DISPARAÎTRE de son écran — sans qu'aucun rôle
+      // n'ait changé, et alors que le serveur continuait de l'autoriser.
+      const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
 
       return sendSuccess(reply, {
         user: formatUserResponse(updatedUser, permissions),
@@ -345,18 +342,14 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
-      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
-      const permissions = {
-        canAccessAdmin: isAdmin,
-        canManageUsers: isAdmin,
-        canManageGroups: isAdmin,
-        canManageConversations: isAdmin,
-        canViewAnalytics: isAdmin,
-        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
-        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
-        canManageNotifications: isAdmin,
-        canManageTranslations: isAdmin,
-      };
+      // La MATRICE, jamais une copie (#4152).
+      //
+      // Ces trois sites composaient les permissions à la main, sur le seul
+      // prédicat `role === 'ADMIN' || role === 'BIGBOSS'` : un MODERATOR qui
+      // changeait son avatar recevait `canAccessAdmin: false` et voyait la
+      // console d'administration DISPARAÎTRE de son écran — sans qu'aucun rôle
+      // n'ait changé, et alors que le serveur continuait de l'autoriser.
+      const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
 
       return sendSuccess(reply, {
         user: formatUserResponse(updatedUser, permissions),
@@ -436,18 +429,14 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
-      const isAdmin = updatedUser.role === 'ADMIN' || updatedUser.role === 'BIGBOSS';
-      const permissions = {
-        canAccessAdmin: isAdmin,
-        canManageUsers: isAdmin,
-        canManageGroups: isAdmin,
-        canManageConversations: isAdmin,
-        canViewAnalytics: isAdmin,
-        canModerateContent: isAdmin || updatedUser.role === 'MODERATOR',
-        canViewAuditLogs: isAdmin || updatedUser.role === 'AUDIT',
-        canManageNotifications: isAdmin,
-        canManageTranslations: isAdmin,
-      };
+      // La MATRICE, jamais une copie (#4152).
+      //
+      // Ces trois sites composaient les permissions à la main, sur le seul
+      // prédicat `role === 'ADMIN' || role === 'BIGBOSS'` : un MODERATOR qui
+      // changeait son avatar recevait `canAccessAdmin: false` et voyait la
+      // console d'administration DISPARAÎTRE de son écran — sans qu'aucun rôle
+      // n'ait changé, et alors que le serveur continuait de l'autoriser.
+      const permissions = servedUserPermissions(updatedUser.role as UserRoleEnum);
 
       return sendSuccess(reply, {
         user: formatUserResponse(updatedUser, permissions),

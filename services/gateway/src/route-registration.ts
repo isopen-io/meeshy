@@ -44,6 +44,7 @@ import { directoryPresenceRoutes } from './routes/directory/presence';
 import { directoryBlocksRoutes } from './routes/directory/blocks';
 import { directoryFriendRequestsRoutes } from './routes/directory/friend-requests';
 import { directoryContactsRoutes } from './routes/directory/contacts';
+import { adminMePermissionsRoutes } from './routes/admin/me-permissions';
 import { communityRoutes } from './routes/communities';
 // import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
 import { dashboardRoutes } from './routes/admin/dashboard';
@@ -231,6 +232,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // (Removed global adminRoutes registration to avoid duplicate route declarations)
 
     // Register admin dashboard routes (at /api/admin/dashboard)
+    await server.register(adminMePermissionsRoutes, { prefix: `${API_PREFIX}/admin` });
     await server.register(dashboardRoutes, { prefix: `${API_PREFIX}/admin` });
 
     // Register enhanced admin user management routes (at /api/v1/admin/users)

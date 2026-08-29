@@ -37,6 +37,7 @@ import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
 } from './conversations/ensureGlobalConversationMembership';
+import { servedUserPermissions } from './admin/served-permissions';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -1195,75 +1196,42 @@ export class AuthService {
   /**
    * Récupérer les permissions d'un utilisateur
    */
+  /**
+   * Les permissions SERVIES à la connexion — une PROJECTION, plus une copie.
+   *
+   * ## Ce que cette méthode était
+   *
+   * Une TROISIÈME définition des permissions, écrite à la main en `switch`, et
+   * c'est celle que le web et iOS lisaient : elle voyage dans la charge de
+   * `/auth/login`, `/auth/register` et `/auth/magic-link`.
+   *
+   * Elle donnait `canAccessAdmin: true` à un ANALYST, quand les deux matrices
+   * disent `false`. Conséquence pour l'utilisateur : un ANALYST se connecte, le
+   * web lui peint la console d'administration, et le serveur lui refuse la
+   * moitié des routes — deux réponses différentes à la même question, servies
+   * par le même serveur, à deux moments du même parcours (#4152).
+   *
+   * ## Ce qu'elle est
+   *
+   * La FORME du fil est conservée — neuf clés, `canManageGroups` compris, que
+   * les clients installés décodent. Chaque valeur vient de la matrice centrale.
+   * `canManageGroups` projette `canManageCommunities` : c'est le même droit
+   * sous le vocabulaire d'avant les communautés.
+   */
+  /**
+   * Les permissions SERVIES à la connexion — une PROJECTION, plus une copie.
+   *
+   * Cette méthode composait une TROISIÈME définition, en `switch`, et c'est
+   * celle que le web et iOS lisaient : elle voyage dans la charge de
+   * `/auth/login`, `/auth/register` et `/auth/magic-link`. Elle donnait
+   * `canAccessAdmin: true` à un ANALYST, quand les deux matrices disent
+   * `false` — le web lui peignait la console d'administration, et le serveur
+   * lui refusait la moitié des routes (#4152).
+   *
+   * La forme du fil est inchangée ; les valeurs viennent de la matrice.
+   */
   getUserPermissions(user: SocketIOUser) {
-    const role = user.role.toUpperCase() as keyof typeof UserRoleEnum;
-    
-    // Permissions basées sur le rôle
-    const basePermissions = {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageGroups: false,
-      canManageConversations: false,
-      canViewAnalytics: false,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    };
-
-    switch (role) {
-      case UserRoleEnum.BIGBOSS:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canViewAuditLogs: true,
-          canManageNotifications: true,
-          canManageTranslations: true,
-        };
-
-      case UserRoleEnum.ADMIN:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canManageNotifications: true,
-        };
-
-      case UserRoleEnum.MODERATOR:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canModerateContent: true,
-          canManageConversations: true,
-        };
-
-      case UserRoleEnum.AUDIT:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canViewAuditLogs: true,
-          canViewAnalytics: true,
-        };
-
-      case UserRoleEnum.ANALYST:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canViewAnalytics: true,
-        };
-
-      default:
-        return basePermissions;
-    }
+    return servedUserPermissions(user.role);
   }
 
   /**

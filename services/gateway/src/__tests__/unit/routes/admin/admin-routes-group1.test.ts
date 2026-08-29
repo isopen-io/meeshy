@@ -133,12 +133,15 @@ describe('PermissionsService', () => {
       expect(perms.canManageTranslations).toBe(true);
     });
 
-    it('returns ADMIN permissions (no audit logs, no translations)', () => {
+    it('returns ADMIN permissions (no audit logs — translations INCLUSES)', () => {
+      // `canManageTranslations: false` était la divergence de la matrice
+      // locale contre la centrale, qui l'accorde à ADMIN. Ce fichier ne teste
+      // plus une matrice mais une PROJECTION du site unique (#4152).
       const perms = service.getUserPermissions('ADMIN');
       expect(perms.canAccessAdmin).toBe(true);
       expect(perms.canManageUsers).toBe(true);
       expect(perms.canViewAuditLogs).toBe(false);
-      expect(perms.canManageTranslations).toBe(false);
+      expect(perms.canManageTranslations).toBe(true);
     });
 
     it('returns MODERATOR permissions (no manage users, no analytics)', () => {
