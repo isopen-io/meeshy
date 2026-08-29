@@ -68,10 +68,21 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 >   arbres — **3 → 0** ; les trois règles de 249i restent à 0 ; clés orphelines 0 ;
 >   backlog non traduit **121 → 121** (la clé neuve est traduite dans les sept
 >   locales) ; catalogue 3406 → 3407.
-> - **⚠️ Deux doutes assumés, à SOLDER au retour de CI** : (1) `ForEach(colors.indices,
->   id: \.self) { index in let hex = colors[index] … }` — un `let` en tête d'un
->   `ViewBuilder` ; (2) `@MainActor` sur une SEULE méthode d'une classe de test non
->   isolée.
+> - **⚠️ PREMIER RUN ROUGE, et sa leçon.** `470bf5f8` : `** TEST BUILD FAILED **`,
+>   exit 65, **trois erreurs de compile, toutes dans le fichier de garde neuf** —
+>   `cannot find 'InteractiveProgressBar' / 'BackgroundColorPalette' in scope`. Il
+>   manquait `@testable import Meeshy`. Le fichier avait été modelé sur
+>   `MediaLabelSourceGuardTests`, qui n'importe que `XCTest` parce qu'il ne fait que
+>   LIRE du texte. **Copier le squelette d'une garde, c'est hériter de ses IMPORTS,
+>   donc de son PÉRIMÈTRE** : dès qu'une garde de forme ajoute une assertion sur une
+>   VALEUR, elle change de nature et son en-tête doit suivre. L'analyse annonçait
+>   pourtant le mélange en toutes lettres, sans en tirer la conséquence.
+> - **Le run rouge a néanmoins SOLDÉ le doute n° 1** : les 3 erreurs sont dans le
+>   bundle de TESTS et la liste complète n'en contient aucune autre — **la cible app
+>   a compilé**, donc `ForEach(colors.indices) { index in let hex = colors[index] … }`
+>   passe. Le doute n° 2 (`@MainActor` sur une seule méthode) reste ouvert : la
+>   compile s'est arrêtée sur la résolution de nom, avant tout contrôle d'isolation.
+>   **Un run rouge n'est pas un run muet — lire ce qu'il a QUAND MÊME prouvé.**
 > - **Suites 251i+** : (a) **la garde s'arrête au premier enfant du label** — un
 >   `ZStack { Circle(); Image() }` porte le même défaut et lui échappe ; l'élargir
 >   demande de définir « un label dont la géométrie est décorative », ce qui est

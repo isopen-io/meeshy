@@ -183,14 +183,44 @@ le contrôler plutôt que l'espérer.
 dans le sujet du commit — sans lui, le job s'appelle `Build app (…)` et ne prouve
 que la compile).
 
-### 4.1 Deux doutes assumés, à SOLDER au retour de CI
+### 4.1 Le premier run, et ce qu'il a soldé
 
-1. **`ForEach(colors.indices, id: \.self) { index in let hex = colors[index] … }`**
-   — un `let` en tête d'un `ViewBuilder` ; la forme est courante mais elle
-   n'existait pas dans les deux copies remplacées.
-2. **`@MainActor` sur une SEULE méthode de `BareShapeTapTargetGuardTests`** (les
-   deux statiques lues appartiennent à des `View`) pendant que la classe reste
-   non isolée.
+Run [33235822962](https://github.com/isopen-io/meeshy/actions/runs/33235822962) sur
+`470bf5f8` : **`** TEST BUILD FAILED **`, exit 65, trois erreurs de compile —
+toutes les trois dans le fichier de garde neuf**, et toutes la même :
+
+```
+BareShapeTapTargetGuardTests.swift:99  error: cannot find 'InteractiveProgressBar' in scope
+BareShapeTapTargetGuardTests.swift:100 error: cannot find 'BackgroundColorPalette' in scope
+BareShapeTapTargetGuardTests.swift:101 error: cannot find 'BackgroundColorPalette' in scope
+```
+
+**Il manquait `@testable import Meeshy`.** Le fichier a été modelé sur
+`MediaLabelSourceGuardTests`, qui n'importe que `XCTest` — parce qu'il ne fait
+que LIRE du texte. Celui-ci fait les deux : il balaie les sources **et**
+interroge deux types de l'app pour fixer la valeur de leur cible.
+
+> **Copier le squelette d'une garde, c'est hériter de ses IMPORTS — donc de son
+> périmètre.** Un fichier qui ne lit que du texte n'a besoin de rien ; dès qu'il
+> ajoute une assertion sur une VALEUR, il change de nature et l'en-tête doit
+> suivre. Le § 3.3 ci-dessus annonçait pourtant ce mélange en toutes lettres
+> (« elle ne juge pas la VALEUR : deux assertions unitaires la fixent ») sans que
+> l'en-tête en tire la conséquence.
+
+**Ce que ce run a néanmoins prouvé.** Les trois erreurs sont dans le bundle de
+TESTS, et la liste « Toutes les erreurs de compilation (3) » n'en contient
+aucune autre : **la cible app a compilé**. Le doute n° 1 est donc SOLDÉ.
+
+1. ~~`ForEach(colors.indices, id: \.self) { index in let hex = colors[index] … }`~~
+   — **compile**. Un `let` en tête d'un `ViewBuilder` est bien accepté.
+2. **`@MainActor` sur une SEULE méthode de `BareShapeTapTargetGuardTests`**
+   pendant que la classe reste non isolée — **non tranché** : la compile s'est
+   arrêtée sur la résolution de nom, avant tout contrôle d'isolation. À solder
+   au run suivant.
+
+> **Un run rouge n'est pas un run muet.** Il tranche tout ce qui a compilé
+> AVANT lui — le lire seulement comme « ça a échoué » perd la moitié de ce qu'on
+> a payé vingt minutes pour apprendre.
 
 ---
 

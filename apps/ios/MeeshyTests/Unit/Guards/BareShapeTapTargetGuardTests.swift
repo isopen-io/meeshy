@@ -1,4 +1,10 @@
 import XCTest
+// Les gardes de FORME du dépôt n'importent que `XCTest` : elles lisent du
+// texte. Celle-ci fait les deux — elle balaie les sources ET interroge deux
+// types de l'app pour fixer la valeur de leur cible, ce que le scan de forme
+// ne peut pas dire. D'où l'import, que le modèle copié (`MediaLabelSourceGuard`)
+// n'avait pas besoin de porter.
+@testable import Meeshy
 
 /// **Un contrôle dont la zone sensible EST son dessin.**
 ///
