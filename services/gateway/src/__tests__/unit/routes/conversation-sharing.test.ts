@@ -46,8 +46,23 @@ jest.mock('../../../utils/conversation-id-cache', () => ({
 // PROLONGER le module, jamais le REMPLACER (CLAUDE.md § « Un double PARTIEL
 // d'un module perd en silence tout ce que le module GAGNE ») : un double qui
 // énumère ses exports rend `undefined` au premier que le module gagne.
-jest.mock('../../../routes/conversations/utils/identifier-generator', () => ({
-  ...(jest.requireActual('../../../routes/conversations/utils/identifier-generator') as object),
+//
+// #4169 — la cible du double a changé de domicile. `sharing.ts` important
+// jusqu'ici `routes/conversations/utils/identifier-generator` (qui ne fait
+// que RÉ-EXPORTER depuis `routes/links/utils/link-helpers`), mocker ce
+// premier module masquait la génération d'identifiant SEULEMENT pour ce
+// chemin d'appel précis. `mintConversationShareLink`
+// (`routes/links/utils/share-link-mint.ts`), désormais LA porte unique
+// appelée par `new-link` ET `/links`, importe `link-helpers` DIRECTEMENT :
+// mocker l'ancien re-export laissait passer le VRAI générateur, qui
+// interroge `conversationShareLink.findFirst` sur un double Prisma sans
+// réponse par défaut — chaque candidat semblait « pris » et l'escalade
+// anti-collision finissait par lever, capturée par le `catch` générique de
+// la route en `500 Error creating link`. Même cible que
+// `links/creation.test.ts` désormais, pour la même raison qu'elles décrivent
+// la même porte.
+jest.mock('../../../routes/links/utils/link-helpers', () => ({
+  ...(jest.requireActual('../../../routes/links/utils/link-helpers') as object),
   generateUniqueShareLinkId: (...args: any[]) => mockGenerateUniqueShareLinkId(...args),
   ensureUniqueShareLinkIdentifier: (...args: any[]) => mockEnsureUniqueShareLinkIdentifier(...args),
 }));
@@ -142,6 +157,12 @@ function createMockFastify() {
     createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     createConversationInviteNotification: jest.fn<any>().mockResolvedValue(undefined),
+    // #4169 — `mintConversationShareLink` (porte unique de `/new-link` ET
+    // `/links`) notifie les admins/créateur par cette méthode. Absente ici,
+    // elle n'aurait pas fait tomber le chemin nominal (best-effort, capturée
+    // par son propre `try/catch`) mais aurait rendu IMPOSSIBLE tout témoin de
+    // parité de notification pour `new-link`.
+    createSystemNotification: jest.fn<any>().mockResolvedValue(undefined),
   };
   const mentionService = {
     invalidateCacheForConversation: jest.fn<any>().mockResolvedValue(undefined),
@@ -302,13 +323,19 @@ describe('POST /conversations/:id/new-link', () => {
   function getNewLinkRoute() {
     const { fastify, prisma, reply } = setup();
     const route = getRoute(fastify, 'POST', 'new-link');
-    return { prisma, reply, route };
+    return { fastify, prisma, reply, route };
   }
 
   function stubSuccess(prisma: any, overrides: Record<string, any> = {}) {
     mockResolveConversationId.mockResolvedValue(CONV_ID);
     prisma.conversation.findUnique.mockResolvedValue({ id: CONV_ID, type: 'group', title: 'Test' });
-    prisma.participant.findFirst.mockResolvedValue(makeParticipant());
+    // #4169 — `makeParticipant()` par défaut porte `role: 'member'`, et un
+    // simple membre n'a plus le droit de fabriquer un lien sur un `group`
+    // (c'est tout le sujet de l'issue). Ce helper teste la MÉCANIQUE de
+    // création (identifiants, forme de la réponse) : il fixe donc son acteur
+    // au plancher exigé, MODERATOR, pour rester un témoin de succès — le
+    // témoin NÉGATIF dédié (`role: 'member' ⇒ 403`) est posé séparément.
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'moderator' }));
     prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
     prisma.conversationShareLink.create.mockResolvedValue({
       id: LINK_ID,
@@ -326,16 +353,31 @@ describe('POST /conversations/:id/new-link', () => {
     });
   }
 
-  it('returns 403 when resolveConversationId returns null', async () => {
+  // #4169 — sortait 403 « Unauthorized access » avant ce lot ; ce site était
+  // aussi un ANTI-TÉMOIN une fois `user.findUnique` déplacé en tête de la
+  // route (§ ci-dessus) : sans mock sur `user.findUnique`, l'exécution
+  // s'arrêtait dès « User not found » et le test restait vert par une raison
+  // sans rapport avec son nom (`sendForbidden` avec `expect.any(String)`
+  // n'a aucun mal à matcher n'importe quel message). Désormais 404, aligné
+  // sur `POST /links` : un identifiant qui ne résout à RIEN est un « je ne
+  // trouve pas », pas un refus d'accès — les deux portes partagent
+  // maintenant `mintConversationShareLink`, donc le MÊME verdict.
+  it('returns 404 when the conversation identifier cannot be resolved', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
+    prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
     mockResolveConversationId.mockResolvedValue(null);
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
-    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockSendNotFound).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(mockSendForbidden).not.toHaveBeenCalled();
   });
 
   it('returns 404 when conversation not found', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
+    // #4169 — cette route relit le rôle de l'appelant AVANT de déléguer à la
+    // porte unique (comportement inchangé) : un acteur enregistré est requis
+    // pour atteindre le chemin qu'on teste ici, même si son rôle n'importe pas.
+    prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
     mockResolveConversationId.mockResolvedValue(CONV_ID);
     prisma.conversation.findUnique.mockResolvedValue(null);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant());
@@ -465,10 +507,111 @@ describe('POST /conversations/:id/new-link', () => {
 
   it('sends internal error on unexpected exception', async () => {
     const { prisma, reply, route } = getNewLinkRoute();
+    // #4169 — même raison que le témoin précédent : atteindre l'exception
+    // simulée plus bas exige de franchir d'abord la relecture du rôle.
+    prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
     mockResolveConversationId.mockRejectedValue(new Error('DB down'));
     const req = makeRequest({ params: { id: CONV_ID }, body: {} });
     await route.handler(req, reply);
     expect(mockSendInternalError).toHaveBeenCalledWith(reply, expect.any(String));
+  });
+
+  // ── #4169 — la garde de RANG qui manquait aux DEUX portes ──────────────────
+  //
+  // Avant ce lot, un simple membre d'un groupe PRIVÉ fabriquait un lien vers
+  // l'historique complet sans qu'aucune ligne de ce fichier ne rougisse — la
+  // suite gravait la politique OUVERTE (`stubSuccess` ci-dessus en était la
+  // preuve). Le témoin qui compte n'est pas seulement « cette porte refuse »
+  // mais « l'AUTRE porte refuse aussi » : son jumeau vit dans
+  // `links/creation.test.ts` (`POST /links`), sur le MÊME prédicat
+  // (`mayMintShareLink`).
+  it('returns 403 when a simple member (role: member) tries to mint a link on a group conversation', async () => {
+    const { prisma, reply, route } = getNewLinkRoute();
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    prisma.conversation.findUnique.mockResolvedValue({ id: CONV_ID, type: 'group', title: 'Test' });
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'member' }));
+    prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
+    const req = makeRequest({ params: { id: CONV_ID }, body: {} });
+    await route.handler(req, reply);
+    expect(mockSendForbidden).toHaveBeenCalledWith(reply, expect.any(String));
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+  });
+
+  // Critère de fin #2 — `/links` accepte déjà BIGBOSS OU ADMIN sur `global` ;
+  // `new-link` n'acceptait que BIGBOSS. Sans ce témoin, le durcissement vers
+  // la porte unique aurait pu régresser silencieusement vers « BIGBOSS seul ».
+  it('allows ADMIN (not just BIGBOSS) to create a link for the global conversation', async () => {
+    const { prisma, reply, route } = getNewLinkRoute();
+    stubSuccess(prisma);
+    prisma.conversation.findUnique.mockResolvedValue({ id: CONV_ID, type: 'global', title: 'Global' });
+    prisma.user.findUnique.mockResolvedValue({ role: 'ADMIN' });
+    const req = makeRequest({ params: { id: CONV_ID }, body: {} });
+    await route.handler(req, reply);
+    expect(mockSendSuccess).toHaveBeenCalled();
+  });
+
+  // Critère de fin #3 — l'anonyme muni d'un lien ne naît plus plus privilégié
+  // que l'inscrit invité par un admin (`canViewHistory: false` par défaut,
+  // route `/invite` de ce même fichier).
+  it('defaults allowViewHistory to false in the created row when the body omits it', async () => {
+    const { prisma, reply, route } = getNewLinkRoute();
+    stubSuccess(prisma);
+    const req = makeRequest({ params: { id: CONV_ID }, body: {} });
+    await route.handler(req, reply);
+    expect(prisma.conversationShareLink.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ allowViewHistory: false }) })
+    );
+  });
+
+  // Critère de fin #4 — `new-link` émet désormais la MÊME notification aux
+  // admins/créateur que `POST /links` (`creation.ts:329`), parce que les deux
+  // portes partagent le même écrivain (`mintConversationShareLink`).
+  it('notifies conversation admins, same as POST /links', async () => {
+    const { fastify, prisma, reply, route } = getNewLinkRoute();
+    stubSuccess(prisma);
+    prisma.participant.findMany.mockResolvedValue([{ userId: 'admin-1' }, { userId: 'admin-2' }]);
+    const req = makeRequest({ params: { id: CONV_ID }, body: { name: 'Team Link' } });
+    await route.handler(req, reply);
+    expect(mockSendSuccess).toHaveBeenCalled();
+    expect(fastify.notificationService.createSystemNotification).toHaveBeenCalledTimes(2);
+    expect(fastify.notificationService.createSystemNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ recipientUserId: 'admin-1' })
+    );
+  });
+
+  // Critère de fin #5, second tiret — la garde 410 sur les DEUX portes. Elle
+  // existe déjà côté `/links` (`links/creation.test.ts`, « conversation
+  // terminée ») ; `new-link` n'avait JAMAIS eu cette garde — c'était le tout
+  // premier défaut listé par l'issue.
+  it('returns 410 when the conversation is closed — new-link had NO such guard before this lot', async () => {
+    const { prisma, reply, route } = getNewLinkRoute();
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: CONV_ID, type: 'group', title: 'Test', isActive: true, closedAt: new Date('2026-03-01')
+    });
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'moderator' }));
+    prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
+    const req = makeRequest({ params: { id: CONV_ID }, body: {} });
+    await route.handler(req, reply);
+    expect(mockSendError).toHaveBeenCalledWith(reply, 410, 'CONVERSATION_CLOSED', expect.anything());
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
+  });
+
+  // Le fil fermé par l'ancien `leave.ts` (avant le cycle 67) ne porte que
+  // `isActive: false`, sans `closedAt` — `isConversationClosed` lit les DEUX
+  // colonnes (`services/messaging/conversationWriteAdmission.ts`).
+  it('returns 410 when the conversation is closed by isActive alone', async () => {
+    const { prisma, reply, route } = getNewLinkRoute();
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    prisma.conversation.findUnique.mockResolvedValue({
+      id: CONV_ID, type: 'group', title: 'Test', isActive: false, closedAt: null
+    });
+    prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'moderator' }));
+    prisma.user.findUnique.mockResolvedValue({ role: 'USER' });
+    const req = makeRequest({ params: { id: CONV_ID }, body: {} });
+    await route.handler(req, reply);
+    expect(mockSendError).toHaveBeenCalledWith(reply, 410, 'CONVERSATION_CLOSED', expect.anything());
+    expect(prisma.conversationShareLink.create).not.toHaveBeenCalled();
   });
 });
 

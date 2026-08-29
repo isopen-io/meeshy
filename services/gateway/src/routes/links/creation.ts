@@ -1,32 +1,22 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
-import { SecuritySanitizer } from '../../utils/sanitize';
 import {
   sendSuccess,
   sendForbidden,
   sendBadRequest,
-  sendNotFound,
-  sendInternalError,
-  sendError
+  sendInternalError
 } from '../../utils/response.js';
-import { UserRoleEnum } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
-import {
-  generateUniqueShareLinkId,
-  generateConversationIdentifier,
-  ensureUniqueShareLinkIdentifier
-} from './utils/link-helpers';
+import { mintConversationShareLink } from './utils/share-link-mint';
 import {
   createLinkSchema,
-  createLinkBodySchema,
-  CreateLinkInput
+  createLinkBodySchema
 } from './types';
 
 export async function registerCreationRoutes(fastify: FastifyInstance) {
@@ -104,272 +94,36 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       const user = request.authContext.registeredUser!;
-      const userId = user.id;
-      const userRole = user.role;
 
-      let conversationId = body.conversationId;
-
-      if (conversationId) {
-        // Vérifier que l'utilisateur est membre de la conversation
-        let member;
-
-        if (conversationId === "meeshy") {
-          const globalConversation = await fastify.prisma.conversation.findFirst({
-            where: { identifier: "meeshy" }
-          });
-
-          if (globalConversation) {
-            member = await fastify.prisma.participant.findFirst({
-              where: {
-                conversationId: globalConversation.id,
-                userId,
-                isActive: true
-              }
-            });
-          }
-        } else {
-          member = await fastify.prisma.participant.findFirst({
-            where: { conversationId, userId, isActive: true }
-          });
-        }
-
-        if (!member) {
-          return sendForbidden(reply, "Vous n'êtes pas membre de cette conversation");
-        }
-
-        // Récupérer les informations de la conversation pour vérifier le type
-        // ET son état terminal. Les deux colonnes font partie du contrat de ce
-        // `select` : `isConversationClosed` accepte une ligne partielle, si bien
-        // qu'en retirer une compile — et les fils fermés par l'ancien `leave.ts`
-        // (avant le cycle 67) portent `isActive: false` sans `closedAt`, tandis
-        // que ceux fermés depuis portent les deux.
-        const conversation = await fastify.prisma.conversation.findUnique({
-          where: { id: conversationId },
-          select: { id: true, type: true, title: true, isActive: true, closedAt: true }
-        });
-
-        if (!conversation) {
-          return sendNotFound(reply, 'Conversation non trouvée');
-        }
-
-        // Un fil terminé n'admet plus personne (cycle 70) : les quatre portes
-        // d'entrée rendent 410. Fabriquer un lien NEUF dessus produirait donc un
-        // lien actif en base — présenté comme vivant par les écrans de gestion —
-        // dont la seule issue possible est ce même 410 pour chacun de ceux qui
-        // le suivent. Le refus se pose ici, à la source, plutôt qu'à l'arrivée.
-        //
-        // AVANT la garde de type : un fil terminé l'est quel que soit son type,
-        // et « pas de lien pour une conversation directe » décrirait la mauvaise
-        // cause.
-        if (isConversationClosed(conversation)) {
-          return sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminée' });
-        }
-
-        const conversationType = conversation.type;
-
-        // Interdire la création de liens pour les conversations directes
-        if (conversationType === 'direct') {
-          return sendForbidden(reply, 'Cannot create share links for direct conversations');
-        }
-
-        // Pour les conversations globales, seuls les ADMIN et BIGBOSS peuvent créer des liens
-        if (conversationType === 'global') {
-          if (userRole !== UserRoleEnum.BIGBOSS && userRole !== UserRoleEnum.ADMIN) {
-            return sendForbidden(reply, 'You do not have the necessary rights to perform this operation');
-          }
-        }
-      } else if (body.newConversation) {
-        // Créer une nouvelle conversation avec les données fournies
-        const defaultPerms = {
-          canSendMessages: true, canSendFiles: true, canSendImages: true,
-          canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
-        };
-
-        const creatorInfo = await fastify.prisma.user.findUnique({
-          where: { id: userId },
-          select: { displayName: true, username: true }
-        });
-        const participantsToCreate: any[] = [
-          { userId, type: 'user', displayName: creatorInfo?.displayName || creatorInfo?.username || 'User', role: 'creator', permissions: defaultPerms }
-        ];
-
-        if (body.newConversation.memberIds && body.newConversation.memberIds.length > 0) {
-          const uniqueMemberIds = [...new Set(body.newConversation.memberIds)]
-            .filter(id => id && id !== userId && id.trim().length > 0);
-
-          const memberUsers = await fastify.prisma.user.findMany({
-            where: { id: { in: uniqueMemberIds } },
-            select: { id: true, displayName: true, username: true }
-          });
-          const memberMap = new Map(memberUsers.map(u => [u.id, u]));
-          for (const memberId of uniqueMemberIds) {
-            const memberUser = memberMap.get(memberId);
-            if (memberUser) {
-              participantsToCreate.push({
-                userId: memberId,
-                type: 'user',
-                displayName: memberUser.displayName || memberUser.username || 'User',
-                role: 'member',
-                permissions: defaultPerms
-              });
-            }
-          }
-        }
-
-        const conversationIdentifier = generateConversationIdentifier(body.newConversation.title);
-
-        const conversation = await fastify.prisma.conversation.create({
-          data: {
-            identifier: conversationIdentifier,
-            type: 'public',
-            title: body.newConversation.title,
-            description: body.newConversation.description || null,
-            participants: {
-              create: participantsToCreate
-            }
-          }
-        });
-        conversationId = conversation.id;
-
-        // Auto-join every connected member's sockets to the new conversation
-        // room so they receive message:new immediately without a reconnect.
-        const socketManager = fastify.socketIOHandler?.getManager();
-        if (socketManager) {
-          for (const participant of participantsToCreate) {
-            socketManager.joinUserToConversationRoom(participant.userId, conversation.id).catch(
-              (err: unknown) => logError(fastify.log, 'Failed to auto-join member to new conversation room:', err)
-            );
-          }
-        }
-
-      } else {
-        // Créer une nouvelle conversation de type public (legacy)
-        const conversationIdentifier = generateConversationIdentifier(body.name || 'Shared Conversation');
-
-        const legacyCreatorInfo = await fastify.prisma.user.findUnique({
-          where: { id: userId },
-          select: { displayName: true, username: true }
-        });
-        const conversation = await fastify.prisma.conversation.create({
-          data: {
-            identifier: conversationIdentifier,
-            type: 'public',
-            title: body.name ? SecuritySanitizer.sanitizeText(body.name) : 'Conversation partagée',
-            description: body.description ? SecuritySanitizer.sanitizeText(body.description) : undefined,
-            participants: {
-              create: [{
-                userId,
-                type: 'user',
-                displayName: legacyCreatorInfo?.displayName || legacyCreatorInfo?.username || 'User',
-                role: 'creator',
-                permissions: {
-                  canSendMessages: true, canSendFiles: true, canSendImages: true,
-                  canSendVideos: false, canSendAudios: false, canSendLocations: false, canSendLinks: false
-                }
-              }]
-            }
-          }
-        });
-        conversationId = conversation.id;
-
-        // Same auto-join for the legacy path (creator is the sole member).
-        const socketManager = fastify.socketIOHandler?.getManager();
-        if (socketManager) {
-          socketManager.joinUserToConversationRoom(userId, conversation.id).catch(
-            (err: unknown) => logError(fastify.log, 'Failed to auto-join creator to new conversation room:', err)
-          );
-        }
-      }
-
-      // Identifiant PUBLIC du lien — compact, opaque, vérifié libre sur les
-      // deux colonnes publiques AVANT l'écriture. Il ne dérive plus de la clé
-      // primaire de la ligne, donc plus besoin de la créer pour le connaître :
-      // une seule écriture au lieu de deux (cf. `generateShareLinkId`).
-      const linkId = await generateUniqueShareLinkId(fastify.prisma);
-
-      // Identifiant LISIBLE — dérivé du nom, sinon de la description. Sans ni
-      // l'un ni l'autre, `ensureUniqueShareLinkIdentifier` rend un identifiant
-      // compact plutôt qu'un `mshy_link-<Date.now()>-<Math.random()>` qui
-      // publiait l'instant de création.
-      let baseIdentifier = '';
-      if (body.name) {
-        baseIdentifier = `mshy_${body.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}`;
-      } else if (body.description) {
-        baseIdentifier = `mshy_${body.description.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').substring(0, 30)}`;
-      }
-      const uniqueIdentifier = await ensureUniqueShareLinkIdentifier(fastify.prisma, baseIdentifier);
-
-      // Créer le lien de partage
-      const shareLink = await fastify.prisma.conversationShareLink.create({
-        data: {
-          linkId,
-          conversationId: conversationId!,
-          createdBy: userId,
-          name: body.name ? SecuritySanitizer.sanitizeText(body.name) : body.name,
-          description: body.description ? SecuritySanitizer.sanitizeText(body.description) : body.description,
-          maxUses: body.maxUses,
-          maxConcurrentUsers: body.maxConcurrentUsers,
-          maxUniqueSessions: body.maxUniqueSessions,
-          expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-          allowAnonymousMessages: body.allowAnonymousMessages ?? true,
-          allowAnonymousFiles: body.allowAnonymousFiles ?? false,
-          allowAnonymousImages: body.allowAnonymousImages ?? true,
-          allowViewHistory: body.allowViewHistory ?? true,
-          requireAccount: body.requireAccount ?? false,
-          requireNickname: body.requireNickname ?? true,
-          requireEmail: body.requireEmail ?? false,
-          requireBirthday: body.requireBirthday ?? false,
-          allowedCountries: body.allowedCountries ?? [],
-          allowedLanguages: body.allowedLanguages ?? [],
-          allowedIpRanges: body.allowedIpRanges ?? [],
-          identifier: uniqueIdentifier
-        }
+      // #4169 — la politique (garde 410, refus des `direct`, BIGBOSS/ADMIN sur
+      // `global`, garde de RANG sur les autres types, génération d'identifiants,
+      // écriture, notification aux admins) ne vit plus qu'à UN seul endroit :
+      // `mintConversationShareLink`, partagée avec l'adaptateur `new-link`
+      // (`routes/conversations/sharing.ts`). Ce handler ne fait plus que
+      // traduire sa propre forme de requête/réponse vers cette porte unique —
+      // il ne re-décide plus rien.
+      const result = await mintConversationShareLink({
+        prisma: fastify.prisma,
+        reply,
+        log: fastify.log,
+        notificationService: fastify.notificationService,
+        socketIOHandler: fastify.socketIOHandler,
+        userId: user.id,
+        userRole: user.role,
+        input: body
       });
-
-      // Notifier les admins et le créateur de la création du lien
-      try {
-        const admins = await fastify.prisma.participant.findMany({
-          where: {
-            conversationId: conversationId!,
-            isActive: true,
-            OR: [
-              { role: 'admin' },
-              { role: 'creator' }
-            ],
-            userId: { not: userId }
-          },
-          select: { userId: true }
-        });
-
-        const notificationService = fastify.notificationService;
-        if (notificationService && admins.length > 0) {
-          const conversation = await fastify.prisma.conversation.findUnique({
-            where: { id: conversationId! },
-            select: { title: true }
-          });
-
-          for (const admin of admins) {
-            await notificationService.createSystemNotification({
-              recipientUserId: admin.userId,
-              content: `Un lien de partage a été créé pour ${conversation?.title || 'la conversation'}${shareLink.name ? ` : ${shareLink.name}` : ''}`,
-              priority: 'normal',
-            });
-          }
-        }
-      } catch (notifError) {
-        fastify.log.error('Error sending share link notification:');
-      }
+      if (!result) return; // La réponse d'erreur est déjà partie.
 
       return sendSuccess(reply, {
-        linkId,
-        conversationId,
+        linkId: result.linkId,
+        conversationId: result.conversationId,
         shareLink: {
-          id: shareLink.id,
-          linkId,
-          name: shareLink.name,
-          description: shareLink.description,
-          expiresAt: shareLink.expiresAt,
-          isActive: shareLink.isActive
+          id: result.shareLink.id,
+          linkId: result.linkId,
+          name: result.shareLink.name,
+          description: result.shareLink.description,
+          expiresAt: result.shareLink.expiresAt,
+          isActive: result.shareLink.isActive
         }
       }, { statusCode: 201 });
 
