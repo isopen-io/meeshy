@@ -171,6 +171,109 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift",  // 6
         "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
+        // 267i (#4322) — les 92 écrans restants qui passaient DÉJÀ les deux
+        // règles, soit 280 clés. #4309 en avait épinglé 40 sur 132 en disant
+        // pourquoi il n'en prenait pas plus : « le risque n'est pas par fichier
+        // mais par PARSEUR — s'il se trompe, il se trompe partout ». La CI a
+        // depuis validé ce parseur sur les 40 premiers, du premier coup, sur les
+        // DEUX règles. Le solde est donc pris avec une confiance mesurée.
+        //
+        // Ce qui reste dehors n'y est pas par oubli : 164 fichiers échouent
+        // encore, dont 154 sur la SEULE règle du `defaultValue` (#4308, 648 clés
+        // divergentes). C'est la dette de littéraux, pas la traduction, qui
+        // borne désormais ce cliquet — la règle A n'en retient que 56.
+        "apps/ios/Meeshy/Features/Main/Views/MessageListViewController.swift",  // 15
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/StoryLanguageDetailView.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileManageViewModel.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListHelpers.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/RootMenuLadderEntry.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Views/ShareLinkIdentitySheet.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Components/CallSignalGlyph.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Components/LanguageFlagChip.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerDescriptionLayer.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerFormatFan.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeSegmenter.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Lentille/Chrome/LentilleSectionIdentity.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Services/CrashDiagnosticsManager.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Services/MediaPermissionCoordinator.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationOptionsViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/ViewModels/TwoFactorViewModel.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+Selection.swift",  // 5
+        "apps/ios/Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",  // 5
+        "apps/ios/Meeshy/Features/Contacts/PeopleDiscoveryView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/ConversationMediaComposerDoor.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Composer/UpgradeGateView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleFocusCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Services/StoryPublishService.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/Cells/PostStatAccessibility.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/ConversationHelperViews.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/MessageListView.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/MyStoriesTab.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StoryAuthorIdentityCard.swift",  // 4
+        "apps/ios/Meeshy/Features/Main/Views/StoryUploadPresentation.swift",  // 4
+        "apps/ios/Meeshy/Features/Contacts/BlockedViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Services/StatusBubbleController.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/ActiveSessionsViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/FeedPostLocationView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/MyStoryCard.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/StoryCanvasAccessibility.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/StoryTrayView.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView+Navigation.swift",  // 3
+        "apps/ios/Meeshy/Features/Main/Components/BrandSignature.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/ReelFeedSoundButton.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Components/ToggleStateAccessibility.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/EpisodeListView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/FaceRampView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeMenu.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Models/ConversationFilterComposition.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Services/MessageForwardService.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/UserProfileViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/ViewModels/VoiceProfileWizardViewModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/AudioPostComposerView.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/StoryLanguageQuickBar.swift",  // 2
+        "apps/ios/Meeshy/Features/Main/Views/iPadRootView.swift",  // 2
+        "apps/ios/Meeshy/Features/Stories/Notifications/StoryNotificationOfflineContent.swift",  // 2
+        "apps/ios/Meeshy/Core/DependencyContainer.swift",  // 1
+        "apps/ios/Meeshy/Features/Auth/ViewModels/EmailVerificationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/CallStarter.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/CallsViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Contacts/ContactsSkeletonList.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/BackgroundColorPalette.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/BackgroundSoundBadge.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/ComposerMentionStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Components/LocalizedNumber.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerTrailingRail.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalConversationStartRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Focal/Row/FocalMetaRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Navigation/Router+StoryReply.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverLaneHeaderStrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Riviere/View/RiverTimeHandle.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/ContactSyncService.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/ConversationCreator.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Services/WidgetDataManager.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/ViewModels/NewConversationViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/ViewModels/StoryExportShareViewModel.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/HashtagResultsView.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonLinkRow.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/StoryLocationReaderTapOverlay.swift",  // 1
+        "apps/ios/Meeshy/Features/Main/Views/VideoLegacySupport.swift",  // 1
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
