@@ -96,6 +96,16 @@ describe('SoundCaptureService', () => {
   });
 
   // MARK: - Forme d'onde (Sound.waveform n'avait aucun écrivain)
+  //
+  // #4190 — ces deux témoins sont désormais la SEULE couverture de la forme
+  // d'onde à l'écriture. Son jumeau de source, `routes/posts/__tests__/
+  // audio.waveform.test.ts`, lisait `routes/posts/audio.ts` pour vérifier que
+  // l'upload manuel lisait le champ multipart `waveform` et le posait sur son
+  // `prisma.sound.create` ; `POST /stories/audio` a été retirée, et avec elle
+  // ce second écrivain. Les deux témoins ci-dessous portent la même propriété
+  // — un `Sound` naît AVEC sa forme d'onde, jamais avec un `[]` gravé en dur —
+  // sur le seul écrivain restant, et ils la portent MIEUX : ils assertent sur
+  // l'appel Prisma réel, là où le témoin retiré lisait du texte.
 
   it('test_captureWritesWaveformOnCreatedSound', async () => {
     const media = await seedMedia('m1');
@@ -584,13 +594,19 @@ describe('SoundCaptureService', () => {
   });
 
   /**
-   * L'index unique `(uploaderId, contentHash)` ne tient que si les DEUX chemins
-   * de création hachent identiquement : la capture lit le fichier EN FLUX
-   * (durée illimitée), l'upload manuel hache le buffer déjà en mémoire. Rien ne
-   * pinnait cette égalité — la faire diverger dédoublonnerait à moitié, en
-   * silence.
+   * L'index unique `(uploaderId, contentHash)` ne dédoublonne que si TOUS les
+   * écrivains de `contentHash` hachent identiquement. Ce témoin pinne la
+   * propriété du hachage EN FLUX (durée illimitée, jamais chargé en mémoire) :
+   * il rend le même condensat qu'un SHA-256 en un seul coup sur le contenu
+   * intégral. La faire diverger dédoublonnerait à moitié, en silence.
+   *
+   * RENOMMÉ (#4190) — il s'appelait `…_equalsTheRouteBufferHash` et opposait le
+   * flux au buffer que hachait `POST /stories/audio`. Cette route est RETIRÉE :
+   * le nom nommait un site qui n'existe plus, alors que l'assertion, elle, est
+   * intacte et toujours utile. Un nom qui ment sur son sujet est pire qu'un nom
+   * générique — il envoie chercher là où il n'y a rien.
    */
-  it('test_hashFile_streamed_equalsTheRouteBufferHash', async () => {
+  it('test_hashFile_streamed_equalsAOneShotSha256', async () => {
     const file = path.join(soundsDir, 'gros.m4a');
     // > 64 Kio : force plusieurs `data` sur le flux, là où un petit fichier
     // n'en émettrait qu'un seul et rendrait le test tautologique.
@@ -602,16 +618,36 @@ describe('SoundCaptureService', () => {
     expect(streamed).toBe(buffered);
   });
 
-  it('test_uploadRoute_hashesWithTheSameAlgorithm', () => {
-    // Garde de source : l'égalité ci-dessus ne vaut que tant que la route
-    // utilise bien SHA-256 sur le buffer intégral.
+  /**
+   * REPOINTÉ (#4190). Le témoin d'origine — `test_uploadRoute_hashesWithThe
+   * SameAlgorithm` — lisait la SOURCE de `routes/posts/audio.ts` pour vérifier
+   * que la route d'upload manuel hachait bien `createHash('sha256')
+   * .update(buffer)`. `POST /stories/audio` a été retirée : son sujet n'existe
+   * plus. La PROPRIÉTÉ qu'il gardait, elle, survit — et il ne se supprime donc
+   * pas, il change d'objet.
+   *
+   * Ce qu'il gardait vraiment : « deux écrivains de `contentHash` ne peuvent
+   * pas diverger ». Il en reste DEUX, et ils vivent tous les deux dans CE
+   * service — la piste EXTRAITE d'une vidéo et le fichier audio DIRECT, deux
+   * `prisma.sound.create` distincts. Ce qui les tient ensemble n'est plus une
+   * égalité entre deux fichiers, c'est un SITE DE HACHAGE UNIQUE : les deux
+   * passent par `SoundCaptureService.hashFile`.
+   *
+   * Un second `createHash` ici — même en SHA-256, même « juste pour ce
+   * chemin-là », même sur un buffer plutôt qu'un flux — rouvrirait exactement
+   * la divergence que l'ancien témoin interdisait entre la route et le service.
+   * Le symptôme serait le même : dédoublonnage à moitié, sans erreur.
+   */
+  it('test_soundCaptureService_hasASingleHashingSite', () => {
     const source = fsSync.readFileSync(
-      path.join(__dirname, '..', '..', '..', 'routes', 'posts', 'audio.ts'), 'utf-8');
-    // Commentaires RETIRÉS avant la recherche : sans ce filtre, passer la route
-    // à MD5 en laissant l'ancienne ligne en commentaire au-dessus gardait le
-    // test vert, alors que les deux chemins ne dédoublonnent plus ensemble.
+      path.join(__dirname, '..', 'SoundCaptureService.ts'), 'utf-8');
+    // Commentaires RETIRÉS avant la recherche : le fichier lu cite `createHash`
+    // en prose (le doc-comment de `hashFile`), et sans ce filtre la garde
+    // compterait des MENTIONS au lieu d'appels — elle rougirait sur une phrase
+    // et resterait verte sur un second hachage commenté par-dessus.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    expect(code).toContain("createHash('sha256').update(buffer).digest('hex')");
+    expect(code.match(/createHash\(/g) ?? []).toHaveLength(1);
+    expect(code).toContain("crypto.createHash('sha256')");
   });
 
   /**

@@ -8,7 +8,6 @@
  * One endpoint is exercised per modified file:
  *   core.ts        → POST /api/v1/posts (401, 400, 500)
  *   feed.ts        → GET  /api/v1/posts/feed (401)
- *   audio.ts       → POST /api/v1/stories/audio (401, 400)
  *   interactions.ts → POST /api/v1/posts/:id/like (401, 404)
  *   comments.ts    → POST /api/v1/posts/:id/comments (401, 400, 404)
  *
