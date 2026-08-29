@@ -33,8 +33,6 @@ import {
 // Devices & social routes
 import {
   getFriendRequests,
-  sendFriendRequest,
-  respondToFriendRequest,
   getAffiliateToken,
 } from './devices';
 
@@ -92,8 +90,6 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Friend requests & affiliate routes
   await getFriendRequests(fastify);
-  await sendFriendRequest(fastify);
-  await respondToFriendRequest(fastify);
   await getAffiliateToken(fastify);
 
   // Blocking routes

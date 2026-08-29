@@ -44,8 +44,6 @@ jest.mock('../../../../routes/users/preferences', () => mockPreferencesFns);
 
 const mockDevicesFns = {
   getFriendRequests: jest.fn<any>().mockResolvedValue(undefined),
-  sendFriendRequest: jest.fn<any>().mockResolvedValue(undefined),
-  respondToFriendRequest: jest.fn<any>().mockResolvedValue(undefined),
   getAffiliateToken: jest.fn<any>().mockResolvedValue(undefined),
 };
 
@@ -117,8 +115,10 @@ describe('userRoutes — registers all route handler groups', () => {
 
     // Devices/friends routes
     expect(mockDevicesFns.getFriendRequests).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.sendFriendRequest).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.respondToFriendRequest).toHaveBeenCalledWith(mockFastify);
+    // `sendFriendRequest` et `respondToFriendRequest` ont été SUPPRIMÉES
+    // (#4162) : c'étaient les jumelles orphelines d'une famille complète, que
+    // personne n'appelait, et dont la seule garde propre a été récupérée dans
+    // `directory/friend-requests-core.ts` avant leur retrait.
     expect(mockDevicesFns.getAffiliateToken).toHaveBeenCalledWith(mockFastify);
 
     // Blocking routes

@@ -321,6 +321,43 @@ export class InitService {
   }
 
   /**
+   * Garantit les deux index composés de `FriendRequest` (#4162).
+   *
+   * La collection n'en portait AUCUN — ni `senderId`, ni `receiverId`, ni
+   * `status`. Les trois listings de demandes d'amitié, appelés à chaque
+   * ouverture de l'écran contacts sur iOS comme sur le web, étaient des
+   * balayages complets.
+   *
+   * Le `schema.prisma` les déclare, et cela ne suffit PAS : sur le connecteur
+   * MongoDB, une déclaration d'index ne devient réelle qu'au `prisma db push`,
+   * que le déploiement n'exécute pas. Un index déclaré et jamais créé se lit
+   * pourtant comme un index posé — c'est exactement la forme du piège que
+   * `ensurePostGeoIndex` a payé, et pour lequel `/posts/nearby` rendait 500
+   * en production.
+   *
+   * Invariant de CHAQUE boot, jamais derrière `shouldInitialize()` : cette
+   * porte ne s'ouvre que sur une base VIDE, et un rattrapage d'index s'applique
+   * par définition à une base qui contient déjà des données.
+   *
+   * `createIndexes` est nativement idempotent : rejouer la même spec sur un
+   * index existant réussit sans erreur.
+   */
+  async ensureFriendRequestIndexes(): Promise<void> {
+    try {
+      await this.prisma.$runCommandRaw({
+        createIndexes: 'FriendRequest',
+        indexes: [
+          { key: { receiverId: 1, status: 1, createdAt: -1 }, name: 'FriendRequest_receiver_status_createdAt' },
+          { key: { senderId: 1, status: 1, createdAt: -1 }, name: 'FriendRequest_sender_status_createdAt' },
+        ],
+      });
+    } catch (error) {
+      logger.error('[INIT] ❌ Erreur lors de la création des index FriendRequest', error);
+      throw error;
+    }
+  }
+
+  /**
    * Réinitialise complètement la base de données
    */
   private async resetDatabase(): Promise<void> {

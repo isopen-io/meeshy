@@ -233,7 +233,11 @@ export function useFriendRequestsV2(
 
   const sendMutation = useMutation({
     mutationFn: async ({ receiverId, message }: { receiverId: string; message?: string }) => {
-      await apiService.post('/friend-requests', { receiverId, ...(message && { message }) });
+      // `/directory/friend-requests` (#4162) : l'unique chemin d'envoi. Celui
+      // qu'appelait ce site était le plus FAIBLE des deux qui coexistaient —
+      // ni garde d'auto-envoi, ni contrôle de désactivation, ni contrôle de
+      // blocage. L'adresse canonique porte les trois.
+      await apiService.post('/directory/friend-requests', { receiverId, ...(message && { message }) });
     },
     onMutate: async ({ receiverId }) => {
       if (!currentUserId) return {};
@@ -259,7 +263,11 @@ export function useFriendRequestsV2(
 
   const acceptMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.patch(`/friend-requests/${requestId}`, { status: 'accepted' });
+      // Un geste, un VERBE (#4162) : le corps porte une action, et la réponse
+      // d'une acceptation porte enfin `conversation` — le serveur la greffait
+      // déjà, mais son schéma ne la déclarant pas, elle était supprimée à la
+      // sérialisation et le client devait la rechercher.
+      await apiService.patch(`/directory/friend-requests/${requestId}`, { action: 'accept' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
@@ -287,7 +295,7 @@ export function useFriendRequestsV2(
 
   const rejectMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.patch(`/friend-requests/${requestId}`, { status: 'rejected' });
+      await apiService.patch(`/directory/friend-requests/${requestId}`, { action: 'reject' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
@@ -305,7 +313,10 @@ export function useFriendRequestsV2(
 
   const cancelMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.delete(`/friend-requests/${requestId}`);
+      // `dismiss`, et non un `DELETE` à part : `cancel` est le geste de
+      // l'ÉMETTEUR, `dismiss` celui de l'une ou l'autre partie — ce que
+      // l'ancienne route acceptait sans distinguer.
+      await apiService.patch(`/directory/friend-requests/${requestId}`, { action: 'dismiss' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: sentQueryKey });

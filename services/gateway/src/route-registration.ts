@@ -42,6 +42,7 @@ import { directoryPeopleRoutes } from './routes/directory/people';
 import { directoryPersonRoutes } from './routes/directory/person';
 import { directoryPresenceRoutes } from './routes/directory/presence';
 import { directoryBlocksRoutes } from './routes/directory/blocks';
+import { directoryFriendRequestsRoutes } from './routes/directory/friend-requests';
 import { communityRoutes } from './routes/communities';
 // import { adminRoutes } from './routes/admin'; // Not used - individual admin routes registered below
 import { dashboardRoutes } from './routes/admin/dashboard';
@@ -286,6 +287,7 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     await server.register(directoryPersonRoutes, { prefix: `${API_PREFIX}/directory` });
     await server.register(directoryPresenceRoutes, { prefix: `${API_PREFIX}/directory` });
     await server.register(directoryBlocksRoutes, { prefix: `${API_PREFIX}/directory` });
+    await server.register(directoryFriendRequestsRoutes, { prefix: `${API_PREFIX}/directory` });
 
     // Register push notification token routes (device registration for APNS/FCM/VoIP)
     await server.register(pushTokenRoutes, { prefix: API_PREFIX });

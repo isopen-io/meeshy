@@ -105,11 +105,48 @@ public struct SendFriendRequest: Encodable {
 
 // MARK: - Respond to Friend Request
 
+/// L'ancienne forme — `{ status }` — que les trois ALIAS servent encore.
+///
+/// Elle ne dit que deux des quatre gestes. La route canonique porte une
+/// ACTION (`FriendRequestAction`) ; ce type reste pour un appelant qui viserait
+/// délibérément un alias.
 public struct RespondFriendRequest: Encodable {
     public let status: String
 
     public init(accepted: Bool) {
         self.status = accepted ? "accepted" : "rejected"
+    }
+}
+
+/// Le corps de `PATCH /directory/friend-requests/{id}` — un geste, un verbe.
+///
+/// Quatre gestes vivaient sur deux verbes et trois routes : `accept`,
+/// `reject`, `cancel` (l'émetteur retire la sienne), `dismiss` (l'une ou
+/// l'autre partie écarte la ligne).
+public struct FriendRequestAction: Encodable {
+    public let action: String
+
+    public init(action: String) {
+        self.action = action
+    }
+}
+
+/// Ce que rendent `cancel` et `dismiss` — la ligne a DISPARU, il n'y a plus de
+/// demande à décoder.
+///
+/// Décodé comme tel, et non en `[String: Bool]` : un type trop STRICT
+/// transforme un succès serveur en échec client, ce que le dépôt a déjà payé
+/// sur le déblocage — l'enregistrement d'outbox n'était jamais acquitté, et
+/// l'écran affichait « impossible » sur un serveur qui avait écrit.
+public struct FriendRequestActionResult: Decodable, Sendable {
+    public let id: String?
+    public let deleted: Bool?
+    public let message: String?
+
+    public init(id: String? = nil, deleted: Bool? = nil, message: String? = nil) {
+        self.id = id
+        self.deleted = deleted
+        self.message = message
     }
 }
 

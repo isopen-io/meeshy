@@ -25,10 +25,17 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
 
     // MARK: - Send Friend Request
 
+    /// `POST /directory/friend-requests` — l'unique chemin d'envoi (#4162).
+    ///
+    /// Deux familles complètes coexistaient côté serveur, et le trafic allait à
+    /// la plus FAIBLE : celle que ce site appelait n'avait ni garde
+    /// d'auto-envoi, ni contrôle de désactivation, ni contrôle de blocage.
+    /// L'adresse canonique porte l'union des gardes des deux, plus le blocage,
+    /// qui n'existait dans aucune.
     public func sendFriendRequest(receiverId: String, message: String? = nil) async throws -> FriendRequest {
         let body = SendFriendRequest(receiverId: receiverId, message: message)
         let response: APIResponse<FriendRequest> = try await api.post(
-            endpoint: "/friend-requests",
+            endpoint: "/directory/friend-requests",
             body: body
         )
         return response.data
@@ -82,10 +89,19 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
 
     // MARK: - Respond to Friend Request
 
+    /// `PATCH /directory/friend-requests/{id}` — un geste, un verbe (#4162).
+    ///
+    /// Quatre gestes vivaient sur deux verbes et trois routes : accepter,
+    /// refuser, annuler, écarter. Le corps porte désormais une ACTION.
+    ///
+    /// La réponse d'une acceptation porte enfin `conversation` : le serveur la
+    /// greffait déjà sur l'objet rendu, mais son schéma ne la déclarant pas,
+    /// elle était supprimée à la sérialisation — l'appelant devait la chercher
+    /// par une seconde requête.
     public func respond(requestId: String, accepted: Bool) async throws -> FriendRequest {
-        let body = RespondFriendRequest(accepted: accepted)
+        let body = FriendRequestAction(action: accepted ? "accept" : "reject")
         let response: APIResponse<FriendRequest> = try await api.request(
-            endpoint: "/friend-requests/\(requestId)",
+            endpoint: "/directory/friend-requests/\(requestId)",
             method: "PATCH",
             body: try JSONEncoder().encode(body)
         )
@@ -94,9 +110,21 @@ public final class FriendService: FriendServiceProviding, @unchecked Sendable {
 
     // MARK: - Delete Friend Request
 
+    /// Écarter une demande — `action=dismiss`, jamais un `DELETE` à part.
+    ///
+    /// `cancel` est le geste de l'ÉMETTEUR, `dismiss` celui de l'une ou l'autre
+    /// partie. L'ancienne route `DELETE` acceptait les deux sans distinguer :
+    /// c'est donc `dismiss` qui la traduit fidèlement.
+    ///
+    /// La réponse est `{ id, deleted, message }` et non un dictionnaire de
+    /// booléens : un type trop STRICT ici transforme un succès serveur en échec
+    /// client, ce que le dépôt a déjà payé sur le déblocage.
     public func deleteRequest(requestId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(
-            endpoint: "/friend-requests/\(requestId)"
+        let body = FriendRequestAction(action: "dismiss")
+        let _: APIResponse<FriendRequestActionResult> = try await api.request(
+            endpoint: "/directory/friend-requests/\(requestId)",
+            method: "PATCH",
+            body: try JSONEncoder().encode(body)
         )
     }
 

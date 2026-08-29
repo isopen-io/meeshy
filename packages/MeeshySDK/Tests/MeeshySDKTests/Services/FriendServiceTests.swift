@@ -38,12 +38,15 @@ final class FriendServiceTests: XCTestCase {
     func test_sendFriendRequest_success_callsPostEndpoint() async throws {
         let fr = makeFriendRequest()
         let response = APIResponse<FriendRequest>(success: true, data: fr, error: nil)
-        mock.stub("/friend-requests", result: response)
+        mock.stub("/directory/friend-requests", result: response)
 
         let result = try await service.sendFriendRequest(receiverId: "user-2", message: "Hi!")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/friend-requests")
+        // L'unique chemin d'envoi (#4162) : celui que ce site appelait était le
+        // plus faible des deux qui coexistaient — ni auto-envoi, ni
+        // désactivation, ni blocage.
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/friend-requests")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
         XCTAssertEqual(result.id, "fr-1")
         XCTAssertEqual(result.status, "pending")
@@ -52,7 +55,7 @@ final class FriendServiceTests: XCTestCase {
     func test_sendFriendRequest_withoutMessage_succeeds() async throws {
         let fr = makeFriendRequest()
         let response = APIResponse<FriendRequest>(success: true, data: fr, error: nil)
-        mock.stub("/friend-requests", result: response)
+        mock.stub("/directory/friend-requests", result: response)
 
         let result = try await service.sendFriendRequest(receiverId: "user-2")
 
@@ -120,12 +123,12 @@ final class FriendServiceTests: XCTestCase {
     func test_respond_accepted_callsPatchEndpoint() async throws {
         let fr = makeFriendRequest(id: "fr-5", status: "accepted")
         let response = APIResponse<FriendRequest>(success: true, data: fr, error: nil)
-        mock.stub("/friend-requests/fr-5", result: response)
+        mock.stub("/directory/friend-requests/fr-5", result: response)
 
         let result = try await service.respond(requestId: "fr-5", accepted: true)
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/friend-requests/fr-5")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/friend-requests/fr-5")
         XCTAssertEqual(mock.lastRequest?.method, "PATCH")
         XCTAssertEqual(result.status, "accepted")
     }
@@ -133,25 +136,33 @@ final class FriendServiceTests: XCTestCase {
     func test_respond_rejected_callsPatchEndpoint() async throws {
         let fr = makeFriendRequest(id: "fr-6", status: "rejected")
         let response = APIResponse<FriendRequest>(success: true, data: fr, error: nil)
-        mock.stub("/friend-requests/fr-6", result: response)
+        mock.stub("/directory/friend-requests/fr-6", result: response)
 
         let result = try await service.respond(requestId: "fr-6", accepted: false)
 
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/friend-requests/fr-6")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/friend-requests/fr-6")
         XCTAssertEqual(result.status, "rejected")
     }
 
     // MARK: - deleteRequest
 
-    func test_deleteRequest_success_callsDeleteEndpoint() async throws {
-        let response = APIResponse<[String: Bool]>(success: true, data: ["deleted": true], error: nil)
-        mock.stub("/friend-requests/fr-9", result: response)
+    func test_deleteRequest_dismissesThroughTheSingleVerb() async throws {
+        // Un geste, un verbe (#4162) : le `DELETE` séparé disparaît au profit
+        // de `PATCH … {action: "dismiss"}`. La réponse porte `{id, deleted,
+        // message}` — décodée comme telle, et non en dictionnaire de booléens :
+        // un type trop STRICT transforme un succès serveur en échec client.
+        let response = APIResponse<FriendRequestActionResult>(
+            success: true,
+            data: FriendRequestActionResult(id: "fr-9", deleted: true, message: "Demande d'ami supprimee"),
+            error: nil
+        )
+        mock.stub("/directory/friend-requests/fr-9", result: response)
 
         try await service.deleteRequest(requestId: "fr-9")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/friend-requests/fr-9")
-        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/friend-requests/fr-9")
+        XCTAssertEqual(mock.lastRequest?.method, "PATCH")
     }
 
     // MARK: - sendEmailInvitation

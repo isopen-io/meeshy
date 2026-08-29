@@ -201,7 +201,9 @@ describe('useFriendRequestsV2', () => {
       await result.current.sendRequest('targetUserId');
     });
 
-    expect(mockPost).toHaveBeenCalledWith('/friend-requests', { receiverId: 'targetUserId' });
+    // L'unique chemin d'envoi (#4162) : celui qu'appelait ce site était le plus
+    // FAIBLE des deux qui coexistaient côté serveur.
+    expect(mockPost).toHaveBeenCalledWith('/directory/friend-requests', { receiverId: 'targetUserId' });
   });
 
   it('accepts a friend request via mutation', async () => {
@@ -216,7 +218,8 @@ describe('useFriendRequestsV2', () => {
       await result.current.acceptRequest('req1');
     });
 
-    expect(mockPatch).toHaveBeenCalledWith('/friend-requests/req1', { status: 'accepted' });
+    // Un geste, un VERBE : le corps porte une ACTION, pas un statut.
+    expect(mockPatch).toHaveBeenCalledWith('/directory/friend-requests/req1', { action: 'accept' });
   });
 
   it('reflète connected de façon optimiste dès acceptRequest, avant toute résolution réseau', async () => {
@@ -257,7 +260,7 @@ describe('useFriendRequestsV2', () => {
     });
 
     let resolveDelete: (value: unknown) => void = () => {};
-    mockDelete.mockImplementation(() => new Promise((resolve) => { resolveDelete = resolve; }));
+    mockPatch.mockImplementation(() => new Promise((resolve) => { resolveDelete = resolve; }));
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.connected).toHaveLength(1));
@@ -285,12 +288,12 @@ describe('useFriendRequestsV2', () => {
       await result.current.rejectRequest('req1');
     });
 
-    expect(mockPatch).toHaveBeenCalledWith('/friend-requests/req1', { status: 'rejected' });
+    expect(mockPatch).toHaveBeenCalledWith('/directory/friend-requests/req1', { action: 'reject' });
   });
 
   it('cancels a friend request via mutation', async () => {
     mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
-    mockDelete.mockResolvedValue({ data: { success: true } });
+    mockPatch.mockResolvedValue({ data: { success: true, data: { id: 'req1', deleted: true } } });
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
 
@@ -300,7 +303,8 @@ describe('useFriendRequestsV2', () => {
       await result.current.cancelRequest('req1');
     });
 
-    expect(mockDelete).toHaveBeenCalledWith('/friend-requests/req1');
+    // `dismiss` remplace le `DELETE` séparé : quatre gestes, un seul verbe.
+    expect(mockPatch).toHaveBeenCalledWith('/directory/friend-requests/req1', { action: 'dismiss' });
   });
 
   it('invalidates and refetches when the OTHER party cancels/removes a request', async () => {

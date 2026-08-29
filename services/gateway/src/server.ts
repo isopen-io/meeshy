@@ -874,6 +874,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // qui ne s'ouvre que sur une base vide. Derrière elle, une base déjà
       // peuplée ne recevait jamais l'index géospatial (500 sur /posts/nearby).
       await initService.ensurePostGeoIndex();
+      await initService.ensureFriendRequestIndexes();
 
       // Check if initialization is needed
       const shouldInit = await initService.shouldInitialize();
