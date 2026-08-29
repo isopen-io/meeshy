@@ -381,9 +381,14 @@ describe('GET /conversations/:conversationId/read-statuses', () => {
     expect(body.success).toBe(true);
     // Map is serialised as a plain object
     expect(body.data[MESSAGE_ID]).toMatchObject({ readCount: 2, deliveredCount: 3 });
+    // #4179 — troisième argument : le plancher d'historique du lecteur.
+    // `null` ici parce que le participant mocké (`{ id: PARTICIPANT_ID }`, sans
+    // `shareLinkId`) ne porte aucune restriction — voir le témoin dédié
+    // (history-floor-read-status-gates.test.ts) pour le cas où il en porte une.
     expect(mockGetConversationReadStatuses).toHaveBeenCalledWith(
       CONVERSATION_ID,
-      [MESSAGE_ID]
+      [MESSAGE_ID],
+      null
     );
   });
 
@@ -586,8 +591,12 @@ describe('POST /conversations/:conversationId/mark-as-received — edge cases', 
     mockResolveConversationId.mockResolvedValue(CONVERSATION_ID);
     mockShouldShowReadReceipts.mockResolvedValue(false);
     mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+    // #4179 — `getUnreadCount` n'alimente plus `markedCount` sur cette route
+    // (elle ne sert plus qu'au badge multi-appareils recalculé par
+    // `broadcastReadStatus`) : c'est désormais le compte RÉELLEMENT figé,
+    // renvoyé par `markMessagesAsReceived`, qui porte `markedCount`.
     mockGetUnreadCount.mockResolvedValue(2);
-    mockMarkMessagesAsReceived.mockResolvedValue(undefined);
+    mockMarkMessagesAsReceived.mockResolvedValue(2);
   });
 
   it('returns 404 when resolveConversationId returns null', async () => {

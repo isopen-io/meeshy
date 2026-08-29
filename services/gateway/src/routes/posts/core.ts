@@ -34,7 +34,10 @@ import {
   type PostReference,
 } from '../../services/posts/postReferences';
 import { HashtagService } from '../../services/HashtagService';
-import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import {
+  createSocialTranslateRateLimitConfig,
+  createSharedWriteRateLimitPreHandler,
+} from './socialRateLimit';
 import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationDeep, parseSharedPlace, type SharedPlace } from '../../services/location/sharedPlace';
@@ -182,6 +185,17 @@ export function registerCoreRoutes(
   requiredAuth: any
 ) {
   const postService = new PostService(prisma);
+  // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
+  // (interactions.ts, sa PROPRE instance de ce même preHandler) :
+  // `config.rateLimit` ne PEUT PAS le faire (chaque route qui le déclare
+  // reçoit son propre "child store", namespacé par sa méthode+URL — cf.
+  // socialRateLimit.ts, en-tête). Le partage réel vient de la CLÉ Redis
+  // (`social:write:create:{userId}`, verbatim, calculée pareil des deux
+  // côtés) — pas de l'identité de la fermeture, qui peut légitimement
+  // différer par fichier. Une seule instance ICI, réutilisée par les deux
+  // routes créatrices ci-dessous, pour ne construire le preHandler qu'une
+  // fois par démarrage plutôt qu'à chaque enregistrement de route.
+  const sharedWriteRateLimit = createSharedWriteRateLimitPreHandler();
   const mentionService = new MentionService(prisma);
   const hashtagService = new HashtagService(prisma);
 
@@ -225,9 +239,12 @@ export function registerCoreRoutes(
    * la table `Sound` avant d'effacer des octets, et les pièces jointes n'y
    * figurent pas.
    */
+  // Publier depuis une pièce jointe EST une création de post : même budget
+  // PARTAGÉ que POST /posts et POST /posts/:postId/repost
+  // (`sharedWriteRateLimit`, cf. définition ci-dessus).
   fastify.post('/posts/from-attachment', {
     preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('create') },
+    preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -437,9 +454,15 @@ export function registerCoreRoutes(
     }
   });
 
+  // #4147 critère 2 & témoin dédié (social-write-rate-limit.test.ts) : ce
+  // seau (`social:write:create:{userId}`) est PARTAGÉ avec
+  // POST /posts/from-attachment ci-dessus et POST /posts/:postId/repost
+  // (interactions.ts) — la garde du contournement « créer via repost pour
+  // éviter le plafond de création » vit dans ce partage, pas dans un
+  // plafond individuel supplémentaire.
   fastify.post('/posts', {
     preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('create') },
+    preHandler: [sharedWriteRateLimit],
     bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -895,8 +918,16 @@ export function registerCoreRoutes(
   });
 
   // POST /posts/:postId/translate — Request on-demand translation for a specific language
+  //
+  // #4147 critère 3 — chaque appel enfile un job ZMQ coûteux vers le
+  // translator ; cette route n'avait AUCUN plafond avant ce lot. Seau
+  // PARTAGÉ avec POST /posts/:postId/comments/:commentId/translate
+  // (comments.ts, même fabrique `createSocialTranslateRateLimitConfig`) : le
+  // pipeline de traduction protégé est le même, qu'on traduise un post ou un
+  // commentaire.
   fastify.post('/posts/:postId/translate', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialTranslateRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

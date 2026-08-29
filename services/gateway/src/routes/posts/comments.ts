@@ -5,13 +5,14 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
-import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema } from './types';
+import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
 import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -533,8 +534,20 @@ export function registerCommentRoutes(
   // demande vers UNE langue (miroir de POST /posts/:postId/translate). Le
   // résultat arrive via comment:translation-updated ; hors des 5 langues
   // pré-générées, c'était le SEUL recours manquant du Prisme côté commentaires.
+  //
+  // #4147 critère 3 — DEUX défauts fermés dans le même geste : (a) aucun
+  // plafond avant ce lot (chaque appel enfile, comme son miroir post, un job
+  // ZMQ vers le translator — budget PROPRE à cette route, `config.rateLimit`
+  // ne pouvant pas le fusionner avec celui du post, cf. socialRateLimit.ts) ;
+  // (b) une validation À LA MAIN qui divergeait silencieusement du contrat du
+  // post — `targetLanguage.length > 5` ici contre `.max(6)` côté
+  // `TranslatePostSchema`, deux comportements pour un même geste : une langue
+  // régionalisée à 6 caractères passait côté post et se refusait ici.
+  // `TranslatePostSchema` (routes/posts/types.ts) est désormais la SEULE
+  // source de validation des deux routes — la garde à la main disparaît.
   fastify.post('/posts/:postId/comments/:commentId/translate', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialTranslateRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -543,12 +556,11 @@ export function registerCommentRoutes(
       }
 
       const { commentId } = request.params;
-      const body = (request.body ?? {}) as { targetLanguage?: unknown; force?: unknown };
-      const targetLanguage = typeof body.targetLanguage === 'string' ? body.targetLanguage.trim() : '';
-      if (targetLanguage.length < 2 || targetLanguage.length > 5) {
-        return sendBadRequest(reply, 'Invalid targetLanguage', { code: 'VALIDATION_ERROR' });
+      const parsed = TranslatePostSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
-      const force = body.force === true;
+      const { targetLanguage, force } = parsed.data;
 
       // Lecture-scope : même garde que le fil (un lecteur autorisé à VOIR le
       // fil peut en demander la traduction).

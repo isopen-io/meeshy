@@ -179,15 +179,41 @@ describe('ConsentValidationService', () => {
       expect(status.canUseVoiceCloning).toBe(false);
     });
 
-    it('application preferences override user-level consent fields', async () => {
-      // user has no dataProcessingConsentAt on the User record but application prefs has it
+    // #4180 — remplace l'ancien "application preferences override
+    // user-level consent fields", qui gardait le défaut que cette issue
+    // ferme : le blob JSON n'a plus AUCUNE priorité, ni aucun effet, sur les
+    // consentements de base. Seule `User.dataProcessingConsentAt` — horodatée
+    // côté serveur par `VoiceProfileService.updateConsent` — fait foi.
+    it('un blob application qui affirme dataProcessingConsentAt sans la colonne User ne l\'accorde plus', async () => {
       const prisma = makePrisma(
         { dataProcessingConsentAt: null },
         { application: { dataProcessingConsentAt: NOW } }
       );
       const status = await makeSut(prisma).getConsentStatus('u1');
 
-      expect(status.hasDataProcessingConsent).toBe(true);
+      expect(status.hasDataProcessingConsent).toBe(false);
+    });
+
+    // Le cas qui distingue vraiment l'ancien comportement du nouveau : sur
+    // l'OCTROI seul, fallback (`applicationPrefs.xxx || user.xxx`) et lecture
+    // directe rendent le même verdict quand les deux sources s'accordent —
+    // un témoin qui ne varie que l'octroi ne tombe jamais. Ici la colonne
+    // User est RÉVOQUÉE (`null`, posée par la vraie route de retrait) pendant
+    // qu'un blob application reste daté d'AVANT la révocation : c'est le cas
+    // que l'ancien `||` masquait, en laissant le blob périmé l'emporter.
+    it('une révocation sur voiceCloningEnabledAt (User) l\'emporte sur un blob application resté daté', async () => {
+      const prisma = makePrisma(
+        {
+          dataProcessingConsentAt: NOW,
+          voiceDataConsentAt: NOW,
+          voiceProfileConsentAt: NOW,
+          voiceCloningEnabledAt: null,
+        },
+        { application: { voiceCloningConsentAt: NOW, voiceCloningEnabledAt: NOW } }
+      );
+      const status = await makeSut(prisma).getConsentStatus('u1');
+
+      expect(status.canUseVoiceCloning).toBe(false);
     });
 
     it('hasThirdPartyServicesConsent requires thirdPartyServicesConsentAt + dataProcessingConsent', async () => {
@@ -348,6 +374,24 @@ describe('ConsentValidationService', () => {
       const violations = await sut.validateApplicationPreferences('u1', { betaFeaturesEnabled: true });
 
       expect(violations.some(v => v.field === 'betaFeaturesEnabled')).toBe(true);
+    });
+
+    // #4180 — l'octroi "same-request" est SUPPRIMÉ : passer
+    // `dataProcessingConsentAt` DANS le corps qu'on valide ne doit plus
+    // jamais accorder `telemetryEnabled`. `ApplicationPreferenceSchema`
+    // rejette déjà cette clé en amont (z.never()), mais cette méthode reste
+    // appelable directement avec un `Record<string, any>` arbitraire — la
+    // garde doit donc tenir ICI aussi, indépendamment de ce que Zod filtre
+    // en amont.
+    it('un dataProcessingConsentAt glissé dans le corps ne grants plus telemetryEnabled (same-request grant retiré)', async () => {
+      const sut = makeSut(makePrisma({ dataProcessingConsentAt: null }));
+
+      const violations = await sut.validateApplicationPreferences('u1', {
+        telemetryEnabled: true,
+        dataProcessingConsentAt: NOW,
+      });
+
+      expect(violations.some(v => v.field === 'telemetryEnabled')).toBe(true);
     });
   });
 
