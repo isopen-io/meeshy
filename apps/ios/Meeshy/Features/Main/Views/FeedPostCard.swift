@@ -881,7 +881,7 @@ struct FeedPostCard: View {
                         onPin?(post.id)
                         HapticFeedback.light()
                     } label: {
-                        Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                        Label(String(localized: "feed.post.pin", defaultValue: "Épingler", bundle: .main), systemImage: "pin")
                     }
                 }
                 if onEdit != nil {

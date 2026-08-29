@@ -109,7 +109,7 @@ struct AddParticipantSheet: View {
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
-            TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur...", bundle: .main), text: $searchQuery)
+            TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur…", bundle: .main), text: $searchQuery)
                 .font(MeeshyFont.relative(15))
                 .foregroundColor(theme.textPrimary)
                 .focused($isSearchFocused)
@@ -267,7 +267,7 @@ struct AddParticipantSheet: View {
     // canonique d'un état « contenu indisponible » (HIG), clé i18n réutilisée.
     private var emptyResults: some View {
         AdaptiveContentUnavailableView(
-            String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main),
+            String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouvé", bundle: .main),
             systemImage: "person.slash"
         )
         .padding(.top, 40)
