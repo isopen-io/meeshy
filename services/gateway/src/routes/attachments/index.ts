@@ -3,6 +3,8 @@
  * Enregistre tous les sous-modules de routes
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import type { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
@@ -29,13 +31,41 @@ const LEGACY_UNVERSIONED_PREFIX = '/api';
  * lui-même (voir plus bas), de sorte que la restriction tienne quel que soit
  * le site de montage.
  *
- * @deprecated Chemin de compatibilité. La bascule de `file/*` en redirection
- * 308 vers `/api/v1`, la migration de la colonne `fileUrl` et la fermeture du
- * magasin public sont des chantiers séparés (`media.md`, étapes 3 à 6).
+ * ## Il DIT désormais qu'il est en sursis (#4324)
+ *
+ * Sa raison de vivre était écrite au site de montage : « des `fileUrl` de cette
+ * forme sont persistées en base depuis des années ». La migration 013 les a
+ * réécrites en clés de stockage — cette raison a disparu.
+ *
+ * Ce qui reste sont les notifications DÉJÀ LIVRÉES, qui portent des adresses de
+ * cette forme et qu'aucun déploiement ne rattrape. L'alias ne se retire donc pas
+ * aujourd'hui : il s'annonce, et son retrait se décidera sur le compteur d'accès
+ * (#4275) plutôt que sur une revue de code.
+ *
+ * L'annonce est posée en `onRequest`, donc AVANT le handler : elle part même
+ * quand le fichier est introuvable, parce que c'est l'ADRESSE qui est en sursis,
+ * pas sa réponse de succès.
+ *
+ * @deprecated Chemin de compatibilité. La bascule en redirection 308 et la
+ * fermeture du magasin public restent des chantiers séparés (`media.md`).
  */
 export async function attachmentLegacyFileRoutes(fastify: FastifyInstance) {
+  fastify.addHook(
+    'onRequest',
+    depreciee({
+      depuis: DEPUIS_ALIAS_NON_VERSIONNE,
+      // Le chemin RÉEL de l'appel, jamais un gabarit : le client doit pouvoir
+      // suivre le `Link` tel quel. `request.url` porte ici le préfixe `/api` du
+      // montage ; le retirer rend le chemin relatif que `apiPath` versionne.
+      successeur: (request) =>
+        apiPath(request.url.slice(LEGACY_UNVERSIONED_PREFIX.length).split('?')[0] ?? '/'),
+      retraitLe: dateDeRetrait(DEPUIS_ALIAS_NON_VERSIONNE),
+    })
+  );
   registerFileStreamRoute(fastify);
 }
+
+const DEPUIS_ALIAS_NON_VERSIONNE = '2026-08-30';
 
 export async function attachmentRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
