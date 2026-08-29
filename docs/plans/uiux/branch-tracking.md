@@ -50,6 +50,40 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
 > résume.
 >
+> ### 254i — résultat NÉGATIF mesuré : la règle « Zero Unnecessary Re-render » est TENUE
+>
+> - **253i est MERGÉE** — PR #4268, squash `e087f501`, issue #4266 fermée, gate
+>   vert sur `799c0d60` (compile 9 min 34, suite **12 min 32 jusqu'au bout**).
+>   Synchronisation 254i : branche repartie de `origin/main` `e087f501`.
+> - **Mesure, à ne pas refaire** : la règle du dépôt « une vue rendue EN BOUCLE
+>   ne doit pas `@ObservedObject` un singleton global » (§ Leaf Views — Zero
+>   Unnecessary Re-render) est **respectée. 0 violation.**
+>
+>   | | |
+>   |---|---|
+>   | `@ObservedObject … = X.shared` dans l'app | **24** occurrences, **22** types |
+>   | types qui sont des ÉCRANS / feuilles / couches de présentation | **22** |
+>   | types rendus en BOUCLE (cellules, rangées) | **0** |
+>
+>   Les 22 sont `SettingsView`, `RootView`, `iPadRootView`, `IncomingCallView`,
+>   `ParticipantProfileSheet`, `SplashScreen`, les écrans de réglages… — chez
+>   qui observer un singleton est le patron NORMAL. Et les vues de rangée que la
+>   règle NOMME (`ThemedMessageBubble`, `MeeshyAvatar`, `ThemedConversationRow`,
+>   plus `FocalRow` et `LanguageFlagChip`) n'en portent **aucun**.
+>
+> - **⚠️ Limite de l'instrument, énoncée pour que le zéro se lise juste.** Le
+>   détecteur « ce type est-il instancié dans un `ForEach` ? » a été éprouvé sur
+>   trois TÉMOINS dont la réponse est connue — les trois vues que la règle cite.
+>   Il en a trouvé **deux sur trois** : `ThemedConversationRow` lui échappe,
+>   parce qu'elle est atteinte par une fonction constructrice de rangée, à un
+>   niveau d'indirection du `ForEach`.
+>
+>   **Le zéro ne repose donc PAS sur ce détecteur** : il repose sur la lecture
+>   des 22 types (tous des écrans) et sur la vérification DIRECTE que les vues
+>   de rangée ne portent pas d'observateur. Un compteur dont on connaît le
+>   défaut vaut mieux qu'un compteur qu'on croit exact — et un témoin qui tombe
+>   est ce qui permet de le dire.
+>
 > ### 253i — le vocabulaire des bascules, enfermé par son NOM (issue #4266)
 >
 > - Base `cd9aa95b`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-253i-toggle-vocabulary.md`.
