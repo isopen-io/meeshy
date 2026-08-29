@@ -98,6 +98,7 @@ struct RiverStreamHost: View {
     @ObservedObject var navigation: RiverNavigationController
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.layoutDirection) private var layoutDirection
 
     @State private var frames: [String: CGRect] = [:]
     @State private var horizontalOffset: CGFloat = 0
@@ -579,7 +580,15 @@ struct RiverStreamHost: View {
                 let isHorizontal = abs(value.translation.width) > abs(value.translation.height)
                 let direction: RiverLaneResolver.RiverStepDirection
                 if isHorizontal {
-                    direction = value.translation.width < 0 ? .right : .left
+                    // Le signe brut disait « vers la GAUCHE de l'écran », donc
+                    // « vers l'avant » — vrai en français, faux en arabe. La
+                    // comparaison ne bouge pas ; seul l'opérande passe dans le
+                    // sens de la LECTURE, identité en LTR (#4297).
+                    let dx = ReadingDirection.readingDelta(
+                        value.translation.width,
+                        layoutDirection: layoutDirection
+                    )
+                    direction = dx < 0 ? .right : .left
                 } else {
                     direction = value.translation.height < 0 ? .down : .up
                 }

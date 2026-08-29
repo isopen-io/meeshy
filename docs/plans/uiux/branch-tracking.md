@@ -29,11 +29,233 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 254i | [#4269](https://github.com/isopen-io/meeshy/pull/4269) | `0f05267c` | — |
 > | 255i | [#4271](https://github.com/isopen-io/meeshy/pull/4271) | `b8a30cfd` | — |
 > | 256i | [#4273](https://github.com/isopen-io/meeshy/pull/4273) | `1fbd1f4d` | — |
+> | 257i | [#4290](https://github.com/isopen-io/meeshy/pull/4290) | `9ac93624` | #4286 |
+> | 258i | [#4294](https://github.com/isopen-io/meeshy/pull/4294) | `5e162ed7` | #4292 |
+> | 259i | [#4299](https://github.com/isopen-io/meeshy/pull/4299) | `c96b307b` | #4297 |
+> | 260i | [#4301](https://github.com/isopen-io/meeshy/pull/4301) | `99d6d21c` | — |
+> | 261i | [#4303](https://github.com/isopen-io/meeshy/pull/4303) | `1af3cc38` | #4302 |
+> | 262i | [#4306](https://github.com/isopen-io/meeshy/pull/4306) | `22e6831f` | — |
+> | 263i | [#4310](https://github.com/isopen-io/meeshy/pull/4310) | `a2ce8815` | #4309 |
+> | 264i | [#4312](https://github.com/isopen-io/meeshy/pull/4312) | `66f6dfc3` | #4311 |
+> | 265i | [#4315](https://github.com/isopen-io/meeshy/pull/4315) | `24c556b8` | #4313 |
+> | 266i | [#4320](https://github.com/isopen-io/meeshy/pull/4320) | `6fc9486c` | #4319 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `6fc9486c` — base de 267i.
+>
+> ### 267i — le solde du cliquet i18n, pris avec la confiance que la CI a rendue (#4322)
+>
+> 263i avait épinglé **40 écrans sur 132**, en nommant sa raison : « le risque
+> n'est pas par fichier mais par PARSEUR — s'il se trompe, il se trompe
+> partout ». La CI a validé ce parseur du premier coup sur les deux règles ;
+> le solde se prend.
+>
+> | mesure | valeur |
+> |---|---|
+> | écrans épinglés | 43 → **135** |
+> | clés gardées | 930 → **1 210** |
+> | règle A (traduction) / règle B (`defaultValue`) | **0** / **0** |
+> | éligibles restants | **0** — vivier épuisé |
+>
+> - **Répliquer les FILTRES, pas la boucle** (leçon 258i) : `state ==
+>   "translated"` (un `needs_review` n'est pas une traduction livrée), les
+>   pluriels par catégorie CLDR, `.module`, `isIdentifier`, le bloc `"""`
+>   qui rend `nil`, et l'exclusion des `defaultValue` interpolés.
+> - **Contrôle de cohérence** : la réplique rend 92 éligibles, exactement le
+>   solde annoncé quatre itérations plus tôt (132 − 40).
+> - **Ce n'est plus la traduction qui borne ce cliquet, c'est la dette de
+>   littéraux** : sur les 164 fichiers restants, **154** échouent sur la seule
+>   règle B (#4308, 648 `defaultValue` divergents) contre 56 sur la règle A.
+>
+> ### 266i — cinq sondes négatives, et le squelette que rien ne gardait (#4319)
+>
+> | doctrine sondée | mesure | verdict |
+> |---|---|---|
+> | `@ObservedObject` initialisé en ligne | **0** sur 145 | sain |
+> | `.id(UUID())` | **0** | sain |
+> | `@State` miroir d'un singleton | 12 miroirs, **12 `.onReceive` appariés** | sain |
+> | matrice squelettes Pattern I4 | **5/5**, + 6 hors bible | sain |
+> | `loadState` sur tout VM qui charge | 19/30 absents | contrat non tenu, **comportement correct** |
+>
+> - **Un motif qui RESSEMBLE à un défaut connu peut être la forme correcte d'une
+>   autre règle** : `@State` semée depuis un singleton est le bug SwiftUI
+>   classique — sauf que les douze sites portent leur `.onReceive` apparié et le
+>   disent sur place. C'est « Zero Unnecessary Re-render » bien appliqué.
+> - **Un pourcentage de non-conformité n'est pas un défaut tant qu'on n'a pas lu
+>   ce que le code FAIT** : 63 % des VM sans `loadState`, mais
+>   `BookmarksViewModel` lit le cache AVANT `isLoading` et ne met aucun spinner
+>   sur un cache chaud. Le comportement protégé est là, sous un autre nom.
+> - Ce que les sondes laissent : le Pattern I4 **nomme cinq écrans** et rien ne
+>   vérifiait qu'ils gardent leur squelette. Un refactor de `ConversationListView`
+>   rendrait l'écran principal **blanc au démarrage à froid**, tout restant vert.
+>   → `SkeletonColdStartGuardTests` (montage + définition), et
+>   `apps/ios/CLAUDE.md` nomme enfin les composants qui EXISTENT
+>   (`SkeletonPlaceholder` n'apparaît dans aucun `.swift` : nom générique de la
+>   bible, réalisé sous quinze noms de domaine).
+> - Bornes décisives : les trois témoins **négatifs** du détecteur de montage —
+>   une mention en commentaire, une mention en chaîne et un nom PRÉFIXÉ
+>   (`SkeletonFeedListPreview()`) ne sont pas des montages.
+>
+> ### 265i — l'onboarding démontrait le Prisme en traduisant l'allemand vers l'allemand (#4313)
+>
+> `Text(_:)` prend un `LocalizedStringKey` : **tout littéral qu'on lui passe
+> devient une clé de catalogue**, extraite par Xcode, sans qu'aucun développeur
+> n'ait écrit `String(localized:)` ni choisi quoi que ce soit.
+>
+> - La carte « Comment ça marche » de l'onboarding montre un message ORIGINAL
+>   étranger + sa TRADUCTION. L'original venait d'un littéral nu, donc du
+>   catalogue, donc traduit en **de / es / pt-BR**. Un Allemand qui choisit
+>   l'allemand voyait deux phrases allemandes, l'une dite « originale », l'autre
+>   sous l'icône `translate`. En es et pt-BR elles ne diffèrent que par les
+>   accents : **pire qu'une traduction absente, ça a l'air d'une traduction ratée.**
+> - **Aucune garde i18n ne pouvait le voir** : toutes s'accrochent à
+>   `String(localized:`. `OnboardingStepViews.swift` était même ÉPINGLÉ parmi les
+>   43 écrans « fully localized » du 263i — la régression n'est pas vers le
+>   français, c'est une traduction de TROP.
+> - **Le mécanisme avait déjà été rencontré et EXCUSÉ** :
+>   `notAnInterfaceString = ["Jean-Pierre"]` en décrivait le fonctionnement exact
+>   sans le remonter à sa cause, trois lignes au-dessus du défaut.
+>   → *Une entrée d'allowlist qui explique pourquoi une clé est inoffensive est
+>   un endroit où quelqu'un a VU le mécanisme et ne l'a pas suivi.*
+> - Remède : `Text(verbatim:)` (7 sites, en remplacement de ligne), 6 clés
+>   retirées du catalogue (**168 suppressions, 0 insertion** — la re-sérialisation
+>   JSON, essayée d'abord, produisait 27 016 lignes de diff et a été annulée), et
+>   `LocalizedStringKeyLiteralGuardTests`.
+> - Borne décisive : **le REMÈDE doit cesser d'être un site**. Une garde qui
+>   interdit une écriture sans reconnaître sa correction est insatisfaisable.
+>
+> ### 264i — la doctrine des tailles figées avait 36 justifications et zéro instrument (#4311)
+>
+> Deux balayages d'accessibilité, deux résultats de nature différente :
+>
+> | passe | mesure | verdict |
+> |---|---|---|
+> | bouton à glyphe seul sans libellé VoiceOver | 871 `Button`, 6 candidats | **0 défaut** — les six sont agrégés puis ré-exposés en action de rotor (idiome 183i) |
+> | taille de police figée | 247 sites, 88 fichiers, dont **37 sur du TEXTE** | **1 défaut** + le cliquet manquant |
+>
+> - **36 des 37 sites de texte portaient leur justification en commentaire**
+>   (doctrine 53i / 82i / 86i : un cadre fixe qui déborderait s'il scalait). Le
+>   37ᵉ — `ProfileUserPostsList.chip` — gelait son CHIFFRE à 18 pt sous un libellé
+>   en `.caption2`, qui scale, dans une tuile **sans hauteur fixe** : en AX5 le
+>   libellé devenait 1,5× plus gros que le nombre qu'il légende.
+> - **Un site dont les voisins sont justifiés RESSEMBLE à un site justifié** —
+>   l'angle mort exact d'une règle tenue par la relecture plutôt que par un
+>   instrument. C'est la forme de #4302 et #4292.
+> - Cliquet posé (`FixedFontSizeGuardTests`) : liste de 87 fichiers en
+>   **surensemble** (aucune classification en jeu, donc rien ne peut la faire
+>   rougir à tort) + texte ≤ **36** + total ≤ **245** + élagage obligatoire.
+>   Épinglé sur l'APRÈS-correctif → **rouge sur l'état d'où il vient**.
+> - Borne décisive : la classification texte/glyphe doit rendre les DEUX
+>   populations non vides. Un classifieur effondré rendrait 0 texte et laisserait
+>   le cliquet **vert en ne protégeant plus rien**.
 > - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
 >
-> ### 257i — les boucles perpétuelles de STATUT (#4286, en cours)
+> ### ⚠️ 262i — cinq règles déclarées, quatre sans une seule violation (close par la négative)
+>
+> Balayage des règles du `CLAUDE.md` qui ont une forme MESURABLE. **Rien à
+> corriger sur quatre d'entre elles**, et la seule « prise » du scanner est un
+> faux positif par construction :
+>
+> | règle déclarée | occurrences |
+> |---|---|
+> | `print()` interdit (os.Logger) | **0** |
+> | `try!` interdit | **0** |
+> | `Color.red/.green/…` littéral | **0** |
+> | `as!` (cast forcé) | 1 |
+> | secrets en `UserDefaults` | **0** — E2E met les IDs de pairs en defaults et les `SymmetricKey` au **Keychain** : la bonne séparation |
+> | `[weak self]` sur closures stockées | 211 `.sink` **tous** gardés, 2 observers gardés |
+>
+> - **Le seul `Timer` sans `[weak self]` n'est pas un défaut** :
+>   `UniversalComposerBar` est une **struct** SwiftUI, où `[weak self]` n'est
+>   même pas EXPRIMABLE (il exige un type classe) — et son timer est invalidé en
+>   cinq points, dont la disparition. La classe qui possède vraiment un timer,
+>   `CameraView`, utilise bien `[weak self]`.
+>   **Une règle ARC ne s'applique qu'à ce qui est compté par ARC** : la recopier
+>   sur une vue de valeur produit un faux positif à chaque balayage.
+> - **`AnyView` : 80 occurrences (28 fichiers), et ce ne sont PAS des paresses** —
+>   ce sont des effacements de type à une frontière d'API (`accessory:`,
+>   `toolRowTrailingAccessory:`, `… ? AnyView(x) : nil`). Les retirer demande de
+>   rendre GÉNÉRIQUES les signatures et de toucher tous les appelants : refonte,
+>   pas remplacement. → **#4305** (commencer par `ConversationView`, 25 des 80).
+>
+> Ne pas relancer ces cinq sondes ; la seule piste ouverte est #4305.
+>
+> ### ⚠️ 260i — sondage « cache-first » : la dimension est SAINE (close par la négative)
+>
+> Sonde sur le principe non négociable « **jamais de spinner quand le cache a des
+> données** ». **Rien à corriger** — et le chemin pour l'établir vaut d'être noté,
+> parce que l'instrument a menti quatre fois sur quatre.
+>
+> | mesure | résultat |
+> |---|---|
+> | `ProgressView` réels | 126 dans 83 fichiers |
+> | conditionnés au chargement SANS test de vacuité | 33 — **presque tous légitimes** |
+> | ViewModels portant `loadState` | 11 |
+> | ViewModels signalés « réseau avant cache » | 4 → **4 faux positifs** |
+>
+> - Les 33 « suspects » sont en écrasante majorité des **spinners d'ACTION** (bouton
+>   d'envoi, vérification 2FA) ou des **pieds de pagination** posés APRÈS les lignes
+>   déjà rendues. Ni les uns ni les autres ne violent la doctrine, qui vise l'écran
+>   qui REMPLACE son contenu par une roue.
+> - Les 4 « réseau avant cache » venaient d'une heuristique **positionnelle** : je
+>   comparais l'offset du premier `CacheCoordinator` à celui du premier appel de
+>   service DANS LE TEXTE du fichier. Sur un ViewModel de 1600 lignes, une propriété
+>   de service déclarée en tête gagne toujours. Vérification faite sur le chemin de
+>   chargement RÉEL : `ConversationListViewModel` est exemplaire (cache d'abord, les
+>   quatre cas de `CacheResult` distingués, et `.expired` récupère la charge sur
+>   disque pour qu'une resync hors-ligne ne vide jamais l'écran) ;
+>   `ContactsListViewModel` et `GlobalSearchViewModel` distinguent aussi les quatre cas.
+>
+> > **Mesurer un ORDRE par des offsets de texte, c'est mesurer l'ordre de
+> > DÉCLARATION, pas l'ordre d'EXÉCUTION.** Un ordre ne se lit que sur le chemin
+> > d'appel. Quatre faux positifs sur quatre : l'instrument n'avait aucune valeur.
+>
+> Ne pas relancer cette sonde sans un instrument qui suit le flot d'exécution.
+>
+> ### 259i — le SIGNE d'un glissement, troisième famille RTL (#4297, MERGÉE `c96b307b`)
+>
+> SwiftUI retourne les piles et les marges ; `RightToLeftLayoutGuardTests` garde les
+> symboles nommés par un côté. **Personne ne gardait le signe d'un `DragGesture`** —
+> « `dx < -60` ⇒ suivant » veut dire « glisser à gauche avance », faux en arabe.
+> Détail : `docs/analyses/uiux/2026-08-29-iteration-259i-reading-direction.md`.
+>
+> - **25 comparaisons de `translation.width`, dont 16 ne doivent PAS se retourner** :
+>   9 n'encodent aucun sens (`abs()`, dominance d'axe) et 7 déplacent un objet qui
+>   suit le doigt. Le tri fait partie de la mesure.
+> - **Forme sûre** : un helper qui est l'IDENTITÉ en LTR ; les sites gardent leurs
+>   comparaisons, seul l'opérande change. Le comportement actuel est préservé par
+>   construction, pas par vérification.
+> - **`.offset(x:)` n'est PAS retourné par SwiftUI** (contrairement aux marges et
+>   alignements). C'est le discriminant entre les deux cas : `ReelsPlayerView` a pu
+>   être retourné (son visuel tient en UN `.offset`), **le cube des stories NON**.
+> - **Retournement du cube TENTÉ puis ANNULÉ** : `horizontalDrag`, `groupSlide`,
+>   `totalSlideX`, `exitX` et l'orientation des faces vivent en espace écran.
+>   Retourner la seule décision aurait envoyé la face de commit à l'opposé du doigt —
+>   **pire que le défaut**, où l'arabe est au moins cohérent. → #4298 (simulateur).
+>
+> ### 258i — le cliquet i18n avait cessé de cliqueter (#4292, MERGÉE `5e162ed7`)
+>
+> Plafond épinglé **1545**, backlog réel **102** : le cliquet admettait 1443 clés
+> neuves non traduites. Le catalogue s'était rempli (3397/3408 traduites en 6
+> locales) sans que le pin suive. Re-piqué à **114**, marqueur du scanner élargi
+> aux appels multi-lignes (185 appels / 61 fichiers, contre 92/46 au 226i).
+> Détail : `docs/analyses/uiux/2026-08-29-iteration-258i-i18n-ratchet.md`.
+>
+> - **226i avait vu le trou et renoncé, pour une raison JUSTE devenue fausse** :
+>   « élargir fait monter le backlog, or le plafond ne doit que descendre ». Vrai
+>   contre un plafond serré — il ne l'était plus. **Avant de renoncer à une
+>   amélioration qu'un cliquet interdit, mesurer le cliquet.**
+> - **Répliquer une règle, c'est répliquer ses FILTRES** : deux erreurs
+>   (`!isModuleBundle` oublié, `isIdentifier` trop strict) ont donné 1024 puis 93
+>   avant 102. Ce qui a attesté la fidélité : en marqueur ÉTROIT, la réplication
+>   reproduit l'état vert actuel des trois règles sœurs (0/0/0).
+> - **Un chiffre peut mesurer ce que le dépôt ne mesure pas** : mes « 133 → 23
+>   orphelines » étaient hors sujet — le test des orphelines lit `combinedSource`,
+>   pas `localizedCalls`, et est insensible à ce correctif.
+> - Backlog **102 ≠ 114** : les 12 de plus sont les clés que le marqueur étroit ne
+>   pouvait pas voir. Elles n'ont jamais été traduites ; elles étaient
+>   incomptables → #4293.
+>
+> ### 257i — les boucles perpétuelles de STATUT (#4286, MERGÉE `9ac93624`)
 >
 > Sept `repeatForever` sur 68 n'avaient aucun portillon Reduce Motion, et
 > c'étaient toutes des animations de **statut** (frappe, enregistrement,

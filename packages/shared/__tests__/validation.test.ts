@@ -329,6 +329,24 @@ describe('language-code normalization at the write boundary', () => {
     expect(parsed.customDestinationLanguage).toBe('bas');
   });
 
+  // The region-tagged form of a supported ISO 639-3 code (`bas-CM`, `ewo-CM` —
+  // officially-supported Cameroonian languages, 639-3 body + ISO 3166-1 region =
+  // 6 chars) is exactly what the platform locale surfaces (`Locale.current`,
+  // `Accept-Language`). customDestinationLanguageCode's `.max(5)` fired BEFORE the
+  // normalizing `.transform` and rejected these 6-char codes with HTTP 400 — the
+  // same silent exclusion CommonSchemas.language.max(6) documents closing, missed
+  // here because `.min(2)`/`.max(...)` split across lines escaped the line-based
+  // grep of iteration 266. The transform reduces bas-CM -> bas (SUPPORTED, kept
+  // verbatim). Prisme priority-3 language must be settable by these users.
+  it('updateUserProfileSchema canonicalizes a region-tagged ISO 639-3 customDestinationLanguage (bas-CM -> bas)', () => {
+    const parsed = updateUserProfileSchema.parse({ customDestinationLanguage: 'bas-CM' });
+    expect(parsed.customDestinationLanguage).toBe('bas');
+  });
+
+  it('updateUserProfileSchema still rejects an over-long (7-char) customDestinationLanguage', () => {
+    expect(updateUserProfileSchema.safeParse({ customDestinationLanguage: 'abcd-CM' }).success).toBe(false);
+  });
+
   it('updateUserProfileSchema still clears customDestinationLanguage on empty string / null', () => {
     expect(updateUserProfileSchema.parse({ customDestinationLanguage: '' }).customDestinationLanguage).toBe('');
     expect(updateUserProfileSchema.parse({ customDestinationLanguage: null }).customDestinationLanguage).toBeNull();

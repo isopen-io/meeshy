@@ -155,7 +155,11 @@ const defaultProps = {
   isLoadingMessages: false,
   currentUser: createMockUser(),
   userLanguage: 'fr',
-  usedLanguages: ['en', 'fr', 'es'],
+  // `usedLanguages` est le prisme ORDONNÉ du lecteur (rangs 1→4). En production il
+  // vient de `getUserLanguagePreferences` et son rang 1 est TOUJOURS `userLanguage`
+  // (les deux dérivent de la même config via `resolveUserLanguagesOrdered` /
+  // `resolveUserPreferredLanguage`). Le rang 1 doit donc égaler `userLanguage: 'fr'`.
+  usedLanguages: ['fr', 'en', 'es'],
   conversationType: 'direct' as const,
   userRole: 'USER' as const,
   conversationId: 'conv-1',
@@ -345,6 +349,124 @@ describe('MessagesDisplay', () => {
       });
 
       expect(screen.getByTestId('display-language')).toHaveTextContent('de');
+    });
+  });
+
+  // Prisme Linguistique #3 : le corps du message DESCEND le prisme ordonné du
+  // lecteur (rangs 1→4) — la première langue servie gagne, par une traduction ou
+  // parce que le message est déjà écrit dedans. L'ancien résolveur ne consultait
+  // que le rang 1 (`userLanguage`), ratant toute traduction d'un rang inférieur.
+  describe('Prisme — descente ordonnée du corps du message', () => {
+    it('sert une traduction de RANG 2 quand le rang 1 n\'a pas de traduction', () => {
+      // Lecteur fr (rang 1) + en (rang 2) ; message espagnol, seule une traduction
+      // ANGLAISE existe. Le rang 1 (fr) n'est pas servi → on descend au rang 2 (en).
+      // Ancien code : aucune traduction 'fr' → repli sur l'original 'es'.
+      renderMessagesDisplay({
+        userLanguage: 'fr',
+        usedLanguages: ['fr', 'en'],
+        messages: [
+          createMockMessage('msg-1', {
+            originalLanguage: 'es',
+            content: 'Hola',
+            translations: [{ targetLanguage: 'en', translatedContent: 'Hello' }],
+          }),
+        ],
+      });
+
+      expect(screen.getByTestId('display-language')).toHaveTextContent('en');
+    });
+
+    it('préfère le RANG 1 au rang 2 quand les deux traductions existent', () => {
+      renderMessagesDisplay({
+        userLanguage: 'fr',
+        usedLanguages: ['fr', 'en'],
+        messages: [
+          createMockMessage('msg-1', {
+            originalLanguage: 'es',
+            content: 'Hola',
+            translations: [
+              { targetLanguage: 'en', translatedContent: 'Hello' },
+              { targetLanguage: 'fr', translatedContent: 'Bonjour' },
+            ],
+          }),
+        ],
+      });
+
+      expect(screen.getByTestId('display-language')).toHaveTextContent('fr');
+    });
+
+    it('matche une traduction région-taguée (en-US) contre une préférence en (normalisation)', () => {
+      // Message espagnol, lecteur fr+en, seule traduction keyée 'en-US'. Une
+      // comparaison brute `=== 'en'` ratait 'en-US' et repliait sur l'original 'es' ;
+      // la descente canonicalise (`normalizeLanguageForDedup`) et sert 'en-US'.
+      renderMessagesDisplay({
+        userLanguage: 'fr',
+        usedLanguages: ['fr', 'en'],
+        messages: [
+          createMockMessage('msg-1', {
+            originalLanguage: 'es',
+            content: 'Hola',
+            translations: [{ targetLanguage: 'en-US', translatedContent: 'Hello' }],
+          }),
+        ],
+      });
+
+      expect(screen.getByTestId('display-language')).toHaveTextContent('en-US');
+    });
+
+    it('garde l\'original quand la langue d\'origine gagne à son rang', () => {
+      // Message anglais, lecteur en (rang 1) + fr (rang 2), une traduction fr existe :
+      // le rang 1 (en) EST la langue d'origine → afficher l'original, jamais la
+      // traduction fr d'un rang inférieur.
+      renderMessagesDisplay({
+        userLanguage: 'en',
+        usedLanguages: ['en', 'fr'],
+        messages: [
+          createMockMessage('msg-1', {
+            originalLanguage: 'en',
+            content: 'Hello',
+            translations: [{ targetLanguage: 'fr', translatedContent: 'Bonjour' }],
+          }),
+        ],
+      });
+
+      expect(screen.getByTestId('display-language')).toHaveTextContent('en');
+    });
+
+    it('bascule vers une traduction de rang 2 qui ARRIVE après coup', async () => {
+      // Init : message espagnol sans traduction → original 'es'. Puis une traduction
+      // anglaise (rang 2) arrive : la bulle bascule vers 'en', pas seulement vers le
+      // rang 1. Ancien effet réactif : ne basculait que sur une traduction 'fr'.
+      const { rerender } = renderMessagesDisplay({
+        userLanguage: 'fr',
+        usedLanguages: ['fr', 'en'],
+        messages: [
+          createMockMessage('msg-1', { originalLanguage: 'es', content: 'Hola', translations: [] }),
+        ],
+      });
+
+      expect(screen.getByTestId('display-language')).toHaveTextContent('es');
+
+      rerender(
+        <MessageViewProvider>
+          <MessagesDisplay
+            {...defaultProps}
+            userLanguage="fr"
+            usedLanguages={['fr', 'en']}
+            messages={[
+              createMockMessage('msg-1', {
+                originalLanguage: 'es',
+                content: 'Hola',
+                translations: [{ targetLanguage: 'en', translatedContent: 'Hello' }],
+              }),
+            ]}
+          />
+        </MessageViewProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('display-language')).toHaveTextContent('en');
+      });
     });
   });
 

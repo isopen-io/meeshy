@@ -2,6 +2,213 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **the pure ThumbHash source-downscale planner landed — the JVM-testable half of the story
+> thumbHash write-path the prior run named as next** (slice `thumbhash-source-plan`, feature-parity
+> "thumbHash blur-placeholder per slide" `[~]` line, and the media `[~]` line at §P). `ThumbHash.encode`
+> was ported over a month ago but its contract rejects any side outside `1..100`; nothing computed the
+> downscale a real source raster needs before it, so the write-path had no legal way to feed it. iOS keeps
+> the same shape — `StorySlideRenderer` renders the composite to a low-res ~100px UIImage BEFORE
+> `toThumbHash()` (audit part-22 §StorySlideRenderer). The planning arithmetic (target dims) is pure and
+> device-free; only the `Bitmap` scale + RGBA read-back are device-bound. So the planner is pure
+> `:core:model`, not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4316/#4315/#4307/#4300/#4291/#4267
+> (all jcnm: web/shared/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`call-stats-reduce`) is on `main` (#4314). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count`
+> = 0/0). Diff verified `apps/android` only (1 main file + 1 new test file).
+>
+> **The change — one pure function, one data class.** `:core:model` `ThumbHashSourcePlan(width, height,
+> downscaled)` + `ThumbHash.sourcePlan(width, height)`: rejects a non-positive side (`require ≥1`, matching
+> `encode`); returns an already-in-budget source verbatim (`downscaled=false`, never upscales) so the caller
+> skips the resize; else scales the long edge exactly to 100, derives the short edge by aspect ratio
+> (round-half-up, reusing the object's own `roundHalfUp`), and clamps each side to `max(1, …)` so an extreme
+> banner ratio whose short edge would round to 0 still yields a legal encode input. Every returned side is
+> provably in `1..100` (short ≤ long, scale ≤ 1 ⇒ short·scale < 100). Blast radius: a new SSOT sibling of
+> `encode`, zero existing call sites touched.
+>
+> **Tests: +15, RED-proven.** `ThumbHashSourcePlanTest`: pass-through (50×80 unchanged; 100×100 boundary;
+> 1×1), downscale (200×200→100×100; 1080×1920→56×100 portrait; 1920×1080→100×56 landscape; 101×50→100×50
+> one-px-over), extreme ratios (1000×3→100×1 and 3×1000→1×100, the clamp), the `1..100` invariant across 11
+> sources, long/short-edge ordering preserved, and two illegal-source rejections (0-width, negative-height).
+> **RED**: drop the `max(1,…)` clamp → exactly the two extreme-ratio tests + the invariant test fail, no
+> collateral; change the budget guard `<=`→`<` → exactly the boundary pass-through test fails.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`
+> (AGP does not auto-map a bare `android-37`; CI's `setup-android` handles the same quirk).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 7m 11s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 1 main + 1 test, no `local.properties`; SDK purity — pure `:core:model` value type +
+> stateless planner, no `android.*`, no orchestration; SSOT — the planner is the single home for the
+> pre-`encode` downscale, no re-implementation; no tautological tests; no coverage floor lowered — new pure
+> logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the story thumbHash write-path's only remaining piece is the app-side `Bitmap`→plan-scale→RGBA
+> read-back → `ThumbHash.encode` at publish, which needs a real `Bitmap` and is not JVM-testable — it waits
+> for a device-capable run alongside the other device-bound Calls seams (WebRTC stats adapter, video-filter
+> actuators). Consider another pure-core Feed/Stories slice next, or a pure reducer in an earlier build-order
+> area. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **the pure WebRTC stats reducer + interval loss-ratio landed — the JVM-testable half of the
+> "live WebRTC stats source" the prior run named as next** (slice `call-stats-reduce`, feature-parity
+> "Connection-quality indicator" `[~]` line). Until now Android had `CallQualitySample(rttMs, packetLoss)` and
+> the tier ladder that consumes it, but nothing that turns a raw WebRTC stats report into that sample — the
+> `NoopCallQualitySampler` seam emitted nothing. iOS keeps this arithmetic in a pure, tested `CallStats.reduce`
+> (`WebRTCTypes.swift` §5.7) precisely so it is unit-testable without a live `RTCPeerConnection`; the framework
+> half is only `NSObject → Double` adaptation. So the reducer is pure `:core:model`, not device-bound
+> (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4307/#4300/#4291/#4267 (all jcnm:
+> shared/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`call-quality-rtt-longhaul-parity`) is on `main` (#4304). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (2 new files: 1 main + 1 test).
+>
+> **The change — two pure functions, one data class.** `:core:model` `CallStats` (rtt/packetsLost/bandwidth/
+> bytesReceived/codec/inbound-audio+video/outbound/availableOutgoingBitrate/jitter) + nested `CallStats.RawEntry`
+> (the framework-agnostic projection of one `RTCStatistics` entry) + `CallStats.reduce(entries)` (candidate-pair
+> rtt×1000 + BWE; inbound-rtp per-kind sums, audio-jitter mean, first-inbound codecId → `codec.mimeType` name
+> resolution `"audio/opus"`→`"opus"`; outbound-rtp sent/bandwidth sums; unknown types ignored; never throws).
+> `CallStats.intervalQualitySample(previous)` derives `CallQualitySample(rttMs, packetLoss)` where packetLoss is
+> the DELTA ratio `Δlost/(Δlost+Δreceived)` (a fraction, the input `VideoQualityLevel.from` wants — NOT iOS's
+> ×100 `packetLossPercent` which is only for the gateway report), each delta **clamped ≥ 0** so an ICE-restart
+> counter reset never reads as negative or spurious loss.
+>
+> **Tests: +25, RED-proven.** `CallStatsTest`: empty/defaults, unknown-type ignore, candidate-pair rtt-ms &
+> BWE-truncation & rtt-absent, inbound audio/video per-kind (video never contributes jitter), audio+video
+> totals, multi-stream loss sum, audio-jitter mean, outbound sums, codec resolution (present/first-wins/
+> unknown-id→null/no-inbound→null), interval sample (clean first tick, cumulative-first-tick ratio, delta ratio,
+> denom-0→0, full reset clamp, loss-counter-only reset never negative, total loss), and two end-to-end
+> reduce→sample→`.level()` classifications (EXCELLENT / CRITICAL). **RED**: three targeted mutations each fail
+> EXACTLY one test, no collateral — drop the reset clamp → the loss-counter-only-reset negative-loss test;
+> drop rtt×1000 → the ms test; codec last-wins instead of first → the first-inbound-wins test.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`
+> (AGP 8.13 does not auto-map a bare `android-37`; CI's `setup-android` handles the same quirk itself).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 5m 53s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 2 new files, no `local.properties`; SDK purity — pure `:core:model` value type +
+> stateless reducer, no `android.*`, no orchestration; SSOT — the reducer/sample ARE the single input the
+> existing `VideoQualityLevel`/`CallQualitySample` ladder consumes, no re-implementation; no tautological tests;
+> no coverage floor lowered — new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the only remaining piece of the connection-quality box is the DEVICE WebRTC stats-report adapter
+> (`RTCStatsReport → List<CallStats.RawEntry>` inside a real `CallQualitySampler`, then `reduce` +
+> `intervalQualitySample` → emit), which needs an emulator/WebRTC and is not JVM-testable — it waits for a
+> device-capable run. Other pure-core Calls candidates: the video-filter / dark-frame / thermal ACTUATOR seams
+> are all likewise device-bound. Consider stepping back to an earlier build-order area (Feed/Stories) for the
+> next pure slice — e.g. the Stories thumbHash **generation** write-path (needs `Bitmap`→RGBA, so structure the
+> pure part around the already-ported `ThumbHash.encode`). Read the chosen box's iOS audit part read-only first.
+
+> On 2026-08-29 **the Android call-quality RTT ladder now classifies a healthy intercontinental call at iOS
+> parity — it had been ported at iOS's PRE-recalibration boundaries and never followed the move** (slice
+> `call-quality-rtt-longhaul-parity`, feature-parity H. Calls — the "Connection-quality indicator" `[~]` line).
+> A genuine, user-facing parity BUG, not a new feature: `CallQualityThresholds` carried `VIDEO_FAIR_RTT_MS=200`
+> / `VIDEO_POOR_RTT_MS=300` / `POOR_RTT_MS=500`, the values iOS `QualityThresholds` (`WebRTCTypes.swift`) held
+> BEFORE it recalibrated the RTT ladder for real long-haul baselines (out to 300/500/800). Its own doc-comment
+> claimed "ported from iOS `QualityThresholds` … matching iOS" while diverging. An Africa↔Asia submarine backbone
+> is already 155-221 ms RTT (WACS 155, 2Africa 158, ACC-1 221) before the mobile last mile, so a healthy
+> intercontinental call routinely sits at 250-450 ms — and Android painted it red at 00:06: a 250 ms hop showed
+> FAIR not GOOD, a 350 ms call showed POOR (the weak-link error hue) not FAIR, a 550 ms link showed CRITICAL not
+> POOR. iOS (and the web mirror `use-call-quality.ts`) showed the same calls healthy. This is exactly the class the
+> roadmap calls a lenience/parity regression (dimensions 6/9/13), and it is pure logic — off-device JVM-testable.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4303/#4300/#4291/#4267 (all jcnm:
+> shared/gateway/ios), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`call-thermal-status-mapping`) is on `main` (#4295). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0).
+>
+> **The change — three constants, no new logic.** `CallQualityThresholds.{VIDEO_FAIR_RTT_MS→300, VIDEO_POOR_RTT_MS
+> →500, POOR_RTT_MS→800}`, now at exact iOS parity, with the long-haul calibration rationale moved into the doc
+> so the next reader sees WHY the boundaries sit where they do. `EXCELLENT_RTT_MS`(100) and every packet-loss band
+> (0.01/0.03/0.05/0.10 — the true congestion signal) were already correct and are untouched. Blast radius is a
+> single consumer: only `VideoQualityLevel.from(rttMs, packetLoss)` reads these (`grep` confirmed zero other
+> non-test call sites), so the fix cannot ripple into the survival policy or sender-cap plan, which consume the
+> enum tier, not the raw RTT.
+>
+> **Tests: +9 net, RED-proven.** `CallQualityTest` re-pinned both sides of all three moved boundaries
+> (300 stays GOOD / 300.1 → FAIR ; 500 stays FAIR / 500.1 → POOR ; 800 stays POOR / 800.1 → CRITICAL) and adds
+> three NAMED intercontinental regressions (250 ms → GOOD, 350 ms → FAIR, 550 ms → POOR) that each cite the
+> real-world scenario they defend. The stale `250 ms → FAIR` sample assertion was corrected to `350 ms → FAIR`.
+> `CallViewModelTest`'s stale `rtt 350 → indicator POOR` (which encoded the bug end-to-end) became `rtt 600 →
+> POOR`, preserving the "keeps updating through a reconnect" intent with a value genuinely POOR under the new
+> ladder; the `150 ms <= fair(200)` comment was refreshed to `videoFairRTT(300)`. **RED**: against the stale
+> constants exactly 9 CallQualityTest cases fail, compile healthy, no collateral — the recalibrated boundaries and
+> the three regressions, precisely the behaviour the fix restores. `CallAnalyticsTest`/`CallSignalManagerTest`/
+> `CallQualityReportTest` were checked and are unaffected (their RTT samples are loss-dominated → CRITICAL, or
+> pass an explicit `ConnectionQuality`).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/`build-tools;
+> 35.0.0`/`platform-tools`. Note: local cmdline-tools (11076708) + AGP 8.13.0 do NOT auto-map `compileSdk=37`
+> onto the published `android-37.0` package (only `android-37.x` are published, never a bare `android-37`), so a
+> local `platforms/android-37 → android-37.0` symlink is needed off-CI; CI's `setup-android` action handles this
+> itself (the workflow's "Provision compileSdk platform" step documents the exact same catalogue quirk).
+>
+> **Verified — targeted GREEN**: `:core:model:CallQualityTest` + `:feature:calls:CallViewModelTest` both **BUILD
+> SUCCESSFUL** after the fix. FULL `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> **BUILD SUCCESSFUL in 5m 40s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff `apps/android` only — 1 main constant file + 2 test
+> files; SDK purity — pure `:core:model` constants, no orchestration, no `android.os`; SSOT — the constants ARE
+> the single home `VideoQualityLevel.from` reads, now truthful to their "matching iOS" doc; no tautological tests;
+> no coverage floor lowered — boundary re-pins keep both-sides coverage and ADD three regressions).
+>
+> **Next**: the connection-quality box's only remaining piece is the live WebRTC stats source (`RTCStatsReport`
+> → `CallQualitySample`) that feeds real rtt/loss samples — needs an emulator/WebRTC, not JVM-testable, so it
+> waits for a device-capable run. Candidate pure-core slices still open in H. Calls: the "In-call translation
+> data channel (dual-stream clean audio)" model layer (but confirm it is genuinely built on iOS first — a prior
+> run flagged several Calls checklist lines as iOS-aspirational, not implemented). Otherwise the Stories
+> write-path thumbHash **generation** box. Read the chosen box's iOS audit part read-only before branching.
+
+> On 2026-08-29 **a raw Android `PowerManager.THERMAL_STATUS_*` reading now collapses to the exact `ThermalState`
+> tier the sender-cap plan consumes — the glue-free half of the iOS `ThermalStateMonitor` port** (slice
+> `call-thermal-status-mapping`, feature-parity H. Calls — the "Thermal-aware quality degradation" `[~]` line;
+> closes the "app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping" pending clause). Before this,
+> `ThermalState`'s own doc-comment named this mapping as `:app` glue that did not exist anywhere — the enum and
+> its `ThermalCeiling` fps/resolution tables shipped, but nothing turned the framework int into the enum, so the
+> policy `VideoSenderCapPlan.forConditions` had no way to be fed a real device tier. This is the pure decision
+> extracted out of the (emulator-only) actuator so it is unit-tested off-device (dimensions 1/2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4291 and #4267 (both gateway,
+> jcnm) — neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to
+> merge. Prior slice (`call-low-light-boost`) is on `main` (#4272). Branched off freshly-fetched `origin/main`;
+> local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android`
+> only (1 main modified + 1 new test).
+>
+> **The change — one pure companion function.** `:core:model` `ThermalState.fromAndroidThermalStatus(status: Int)`
+> collapses the seven documented `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers at iOS
+> parity: `NONE`(0) → NOMINAL; `LIGHT`(1)/`MODERATE`(2) → FAIR; `SEVERE`(3) → SERIOUS; `CRITICAL`(4)/`EMERGENCY`(5)/
+> `SHUTDOWN`(6) → CRITICAL. **SOTA hardening over a bare `when`:** the collapse is **monotonic and clamped at both
+> ends** — any value ≥ `CRITICAL`(4), including a future OS tier above `SHUTDOWN`, sheds the most encode load
+> (protective, never mistaken for cool), while a sub-`NONE`/negative reading (an absent/unreadable sensor, never a
+> real "cold" report) forwards untouched as NOMINAL so it never silently degrades a cool device's call quality. No
+> `android.os` import — three private constants mirror the framework values so `:core:model` stays JVM-pure and
+> the `:app` layer only forwards `getCurrentThermalStatus()`.
+>
+> **Tests: +11** `ThermalStateFromStatusTest` (behaviour via the public API, no Android): the seven documented
+> tiers each pinned; both-ends clamp — future tier (7, 99) → CRITICAL, invalid negative (-1, Int.MIN_VALUE) →
+> NOMINAL; the collapse is monotonic non-decreasing across 0..6; and it composes with the plan it exists to feed
+> (a `SHUTDOWN` reading yields the identical worst-case ceiling as `ThermalState.CRITICAL`). **Mutation-RED-
+> proven**: weakening the upper clamp (`>=` → `==`) reddens EXACTLY the 5 escalation tests (EMERGENCY, SHUTDOWN,
+> future-tier, monotonic, composition), the 6 lower-tier tests stay green; restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 7m 19s**, 973 actionable tasks, 0 failed. Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — a pure `:core:model` int→enum collapse, no orchestration, no
+> `android.os` import; SSOT — reuses `ThermalState`/`ThermalCeiling`, is the single home the app glue forwards to;
+> no tautological tests; no floor lowered).
+>
+> **Next**: the thermal box's only remaining piece is the live RTP-sender actuator (`VideoProcessor`/RTP encoding
+> params — needs an emulator/WebRTC, not JVM-testable). Candidate pure-core slices still open in H. Calls: the
+> "In-call translation data channel (dual-stream clean audio)" model layer, or the connection-quality-indicator
+> tier→label/colour mapping. Otherwise the Stories write-path thumbHash **generation** box (needs `Bitmap`→RGBA
+> glue, lower JVM yield). Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **a dim in-call video frame now carries a pure, exact-parity low-light-boost decision, folded
 > straight from the frame's luma** (slice `call-low-light-boost`, feature-parity H. Calls — the "In-call video
 > filters … low-light boost" `[~]` line; closes the "the low-light boost pass (folding `FrameLuminance`)"

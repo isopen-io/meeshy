@@ -44,6 +44,17 @@ export interface SocketAttachment {
   readonly metadata?: unknown;
   readonly uploadedBy?: string | null;
   readonly isAnonymous?: boolean | null;
+  /**
+   * Provenance : le média vient de la caméra / du micro de l'app. La feuille de
+   * partage le lit pour décider si publier ce média demande confirmation
+   * (`publicationNeedsCaptureConfirmation`). `attachmentMediaSelect` le charge à
+   * DESSEIN (« la provenance voyage avec le média … Absent d'ici, la garde ne se
+   * déclenche jamais ») ; l'omettre ICI désarmait la garde sur le chemin de
+   * livraison WebSocket, exactement ce que le commentaire du select met en garde.
+   * `boolean` non nullable, comme le contrat partagé
+   * (`MessageAttachment.capturedInApp`, `Boolean @default(false)`).
+   */
+  readonly capturedInApp: boolean;
   readonly createdAt: Date | string;
   readonly transcription: unknown;
   readonly translations: unknown;
@@ -108,6 +119,10 @@ export function serializeAttachmentForSocket(
     metadata: raw.metadata ?? null,
     uploadedBy: (raw.uploadedBy as string | null | undefined) ?? null,
     isAnonymous: (raw.isAnonymous as boolean | null | undefined) ?? null,
+    // Provenance — voir `SocketAttachment.capturedInApp`. Le défaut `false`
+    // reflète la valeur de colonne (`@default(false)`) pour un appelant qui
+    // aurait requêté sans ce champ.
+    capturedInApp: (raw.capturedInApp as boolean | null | undefined) ?? false,
     createdAt: raw.createdAt as Date | string,
     // Prisme Linguistique — null = pas encore enrichi, présent = serialize tel quel
     transcription: raw.transcription ?? null,

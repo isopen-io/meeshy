@@ -277,6 +277,16 @@ extension StoryViewerView {
 
                 switch axis {
                 case 1: // Horizontal — group navigation
+                    // NE PAS retourner ce signe seul (#4297, tenté puis annulé).
+                    // La navigation par groupe n'est pas qu'une décision : c'est
+                    // un CUBE, dont toute la géométrie vit en espace ÉCRAN —
+                    // `horizontalDrag`, `groupSlide`, `totalSlideX`,
+                    // `exitX = forward ? -screenW : screenW`, et l'orientation des
+                    // faces voisines. Retourner la décision sans retourner le cube
+                    // ferait partir la face de commit à l'OPPOSÉ du doigt qui
+                    // vient de la pousser : une incohérence pire que le défaut
+                    // actuel, où l'arabe est simplement orienté comme le français.
+                    // Le retournement complet demande le simulateur (#4298).
                     let dx = value.translation.width
                     let predicted = value.predictedEndTranslation.width
 

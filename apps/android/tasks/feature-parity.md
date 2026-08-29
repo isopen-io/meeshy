@@ -4229,7 +4229,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       already-shipped `rememberThumbHashPainter` (the exact idiom the feed's `AsyncImage` uses). +13 tests,
       mutation-RED-proven (reversing the cascade reddens exactly the priority test). Pending: write-path
       **generation** (encode a ThumbHash from the composed slide bitmap into `effects.thumbHash` at publish) —
-      needs `Bitmap`→RGBA, so it is a separate follow-up using the already-ported `ThumbHash.encode`.
+      needs `Bitmap`→RGBA. Its JVM-testable half now shipped (slice `thumbhash-source-plan`, 2026-08-29):
+      `ThumbHash.sourcePlan(width, height) → ThumbHashSourcePlan(width, height, downscaled)` in `:core:model`
+      computes the legal `encode` input dimensions — caps the long edge at 100px, derives the short edge by
+      aspect ratio (round-half-up), clamps each side to ≥1 so an extreme banner ratio never rounds to a 0-side
+      encode input, and passes an already-in-budget source through verbatim (`downscaled=false`, no upscale).
+      +15 tests, mutation-RED-proven (dropping the ≥1 clamp reddens the extreme-ratio tests; `<` vs `<=`
+      on the budget boundary reddens the pass-through test). Remaining glue: the app-side `Bitmap` scale to
+      the plan + RGBA read-back + `ThumbHash.encode` at publish (device-bound).
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
 - [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
@@ -5773,8 +5780,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       the in-call "camera may be covered" UI hint.
 - [~] Thermal-aware quality degradation (fps/resolution caps, video disable) — **policy layer landed**
       (slice `call-sender-cap-plan`): pure `ThermalCeiling`/`VideoSenderCapPlan` in `core:model` (port of
-      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. Pending: the
-      app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping + the live RTP-sender actuator.
+      iOS `VideoThermalProfile`) composes a device thermal tier onto the network sender cap. **Thermal-source
+      mapping landed** (slice `call-thermal-status-mapping`): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the seven raw `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers,
+      monotonic & clamped at both ends, so the `:app` layer only forwards `getCurrentThermalStatus()`.
+      Pending: only the live RTP-sender actuator (needs an emulator/WebRTC, not JVM-testable).
 - [~] Adaptive call quality (bitrate ladder, auto video-disable on critical link) —
       **quality-tier SSOT landed** (slice `call-quality-level`): pure `core:model`
       `VideoQualityLevel` (5-tier `CRITICAL<POOR<FAIR<GOOD<EXCELLENT`, port of iOS
@@ -5797,9 +5807,11 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       tier and floors CRITICAL to 360p15 @ 100 kbps (never a zero encoder / never an upscale);
       `forConditions` composes it with a `ThermalCeiling` (port of iOS `VideoThermalProfile`,
       `NOMINAL` a no-op) taking the more conservative value per axis. Closes the
-      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Pending:** the real
-      WebRTC actuator seam (map `PowerManager.THERMAL_STATUS_*` → `ThermalState`, apply the cap to the
-      live RTP video sender, debounce re-apply) + consuming `Suspend`/`Resume`.
+      "Thermal-aware quality degradation" line at the policy layer. +17 tests. **Thermal-source mapping
+      landed** (slice `call-thermal-status-mapping`, 2026-08-29): pure `ThermalState.fromAndroidThermalStatus(Int)`
+      collapses the raw `PowerManager.THERMAL_STATUS_*` int the `:app` layer forwards. **Pending:** only the real
+      WebRTC actuator seam (apply the cap to the live RTP video sender, debounce re-apply) + consuming
+      `Suspend`/`Resume`.
 - [~] Connection-quality indicator; call-waiting banner (second incoming call) —
       **connection-quality indicator landed** (slice `call-quality-level`): the pure
       four-tier `ConnectionQuality` (`VideoQualityLevel` collapsed `CRITICAL→POOR`,
@@ -5820,7 +5832,33 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
       identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
       fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
-      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      *pending* call's id. +15 tests. The **long-haul RTT recalibration** landed (slice
+      `call-quality-rtt-longhaul-parity`, 2026-08-29): the three Android RTT boundaries had been
+      ported at iOS's PRE-recalibration values (fair `200` / poor `300` / critical `500`) and never
+      followed iOS's move out to `300`/`500`/`800`. On a healthy Africa↔Asia call (RTT 250-450 ms,
+      already 155-221 ms on the backbone before the mobile last mile) Android misclassified the tier —
+      a 250 ms hop showed FAIR not GOOD, a 350 ms call showed POOR (weak-link error hue) not FAIR, a
+      550 ms link showed CRITICAL not POOR — so the very calls this ladder exists to serve were
+      painted red at 00:06 while iOS showed them healthy. `CallQualityThresholds.{VIDEO_FAIR_RTT_MS,
+      VIDEO_POOR_RTT_MS,POOR_RTT_MS}` are now at exact iOS `WebRTCTypes.QualityThresholds` parity;
+      packet-loss bands (the true congestion signal) were already correct and unchanged. +9 tests
+      (both-sides-of-boundary re-pins at 300/500/800 + three named intercontinental regressions),
+      RED-proven (9 fail against the stale constants, compile healthy). The **WebRTC stats reducer +
+      interval loss-ratio landed** (slice `call-stats-reduce`, 2026-08-29): the pure `core:model`
+      `CallStats` + `CallStats.RawEntry` + `CallStats.reduce(entries)` is the SSOT projection of a WebRTC
+      stats report — a faithful port of iOS `CallStats.reduce` (`WebRTCTypes.swift` §5.7): `candidate-pair`
+      sets rtt (`currentRoundTripTime`×1000) + `availableOutgoingBitrate`; `inbound-rtp` sums packetsLost/
+      bytesReceived, splits `packetsReceived` into audio/video by `kind`, means the audio jitter, and resolves
+      the primary codec via the FIRST inbound entry's `codecId → codec.mimeType` (`"audio/opus"`→`"opus"`);
+      `outbound-rtp` sums sent packets + bandwidth. `CallStats.intervalQualitySample(previous)` derives the
+      loss FRACTION `Δlost/(Δlost+Δreceived)` from two cumulative snapshots (port of `WebRTCService.adjustBitrate`)
+      — never the raw cumulative count (the P1-4 >100 %-loss bug), and **clamps each delta at 0** so a counter
+      reset (ICE restart) never yields negative/spurious loss. This is the pure half of the "live WebRTC stats
+      source" — the device actuator now only adapts `RTCStatsReport → List<RawEntry>` then calls `reduce` +
+      `intervalQualitySample`. +25 tests, RED-proven (drop the reset clamp → exactly the negative-loss test
+      fails; drop rtt×1000 → exactly the ms test; make codec last-wins → exactly the first-wins test; each 1
+      failed, no collateral). **Pending:** only the device WebRTC stats-report adapter that feeds `reduce`.
+      The **identity-aware active-call teardown** landed (slice
       `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
       `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
       CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the

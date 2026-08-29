@@ -1785,9 +1785,18 @@ dépôt, et un cliquet ment plus longtemps qu'un journal.
 
 ### Ce qui reste, à sa taille
 
-Deux familles sur douze valident à la main. Écart de CONSISTANCE, pas de
-couverture : les gardes sont réelles et lisibles. La question utile n'est pas
-« sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+Deux familles sur douze validaient à la main. Écart de CONSISTANCE, pas de
+couverture : les gardes étaient réelles et lisibles. La question utile n'était
+pas « sont-elles gardées ? » mais « la douzième famille le sera-t-elle ? ».
+
+**SOLDÉ.** `AttachmentReactionHandler` (itération 280) puis `LocationHandler`
+(itération 281) ont rejoint la frontière Zod partagée. Les DOUZE familles
+valident désormais par `validateSocketEvent`. `LocationHandler` exprime ses
+bornes de coordonnées et de durée en Zod pur (`z.number().min().max()`,
+`.gt(0).max(480)`) — `_validateCoordinates` est retiré — et `location:live-stop`
+a reçu sa première garde de frontière (`SocketLocationLiveStopSchema`). Les
+messages métier (`'Invalid coordinates'`, `'Invalid duration (must be 1-480
+minutes)'`) remontent sous le préfixe unifié `'Validation failed: …'`.
 
 ### Et pourtant le CAST, lui, effaçait les DEUX sens
 

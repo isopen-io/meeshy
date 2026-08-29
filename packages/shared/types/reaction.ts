@@ -166,6 +166,26 @@ export function isValidEmoji(emoji: string): boolean {
 }
 
 /**
+ * Borne de LONGUEUR (unités UTF-16, c.-à-d. `String.length`) d'un emoji de
+ * réaction ou de sticker, posée comme cap de défense en profondeur AVANT que
+ * `isValidEmoji` (la SSOT de FORMAT) ne s'exécute à la frontière (Zod `.max()`).
+ *
+ * Elle DOIT admettre tout emoji que `isValidEmoji` accepte — sinon un grapheme
+ * RGI valide est refusé par le pré-contrôle de longueur avant même le contrôle
+ * de format. Le plus long emoji RGI de l'Unicode courant est le bisou à deux
+ * teints `👩🏽‍❤️‍💋‍👨🏼` = **15 unités** ; la famille `👨‍👩‍👧‍👦` en fait 11.
+ * `32` laisse une marge confortable pour les futures séquences ZWJ tout en
+ * restant un cap serré contre une charge forgée (que `isValidEmoji` refusera de
+ * toute façon comme non-emoji).
+ *
+ * Historique : une ancienne borne `10` — calibrée sur l'emoji mono-code-point
+ * d'avant `\p{RGI_Emoji}` — rejetait au portillon les emojis famille / couple /
+ * multi-personnes teintés, réintroduisant au niveau LONGUEUR le blocage que le
+ * passage à RGI avait levé au niveau FORMAT.
+ */
+export const EMOJI_MAX_LENGTH = 32;
+
+/**
  * Nettoie et valide un emoji
  * Retourne l'emoji nettoyé ou null si invalide
  */
