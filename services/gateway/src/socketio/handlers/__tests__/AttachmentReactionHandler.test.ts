@@ -191,12 +191,12 @@ describe('AttachmentReactionHandler', () => {
       expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
-    it('rejects an over-long emoji (>10 chars) at the boundary — parity with the reaction twins', async () => {
+    it('rejects an over-long emoji (> EMOJI_MAX_LENGTH) at the boundary — parity with the reaction twins', async () => {
       const cb = jest.fn();
       const { handler, service } = makeHandler();
       const socket = makeSocket();
 
-      await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: MSG_ID, emoji: 'a'.repeat(11) }, cb);
+      await handler.handleAdd(socket, { attachmentId: ATTACH_ID, messageId: MSG_ID, emoji: 'a'.repeat(40) }, cb);
 
       expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
       expect(service.addAttachmentReaction).not.toHaveBeenCalled();

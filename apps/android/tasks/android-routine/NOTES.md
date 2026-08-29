@@ -2425,3 +2425,55 @@ which already clamps to `[2,600]` via `StoryDurationPin.clamp`, so no re-clamp o
   compileSdk 37 → android-37.0 on first `./gradlew`, no hash error, no copy→patch). Full CI-mirror gate
   (`assembleDebug testDebugUnitTest`, all modules) BUILD SUCCESSFUL locally — the "try pristine first" note
   held again.
+
+## 2026-08-29 — a "ported from iOS … matching iOS" doc-comment is a claim to VERIFY, not a fact to trust (slice `call-quality-rtt-longhaul-parity`)
+`CallQualityThresholds` said, in its own KDoc, "the Android SSOT ported from iOS `QualityThresholds`" and
+"matching iOS" — while carrying `VIDEO_FAIR_RTT_MS=200 / VIDEO_POOR_RTT_MS=300 / POOR_RTT_MS=500`, the values
+iOS held *before* it recalibrated the RTT ladder out to `300/500/800` for real long-haul baselines. The port
+was faithful the day it was written and silently drifted when iOS moved. Reusable moves:
+- **When a constant claims parity with another platform, open BOTH and diff the numbers — don't trust the
+  prose.** The divergence here was three literals a `grep` apart; the doc-comment actively hid it. A parity
+  claim ages; the SSOT it names keeps moving. This is the cross-platform twin of leçon 261 ("an énumération of
+  sites carries two claims, and 'these are the sites' is almost never re-checked"): "these values match iOS"
+  is a second, unverified claim riding on "these values were ported from iOS".
+- **A stale threshold is a lenience/parity BUG, priced like the feature it degrades — not tech debt.** The
+  effect wasn't cosmetic: a healthy 350 ms intercontinental call rendered in the weak-link ERROR hue (POOR)
+  when iOS/web showed it FAIR. The roadmap's "une lenteur/dégradation est un BUG" applies verbatim to a
+  misclassification that paints a good call red.
+- **The test that catches a stale boundary must live on a value the boundary actually MOVED past, and name the
+  scenario.** Re-pinning `300 stays GOOD / 300.1 → FAIR` proves the new boundary; the three *named*
+  intercontinental regressions (250→GOOD, 350→FAIR, 550→POOR) are what a future reader greps for when the next
+  recalibration lands — they encode the real Africa↔Asia baseline (155-221 ms backbone + mobile last mile),
+  not just an abstract threshold. RED-proving showed exactly 9 fail against the stale constants, no collateral.
+- **Blast-radius check before touching a shared constant: `grep` its non-test consumers first.** Only
+  `VideoQualityLevel.from(rttMs, packetLoss)` reads these three — the survival policy and sender-cap plan
+  consume the enum *tier*, not raw RTT — so the change could not ripple. Confirmed before editing, not after.
+- **SDK bootstrap reconciliation (vs. the prior run's "pristine android-37.0 alone worked" note):** it did
+  NOT this run — local cmdline-tools `11076708` + AGP 8.13.0 errored `Failed to find target with hash string
+  'android-37'` because only `android-37.0/.1/.2` are published (never a bare `android-37`). Fix off-CI: a
+  `platforms/android-37 → android-37.0` symlink (SDK is local-only, never committed). The two notes are both
+  true — AGP's willingness to auto-map `37 → 37.0` is version/cache-sensitive; if pristine errors, symlink
+  rather than assume the repo is broken. CI is unaffected (its `setup-android` step documents the same quirk).
+
+## 2026-08-29 — a "needs an emulator" pending item often has a PURE half worth extracting first (slice `call-stats-reduce`)
+The prior run's "Next" named "the live WebRTC stats source (`RTCStatsReport → CallQualitySample`)" as device-only.
+That is half true. The FRAMEWORK half (reading `RTCStatsReport`'s `NSObject`/value graph) is device-bound; the
+ARITHMETIC half (per-kind packet sums, codec-id→name resolution, the audio-jitter mean, and — critically — the
+cumulative-counter → interval-loss-**ratio** conversion) is pure and was already factored out on iOS exactly so
+it is unit-testable (`CallStats.reduce` + `WebRTCService.adjustBitrate`, `WebRTCTypes.swift` §5.7). Lesson:
+before shelving a pending item as "emulator only", ask **which slice of it is the decision and which is the I/O**
+— port the decision as `:core:model` now, leave only the thin adapter for the device run. This is the same
+building-blocks-vs-orchestration grain the whole Calls area has followed (the reducer is the input SSOT the
+existing `VideoQualityLevel`/`CallQualitySample` ladder consumes).
+
+Two porting specifics worth keeping:
+- **A cumulative counter is never a fraction.** libwebrtc's `packetsLost`/`packetsReceived` only grow. A tick's
+  loss ratio is `Δlost/(Δlost+Δreceived)` between two snapshots, and each delta must be **clamped ≥ 0** —
+  otherwise an ICE-restart counter reset (current < previous) reads as negative loss when ONLY one axis resets
+  while the other grows (both-axes reset is already caught by `denom > 0`, so a full-reset test does NOT exercise
+  the clamp — a loss-counter-only-reset test does; that's the discriminating case that makes the clamp
+  load-bearing). Watch the denominator: iOS's is `Δlost + Δreceived`, not `Δreceived`.
+- **Fraction vs percent are two consumers.** iOS emits BOTH a `lossRatio` (fraction, feeds `VideoQualityLevel.from`)
+  and a `packetLossPercent` (×100, feeds the gateway call-quality report) from the same deltas. Android's
+  `CallQualitySample.packetLoss` is the FRACTION — porting the ×100 value here would silently pin every call to
+  critical. Document which one you ported so the next reader doesn't "fix" it.

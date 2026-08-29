@@ -996,12 +996,12 @@ struct StepLanguageView: View {
                     Circle()
                         .fill(MeeshyColors.indigo400.opacity(0.2))
                         .frame(width: 32, height: 32)
-                        .overlay(Text("JP").font(.caption2.weight(.bold)).foregroundColor(MeeshyColors.indigo400))
+                        .overlay(Text(verbatim: "JP").font(.caption2.weight(.bold)).foregroundColor(MeeshyColors.indigo400))
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Jean-Pierre")
+                        Text(verbatim: "Jean-Pierre")
                             .font(.caption2.weight(.medium)).foregroundColor(.secondary)
-                        Text("Hello! How are you doing today?")
+                        Text(verbatim: "Hello! How are you doing today?")
                             .font(.footnote)
                             .padding(10)
                             .background(RoundedRectangle(cornerRadius: 12).fill(Color(.systemGray5)))

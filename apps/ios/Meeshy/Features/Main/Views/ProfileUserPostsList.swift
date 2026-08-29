@@ -132,10 +132,10 @@ private struct ProfilePostsStatsBand: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: icon)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(MeeshyFont.relative(15, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo500)
                 Text(display)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(18, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .monospacedDigit()
                     .lineLimit(1)

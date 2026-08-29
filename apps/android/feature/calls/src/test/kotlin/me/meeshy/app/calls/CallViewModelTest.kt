@@ -1080,7 +1080,7 @@ class CallViewModelTest {
     @Test
     fun `a healthy sample lights the indicator once connected`() = runTest {
         val vm = vm().connect()
-        emitQuality(rttMs = 150.0) // > excellentRTT(100), <= fair(200) → GOOD
+        emitQuality(rttMs = 150.0) // > excellentRTT(100), <= videoFairRTT(300) → GOOD
 
         assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.GOOD)
     }
@@ -1102,7 +1102,7 @@ class CallViewModelTest {
         vm.onSignal(CallEvent.ConnectionStalled)
         assertThat(vm.state.value.status).isEqualTo(CallStatus.RECONNECTING)
 
-        emitQuality(rttMs = 350.0) // > videoPoorRTT(300) → POOR tier → indicator POOR
+        emitQuality(rttMs = 600.0) // > videoPoorRTT(500) → POOR tier → indicator POOR
         assertThat(vm.state.value.connectionQuality).isEqualTo(ConnectionQuality.POOR)
     }
 

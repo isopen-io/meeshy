@@ -1477,12 +1477,12 @@ describe('POST /posts/:id/repost — createPostRepostNotification rejects (line 
 // ─── Branch coverage: null-coalescing and ternary false branches ─────────────
 
 describe('POST /posts/:id/like — invalid emoji triggers fallback (lines 40-41)', () => {
-  it('returns 200 using default heart emoji when LikeSchema fails max(10)', async () => {
-    // An emoji longer than 10 chars fails z.string().max(10) → parsed.success = false → emoji = '❤️'
+  it('returns 200 using default heart emoji when LikeSchema length bound fails', async () => {
+    // An emoji longer than EMOJI_MAX_LENGTH fails z.string().max() → parsed.success = false → emoji = '❤️'
     const app = await buildApp();
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/like`,
-      payload: { emoji: 'x'.repeat(11) },
+      payload: { emoji: 'x'.repeat(40) },
     });
     expect(res.statusCode).toBe(200);
     await app.close();
