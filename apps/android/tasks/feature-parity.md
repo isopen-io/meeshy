@@ -4229,7 +4229,14 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       already-shipped `rememberThumbHashPainter` (the exact idiom the feed's `AsyncImage` uses). +13 tests,
       mutation-RED-proven (reversing the cascade reddens exactly the priority test). Pending: write-path
       **generation** (encode a ThumbHash from the composed slide bitmap into `effects.thumbHash` at publish) —
-      needs `Bitmap`→RGBA, so it is a separate follow-up using the already-ported `ThumbHash.encode`.
+      needs `Bitmap`→RGBA. Its JVM-testable half now shipped (slice `thumbhash-source-plan`, 2026-08-29):
+      `ThumbHash.sourcePlan(width, height) → ThumbHashSourcePlan(width, height, downscaled)` in `:core:model`
+      computes the legal `encode` input dimensions — caps the long edge at 100px, derives the short edge by
+      aspect ratio (round-half-up), clamps each side to ≥1 so an extreme banner ratio never rounds to a 0-side
+      encode input, and passes an already-in-budget source through verbatim (`downscaled=false`, no upscale).
+      +15 tests, mutation-RED-proven (dropping the ≥1 clamp reddens the extreme-ratio tests; `<` vs `<=`
+      on the budget boundary reddens the pass-through test). Remaining glue: the app-side `Bitmap` scale to
+      the plan + RGBA read-back + `ThumbHash.encode` at publish (device-bound).
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
 - [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback

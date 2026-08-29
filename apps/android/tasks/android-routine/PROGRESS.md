@@ -2,6 +2,55 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **the pure ThumbHash source-downscale planner landed — the JVM-testable half of the story
+> thumbHash write-path the prior run named as next** (slice `thumbhash-source-plan`, feature-parity
+> "thumbHash blur-placeholder per slide" `[~]` line, and the media `[~]` line at §P). `ThumbHash.encode`
+> was ported over a month ago but its contract rejects any side outside `1..100`; nothing computed the
+> downscale a real source raster needs before it, so the write-path had no legal way to feed it. iOS keeps
+> the same shape — `StorySlideRenderer` renders the composite to a low-res ~100px UIImage BEFORE
+> `toThumbHash()` (audit part-22 §StorySlideRenderer). The planning arithmetic (target dims) is pure and
+> device-free; only the `Bitmap` scale + RGBA read-back are device-bound. So the planner is pure
+> `:core:model`, not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4316/#4315/#4307/#4300/#4291/#4267
+> (all jcnm: web/shared/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision,
+> nothing of mine to merge. Prior slice (`call-stats-reduce`) is on `main` (#4314). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count`
+> = 0/0). Diff verified `apps/android` only (1 main file + 1 new test file).
+>
+> **The change — one pure function, one data class.** `:core:model` `ThumbHashSourcePlan(width, height,
+> downscaled)` + `ThumbHash.sourcePlan(width, height)`: rejects a non-positive side (`require ≥1`, matching
+> `encode`); returns an already-in-budget source verbatim (`downscaled=false`, never upscales) so the caller
+> skips the resize; else scales the long edge exactly to 100, derives the short edge by aspect ratio
+> (round-half-up, reusing the object's own `roundHalfUp`), and clamps each side to `max(1, …)` so an extreme
+> banner ratio whose short edge would round to 0 still yields a legal encode input. Every returned side is
+> provably in `1..100` (short ≤ long, scale ≤ 1 ⇒ short·scale < 100). Blast radius: a new SSOT sibling of
+> `encode`, zero existing call sites touched.
+>
+> **Tests: +15, RED-proven.** `ThumbHashSourcePlanTest`: pass-through (50×80 unchanged; 100×100 boundary;
+> 1×1), downscale (200×200→100×100; 1080×1920→56×100 portrait; 1920×1080→100×56 landscape; 101×50→100×50
+> one-px-over), extreme ratios (1000×3→100×1 and 3×1000→1×100, the clamp), the `1..100` invariant across 11
+> sources, long/short-edge ordering preserved, and two illegal-source rejections (0-width, negative-height).
+> **RED**: drop the `max(1,…)` clamp → exactly the two extreme-ratio tests + the invariant test fail, no
+> collateral; change the budget guard `<=`→`<` → exactly the boundary pass-through test fails.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`
+> (AGP does not auto-map a bare `android-37`; CI's `setup-android` handles the same quirk).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 7m 11s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 1 main + 1 test, no `local.properties`; SDK purity — pure `:core:model` value type +
+> stateless planner, no `android.*`, no orchestration; SSOT — the planner is the single home for the
+> pre-`encode` downscale, no re-implementation; no tautological tests; no coverage floor lowered — new pure
+> logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the story thumbHash write-path's only remaining piece is the app-side `Bitmap`→plan-scale→RGBA
+> read-back → `ThumbHash.encode` at publish, which needs a real `Bitmap` and is not JVM-testable — it waits
+> for a device-capable run alongside the other device-bound Calls seams (WebRTC stats adapter, video-filter
+> actuators). Consider another pure-core Feed/Stories slice next, or a pure reducer in an earlier build-order
+> area. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **the pure WebRTC stats reducer + interval loss-ratio landed — the JVM-testable half of the
 > "live WebRTC stats source" the prior run named as next** (slice `call-stats-reduce`, feature-parity
 > "Connection-quality indicator" `[~]` line). Until now Android had `CallQualitySample(rttMs, packetLoss)` and
