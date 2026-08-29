@@ -24,6 +24,7 @@
  * @jest-environment node
  */
 
+import { apiBasePath } from '@meeshy/shared/api/prefix';
 import { describe, it, expect, beforeAll } from '@jest/globals';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -34,7 +35,10 @@ import Fastify from 'fastify';
 // circuiterait le chemin que la production emprunte réellement.
 import { attachmentRoutes } from '../../../routes/attachments';
 
-const API_PREFIX = '/api/v1';
+// #4324 — le test ne porte plus son propre littéral : il lit la MÊME source que
+// le serveur. Comparer deux littéraux ne prouvait leur accord que tant que
+// personne n'en changeait un ; partager la source rend l'accord structurel.
+const API_PREFIX = apiBasePath();
 const LEGACY_PREFIX = '/api';
 
 /** Les dix couples que `attachmentRoutes` déclare, sans préfixe. */
@@ -191,7 +195,12 @@ describe('montage non versionné des pièces jointes (#4187)', () => {
     expect(source).toContain(
       'await server.register(attachmentRoutes, { prefix: API_PREFIX });'
     );
-    expect(source).toContain('const API_PREFIX = `/api/${API_VERSION}`;');
+    // Le serveur DÉRIVE son préfixe du site unique (#4324), il ne l'écrit pas.
+    // C'est cette dérivation que le témoin atteste : elle est ce qui garantit
+    // que le montage reproduit ci-dessus est celui que la production sert,
+    // quelle que soit la version configurée.
+    expect(source).toContain('const API_PREFIX = apiBasePath();');
+    expect(source).toContain("from '@meeshy/shared/api/prefix'");
 
     const legacyMounts = [
       ...source.matchAll(

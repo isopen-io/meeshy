@@ -21,6 +21,7 @@
  * automatiquement couverte par le test de garde.
  */
 
+import { apiBasePath, apiVersion } from '@meeshy/shared/api/prefix';
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from './services/message-translation/MessageTranslationService';
@@ -99,8 +100,11 @@ import { appRoutes } from './routes/app';
 import { healthProbeRoutes } from './routes/health';
 
 // API versioning
-const API_VERSION = 'v1';
-const API_PREFIX = `/api/${API_VERSION}`;
+// #4324 — la version d'API vient de la CONFIGURATION, jamais d'une constante :
+// le déploiement peut la changer, ou porter le préfixe autrement
+// (`api.domain.tld/v2/`). Site unique : `@meeshy/shared/api/prefix`.
+const API_VERSION = apiVersion();
+const API_PREFIX = apiBasePath();
 
 /**
  * Dépendances nécessaires à `registerAllRoutes`. Sous-ensemble des champs

@@ -1,3 +1,4 @@
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { Server } from '@tus/server';
 import { FileStore } from '@tus/file-store';
 import type { FastifyInstance } from 'fastify';
@@ -319,7 +320,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
       const fileSize = upload.size || 0;
       const relPath = path.join(year, month, userId, storedName);
-      const fileUrl = `${publicUrl}/api/v1/attachments/file/${relPath}`;
+      const fileUrl = `${publicUrl}${apiPath(`/attachments/file/${relPath}`)}`;
 
       const attachmentType = getAttachmentType(mimeType, filename);
       let metadata: Record<string, any> = {};
@@ -344,7 +345,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           thumbnailRelPath = await metadataManager.generateVideoThumbnail(relPath) ?? undefined;
         }
         if (thumbnailRelPath) {
-          thumbnailUrl = `${publicUrl}/api/v1/attachments/file/${thumbnailRelPath}`;
+          thumbnailUrl = `${publicUrl}${apiPath(`/attachments/file/${thumbnailRelPath}`)}`;
         }
       } catch (err) {
         logger.warn('[TUS] Thumbnail generation failed:', err);

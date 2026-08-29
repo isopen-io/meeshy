@@ -7,6 +7,7 @@
  * - API abuse (max 300 requests/minute)
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
 import { UnifiedAuthRequest } from './auth';
@@ -107,7 +108,7 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
       // `routes/health/index.ts`, donc une cadence infinie coûte un ping toutes
       // les 2 s, quoi qu'il arrive.
       return path === '/health' || path === '/healthz' || path === '/ready'
-        || path === '/api/v1/health/ready';
+        || path === apiPath('/health/ready');
     },
     errorResponseBuilder: (request, context) => {
       return {
