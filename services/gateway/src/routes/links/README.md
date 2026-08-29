@@ -12,8 +12,8 @@ src/routes/links/
 ├── creation.ts                     # Création de liens (349 lignes)
 ├── retrieval.ts                    # GET /links/:identifier (291 lignes)
 ├── messages-retrieval.ts           # GET /links/:identifier/messages (167 lignes)
-├── messages.ts                     # POST messages via liens (547 lignes)
-├── management.ts                   # PUT/PATCH mise à jour (338 lignes)
+├── messages.ts                     # POST /links/:identifier/messages (466 lignes)
+├── management.ts                   # PATCH mise à jour (185 lignes)
 ├── admin.ts                        # Liste, toggle, extend, delete (601 lignes)
 └── utils/
     ├── link-helpers.ts             # Fonctions helper générales (164 lignes)
@@ -45,11 +45,24 @@ Point d'entrée qui enregistre toutes les routes dans l'ordre logique.
 
 ### `messages.ts`
 - `POST /links/:identifier/messages` - Envoyer message (anonyme)
-- `POST /links/:identifier/messages/auth` - Envoyer message (authentifié)
+
+> `POST /links/:identifier/messages/auth` a été RETIRÉE (#4188) : aucun des
+> quatre clients ne l'appelait, et pour le fil global `meeshy` elle fabriquait
+> un participant SYNTHÉTIQUE `{ id: userId }` — un `User.id` écrit dans une
+> colonne qui attend un `Participant.id`, la garde d'appartenance
+> court-circuitée. Un membre inscrit écrit par le transport nominal
+> (`POST /conversations/:id/messages`, socket `message:send`) : entrer par un
+> lien de partage ne lui donnait rien de plus.
 
 ### `management.ts`
-- `PUT /links/:conversationShareLinkId` - Mettre à jour par ID base de données
 - `PATCH /links/:linkId` - Mettre à jour par linkId public
+
+> `PUT /links/:conversationShareLinkId` a été RETIRÉE (#4188) : jumelle du
+> `PATCH` exigeant ADMIN là où celui-ci exige MODERATOR. Le seuil EFFECTIF
+> d'une règle étant celui de sa porte la plus permissive, cette ADMIN était
+> décorative. Aucun client n'émettait de `PUT` vers `/links` (web
+> `link-edit-modal.tsx` : `PATCH` ; iOS `ShareLinkService.toggleLink` :
+> `api.patch` ; Android `LinkApi.kt` : `@PATCH`).
 
 ### `admin.ts`
 - `GET /links/my-links` - Lister les liens de l'utilisateur
@@ -99,8 +112,6 @@ Toutes les routes sont préfixées par `/links`:
 | GET | `/:identifier` | Détails du lien | Optional |
 | GET | `/:identifier/messages` | Messages du lien | Optional |
 | POST | `/:identifier/messages` | Envoyer message (anonyme) | Session |
-| POST | `/:identifier/messages/auth` | Envoyer message (auth) | Required |
-| PUT | `/:conversationShareLinkId` | Mettre à jour (DB ID) | Required |
 | PATCH | `/:linkId` | Mettre à jour (linkId) | Required |
 | GET | `/my-links` | Lister mes liens | Required |
 | PATCH | `/:linkId/toggle` | Toggle actif/inactif | Required |

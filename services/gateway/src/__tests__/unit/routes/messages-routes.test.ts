@@ -1425,41 +1425,21 @@ describe('POST /conversations/:id/messages', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Group 5: POST /conversations/:id/read
+// Group 5: POST /conversations/:id/read — RETIRÉE (#4188)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-describe('POST /conversations/:id/read', () => {
-  const getHandler_ = () => fastify._routes['POST']['/conversations/:id/read'];
-
-  it('returns 403 when conversationId not found', async () => {
-    mockResolveConversationId.mockResolvedValue(null);
-    const reply = makeReply();
-    await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
-  });
-
-  it('returns 403 when no membership', async () => {
-    prisma.participant.findFirst.mockResolvedValue(null);
-    const reply = makeReply();
-    await getHandler_()(makeRequest(), reply);
-    expect(mockSendForbidden).toHaveBeenCalled();
-  });
-
-  it('marks read and returns markedCount', async () => {
-    mockGetUnreadCount.mockResolvedValue(7);
-    const reply = makeReply();
-    await getHandler_()(makeRequest(), reply);
-    expect(mockMarkMessagesAsRead).toHaveBeenCalled();
-    expect(mockSendSuccess).toHaveBeenCalledWith(reply, { markedCount: 7 });
-  });
-
-  it('error path → 500', async () => {
-    prisma.participant.findFirst.mockRejectedValue(new Error('DB'));
-    const reply = makeReply();
-    await getHandler_()(makeRequest(), reply);
-    expect(mockSendInternalError).toHaveBeenCalled();
-  });
-});
+// Les quatre témoins de ce groupe — 403 sans conversation, 403 sans
+// appartenance, `markedCount`, 500 — étaient les MIROIRS d'une porte qui
+// n'existe plus. `/read` était la TROISIÈME entrée du même geste
+// d'acquittement, sans appelant sur les trois clients ; les quatre mêmes
+// comportements sont témoignés au groupe 3 sur `POST /conversations/:id/mark-read`,
+// qui reste la porte nominale. Ce qui part est une ENTRÉE, jamais une capacité.
+//
+// L'ABSENCE de la route est gardée là où la table de routes se lit vraiment, et
+// non par le silence de ce fichier : `unit/routes/dead-doors-are-not-mounted.test.ts`
+// exige DANS LE MÊME BLOC que `POST /conversations/:id/read` ne soit plus
+// déclarée ET que `POST /conversations/:id/mark-read` le soit toujours — c'est
+// cette seconde moitié qui empêche la garde négative de passer au vert le jour
+// où plus rien ne serait énuméré.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Group 6: POST /conversations/:id/mark-unread
@@ -3867,7 +3847,7 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
 // Le suivi de lecture d'un participant SANS COMPTE
 // ═══════════════════════════════════════════════════════════════════════════════
 
-describe('mark-read / read / mark-unread — un invité de lien partagé', () => {
+describe('mark-read / mark-unread — un invité de lien partagé', () => {
   // Un double qui ÉVALUE le `where` : une garde revenue à `userId` seul ne
   // trouve plus cette ligne, et le test rougit. `userId: null` est la ligne
   // réelle d'un participant sans compte.
@@ -3926,15 +3906,13 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     });
   });
 
-  it('/read acquitte la conversation de l\'invité', async () => {
-    mockGetUnreadCount.mockResolvedValue(1);
-    const reply = makeReply();
-
-    await fastify._routes['POST']['/conversations/:id/read'](anonymousRequest(), reply);
-
-    expect(mockSendForbidden).not.toHaveBeenCalled();
-    expect(mockMarkMessagesAsRead).toHaveBeenCalledWith(ANON_PART_ID, 'resolved-conv-id');
-  });
+  // `/read acquitte la conversation de l'invité` a été SUPPRIMÉ avec la route
+  // (#4188), et seulement parce qu'il a un ÉQUIVALENT STRICT deux témoins plus
+  // haut : `mark-read avance le curseur de l'invité au lieu de lui répondre 403`
+  // pose les deux mêmes assertions — aucun `sendForbidden`, et
+  // `markMessagesAsRead` appelé avec le `Participant.id` de l'invité. Le
+  // COMPORTEMENT gardé (un invité de lien acquitte sa conversation) survit donc
+  // intégralement ; seule la porte par laquelle ce témoin-là y entrait a disparu.
 
   it('mark-unread rembobine le curseur de l\'invité', async () => {
     prisma.message.findFirst
@@ -3989,19 +3967,13 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     expect(payload.participantId).toBe(ANON_PART_ID);
   });
 
-  it('/read nomme l\'invité de la même façon que mark-read', async () => {
-    mockShouldShowReadReceipts.mockResolvedValue(true);
-    prisma.participant.findMany.mockResolvedValue([{ id: ANON_PART_ID, userId: null }]);
-    mockGetUnreadCount.mockResolvedValue(1);
-
-    await fastify._routes['POST']['/conversations/:id/read'](anonymousRequest(), makeReply());
-
-    const payload = fastify._mockEmit.mock.calls
-      .find(([event]: any[]) => event === 'read-status:updated')?.[1] as any;
-    expect(payload).toBeDefined();
-    expect(payload.userId).toBeNull();
-    expect(payload.participantId).toBe(ANON_PART_ID);
-  });
+  // `/read nomme l'invité de la même façon que mark-read` a été SUPPRIMÉ avec la
+  // route (#4188). Son objet était la CONVERGENCE de deux portes sur une même
+  // règle de nommage ; il ne reste qu'une porte, donc plus rien à faire
+  // converger — et la règle elle-même (`userId: null`, `participantId` porteur
+  // de l'identité) est gardée mot pour mot par le témoin JUSTE AU-DESSUS, sur
+  // `mark-read`. Supprimer ici ne perd aucune assertion : le titre du témoin
+  // disait déjà que sa référence était l'autre.
 
   // ANTI-SUR-CORRECTION. Nuller le champ NE DOIT PAS nuller la clé de room :
   // c'est `ROOMS.user(Participant.id)` qu'`AuthHandler` fait rejoindre aux
@@ -4041,11 +4013,30 @@ describe('mark-read / read / mark-unread — un invité de lien partagé', () =>
     expect(payload.userId).toBe(USER_ID);
   });
 
-  it('les trois routes de lecture acceptent un authentifié SANS COMPTE, jamais un anonyme sans jeton', () => {
+  it('les deux routes de lecture acceptent un authentifié SANS COMPTE, jamais un anonyme sans jeton', () => {
     // La porte, pas la clé : `requiredAuth` (allowAnonymous: false) répondait 403
     // avant même de regarder la conversation. `requireAuth: true` reste — un
     // appelant sans jeton du tout n'entre pas.
-    const readRoutes = ['/conversations/:id/mark-read', '/conversations/:id/read', '/conversations/:id/mark-unread'];
+    //
+    // CE TÉMOIN COMPTAIT À TROIS jusqu'à #4188 : `POST /conversations/:id/read`
+    // portait la même préValidation `participantAuth(allowAnonymous: true)` et
+    // fermait l'énumération. Cette route a été RETIRÉE — c'était la troisième
+    // PORTE d'un même geste, pas une capacité de plus. La CAPACITÉ survit
+    // intacte : `mark-read` porte la même garde, donc l'invité d'un lien de
+    // partage garde son acquittement. Ce qui disparaît est une entrée, jamais le
+    // droit d'entrer.
+    //
+    // Le témoin est AJUSTÉ, jamais supprimé : c'est LUI qui garde la posture
+    // d'authentification des deux portes RESTANTES — un `allowAnonymous: false`
+    // réintroduit sur `mark-read` ou `mark-unread` renverrait 403 à tous les
+    // invités de lien, et c'est cette assertion qui rougirait. Le supprimer
+    // parce qu'il est rouge aurait payé le retrait d'une porte par la perte
+    // d'une protection qui ne parlait pas que d'elle.
+    //
+    // L'absence de la troisième porte n'est pas gardée ici — le silence ne garde
+    // rien — mais sur la table de routes RÉELLEMENT montée, par
+    // `unit/routes/dead-doors-are-not-mounted.test.ts`.
+    const readRoutes = ['/conversations/:id/mark-read', '/conversations/:id/mark-unread'];
     for (const route of readRoutes) {
       expect(fastify._routeOpts['POST'][route].preValidation).toEqual([mockParticipantAuthMiddleware]);
     }

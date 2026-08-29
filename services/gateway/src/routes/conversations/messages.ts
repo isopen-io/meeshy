@@ -1930,94 +1930,12 @@ export function registerMessagesRoutes(
   });
 
 
-  fastify.post<{ Params: ConversationParams }>('/conversations/:id/read', {
-    schema: {
-      description: 'Mark conversation as read (alias for mark-read endpoint)',
-      tags: ['conversations', 'messages'],
-      summary: 'Mark as read',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'Conversation ID or identifier' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            // `data` était ABSENT de ce schéma (#4192) : `fast-json-stringify`
-            // supprimait donc la charge ENTIÈRE, et le client qui marque une
-            // conversation comme lue recevait `{"success":true}` sans le
-            // moindre compte. Le handler envoyait pourtant `{ markedCount }`
-            // depuis toujours — c'est la forme `envelope`, la plus silencieuse
-            // des trois, parce qu'il ne manque pas une clé mais toutes.
-            data: {
-              type: 'object',
-              properties: {
-                markedCount: { type: 'number', description: 'Number of messages marked as read' }
-              }
-            }
-          }
-        },
-        401: errorResponseSchema,
-        403: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    },
-    preValidation: [participantAuth]
-  }, async (request, reply) => {
-    try {
-      const { id } = request.params;
-      const authRequest = request as UnifiedAuthRequest;
-      const userId = authRequest.authContext.userId;
-
-      // Résoudre l'ID de conversation réel
-      const conversationId = await resolveConversationId(prisma, id);
-      if (!conversationId) {
-        return sendForbidden(reply, 'Unauthorized access to this conversation');
-      }
-
-      // Résoudre l'appelant → participantId (curseur = participantId)
-      const membership = await resolveCallerParticipant(prisma, authRequest.authContext, conversationId);
-
-      if (!membership) {
-        return sendForbidden(reply, 'Not a participant in this conversation');
-      }
-
-      const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-      const readStatusService = new MessageReadStatusService(prisma);
-
-      const unreadCount = await readStatusService.getUnreadCount(membership.id, conversationId);
-      await readStatusService.markMessagesAsRead(membership.id, conversationId);
-      try {
-        await broadcastReadStatus(
-          {
-            io: socketIOHandler?.getManager?.()?.getIO(),
-            prisma,
-            readStatusService,
-            privacyPreferencesService,
-            bridgeService
-          },
-          {
-            conversationId,
-            participantId: membership.id,
-            userId,
-            isAnonymous: (request as UnifiedAuthRequest).authContext.type === 'anonymous',
-            type: 'read'
-          }
-        );
-      } catch (error) {
-        logger.error('Error broadcasting read status:', error);
-      }
-
-      return sendSuccess(reply, { markedCount: unreadCount });
-    } catch (error) {
-      logger.error('Error marking conversation as read', error);
-      return sendInternalError(reply, 'Erreur lors du marquage comme lu');
-    }
-  });
+  // #4188 — `POST /conversations/:id/read` a été RETIRÉE. Son propre schéma
+  // Fastify se déclarait « alias for mark-read endpoint » : son corps n'était
+  // jamais lu et son `{ markedCount }` était supprimé à la sérialisation par le
+  // schéma 200. La porte VIVANTE est `POST /conversations/:id/mark-read`
+  // (ci-dessus), qui fait le même geste en le disant. `POST
+  // /conversations/:id/mark-unread` ci-dessous n'est PAS concernée.
 
   /**
    * POST /conversations/:id/mark-unread

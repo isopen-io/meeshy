@@ -1,7 +1,16 @@
 /**
  * Unit tests for message routes (messages.ts)
- * Tests GET/PUT/DELETE /messages/:messageId, status, translations,
- * status-details, and attachment routes.
+ * Tests GET/PUT/DELETE /messages/:messageId, translations, status-details,
+ * and attachment routes.
+ *
+ * `POST /messages/:messageId/status` a été RETIRÉE (#4188) : aucun des quatre
+ * clients ne l'appelait, son schéma acceptait `status: 'delivered'` qu'aucune
+ * branche ne traitait — mesuré avant retrait : **200 au corps VIDE**, la porte
+ * acquittait un accusé de livraison qu'elle n'écrivait pas (l'issue annonçait
+ * un 500 ; le vrai comportement est pire, un 500 fait réessayer) —, et elle
+ * portait la quatrième copie du fan-out d'accusés sans plancher d'historique.
+ * La porte vivante est `POST /conversations/:conversationId/mark-as-read`.
+ * Son absence est verrouillée par `dead-doors-are-not-mounted.test.ts`.
  *
  * `GET /messages/:messageId/history` a été retirée : aucune donnée
  * d'historique n'existe en base, aucun des quatre clients ne l'appelait, et
@@ -81,7 +90,6 @@ jest.mock('../../../validation/messages-schemas', () => ({
   MessageParamsSchema: {},
   AttachmentParamsSchema: {},
   UpdateMessageBodySchema: {},
-  MessageStatusBodySchema: {},
   MessageStatusDetailsQuerySchema: {},
   AttachmentStatusBodySchema: {},
 }));
@@ -666,57 +674,6 @@ describe('DELETE /messages/:messageId', () => {
       where: { id: CONV_ID, lastMessageAt: mockMessage.conversation.lastMessageAt },
       data: { lastMessageAt: mockMessage.conversation.createdAt },
     });
-  });
-});
-
-// ─── POST /messages/:messageId/status ─────────────────────────────────────────
-
-describe('POST /messages/:messageId/status', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 404 when message or participant not found', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce(null);
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it('returns 400 when marking own message as read', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
-      ...mockMessage,
-      senderId: PART_ID,
-      conversation: {
-        ...mockMessage.conversation,
-        participants: [{ id: PART_ID, userId: USER_ID }],
-      },
-    });
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it('returns 200 on successful status update', async () => {
-    (app as any).prisma.message.findFirst.mockResolvedValueOnce({
-      ...mockMessage,
-      senderId: 'other-part-id',
-      conversation: {
-        id: CONV_ID,
-        createdAt: new Date(),
-        participants: [{ id: PART_ID, userId: USER_ID }],
-      },
-    });
-    const res = await app.inject({
-      method: 'POST', url: '/messages/' + MSG_ID + '/status',
-      payload: { status: 'read' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
   });
 });
 
