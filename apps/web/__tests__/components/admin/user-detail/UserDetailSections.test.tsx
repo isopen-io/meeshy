@@ -1068,39 +1068,40 @@ describe('UserSecuritySection', () => {
   it('handleUnlockAccount calls post and onUpdate', async () => {
     const future = new Date(Date.now() + 86400000).toISOString();
     const { onUpdate } = renderSecurity({ lockedUntil: future });
-    mockPost.mockResolvedValue({});
+    mockPatch.mockResolvedValue({});
     fireEvent.click(screen.getByText('usersDetail.unlockButton'));
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/admin/users/user-1/unlock'));
+    // Une adresse pour la SÉCURITÉ d'un compte, deux champs (#4154).
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/admin/users/user-1/security', { unlock: true }));
     expect(onUpdate).toHaveBeenCalled();
   });
 
   it('handleUnlockAccount shows error toast on failure', async () => {
     const future = new Date(Date.now() + 86400000).toISOString();
     renderSecurity({ lockedUntil: future });
-    mockPost.mockRejectedValue(new Error('Server error'));
+    mockPatch.mockRejectedValue(new Error('Server error'));
     fireEvent.click(screen.getByText('usersDetail.unlockButton'));
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
 
   it('handleToggle2FA calls disable endpoint when 2FA is enabled', async () => {
     const { onUpdate } = renderSecurity({ twoFactorEnabledAt: '2024-01-01T00:00:00Z' });
-    mockPost.mockResolvedValue({});
+    mockPatch.mockResolvedValue({});
     fireEvent.click(screen.getByText('security.disable2FA'));
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/admin/users/user-1/disable-2fa'));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/admin/users/user-1/security', { twoFactorEnabled: false }));
     expect(onUpdate).toHaveBeenCalled();
   });
 
   it('handleToggle2FA calls enable endpoint when 2FA is disabled', async () => {
     const { onUpdate } = renderSecurity({ twoFactorEnabledAt: null });
-    mockPost.mockResolvedValue({});
+    mockPatch.mockResolvedValue({});
     fireEvent.click(screen.getByText('security.enable2FA'));
-    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/admin/users/user-1/enable-2fa'));
+    await waitFor(() => expect(mockPatch).toHaveBeenCalledWith('/admin/users/user-1/security', { twoFactorEnabled: true }));
     expect(onUpdate).toHaveBeenCalled();
   });
 
   it('handleToggle2FA shows error toast on failure', async () => {
     renderSecurity({ twoFactorEnabledAt: null });
-    mockPost.mockRejectedValue(new Error('Network error'));
+    mockPatch.mockRejectedValue(new Error('Network error'));
     fireEvent.click(screen.getByText('security.enable2FA'));
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
@@ -1113,14 +1114,14 @@ describe('UserSecuritySection', () => {
   it('handleUnlockAccount falls back to translated error when error has no message', async () => {
     const future = new Date(Date.now() + 86400000).toISOString();
     renderSecurity({ lockedUntil: future });
-    mockPost.mockRejectedValue(new Error());
+    mockPatch.mockRejectedValue(new Error());
     fireEvent.click(screen.getByText('usersDetail.unlockButton'));
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
 
   it('handleToggle2FA falls back to translated error when error has no message', async () => {
     renderSecurity({ twoFactorEnabledAt: null });
-    mockPost.mockRejectedValue(new Error());
+    mockPatch.mockRejectedValue(new Error());
     fireEvent.click(screen.getByText('security.enable2FA'));
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });

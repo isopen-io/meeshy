@@ -88,10 +88,12 @@ describe('adminService', () => {
   });
 
   describe('updateUserRole', () => {
-    it('calls PATCH /admin/users/:id/role with the role', async () => {
+    it('écrit le rôle à l’adresse UNIQUE du compte, jamais sur une route dédiée', async () => {
+      // #4154 : le rôle n'a plus sa route, il a sa LOI. Une route par champ
+      // faisait hériter chaque nouveau champ de la garde de son adresse.
       mockPatch.mockResolvedValue({ success: true, data: mockUser });
       await adminService.updateUserRole('u1', 'ADMIN');
-      expect(mockPatch).toHaveBeenCalledWith('/admin/users/u1/role', { role: 'ADMIN' });
+      expect(mockPatch).toHaveBeenCalledWith('/admin/users/u1', { role: 'ADMIN' });
     });
 
     it('re-throws on error', async () => {
@@ -101,10 +103,10 @@ describe('adminService', () => {
   });
 
   describe('toggleUserStatus', () => {
-    it('calls PATCH /admin/users/:id/status with isActive', async () => {
+    it('écrit le statut à la même adresse — autre champ, autre loi', async () => {
       mockPatch.mockResolvedValue({ success: true, data: mockUser });
       await adminService.toggleUserStatus('u1', false);
-      expect(mockPatch).toHaveBeenCalledWith('/admin/users/u1/status', { isActive: false });
+      expect(mockPatch).toHaveBeenCalledWith('/admin/users/u1', { isActive: false });
     });
 
     it('re-throws on error', async () => {

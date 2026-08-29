@@ -160,6 +160,11 @@ function resetMocks() {
   mockAudit.logResetPassword.mockResolvedValue(undefined);
   mockAudit.logDeleteUser.mockResolvedValue(undefined);
 
+  // `requireHierarchy` (#4154) lit le RANG de la cible en base : sans ce
+  // défaut, le double rend `undefined`, la garde échoue FERMÉ et tous les
+  // témoins d'écriture liraient 403 pour une raison qui n'est pas la leur.
+  mockPrisma.user.findUnique.mockResolvedValue({ role: mockUser.role } as never);
+
   mockUMS.getUsers.mockResolvedValue({ users: [], total: 0 });
   mockUMS.getUserById.mockResolvedValue(mockUser);
   mockUMS.createUser.mockResolvedValue(mockUser);
@@ -447,17 +452,34 @@ describe('PATCH /admin/users/:userId', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  // La loi de ROUTE (`canModifyUser`) a cédé la place à DEUX questions posées
+  // séparément (#4154) : la permission du CHAMP, et le RANG de la cible.
+  // Un témoin qui n'exercerait que la première ne verrait pas l'escalade.
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123', payload: validBody });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.updateUser).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a field that carries no law', async () => {
+    // Fail-closed sur l'inconnu : un champ absent de `LOI_PAR_CHAMP` n'est pas
+    // écrit sous une loi par défaut, il est REFUSÉ. C'est cette branche-là qui
+    // ferme la classe, pas la correction des champs connus.
+    const res = await app.inject({
+      method: 'PATCH',
+      url: '/admin/users/user123',
+      payload: { password: 'contournement' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.updateUser).not.toHaveBeenCalled();
   });
 
   it('returns 400 when validation throws ZodError', async () => {
     (adminUserValidation.updateUserProfileValidationSchema.parse as jest.Mock).mockImplementationOnce(() => {
       throw new z.ZodError([{ code: 'custom', message: 'Invalid', path: ['displayName'] }]);
     });
-    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123', payload: {} });
+    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123', payload: validBody });
     expect(res.statusCode).toBe(400);
   });
 
@@ -546,17 +568,15 @@ describe('PATCH /admin/users/:userId/status', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123/status', payload: { isActive: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.updateStatus).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when validation throws ZodError', async () => {
-    (adminUserValidation.updateStatusValidationSchema.parse as jest.Mock).mockImplementationOnce(() => {
-      throw new z.ZodError([{ code: 'custom', message: 'Invalid', path: ['isActive'] }]);
-    });
-    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123/status', payload: {} });
+  it('returns 400 when isActive is not a boolean', async () => {
+    const res = await app.inject({ method: 'PATCH', url: '/admin/users/user123/status', payload: { isActive: 'peut-etre' } });
     expect(res.statusCode).toBe(400);
   });
 
@@ -786,10 +806,11 @@ describe('POST /admin/users/:userId/verify-email', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-email', payload: { verified: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.verifyEmail).not.toHaveBeenCalled();
   });
 
   it('returns 400 on invalid body (local Zod schema)', async () => {
@@ -838,10 +859,11 @@ describe('POST /admin/users/:userId/verify-phone', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-phone', payload: { verified: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.verifyPhone).not.toHaveBeenCalled();
   });
 
   it('returns 400 on invalid body (local Zod schema)', async () => {
@@ -861,32 +883,42 @@ describe('POST /admin/users/:userId/verify-phone', () => {
 });
 
 // ── POST /admin/users/:userId/voice-consent ──────────────────────────────────
+//
+// L'adresse historique du consentement PASSE désormais par la loi SOUVERAINE
+// (#4154) : poser au nom d'autrui la preuve qu'il a consenti à l'usage de sa
+// voix fabrique une pièce légale. Elle coûte le rang le plus haut ET un motif
+// écrit. C'est le seul alias dont le CONTRAT change — il existe pour ne pas
+// rendre 404, pas pour conserver une porte que l'issue ferme.
 describe('POST /admin/users/:userId/voice-consent', () => {
-  let app: FastifyInstance;
+  let appSouverain: FastifyInstance;
+  let appAdmin: FastifyInstance;
+  const MOTIF = 'demande RGPD ecrite du 2026-08-29';
 
   beforeAll(async () => {
     resetMocks();
-    app = buildApp();
-    await app.ready();
+    appSouverain = buildApp('BIGBOSS');
+    appAdmin = buildApp('ADMIN');
+    await appSouverain.ready();
+    await appAdmin.ready();
   });
-  afterAll(() => app.close());
+  afterAll(async () => { await appSouverain.close(); await appAdmin.close(); });
   beforeEach(resetMocks);
 
   it('returns 200 with enabled=true (enabled branch)', async () => {
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true }
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().message).toContain('enabled');
   });
 
   it('returns 200 with enabled=false (disabled branch)', async () => {
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceData', enabled: false }
+      payload: { consentType: 'voiceData', enabled: false, reason: MOTIF }
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().message).toContain('disabled');
@@ -894,39 +926,52 @@ describe('POST /admin/users/:userId/voice-consent', () => {
 
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true }
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({
+  it('refuse un ADMIN — le rang souverain ne se délègue pas par une permission', async () => {
+    // `hasPermission` rend `true` dans ce double : si la garde passait par la
+    // matrice, ce témoin ne tomberait pas. Elle interroge le RANG, que rien
+    // dans le double ne peut accorder.
+    const res = await appAdmin.inject({
+      method: 'POST',
+      url: '/admin/users/user123/voice-consent',
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
+    });
+    expect(res.statusCode).toBe(403);
+    expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
+  });
+
+  it('refuse un souverain SANS motif écrit — la trace est une condition, pas un ornement', async () => {
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
       payload: { consentType: 'voiceProfile', enabled: true }
     });
-    expect(res.statusCode).toBe(403);
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
   });
 
-  it('returns 400 on invalid consentType (local Zod enum)', async () => {
-    const res = await app.inject({
+  it('returns 400 on invalid consentType (aucune loi ne porte ce champ)', async () => {
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'invalid_type', enabled: true }
+      payload: { consentType: 'invalid_type', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(400);
   });
 
   it('returns 500 when toggleVoiceConsent throws', async () => {
     mockUMS.toggleVoiceConsent.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({
+    const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true }
+      payload: { consentType: 'voiceProfile', enabled: true, reason: MOTIF }
     });
     expect(res.statusCode).toBe(500);
   });
@@ -956,9 +1001,13 @@ describe('POST /admin/users/:userId/verify-age', () => {
     expect(res.json().message).toBe('Age unverified');
   });
 
-  it('returns 200 with no body (all fields optional)', async () => {
+  it('refuse un corps VIDE — un PATCH qui n’écrit rien n’est pas un succès', async () => {
+    // L'ancien schéma local déclarait tous ses champs optionnels : la route
+    // rendait donc 200 en n'écrivant RIEN, et le client ne pouvait pas
+    // distinguer « c'est fait » de « je n'ai rien compris à ta demande ».
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-age', payload: {} });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(mockUMS.verifyAge).not.toHaveBeenCalled();
   });
 
   it('returns 404 when user not found', async () => {
@@ -967,19 +1016,25 @@ describe('POST /admin/users/:userId/verify-age', () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it('returns 403 when canModifyUser is false', async () => {
-    (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
+  it('returns 403 when the caller does not outrank the target', async () => {
+    (permissionsService.canManageUser as jest.Mock).mockReturnValue(false);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/verify-age', payload: { verified: true } });
     expect(res.statusCode).toBe(403);
+    expect(mockUMS.verifyAge).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when isAdult is not a boolean (local Zod schema)', async () => {
+  it('returns 400 when the body names no verification at all', async () => {
+    // `isAdult` n'a JAMAIS été un champ de vérification : le schéma local
+    // l'acceptait, la route ne l'écrivait nulle part. Traduit vers la loi des
+    // champs, un tel corps ne présente aucun champ — et un PATCH qui n'écrit
+    // rien est une requête malformée, pas un succès silencieux.
     const res = await app.inject({
       method: 'POST',
       url: '/admin/users/user123/verify-age',
       payload: { isAdult: 'not-a-boolean' }
     });
     expect(res.statusCode).toBe(400);
+    expect(mockUMS.verifyAge).not.toHaveBeenCalled();
   });
 
   it('returns 500 when verifyAge throws', async () => {

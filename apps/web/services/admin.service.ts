@@ -195,11 +195,16 @@ export const adminService = {
   },
 
   /**
-   * Met à jour le rôle d'un utilisateur
+   * Met à jour le rôle d'un utilisateur.
+   *
+   * Adresse UNIQUE des écritures d'un compte depuis #4154 : le rôle n'a plus
+   * sa route, il a sa LOI (`canUpdateUserRoles` + hiérarchie + rang visé). Les
+   * anciennes adresses `/role` et `/status` restent servies comme alias, mais
+   * un client neuf n'a aucune raison de les appeler.
    */
   async updateUserRole(userId: string, role: string): Promise<ApiResponse<User>> {
     try {
-      const response = await apiService.patch<User>(`/admin/users/${userId}/role`, { role });
+      const response = await apiService.patch<User>(`/admin/users/${userId}`, { role });
       return response;
     } catch (error) {
       logger.error('[Admin]', 'Erreur lors de la mise à jour du rôle', { error });
@@ -208,11 +213,11 @@ export const adminService = {
   },
 
   /**
-   * Active/désactive un utilisateur
+   * Active/désactive un utilisateur — même adresse, autre champ, autre loi.
    */
   async toggleUserStatus(userId: string, isActive: boolean): Promise<ApiResponse<User>> {
     try {
-      const response = await apiService.patch<User>(`/admin/users/${userId}/status`, { isActive });
+      const response = await apiService.patch<User>(`/admin/users/${userId}`, { isActive });
       return response;
     } catch (error) {
       logger.error('[Admin]', 'Erreur lors de la mise à jour du statut', { error });

@@ -74,7 +74,15 @@ async function buildApp(): Promise<FastifyInstance> {
       registeredUser: { id: ADMIN_ID, role: 'ADMIN' },
     };
   });
-  app.decorate('prisma', {} as any);
+  // `requireHierarchy` (#4154) lit le RANG de la cible en base — c'est là, et
+  // nulle part ailleurs, qu'il est déclaré. Un double `prisma` vide serait plus
+  // pauvre que la production : la garde y lèverait au lieu de refuser, et le
+  // témoin lirait 500 là où il croit lire 403.
+  app.decorate('prisma', {
+    user: {
+      findUnique: async () => ({ role: (await getUserById()).role }),
+    },
+  } as any);
   await app.register(userAdminRoutes);
   await app.ready();
   return app;
