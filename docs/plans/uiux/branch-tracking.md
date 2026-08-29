@@ -50,6 +50,36 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
 > résume.
 >
+> ### 255i — sondage « cohérence visuelle » : la dimension est SAINE (une seule prise, #4270)
+>
+> - Base `0f05267c`, après le merge de #4269.
+> - **Mesures, à ne pas refaire :**
+>
+>   | classe sondée | résultat |
+>   |---|---|
+>   | alias de couleur DÉPRÉCIÉS (`pink`, `coral`, `cyan`, `purple`, `teal`, `green`, `orange`, `infoBlue`, `primaryGradient`) | **0** — la migration vers l'échelle Indigo est COMPLÈTE |
+>   | `Color.red` brut | **0** |
+>   | dégradés de fond écrits à la main | **5 sites, 0 défaut** (voir ci-dessous) |
+>   | `Color.purple` brut | **3 sites, 1 concept** → seule prise, issue **#4270** |
+>
+> - **Les cinq dégradés sont tous LÉGITIMES**, et c'est le point instructif —
+>   le compte brut (« 5 sites recopient `backgroundGradient` ») était faux :
+>
+>   | site | verdict |
+>   |---|---|
+>   | `CallView:395` | **délibéré et commenté** : `theme.backgroundGradient` vire au quasi-blanc en clair, ce qui rendrait les libellés blancs invisibles |
+>   | `AudioPostComposerView:46` | délibéré et commenté — mais sa justification (« pas de token équivalent ») est **FACTUELLEMENT FAUSSE** : ces deux valeurs SONT celles de `backgroundGradient`. ⚠️ commentaire à corriger, à grouper avec le prochain lot qui touche du code d'app |
+>   | `MeeshyApp:1178` (splash) | **variante** : troisième couleur = `indigo950`, pas `0F0D19` |
+>   | `CallView:1917` | couleur de BORDURE, pas un dégradé |
+>   | `ConversationListHelpers:384` | byte-identique… mais dans une **leaf view** qui reçoit `isDark` en paramètre. La router vers `theme.backgroundGradient` ferait lire le singleton `ThemeManager` **dans une vue feuille** — soit violer la règle même que 254i vient de vérifier. **La duplication y est le COÛT de cette règle, pas un défaut.** |
+>
+>   > **Deux règles justes peuvent se contredire sur un site, et c'est la
+>   > seconde qui explique la « duplication » de la première.** Avant de router
+>   > un site vers une source unique, demander ce qui l'en empêchait.
+>
+> - **Le token qui manque vit dans le SDK** (`MeeshyColors`), hors du périmètre
+>   iOS-only de la piste → #4270, comme les cinq replis de drapeau du #4260.
+>
 > ### 254i — résultat NÉGATIF mesuré : la règle « Zero Unnecessary Re-render » est TENUE
 >
 > - **253i est MERGÉE** — PR #4268, squash `e087f501`, issue #4266 fermée, gate
