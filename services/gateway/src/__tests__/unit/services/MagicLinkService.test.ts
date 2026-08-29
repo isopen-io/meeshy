@@ -592,14 +592,37 @@ describe('MagicLinkService', () => {
         });
       });
 
-      it('should generate JWT token', async () => {
+      it('signe un JWT de la MÊME forme que les quatre autres sites — avec `role` et `sid` (#4264)', async () => {
+        // Ce site signait sa propre charge à DEUX champs, depuis son propre
+        // `require('jsonwebtoken')` : pas de `role`, là où connexion, 2FA,
+        // inscription et renouvellement en posent un. Une divergence de forme
+        // entre deux jetons du même service, invisible tant qu'aucun appelant
+        // ne lisait `role` — et impossible à rattraper sans un site unique.
         await service.validateMagicLink(validValidation);
 
         expect(mockJwtSign).toHaveBeenCalledWith(
-          { userId: mockUser.id, username: mockUser.username },
+          {
+            userId: mockUser.id,
+            username: mockUser.username,
+            role: mockUser.role,
+            sid: mockSession.id
+          },
           expect.any(String),
           { expiresIn: '24h' }
         );
+      });
+
+      it('crée la session AVANT de signer — sinon il n\'y a aucune session à nommer', async () => {
+        // L'ORDRE est le correctif. Signer d'abord rendait le `sid`
+        // structurellement impossible : la ligne `UserSession` n'existait pas
+        // encore au moment de la signature. Le mode de panne change et c'est
+        // voulu — `createSession` en échec ne fabrique plus de JWT du tout.
+        mockCreateSession.mockRejectedValueOnce(new Error('session en panne'));
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.success).toBe(false);
+        expect(mockJwtSign).not.toHaveBeenCalled();
       });
 
       it('should create session with request context', async () => {
