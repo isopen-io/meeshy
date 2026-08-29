@@ -204,7 +204,10 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'conversations/core.ts': 8,
   'conversations/leave.ts': 1,
   'conversations/messages.ts': 5,
-  'conversations/participants.ts': 7,
+  // Cinq, et non sept : deux sites ont suivi le geste de retrait d'un
+  // participant dans son propre fichier (#4176). Le compte total est inchangé.
+  'conversations/participants.ts': 5,
+  'conversations/participant-removal.ts': 2,
   'conversations/search.ts': 1,
   'conversations/sharing.ts': 2,
   'conversations/stats.ts': 1,
@@ -215,7 +218,15 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'links/creation.ts': 2,
   'me/export.ts': 2,
   'posts/hashtag.ts': 1,
-  'posts/interactions.ts': 1,
+  // `posts/interactions.ts` a perdu le sien en meme temps que ses routes : il
+  // vit desormais dans `posts/impressions.ts`, inchange. `postConsumptionGate`
+  // en ajoute UN, et c'est un ajout assume : il remplace N `findFirst`
+  // sequentiels par UNE passe. Il n'a ni take ni skip parce que sa borne est
+  // AILLEURS — la clause `id: { in: distinctIds }` sur un lot que le schema de
+  // `/posts/impressions/batch` plafonne a 100. Une borne transitive reste une
+  // borne ; ce cliquet compte les take/skip, il ne sait pas les lire.
+  'posts/impressions.ts': 1,
+  'posts/postConsumptionGate.ts': 1,
   'posts/nearby.ts': 1,
   'push-tokens.ts': 1,
   'signal-protocol.ts': 1,

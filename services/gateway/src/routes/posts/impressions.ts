@@ -130,7 +130,19 @@ export function registerImpressionRoutes(
         type: 'object',
         required: ['postIds'],
         properties: {
-          postIds: { type: 'array', items: { type: 'string' } },
+          // Le lot est PLAFONNÉ, et pas seulement par prudence : chaque id
+          // coûte une ligne au `findMany` d'accès (`postsLisiblesPar`) puis une
+          // vérification d'ACL. Sans plafond, un appelant authentifié choisit
+          // seul le travail que la passerelle exécute — un lot de cent mille
+          // ids devient une lecture de cent mille lignes et autant de verdicts.
+          // 100 suit le précédent de `user-deletions.ts` ; un écran de fil
+          // n'observe jamais plus de quelques dizaines de posts par salve.
+          //
+          // PAS de `minItems` : un lot VIDE est un succès à zéro enregistrement,
+          // et deux témoins l'exigent. Un client qui n'a rien observé ne doit
+          // pas avoir à le vérifier avant d'appeler — c'est le serveur qui sait
+          // répondre « rien à faire », pas l'appelant qui doit le deviner.
+          postIds: { type: 'array', items: { type: 'string' }, maxItems: 100 },
           source: { type: 'string', enum: [...IMPRESSION_SOURCES] }
         }
       }

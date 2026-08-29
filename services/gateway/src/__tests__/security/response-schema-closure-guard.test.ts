@@ -348,7 +348,6 @@ const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
   'conversations/messages.ts|200': 2,
   'conversations/threads.ts|200': 1,
   'me/export.ts|200': 3,
-  'me/preferences/index.ts|200': 7,
   'me/preferences/preference-router-factory.ts|200': 3,
   'user-stats.ts|200': 1,
   'users/preferences.ts|200': 1,
@@ -362,15 +361,13 @@ const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
  */
 const FROZEN_MISSING_SUCCESS_SCHEMAS: readonly string[] = [
   'auth/revoke-all-sessions.ts|get|/revoke-all-sessions|no-response-key',
-  'conversations/ban.ts|patch|/conversations/:id/participants/:userId/ban|no-response-key',
-  'conversations/ban.ts|patch|/conversations/:id/participants/:userId/unban|no-response-key',
   'conversations/core.ts|get|/conversations/:id/analysis|response-no-success-code',
-  'conversations/delete-for-me.ts|delete|/conversations/:id/delete-for-me|no-response-key',
-  'conversations/leave.ts|post|/conversations/:id/leave|no-response-key',
   'invitations.ts|post|/invitations/email|no-response-key',
   'me/delete-account.ts|get|/account/deletion|no-response-key',
-  'posts/interactions.ts|post|/posts/:postId/impression|no-response-key',
-  'posts/interactions.ts|post|/posts/impressions/batch|no-response-key',
+  // Les deux memes routes, dans leur fichier propre (#4146). Leur schema de
+  // reponse reste a declarer : le deplacement ne repare rien, et le gel le dit.
+  'posts/impressions.ts|post|/posts/:postId/impression|no-response-key',
+  'posts/impressions.ts|post|/posts/impressions/batch|no-response-key',
 ];
 
 /** Compte les sites ouverts par (fichier, code de statut) — la clé stable. */

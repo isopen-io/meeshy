@@ -53,7 +53,10 @@ jest.mock('../../../routes/reports', () => ({
 import { reportRoutes } from '../../../routes/admin/reports';
 import { registerUserWriteRoutes } from '../../../routes/admin/users-write';
 
-const SUCCESSEUR_ADMIN_USERS = '/api/v1/admin/users/:userId';
+// L'id est RÉSOLU, jamais le gabarit : un `Link` que le client ne peut pas
+// suivre tel quel n'indique aucune migration. Les URL injectées ci-dessous
+// portent toutes `u1`, donc c'est `u1` qui doit ressortir dans l'en-tête.
+const SUCCESSEUR_ADMIN_USERS = '/api/v1/admin/users/u1';
 
 /**
  * `authenticate` REFUSE. C'est le seul état à simuler : l'annonce court avant
@@ -119,14 +122,30 @@ describe("Les dix adresses en sursis l'annoncent, MÊME refusées", () => {
   });
 });
 
-describe("Sunset n'est jamais inventé", () => {
-  it('aucune des dix ne porte de date de retrait — le compteur (#4275) ne l’a pas encore fixée', async () => {
+describe("Sunset se dérive d'une règle écrite, et ne recule jamais", () => {
+  it('les dix portent la MÊME échéance, dérivée de leur jour de dépréciation', async () => {
     const app = await monter();
+
+    // `identity.md` § 5 — 180 jours après le montage double. Ancrée sur le jour
+    // de dépréciation (2026-08-29), donc IDENTIQUE d'un appel à l'autre : une
+    // échéance ancrée sur « maintenant » reculerait d'un jour chaque jour et
+    // n'arriverait jamais.
+    const ATTENDU = new Date(Date.parse('2026-08-29') + 180 * 24 * 60 * 60 * 1000).toUTCString();
 
     for (const { methode, url } of EN_SURSIS) {
       const res = await app.inject({ method: methode, url, payload: {} });
-      expect(Object.keys(res.headers)).not.toContain('sunset');
+      expect(res.headers.sunset).toBe(ATTENDU);
     }
+
+    await app.close();
+  });
+
+  it("ne bouge pas entre deux appels de la MÊME adresse", async () => {
+    const app = await monter();
+    const premier = await app.inject({ method: 'POST', url: '/api/v1/admin/reports/', payload: {} });
+    const second = await app.inject({ method: 'POST', url: '/api/v1/admin/reports/', payload: {} });
+
+    expect(second.headers.sunset).toBe(premier.headers.sunset);
 
     await app.close();
   });
