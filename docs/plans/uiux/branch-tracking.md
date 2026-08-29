@@ -37,8 +37,38 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 262i | [#4306](https://github.com/isopen-io/meeshy/pull/4306) | `22e6831f` | — |
 > | 263i | [#4310](https://github.com/isopen-io/meeshy/pull/4310) | `a2ce8815` | #4309 |
 > | 264i | [#4312](https://github.com/isopen-io/meeshy/pull/4312) | `66f6dfc3` | #4311 |
+> | 265i | [#4315](https://github.com/isopen-io/meeshy/pull/4315) | `24c556b8` | #4313 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `66f6dfc3` — base de 265i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `24c556b8` — base de 266i.
+>
+> ### 266i — cinq sondes négatives, et le squelette que rien ne gardait (#4319)
+>
+> | doctrine sondée | mesure | verdict |
+> |---|---|---|
+> | `@ObservedObject` initialisé en ligne | **0** sur 145 | sain |
+> | `.id(UUID())` | **0** | sain |
+> | `@State` miroir d'un singleton | 12 miroirs, **12 `.onReceive` appariés** | sain |
+> | matrice squelettes Pattern I4 | **5/5**, + 6 hors bible | sain |
+> | `loadState` sur tout VM qui charge | 19/30 absents | contrat non tenu, **comportement correct** |
+>
+> - **Un motif qui RESSEMBLE à un défaut connu peut être la forme correcte d'une
+>   autre règle** : `@State` semée depuis un singleton est le bug SwiftUI
+>   classique — sauf que les douze sites portent leur `.onReceive` apparié et le
+>   disent sur place. C'est « Zero Unnecessary Re-render » bien appliqué.
+> - **Un pourcentage de non-conformité n'est pas un défaut tant qu'on n'a pas lu
+>   ce que le code FAIT** : 63 % des VM sans `loadState`, mais
+>   `BookmarksViewModel` lit le cache AVANT `isLoading` et ne met aucun spinner
+>   sur un cache chaud. Le comportement protégé est là, sous un autre nom.
+> - Ce que les sondes laissent : le Pattern I4 **nomme cinq écrans** et rien ne
+>   vérifiait qu'ils gardent leur squelette. Un refactor de `ConversationListView`
+>   rendrait l'écran principal **blanc au démarrage à froid**, tout restant vert.
+>   → `SkeletonColdStartGuardTests` (montage + définition), et
+>   `apps/ios/CLAUDE.md` nomme enfin les composants qui EXISTENT
+>   (`SkeletonPlaceholder` n'apparaît dans aucun `.swift` : nom générique de la
+>   bible, réalisé sous quinze noms de domaine).
+> - Bornes décisives : les trois témoins **négatifs** du détecteur de montage —
+>   une mention en commentaire, une mention en chaîne et un nom PRÉFIXÉ
+>   (`SkeletonFeedListPreview()`) ne sont pas des montages.
 >
 > ### 265i — l'onboarding démontrait le Prisme en traduisant l'allemand vers l'allemand (#4313)
 >
