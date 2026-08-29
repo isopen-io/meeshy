@@ -40,7 +40,7 @@
  * viendrait jamais.
  */
 
-import { exigerNodeRecent } from '../../../scripts/require-node-runtime';
+import { exigerNodeRecent } from '../../../scripts/require-node-runtime.js';
 
 // AVANT tout autre import : ce qui suit charge undici par transitivite,
 // et un Node trop ancien y echoue sur une pile qui ne nomme pas la cause.
