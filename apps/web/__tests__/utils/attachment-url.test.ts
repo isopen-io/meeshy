@@ -71,22 +71,22 @@ describe('attachment-url', () => {
     });
 
     describe('relative paths with date pattern', () => {
-      it('should add /api/attachments/file prefix to date path starting with /', () => {
+      it('should add the VERSIONED /api/v1/attachments/file prefix to a date path starting with /', () => {
         const relativePath = '/2024/11/userId/photo.jpg';
         const result = buildAttachmentUrl(relativePath);
-        expect(result).toBe('https://gate.meeshy.me/api/attachments/file/2024/11/userId/photo.jpg');
+        expect(result).toBe('https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg');
       });
 
-      it('should add /api/attachments/file/ prefix to date path without /', () => {
+      it('should add the VERSIONED /api/v1/attachments/file/ prefix to a date path without /', () => {
         const relativePath = '2024/11/userId/photo.jpg';
         const result = buildAttachmentUrl(relativePath);
-        expect(result).toBe('https://gate.meeshy.me/api/attachments/file/2024/11/userId/photo.jpg');
+        expect(result).toBe('https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg');
       });
     });
 
     describe('absolute URLs', () => {
       it('should return correct URL as-is if already properly formatted', () => {
-        const absoluteUrl = 'https://gate.meeshy.me/api/attachments/file/2024/11/userId/photo.jpg';
+        const absoluteUrl = 'https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg';
         const result = buildAttachmentUrl(absoluteUrl);
         expect(result).toBe(absoluteUrl);
       });
@@ -100,7 +100,7 @@ describe('attachment-url', () => {
       it('should fix URLs missing /api/attachments/file/ prefix', () => {
         const wrongUrl = 'https://meeshy.me/2024/11/userId/photo.jpg';
         const result = buildAttachmentUrl(wrongUrl);
-        expect(result).toBe('https://gate.meeshy.me/api/attachments/file/2024/11/userId/photo.jpg');
+        expect(result).toBe('https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg');
       });
 
       it('should pass through localhost URLs', () => {
@@ -309,5 +309,31 @@ describe('attachment-url', () => {
       expect(result).toBe(invalidPath);
       consoleSpy.mockRestore();
     });
+  });
+});
+
+describe('La clé de stockage reçoit une route VERSIONNÉE (#4324)', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    process.env.NEXT_PUBLIC_BACKEND_URL = 'https://gate.meeshy.me';
+    mockedGetBackendUrl.mockReturnValue('https://gate.meeshy.me');
+  });
+
+  it("compose avec la version : la passerelle la réclame, elle n'est pas optionnelle", () => {
+    expect(buildAttachmentUrl('2024/11/userId/photo.jpg'))
+      .toBe('https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg');
+  });
+
+  it("reconnaît une clé qui n'est PAS un chemin de date — un avatar en est une", () => {
+    // `isDatePath` ne testait que `^\d{4}/\d{2}/`. Après la migration 013, les
+    // avatars sont stockés en `avatars/user/<id>.jpg` : ils tombaient dans le cas
+    // « format inattendu » et étaient rendus tels quels, donc illisibles.
+    expect(buildAttachmentUrl('avatars/user/68f2a81417a557e8ce4ddfc1.jpg'))
+      .toBe('https://gate.meeshy.me/api/v1/attachments/file/avatars/user/68f2a81417a557e8ce4ddfc1.jpg');
+  });
+
+  it('un chemin absolu de date reçoit lui aussi la version', () => {
+    expect(buildAttachmentUrl('/2024/11/userId/photo.jpg'))
+      .toBe('https://gate.meeshy.me/api/v1/attachments/file/2024/11/userId/photo.jpg');
   });
 });
