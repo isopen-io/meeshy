@@ -38,8 +38,33 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 263i | [#4310](https://github.com/isopen-io/meeshy/pull/4310) | `a2ce8815` | #4309 |
 > | 264i | [#4312](https://github.com/isopen-io/meeshy/pull/4312) | `66f6dfc3` | #4311 |
 > | 265i | [#4315](https://github.com/isopen-io/meeshy/pull/4315) | `24c556b8` | #4313 |
+> | 266i | [#4320](https://github.com/isopen-io/meeshy/pull/4320) | `6fc9486c` | #4319 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `24c556b8` — base de 266i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `6fc9486c` — base de 267i.
+>
+> ### 267i — le solde du cliquet i18n, pris avec la confiance que la CI a rendue (#4322)
+>
+> 263i avait épinglé **40 écrans sur 132**, en nommant sa raison : « le risque
+> n'est pas par fichier mais par PARSEUR — s'il se trompe, il se trompe
+> partout ». La CI a validé ce parseur du premier coup sur les deux règles ;
+> le solde se prend.
+>
+> | mesure | valeur |
+> |---|---|
+> | écrans épinglés | 43 → **135** |
+> | clés gardées | 930 → **1 210** |
+> | règle A (traduction) / règle B (`defaultValue`) | **0** / **0** |
+> | éligibles restants | **0** — vivier épuisé |
+>
+> - **Répliquer les FILTRES, pas la boucle** (leçon 258i) : `state ==
+>   "translated"` (un `needs_review` n'est pas une traduction livrée), les
+>   pluriels par catégorie CLDR, `.module`, `isIdentifier`, le bloc `"""`
+>   qui rend `nil`, et l'exclusion des `defaultValue` interpolés.
+> - **Contrôle de cohérence** : la réplique rend 92 éligibles, exactement le
+>   solde annoncé quatre itérations plus tôt (132 − 40).
+> - **Ce n'est plus la traduction qui borne ce cliquet, c'est la dette de
+>   littéraux** : sur les 164 fichiers restants, **154** échouent sur la seule
+>   règle B (#4308, 648 `defaultValue` divergents) contre 56 sur la règle A.
 >
 > ### 266i — cinq sondes négatives, et le squelette que rien ne gardait (#4319)
 >
