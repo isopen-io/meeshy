@@ -2,6 +2,53 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a raw Android `PowerManager.THERMAL_STATUS_*` reading now collapses to the exact `ThermalState`
+> tier the sender-cap plan consumes — the glue-free half of the iOS `ThermalStateMonitor` port** (slice
+> `call-thermal-status-mapping`, feature-parity H. Calls — the "Thermal-aware quality degradation" `[~]` line;
+> closes the "app-side `PowerManager.THERMAL_STATUS_*` → `ThermalState` mapping" pending clause). Before this,
+> `ThermalState`'s own doc-comment named this mapping as `:app` glue that did not exist anywhere — the enum and
+> its `ThermalCeiling` fps/resolution tables shipped, but nothing turned the framework int into the enum, so the
+> policy `VideoSenderCapPlan.forConditions` had no way to be fed a real device tier. This is the pure decision
+> extracted out of the (emulator-only) actuator so it is unit-tested off-device (dimensions 1/2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4291 and #4267 (both gateway,
+> jcnm) — neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to
+> merge. Prior slice (`call-low-light-boost`) is on `main` (#4272). Branched off freshly-fetched `origin/main`;
+> local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android`
+> only (1 main modified + 1 new test).
+>
+> **The change — one pure companion function.** `:core:model` `ThermalState.fromAndroidThermalStatus(status: Int)`
+> collapses the seven documented `PowerManager.THERMAL_STATUS_*` tiers onto the four `ThermalState` tiers at iOS
+> parity: `NONE`(0) → NOMINAL; `LIGHT`(1)/`MODERATE`(2) → FAIR; `SEVERE`(3) → SERIOUS; `CRITICAL`(4)/`EMERGENCY`(5)/
+> `SHUTDOWN`(6) → CRITICAL. **SOTA hardening over a bare `when`:** the collapse is **monotonic and clamped at both
+> ends** — any value ≥ `CRITICAL`(4), including a future OS tier above `SHUTDOWN`, sheds the most encode load
+> (protective, never mistaken for cool), while a sub-`NONE`/negative reading (an absent/unreadable sensor, never a
+> real "cold" report) forwards untouched as NOMINAL so it never silently degrades a cool device's call quality. No
+> `android.os` import — three private constants mirror the framework values so `:core:model` stays JVM-pure and
+> the `:app` layer only forwards `getCurrentThermalStatus()`.
+>
+> **Tests: +11** `ThermalStateFromStatusTest` (behaviour via the public API, no Android): the seven documented
+> tiers each pinned; both-ends clamp — future tier (7, 99) → CRITICAL, invalid negative (-1, Int.MIN_VALUE) →
+> NOMINAL; the collapse is monotonic non-decreasing across 0..6; and it composes with the plan it exists to feed
+> (a `SHUTDOWN` reading yields the identical worst-case ceiling as `ThermalState.CRITICAL`). **Mutation-RED-
+> proven**: weakening the upper clamp (`>=` → `==`) reddens EXACTLY the 5 escalation tests (EMERGENCY, SHUTDOWN,
+> future-tier, monotonic, composition), the 6 lower-tier tests stay green; restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 7m 19s**, 973 actionable tasks, 0 failed. Reviewer
+> **PASS** (diff `apps/android` only; SDK purity — a pure `:core:model` int→enum collapse, no orchestration, no
+> `android.os` import; SSOT — reuses `ThermalState`/`ThermalCeiling`, is the single home the app glue forwards to;
+> no tautological tests; no floor lowered).
+>
+> **Next**: the thermal box's only remaining piece is the live RTP-sender actuator (`VideoProcessor`/RTP encoding
+> params — needs an emulator/WebRTC, not JVM-testable). Candidate pure-core slices still open in H. Calls: the
+> "In-call translation data channel (dual-stream clean audio)" model layer, or the connection-quality-indicator
+> tier→label/colour mapping. Otherwise the Stories write-path thumbHash **generation** box (needs `Bitmap`→RGBA
+> glue, lower JVM yield). Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **a dim in-call video frame now carries a pure, exact-parity low-light-boost decision, folded
 > straight from the frame's luma** (slice `call-low-light-boost`, feature-parity H. Calls — the "In-call video
 > filters … low-light boost" `[~]` line; closes the "the low-light boost pass (folding `FrameLuminance`)"
