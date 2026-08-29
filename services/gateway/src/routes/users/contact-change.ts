@@ -10,10 +10,64 @@ import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
 import { generateNumericCode } from '../../utils/verification-code';
 import { getCacheStore } from '../../services/CacheStore';
+import { createContactChangeRateLimitConfig } from '../../middleware/rate-limiter';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
+
+/**
+ * Le plafond d'essais sur un code SMS, et sa fenêtre (#4184, critère 4).
+ *
+ * Six chiffres, c'est un million de combinaisons — quelques minutes d'appels
+ * si personne ne compte. Cinq essais suffisent LARGEMENT à une faute de frappe
+ * et ne suffisent à aucune recherche exhaustive.
+ */
+const ESSAIS_MAX_CODE_TELEPHONE = 5;
+/** La fenêtre suit la durée de vie du code (15 min) : compter au-delà n'a pas d'objet. */
+const FENETRE_ESSAIS_SECONDES = 900;
+
+const cleEssaisTelephone = (userId: string) => `verify-phone-attempts:${userId}`;
+
+/**
+ * Compte un essai RATÉ et dit si le plafond est franchi.
+ *
+ * Le compteur vit dans le cache, comme le limiteur de renvoi voisin. C'est
+ * assumé et borné : un cache vidé remettrait le compteur à zéro, et un
+ * compteur qui repart à zéro n'est pas un compteur. C'est pourquoi l'appelant
+ * n'utilise PAS ce verdict pour refuser seulement — il EFFACE la demande en
+ * attente dans la ligne `User`. Le verdict est ainsi écrit là où il DURE :
+ * même cache perdu, le code deviné n'ouvre plus rien, parce qu'il n'y a plus
+ * de demande à confirmer.
+ *
+ * Et l'incrément est posé sur l'ÉCHEC, jamais sur le succès : c'est le chemin
+ * raté que suit une recherche exhaustive, et une garde qui ne se déclenche
+ * que sur le chemin réussi ne garde personne.
+ */
+async function compterEssaiRate(userId: string): Promise<{ plafondAtteint: boolean }> {
+  const cache = getCacheStore();
+  const cle = cleEssaisTelephone(userId);
+  try {
+    const precedents = Number.parseInt((await cache.get(cle)) ?? '0', 10) || 0;
+    const total = precedents + 1;
+    await cache.set(cle, String(total), FENETRE_ESSAIS_SECONDES);
+    return { plafondAtteint: total >= ESSAIS_MAX_CODE_TELEPHONE };
+  } catch {
+    // Le gardien en panne ne devient pas l'absence de garde : un essai qu'on
+    // ne peut pas compter est traité comme le dernier autorisé.
+    return { plafondAtteint: true };
+  }
+}
+
+/** Une vérification RÉUSSIE rend son crédit à l'utilisateur — sinon une faute
+ *  de frappe d'hier enfermerait la demande de demain. */
+async function oublierEssais(userId: string): Promise<void> {
+  try {
+    await getCacheStore().del(cleEssaisTelephone(userId));
+  } catch {
+    // Sans conséquence : la fenêtre expire d'elle-même.
+  }
+}
 
 /**
  * Schema pour le changement d'email
@@ -73,6 +127,7 @@ function generatePhoneCode(): string {
 export async function initiateEmailChange(fastify: FastifyInstance) {
   fastify.post('/users/me/change-email', {
     onRequest: [fastify.authenticate],
+    config: { rateLimit: createContactChangeRateLimitConfig('initiate') },
     schema: {
       description: 'Initiate email change. Sends verification email to the new email address. The email change only takes effect after verification.',
       tags: ['users'],
@@ -203,6 +258,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
 export async function verifyEmailChange(fastify: FastifyInstance) {
   fastify.post('/users/me/verify-email-change', {
     onRequest: [fastify.authenticate],
+    config: { rateLimit: createContactChangeRateLimitConfig('verify') },
     schema: {
       description: 'Verify and activate email change using the token sent to the new email address.',
       tags: ['users'],
@@ -331,6 +387,7 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
 export async function resendEmailChangeVerification(fastify: FastifyInstance) {
   fastify.post('/users/me/resend-email-change-verification', {
     onRequest: [fastify.authenticate],
+    config: { rateLimit: createContactChangeRateLimitConfig('resend') },
     schema: {
       description: 'Resend verification email for pending email change. Generates a new token and sends to the pending email address.',
       tags: ['users'],
@@ -398,10 +455,22 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'No pending email change');
       }
 
-      // Rate limiting: Check if we sent an email in the last minute
+      // Rate limiting: Check if we sent an email in the last minute.
+      //
+      // #4184 c.5 — FAIL-CLOSED. La lecture était nue : une panne du cache
+      // faisait lever, la route rendait 500 sans envoyer — mais toute lecture
+      // qui ne rend RIEN laissait passer, et la panne du gardien devenait
+      // l'absence de garde sur un envoi d'e-mails en boucle. Un limiteur qu'on
+      // ne peut pas interroger REFUSE : le coût est un renvoi différé d'une
+      // minute, contre un envoi non borné vers une adresse choisie.
       const cacheStore = getCacheStore();
       const rateLimitKey = `resend-email-change:${userId}`;
-      const lastSent = await cacheStore.get(rateLimitKey);
+      let lastSent: string | null;
+      try {
+        lastSent = await cacheStore.get(rateLimitKey);
+      } catch {
+        return sendError(reply, 429, 'Verification service temporarily unavailable, please retry shortly');
+      }
 
       if (lastSent) {
         const secondsRemaining = Math.ceil((parseInt(lastSent) + 60000 - Date.now()) / 1000);
@@ -461,6 +530,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
 export async function initiatePhoneChange(fastify: FastifyInstance) {
   fastify.post('/users/me/change-phone', {
     onRequest: [fastify.authenticate],
+    config: { rateLimit: createContactChangeRateLimitConfig('initiate') },
     schema: {
       description: 'Initiate phone number change. Sends SMS verification code to the new phone number. The phone change only takes effect after verification.',
       tags: ['users'],
@@ -582,6 +652,7 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
 export async function verifyPhoneChange(fastify: FastifyInstance) {
   fastify.post('/users/me/verify-phone-change', {
     onRequest: [fastify.authenticate],
+    config: { rateLimit: createContactChangeRateLimitConfig('verify') },
     schema: {
       description: 'Verify and activate phone number change using the SMS code sent to the new number.',
       tags: ['users'],
@@ -649,8 +720,32 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'No pending phone change');
       }
 
-      // Verify code
-      if (user.pendingPhoneVerificationCode !== hashedCode) {
+      // Verify code — comparaison à TEMPS CONSTANT (#4184 c.4). Les deux
+      // valeurs sont des empreintes, donc la fuite serait fine ; `timingSafeEqual`
+      // la supprime pour le coût d'une longueur à comparer d'abord (la fonction
+      // lève sur des tailles différentes).
+      const attendu = Buffer.from(user.pendingPhoneVerificationCode, 'utf8');
+      const fourni = Buffer.from(hashedCode, 'utf8');
+      const codeJuste = attendu.length === fourni.length && crypto.timingSafeEqual(attendu, fourni);
+
+      if (!codeJuste) {
+        const { plafondAtteint } = await compterEssaiRate(userId);
+
+        if (plafondAtteint) {
+          // Le verdict s'écrit LÀ OÙ IL DURE — voir `compterEssaiRate`.
+          await fastify.prisma.user.update({
+            where: { id: userId },
+            data: {
+              pendingPhoneNumber: null,
+              pendingPhoneVerificationCode: null,
+              pendingPhoneVerificationExpiry: null
+            }
+          });
+          await oublierEssais(userId);
+          logger.warn(`[PHONE_CHANGE] essais epuises, demande annulee pour ${userId}`);
+          return sendError(reply, 429, 'Too many invalid codes. The phone change request has been cancelled.');
+        }
+
         return sendBadRequest(reply, 'Invalid verification code');
       }
 
@@ -682,6 +777,8 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
           pendingPhoneVerificationExpiry: null
         }
       });
+
+      await oublierEssais(userId);
 
       logger.info(`[PHONE_CHANGE] Phone changed successfully for user ${userId} to ${user.pendingPhoneNumber}`);
 
