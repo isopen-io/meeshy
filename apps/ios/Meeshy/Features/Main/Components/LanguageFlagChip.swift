@@ -137,6 +137,18 @@ struct LanguageFlagChip: View {
 
     // MARK: - Vocabulaire
 
+    // ⚠️ **Ce vocabulaire est `@MainActor`, et ne peut pas ne pas l'être.**
+    // `MeeshySDK/Package.swift` donne à **MeeshyUI** `.defaultIsolation(MainActor.self)`
+    // (SE-0466) : `LanguageDisplay`, son `from(code:)` et ses `flag` / `name` sont
+    // donc isolés. Le cœur `MeeshySDK` (`LanguageData`, `MeeshyUser`) ne l'est pas
+    // — et un appel MainActor → nonisolated est toujours licite, jamais l'inverse.
+    //
+    // Le 252i a marqué ces helpers `nonisolated` en croyant la marque « sans
+    // risque dans les deux cas » : elle est légale partout, mais elle CONTRAINT
+    // ce que le corps a le droit de toucher. Huit erreurs de compile, toutes
+    // ici. **Un attribut d'isolation ne se pose pas par prudence : il se pose
+    // après avoir lu l'isolation de ce que la fonction APPELLE.**
+
     /// Le drapeau, ou le CODE en capitales quand la langue n'est pas au
     /// catalogue de `LanguageDisplay`.
     ///
@@ -163,7 +175,7 @@ struct LanguageFlagChip: View {
     /// rien à ce que #4248 a testé (`"xx"` → `"XX"`, `""` → `"?"`) : il ne
     /// s'exerce que sur les codes RÉGIONAUX, `pt-BR` ou `zh-Hans`, qu'aucune
     /// table n'indexe tels quels et que toutes deux servent sous leur base.
-    nonisolated static func flag(for code: String) -> String {
+    static func flag(for code: String) -> String {
         if let flag = LanguageDisplay.from(code: code)?.flag { return flag }
         if let flag = LanguageData.info(for: code.lowercased())?.flag { return flag }
         if let base = MeeshyUser.normalizeLanguageCode(code) {
@@ -173,7 +185,7 @@ struct LanguageFlagChip: View {
         return Self.rawName(for: code) ?? "?"
     }
 
-    nonisolated private static func rawName(for code: String) -> String? {
+    private static func rawName(for code: String) -> String? {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed.uppercased()
     }
@@ -221,7 +233,7 @@ struct LanguageFlagChip: View {
     /// Même ordre que `flag(for:)`, pour la même raison : ce que VoiceOver
     /// PRONONCE doit couvrir les 78 langues, pas les 41. Sans la seconde table,
     /// un lecteur wolof entendait « Afficher en WO ».
-    nonisolated static func spokenName(for code: String) -> String {
+    static func spokenName(for code: String) -> String {
         if let name = LanguageDisplay.from(code: code)?.name { return name }
         if let name = LanguageData.info(for: code.lowercased())?.nativeName { return name }
         if let base = MeeshyUser.normalizeLanguageCode(code) {

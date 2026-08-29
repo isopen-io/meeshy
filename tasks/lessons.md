@@ -18302,3 +18302,19 @@ j'ai copié la FORME d'un fichier de test éprouvé sans lire ses doc-comments.
   pas trancher en refactorant** : isoler la décision produit, la laisser au
   porteur, et poser dans la garde une **exemption NOMMÉE et motivée** — jamais
   une regex discrètement étroite, qui cacherait le choix au lieu de l'exposer.
+- **Un attribut d'ISOLATION ne se pose pas par prudence — il se pose après avoir
+  lu l'isolation de ce que la fonction APPELLE (252i bis).** J'ai marqué le
+  vocabulaire de la puce `nonisolated` en me disant que la marque était « sans
+  risque dans les deux cas ». Elle est légale partout, mais elle **contraint ce
+  que le corps a le droit de toucher** : huit erreurs de compile, toutes au même
+  endroit. `MeeshySDK/Package.swift` donne à **MeeshyUI**
+  `.defaultIsolation(MainActor.self)` (SE-0466) — `LanguageDisplay`, son
+  `from(code:)` et ses `flag`/`name` sont isolés ; le cœur `MeeshySDK`
+  (`LanguageData`, `MeeshyUser`) ne l'est pas. Un appel MainActor → nonisolated
+  est toujours licite, **jamais l'inverse**.
+  > Le pire est que j'avais ANTICIPÉ le problème d'isolation — c'est pour cela
+  > que j'ai posé la marque — et que la mitigation a créé la panne qu'elle
+  > visait, faute d'avoir vérifié dans quel SENS elle jouait. **Une mitigation
+  > posée sur une intuition non vérifiée est un pari, pas une précaution** ; le
+  > fichier qui donnait la réponse (`Package.swift`, `LanguageDisplay.swift`)
+  > était déjà ouvert.
