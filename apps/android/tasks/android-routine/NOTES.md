@@ -2425,3 +2425,32 @@ which already clamps to `[2,600]` via `StoryDurationPin.clamp`, so no re-clamp o
   compileSdk 37 → android-37.0 on first `./gradlew`, no hash error, no copy→patch). Full CI-mirror gate
   (`assembleDebug testDebugUnitTest`, all modules) BUILD SUCCESSFUL locally — the "try pristine first" note
   held again.
+
+## 2026-08-29 — a "ported from iOS … matching iOS" doc-comment is a claim to VERIFY, not a fact to trust (slice `call-quality-rtt-longhaul-parity`)
+`CallQualityThresholds` said, in its own KDoc, "the Android SSOT ported from iOS `QualityThresholds`" and
+"matching iOS" — while carrying `VIDEO_FAIR_RTT_MS=200 / VIDEO_POOR_RTT_MS=300 / POOR_RTT_MS=500`, the values
+iOS held *before* it recalibrated the RTT ladder out to `300/500/800` for real long-haul baselines. The port
+was faithful the day it was written and silently drifted when iOS moved. Reusable moves:
+- **When a constant claims parity with another platform, open BOTH and diff the numbers — don't trust the
+  prose.** The divergence here was three literals a `grep` apart; the doc-comment actively hid it. A parity
+  claim ages; the SSOT it names keeps moving. This is the cross-platform twin of leçon 261 ("an énumération of
+  sites carries two claims, and 'these are the sites' is almost never re-checked"): "these values match iOS"
+  is a second, unverified claim riding on "these values were ported from iOS".
+- **A stale threshold is a lenience/parity BUG, priced like the feature it degrades — not tech debt.** The
+  effect wasn't cosmetic: a healthy 350 ms intercontinental call rendered in the weak-link ERROR hue (POOR)
+  when iOS/web showed it FAIR. The roadmap's "une lenteur/dégradation est un BUG" applies verbatim to a
+  misclassification that paints a good call red.
+- **The test that catches a stale boundary must live on a value the boundary actually MOVED past, and name the
+  scenario.** Re-pinning `300 stays GOOD / 300.1 → FAIR` proves the new boundary; the three *named*
+  intercontinental regressions (250→GOOD, 350→FAIR, 550→POOR) are what a future reader greps for when the next
+  recalibration lands — they encode the real Africa↔Asia baseline (155-221 ms backbone + mobile last mile),
+  not just an abstract threshold. RED-proving showed exactly 9 fail against the stale constants, no collateral.
+- **Blast-radius check before touching a shared constant: `grep` its non-test consumers first.** Only
+  `VideoQualityLevel.from(rttMs, packetLoss)` reads these three — the survival policy and sender-cap plan
+  consume the enum *tier*, not raw RTT — so the change could not ripple. Confirmed before editing, not after.
+- **SDK bootstrap reconciliation (vs. the prior run's "pristine android-37.0 alone worked" note):** it did
+  NOT this run — local cmdline-tools `11076708` + AGP 8.13.0 errored `Failed to find target with hash string
+  'android-37'` because only `android-37.0/.1/.2` are published (never a bare `android-37`). Fix off-CI: a
+  `platforms/android-37 → android-37.0` symlink (SDK is local-only, never committed). The two notes are both
+  true — AGP's willingness to auto-map `37 → 37.0` is version/cache-sensitive; if pristine errors, symlink
+  rather than assume the repo is broken. CI is unaffected (its `setup-android` step documents the same quirk).

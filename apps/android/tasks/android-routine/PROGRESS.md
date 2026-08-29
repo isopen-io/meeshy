@@ -2,6 +2,64 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **the Android call-quality RTT ladder now classifies a healthy intercontinental call at iOS
+> parity — it had been ported at iOS's PRE-recalibration boundaries and never followed the move** (slice
+> `call-quality-rtt-longhaul-parity`, feature-parity H. Calls — the "Connection-quality indicator" `[~]` line).
+> A genuine, user-facing parity BUG, not a new feature: `CallQualityThresholds` carried `VIDEO_FAIR_RTT_MS=200`
+> / `VIDEO_POOR_RTT_MS=300` / `POOR_RTT_MS=500`, the values iOS `QualityThresholds` (`WebRTCTypes.swift`) held
+> BEFORE it recalibrated the RTT ladder for real long-haul baselines (out to 300/500/800). Its own doc-comment
+> claimed "ported from iOS `QualityThresholds` … matching iOS" while diverging. An Africa↔Asia submarine backbone
+> is already 155-221 ms RTT (WACS 155, 2Africa 158, ACC-1 221) before the mobile last mile, so a healthy
+> intercontinental call routinely sits at 250-450 ms — and Android painted it red at 00:06: a 250 ms hop showed
+> FAIR not GOOD, a 350 ms call showed POOR (the weak-link error hue) not FAIR, a 550 ms link showed CRITICAL not
+> POOR. iOS (and the web mirror `use-call-quality.ts`) showed the same calls healthy. This is exactly the class the
+> roadmap calls a lenience/parity regression (dimensions 6/9/13), and it is pure logic — off-device JVM-testable.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4303/#4300/#4291/#4267 (all jcnm:
+> shared/gateway/ios), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`call-thermal-status-mapping`) is on `main` (#4295). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0).
+>
+> **The change — three constants, no new logic.** `CallQualityThresholds.{VIDEO_FAIR_RTT_MS→300, VIDEO_POOR_RTT_MS
+> →500, POOR_RTT_MS→800}`, now at exact iOS parity, with the long-haul calibration rationale moved into the doc
+> so the next reader sees WHY the boundaries sit where they do. `EXCELLENT_RTT_MS`(100) and every packet-loss band
+> (0.01/0.03/0.05/0.10 — the true congestion signal) were already correct and are untouched. Blast radius is a
+> single consumer: only `VideoQualityLevel.from(rttMs, packetLoss)` reads these (`grep` confirmed zero other
+> non-test call sites), so the fix cannot ripple into the survival policy or sender-cap plan, which consume the
+> enum tier, not the raw RTT.
+>
+> **Tests: +9 net, RED-proven.** `CallQualityTest` re-pinned both sides of all three moved boundaries
+> (300 stays GOOD / 300.1 → FAIR ; 500 stays FAIR / 500.1 → POOR ; 800 stays POOR / 800.1 → CRITICAL) and adds
+> three NAMED intercontinental regressions (250 ms → GOOD, 350 ms → FAIR, 550 ms → POOR) that each cite the
+> real-world scenario they defend. The stale `250 ms → FAIR` sample assertion was corrected to `350 ms → FAIR`.
+> `CallViewModelTest`'s stale `rtt 350 → indicator POOR` (which encoded the bug end-to-end) became `rtt 600 →
+> POOR`, preserving the "keeps updating through a reconnect" intent with a value genuinely POOR under the new
+> ladder; the `150 ms <= fair(200)` comment was refreshed to `videoFairRTT(300)`. **RED**: against the stale
+> constants exactly 9 CallQualityTest cases fail, compile healthy, no collateral — the recalibrated boundaries and
+> the three regressions, precisely the behaviour the fix restores. `CallAnalyticsTest`/`CallSignalManagerTest`/
+> `CallQualityReportTest` were checked and are unaffected (their RTT samples are loss-dominated → CRITICAL, or
+> pass an explicit `ConnectionQuality`).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/`build-tools;
+> 35.0.0`/`platform-tools`. Note: local cmdline-tools (11076708) + AGP 8.13.0 do NOT auto-map `compileSdk=37`
+> onto the published `android-37.0` package (only `android-37.x` are published, never a bare `android-37`), so a
+> local `platforms/android-37 → android-37.0` symlink is needed off-CI; CI's `setup-android` action handles this
+> itself (the workflow's "Provision compileSdk platform" step documents the exact same catalogue quirk).
+>
+> **Verified — targeted GREEN**: `:core:model:CallQualityTest` + `:feature:calls:CallViewModelTest` both **BUILD
+> SUCCESSFUL** after the fix. FULL `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> **BUILD SUCCESSFUL in 5m 40s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff `apps/android` only — 1 main constant file + 2 test
+> files; SDK purity — pure `:core:model` constants, no orchestration, no `android.os`; SSOT — the constants ARE
+> the single home `VideoQualityLevel.from` reads, now truthful to their "matching iOS" doc; no tautological tests;
+> no coverage floor lowered — boundary re-pins keep both-sides coverage and ADD three regressions).
+>
+> **Next**: the connection-quality box's only remaining piece is the live WebRTC stats source (`RTCStatsReport`
+> → `CallQualitySample`) that feeds real rtt/loss samples — needs an emulator/WebRTC, not JVM-testable, so it
+> waits for a device-capable run. Candidate pure-core slices still open in H. Calls: the "In-call translation
+> data channel (dual-stream clean audio)" model layer (but confirm it is genuinely built on iOS first — a prior
+> run flagged several Calls checklist lines as iOS-aspirational, not implemented). Otherwise the Stories
+> write-path thumbHash **generation** box. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **a raw Android `PowerManager.THERMAL_STATUS_*` reading now collapses to the exact `ThermalState`
 > tier the sender-cap plan consumes — the glue-free half of the iOS `ThermalStateMonitor` port** (slice
 > `call-thermal-status-mapping`, feature-parity H. Calls — the "Thermal-aware quality degradation" `[~]` line;
