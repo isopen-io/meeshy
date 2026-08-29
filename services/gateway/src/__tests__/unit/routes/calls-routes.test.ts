@@ -504,7 +504,20 @@ describe('callRoutes', () => {
       await getRoute(routes, 'GET', '/calls/:callId/transcript')(req, reply);
 
       expect(reply._body).toMatchObject({ success: true, data: transcript });
-      expect(mockGetCallTranscript).toHaveBeenCalledWith(CALL_ID, USER_ID);
+      // #4165 — la page par defaut est bornee : un appel d'une heure ne rend
+      // plus son journal entier au premier acces au replay.
+      expect(mockGetCallTranscript).toHaveBeenCalledWith(CALL_ID, USER_ID, 0, 100);
+    });
+
+    it('transmet la fenetre demandee au service, jamais un slice apres coup', async () => {
+      const { routes, reply } = setup();
+      mockGetCallTranscript.mockResolvedValueOnce({ ...transcript, total: 900, hasMore: true });
+
+      const req = makeRequest({ params: { callId: CALL_ID }, query: { offset: '200', limit: '50' } });
+      await getRoute(routes, 'GET', '/calls/:callId/transcript')(req, reply);
+
+      expect(mockGetCallTranscript).toHaveBeenCalledWith(CALL_ID, USER_ID, 200, 50);
+      expect(reply._body?.data).toMatchObject({ total: 900, hasMore: true });
     });
 
     it('returns 403 when the requester never took part in the call', async () => {

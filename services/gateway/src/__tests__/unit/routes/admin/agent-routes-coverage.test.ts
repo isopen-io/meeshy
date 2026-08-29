@@ -970,15 +970,15 @@ describe('Agent Admin Routes — coverage gap tests', () => {
         avgConfidence: 0.7,
         lastResponseAt: now,
       };
-      prisma.agentConfig.findMany
-        .mockResolvedValueOnce([{ conversationId: CONV_ID }])
-        .mockResolvedValueOnce([configItem]);
-      prisma.agentUserRole.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ conversationId: CONV_ID, userId: USER_ID }]);
-      prisma.agentAnalytic.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([analyticsItem]);
+      // #4165 — `GET /configs` ne fait plus DEUX appels à chacun de ces trois
+      // `findMany` (un pour rassembler l'univers des conversationIds, un pour
+      // la page) : le premier a été retiré, remplacé par le `where` relationnel
+      // de `conversation.findMany` ci-dessous. Un seul appel désormais — donc
+      // une seule valeur mockée, celle de l'ancien SECOND appel (la donnée de
+      // détail), plus jamais la forme `{conversationId}` seule du premier.
+      prisma.agentConfig.findMany.mockResolvedValue([configItem]);
+      prisma.agentUserRole.findMany.mockResolvedValue([{ conversationId: CONV_ID, userId: USER_ID }]);
+      prisma.agentAnalytic.findMany.mockResolvedValue([analyticsItem]);
       prisma.conversation.findMany.mockResolvedValue([{ id: CONV_ID, title: 'Room', type: 'GROUP' }]);
       prisma.conversation.count.mockResolvedValue(1);
 
@@ -1021,13 +1021,11 @@ describe('Agent Admin Routes — coverage gap tests', () => {
         avgConfidence: 0.5,
         lastResponseAt: null,
       };
-      prisma.agentConfig.findMany
-        .mockResolvedValueOnce([{ conversationId: CONV_ID }])
-        .mockResolvedValueOnce([]);
+      // #4165 — un seul appel par `findMany` désormais (voir le commentaire
+      // du test précédent) : la valeur de l'ancien SECOND appel seule.
+      prisma.agentConfig.findMany.mockResolvedValue([]);
       prisma.agentUserRole.findMany.mockResolvedValue([]);
-      prisma.agentAnalytic.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([analyticsItemNoDate]);
+      prisma.agentAnalytic.findMany.mockResolvedValue([analyticsItemNoDate]);
       prisma.conversation.findMany.mockResolvedValue([{ id: CONV_ID, title: 'Room', type: 'GROUP' }]);
       prisma.conversation.count.mockResolvedValue(1);
 

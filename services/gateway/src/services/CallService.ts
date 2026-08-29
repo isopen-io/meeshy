@@ -2002,8 +2002,16 @@ export class CallService {
    * — plus strict que `getCallSession`, qui autorise tout membre de la
    * conversation. Un membre qui n'a pas pris part à l'appel n'a pas à lire
    * ce qui s'y est dit.
+   *
+   * Rend une PAGE de segments (#4165), pas le journal entier : `total` est le
+   * vrai compte, `hasMore` dit s'il reste à lire.
    */
-  async getCallTranscript(callId: string, requestingUserId: string): Promise<{
+  async getCallTranscript(
+    callId: string,
+    requestingUserId: string,
+    offset: number = 0,
+    limit: number = 100
+  ): Promise<{
     callId: string;
     conversationId: string;
     callStartedAt: Date;
@@ -2017,6 +2025,8 @@ export class CallService {
       capturedAtMs: number;
       translations: Array<{ targetLanguage: string; translatedText: string }>;
     }>;
+    total: number;
+    hasMore: boolean;
   }> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
@@ -2035,11 +2045,20 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You do not have access to this call transcript`);
     }
 
-    const rows = await this.prisma.transcription.findMany({
-      where: { callSessionId: callId },
-      include: { translations: true },
-      orderBy: { timestamp: 'asc' }
-    });
+    // #4165 — un appel d'une heure produit des milliers de segments, chacun
+    // avec ses traductions : le `findMany` nu rendait le journal ENTIER a
+    // chaque ouverture du replay. La borne est posee DANS la requete ; un
+    // `slice` apres coup aurait paye le chargement avant de le cacher.
+    const [rows, total] = await Promise.all([
+      this.prisma.transcription.findMany({
+        where: { callSessionId: callId },
+        include: { translations: true },
+        orderBy: { timestamp: 'asc' },
+        skip: offset,
+        take: limit
+      }),
+      this.prisma.transcription.count({ where: { callSessionId: callId } })
+    ]);
 
     const participantsById = new Map(
       call.participants.map((p) => [p.participantId, p.participant])
@@ -2049,6 +2068,8 @@ export class CallService {
       callId,
       conversationId: call.conversationId,
       callStartedAt: call.startedAt,
+      total,
+      hasMore: offset + rows.length < total,
       segments: rows.map((row) => {
         const participant = participantsById.get(row.participantId);
         return {

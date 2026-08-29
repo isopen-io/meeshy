@@ -230,6 +230,10 @@ const makePrisma = (): any => ({
   },
   reaction: {
     findMany: jest.fn().mockResolvedValue([]),
+    // #4165 : `GET /conversations/:id/reactions` compte le VRAI total à part
+    // de la page (`.count()`), en plus du `.findMany` déjà mocké — sans ce
+    // double, un test Prisma réel appellerait une méthode inexistante.
+    count: jest.fn().mockResolvedValue(0),
   },
   user: {
     findUnique: jest.fn().mockResolvedValue(null),
@@ -2503,13 +2507,24 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
+      // #4165 — `hasMore` est un champ NEUF (critère 2 : de quoi demander la
+      // suite maintenant que la route rend une PAGE). `total` reste le vrai
+      // compte de la conversation, servi par `.count()` — mocké à 0 ci-dessus
+      // dans le double global (`prisma.reaction.count`), cohérent avec la
+      // page vide.
       expect(mockSendSuccess).toHaveBeenCalledWith(reply, {
         reactions: [],
         total: 0,
+        hasMore: false,
       });
     });
 
     it('groups reactions by messageId and emoji', async () => {
+      // #4165 — `total` est désormais le VRAI compte de la conversation
+      // (`.count()`), plus le `.findMany` borné : les trois lignes ci-dessous
+      // sont une PAGE, le total peut différer de sa longueur. Ici les deux
+      // coïncident (3 lignes, 3 au total) pour garder ce test simple.
+      prisma.reaction.count.mockResolvedValue(3);
       prisma.reaction.findMany.mockResolvedValue([
         {
           messageId: MSG_ID,

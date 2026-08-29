@@ -1,7 +1,30 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
-import { applyHistoryFloor, HISTORY_FLOOR_PARTICIPANT_SELECT } from '../../../services/historyFloor';
+import { applyHistoryFloor } from '../../../services/historyFloor';
+
+/**
+ * Plafond d'affichage des listes membres / participants anonymes d'un lien de
+ * partage (#4165). Aligné sur le plafond de `validatePagination` (≤ 100) : au
+ * -delà, `totalMembers`/`totalAnonymousParticipants` (comptés à part, JAMAIS
+ * dérivés de la longueur du tableau affiché) disent au client qu'il y en a
+ * plus — c'est `membersHasMore`/`anonymousParticipantsHasMore` côté route.
+ */
+export const LINK_PARTICIPANT_DISPLAY_CAP = 100;
+
+/** Sous-ensemble de `ParticipantPermissions` (schema.prisma) que `retrieval.ts` lit. */
+type LinkParticipantPermissions = {
+  canSendMessages: boolean;
+  canSendFiles: boolean;
+  canSendImages: boolean;
+};
+
+/** Sous-ensemble d'`AnonymousProfile` (schema.prisma) que `retrieval.ts` lit. */
+type LinkAnonymousProfile = {
+  username: string;
+  firstName: string;
+  lastName: string;
+};
 
 const senderInclude = {
   select: {
@@ -36,52 +59,7 @@ export const shareLinkIncludeStructure = {
       title: true,
       description: true,
       type: true,
-      createdAt: true,
-      participants: {
-        where: { isActive: true },
-        select: {
-          id: true,
-          type: true,
-          displayName: true,
-          avatar: true,
-          language: true,
-          isOnline: true,
-          lastActiveAt: true,
-          isActive: true,
-          userId: true,
-          // Ce qui décide du PLANCHER d'historique du lecteur (`historyFloorFor`)
-          // — la ligne du lien est le seul endroit où `retrieval.ts` lit sa
-          // participation, donc elle doit porter toute la règle. Étalée
-          // depuis la SSOT (#3893) plutôt que recopiée : un champ qu'elle
-          // gagne arrive ici sans édition manuelle.
-          ...HISTORY_FLOOR_PARTICIPANT_SELECT,
-          // `profile` et `rights` UNIQUEMENT : `anonymousSession.session` porte
-          // le hash du jeton, l'IP et l'empreinte appareil — jamais exposables
-          // sur une route consultable sans authentification. Plus RICHE que la
-          // SSOT (qui ne demande que `rights`) — override volontaire, après le
-          // spread.
-          anonymousSession: { select: { profile: true, rights: true } },
-          // Même chose pour `user` : plus RICHE que la SSOT (profil affiché en
-          // plus du rôle), donc réécrit après le spread — mais `role` DOIT
-          // rester : c'est le champ que lit le bypass plateforme ADMIN/BIGBOSS
-          // (#3892, `historyFloorFor`). L'omettre ici l'aurait perdu SILENCIEUSEMENT,
-          // ce site étant le seul des appelants de la SSOT à redéclarer `user`.
-          user: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              systemLanguage: true,
-              isOnline: true,
-              lastActiveAt: true,
-              role: true
-            }
-          }
-        }
-      }
+      createdAt: true
     }
   },
   creator: {
@@ -94,6 +72,128 @@ export const shareLinkIncludeStructure = {
     }
   }
 };
+
+/**
+ * Est-ce que `userId` a une participation ACTIVE de type `user` dans cette
+ * conversation ? Requête ciblée et indexée — indépendante de l'effectif de la
+ * conversation, à l'inverse de l'ancien `participants.find(...)` sur la
+ * relation chargée en bloc (#4165). Sert à la fois la garde d'accès et le
+ * calcul de `userType` : un lecteur `hasAccess` par le cas spécial "meeshy"
+ * sans être réellement participant reste `userType: 'anonymous'`, comme avant.
+ */
+export async function findActiveUserParticipant(
+  prisma: PrismaClient,
+  conversationId: string,
+  userId: string
+): Promise<{ id: string } | null> {
+  return prisma.participant.findFirst({
+    where: { conversationId, userId, type: 'user', isActive: true },
+    select: { id: true }
+  });
+}
+
+/**
+ * Page (bornée, `LINK_PARTICIPANT_DISPLAY_CAP`) des membres inscrits affichés
+ * sur la fiche d'un lien. Ne sélectionne PAS `isOnline`/`lastActiveAt` : la
+ * route les sert toujours masqués (lien consultable sans authentification),
+ * les charger serait payer une colonne que rien ne lit.
+ */
+export async function findLinkMembers(
+  prisma: PrismaClient,
+  conversationId: string,
+  take: number = LINK_PARTICIPANT_DISPLAY_CAP
+): Promise<Array<{
+  id: string;
+  role: string;
+  joinedAt: Date;
+  user: { id: string; username: string; firstName: string | null; lastName: string | null; displayName: string | null; avatar: string | null } | null;
+}>> {
+  return prisma.participant.findMany({
+    where: { conversationId, type: 'user', isActive: true },
+    orderBy: { joinedAt: 'asc' },
+    take: take,
+    select: {
+      id: true,
+      role: true,
+      joinedAt: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          firstName: true,
+          lastName: true,
+          displayName: true,
+          avatar: true
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Page (bornée) des participants anonymes affichés. `isOnline`/`lastActiveAt`
+ * SONT sélectionnés ici (contrairement aux membres) parce que la route les
+ * gate — elle ne les tait pas — derrière `anonymousPresenceVisible`
+ * (ADMIN/BIGBOSS uniquement, directive présence du 2026-08-25).
+ */
+export async function findLinkAnonymousParticipants(
+  prisma: PrismaClient,
+  conversationId: string,
+  take: number = LINK_PARTICIPANT_DISPLAY_CAP
+): Promise<Array<{
+  id: string;
+  displayName: string | null;
+  avatar: string | null;
+  language: string;
+  isOnline: boolean;
+  lastActiveAt: Date | null;
+  joinedAt: Date;
+  permissions: LinkParticipantPermissions | null;
+  anonymousSession: { profile: LinkAnonymousProfile } | null;
+}>> {
+  return prisma.participant.findMany({
+    where: { conversationId, type: 'anonymous', isActive: true },
+    orderBy: { joinedAt: 'asc' },
+    take: take,
+    select: {
+      id: true,
+      displayName: true,
+      avatar: true,
+      language: true,
+      isOnline: true,
+      lastActiveAt: true,
+      joinedAt: true,
+      permissions: true,
+      anonymousSession: { select: { profile: true } }
+    }
+  });
+}
+
+/** Effectifs VRAIS (membres inscrits / participants anonymes actifs) — comptés
+ * à part des pages ci-dessus pour que `totalMembers`/`totalAnonymousParticipants`
+ * restent exacts même quand l'affichage est tronqué au plafond. */
+export async function countLinkParticipantsByType(
+  prisma: PrismaClient,
+  conversationId: string
+): Promise<{ totalMembers: number; totalAnonymousParticipants: number }> {
+  const [totalMembers, totalAnonymousParticipants] = await Promise.all([
+    prisma.participant.count({ where: { conversationId, type: 'user', isActive: true } }),
+    prisma.participant.count({ where: { conversationId, type: 'anonymous', isActive: true } })
+  ]);
+  return { totalMembers, totalAnonymousParticipants };
+}
+
+/** Effectif des participants anonymes actuellement en ligne — appelant
+ * uniquement quand `anonymousPresenceVisible` (sinon la route sert `0`, comme
+ * avant : la présence hors ADMIN/BIGBOSS n'a jamais été vraie sur cette route). */
+export async function countOnlineAnonymousParticipants(
+  prisma: PrismaClient,
+  conversationId: string
+): Promise<number> {
+  return prisma.participant.count({
+    where: { conversationId, type: 'anonymous', isActive: true, isOnline: true }
+  });
+}
 
 /**
  * Récupère un lien de partage par différents identifiants

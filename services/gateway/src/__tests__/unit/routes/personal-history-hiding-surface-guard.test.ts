@@ -57,7 +57,12 @@ const SURFACES: Record<string, Classification> = {
   'conversations/threads.ts': { kind: 'applies', reads: 1, applications: 2 },
 
   // ── Exemptes, avec leur raison ────────────────────────────────────────────
-  'sync.ts': {
+  // `sync.ts` → `sync/messages.ts` (#4171, intégré pendant ce lot : le
+  // fichier unique est devenu un répertoire). Même lecture, même raison,
+  // seul le CHEMIN a changé — vérifié : `sync/messages.ts` porte encore
+  // exactement les deux `prisma.message.findMany` et le même appel à
+  // `loadPersonalHistoryHidingByConversation` que l'ancien `sync.ts`.
+  'sync/messages.ts': {
     kind: 'exempt',
     reads: 2,
     why:

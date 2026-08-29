@@ -25,7 +25,7 @@ const mockGetRecentReports = jest.fn<any>().mockResolvedValue([]);
 const mockGetReportById = jest.fn<any>().mockResolvedValue({ id: 'rpt-1' });
 const mockUpdateReport = jest.fn<any>().mockResolvedValue({ id: 'rpt-1', status: 'resolved' });
 const mockDeleteReport = jest.fn<any>().mockResolvedValue(undefined);
-const mockGetReportsForEntity = jest.fn<any>().mockResolvedValue([]);
+const mockGetReportsForEntity = jest.fn<any>().mockResolvedValue({ reports: [], total: 0 });
 const mockAssignModerator = jest.fn<any>().mockResolvedValue({ id: 'rpt-1' });
 const mockGetModeratorReports = jest.fn<any>().mockResolvedValue([]);
 
@@ -291,7 +291,7 @@ describe('DELETE /:id — success → 200', () => {
 describe('GET /entity/:type/:id — success → 200', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockGetReportsForEntity.mockResolvedValue([]);
+    mockGetReportsForEntity.mockResolvedValue({ reports: [], total: 0 });
     app = await buildApp();
   });
   afterAll(async () => { await app.close(); });

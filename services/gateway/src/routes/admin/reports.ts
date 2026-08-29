@@ -213,17 +213,24 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/admin/reports/entity/:type/:id
-   * Obtenir tous les signalements pour une entite specifique
+   * Obtenir une PAGE des signalements d'une entite specifique (#4165).
+   *
+   * La route rendait la collection entiere : une entite tres signalee servait
+   * TOUS ses signalements a chaque ouverture de la fiche. Elle reprend ici la
+   * convention offset/limit deja posee par GET / du meme fichier, plutot
+   * qu'une seconde convention inventee pour l'occasion.
    */
   fastify.get('/entity/:type/:id', {
     onRequest: [fastify.authenticate, requireModeratorPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { type, id } = request.params as { type: string; id: string };
+      const { offset: offsetRaw, limit: limitRaw } = request.query as { offset?: string; limit?: string };
+      const { offset, limit } = validatePagination(offsetRaw, limitRaw);
 
-      const reports = await reportService.getReportsForEntity(type, id);
+      const { reports, total } = await reportService.getReportsForEntity(type, id, offset, limit);
 
-      return sendSuccess(reply, reports);
+      return sendPaginatedSuccess(reply, reports, buildPaginationMeta(total, offset, limit, reports.length));
     } catch (error) {
       logError(fastify.log, 'Get entity reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');

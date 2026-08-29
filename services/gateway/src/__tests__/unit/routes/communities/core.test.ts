@@ -72,6 +72,9 @@ function makePrisma(overrides: Record<string, any> = {}) {
     conversation: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
+      // part de la page (`.count()`), en plus du `.findMany` déjà mocké.
+      count: jest.fn<any>().mockResolvedValue(0),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     user: {

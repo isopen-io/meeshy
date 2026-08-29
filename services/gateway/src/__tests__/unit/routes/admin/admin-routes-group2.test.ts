@@ -637,13 +637,16 @@ describe('Admin report routes', () => {
       await app.ready();
 
       const reports = [{ id: 'r1' }, { id: 'r2' }];
-      mockReportService.getReportsForEntity.mockResolvedValueOnce(reports);
+      mockReportService.getReportsForEntity.mockResolvedValueOnce({ reports, total: 2 });
 
       const res = await app.inject({ method: 'GET', url: '/entity/user/507f1f77bcf86cd799439020' });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.data).toHaveLength(2);
-      expect(mockReportService.getReportsForEntity).toHaveBeenCalledWith('user', '507f1f77bcf86cd799439020');
+      // #4165 — la borne voyage jusqu'au service : la route ne peut plus lui
+      // demander la collection entiere, meme si le service l'acceptait encore.
+      expect(mockReportService.getReportsForEntity).toHaveBeenCalledWith('user', '507f1f77bcf86cd799439020', 0, 20);
+      expect(body.pagination).toMatchObject({ total: 2, offset: 0, limit: 20 });
     });
 
     it('returns 500 on service error', async () => {

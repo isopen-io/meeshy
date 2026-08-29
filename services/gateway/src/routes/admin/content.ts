@@ -17,6 +17,23 @@ import { withAnonymousParticipantCounts } from '../../utils/share-link-participa
 import { requirePermission } from '../../middleware/authorize';
 
 /**
+ * Plafond de SCAN de `GET /admin/translations` (#4165).
+ *
+ * Le pas de pagination de cette route est la TRADUCTION — une ligne par couple
+ * message × langue cible, aplatie depuis la colonne JSON `Message.translations`
+ * — et non le message. Un `skip`/`take` posé sur `message.findMany` ne peut donc
+ * PAS servir la fenêtre demandée : il décalerait une seconde fois un `offset`
+ * déjà appliqué au tableau aplati, et les pages 2+ sauteraient des lignes.
+ *
+ * Ce qui est borné ici est donc le SCAN, pas la page. Le plafond est volontairement
+ * généreux : en deçà, `total` reste le VRAI compte des traductions filtrées et la
+ * route répond exactement comme avant ; au-delà, la troncature est DÉCLARÉE par
+ * `hasMore` plutôt que passée sous silence. Ce qui disparaît est le pire cas que
+ * l'audit nomme — « TOUS les messages traduits », sans borne d'aucune sorte.
+ */
+const TRANSLATIONS_MESSAGE_SCAN_CAP = 5_000;
+
+/**
  * Lignes des deux listes d'administration de ce fichier.
  *
  * Elles étaient déclarées `data: { type: 'array', items: { type: 'object' } }`.
@@ -507,8 +524,14 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: TRANSLATIONS_MESSAGE_SCAN_CAP
       });
+
+      // Le scan a-t-il été tronqué ? Si oui, `total` ne compte que la fenêtre
+      // lue et `hasMore` doit le dire — il ne peut alors qu'être trop prudent,
+      // jamais trop optimiste.
+      const scanTronque = messages.length === TRANSLATIONS_MESSAGE_SCAN_CAP;
 
       // "Dé-normaliser" le JSON translations vers array plat
       interface FlatTranslation {
@@ -585,7 +608,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
-        hasMore: offsetNum + paginatedTranslations.length < totalCount
+        hasMore: scanTronque || offsetNum + paginatedTranslations.length < totalCount
       });
 
     } catch (error) {

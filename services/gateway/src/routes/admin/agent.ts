@@ -7,6 +7,7 @@ import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData, type AgentAdminEve
 import { logError } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
+import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { AgentHttpClient, AgentUnavailableError } from '../../services/AgentHttpClient';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
@@ -25,6 +26,12 @@ const validateObjectId = (id: string, name: string, reply: FastifyReply): boolea
 // (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
 // décide — un seul endroit où lire la loi, un seul où la changer.
 const requireAgentAdmin = requirePermission('canManageAgent');
+
+// #4165 — plafond du nombre de rôles agent par conversation, utilisé pour
+// borner explicitement `agentUserRole.findMany` sur une page de
+// `GET /configs`. Aligné sur `agentConfigSchema.maxControlledUsers` (`.max(50)`
+// ci-dessous) : un config ne peut de toute façon piloter plus de 50 comptes.
+const AGENT_MAX_CONTROLLED_USERS_PER_CONVERSATION = 50;
 
 const agentConfigSchema = z.object({
   enabled: z.boolean().optional(),
@@ -344,26 +351,24 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10)));
       const skip = (pageNum - 1) * limitNum;
 
-      // Collect ALL conversationIds with any agent activity
-      const [configConvIds, roleConvIds, analyticConvIds] = await Promise.all([
-        fastify.prisma.agentConfig.findMany({ select: { conversationId: true } }),
-        fastify.prisma.agentUserRole.findMany({ select: { conversationId: true }, distinct: ['conversationId'] }),
-        fastify.prisma.agentAnalytic.findMany({ select: { conversationId: true } }),
-      ]);
-
-      const allConvIds = [...new Set([
-        ...configConvIds.map((c) => c.conversationId),
-        ...roleConvIds.map((r) => r.conversationId),
-        ...analyticConvIds.map((a) => a.conversationId),
-      ])];
-
-      if (allConvIds.length === 0) {
-        return sendPaginatedSuccess(reply, [], { total: 0, page: pageNum, limit: limitNum, hasMore: false } as any);
-      }
-
-      // Fetch conversations (with optional search filter)
+      // BORNÉ (#4165). Les trois `findMany` retirés ici lisaient CHAQUE ligne
+      // de `agentConfig`/`agentUserRole`/`agentAnalytic` — même projetée sur
+      // le seul `conversationId` — pour construire, EN MÉMOIRE, l'univers des
+      // conversations « avec une activité agent », AVANT même que la
+      // pagination ne s'applique : le coût grandissait avec le nombre TOTAL de
+      // conversations ayant jamais eu un agent, pas avec la taille d'une page.
+      // Le `where` ci-dessous pose la MÊME question dans la requête
+      // `conversation.findMany`, via les relations inverses que
+      // `schema.prisma` déclare déjà (`agentConfig`, `agentAnalytic`,
+      // `agentUserRoles` sur `Conversation`) : MongoDB l'évalue au moment de
+      // sélectionner LA PAGE, jamais sur la collection entière. Le coût
+      // redevient celui d'une page.
       const conversationWhere = {
-        id: { in: allConvIds },
+        OR: [
+          { agentConfig: { isNot: null } },
+          { agentAnalytic: { isNot: null } },
+          { agentUserRoles: { some: {} } },
+        ],
         ...(search ? { title: { contains: search, mode: 'insensitive' as const } } : {}),
       };
       const [conversations, total] = await Promise.all([
@@ -380,17 +385,30 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const pageConvIds = conversations.map((c) => c.id);
       const convMap = new Map(conversations.map((c) => [c.id, c]));
 
-      // Fetch configs, roles, analytics for this page
+      // Fetch configs, roles, analytics for this page. Les trois requêtes sont
+      // déjà scopées à `pageConvIds` (≤ `limitNum` ≤ 100, lui-même issu de
+      // `conversation.findMany` BORNÉ ci-dessus) — leur risque n'est donc pas
+      // celui des trois `findMany` retirés plus haut. `take` explicite quand
+      // même (#4165) : la borne ne doit pas dépendre implicitement d'une
+      // contrainte `schema.prisma` qu'un futur changement de modèle pourrait
+      // lever sans qu'aucun témoin ne le voie ici.
       const [configs, allRoles, allAnalytics] = await Promise.all([
         fastify.prisma.agentConfig.findMany({
           where: { conversationId: { in: pageConvIds } },
+          // `@@unique([conversationId])` : au plus UNE ligne par conversation de la page.
+          take: pageConvIds.length,
         }),
         fastify.prisma.agentUserRole.findMany({
           where: { conversationId: { in: pageConvIds } },
           select: { conversationId: true, userId: true },
+          // Plusieurs rôles par conversation, bornés par `maxControlledUsers`
+          // (Zod : `.max(50)` sur `agentConfigSchema` ci-dessus).
+          take: pageConvIds.length * AGENT_MAX_CONTROLLED_USERS_PER_CONVERSATION,
         }),
         fastify.prisma.agentAnalytic.findMany({
           where: { conversationId: { in: pageConvIds } },
+          // `@@unique([conversationId])` : au plus UNE ligne par conversation de la page.
+          take: pageConvIds.length,
           select: { conversationId: true, messagesSent: true, totalWordsSent: true, avgConfidence: true, lastResponseAt: true },
         }),
       ]);
@@ -639,20 +657,43 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   fastify.get('/configs/:conversationId/roles', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
     schema: {
-      description: 'List all agent user roles for a conversation.',
+      description: 'List all agent user roles for a conversation, paginated.',
       tags: ['admin-agent'],
       summary: 'List conversation roles',
       security: securityBearerAuth,
       params: conversationIdParams,
-      response: { 200: successArrayResponse, ...stdErrors },
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Number of items to skip (default: 0)' },
+          limit: { type: 'string', description: 'Items per page (default: 20, max: 100)' },
+        },
+      },
+      response: { 200: paginatedArrayResponse, ...stdErrors },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
       /* istanbul ignore next -- Fastify schema validates the ObjectId pattern before the handler runs */
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
-      const roles = await fastify.prisma.agentUserRole.findMany({ where: { conversationId } });
-      return sendSuccess(reply, roles);
+      // BORNÉ (#4165). Sans `take` ni `select`, cette liste grandissait avec
+      // l'effectif de LA conversation — jusqu'à des milliers de rôles sur le
+      // salon le plus peuplé — et chaque ligne transporte tous ses tableaux
+      // de profil (catchphrases, relationshipMap, topicsOfExpertise…).
+      // `validatePagination` pose le même plafond (≤ 100) que le reste du
+      // dépôt ; `hasMore` dit au client s'il y a une page de plus.
+      const { offset: offsetStr, limit: limitStr } = request.query as { offset?: string; limit?: string };
+      const { offset, limit } = validatePagination(offsetStr, limitStr);
+      const [roles, total] = await Promise.all([
+        fastify.prisma.agentUserRole.findMany({
+          where: { conversationId },
+          orderBy: { id: 'asc' },
+          skip: offset,
+          take: limit,
+        }),
+        fastify.prisma.agentUserRole.count({ where: { conversationId } }),
+      ]);
+      return sendPaginatedSuccess(reply, roles, buildPaginationMeta(total, offset, limit, roles.length));
     } catch (error) {
       logError(fastify.log, 'Error fetching agent roles:', error);
       return sendInternalError(reply, 'Erreur serveur');
