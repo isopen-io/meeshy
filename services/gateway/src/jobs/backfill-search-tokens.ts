@@ -35,30 +35,51 @@ export async function backfillSearchTokens(prisma: PrismaClient): Promise<number
   let traites = 0;
 
   for (let tour = 0; tour < TOURS_MAX; tour++) {
-    // `isEmpty: true` seul ne suffirait pas : sur le connecteur MongoDB, un
-    // filtre scalaire ne matche pas les documents où le champ est ABSENT — et
-    // c'est précisément le cas des lignes créées avant la colonne (leçon 307).
-    const lot = await prisma.user.findMany({
-      where: {
-        OR: [
-          { searchTokens: { isEmpty: true } },
-          { searchTokens: { isSet: false } },
-        ],
-      },
-      select: { id: true, username: true, displayName: true, firstName: true, lastName: true },
-      take: TAILLE_LOT,
-    } as never);
+    // `findRaw`, et c'est la SEULE forme qui marche ici.
+    //
+    // Prisma n'exprime pas « ce champ est absent » sur une LISTE scalaire : ses
+    // filtres de tableau sont `equals`, `has`, `hasEvery`, `hasSome`, `isEmpty`
+    // — `isSet` n'appartient qu'aux scalaires optionnels, et le passer lève un
+    // `PrismaClientValidationError` (mesuré en intégration : le rattrapage
+    // échouait au démarrage, la colonne restait vide sur les 222 comptes, et la
+    // recherche ne trouvait personne).
+    //
+    // `isEmpty: true` seul ne suffit pas non plus : en MongoDB, `$size: 0` ne
+    // matche pas un document où le champ MANQUE — c'est-à-dire exactement les
+    // lignes créées avant la colonne, donc toutes celles à rattraper.
+    //
+    // Un filtre brut est acceptable ici et nulle part ailleurs : ce n'est pas un
+    // chemin chaud, il s'exécute une fois, et l'API typée ne peut pas dire cette
+    // question.
+    const brut = (await (prisma as unknown as {
+      user: { findRaw: (args: unknown) => Promise<unknown> };
+    }).user.findRaw({
+      filter: { $or: [{ searchTokens: { $exists: false } }, { searchTokens: { $size: 0 } }] },
+      options: { limit: TAILLE_LOT, projection: { _id: 1, username: 1, displayName: 1, firstName: 1, lastName: 1 } },
+    })) as Array<Record<string, unknown>>;
+
+    // `findRaw` rend le document MONGO : la clé est `_id`, pas `id`, et sa
+    // valeur est un `{ $oid }`. Le confondre avec la forme Prisma ferait écrire
+    // sur `undefined`.
+    const lot = brut.map((doc) => ({
+      id: typeof doc._id === 'object' && doc._id !== null
+        ? String((doc._id as { $oid?: string }).$oid ?? doc._id)
+        : String(doc._id),
+      username: (doc.username as string | null) ?? null,
+      displayName: (doc.displayName as string | null) ?? null,
+      firstName: (doc.firstName as string | null) ?? null,
+      lastName: (doc.lastName as string | null) ?? null,
+    }));
 
     if (lot.length === 0) break;
 
     await Promise.all(
-      (lot as Array<{ id: string; username: string; displayName: string | null; firstName: string | null; lastName: string | null }>)
-        .map((compte) =>
-          prisma.user.update({
-            where: { id: compte.id },
-            data: { searchTokens: searchTokensFor(compte) },
-          })
-        )
+      lot.map((compte) =>
+        prisma.user.update({
+          where: { id: compte.id },
+          data: { searchTokens: searchTokensFor({ ...compte, username: compte.username ?? undefined }) },
+        })
+      )
     );
 
     traites += lot.length;

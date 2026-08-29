@@ -292,8 +292,15 @@ class MeeshyServer {
     // rattrapage doit donc précéder l'usage. Il n'est PAS derrière une garde de
     // premier boot — le dépôt a déjà payé ce piège avec `ensurePostGeoIndex`,
     // restée sous `shouldInitialize()` et jamais exécutée en production.
-    void backfillSearchTokens(this.prisma).catch((error) =>
-      logger.error('[BackfillSearchTokens] rattrapage interrompu', { error })
+    void backfillSearchTokens(this.prisma).catch((error: unknown) =>
+      // Message EXPLICITE, avec sa conséquence : un `error` opaque a laissé ce
+      // rattrapage échouer en silence au premier déploiement — la colonne est
+      // restée vide sur les 222 comptes, et la recherche ne trouvait personne.
+      // Un journal qui ne dit pas ce qui est cassé ne signale rien.
+      logger.error(
+        '[BackfillSearchTokens] rattrapage INTERROMPU — la recherche de personnes ne trouvera personne tant que la colonne `searchTokens` est vide',
+        { error: error instanceof Error ? { name: error.name, message: error.message } : error }
+      )
     );
 
     // Initialiser le service de nettoyage des uploads tus incomplets
