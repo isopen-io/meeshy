@@ -13,6 +13,11 @@ import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError, sendBadRequest, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import {
+  createSocialWriteRateLimitConfig,
+  createSharedWriteRateLimitPreHandler,
+  hardenedRateLimitConfig,
+} from './socialRateLimit';
 import { resolveInteractionTarget } from '../../services/posts/postVisibility';
 import { withMutationLog, withMutationOutcome } from '../../utils/withMutationLog';
 import { MutationInFlight } from '../../services/MutationLogService';
@@ -50,10 +55,28 @@ export function registerInteractionRoutes(
   registerImpressionRoutes(fastify, prisma, requiredAuth);
   registerShareRoutes(fastify, prisma, requiredAuth, postService);
 
+  // #4147 critère 2 — seau PARTAGÉ avec POST /posts et
+  // POST /posts/from-attachment (core.ts, sa PROPRE instance de ce même
+  // preHandler ; le partage vient de la clé Redis, pas de l'identité de la
+  // fermeture — cf. socialRateLimit.ts, en-tête). Posé sur repost ci-dessous.
+  const sharedWriteRateLimit = createSharedWriteRateLimitPreHandler();
+
   // POST /posts/:postId/like
+  //
+  // `hardenedRateLimitConfig` recale ce seau (hook `preHandler` + `skipOnError:
+  // false`, cf. socialRateLimit.ts) — sans quoi la clé se calculait à
+  // `onRequest`, avant `authContext`, donc par IP plutôt que par compte
+  // (#4147 critère 6). #4147 critère 4 demande « le même seau que POST » pour
+  // DELETE ci-dessous ; `config.rateLimit` ne peut PAS faire converger deux
+  // ROUTES vers un compteur unique (cf. socialRateLimit.ts, en-tête : chaque
+  // route reçoit son propre "child store", namespacé par sa méthode+URL) —
+  // DELETE reçoit donc le MÊME plafond (30/min, même fabrique, même clé par
+  // COMPTE), posé INDÉPENDAMMENT, ce que le critère autorise explicitement
+  // (« au minimum le 30/min actuel du POST tant que la route cible
+  // n'existe pas »).
   fastify.post('/posts/:postId/like', {
     preValidation: [requiredAuth],
-    config: { rateLimit: createPostRouteRateLimitConfig('like') },
+    config: { rateLimit: hardenedRateLimitConfig(createPostRouteRateLimitConfig('like')) },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -196,8 +219,22 @@ export function registerInteractionRoutes(
   });
 
   // DELETE /posts/:postId/like
+  //
+  // #4147 critère 4 — avant ce lot, aucun plafond : le retrait était libre
+  // pendant que la pose (POST ci-dessus) était bornée à 30/min, une
+  // asymétrie qu'un compte peut exploiter pour marteler la ligne
+  // `PostReaction`/les compteurs sans jamais être freiné. Même plafond que
+  // POST, posé de façon identique
+  // (`hardenedRateLimitConfig(createPostRouteRateLimitConfig('like'))` —
+  // même fabrique, même clé PAR COMPTE, même échec fail-closed) : les deux
+  // sens du geste sont désormais bornés au même rythme, chacun sur son
+  // propre budget de 30/min (`config.rateLimit` ne peut pas les fusionner en
+  // un seul compteur inter-routes — cf. socialRateLimit.ts, en-tête ; le
+  // critère l'autorise explicitement : « au minimum le 30/min actuel du
+  // POST »).
   fastify.delete('/posts/:postId/like', {
     preValidation: [requiredAuth],
+    config: { rateLimit: hardenedRateLimitConfig(createPostRouteRateLimitConfig('like')) },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -614,8 +651,18 @@ export function registerInteractionRoutes(
   // publication fraîche (createdAt/expiresAt = now/now+TTL) et un engagement
   // remis à zéro. Auteur uniquement, type STORY uniquement. Le broadcast
   // `story:created` la re-fanne dans les trays des destinataires.
+  // #4147 critère 1 — la seule route DESTRUCTIVE du module (supprime
+  // postView/postReaction/postImpression, remet sept compteurs à zéro,
+  // refanne story:created dans tous les trays) n'avait AUCUN plafond avant ce
+  // lot : dix appels valaient dix remises à zéro de l'engagement acquis.
+  // Seau dédié `social:write` — cf. socialRateLimit.ts pour le choix de ne
+  // PAS le coupler à la création (`posts:create`, réutilisé par repost
+  // juste en dessous) : republier une story existante n'est pas un geste de
+  // création, et le coupler bloquerait un usage nominal (prolonger une
+  // story qui expire) sur le budget d'un autre.
   fastify.post('/posts/:postId/republish', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialWriteRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -701,8 +748,20 @@ export function registerInteractionRoutes(
     }
   });
 
+  // #4147 critère 2 — un repost crée pourtant un `Post`
+  // (`postService.repostPost` → `prisma.post.create`) mais n'avait, avant ce
+  // lot, aucun plafond : le plafond de création (`POST /posts`, 10/min) se
+  // contournait entièrement en repostant. `sharedWriteRateLimit` (construit
+  // plus haut) fait consommer à cette route le MÊME budget que POST /posts
+  // et POST /posts/from-attachment — PAS via `config.rateLimit` (qui ne
+  // PEUT PAS faire partager un compteur entre routes, cf.
+  // socialRateLimit.ts, en-tête) mais via un `preHandler` qui incrémente
+  // directement la même clé Redis. C'est ce partage — prouvé par témoin
+  // (deux comptes, deux seaux distincts ; un seul compte, un budget commun
+  // aux trois routes) — qui ferme le contournement.
   fastify.post('/posts/:postId/repost', {
     preValidation: [requiredAuth],
+    preHandler: [sharedWriteRateLimit],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

@@ -8,6 +8,7 @@ import { withMentions } from '../../services/posts/postReferences';
 import { wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { resolveDensityGridStepDegrees } from '../../services/location/geoDiscoverability';
+import { createSocialDiscoveryRateLimitConfig } from './socialRateLimit';
 
 /**
  * GET /posts/nearby + GET /posts/nearby/density — recherche géospatiale de
@@ -26,6 +27,11 @@ const METERS_PER_KM = 1000;
 // Antipode terrestre (~20 015 km) : au-delà, "à proximité" n'a plus de sens —
 // borne haute pour éviter un $geoNear sans limite pratique de rayon.
 const MAX_RADIUS_KM = 20000;
+// #4147 critere 5 -- un cellSizeKm tres fin sur un grand rayon produit un nombre
+// COMBINATOIRE de cellules : la reponse degrade le client (parsing, memoire,
+// rendu) sans qu'aucun besoin produit ne le demande. La borne est posee sur ce
+// qui est SERVI, la ou le cout devient celui du lecteur.
+const MAX_DENSITY_CELLS = 2000;
 
 const NearbyQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),
@@ -121,6 +127,7 @@ export function registerNearbyRoutes(
   // GET /posts/nearby — pins triés par distance, contenu complet.
   fastify.get('/posts/nearby', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialDiscoveryRateLimitConfig() },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -192,6 +199,7 @@ export function registerNearbyRoutes(
   // relecture Prisma.
   fastify.get('/posts/nearby/density', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialDiscoveryRateLimitConfig() },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -232,7 +240,7 @@ export function registerNearbyRoutes(
         command as unknown as Prisma.InputJsonObject
       )) as unknown as DensityAggregateResult;
       const rows = raw.cursor?.firstBatch ?? [];
-      const data = rows.map((row) => ({ cellLat: row.cellLat, cellLng: row.cellLng, count: row.count }));
+      const data = rows.slice(0, MAX_DENSITY_CELLS).map((row) => ({ cellLat: row.cellLat, cellLng: row.cellLng, count: row.count }));
 
       return sendSuccess(reply, data);
     } catch (error) {
