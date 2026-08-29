@@ -2685,15 +2685,39 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `persistDraft does not save a draft carrying a sticker`() = runTest {
+    fun `persistDraft saves the selected slide's on-canvas stickers`() = runTest {
         val store = InMemoryStoryComposerDraftStore()
         val vm = viewModel(draftStore = store)
         vm.onTextChange("caption")
-        vm.onAddSticker("🎉") // a sticker is rich content the snapshot can't yet represent
+        vm.onAddSticker("🎉")
 
         vm.persistDraft()
 
-        assertThat(store.load()).isNull()
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        val slide = saved!!.slides.single()
+        assertThat(slide.text).isEqualTo("caption")
+        assertThat(slide.stickers.single().emoji).isEqualTo("🎉")
+    }
+
+    @Test
+    fun `onEnterComposer restores persisted stickers`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    stickers = listOf(
+                        me.meeshy.sdk.model.StoryDraftStickerElementSnapshot(id = "k1", emoji = "😀"),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.selectedSlideStickers.single().emoji).isEqualTo("😀")
     }
 
     @Test

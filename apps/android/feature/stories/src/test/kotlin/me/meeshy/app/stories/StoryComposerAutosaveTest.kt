@@ -13,10 +13,11 @@ import org.junit.Test
 /**
  * [StoryComposerAutosave] — the pure decision layer that turns a live composer deck into
  * a save / clear / no-op against the durable draft store, and restores a stored draft
- * only into a pristine composer. The rich-content fidelity gate (a draft carrying
- * elements/stickers/background is not yet persistable) is the load-bearing rule: it keeps
- * a restore from ever being lossy. The 9:16 canvas pan/zoom transform, the photo filter and
- * the pinned duration are persistable and round-trip through the snapshot.
+ * only into a pristine composer. Every dimension of a composer slide — caption, media,
+ * canvas pan/zoom transform, photo filter, pinned duration, colour/media background,
+ * on-canvas text elements and stickers — round-trips through the snapshot, so there is no
+ * longer any rich content that forces a draft to be treated as not-yet-persistable: the
+ * decision turns purely on whether the projected snapshot is worth restoring and changed.
  */
 class StoryComposerAutosaveTest {
 
@@ -137,7 +138,7 @@ class StoryComposerAutosaveTest {
     }
 
     @Test
-    fun `a draft that gained rich content purges its stale stored draft`() {
+    fun `a draft that gained a sticker now saves it over the stale stored draft`() {
         val previous = textDeck("simple before").toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
         val deck = textDeck("simple before")
             .addStickerToSelected(StoryStickerElement(id = "k1", emoji = "🎉"))
@@ -150,54 +151,9 @@ class StoryComposerAutosaveTest {
             previous = previous,
         )
 
-        assertThat(action).isEqualTo(StoryDraftPersist.Clear)
-    }
-
-    // ---- deckHasRichContent: each arm ----
-
-    @Test
-    fun `deckHasRichContent is false for a bare text plus media deck`() {
-        assertThat(
-            StoryComposerAutosave.deckHasRichContent(textDeck("t").addMediaToSelected("m1")),
-        ).isFalse()
-    }
-
-    @Test
-    fun `deckHasRichContent is true for a sticker`() {
-        val deck = blankDeck().addStickerToSelected(StoryStickerElement(id = "k1", emoji = "🎉"))
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isTrue()
-    }
-
-    @Test
-    fun `deckHasRichContent is false for a text element now that it is persistable`() {
-        val deck = blankDeck().addTextElementToSelected(StoryTextElement(id = "e1", text = "on canvas"))
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
-    }
-
-    @Test
-    fun `deckHasRichContent is false for a colour background now that it is persistable`() {
-        val deck = blankDeck().setSelectedBackground(StoryBackgroundValue.Hex("FF0000"))
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
-    }
-
-    @Test
-    fun `deckHasRichContent is false for a background media designation now that it is persistable`() {
-        val deck = blankDeck().addMediaToSelected("m1").toggleSelectedBackgroundMedia("m1")
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
-    }
-
-    @Test
-    fun `deckHasRichContent is false for a pinned duration now that it is persistable`() {
-        val deck = blankDeck().setSelectedDuration(12.0)
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
-    }
-
-    @Test
-    fun `deckHasRichContent is false for a non-identity canvas transform now that it is persistable`() {
-        val deck = blankDeck().updateSelectedTransform(
-            StoryCanvasTransform(scale = 2f).clampedTo(1000f, 1000f),
-        )
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().stickers.single().emoji).isEqualTo("🎉")
     }
 
     // ---- deckIsPristine ----
@@ -240,6 +196,12 @@ class StoryComposerAutosaveTest {
     fun `a single slide carrying even a blank text element is not pristine`() {
         val withElement = blankDeck().addTextElementToSelected(StoryTextElement(id = "e1"))
         assertThat(StoryComposerAutosave.deckIsPristine(withElement)).isFalse()
+    }
+
+    @Test
+    fun `a single slide carrying even a blank sticker is not pristine`() {
+        val withSticker = blankDeck().addStickerToSelected(StoryStickerElement(id = "k1", emoji = ""))
+        assertThat(StoryComposerAutosave.deckIsPristine(withSticker)).isFalse()
     }
 
     // ---- restore ----
@@ -399,12 +361,6 @@ class StoryComposerAutosaveTest {
     }
 
     // ---- photo filter persistence ----
-
-    @Test
-    fun `deckHasRichContent is false for a filtered slide now that it is persistable`() {
-        val deck = blankDeck().setSelectedFilter(StoryFilter.VINTAGE)
-        assertThat(StoryComposerAutosave.deckHasRichContent(deck)).isFalse()
-    }
 
     @Test
     fun `a single blank slide with a filter is not pristine`() {
@@ -881,6 +837,137 @@ class StoryComposerAutosaveTest {
 
         val action = StoryComposerAutosave.resolve(
             deck = deck.addTextElementToSelected(StoryTextElement(id = "e1", text = "added")),
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = previous,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+    }
+
+    // ---- on-canvas sticker persistence ----
+
+    private fun placedSticker() = StoryStickerElement(
+        id = "k1",
+        emoji = "🎉",
+        x = 0.25f,
+        y = 0.75f,
+        scale = 1.8f,
+        rotationDeg = -40f,
+    )
+
+    @Test
+    fun `toDraftSnapshot carries a sticker with all its fields`() {
+        val sticker = placedSticker()
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .addStickerToSelected(sticker)
+
+        val snap = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).slides.single().stickers.single()
+
+        assertThat(snap.id).isEqualTo("k1")
+        assertThat(snap.emoji).isEqualTo("🎉")
+        assertThat(snap.x).isWithin(1e-4f).of(0.25f)
+        assertThat(snap.y).isWithin(1e-4f).of(0.75f)
+        assertThat(snap.scale).isWithin(1e-4f).of(1.8f)
+        assertThat(snap.rotationDeg).isWithin(1e-4f).of(-40f)
+    }
+
+    @Test
+    fun `toDeck restores a sticker with all its fields`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    mediaIds = listOf("m1"),
+                    stickers = listOf(
+                        me.meeshy.sdk.model.StoryDraftStickerElementSnapshot(
+                            id = "k1",
+                            emoji = "😀",
+                            x = 0.2f,
+                            y = 0.9f,
+                            scale = 2.2f,
+                            rotationDeg = 33f,
+                        ),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+
+        val sticker = snap.toDeck()!!.slides.single().stickers.single()
+
+        assertThat(sticker).isEqualTo(
+            StoryStickerElement(id = "k1", emoji = "😀", x = 0.2f, y = 0.9f, scale = 2.2f, rotationDeg = 33f),
+        )
+    }
+
+    @Test
+    fun `a placed sticker survives the deck-snapshot-deck round-trip`() {
+        val deck = StorySlideDeck.single("s1")
+            .addMediaToSelected("m1")
+            .addStickerToSelected(placedSticker())
+
+        val rebuilt = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, now).toDeck()
+
+        assertThat(rebuilt!!.slides.single().stickers.single()).isEqualTo(placedSticker().normalised())
+    }
+
+    @Test
+    fun `toDeck re-normalises an out-of-range persisted sticker`() {
+        val snap = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    stickers = listOf(
+                        me.meeshy.sdk.model.StoryDraftStickerElementSnapshot(
+                            id = "k1",
+                            emoji = "🎈",
+                            x = 5f,
+                            y = -3f,
+                            scale = 999f,
+                            rotationDeg = 540f,
+                        ),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+
+        val sticker = snap.toDeck()!!.slides.single().stickers.single()
+
+        assertThat(sticker).isEqualTo(
+            StoryStickerElement(id = "k1", emoji = "🎈", x = 5f, y = -3f, scale = 999f, rotationDeg = 540f)
+                .normalised(),
+        )
+    }
+
+    @Test
+    fun `a sticker-only slide resolves to Save carrying the sticker`() {
+        val deck = StorySlideDeck.single("s1")
+            .addStickerToSelected(StoryStickerElement(id = "k1", emoji = "🎉"))
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck,
+            visibility = StoryVisibility.PUBLIC,
+            repostOfId = null,
+            nowIso = now,
+            previous = null,
+        )
+
+        assertThat(action).isInstanceOf(StoryDraftPersist.Save::class.java)
+        val snap = (action as StoryDraftPersist.Save).snapshot
+        assertThat(snap.slides.single().stickers.single().emoji).isEqualTo("🎉")
+    }
+
+    @Test
+    fun `adding a sticker to an already-saved draft resolves to Save, not None`() {
+        val deck = StorySlideDeck.single("s1").addMediaToSelected("m1")
+        val previous = deck.toDraftSnapshot(StoryVisibility.PUBLIC, null, "earlier")
+
+        val action = StoryComposerAutosave.resolve(
+            deck = deck.addStickerToSelected(StoryStickerElement(id = "k1", emoji = "🎉")),
             visibility = StoryVisibility.PUBLIC,
             repostOfId = null,
             nowIso = now,

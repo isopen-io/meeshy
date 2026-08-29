@@ -5,6 +5,21 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — when the LAST case a gate guarded goes away, RETIRE the gate; don't leave it as a constant-`false` branch (slice `story-draft-persist-sticker-elements`)
+The story-draft fidelity gate (`deckHasRichContent`) existed to catch content the primitive snapshot could
+not yet represent, purging a stale draft rather than restoring lossily. Six slices lifted its dimensions one
+at a time (transform, filter, duration, background, text elements, stickers); after the last one the gate
+would have been `deck.slides.any { it.stickers.isNotEmpty() }` → wired to a snapshot that now *carries*
+stickers → constant `false`. The temptation is to keep the (now-dead) function and its two call sites "just in
+case". Resisted: a branch that can never be true is a lie about the code's shape — it tells the next reader a
+purge path still exists. So the function, its `resolve` first arm, and its `deckIsPristine` call were all
+removed; `deckIsPristine`'s intent (a silently-added sticker still counts as touched) moved to an explicit
+`it.stickers.isEmpty()`. **Retiring a gate is a behaviour change and needs the same TDD care as adding one**:
+the `resolve` purge-on-rich test became a Save test, the VM does-not-save test became a saves test, and the
+six `deckHasRichContent is …` unit tests were deleted WITH the function — legitimate because each dimension's
+"is persistable" behaviour is already covered by its own Save + round-trip tests, so no behaviour coverage was
+lost (only tests of a deleted symbol). Check that equivalence before deleting a test, every time.
+
 ## 2026-08-29 — a durable "object-graph" snapshot can stay primitive-only by riding EXISTING wire SSOTs, not re-spelling them (slice `story-draft-persist-text-elements`)
 The first object-graph dimension of the story fidelity gate (on-canvas `StoryTextElement`, ~13 styled
 fields incl. a sealed `StoryTextBackground` and three enums) looked like it needed a polymorphic
