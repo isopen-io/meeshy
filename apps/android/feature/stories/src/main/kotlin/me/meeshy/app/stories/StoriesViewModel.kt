@@ -81,7 +81,7 @@ class StoriesViewModel @Inject constructor(
                     val tray = StoryTrayBuilder.build(
                         groups = merged.toStoryGroups(currentUserId = currentUserId),
                         currentUserId = currentUserId,
-                        mediaBaseUrl = config.socketUrl,
+                        mediaBaseUrl = config.apiBaseUrl,
                     )
                     _state.update {
                         it.copy(
