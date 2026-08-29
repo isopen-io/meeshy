@@ -33,7 +33,39 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `1fbd1f4d` — base de 257i.
 > - Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
 >
-> ### 259i — le SIGNE d'un glissement, troisième famille RTL (#4297, en cours)
+> ### ⚠️ 260i — sondage « cache-first » : la dimension est SAINE (close par la négative)
+>
+> Sonde sur le principe non négociable « **jamais de spinner quand le cache a des
+> données** ». **Rien à corriger** — et le chemin pour l'établir vaut d'être noté,
+> parce que l'instrument a menti quatre fois sur quatre.
+>
+> | mesure | résultat |
+> |---|---|
+> | `ProgressView` réels | 126 dans 83 fichiers |
+> | conditionnés au chargement SANS test de vacuité | 33 — **presque tous légitimes** |
+> | ViewModels portant `loadState` | 11 |
+> | ViewModels signalés « réseau avant cache » | 4 → **4 faux positifs** |
+>
+> - Les 33 « suspects » sont en écrasante majorité des **spinners d'ACTION** (bouton
+>   d'envoi, vérification 2FA) ou des **pieds de pagination** posés APRÈS les lignes
+>   déjà rendues. Ni les uns ni les autres ne violent la doctrine, qui vise l'écran
+>   qui REMPLACE son contenu par une roue.
+> - Les 4 « réseau avant cache » venaient d'une heuristique **positionnelle** : je
+>   comparais l'offset du premier `CacheCoordinator` à celui du premier appel de
+>   service DANS LE TEXTE du fichier. Sur un ViewModel de 1600 lignes, une propriété
+>   de service déclarée en tête gagne toujours. Vérification faite sur le chemin de
+>   chargement RÉEL : `ConversationListViewModel` est exemplaire (cache d'abord, les
+>   quatre cas de `CacheResult` distingués, et `.expired` récupère la charge sur
+>   disque pour qu'une resync hors-ligne ne vide jamais l'écran) ;
+>   `ContactsListViewModel` et `GlobalSearchViewModel` distinguent aussi les quatre cas.
+>
+> > **Mesurer un ORDRE par des offsets de texte, c'est mesurer l'ordre de
+> > DÉCLARATION, pas l'ordre d'EXÉCUTION.** Un ordre ne se lit que sur le chemin
+> > d'appel. Quatre faux positifs sur quatre : l'instrument n'avait aucune valeur.
+>
+> Ne pas relancer cette sonde sans un instrument qui suit le flot d'exécution.
+>
+> ### 259i — le SIGNE d'un glissement, troisième famille RTL (#4297, MERGÉE `c96b307b`)
 >
 > SwiftUI retourne les piles et les marges ; `RightToLeftLayoutGuardTests` garde les
 > symboles nommés par un côté. **Personne ne gardait le signe d'un `DragGesture`** —
