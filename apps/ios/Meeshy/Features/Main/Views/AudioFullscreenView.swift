@@ -351,7 +351,7 @@ private struct AudioFullscreenPage: View {
     }
 
     private var originalFlag: String {
-        LanguageDisplay.from(code: item.originalLanguage)?.flag ?? "\u{1F3B5}"
+        LanguageFlagChip.flag(for: item.originalLanguage)
     }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
@@ -1127,7 +1127,7 @@ private struct AudioFullscreenPage: View {
                     ForEach(translatedAudios, id: \.id) { audio in
                         let display = LanguageDisplay.from(code: audio.targetLanguage)
                         languagePill(
-                            flag: display?.flag ?? "\u{1F310}",
+                            flag: LanguageFlagChip.flag(for: audio.targetLanguage),
                             code: audio.targetLanguage,
                             label: display?.name ?? audio.targetLanguage,
                             isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()

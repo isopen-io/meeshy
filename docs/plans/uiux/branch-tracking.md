@@ -8,13 +8,80 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 2. Develop, commit, push on the working branch
 3. Once CI passes: merge into main via PR
 4. After merge: update this file with the new base
-5. Delete the feature branch after merge
+5. **Réinitialiser** la branche de travail sur le nouveau `main`
+   (`git checkout -B <branche> origin/main` + `push --force-with-lease`) —
+   **ne pas la SUPPRIMER** : les caches Actions sont scopés par ref, et
+   supprimer la ref les évince, ce qui fait repartir le gate iOS à froid et lui
+   fait dépasser son plafond de 50 min (mesure : § « La branche de travail se
+   RÉINITIALISE » ci-dessous).
 
 ---
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 251i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 252i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+>
+> - **251i est MERGÉE** — PR [#4257](https://github.com/isopen-io/meeshy/pull/4257), squash `9286ce92`, issue #4256 fermée, 17 checks verts, gate `Build app + tests unitaires` vert sur `ec96244c` (**9008 tests, 0 échec**). Le doute publié de 251i est **SOLDÉ** : `MetaSeparator()` sans paramètre reçoit bien `.font` / `.foregroundColor` du site par l'environnement — aucun des 28 sites n'a changé d'apparence.
+> - **Synchronisation 252i** : branche repartie de `origin/main` `9286ce92`.
+>
+> ### ⚠️ La branche de travail se RÉINITIALISE, elle ne se SUPPRIME pas (mesuré au 251i)
+>
+> Le protocole ci-dessous dit « supprimer la branche après le merge » (étape 5).
+> **Ne pas le faire — c'est ce qui a coûté un cycle de CI à 251i.** Les caches
+> Actions sont scopés par **ref** : supprimer la branche évince le cache SPM et
+> le cache DerivedData de la piste, et le premier run de l'itération suivante
+> repart **à froid**. Mesure comparée, même gate, même branche :
+>
+> | étape | run chaud | run froid |
+> |---|---|---|
+> | restauration SPM / DerivedData | 26 s / 23 s (hit) | 1 s / 0 s (**miss**) |
+> | compile | 7 min | **25 min** |
+> | tests | 13 min 43 → vert | **1 min 12 → tué** |
+>
+> Le préambule à froid consomme **47 des 50 minutes** du plafond
+> (`.github/workflows/ios.yml` → `timeout-minutes`), et la suite n'a plus le
+> budget de tourner. `git checkout -B <branche> origin/main` + `push
+> --force-with-lease` **préserve la ref** (donc les caches) tout en repartant de
+> `main` : c'est la manœuvre à faire à chaque itération.
+>
+> Corollaire de lecture, appris au même endroit : **« 0 test en échec » n'est pas
+> « les tests passent »**. L'étape qui dépouille le bundle affiche 0 quand la
+> suite a été TUÉE avant d'exécuter quoi que ce soit. Lire la durée et la
+> conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
+> résume.
+>
+> ### 252i — la garde de 249i ne pouvait pas voir la neuvième copie (issue #4260)
+>
+> - Base `9286ce92`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-252i-language-flag-role.md`.
+> - **#4248 avait soldé huit copies de la puce de langue ; `FocalRow` en portait
+>   deux de plus, invisibles à sa garde** — celle-ci interdit une FORME (le
+>   soulignement dessiné, les clés réservées) et les deux copies disaient leur
+>   état par l'OPACITÉ et par un fond de puce. **Une garde bâtie sur les
+>   instances qu'on a trouvées généralise à ces instances, pas au concept** :
+>   celle de 252i interroge le RÔLE (qui décide du drapeau, qui le nomme).
+> - **Régression silencieuse évitée de justesse** : la copie lisait
+>   `LanguageData` (78 langues), la source unique `LanguageDisplay` (41). Router
+>   l'une vers l'autre rendait « WO » là où la rangée montrait 🇸🇳, pour
+>   39 langues, sans qu'aucun test ne rougisse. **Une source unique doit être
+>   plus riche que la plus riche des copies qu'elle remplace.**
+> - **Décision produit ISOLÉE, pas tranchée** : les deux tables divergent sur UN
+>   code — `pt`, 🇵🇹 vs 🇧🇷 — et un banc épingle 🇧🇷. `ComposerLanguageFlag`
+>   garde sa table, sous une **exemption nommée** dans la garde, jusqu'à ce que
+>   le porteur tranche (suite n° 1 de l'analyse).
+> - Preuve : secondes réponses à « quel drapeau ? » **10 → 0** ; étiquettes au
+>   nom nu **2 → 0** ; copies du contrôle **2 → 0** ; catalogue inchangé (3408).
+> - **Résultat NÉGATIF acquis, à ne pas refaire** : les *boutons à icône seule
+>   sans nom VoiceOver* ne sont pas une famille de défauts. 102 candidats bruts,
+>   **3** après un balayage correct, et les 3 sont délibérés et documentés.
+>   **Famille vide.**
+> - **Quatre scanners avant un nombre publiable** (102 → 20 → 13 → 40/15/16/9).
+>   Un compteur n'est pas une mesure tant qu'on n'a pas vérifié qu'il rate ce
+>   qu'il doit rater : **toute mesure inclut un témoin dont on connaît la
+>   réponse.**
+>
+> ---
+>
+> **Historique 251i (conservé) :**
 > - **250i est MERGÉE** — PR [#4252](https://github.com/isopen-io/meeshy/pull/4252), squash `c14593da`, issue #4251 fermée, 17 checks verts. **Les deux doutes de 250i sont SOLDÉS** : un `let` en tête d'un `ViewBuilder` compile, et `@MainActor` sur une seule méthode d'une classe de test non isolée compile et s'exécute.
 > - **Synchronisation 251i** : branche repartie de `origin/main` `c14593da`.
 >
