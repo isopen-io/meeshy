@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { ErrorCode } from '../types/errors.js';
 import { personNamePatternSource, usernamePatternSource } from '../types/api-schemas.js';
+import { EMOJI_MAX_LENGTH } from '../types/reaction.js';
 import { createError } from './errors.js';
 import { isSupportedLanguage } from './languages.js';
 import { normalizeLanguageCode } from './language-normalize.js';
@@ -1311,7 +1312,7 @@ export const ReactionSchemas = {
 
   // Ajouter une réaction
   add: z.object({
-    emoji: z.string().min(1).max(10),
+    emoji: z.string().min(1).max(EMOJI_MAX_LENGTH),
   }),
 };
 
