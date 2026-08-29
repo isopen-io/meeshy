@@ -8,20 +8,12 @@ import { validateQuery } from '../../validation/helpers.js';
 import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
 import { permissionsService } from '../../services/admin/permissions.service';
 import type { UserRoleEnum } from '@meeshy/shared/types';
+import { requirePermission } from '../../middleware/authorize';
 
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canView = ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'].includes(userRole);
-
-  if (!canView) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canViewUsers');
 
 export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
   /**

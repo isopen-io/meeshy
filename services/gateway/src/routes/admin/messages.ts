@@ -4,21 +4,19 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
+import { requirePermission } from '../../middleware/authorize';
 
 // Middleware pour vérifier les permissions admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canView = ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'].includes(userRole);
-
-  if (!canView) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+//
+// Ces routes sont des ANALYSES (stats, tendances, engagement), mais leur
+// admission d'aujourd'hui inclut MODERATOR et exclut ANALYST — l'inverse de
+// `canViewAnalytics`. Le lot uniformise le VOCABULAIRE sans changer un seul
+// rôle admis : la question du bon niveau appartient à #4157, qui la relira
+// pour ce qu'elle est.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 export async function messagesRoutes(fastify: FastifyInstance) {
   /**

@@ -13,19 +13,18 @@ import { UserRole as PrismaUserRole } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
+import { requirePermission } from '../../middleware/authorize';
 
 // Middleware d'autorisation admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
-  if (!permissions.canAccessAdmin) {
-    return sendForbidden(reply, 'Acces administrateur requis');
-  }
-};
+// `requireAdmin` était la QUATORZIÈME garde locale — celle que l'inventaire
+// initial avait manquée (#4153). Elle lisait la matrice, ce qui la rendait
+// juste, et son nom la rendait indiscernable des six autres `requireAdmin` qui
+// ne la lisaient pas.
+//
+// Changer un RÔLE demande plus que d'accéder à l'administration : c'est la
+// permission qui le dit, et elle admet BIGBOSS et ADMIN seulement — ce que les
+// gardes de hiérarchie de ce fichier confirmaient déjà route par route.
+const requireAdmin = requirePermission('canUpdateUserRoles');
 
 export async function registerRoleRoutes(fastify: FastifyInstance) {
   // Modifier le role d'un utilisateur

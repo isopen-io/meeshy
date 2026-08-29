@@ -9,6 +9,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { requirePermission } from '../../middleware/authorize';
 
 /**
  * Ligne de la liste d'administration des posts.
@@ -75,17 +76,10 @@ const adminPostRowSchema = {
 } as const;
 
 // Middleware d'autorisation admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
-  if (!permissions.canAccessAdmin) {
-    return sendForbidden(reply, 'Acces administrateur requis');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 // Query type for listing posts
 interface PostListQuery {

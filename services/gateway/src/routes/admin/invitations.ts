@@ -5,21 +5,13 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { requirePermission } from '../../middleware/authorize';
 
 // Middleware pour vérifier les permissions admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canManage = ['BIGBOSS', 'ADMIN'].includes(userRole);
-
-  if (!canManage) {
-    return sendForbidden(reply, 'Permission admin requise');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canCreateUsers');
 
 export async function invitationRoutes(fastify: FastifyInstance) {
   /**

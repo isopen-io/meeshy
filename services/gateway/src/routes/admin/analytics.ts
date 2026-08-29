@@ -6,6 +6,7 @@ import { validateQuery } from '../../validation/helpers.js';
 import { AnalyticsMessageTypesQuerySchema, AnalyticsLanguageDistQuerySchema, AnalyticsKpisQuerySchema } from '../../validation/admin-schemas.js';
 import { getCacheStore } from '../../services/CacheStore';
 import { coerceCallAnalytics, summarizeCallReliability } from '../../services/callAnalyticsAggregate';
+import { requirePermission } from '../../middleware/authorize';
 
 const CACHE_TTL = {
   realtime: 60,         // 1 min — "real-time" freshness
@@ -16,19 +17,10 @@ const CACHE_TTL = {
 } as const;
 
 // Middleware pour vérifier les permissions analytics
-const requireAnalyticsPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canViewAnalytics = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
-
-  if (!canViewAnalytics) {
-    return sendForbidden(reply, 'Permission insuffisante pour voir les analyses');
-  }
-};
+// `requireAnalyticsPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAnalyticsPermission = requirePermission('canViewAnalytics');
 
 export async function analyticsRoutes(fastify: FastifyInstance) {
   /**

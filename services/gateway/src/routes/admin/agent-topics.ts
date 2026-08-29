@@ -6,6 +6,7 @@ import { AgentHttpClient } from '../../services/AgentHttpClient';
 import { submittedKeysOnly } from '../../utils/partial-update';
 import { AGENT_ADMIN_EVENT_CHANNEL, type AgentAdminEventData } from '@meeshy/shared/types/socketio-events';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
+import { requirePermission } from '../../middleware/authorize';
 
 /**
  * Routes admin CRUD pour le catalogue de topics dynamiques utilisé par le
@@ -21,17 +22,10 @@ import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
  *   POST   /admin/agent/topics/:id/test     — test regex contre sampleText
  */
 
-const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const user = (request as FastifyRequest & { user?: { role?: string } }).user;
-  if (!user) {
-    sendError(reply, 401, 'Authentification requise');
-    return;
-  }
-  if (!['BIGBOSS', 'ADMIN'].includes(user.role ?? '')) {
-    sendError(reply, 403, 'Permission insuffisante');
-    return;
-  }
-};
+// `requireAgentAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAgentAdmin = requirePermission('canManageAgent');
 
 const TopicInputSchema = z.object({
   slug: z.string().regex(/^[a-z0-9_-]+$/, 'kebab_case requis').min(2).max(40),

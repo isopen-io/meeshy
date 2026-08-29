@@ -9,6 +9,7 @@ import { EmailService } from '../../services/EmailService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
+import { requirePermission } from '../../middleware/authorize';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
@@ -16,16 +17,10 @@ const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 // Auth middleware - BIGBOSS & ADMIN only
 // ---------------------------------------------------------------------------
 
-const requireBroadcastPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-  const userRole = authContext.registeredUser.role;
-  if (!['BIGBOSS', 'ADMIN'].includes(userRole)) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
-};
+// `requireBroadcastPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireBroadcastPermission = requirePermission('canManageNotifications');
 
 // ---------------------------------------------------------------------------
 // Routes

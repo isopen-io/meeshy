@@ -10,6 +10,7 @@ import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError
 import { AgentHttpClient, AgentUnavailableError } from '../../services/AgentHttpClient';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
+import { requirePermission } from '../../middleware/authorize';
 
 const validateObjectId = (id: string, name: string, reply: FastifyReply): boolean => {
   /* istanbul ignore next -- Fastify schema validates the ObjectId pattern before the handler runs; this branch is defensive dead code */
@@ -20,17 +21,10 @@ const validateObjectId = (id: string, name: string, reply: FastifyReply): boolea
   return true;
 };
 
-const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-    sendError(reply, 401, 'Authentification requise');
-    return;
-  }
-  if (!['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role)) {
-    sendError(reply, 403, 'Permission insuffisante');
-    return;
-  }
-};
+// `requireAgentAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAgentAdmin = requirePermission('canManageAgent');
 
 const agentConfigSchema = z.object({
   enabled: z.boolean().optional(),

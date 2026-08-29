@@ -10,6 +10,7 @@ import type {
   ReportFilters
 } from '@meeshy/shared/types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { requirePermission } from '../../middleware/authorize';
 
 // Schemas de validation Zod
 const createReportSchema = z.object({
@@ -28,19 +29,10 @@ const updateReportSchema = z.object({
 });
 
 // Middleware pour verifier les permissions de moderation
-const requireModeratorPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canModerate = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(userRole);
-
-  if (!canModerate) {
-    return sendForbidden(reply, 'Permission de moderation requise');
-  }
-};
+// `requireModeratorPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireModeratorPermission = requirePermission('canModerateContent');
 
 export async function reportRoutes(fastify: FastifyInstance) {
   const reportService = getReportService(fastify.prisma);

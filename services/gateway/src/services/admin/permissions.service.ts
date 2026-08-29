@@ -26,6 +26,16 @@ export interface AdminPermissions {
    * modère du contenu, ne doit pas voir la présence non plus.
    */
   canViewPresence: boolean;
+  /**
+   * Configurer l'AGENT — ses sujets, ses réglages par conversation, ses rôles.
+   *
+   * Ajoutée par #4153, et volontairement calquée sur l'admission d'aujourd'hui
+   * (BIGBOSS, ADMIN) : ce lot uniformise le VOCABULAIRE, pas les niveaux. Sans
+   * ce mot, `agent.ts` et `agent-topics.ts` devraient emprunter une permission
+   * qui parle d'autre chose — et un emprunt sémantique est exactement ce qui
+   * rend une matrice illisible.
+   */
+  canManageAgent: boolean;
 }
 
 export class PermissionsService {
@@ -56,7 +66,8 @@ export class PermissionsService {
       canModerateContent: true,
       canManageNotifications: true,
       canManageTranslations: true,
-      canViewPresence: true
+      canViewPresence: true,
+      canManageAgent: true
     },
     'ADMIN': {
       canAccessAdmin: true,
@@ -75,7 +86,8 @@ export class PermissionsService {
       canModerateContent: true,
       canManageNotifications: true,
       canManageTranslations: true,  // ADMIN can now manage translations
-      canViewPresence: true
+      canViewPresence: true,
+      canManageAgent: true
     },
     'MODERATOR': {
       canAccessAdmin: true,
@@ -94,7 +106,8 @@ export class PermissionsService {
       canModerateContent: true,
       canManageNotifications: false,
       canManageTranslations: false,
-      canViewPresence: false  // ❌ Modération de contenu ≠ visibilité de présence
+      canViewPresence: false,  // ❌ Modération de contenu ≠ visibilité de présence
+      canManageAgent: false
     },
     'AUDIT': {
       canAccessAdmin: true,
@@ -113,7 +126,8 @@ export class PermissionsService {
       canModerateContent: false,
       canManageNotifications: false,
       canManageTranslations: false,
-      canViewPresence: false
+      canViewPresence: false,
+      canManageAgent: false
     },
     'ANALYST': {
       canAccessAdmin: false,
@@ -132,7 +146,8 @@ export class PermissionsService {
       canModerateContent: false,
       canManageNotifications: false,
       canManageTranslations: false,
-      canViewPresence: false
+      canViewPresence: false,
+      canManageAgent: false
     },
     'USER': {
       canAccessAdmin: false,
@@ -151,7 +166,8 @@ export class PermissionsService {
       canModerateContent: false,
       canManageNotifications: false,
       canManageTranslations: false,
-      canViewPresence: false
+      canViewPresence: false,
+      canManageAgent: false
     },
     // Aliases are handled by resolveRole method
   };
