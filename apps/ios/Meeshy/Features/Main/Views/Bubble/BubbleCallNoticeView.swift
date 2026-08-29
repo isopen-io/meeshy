@@ -141,7 +141,7 @@ struct BubbleCallNoticeView: View, Equatable {
             HStack(spacing: 5) {
                 if let duration { metric(icon: "clock", text: duration) }
                 if duration != nil, data != nil {
-                    Text("·")
+                    MetaSeparator()
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(ThemeManager.shared.textMuted)
                 }

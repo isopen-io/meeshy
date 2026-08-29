@@ -14,6 +14,65 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 251i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **250i est MERGÉE** — PR [#4252](https://github.com/isopen-io/meeshy/pull/4252), squash `c14593da`, issue #4251 fermée, 17 checks verts. **Les deux doutes de 250i sont SOLDÉS** : un `let` en tête d'un `ViewBuilder` compile, et `@MainActor` sur une seule méthode d'une classe de test non isolée compile et s'exécute.
+> - **Synchronisation 251i** : branche repartie de `origin/main` `c14593da`.
+>
+> ### 251i — le point que VoiceOver lit à voix haute
+>
+> - **Le suivi (a) de 250i est CLOS PAR LA NÉGATIVE.** La famille élargie
+>   (« un `ZStack { Circle(); Image() }` échappe à la garde ») est **vide** :
+>   2 candidats, 2 faux positifs — `ThemedActionButton` fait déjà 46 pt (le cadre
+>   passe par un PARAMÈTRE, d'où l'angle mort du scanner) et `MessageMoreSheet`
+>   porte `minHeight: 68` plus un `Text`, tous deux hors de la fenêtre de
+>   22 lignes. **Taux de faux positifs d'un élargissement : 2/2.** Une garde qui
+>   crie au loup deux fois pour zéro prise apprend à ses lecteurs à l'ignorer.
+>   **Un suivi se ferme aussi par la négative — et la mesure vaut d'être écrite.**
+> - **Ce que le résultat négatif a libéré** : si la géométrie est close, que
+>   fuit-il ENCORE vers l'arbre d'accessibilité ? Réponse : **le point médian**,
+>   `Text("·")`, 28 sites — **8 muets, 20 lus à voix haute**, sur les surfaces les
+>   plus denses (fil ×5, détail ×6, commentaires ×3, stories ×2, reels…).
+> - **⚠️ LE SAVOIR ÉTAIT ÉCRIT, ET N'AVAIT VOYAGÉ QUE HUIT FOIS.** Un des sites
+>   conformes porte `.accessibilityHidden(true) // decorative separator — not
+>   announced to VoiceOver`. La règle est connue, formulée, exacte — appliquée
+>   8 fois sur 28. C'est la **troisième fois en quatre lots** qu'un savoir juste
+>   écrit dans un commentaire n'atteint pas ses autres sites (248i, 250i, 251i).
+>   **Ajouter le modificateur vingt fois aurait soldé les vingt sites du jour et
+>   rien du vingt-neuvième : une règle qu'on peut oublier de poser doit devenir
+>   une chose qu'on ne peut pas écrire autrement.**
+> - **⚠️ `.font(nil)` N'HÉRITE PAS — IL EFFACE.** La première écriture du
+>   composant prenait `font:`/`color:` optionnels et posait `.font(font)` : les
+>   huit sites qui ne fixaient que la couleur auraient perdu leur police. Le
+>   composant final n'a **aucun paramètre** — les modificateurs chaînés du site
+>   s'appliquent par l'environnement, et la conversion devient un pur échange de
+>   jeton. **Un paramètre optionnel qui se propage à un modificateur SwiftUI
+>   n'est pas neutre quand il vaut nil.**
+> - **⚠️ RENOMMER UNE CHOSE OBLIGE À RELIRE CE QUI LA CHERCHE.**
+>   `LentilleRowSourceGuardTests` interdit `Text("·")` dans un entête. Rien n'a
+>   cassé (aucun fichier `Lentille/` n'était à convertir) — mais le renommage
+>   ouvrait un trou pour l'avenir : un point ajouté demain sous son NOUVEAU nom
+>   passerait au vert. L'assertion connaît désormais les deux écritures.
+>   Troisième occurrence en quatre lots, **et la première faite en AMONT plutôt
+>   qu'après un rouge**.
+> - **Second défaut de la même famille** : dans l'aperçu d'un commentaire du fil,
+>   deux drapeaux non interactifs s'annonçaient comme deux PAYS (« drapeau du
+>   Royaume-Uni, drapeau de la France »). Ils forment UNE information et
+>   s'annoncent en une phrase — `LanguageFlagChip.translationSummary(from:to:)`,
+>   clé `a11y.language.translated_from`, 7 locales. Pas de `LanguageFlagChip`
+>   ici : la puce est un CONTRÔLE, et rien n'y est cliquable.
+> - **Preuve** : séparateurs écrits à la main **28 → 0** ; les trois règles de
+>   249i et celle de 250i restent à **0** ; clés orphelines 0 ; backlog non
+>   traduit **121 → 121** ; catalogue 3407 → 3408. **Aucun pixel ne bouge** — seul
+>   change ce que VoiceOver dit.
+> - **Les trois contrôles que les rouges de 250i ont rendus systématiques**, tous
+>   faits avant ce push : `@testable import` sur une garde qui interroge un type ;
+>   chaque message d'assertion porte la valeur obtenue ; les gardes qui NOMMENT ce
+>   qu'on renomme sont relues.
+> - **Suites 252i+** : (a) la garde ne connaît que le point médian — les autres
+>   ponctuations ne sont employées nulle part, les ajouter serait épingler une
+>   graphie qu'on n'écrit pas (leçon 272 à l'envers) ; (b) Dynamic Type XXL de la
+>   rangée méta, toujours ouvert (demande un simulateur) ; (c) carry-over SDK.
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 250i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 > - **249i est MERGÉE** — PR [#4249](https://github.com/isopen-io/meeshy/pull/4249), squash `ce9ebfc6`, issue #4248 fermée. **CI `Build app + tests unitaires` : 8989 passés / 0 échec / 5 sautés sur 8994**, `COMPILE_ONLY: false`, 17 checks verts (Trivy neutre, Voice E2E sauté). Les trois doutes de compile publiés par 249i sont donc SOLDÉS : le ternaire `.isSelected` sur un `Button`, `Font` comparé entre deux `MeeshyFont.relative`, et `Font.weight(_:)` sur un `Font` déjà construit compilent tous les trois.
 > - **Synchronisation 250i** : branche `claude/intelligent-noether-6zxsbz` **repartie de `origin/main` `ce9ebfc6`** (la branche désignée redémarre du main après merge, elle ne s'empile pas sur de l'histoire déjà mergée).

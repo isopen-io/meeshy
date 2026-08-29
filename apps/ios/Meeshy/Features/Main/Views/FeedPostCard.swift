@@ -800,7 +800,7 @@ struct FeedPostCard: View {
 
                     let flags = buildAvailableFlags()
                     if !flags.isEmpty || post.translations?.isEmpty == false {
-                        Text("·")
+                        MetaSeparator()
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
 
@@ -818,7 +818,7 @@ struct FeedPostCard: View {
                     // Reach stats (impressions · views) — visible ONLY to the
                     // post's author, after the meta row (private analytics).
                     if isAuthor {
-                        Text("·").font(.caption).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(.caption).foregroundColor(theme.textMuted)
                         HStack(spacing: 3) {
                             ReachMetricLabel(
                                 icon: "chart.bar.fill",
@@ -826,8 +826,7 @@ struct FeedPostCard: View {
                                 label: String(localized: "feed.reel.impressions", defaultValue: "Impressions", bundle: .main),
                                 tint: theme.textMuted
                             )
-                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
-                                .accessibilityHidden(true)
+                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
                             ReachMetricLabel(
                                 icon: "eye.fill",
                                 count: post.viewCount,
@@ -942,7 +941,7 @@ struct FeedPostCard: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.accentText(repost.authorColor))
 
-                    Text("·")
+                    MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
                     Text(timeAgo(from: repost.timestamp))
@@ -1337,22 +1336,30 @@ struct FeedPostCard: View {
                             .foregroundColor(theme.accentText(comment.authorColor))
 
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
-                            Text("·").font(.caption2).foregroundColor(theme.textMuted)
-
-                            let origDisplay = LanguageDisplay.from(code: origLang)
-                            Text(origDisplay?.flag ?? "?")
-                                .font(.caption2)
+                            MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
 
                             let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
                             let targetLang = userLangs.first?.lowercased() ?? "fr"
-                            let targetDisplay = LanguageDisplay.from(code: targetLang)
-                            Text(targetDisplay?.flag ?? "?")
-                                .font(.caption2)
-
-                            Image(systemName: "translate")
-                                .font(.caption2.weight(.medium))
-                                .foregroundColor(MeeshyColors.indigo400)
-                                .accessibilityHidden(true)
+                            // Ces trois glyphes ne disent qu'UNE chose : « ce
+                            // commentaire a été traduit, de là vers ici ». Lus un
+                            // par un, VoiceOver annonçait deux PAYS — « drapeau du
+                            // Royaume-Uni, drapeau de la France ». Ils s'annoncent
+                            // donc en une phrase, et une seule. La paire n'est PAS
+                            // interactive ici (l'aperçu ouvre le commentaire) :
+                            // pas de `LanguageFlagChip`, qui est un contrôle.
+                            HStack(spacing: 4) {
+                                Text(LanguageFlagChip.flag(for: origLang))
+                                    .font(.caption2)
+                                Text(LanguageFlagChip.flag(for: targetLang))
+                                    .font(.caption2)
+                                Image(systemName: "translate")
+                                    .font(.caption2.weight(.medium))
+                                    .foregroundColor(MeeshyColors.indigo400)
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(
+                                LanguageFlagChip.translationSummary(from: origLang, to: targetLang)
+                            )
                         }
                     }
 

@@ -425,7 +425,7 @@ struct ReelFeedCard: View, Equatable {
     }
 
     private var metaDot: some View {
-        Text("·").font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
     }
 
     private func metricInline(icon: String, count: Int, a11yLabel: String) -> some View {

@@ -368,7 +368,7 @@ struct ConversationInfoSheet: View {
                 .foregroundColor(theme.textSecondary)
 
             if conversation.memberCount > 0 {
-                Text("·")
+                MetaSeparator()
                     .foregroundColor(theme.textMuted)
                 Image(systemName: "person.2.fill")
                     .font(MeeshyFont.relative(10))
@@ -862,7 +862,7 @@ struct ConversationInfoSheet: View {
                         .font(MeeshyFont.relative(13, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
-                    Text("·")
+                    MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
                     Text(relativeTime(from: msg.createdAt))
