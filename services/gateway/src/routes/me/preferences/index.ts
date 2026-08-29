@@ -7,15 +7,10 @@ import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import { createPreferenceRouter } from './preference-router-factory';
-import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
 import {
   resolveStoredPrivacyPreferences,
   retireLegacyPrivacyRows,
 } from '../../../services/preferences/privacy-storage';
-import {
-  PREFERENCE_CATEGORIES,
-  emitPreferenceCategoryUpdated
-} from '../../../services/preferences/preferences-broadcast';
 import { categoriesRoutes } from './categories';
 import {
   PrivacyPreferenceSchema,
@@ -136,79 +131,27 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DELETE /me/preferences - Réinitialiser TOUTES les préférences
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  fastify.delete(
-    '/',
-    {
-      schema: {
-        description: 'Réinitialiser toutes les préférences aux valeurs par défaut',
-        tags: ['preferences'],
-        summary: 'Reset all preferences',
-        response: {
-          200: {
-            description: 'Préférences réinitialisées',
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              message: { type: 'string' }
-            }
-          },
-          401: errorResponseSchema,
-          500: errorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const userId = request.auth?.userId;
-
-      if (!userId) {
-        return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
-      }
-
-      try {
-        // `updateMany` et non `update` — même raison qu'au verbe DELETE d'une
-        // catégorie : la ligne `UserPreferences` n'existe pas tant que rien
-        // n'a été écrit, et `update` levait alors `P2025`, rendu en 500.
-        await prisma.userPreferences.updateMany({
-          where: { userId },
-          data: {
-            privacy: null,
-            audio: null,
-            message: null,
-            notification: null,
-            video: null,
-            document: null,
-            application: null
-          }
-        });
-
-        // Le document mis à `null` ne suffit pas : la lecture redescendrait
-        // alors sur les lignes de janvier, et « tout réinitialiser » laisserait
-        // un réglage que le serveur obéit et qu'aucun écran ne montre plus.
-        await retireLegacyPrivacyRows(prisma, userId);
-
-        // La remise à zéro globale efface AUSSI `privacy` : le cache partagé
-        // des portes de diffusion doit l'apprendre, comme sur une écriture
-        // ciblée (cf. `services/preferences/privacy-cache`).
-        invalidatePrivacyPreferences(userId);
-
-        // Et les autres appareils aussi. Le contrat client est par catégorie
-        // (`queryKeys.preferences.category`), donc une émission par catégorie
-        // effacée — cf. `services/preferences/preferences-broadcast`.
-        for (const category of PREFERENCE_CATEGORIES) {
-          emitPreferenceCategoryUpdated(fastify, userId, category);
-        }
-
-        return sendSuccess(reply, undefined, { message: 'All preferences reset to defaults' });
-      } catch (error: any) {
-        fastify.log.error({ error }, 'Error resetting all preferences');
-        return sendInternalError(reply, 'RESET_ERROR', { message: error.message || 'Failed to reset preferences' });
-      }
-    }
-  );
+  // ─── La remise à zéro GLOBALE a été RETIRÉE (#4186) ───────────────────────
+  //
+  // `DELETE /me/preferences` (sans catégorie) réinitialisait les sept blobs
+  // d'un coup. Personne ne l'appelait — mesuré sur les trois clients : le SDK
+  // iOS ne connaît que `resetPreferences(category:)`
+  // (`PreferenceService.swift:131` → `/me/preferences/{catégorie}`), le web ne
+  // compose que `/api/v1/me/preferences/${category}` (`hooks/use-preferences.ts`)
+  // et Android n'expose aucun DELETE de préférence (`PreferencesApi.kt`).
+  //
+  // Rien de ce qu'elle faisait n'est perdu : le DELETE par CATÉGORIE de la
+  // factory (`preference-router-factory.ts:383`) fait les MÊMES trois gestes —
+  // `afterWrite` retire les lignes héritées de janvier 2026, le cache des
+  // portes de diffusion est purgé, et `preferences:updated` part par catégorie.
+  // La capacité « tout réinitialiser » coûte donc sept appels au lieu d'un, et
+  // le lot L3 la rend en un seul sous un AUTRE contrat —
+  // `DELETE /me/preferences?categories=` (absent = tout), qui absorbe du même
+  // coup les sept DELETE par catégorie (`docs/product/api-simplification/me.md`
+  // § « La surface cible »). Retirer ici n'est pas un aller-retour : c'est
+  // libérer l'adresse pour la forme qui la mérite.
+  //
+  // Témoin d'absence : `__tests__/unit/routes/identity-twins-retired.test.ts`.
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GET /me/preferences/encryption - Préférence de chiffrement + état des clés

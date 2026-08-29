@@ -1,6 +1,7 @@
 /**
  * Unit tests for userPreferencesRoutes (routes/me/preferences/index.ts)
- * Tests GET / (all prefs), DELETE / (reset all), and sub-route registration.
+ * Tests GET / (all prefs) and sub-route registration. Le DELETE / global a été
+ * retiré (#4186) — son absence est gardée par identity-twins-retired.test.ts.
  *
  * @jest-environment node
  */
@@ -188,35 +189,14 @@ describe('GET / — get all preferences', () => {
   });
 });
 
-// ─── DELETE / ────────────────────────────────────────────────────────────────
-
-describe('DELETE / — reset all preferences', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(() => app.close());
-
-  it('returns 200 on successful reset', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-  });
-
-  it('returns 401 when unauthenticated', async () => {
-    const anonApp = await buildApp({ auth: 'unauthenticated' });
-    const res = await anonApp.inject({ method: 'DELETE', url: '/' });
-    expect(res.statusCode).toBe(401);
-    await anonApp.close();
-  });
-
-  it('returns 500 on DB error', async () => {
-    const prisma = makePrisma();
-    prisma.userPreferences.updateMany = jest.fn<any>().mockRejectedValue(new Error('db error'));
-    const errApp = await buildApp({ prisma });
-    const res = await errApp.inject({ method: 'DELETE', url: '/' });
-    expect(res.statusCode).toBe(500);
-    await errApp.close();
-  });
-});
+// ─── DELETE / — RETIRÉE (#4186) ──────────────────────────────────────────────
+//
+// La remise à zéro GLOBALE n'avait aucun appelant sur les trois clients, et
+// tout ce qu'elle faisait est fait par le DELETE d'une CATÉGORIE (retrait des
+// lignes héritées, purge du cache de confidentialité, diffusion). L'absence de
+// la route est gardée ailleurs, par un témoin NÉGATIF monté sous le préfixe de
+// production : `__tests__/unit/routes/identity-twins-retired.test.ts`. Ne rien
+// tester ici ne remarquerait pas son retour.
 
 // ─── Sub-routes registration ──────────────────────────────────────────────────
 

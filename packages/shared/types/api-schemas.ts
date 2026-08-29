@@ -3513,21 +3513,6 @@ export const verifyPhoneRequestSchema = {
 } as const;
 
 /**
- * Validate session token request body schema
- */
-export const validateSessionRequestSchema = {
-  type: 'object',
-  required: ['sessionToken'],
-  properties: {
-    sessionToken: {
-      type: 'string',
-      minLength: 1,
-      description: 'Session token to validate'
-    }
-  }
-} as const;
-
-/**
  * Change password request body schema
  */
 export const changePasswordRequestSchema = {
@@ -3630,22 +3615,6 @@ export const magicLinkRequestResponseSchema = {
  * POST /api/v1/auth/magic-link/validate
  */
 export const magicLinkValidateRequestSchema = {
-  type: 'object',
-  required: ['token'],
-  properties: {
-    token: {
-      type: 'string',
-      minLength: 1,
-      description: 'Magic link token from email URL'
-    }
-  }
-} as const;
-
-/**
- * Validate magic link token query schema (for GET request)
- * GET /api/v1/auth/magic-link/validate?token=xxx
- */
-export const magicLinkValidateQuerySchema = {
   type: 'object',
   required: ['token'],
   properties: {

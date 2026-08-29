@@ -385,74 +385,23 @@ describe('GET /me/preferences', () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// DELETE /me/preferences — reset all
+// DELETE /me/preferences — RETIRÉE (#4186)
+//
+// La remise à zéro GLOBALE n'avait aucun appelant : le SDK iOS ne connaît que
+// `resetPreferences(category:)`, le web ne compose que
+// `/api/v1/me/preferences/${category}`, et Android n'expose aucun DELETE de
+// préférence. Ses quatre cas partaient avec elle ; leurs équivalents par
+// CATÉGORIE vivent plus bas, et c'est le chemin qui reste.
+//
+// L'absence de la route est gardée par un témoin NÉGATIF monté sous le préfixe
+// de production : `__tests__/unit/routes/identity-twins-retired.test.ts`.
 // ═══════════════════════════════════════════════════════════════════════════════
-
-describe('DELETE /me/preferences', () => {
-  let app: FastifyInstance;
-
-  beforeAll(async () => {
-    app = await buildApp();
-  });
-  afterAll(() => app.close());
-  beforeEach(() => jest.clearAllMocks());
-
-  it('returns 200 and success message when reset succeeds', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.success).toBe(true);
-    expect(body.message).toMatch(/reset/i);
-  });
-
-  it('nulls out all category fields in the prisma updateMany call', async () => {
-    const prisma = makePrisma();
-    const appInspect = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-    appInspect.decorate('prisma', prisma as unknown);
-    appInspect.decorate('socketIOHandler', { getManager: () => null } as unknown);
-    appInspect.decorate('mutationLogService', null as unknown);
-    appInspect.addHook('preHandler', async (req) => {
-      (req as unknown as Record<string, unknown>).auth = { userId: USER_ID };
-    });
-    await appInspect.register(userPreferencesRoutes, { prefix: '/me/preferences' });
-    await appInspect.ready();
-
-    await appInspect.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    const updateCall = (prisma.userPreferences.updateMany as ReturnType<typeof jest.fn>).mock.calls[0][0];
-    expect(updateCall.where.userId).toBe(USER_ID);
-    expect(updateCall.data.privacy).toBeNull();
-    expect(updateCall.data.audio).toBeNull();
-    expect(updateCall.data.message).toBeNull();
-    expect(updateCall.data.notification).toBeNull();
-    expect(updateCall.data.video).toBeNull();
-    expect(updateCall.data.document).toBeNull();
-    expect(updateCall.data.application).toBeNull();
-    await appInspect.close();
-  });
-
-  it('returns 401 when userId is missing', async () => {
-    const appNoAuth = await buildApp({}, 'no-user-id');
-    const res = await appNoAuth.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    expect(res.statusCode).toBe(401);
-    await appNoAuth.close();
-  });
-
-  it('returns 500 on db error', async () => {
-    const appErr = await buildApp({ updateManyError: new Error('db crash') });
-    const res = await appErr.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    expect(res.statusCode).toBe(500);
-    await appErr.close();
-  });
-});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DELETE — la remise à zéro se diffuse, et n'échoue pas sur un compte neuf
 //
-// Cycle 48. Deux défauts jumeaux sur les DEUX routes de remise à zéro :
+// Cycle 48. Deux défauts jumeaux, à l'époque sur les DEUX routes de remise à
+// zéro — la globale a depuis été retirée (#4186), il n'en reste qu'une :
 //   A. elles n'émettaient pas `preferences:updated` alors que PUT/PATCH le font
 //      — les autres appareils gardaient la valeur d'AVANT la remise à zéro
 //      (`usePreferences()` pose `staleTime: Infinity` côté web) ;
@@ -525,42 +474,11 @@ describe('DELETE /me/preferences/:category — diffusion et compte sans ligne', 
   });
 });
 
-describe('DELETE /me/preferences — diffusion et compte sans ligne', () => {
-  beforeEach(() => jest.clearAllMocks());
-
-  it('diffuse une fois par catégorie effacée — le contrat client est per-catégorie', async () => {
-    const app = await buildApp();
-
-    await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    const categories = prefsEmissions(app).map((e) => (e.payload as { category: string }).category);
-    expect(categories.sort()).toEqual(
-      ['application', 'audio', 'document', 'message', 'notification', 'privacy', 'video'],
-    );
-    expect(prefsEmissions(app).every((e) => e.room === `user:${USER_ID}`)).toBe(true);
-    await app.close();
-  });
-
-  it('rend 200 pour un utilisateur sans ligne UserPreferences', async () => {
-    const app = await buildApp({ rowExists: false });
-
-    const res = await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
-    await app.close();
-  });
-
-  it('ne diffuse pas quand la remise à zéro globale échoue', async () => {
-    const app = await buildApp({ updateManyError: new Error('db crash') });
-
-    const res = await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    expect(res.statusCode).toBe(500);
-    expect(prefsEmissions(app)).toEqual([]);
-    await app.close();
-  });
-});
+// Le pendant GLOBAL de ces trois cas est parti avec la route (#4186). Ce qu'il
+// verrouillait — diffuser par CATÉGORIE, ne pas rendre 500 sur un compte sans
+// ligne `UserPreferences`, ne rien diffuser quand l'écriture échoue — reste
+// verrouillé au-dessus, sur le DELETE d'une catégorie, qui est désormais le
+// seul chemin de remise à zéro.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Garde d'accès — dette nommée par les cycles 46 et 47
@@ -1204,14 +1122,9 @@ describe('écriture de préférences — purge du cache serveur', () => {
     await app.close();
   });
 
-  it('DELETE /me/preferences purge le cache — la remise à zéro globale efface aussi privacy', async () => {
-    const app = await buildApp();
-
-    await app.inject({ method: 'DELETE', url: '/me/preferences', headers: AUTH });
-
-    expect(mockInvalidatePrivacyPreferences).toHaveBeenCalledWith(USER_ID);
-    await app.close();
-  });
+  // Le cas GLOBAL a disparu avec la route (#4186) : la purge du cache reste
+  // exigée sur le DELETE de `privacy`, ci-dessus — le seul chemin qui efface
+  // encore cette catégorie.
 
   it("une écriture d'une autre catégorie ne purge PAS le cache de confidentialité", async () => {
     const app = await buildCategoryApp('audio');

@@ -116,102 +116,31 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
     }
   });
 
-  /**
-   * GET /auth/magic-link/validate
-   * Validate magic link token and create session
-   */
-  fastify.get('/magic-link/validate', {
-    schema: {
-      description: 'Validate a magic link token and log the user in. The token must be valid and not expired (1 minute validity).',
-      tags: ['auth'],
-      summary: 'Validate magic link',
-      querystring: {
-        type: 'object',
-        required: ['token'],
-        properties: {
-          token: {
-            type: 'string',
-            description: 'Magic link token from email',
-            example: 'abc123xyz...'
-          }
-        }
-      },
-      response: {
-        200: {
-          description: 'Successful login via magic link',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                // `{ type: 'object' }` sans `properties` sérialise en `{}` :
-                // la connexion rendait son jeton et AUCUN utilisateur. Les
-                // schémas partagés décrivent déjà ces deux formes —
-                // `userSchema` couvre le `socketIOUser` que le service
-                // construit, `sessionSchema` la `SessionData` de
-                // `createSession`.
-                //
-                // Pas de gate de présence ici, et pour une raison précise :
-                // `isOnline`/`lastActiveAt` y sont SYNTHÉTISÉS pour le
-                // compte qui vient de se connecter — c'est le lecteur
-                // lui-même, et la politique rend `FULL` sur `isSelf`.
-                user: userSchema,
-                token: { type: 'string', description: 'JWT access token' },
-                sessionToken: { type: 'string', description: 'Session token for device management' },
-                session: sessionSchema,
-                expiresIn: { type: 'number', example: 86400 }
-              }
-            }
-          }
-        },
-        400: {
-          description: 'Invalid or expired token',
-          ...errorResponseSchema
-        }
-      },
-      security: []
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      // Validate input
-      const query = request.query as { token?: string };
-      const validationResult = validateMagicLinkSchema.safeParse({ token: query.token });
-
-      if (!validationResult.success) {
-        /* istanbul ignore next -- Zod always produces a non-falsy message; the || branch is unreachable */
-        return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
-      }
-
-      const { token } = validationResult.data;
-
-      // Get request context
-      const requestContext = await getRequestContext(request);
-
-      // Validate magic link
-      const result = await magicLinkService.validateMagicLink({
-        token,
-        requestContext
-      });
-
-      if (!result.success) {
-        return sendBadRequest(reply, result.error);
-      }
-
-      // Return success with user data
-      return sendSuccess(reply, {
-        user: result.user,
-        token: result.token,
-        sessionToken: result.sessionToken,
-        session: result.session,
-        expiresIn: 86400 // 24 hours
-      });
-
-    } catch (error) {
-      logger.error('MagicLink validation error', error as Error);
-      return sendInternalError(reply, 'An error occurred. Please try again.');
-    }
-  });
+  // ─── La jumelle GET de la validation a été RETIRÉE (#4186) ────────────────
+  //
+  // `GET /auth/magic-link/validate?token=…` ouvrait une session comme la POST
+  // ci-dessous, mais en moins bien, et sur deux points qui se paient chez
+  // l'utilisateur :
+  //
+  //   1. elle n'appliquait NI `rememberDevice` NI `markSessionTrusted`, et
+  //      figeait `expiresIn` à 86 400. Celui qui avait coché « se souvenir de
+  //      moi » à la DEMANDE du lien — un choix conservé côté SERVEUR,
+  //      justement pour qu'aucun client ne puisse le forger — se retrouvait
+  //      déconnecté au bout de 24 h au lieu de 365 jours, sans rien pour le
+  //      lui expliquer. Deux verbes, un seul nom, deux durées de session ;
+  //   2. elle faisait voyager le jeton de connexion à USAGE UNIQUE en QUERY
+  //      STRING : journalisé par tout proxy et tout serveur d'accès, gardé
+  //      dans l'historique du navigateur, transmis en `Referer`.
+  //
+  // Aucun client ne l'appelait — mesuré sur les trois : le SDK iOS
+  // (`AuthService.swift:102`), le web (`services/magic-link.service.ts:150`)
+  // et Android (`AuthApi.kt:147`) font tous les trois un POST. Et le lien
+  // ENVOYÉ PAR E-MAIL ne la visait pas non plus : `MagicLinkService:430`
+  // compose `${FRONTEND_URL}/auth/magic-link?token=…`, une page WEB, qui
+  // relaie ensuite vers la POST. Aucun lien déjà dans une boîte mail ne se
+  // brise donc — c'est ce qui rend ce retrait possible sans redirection.
+  //
+  // Témoin d'absence : `__tests__/unit/routes/identity-twins-retired.test.ts`.
 
   /**
    * POST /auth/magic-link/validate
