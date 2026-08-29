@@ -87,6 +87,9 @@ function isHttpMethod(value: string): value is HttpMethod {
   return (KNOWN_METHODS as readonly string[]).includes(value);
 }
 
+/** Le préfixe versionné, tel que le gateway le monte (`API_PREFIX` côté serveur). */
+const API_V1_PREFIX = '/api/v1';
+
 function splitPathSegments(path: string): readonly string[] {
   return path.split('/').filter((segment) => segment.length > 0);
 }
@@ -121,7 +124,7 @@ interface NamespaceSplit {
   readonly rest: readonly string[];
 }
 
-function deriveNamespace(segments: readonly string[]): NamespaceSplit {
+function deriveNamespace(segments: readonly string[], rawPath: string, allPaths: ReadonlySet<string>): NamespaceSplit {
   const [first, second, ...tail] = segments;
 
   if (first === 'api' && second === 'v1') {
@@ -135,9 +138,27 @@ function deriveNamespace(segments: readonly string[]): NamespaceSplit {
     return { namespace: `apiLegacy${toPascalCase(second ?? 'root')}`, rest: second === undefined ? [] : tail };
   }
 
-  // Aucun `/api` du tout (`/health`, `/voice/analysis`…) : le premier segment
-  // EST le namespace.
-  return { namespace: toCamelCase(first ?? 'root'), rest: second === undefined ? [] : [second, ...tail] };
+  const rest = second === undefined ? [] : [second, ...tail];
+
+  // Un chemin SANS `/api` dont l'homonyme existe sous `/api/v1` est un ALIAS de
+  // compatibilité (`/voice/analysis`, `/attachments/:id/analysis`), et non une
+  // route d'infrastructure comme `/health` ou `/info`. Les deux dérivaient le
+  // MÊME nom de catalogue — la collision que le garde-fou plus bas a levée dès
+  // que le gateway a monté ces alias.
+  //
+  // La distinction se lit dans le manifeste lui-même — la présence du chemin
+  // v1 — et non dans le nom du module qui les monte : un `Legacy` dans un nom
+  // de fonction est une convention, et une convention se perd au premier
+  // renommage. Le préfixe suit la forme déjà retenue pour `/api/<x>` sans
+  // version, parce que c'est le même problème : deux adresses distinctes qui
+  // ne peuvent pas partager une adresse de catalogue.
+  if (allPaths.has(`${API_V1_PREFIX}${rawPath}`)) {
+    return { namespace: `rootLegacy${toPascalCase(first ?? 'root')}`, rest };
+  }
+
+  // Aucun `/api` du tout et aucun homonyme versionné (`/health`, `/info`) :
+  // le premier segment EST le namespace.
+  return { namespace: toCamelCase(first ?? 'root'), rest };
 }
 
 interface KeySplit {
@@ -320,9 +341,10 @@ export function buildApiEndpointsCatalog(routes: readonly ManifestRouteInput[]):
     })
   );
 
+  const tousLesChemins = new Set(pathTemplates);
   const entries: CatalogEntry[] = pathTemplates.map((rawPath) => {
     const segments = splitPathSegments(rawPath);
-    const { namespace, rest } = deriveNamespace(segments);
+    const { namespace, rest } = deriveNamespace(segments, rawPath, tousLesChemins);
     const { key, paramNames } = deriveKeyAndParams(rest);
     return { namespace, key, rawPath, paramNames, methods: pathMethods.get(rawPath) ?? [] };
   });
