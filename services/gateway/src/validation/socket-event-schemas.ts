@@ -166,6 +166,22 @@ export const SocketReactionRemoveSchema = z.object({
 
 export type SocketReactionRemoveData = z.infer<typeof SocketReactionRemoveSchema>;
 
+export const SocketAttachmentReactionAddSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: z.string().min(1).max(10),
+});
+
+export type SocketAttachmentReactionAddData = z.infer<typeof SocketAttachmentReactionAddSchema>;
+
+export const SocketAttachmentReactionRemoveSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: z.string().min(1).max(10),
+});
+
+export type SocketAttachmentReactionRemoveData = z.infer<typeof SocketAttachmentReactionRemoveSchema>;
+
 export const SocketCommentReactionAddSchema = z.object({
   commentId: mongoId,
   postId: mongoId,

@@ -137,7 +137,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ attachmentId: '' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when payload is missing messageId', async () => {
@@ -145,7 +145,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ messageId: '' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when payload is missing emoji', async () => {
@@ -153,7 +153,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ emoji: '' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Invalid payload' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('rejects non-ObjectId messageId (optimistic/temp id)', async () => {
@@ -161,7 +161,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ messageId: 'cid_temp_123' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('rejects non-ObjectId attachmentId', async () => {
@@ -169,7 +169,7 @@ describe('AttachmentReactionHandler', () => {
       const handler = new AttachmentReactionHandler(deps);
       const cb = jest.fn();
       await handler.handleAdd(makeSocket(), makePayload({ attachmentId: 'not-an-object-id' }), cb);
-      expect(cb).toHaveBeenCalledWith({ success: false, error: 'Could not resolve participant' });
+      expect(cb).toHaveBeenCalledWith({ success: false, error: expect.stringContaining('Validation failed') });
     });
 
     it('returns error when socket user is not in socketToUser map', async () => {
