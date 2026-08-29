@@ -102,7 +102,7 @@ struct LoginView: View {
                 .padding(.bottom, MeeshySpacing.xxl)
                 .accessibilityHidden(true)
 
-                Text("Meeshy")
+                Text(verbatim: "Meeshy")
                     .font(MeeshyFont.relative(MeeshyFont.largeTitleSize + 6, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(

@@ -1230,7 +1230,7 @@ struct SplashScreen: View {
                     .padding(.bottom, 32)
 
                 // App Name
-                Text("Meeshy")
+                Text(verbatim: "Meeshy")
                     .font(MeeshyFont.relative(46, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(

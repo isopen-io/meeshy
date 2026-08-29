@@ -36,8 +36,37 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 261i | [#4303](https://github.com/isopen-io/meeshy/pull/4303) | `1af3cc38` | #4302 |
 > | 262i | [#4306](https://github.com/isopen-io/meeshy/pull/4306) | `22e6831f` | — |
 > | 263i | [#4310](https://github.com/isopen-io/meeshy/pull/4310) | `a2ce8815` | #4309 |
+> | 264i | [#4312](https://github.com/isopen-io/meeshy/pull/4312) | `66f6dfc3` | #4311 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `a2ce8815` — base de 264i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `66f6dfc3` — base de 265i.
+>
+> ### 265i — l'onboarding démontrait le Prisme en traduisant l'allemand vers l'allemand (#4313)
+>
+> `Text(_:)` prend un `LocalizedStringKey` : **tout littéral qu'on lui passe
+> devient une clé de catalogue**, extraite par Xcode, sans qu'aucun développeur
+> n'ait écrit `String(localized:)` ni choisi quoi que ce soit.
+>
+> - La carte « Comment ça marche » de l'onboarding montre un message ORIGINAL
+>   étranger + sa TRADUCTION. L'original venait d'un littéral nu, donc du
+>   catalogue, donc traduit en **de / es / pt-BR**. Un Allemand qui choisit
+>   l'allemand voyait deux phrases allemandes, l'une dite « originale », l'autre
+>   sous l'icône `translate`. En es et pt-BR elles ne diffèrent que par les
+>   accents : **pire qu'une traduction absente, ça a l'air d'une traduction ratée.**
+> - **Aucune garde i18n ne pouvait le voir** : toutes s'accrochent à
+>   `String(localized:`. `OnboardingStepViews.swift` était même ÉPINGLÉ parmi les
+>   43 écrans « fully localized » du 263i — la régression n'est pas vers le
+>   français, c'est une traduction de TROP.
+> - **Le mécanisme avait déjà été rencontré et EXCUSÉ** :
+>   `notAnInterfaceString = ["Jean-Pierre"]` en décrivait le fonctionnement exact
+>   sans le remonter à sa cause, trois lignes au-dessus du défaut.
+>   → *Une entrée d'allowlist qui explique pourquoi une clé est inoffensive est
+>   un endroit où quelqu'un a VU le mécanisme et ne l'a pas suivi.*
+> - Remède : `Text(verbatim:)` (7 sites, en remplacement de ligne), 6 clés
+>   retirées du catalogue (**168 suppressions, 0 insertion** — la re-sérialisation
+>   JSON, essayée d'abord, produisait 27 016 lignes de diff et a été annulée), et
+>   `LocalizedStringKeyLiteralGuardTests`.
+> - Borne décisive : **le REMÈDE doit cesser d'être un site**. Une garde qui
+>   interdit une écriture sans reconnaître sa correction est insatisfaisable.
 >
 > ### 264i — la doctrine des tailles figées avait 36 justifications et zéro instrument (#4311)
 >
