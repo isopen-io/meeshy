@@ -4209,8 +4209,15 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       BUILD SUCCESSFUL.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
-      surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
-      RAW background publish-all still pending.
+      surface a Retry/Discard strip above the tray — no silent loss); **RAW background publish-all**
+      done (slice `story-publish-queue-media-only`, 2026-08-29): `StoryRepository.decodeStoryPublish`
+      no longer requires text — a media-only (image/video, no caption) publish, exactly what the
+      composer's `toCreateStoryRequest` emits (`content = null`, `mediaIds = [...]`), now decodes and
+      so surfaces BOTH its optimistic self-ring AND its failure-recovery strip instead of being
+      silently dropped; `Pending`/`FailedStoryPublish.content` are nullable and carry `mediaIds`, the
+      strip shows a localised `stories_publish_media_summary` when there is no caption. +14 tests,
+      mutation-RED-proven (dropping the media clause reddens exactly the 3 media-only decode tests).
+      A media-preview THUMBNAIL in the ring (needs the local media URI on the outbox row) still pending.
 - [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
       in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
 - [~] thumbHash blur-placeholder per slide — **display/read path DONE** (slice

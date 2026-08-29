@@ -2,6 +2,52 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a media-only (RAW background) story queued offline now surfaces its optimistic self-ring
+> and its failure-recovery strip, instead of being silently dropped** (slice `story-publish-queue-media-only`,
+> feature-parity E. Stories — the "Offline publish queue … RAW background publish-all" clause of the `[~]` line).
+> Before this, `StoryRepository.decodeStoryPublish` required NON-BLANK TEXT (`content?.takeIf { isNotBlank } ?:
+> return null`), so a story published with only an image/video background and no caption — exactly what the
+> composer's `toCreateStoryRequest` emits (`content = null`, `mediaIds = [...]`) — decoded to `null` and was
+> excluded from BOTH `pendingPublishes()` (no self-ring) AND `failedPublishes()` (silent loss on exhaustion, no
+> retry/discard). iOS queues an image/video-only story as a first-class publish; Android dropped it from the
+> queue projection entirely — a real robustness/parity gap (dimensions 1/8/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4261 (iOS a11y, jcnm) — not a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-slide-thumbhash-placeholder`) is on `main` (#4259). Branched off freshly-fetched `origin/main`; local
+> HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified `apps/android` only.
+>
+> **The change — one decode gate widened + the two building blocks + a strip fallback.** (1) `:sdk-core`
+> `StoryRepository.decodeStoryPublish`: a publish is decodable when it has non-blank text OR ≥1 non-blank media id
+> (blank media ids filtered); a row with NEITHER is still skipped defensively. `content` on the decoded value
+> becomes nullable; `mediaIds` carried through. (2) `PendingStoryPublish` / `FailedStoryPublish`: `content: String`
+> → `String?` (null = media-only), new `mediaIds: List<String> = emptyList()`. (3) `:feature:stories`
+> `StoryPublishFailures.Item`: new `mediaCount`; `preview` is now the caption ("" for media-only). The strip
+> Composable (`StoryFailedRow`) renders `preview` when non-blank, else a localised `pluralStringResource`
+> media summary (`stories_publish_media_summary`, added in en/fr/es/pt) — i18n stays in Compose, logic stays
+> pure. `StoryOptimisticTray.toSyntheticStory` carries the null content unchanged; the tray grouping
+> (`type==STORY && author!=null`) rings a media-only self story fine.
+>
+> **Tests: +14** (7 `StoryRepositoryTest` — media-only pending decode / captioned media ids carried / blank media
+> ids filtered / neither-text-nor-media skipped / text-only leaves media empty / media-only failed surfaced;
+> 3 `StoryPublishFailuresTest` — text reports 0 media / media-only blank preview + count / captioned media keeps
+> both; 1 `StoryOptimisticTrayTest` — media-only null-content self ring; plus helper updates). **Mutation-RED-
+> proven**: neutering the decode gate to `if (content == null) return null` (dropping the media clause) reddens
+> EXACTLY the media-only tests, restored, full suite green.
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `assembleDebug` + `testDebugUnitTest` (all modules). SDK
+> bootstrap needs `platforms;android-35` + `build-tools;35.0.0` ALONGSIDE `android-37.0` — with only android-37.0,
+> AGP 8.13.0 resolves compileSdk 37 to hash `android-37` and fails "Failed to find target"; the android-35 pair
+> unblocks resolution (NOTES updated). Reviewer **PASS** (diff `apps/android` only; SDK purity — the gate is
+> `:sdk-core` repository decode, the strip label is `:feature:stories`; SSOT — one decode function feeds both
+> projections; no tautological tests; no floor lowered).
+>
+> **Next**: write-path thumbHash **generation** (encode from the composed slide bitmap into `effects.thumbHash`
+> at publish; `ThumbHash.encode` already ported, needs `Bitmap`→RGBA glue) completes the thumbHash box; or a
+> media-only **preview thumbnail** in the optimistic ring (needs the local media URI carried on the outbox row,
+> a deeper change) ; or move to the next build-order area (**Calls**) — its remaining `[ ]` boxes (in-call
+> translation data channel, audio effects) are integration-heavy, so scout for a pure-core policy slice first.
+
 > On 2026-08-29 **a story slide shows an instant blur behind its loading background image — no black flash on
 > cold load** (slice `story-slide-thumbhash-placeholder`, feature-parity E. Stories — the "thumbHash
 > blur-placeholder per slide" line, now `[~]`: the DISPLAY/read half is done; write-path GENERATION stays a

@@ -13,11 +13,12 @@ class StoryOptimisticTrayTest {
 
     private fun publish(
         tempId: String = "pending_1",
-        content: String = "hello",
+        content: String? = "hello",
         visibility: String = "PUBLIC",
         language: String? = "fr",
         createdAtMillis: Long = 1_700_000_000_000L,
-    ) = PendingStoryPublish(tempId, content, visibility, language, createdAtMillis)
+        mediaIds: List<String> = emptyList(),
+    ) = PendingStoryPublish(tempId, content, visibility, language, createdAtMillis, mediaIds)
 
     private fun cached(id: String) =
         ApiPost(id = id, type = "STORY", author = ApiAuthor(id = "me", username = "self"))
@@ -44,6 +45,19 @@ class StoryOptimisticTrayTest {
         assertThat(post.author?.id).isEqualTo("me")
         assertThat(post.author?.username).isEqualTo("self")
         assertThat(post.author?.avatar).isEqualTo("a.png")
+    }
+
+    @Test
+    fun `a media-only publish still becomes a self-authored ring with null content`() {
+        val post = StoryOptimisticTray.pendingStories(
+            listOf(publish(content = null, mediaIds = listOf("m1"))),
+            self,
+        ).single()
+
+        assertThat(post.id).isEqualTo("pending_1")
+        assertThat(post.type).isEqualTo("STORY")
+        assertThat(post.content).isNull()
+        assertThat(post.author?.id).isEqualTo("me")
     }
 
     @Test
