@@ -5,6 +5,29 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-29 — SDK bootstrap for compileSdk 37 needs `platforms;android-35` + `build-tools;35.0.0` ALONGSIDE `android-37.0` (slice `story-publish-queue-media-only`)
+Installing only `platforms;android-37.0` (the sole published API-37 platform — no bare `android-37` exists) is
+NOT enough: AGP 8.13.0 resolves `compileSdk = 37` to the target hash `android-37`, and Gradle dies with
+`Failed to find target with hash string 'android-37' in: …` at task-dependency resolution — a red herring that
+looks like a missing platform. Installing `platforms;android-35` + `build-tools;35.0.0` alongside android-37.0
+(the exact package set the last green run used) unblocks resolution and the full gate goes green. So the fresh-
+container recipe is: `cmdline-tools` + accept licences + `sdkmanager "platforms;android-37.0" "build-tools;37.0.0"
+"platform-tools" "platforms;android-35" "build-tools;35.0.0"`. Also: prefer a plain (incremental) rerun for the
+mutation-proof, NOT `--rerun-tasks` — the latter recompiles the whole dependency chain (~2 min) instead of just
+re-running the one test task.
+
+## 2026-08-29 — the outbox decode gate is a Prisme-of-content question: "what does this publish CARRY?", not "does it have TEXT?" (slice `story-publish-queue-media-only`)
+`StoryRepository.decodeStoryPublish` gated on non-blank text (`content?.takeIf { isNotBlank } ?: return null`),
+so a media-only (RAW background) story — `content = null`, `mediaIds = [...]`, exactly what the composer emits —
+decoded to null and vanished from BOTH the optimistic ring AND the failure strip: a queued image/video story
+that FAILED was lost silently, with no retry/discard. The block was fine for text and invisible for media
+because media never composes a caption. **When a decoder/projection gates on ONE payload dimension (text), ask
+what ELSE the row can carry (media, and later a local URI/thumbnail) that the gate silently drops** — the same
+"what travels beside the text?" reflex the gateway Prisme lessons (root CLAUDE.md §124/125) apply to
+notifications, here applied to the outbox. The fix widened the gate to "non-blank text OR ≥1 non-blank media id"
+and made `content` nullable on both building blocks; the failure strip's caption became a localised media
+summary so a media-only row is never a blank line.
+
 ## 2026-08-29 — a model field + a decoder + a painter all shipping does NOT mean a surface consumes them (slice `story-slide-thumbhash-placeholder`)
 The ThumbHash blur placeholder was "half-built and invisible": the field was on the model
 (`StoryEffects.thumbHash`, `FeedMedia.thumbHash`), the decoder (`ThumbHash.decodeBase64`) and the Compose

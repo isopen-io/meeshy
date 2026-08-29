@@ -18,23 +18,39 @@ import me.meeshy.sdk.story.FailedStoryPublish
  */
 object StoryPublishFailures {
 
-    /** A failed publish rendered for the strip — [cmid] targets the retry/discard. */
+    /**
+     * A failed publish rendered for the strip — [cmid] targets the retry/discard.
+     *
+     * [preview] is the collapsed text; it is **blank** for a media-only (RAW
+     * background) publish, in which case the row falls back to a media summary
+     * driven by [mediaCount] (the localised label lives in the Composable, not
+     * here, so this stays pure and language-agnostic).
+     */
     data class Item(
         val cmid: String,
         val preview: String,
         val failedAtMillis: Long,
+        val mediaCount: Int,
     )
 
     /**
      * Failure items for [failed], most-recently-failed first (stable for ties so a
-     * batch that failed together keeps its enqueue order). Each content is collapsed
+     * batch that failed together keeps its enqueue order). Each caption is collapsed
      * to a single-line [PREVIEW_MAX]-char preview, ellipsised when truncated, so a
-     * long story stays one tidy strip row.
+     * long story stays one tidy strip row; a media-only publish yields a blank
+     * preview and its [Item.mediaCount], so the strip can label it without losing it.
      */
     fun from(failed: List<FailedStoryPublish>): List<Item> =
         failed
             .sortedByDescending { it.failedAtMillis }
-            .map { Item(cmid = it.cmid, preview = it.content.preview(), failedAtMillis = it.failedAtMillis) }
+            .map {
+                Item(
+                    cmid = it.cmid,
+                    preview = it.content.orEmpty().preview(),
+                    failedAtMillis = it.failedAtMillis,
+                    mediaCount = it.mediaIds.size,
+                )
+            }
 
     private fun String.preview(): String {
         val single = trim().replace(WHITESPACE_RUN, " ")

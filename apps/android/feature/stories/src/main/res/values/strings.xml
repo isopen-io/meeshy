@@ -31,6 +31,10 @@
     <string name="stories_publish_failed_title">Couldn\'t post your story</string>
     <string name="stories_publish_retry">Retry</string>
     <string name="stories_publish_discard">Discard</string>
+    <plurals name="stories_publish_media_summary">
+        <item quantity="one">Photo or video</item>
+        <item quantity="other">%1$d photos or videos</item>
+    </plurals>
     <string name="stories_composer_title">New story</string>
     <string name="stories_composer_cancel">Cancel</string>
     <string name="stories_composer_publish">Share</string>
