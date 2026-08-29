@@ -143,7 +143,15 @@ function makePrismaForMessages({
 
 function buildReportApp(authContext = makeAuthContext()) {
   const app = Fastify({ logger: false });
-  app.decorate('prisma', {} as any);
+  // La cible d'un signalement est VÉRIFIÉE avant écriture depuis #4155 : un
+  // double `prisma` vide serait plus pauvre que la production — la
+  // vérification y lèverait, et le témoin lirait 500 là où il croit lire 201.
+  app.decorate('prisma', {
+    user: { findUnique: async () => ({ id: '507f1f77bcf86cd799439012' }) },
+    message: { findUnique: async () => ({ conversationId: '507f1f77bcf86cd799439088' }) },
+    conversation: { findUnique: async () => ({ id: '507f1f77bcf86cd799439014' }) },
+    participant: { findFirst: async () => ({ id: 'p1' }) },
+  } as any);
   app.decorate('authenticate', async (request: any) => {
     request.authContext = authContext;
   });
@@ -220,8 +228,10 @@ describe('Admin report routes', () => {
       );
     });
 
-    it('uses reporterId from body when provided (overridden by authContext.registeredUser.id)', async () => {
-      // registeredUser.id takes priority over body.reporterId
+    it('ignore un `reporterId` du corps — le champ a quitté le contrat (#4155)', async () => {
+      // Il était déjà inatteignable (`authContext.registeredUser?.id ||
+      // body.reporterId`), mais PRÉSENT dans le schéma public : un champ mort
+      // dans un contrat est une invitation pour la prochaine main.
       app = buildReportApp();
       await app.ready();
 
@@ -245,7 +255,10 @@ describe('Admin report routes', () => {
       );
     });
 
-    it('uses body.reporterName when provided', async () => {
+    it('IGNORE `reporterName` du corps — un inscrit ne signe pas d’un nom qu’il choisit', async () => {
+      // `reporterId` était forcé à l'identité serveur ; `reporterName` venait du
+      // corps. Un signalement portait donc une identité à moitié vraie, et
+      // c'est la moitié LISIBLE par un modérateur qui était fausse.
       app = buildReportApp();
       await app.ready();
 
@@ -263,7 +276,7 @@ describe('Admin report routes', () => {
       });
 
       expect(mockReportService.createReport).toHaveBeenCalledWith(
-        expect.objectContaining({ reporterName: 'John Doe' })
+        expect.objectContaining({ reporterName: 'admin' })
       );
     });
 

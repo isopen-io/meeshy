@@ -1,6 +1,12 @@
 import XCTest
 @testable import MeeshySDK
 
+/// L'adresse d'un signalement, et ce qu'elle dit du privilège (#4155).
+///
+/// Ces témoins visaient `/admin/reports` — une adresse qui annonçait un
+/// privilège que le geste n'exige pas. Elle reste servie en adaptateur, mais
+/// c'est `/reports` que l'app doit appeler : le jour où le préfixe `/admin`
+/// est durci, un témoin qui pointe encore l'ancienne adresse ne prévient pas.
 final class ReportServiceTests: XCTestCase {
 
     private var mock: MockAPIClient!
@@ -22,24 +28,24 @@ final class ReportServiceTests: XCTestCase {
     func testReportMessagePostsToAdminReports() async throws {
         let reportData = ReportResponseData(id: "report1")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportMessage(messageId: "msg123", reportType: "SPAM", reason: "Obvious spam")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/admin/reports")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/reports")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testReportMessageWithNilReason() async throws {
         let reportData = ReportResponseData(id: "report2")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportMessage(messageId: "msg456", reportType: "HARASSMENT")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/admin/reports")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/reports")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
@@ -48,19 +54,19 @@ final class ReportServiceTests: XCTestCase {
     func testReportUserPostsToAdminReports() async throws {
         let reportData = ReportResponseData(id: "report3")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportUser(userId: "user789", reportType: "IMPERSONATION", reason: "Fake account")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/admin/reports")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/reports")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testReportUserWithNilReason() async throws {
         let reportData = ReportResponseData(id: "report4")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportUser(userId: "user000", reportType: "SPAM")
 
@@ -73,19 +79,19 @@ final class ReportServiceTests: XCTestCase {
     func testReportStoryPostsToAdminReports() async throws {
         let reportData = ReportResponseData(id: "report5")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportStory(storyId: "story123", reportType: "INAPPROPRIATE", reason: "Violent content")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/admin/reports")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/reports")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testReportStoryWithNilReason() async throws {
         let reportData = ReportResponseData(id: "report6")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportStory(storyId: "story456", reportType: "SPAM")
 
@@ -97,7 +103,7 @@ final class ReportServiceTests: XCTestCase {
     func testReportConversationPostsToAdminReports() async throws {
         let reportData = ReportResponseData(id: "report7")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportConversation(
             conversationId: "conv123",
@@ -106,14 +112,14 @@ final class ReportServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/admin/reports")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/reports")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     func testReportConversationWithNilReason() async throws {
         let reportData = ReportResponseData(id: "report8")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportConversation(conversationId: "conv456", reportType: "HARASSMENT")
 
@@ -125,7 +131,7 @@ final class ReportServiceTests: XCTestCase {
     func testAllReportTypesUseAdminReportsEndpoint() async throws {
         let reportData = ReportResponseData(id: "r1")
         let response = APIResponse<ReportResponseData>(success: true, data: reportData, error: nil)
-        mock.stub("/admin/reports", result: response)
+        mock.stub("/reports", result: response)
 
         try await service.reportMessage(messageId: "m1", reportType: "SPAM")
         try await service.reportUser(userId: "u1", reportType: "SPAM")
@@ -134,7 +140,7 @@ final class ReportServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 4)
         for request in mock.requests {
-            XCTAssertEqual(request.endpoint, "/admin/reports")
+            XCTAssertEqual(request.endpoint, "/reports")
             XCTAssertEqual(request.method, "POST")
         }
     }

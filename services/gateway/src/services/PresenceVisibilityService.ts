@@ -4,6 +4,7 @@ import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { resolvePresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { PrivacyPreferencesService } from './PrivacyPreferencesService';
+import { amitieAcceptee } from './friendship';
 
 export type PresenceViewer = { readonly userId: string; readonly role: GlobalUserRoleType } | null;
 export type PresenceTarget = { readonly id: string; readonly deactivatedAt?: Date | null };
@@ -179,18 +180,8 @@ export class PresenceVisibilityService {
     return !!row;
   }
 
-  private async areConnected(a: string, b: string): Promise<boolean> {
-    const friend = await this.prisma.friendRequest.findFirst({
-      where: {
-        status: 'accepted',
-        OR: [
-          { senderId: a, receiverId: b },
-          { senderId: b, receiverId: a },
-        ],
-      },
-      select: { id: true },
-    });
-    return !!friend;
+  private areConnected(a: string, b: string): Promise<boolean> {
+    return amitieAcceptee(this.prisma, a, b);
   }
 }
 

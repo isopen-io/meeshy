@@ -17,6 +17,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { createSignalProtocolRateLimitConfig } from '../middleware/rate-limiter';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
+import { amitieAcceptee } from '../services/friendship';
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
@@ -228,15 +229,10 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
             })
           : null;
 
-        // Also allow if they are friends
-        const areFriends = await prisma.friendRequest.findFirst({
-          where: {
-            OR: [
-              { senderId: requestingUserId, receiverId: targetUserId, status: 'accepted' },
-              { senderId: targetUserId, receiverId: requestingUserId, status: 'accepted' }
-            ]
-          }
-        });
+        // Also allow if they are friends — par le SITE UNIQUE de la question
+        // (#4155). Cette copie posait la même requête, à l'identique et sans
+        // lien : celle qui aurait bougé n'aurait fait rougir aucune autre.
+        const areFriends = await amitieAcceptee(prisma, requestingUserId, targetUserId);
 
         if (!sharedConversation && !areFriends) {
           logger.warn('SECURITY: Unauthorized key bundle request', {

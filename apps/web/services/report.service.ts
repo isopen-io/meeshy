@@ -2,7 +2,12 @@ import { apiService } from './api.service';
 import type { CreateReportDTO, Report } from '@meeshy/shared/types';
 
 /**
- * Service pour gérer les signalements
+ * Service pour gérer les signalements.
+ *
+ * Adresse `POST /reports` depuis #4155 : signaler est un geste ORDINAIRE (S2).
+ * Il vivait sous `/admin/reports`, la seule route d'administration ouverte à un
+ * utilisateur ordinaire — une adresse qui mentait sur le privilège, et que
+ * n'importe quel durcissement du préfixe `/admin` aurait cassée.
  */
 class ReportService {
   /**
@@ -16,7 +21,7 @@ class ReportService {
       reason
     };
 
-    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+    const response = await apiService.post<{ success: boolean; data: Report }>('/reports', reportData);
 
     if (response.data && (response.data as any).success) {
       return (response.data as any).data;
@@ -36,7 +41,7 @@ class ReportService {
       reason
     };
 
-    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+    const response = await apiService.post<{ success: boolean; data: Report }>('/reports', reportData);
 
     if (response.data && (response.data as any).success) {
       return (response.data as any).data;
@@ -56,7 +61,7 @@ class ReportService {
       reason
     };
 
-    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+    const response = await apiService.post<{ success: boolean; data: Report }>('/reports', reportData);
 
     if (response.data && (response.data as any).success) {
       return (response.data as any).data;
@@ -76,7 +81,7 @@ class ReportService {
       reason
     };
 
-    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+    const response = await apiService.post<{ success: boolean; data: Report }>('/reports', reportData);
 
     if (response.data && (response.data as any).success) {
       return (response.data as any).data;
@@ -96,7 +101,7 @@ class ReportService {
       reason
     };
 
-    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+    const response = await apiService.post<{ success: boolean; data: Report }>('/reports', reportData);
 
     if (response.data && (response.data as any).success) {
       return (response.data as any).data;
@@ -116,7 +121,7 @@ class ReportService {
       reason
     };
 
-    const response = await apiService.post<{ success: boolean; data: Report }>('/admin/reports', reportData);
+    const response = await apiService.post<{ success: boolean; data: Report }>('/reports', reportData);
 
     if (response.data && (response.data as any).success) {
       return (response.data as any).data;

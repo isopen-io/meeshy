@@ -50,6 +50,7 @@ import { communityRoutes } from './routes/communities';
 import { dashboardRoutes } from './routes/admin/dashboard';
 import { userAdminRoutes } from './routes/admin/users';
 import { reportRoutes } from './routes/admin/reports';
+import { reportCreationRoutes } from './routes/reports';
 import { invitationRoutes } from './routes/admin/invitations';
 import { analyticsRoutes } from './routes/admin/analytics';
 import { languagesRoutes } from './routes/admin/languages';
@@ -240,6 +241,10 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
 
     // Register admin report routes (at /api/admin/reports)
     await server.register(reportRoutes, { prefix: `${API_PREFIX}/admin/reports` });
+    // Signaler un contenu est un geste ORDINAIRE (S2), pas un geste
+    // d'administration : il a sa propre adresse depuis #4155. `/admin/reports`
+    // reste un adaptateur mince le temps que les trois clients migrent.
+    await server.register(reportCreationRoutes, { prefix: `${API_PREFIX}/reports` });
 
     // Register admin invitations routes (at /api/admin/invitations)
     await server.register(invitationRoutes, { prefix: `${API_PREFIX}/admin/invitations` });

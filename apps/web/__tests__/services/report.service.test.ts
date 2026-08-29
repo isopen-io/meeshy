@@ -25,13 +25,13 @@ beforeEach(() => jest.clearAllMocks());
 // ─── reportMessage ────────────────────────────────────────────────────────────
 
 describe('reportService.reportMessage', () => {
-  it('POSTs to /admin/reports with reportedType=message and returns report on success', async () => {
+  it('POSTs to /reports (S2, plus /admin) with reportedType=message and returns report on success', async () => {
     const report = makeReport();
     mockApi.post.mockResolvedValue({ data: { success: true, data: report } } as any);
 
     const result = await reportService.reportMessage('msg-1', 'spam', 'unwanted');
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+    expect(mockApi.post).toHaveBeenCalledWith('/reports', {
       reportedType: 'message',
       reportedEntityId: 'msg-1',
       reportType: 'spam',
@@ -65,7 +65,7 @@ describe('reportService.reportUser', () => {
 
     const result = await reportService.reportUser('user-1', 'harassment', 'harassing me');
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+    expect(mockApi.post).toHaveBeenCalledWith('/reports', {
       reportedType: 'user',
       reportedEntityId: 'user-1',
       reportType: 'harassment',
@@ -93,7 +93,7 @@ describe('reportService.reportConversation', () => {
 
     const result = await reportService.reportConversation('conv-1', 'illegal', 'illegal content');
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+    expect(mockApi.post).toHaveBeenCalledWith('/reports', {
       reportedType: 'conversation',
       reportedEntityId: 'conv-1',
       reportType: 'illegal',
@@ -121,7 +121,7 @@ describe('reportService.reportCommunity', () => {
 
     const result = await reportService.reportCommunity('comm-1', 'hate-speech', 'hate content');
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+    expect(mockApi.post).toHaveBeenCalledWith('/reports', {
       reportedType: 'community',
       reportedEntityId: 'comm-1',
       reportType: 'hate-speech',
@@ -155,7 +155,7 @@ describe('reportService.reportPost', () => {
 
     const result = await reportService.reportPost('post-1', 'inappropriate', 'inappropriate content');
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+    expect(mockApi.post).toHaveBeenCalledWith('/reports', {
       reportedType: 'post',
       reportedEntityId: 'post-1',
       reportType: 'inappropriate',
@@ -189,7 +189,7 @@ describe('reportService.reportStory', () => {
 
     const result = await reportService.reportStory('story-1', 'offensive', 'offensive content');
 
-    expect(mockApi.post).toHaveBeenCalledWith('/admin/reports', {
+    expect(mockApi.post).toHaveBeenCalledWith('/reports', {
       reportedType: 'story',
       reportedEntityId: 'story-1',
       reportType: 'offensive',

@@ -5,23 +5,14 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import { getReportService } from '../../services/admin/report.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import type {
-  CreateReportDTO,
   UpdateReportDTO,
   ReportFilters
 } from '@meeshy/shared/types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/authorize';
+import { signaler, limiteursDeSignalement } from '../reports';
 
 // Schemas de validation Zod
-const createReportSchema = z.object({
-  reportedType: z.enum(['message', 'user', 'conversation', 'community', 'post', 'story', 'sound']),
-  reportedEntityId: z.string().min(1, 'ID de l\'entite requis'),
-  reporterId: z.string().optional(),
-  reporterName: z.string().optional(),
-  reportType: z.enum(['spam', 'inappropriate', 'harassment', 'violence', 'hate_speech', 'fake_profile', 'impersonation', 'other']),
-  reason: z.string().optional()
-});
-
 const updateReportSchema = z.object({
   status: z.enum(['pending', 'under_review', 'resolved', 'rejected', 'dismissed']).optional(),
   moderatorNotes: z.string().optional(),
@@ -38,38 +29,28 @@ export async function reportRoutes(fastify: FastifyInstance) {
   const reportService = getReportService(fastify.prisma);
 
   /**
-   * POST /api/admin/reports
-   * Creer un nouveau signalement
+   * `POST /admin/reports` — ADAPTATEUR MINCE vers `POST /reports` (#4155).
+   *
+   * Signaler n'est pas un geste d'administration : c'était pourtant la seule
+   * route de ce répertoire ouverte à un utilisateur ordinaire, et la seule que
+   * les trois clients appelaient. L'adresse ment donc sur le privilège, et le
+   * jour où quelqu'un durcit le préfixe `/admin` — liste blanche d'IP, WAF —
+   * il casse le signalement sur iOS, Android et le web sans le savoir.
+   *
+   * Elle reste montée le temps que les trois clients migrent, et elle ne
+   * DÉCIDE plus rien : même corps validé, mêmes trois seuils de débit, même
+   * vérification de cible, même identité serveur. Un adaptateur qui recopierait
+   * le geste porterait sa propre loi — c'est la forme du défaut, pas sa
+   * correction.
+   *
+   * Avant de la retirer : COMPTER les appels des trois clients. Le client
+   * Kotlin (`core/network/.../ReportApi.kt`) n'avait pas été inventorié par
+   * l'audit qui a ouvert cette issue.
    */
   fastify.post('/', {
-    onRequest: [fastify.authenticate]
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      const body = createReportSchema.parse(request.body);
-
-      // Si l'utilisateur est authentifie, utiliser son ID
-      const reportData: CreateReportDTO = {
-        reportedType: body.reportedType,
-        reportedEntityId: body.reportedEntityId,
-        reportType: body.reportType,
-        reporterId: authContext.registeredUser?.id || body.reporterId,
-        reporterName: body.reporterName || authContext.anonymousUser?.username,
-        reason: body.reason
-      };
-
-      const report = await reportService.createReport(reportData);
-
-      return sendSuccess(reply, report, { statusCode: 201, message: 'Signalement cree avec succes' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return sendBadRequest(reply, 'Donnees invalides');
-      }
-
-      logError(fastify.log, 'Create report error:', error);
-      return sendInternalError(reply, 'Erreur lors de la creation du signalement');
-    }
-  });
+    onRequest: [fastify.authenticate],
+    preHandler: limiteursDeSignalement(fastify)
+  }, (request: FastifyRequest, reply: FastifyReply) => signaler(fastify, request, reply));
 
   /**
    * GET /api/admin/reports

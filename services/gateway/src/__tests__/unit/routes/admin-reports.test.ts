@@ -71,7 +71,13 @@ async function buildApp(role = 'MODERATOR'): Promise<FastifyInstance> {
     };
   });
 
-  app.decorate('prisma', {} as any);
+  // La cible d'un signalement est VÉRIFIÉE avant écriture depuis #4155 : un
+  // double `prisma` vide est plus pauvre que la production — la vérification y
+  // lèverait, et le témoin lirait 500 là où il croit lire 201.
+  app.decorate('prisma', {
+    message: { findUnique: async () => ({ conversationId: '507f1f77bcf86cd799439077' }) },
+    participant: { findFirst: async () => ({ id: 'p1' }) },
+  } as any);
 
   await app.register(reportRoutes);
   await app.ready();
