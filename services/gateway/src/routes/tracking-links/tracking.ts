@@ -740,8 +740,15 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            trackingLinks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            total: { type: 'number' }
+            // Déclarées à la RACINE, envoyées sous `data` (#4192) : la liste
+            // d'administration arrivait VIDE côté web, sans erreur ni journal.
+            data: {
+              type: 'object',
+              properties: {
+                trackingLinks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                total: { type: 'number' }
+              }
+            }
           }
         },
         403: { ...errorResponseSchema },
@@ -792,8 +799,14 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean' },
-            clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            total: { type: 'number' }
+            // Jumelle du site précédent, même fichier, même défaut (#4192).
+            data: {
+              type: 'object',
+              properties: {
+                clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
+                total: { type: 'number' }
+              }
+            }
           }
         },
         404: { ...errorResponseSchema },

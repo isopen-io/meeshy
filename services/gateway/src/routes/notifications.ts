@@ -706,7 +706,17 @@ export async function notificationRoutes(fastify: FastifyInstance) {
             type: 'object',
             properties: {
               success: { type: 'boolean' },
-              deletedCount: { type: 'number' },
+              // `deletedCount` était déclaré à la RACINE alors que `sendSuccess`
+              // l'enveloppe sous `data` (#4192) : la clé ne figurant pas dans
+              // `data`, le sérialiseur vidait l'objet. L'administrateur voyait
+              // « succès » sans jamais savoir combien de lignes il venait de
+              // supprimer — sur un geste irréversible.
+              data: {
+                type: 'object',
+                properties: {
+                  deletedCount: { type: 'number' },
+                },
+              },
             },
           },
           403: errorResponseSchema,

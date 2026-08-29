@@ -1945,7 +1945,19 @@ export function registerMessagesRoutes(
         200: {
           type: 'object',
           properties: {
-            success: { type: 'boolean', example: true }
+            success: { type: 'boolean', example: true },
+            // `data` était ABSENT de ce schéma (#4192) : `fast-json-stringify`
+            // supprimait donc la charge ENTIÈRE, et le client qui marque une
+            // conversation comme lue recevait `{"success":true}` sans le
+            // moindre compte. Le handler envoyait pourtant `{ markedCount }`
+            // depuis toujours — c'est la forme `envelope`, la plus silencieuse
+            // des trois, parce qu'il ne manque pas une clé mais toutes.
+            data: {
+              type: 'object',
+              properties: {
+                markedCount: { type: 'number', description: 'Number of messages marked as read' }
+              }
+            }
           }
         },
         401: errorResponseSchema,
