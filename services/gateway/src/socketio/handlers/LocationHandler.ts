@@ -102,6 +102,12 @@ import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
 import { isConversationClosed } from '../../services/messaging/conversationWriteAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import {
+  SocketLocationLiveStartSchema,
+  SocketLocationLiveUpdateSchema,
+  SocketLocationLiveStopSchema,
+} from '../../validation/socket-event-schemas.js';
 
 const logger = enhancedLogger.child({ module: 'LocationHandler' });
 
@@ -157,6 +163,18 @@ export class LocationHandler {
     callback?: (response: SocketIOResponse<LocationLiveStartedEventData>) => void
   ): Promise<void> {
     try {
+      // Frontière socket : même garde Zod que les quatre familles de réaction.
+      // Le schéma borne latitude/longitude ET la durée, avec les messages
+      // informatifs de l'ancienne garde manuscrite (`Invalid coordinates`,
+      // `Invalid duration (must be 1-480 minutes)`), désormais servis sous le
+      // préfixe unifié `Validation failed:`.
+      const validation = validateSocketEvent(SocketLocationLiveStartSchema, data);
+      if (validation.success === false) {
+        this._sendError(callback, validation.error);
+        return;
+      }
+      const input = validation.data;
+
       const context = this._getUserContext(socket);
       if (!context) {
         this._sendError(callback, 'User not authenticated');
@@ -169,17 +187,7 @@ export class LocationHandler {
         return;
       }
 
-      if (!this._validateCoordinates(data.latitude, data.longitude)) {
-        this._sendError(callback, 'Invalid coordinates');
-        return;
-      }
-
-      if (!data.durationMinutes || data.durationMinutes <= 0 || data.durationMinutes > 480) {
-        this._sendError(callback, 'Invalid duration (must be 1-480 minutes)');
-        return;
-      }
-
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
+      const normalizedId = await this.normalizeConversationId(input.conversationId);
 
       const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) {
@@ -198,15 +206,15 @@ export class LocationHandler {
       }
 
       const now = new Date();
-      const expiresAt = new Date(now.getTime() + data.durationMinutes * 60_000);
+      const expiresAt = new Date(now.getTime() + input.durationMinutes * 60_000);
 
       const eventData: LocationLiveStartedEventData = {
         conversationId: normalizedId,
         userId: context.userId,
         username: context.displayName,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        durationMinutes: data.durationMinutes,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        durationMinutes: input.durationMinutes,
         expiresAt,
         startedAt: now,
       };
@@ -216,9 +224,9 @@ export class LocationHandler {
         userId: context.userId,
         username: context.displayName,
         socketId: socket.id,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        durationMinutes: data.durationMinutes,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        durationMinutes: input.durationMinutes,
         startedAt: now,
         expiresAt,
       });
@@ -241,15 +249,23 @@ export class LocationHandler {
     data: LocationLiveUpdateData
   ): Promise<void> {
     try {
+      // Frontière socket : le schéma borne latitude/longitude ET les quatre
+      // champs de télémétrie optionnels (altitude/accuracy/speed/heading). Ces
+      // derniers sont diffusés VERBATIM à chaque pair : sans cette garde, une
+      // valeur forgée (NaN/Infinity/non numérique) atteignait leur carte. Pas
+      // de callback ici — un refus est un `return` silencieux, comme la garde
+      // manuscrite qu'il remplace.
+      const validation = validateSocketEvent(SocketLocationLiveUpdateSchema, data);
+      if (validation.success === false) return;
+      const input = validation.data;
+
       const context = this._getUserContext(socket);
       if (!context) return;
 
       const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_LIVE_UPDATE);
       if (!allowed) return;
 
-      if (!this._validateCoordinates(data.latitude, data.longitude)) return;
-
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
+      const normalizedId = await this.normalizeConversationId(input.conversationId);
 
       const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) return;
@@ -266,18 +282,18 @@ export class LocationHandler {
         // La dernière position connue est ce que le rattrapage rejouera : sans
         // ce rafraîchissement, un arrivant recevrait le point de DÉPART, qui
         // peut avoir des heures.
-        this.sessions.set(key, { ...session, latitude: data.latitude, longitude: data.longitude });
+        this.sessions.set(key, { ...session, latitude: input.latitude, longitude: input.longitude });
       }
 
       const eventData: LocationLiveUpdatedEventData = {
         conversationId: normalizedId,
         userId: context.userId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        altitude: data.altitude,
-        accuracy: data.accuracy,
-        speed: data.speed,
-        heading: data.heading,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        altitude: input.altitude,
+        accuracy: input.accuracy,
+        speed: input.speed,
+        heading: input.heading,
         timestamp: now,
       };
 
@@ -294,13 +310,18 @@ export class LocationHandler {
     data: LocationLiveStopData
   ): Promise<void> {
     try {
+      // Frontière socket : le schéma borne `conversationId` (non vide, ≤ 255).
+      const validation = validateSocketEvent(SocketLocationLiveStopSchema, data);
+      if (validation.success === false) return;
+      const input = validation.data;
+
       const context = this._getUserContext(socket);
       if (!context) return;
 
       const allowed = await this.rateLimiter.checkLimit(context.userId, SOCKET_RATE_LIMITS.LOCATION_LIVE_STOP);
       if (!allowed) return;
 
-      const normalizedId = await this.normalizeConversationId(data.conversationId);
+      const normalizedId = await this.normalizeConversationId(input.conversationId);
 
       const participantId = await this._resolveParticipantId(context, normalizedId);
       if (!participantId) return;
@@ -583,17 +604,6 @@ export class LocationHandler {
       select: { isActive: true, closedAt: true },
     });
     return isConversationClosed(conversation);
-  }
-
-  private _validateCoordinates(latitude: number, longitude: number): boolean {
-    return (
-      typeof latitude === 'number' &&
-      typeof longitude === 'number' &&
-      latitude >= -90 &&
-      latitude <= 90 &&
-      longitude >= -180 &&
-      longitude <= 180
-    );
   }
 
   private _sendError<T>(callback: ((response: SocketIOResponse<T>) => void) | undefined, message: string): void {

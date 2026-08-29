@@ -252,6 +252,67 @@ export const SocketMessageDeleteSchema = z.object({
 
 export type SocketMessageDeleteData = z.infer<typeof SocketMessageDeleteSchema>;
 
+// ─── Partage de position en direct ─────────────────────────────────────────
+//
+// `LocationHandler` est la DOUZIÈME famille de handlers Socket.IO à valider sa
+// frontière entrante par Zod (cycle 107 « la douzième famille le sera-t-elle ? »),
+// après les quatre familles de réaction. Elle validait à la main — et ne gardait
+// que la latitude et la longitude : les quatre champs de télémétrie optionnels
+// (`altitude`, `accuracy`, `speed`, `heading`) voyageaient À CÔTÉ des coordonnées
+// gardées et étaient diffusés VERBATIM à chaque pair. Une valeur forgée
+// (`NaN` / `Infinity` / non numérique) atteignait donc la carte de tous les
+// participants. En Zod v4, `z.number()` rejette nativement `NaN` et l'infini
+// (`invalid_type`) — chaque champ de télémétrie est donc borné par sa seule
+// déclaration.
+//
+// Les messages informatifs sont préservés sous le préfixe unifié
+// `Validation failed:` de `validateSocketEvent` : la latitude/longitude hors
+// borne rend `Invalid coordinates`, la durée hors [0;480] rend
+// `Invalid duration (must be 1-480 minutes)` — mot pour mot les messages que
+// les gardes manuscrites rendaient, désormais servis par une source unique.
+const conversationIdField = z.string().min(1).max(255);
+
+const coordinate = (bound: number) =>
+  z
+    .number({ error: 'Invalid coordinates' })
+    .min(-bound, { error: 'Invalid coordinates' })
+    .max(bound, { error: 'Invalid coordinates' });
+
+// Non contraint au-delà de sa finitude : la télémétrie GPS (altitude en mètres,
+// précision, vitesse, cap) n'a pas de borne produit universelle, mais elle doit
+// être un nombre FINI — c'est la garde qui manquait.
+const telemetryField = z.number().optional();
+
+export const SocketLocationLiveStartSchema = z.object({
+  conversationId: conversationIdField,
+  latitude: coordinate(90),
+  longitude: coordinate(180),
+  durationMinutes: z
+    .number({ error: 'Invalid duration (must be 1-480 minutes)' })
+    .gt(0, { error: 'Invalid duration (must be 1-480 minutes)' })
+    .max(480, { error: 'Invalid duration (must be 1-480 minutes)' }),
+});
+
+export type SocketLocationLiveStartData = z.infer<typeof SocketLocationLiveStartSchema>;
+
+export const SocketLocationLiveUpdateSchema = z.object({
+  conversationId: conversationIdField,
+  latitude: coordinate(90),
+  longitude: coordinate(180),
+  altitude: telemetryField,
+  accuracy: telemetryField,
+  speed: telemetryField,
+  heading: telemetryField,
+});
+
+export type SocketLocationLiveUpdateData = z.infer<typeof SocketLocationLiveUpdateSchema>;
+
+export const SocketLocationLiveStopSchema = z.object({
+  conversationId: conversationIdField,
+});
+
+export type SocketLocationLiveStopData = z.infer<typeof SocketLocationLiveStopSchema>;
+
 export const SocketAuthenticateSchema = z.object({
   userId: z.string().optional(),
   sessionToken: z.string().optional(),
