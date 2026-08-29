@@ -189,6 +189,15 @@ data class StorySlideView(
      */
     val backgroundTransform: StoryBackgroundObjectTransform = StoryBackgroundObjectTransform.IDENTITY,
     /**
+     * The ThumbHash the viewer decodes into an instant blur behind the background
+     * [imageUrl] while it loads — no black flash on cold load. Resolved once at
+     * projection time via [StorySlidePlaceholder] (slide-level `effects.thumbHash`
+     * then the flat background image's per-media hash). `null` when the slide
+     * carries no usable hash: the image then loads over the plain background with
+     * no placeholder, exactly as before.
+     */
+    val backgroundThumbHash: String? = null,
+    /**
      * The locked repost attribution shown after the author's name when this slide
      * is a repost of someone else's story (repost icon + `@handle`, no "via"),
      * resolved once at projection time via [StoryRepostAttribution]. `null` for a
@@ -700,6 +709,7 @@ class StoryViewerViewModel @Inject constructor(
             backgroundVideoUrl = background.videoUrl,
             backgroundLoop = background.loop,
             backgroundTransform = background.transform,
+            backgroundThumbHash = StorySlidePlaceholder.resolve(this),
             foregroundMedia = foreground,
             textObjects = textObjects,
             backgroundAudioUrl = resolveAudioUrl(preferBackground = true),

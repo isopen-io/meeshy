@@ -2,6 +2,57 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a story slide shows an instant blur behind its loading background image — no black flash on
+> cold load** (slice `story-slide-thumbhash-placeholder`, feature-parity E. Stories — the "thumbHash
+> blur-placeholder per slide" line, now `[~]`: the DISPLAY/read half is done; write-path GENERATION stays a
+> Bitmap follow-up). Before this, the viewer's background `AsyncImage` painted nothing (black) while the full
+> image loaded — a visible cold-load flash iOS's `StorySlideRenderer` never has, because it decodes the slide's
+> ThumbHash into a blur placeholder. The hash was already on the model (`StoryEffects.thumbHash`,
+> `FeedMedia.thumbHash`), the decoder (`ThumbHash.decodeBase64`, `:core:model`) and the Compose painter
+> (`rememberThumbHashPainter`, `:sdk-ui`) already shipped and are used by the feed — only the story viewer never
+> consumed them. This is a pure instant-app win (dimensions 2/4/8).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4257 (iOS a11y, jcnm) — not a
+> `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge. Prior slice
+> (`story-draft-persist-sticker-elements`) is on `main` (#4253, HEAD `c14593da`). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (2 main modified + 1 new main + 1 new test).
+>
+> **The change — one pure resolver + minimum wiring.** (1) `:feature:stories` new `StorySlidePlaceholder` object:
+> `resolve(effectsThumbHash, backgroundImageThumbHash)` returns the first non-blank trimmed of the two (slide-level
+> `effects.thumbHash` beats the flat `FeedMedia.thumbHash`), and a `resolve(item: StoryItem)` overload that reads
+> `storyEffects?.thumbHash` then the flat `media.firstOrNull { IMAGE && url != null }?.thumbHash` — mirroring the
+> viewer's own image-background selection so the blur shown is the blur of the image that is loading. (2)
+> `StoryViewerViewModel`: new `StorySlideView.backgroundThumbHash: String?`, populated in `toSlideView` via
+> `StorySlidePlaceholder.resolve(this)`. (3) `StoryViewerScreen`: the image branch's `AsyncImage` gains
+> `placeholder = rememberThumbHashPainter(slide.backgroundThumbHash)` — the exact idiom `FeedScreen` already uses;
+> the video branch (ExoPlayer surface, no placeholder slot) is untouched by design.
+>
+> **Tests: +13** `StorySlidePlaceholderTest` (behaviour via the public API, no Android/Compose/I-O): granular
+> cascade — effects beats background, null/blank effects falls through, both-absent/both-blank → null, surrounding
+> whitespace trimmed; item overload — effects hash used, falls back to flat image hash, a leading VIDEO is
+> skipped for the IMAGE hash, an image with a null url is not chosen, a blank flat hash → null, neither source →
+> null, a null `storyEffects` still reads the flat hash. **Mutation-RED-proven**: reversing the cascade order
+> (`listOfNotNull(background, effects)`) reddens EXACTLY `slide-level effects hash wins over the background image
+> hash` (13 tests, 1 failed), restored, full suite green.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools` (compileSdk 37 → AGP's `android-37.0`, same as CI's provisioner).
+>
+> **Verified — FULL local CI-mirror gate GREEN**: `./apps/android/meeshy.sh check` (assembleDebug +
+> testDebugUnitTest, ALL modules) **BUILD SUCCESSFUL in 4m 28s**, 973 actionable tasks, 0 failed; the new suite
+> 13/13 and the mutation proof (1 RED, restored). Reviewer **PASS** (diff `apps/android` only; SDK purity — the
+> resolver is `:feature:stories` orchestration, the decode/painter stay in `:core:model`/`:sdk-ui`; SSOT — one
+> resolver, mirrors the viewer's existing image selection; instant-app — this IS the cold-load blur win; no
+> tautological tests; no floor lowered).
+>
+> **Next**: write-path thumbHash **generation** (encode from the composed slide bitmap into `effects.thumbHash`
+> at publish) is the natural completion of this box but needs `Bitmap`→RGBA (the pure `ThumbHash.encode` is
+> already ported) — a mostly-glue slice, lower JVM-test yield. Higher-value pure-core boxes still open in E.
+> Stories: the `[~]` Offline publish queue's **preview-before-publish** and **RAW background publish-all**, or
+> move to the next build-order area (**Calls**) if Stories has no clean pure-core box left. Read the chosen box's
+> iOS audit part read-only before branching.
+
 > On 2026-08-29 **a story draft's on-canvas stickers survive leaving the composer — and the fidelity gate is
 > RETIRED** (slice `story-draft-persist-sticker-elements`, feature-parity E. Stories — the "Draft save/restore …"
 > line, now `[x]`; lifts the SIXTH and LAST rich dimension after the canvas transform, filter, pinned duration,
