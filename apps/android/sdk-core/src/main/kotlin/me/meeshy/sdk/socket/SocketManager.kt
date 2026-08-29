@@ -49,11 +49,42 @@ class SocketManager @Inject constructor(
 
     val isConnected: Boolean get() = _socket?.connected() == true
 
+    /**
+     * Ce que le handshake transmet — et sous QUELLE clé.
+     *
+     * Deux corrections en une (#4213) :
+     *
+     * 1. **Le jeton de SESSION d'un compte inscrit voyage enfin.** Un socket
+     *    inscrit s'authentifiait au JWT seul, si bien que le serveur n'avait
+     *    aucun moyen de dire quel socket appartient à quelle session : révoquer
+     *    une session passait la ligne à `isValid: false` et l'appareil
+     *    continuait de tout recevoir indéfiniment, un socket n'étant
+     *    authentifié qu'une fois, au connect, et jamais revérifié.
+     *
+     * 2. **Un invité de lien s'annonçait sous la MAUVAISE clé.** Le code
+     *    précédent posait `token` quel que soit le jeton — or la passerelle
+     *    branche sur les clés : `sessionToken` SANS `token` désigne un
+     *    participant anonyme, et un jeton de session présenté en `token` part
+     *    dans la vérification JWT, qui le refuse. Aucun invité de lien Android
+     *    ne pouvait donc ouvrir de socket.
+     */
+    internal fun handshakeAuth(tokenStore: TokenStore): Map<String, String>? {
+        val jwt = tokenStore.jwt
+        val session = tokenStore.sessionToken
+
+        return when {
+            jwt != null && session != null -> mapOf("token" to jwt, "sessionToken" to session)
+            jwt != null -> mapOf("token" to jwt)
+            session != null -> mapOf("sessionToken" to session)
+            else -> null
+        }
+    }
+
     fun connect() {
-        val token = tokenStore.jwt ?: tokenStore.sessionToken ?: return
+        val auth = handshakeAuth(tokenStore) ?: return
         _connectionState.value = SocketConnectionState.CONNECTING
         val opts = IO.Options().apply {
-            auth = mapOf("token" to token)
+            this.auth = auth
             transports = arrayOf("websocket")
             reconnection = true
             reconnectionAttempts = Int.MAX_VALUE

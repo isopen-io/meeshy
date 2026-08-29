@@ -148,6 +148,15 @@ function makePrisma(overrides: Record<string, any> = {}) {
     userSession: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
       update: jest.fn<any>().mockResolvedValue({}),
+      // Depuis #4213, `/refresh` REFUSE quand l'utilisateur n'a plus AUCUNE
+      // session valide : c'est ce qui fait que la révocation atteint enfin
+      // cette route. Un JWT authentique mais expiré suffisait auparavant à
+      // obtenir un JWT neuf, si bien que couper les sockets ne servait à rien
+      // — le porteur d'un jeton volé se reconnectait dans la seconde.
+      //
+      // Le double en déclare une : ces témoins portent sur le RENOUVELLEMENT,
+      // pas sur la révocation, qui a les siens.
+      count: jest.fn<any>().mockResolvedValue(1),
     },
     ...overrides,
   };
@@ -456,6 +465,9 @@ describe('POST /refresh — with trusted session', () => {
       userSession: {
         findFirst: jest.fn<any>().mockResolvedValue(null),
         update: jest.fn<any>().mockResolvedValue({}),
+        // Une surcharge REMPLACE la clé entière : sans ce rappel, elle perd le
+        // `count` du double de base et la garde de révocation (#4213) refuse.
+        count: jest.fn<any>().mockResolvedValue(1),
       },
     });
     const app = await buildApp({ prisma });
@@ -481,6 +493,7 @@ describe('POST /refresh — with trusted session', () => {
       userSession: {
         findFirst: jest.fn<any>().mockResolvedValue(null),
         update,
+        count: jest.fn<any>().mockResolvedValue(1),
       },
     });
     const app = await buildApp({ prisma });
@@ -510,6 +523,9 @@ describe('POST /refresh — with trusted session', () => {
       userSession: {
         findFirst: jest.fn<any>().mockResolvedValue(null),
         update: jest.fn<any>().mockResolvedValue({}),
+        // Une surcharge REMPLACE la clé entière : sans ce rappel, elle perd le
+        // `count` du double de base et la garde de révocation (#4213) refuse.
+        count: jest.fn<any>().mockResolvedValue(1),
       },
     });
     const app = await buildApp({ prisma });

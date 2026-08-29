@@ -62,7 +62,7 @@ import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupSe
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
-import { AuthenticationError, ValidationError, TranslationError, UserLockedError } from './errors/custom-errors';
+import { typedErrorResponse } from './errors/custom-errors';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -633,21 +633,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Cast to `any` once to safely access error properties below.
       const err: any = error as any;
 
-      if (err instanceof AuthenticationError) {
-        return reply.code(401).send({
-          error: 'Authentication Failed',
-          message: err.message,
-          statusCode: 401,
-          timestamp: new Date().toISOString()
-        });
-      }
-
       // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
       // `err.validation`. Sans cette branche il tombait dans le repli
       // générique et ressortait en « Internal Server Error / An unexpected
       // error occurred » sous un code 400 — le client apprenait qu'il avait
       // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
       // `POST /auth/register` le 2026-08-18.
+      //
+      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
+      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
+      // par tout repli qui lit ce champ.
       const schemaRefusal = schemaValidationErrorResponse(error);
       if (schemaRefusal) {
         return reply.code(schemaRefusal.statusCode).send({
@@ -656,36 +651,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         });
       }
 
-      if (error instanceof ValidationError) {
-        return reply.code(400).send({
-          error: 'Validation Error',
-          message: err.message,
-          statusCode: 400,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // 423 « Locked ». Sans cette branche, le repli générique rendait bien le
-      // code 423 (il lit `err.statusCode`) mais REMPLAÇAIT le corps par
-      // « An unexpected error occurred » et perdait `lockedUntil` : la personne
-      // verrouillée recevait un code juste et une explication fausse, sans
-      // jamais apprendre quand elle pourrait revenir (#4138).
-      if (error instanceof UserLockedError) {
-        return reply.code(error.statusCode).send({
-          error: 'Account Locked',
-          code: error.code,
-          message: error.message,
-          statusCode: error.statusCode,
-          ...(error.lockedUntil && { lockedUntil: error.lockedUntil.toISOString() }),
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      if (error instanceof TranslationError) {
-        return reply.code(500).send({
-          error: 'Translation Error',
-          message: err.message,
-          statusCode: 500,
+      // TOUTE la hiérarchie typée, en UNE branche (#4212).
+      //
+      // Trois sous-classes sur dix-neuf avaient la leur ; les seize autres
+      // tombaient dans le repli générique. Celui-ci lit bien `err.statusCode`
+      // — le CODE était donc juste — mais il REMPLACE le message par « An
+      // unexpected error occurred » et jette tout champ propre à la classe.
+      //
+      // Un compte verrouillé recevait ainsi `423` avec « Internal Server
+      // Error » et SANS `lockedUntil` : la personne apprenait qu'on la
+      // refusait, jamais quand elle pourrait revenir (#4138).
+      //
+      // > Un handler qui rend le bon CODE et le mauvais CORPS est plus
+      // > trompeur qu'un handler qui échoue franchement : le code juste fait
+      // > croire que la couche a compris l'erreur.
+      //
+      // La DÉCISION vit dans `typedErrorResponse`, une fonction pure : ce
+      // handler-ci ne peut s'exercer qu'en montant un serveur, et le critère
+      // demande un témoin par sous-classe.
+      const typed = typedErrorResponse(error);
+      if (typed) {
+        return reply.code(typed.statusCode).send({
+          ...typed,
           timestamp: new Date().toISOString()
         });
       }

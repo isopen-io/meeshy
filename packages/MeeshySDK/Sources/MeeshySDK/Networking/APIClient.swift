@@ -463,6 +463,24 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         set { tokenLock.withLock { $0.anon = newValue } }
     }
 
+    /// Le jeton de session d'un compte INSCRIT — distinct de l'anonyme (#4213).
+    ///
+    /// Il ne sert pas à s'authentifier : c'est le JWT qui le fait. Il sert à
+    /// DIRE QUELLE SESSION une connexion représente, ce dont le handshake
+    /// Socket.IO a besoin pour qu'une révocation puisse couper le bon socket —
+    /// et lui seul.
+    ///
+    /// Il vit ici, sous le même verrou que les deux autres, parce que le
+    /// transport le lit depuis un contexte NON isolé : `AuthManager`, isolé
+    /// `@MainActor`, ne peut pas être interrogé au milieu d'une construction
+    /// synchrone de `SocketManager`.
+    private let registeredSessionLock = OSAllocatedUnfairLock<String?>(initialState: nil)
+
+    public var registeredSessionToken: String? {
+        get { registeredSessionLock.withLock { $0 } }
+        set { registeredSessionLock.withLock { $0 = newValue } }
+    }
+
     /// L'identifiant à présenter au gateway, et SOUS QUEL EN-TÊTE.
     ///
     /// Deux populations, deux protocoles : un inscrit s'annonce par

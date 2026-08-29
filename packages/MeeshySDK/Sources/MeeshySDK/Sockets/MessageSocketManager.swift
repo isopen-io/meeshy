@@ -2222,6 +2222,23 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// retry loop. A `.notArmed` outcome there means the app is left with no
     /// transport and nothing retrying — so the caller has to arm the backoff
     /// ladder. See `forceReconnect()`.
+    /// Les en-têtes du handshake — le JWT, et le jeton de session s'il existe.
+    ///
+    /// Extrait pour être testable : la construction du `SocketManager` ne l'est
+    /// pas, et c'est la PRÉSENCE de la seconde clé qui décide si la révocation
+    /// d'une session peut atteindre cet appareil.
+    /// Le jeton est passé en PARAMÈTRE, jamais lu depuis le singleton ici :
+    /// `AuthManager` est isolé `@MainActor`, et cette fonction est appelée
+    /// depuis le contexte de transport. La lire ici forcerait un saut d'acteur
+    /// dans une construction synchrone — et rendrait la fonction intestable.
+    static func handshakeHeaders(token: String, sessionToken: String?) -> [String: String] {
+        var headers = ["Authorization": "Bearer \(token)"]
+        if let sessionToken, !sessionToken.isEmpty {
+            headers["x-session-token"] = sessionToken
+        }
+        return headers
+    }
+
     @discardableResult
     func establishTransport() -> SocketConnectOutcome {
         // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
@@ -2270,7 +2287,19 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // WS d'abord AVEC repli), un réseau qui casse l'upgrade WebSocket
             // (proxy TLS-inspectant, portail captif) perdrait tout temps réel.
             // À reconsidérer seulement avec un repli après N échecs.
-            .extraHeaders(["Authorization": "Bearer \(token)"]),
+            // Le jeton de SESSION voyage AVEC le JWT (#4213).
+            //
+            // Un socket inscrit s'authentifiait au JWT seul, et le serveur
+            // n'avait donc aucun moyen de dire quel socket appartient à quelle
+            // session : révoquer une session passait la ligne à
+            // `isValid: false` et cet appareil continuait de tout recevoir —
+            // `message:new`, `conversation:updated` — indéfiniment, un socket
+            // n'étant authentifié qu'une fois, au connect, et jamais revérifié.
+            //
+            // En EN-TÊTE, comme le JWT et comme les appels REST : le serveur le
+            // lit par `extractSessionToken`, qui accepte l'en-tête
+            // `x-session-token` aussi bien que `handshake.auth`.
+            .extraHeaders(Self.handshakeHeaders(token: token, sessionToken: APIClient.shared.registeredSessionToken)),
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),

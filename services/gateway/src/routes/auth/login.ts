@@ -29,6 +29,8 @@ import {
   sendBadRequest,
   sendInternalError
 } from '../../utils/response.js';
+import { disconnectSession } from '../../socketio/disconnectSession';
+import { hashSessionToken } from '../../utils/session-token';
 
 const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
 
@@ -354,9 +356,43 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       await authService.updateOnlineStatus(userId, false);
 
       if (sessionToken) {
+        // L'identifiant est relevé AVANT l'invalidation : après, la ligne
+        // n'est plus valide et la recherche qui la sert non plus.
+        //
+        // Toute cette moitié est BEST-EFFORT et ne peut pas faire échouer la
+        // déconnexion : elle est déjà écrite quand on arrive ici, et une
+        // déconnexion qui rend 500 parce que la comptabilité des sockets a
+        // trébuché est pire qu'un socket laissé ouvert — l'utilisateur
+        // réessaie, et se déconnecte deux fois.
+        let sessionId: string | undefined;
+        try {
+          const session = await fastify.prisma?.userSession?.findFirst({
+            where: { userId, sessionToken: hashSessionToken(sessionToken) },
+            select: { id: true },
+          });
+          sessionId = session?.id;
+        } catch (error) {
+          fastify.log.warn({ err: error }, '[AUTH] session lookup failed on logout');
+        }
+
         const loggedOut = await authService.logout(sessionToken);
         if (loggedOut) {
           logger.info('Session invalidée');
+        }
+
+        // Le socket de CET appareil, et lui seul (#4213). Se déconnecter
+        // laissait jusqu'ici le socket ouvert : l'appareil continuait de
+        // recevoir tout le temps réel d'un compte dont il venait de sortir.
+        // `disconnectRevokedSessions` couperait les AUTRES appareils, qui
+        // n'ont rien demandé.
+        if (sessionId) {
+          await disconnectSession({
+            io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+            userId,
+            sessionId,
+            message: 'Signed out.',
+            onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on logout'),
+          });
         }
       }
 

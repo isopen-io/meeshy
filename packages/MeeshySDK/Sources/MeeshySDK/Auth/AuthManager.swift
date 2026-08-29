@@ -174,6 +174,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private func tokenKey(for userId: String) -> String { "meeshy_token_\(userId)" }
     private func userKey(for userId: String) -> String { "meeshy_user_\(userId)" }
     private func sessionTokenKey(for userId: String) -> String { "meeshy_session_token_\(userId)" }
+
+    /// Le jeton de SESSION du compte actif, ou `nil`.
+    ///
+    /// Il voyage déjà en en-tête `X-Session-Token` sur les appels REST ; il
+    /// manquait au handshake Socket.IO, si bien qu'un socket inscrit
+    /// s'authentifiait au JWT SEUL et que le serveur n'avait aucun moyen de
+    /// dire quel socket appartient à quelle session. Révoquer une session
+    /// passait la ligne à `isValid: false` et l'appareil continuait de tout
+    /// recevoir indéfiniment (#4213).
+    public var currentSessionToken: String? {
+        guard let userId = activeUserId else { return nil }
+        return keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
+    }
     private func tokenDateUDKey(for userId: String) -> String { "meeshy_token_date_\(userId)" }
     private func pendingProfileKey(for userId: String) -> String { "meeshy_pending_profile_\(userId)" }
 
@@ -530,6 +543,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         activeUserId = nil
         currentUser = nil
         APIClient.shared.authToken = nil
+        APIClient.shared.registeredSessionToken = nil
 
         // D3 — wipe every cached store. Désormais AWAITED (vs fire-and-forget)
         // pour garantir que le router ne voie pas isAuthenticated=false
@@ -590,6 +604,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
             isAuthenticated = false
             pendingOptimisticProfile = nil
             APIClient.shared.authToken = nil
+        APIClient.shared.registeredSessionToken = nil
         }
     }
 
@@ -637,6 +652,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         pendingOptimisticProfile = loadPendingProfileFromKeychain(userId: userId)
 
         APIClient.shared.authToken = token
+        // Le jeton de session suit le JWT (#4213) : le transport le lit depuis
+        // un contexte non isolé, et sans lui aucune révocation ne peut viser
+        // ce socket-ci plutôt qu'un autre.
+        APIClient.shared.registeredSessionToken = currentSessionToken
         isAuthenticated = true
         warmSessionScopedCaches()
 
@@ -830,6 +849,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         activeUserId = userId
         APIClient.shared.authToken = token
+        // Le jeton de session suit le JWT (#4213) : le transport le lit depuis
+        // un contexte non isolé, et sans lui aucune révocation ne peut viser
+        // ce socket-ci plutôt qu'un autre.
+        APIClient.shared.registeredSessionToken = currentSessionToken
 
         upsertSavedAccount(from: user)
         // U3 — preserve an in-flight optimistic profile edit across a token
@@ -885,6 +908,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         ConversationSyncEngine.shared.resetSyncCheckpoints()
         isAuthenticated = false
         APIClient.shared.authToken = nil
+        APIClient.shared.registeredSessionToken = nil
     }
 
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {

@@ -18,6 +18,8 @@ import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
 import { resolveAutoTranslateEnabled } from '../../utils/auto-translate-preference';
+import { disconnectSession } from '../../socketio/disconnectSession';
+import { hashSessionToken } from '../../utils/session-token';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -201,6 +203,36 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           activeSession = session;
           logger.info('Session de confiance retrouvée pour glisser sa fenêtre d\'expiration', { userId: decoded.userId });
         }
+      }
+
+      // La RÉVOCATION doit atteindre cette route (#4213, note de #4141).
+      //
+      // Jusqu'ici, un JWT authentique mais EXPIRÉ suffisait à obtenir un JWT
+      // neuf, sans jeton de session ni consultation d'aucune liste de
+      // révocation. Couper les sockets ne servait donc à rien : le porteur d'un
+      // JWT volé se reconnectait dans la seconde. Les deux ensemble seulement
+      // font une révocation.
+      //
+      // La garde est posée sur l'EXISTENCE d'une session valide, et non sur la
+      // présentation d'un jeton de session : exiger le jeton refuserait les
+      // clients installés qui n'en envoient pas, alors que le cas qui compte —
+      // « ce n'était pas moi », la réinitialisation de mot de passe — invalide
+      // TOUTES les sessions et laisse donc l'utilisateur sans aucune ligne
+      // valide.
+      //
+      // Ce qu'elle NE ferme PAS : la révocation d'UNE session laisse les autres
+      // valides, donc un JWT volé passe encore tant que son propriétaire reste
+      // connecté ailleurs. La fermer complètement demande que le JWT porte son
+      // identifiant de session — un changement de forme du jeton, suivi à part.
+      const sessionsValides = await context.prisma.userSession.count({
+        where: { userId: decoded.userId, isValid: true },
+      });
+
+      if (sessionsValides === 0) {
+        logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
+          userId: decoded.userId,
+        });
+        return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter');
       }
 
       const user = await authService.getUserById(decoded.userId);
@@ -562,6 +594,24 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendNotFound(reply, 'Impossible de révoquer cette session');
       }
 
+      // Le socket de CET appareil, et lui seul (#4213).
+      //
+      // Jusqu'ici, révoquer une session passait la ligne à `isValid: false` et
+      // l'appareil continuait de TOUT recevoir — `message:new`,
+      // `conversation:updated` — indéfiniment : un socket n'est authentifié
+      // qu'une fois, au connect, et jamais revérifié.
+      //
+      // `disconnectRevokedSessions` était le mauvais outil ici : elle coupe
+      // TOUS les sockets de l'utilisateur, donc aussi celui depuis lequel on
+      // fait le ménage. `disconnectSession` filtre sur l'identifiant de session
+      // rangé au handshake.
+      await disconnectSession({
+        io: fastify.socketIOHandler?.getManager?.()?.getIO(),
+        userId,
+        sessionId,
+        onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on session revoke'),
+      });
+
       logger.info(`[AUTH] ✅ Session révoquée sessionId=${sessionId}`);
 
       return sendSuccess(reply, { message: 'Session révoquée avec succès' });
@@ -609,9 +659,38 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       logger.info(`Révocation de toutes les sessions pour userId=${userId} (sauf courante)`);
 
+      // Les identifiants sont relevés AVANT la révocation (#4213) : après, la
+      // ligne n'est plus « active » et la liste ne la rend plus. Sans eux, on
+      // saurait combien de sessions ont été coupées et aucune ne saurait
+      // laquelle — donc aucun socket ne pourrait être fermé.
+      const courante = currentToken
+        ? await fastify.prisma.userSession.findFirst({
+            where: { userId, sessionToken: hashSessionToken(currentToken) },
+            select: { id: true },
+          })
+        : null;
+
+      const aCouper = (await authService.getUserActiveSessions(userId))
+        .map((session) => session.id)
+        .filter((id) => id !== courante?.id);
+
       const revokedCount = await authService.revokeAllSessionsExceptCurrent(userId, currentToken);
 
         logger.info(`Sessions révoquées count=${revokedCount}`);
+
+      // Chaque session révoquée voit SON socket coupé — jamais celui de
+      // l'appareil courant, qui est précisément celui depuis lequel on fait le
+      // ménage. `disconnectRevokedSessions` les couperait tous, y compris lui.
+      const io = fastify.socketIOHandler?.getManager?.()?.getIO();
+      for (const sessionId of aCouper) {
+        await disconnectSession({
+          io,
+          userId,
+          sessionId,
+          message: 'This device was signed out from another device.',
+          onError: (error) => fastify.log.warn({ err: error }, '[AUTH] socket cut failed on revoke-others'),
+        });
+      }
 
       return sendSuccess(reply, {
         message: `${revokedCount} session(s) révoquée(s) avec succès`,

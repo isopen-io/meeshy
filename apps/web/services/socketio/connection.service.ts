@@ -150,9 +150,28 @@ export class ConnectionService {
    * en `jwt malformed` — la passerelle émettait « Authentication failed » et
    * coupait la socket, laissant tout participant anonyme sans temps réel.
    */
+  /**
+   * Ce que le handshake transmet — et, depuis #4213, le jeton de SESSION d'un
+   * utilisateur inscrit en plus de son JWT.
+   *
+   * Un socket inscrit s'authentifiait au JWT SEUL. `UserSession.sessionToken`
+   * stocke le hash d'un jeton opaque que rien n'obligeait à transmettre ici :
+   * il n'existait donc AUCUN moyen, côté serveur, de dire quel socket
+   * appartient à quelle session. Révoquer une session passait la ligne à
+   * `isValid: false` et l'appareil continuait de tout recevoir — `message:new`,
+   * `conversation:updated` — indéfiniment, un socket n'étant authentifié qu'une
+   * fois, au connect, et jamais revérifié.
+   *
+   * Les deux clés voyagent ENSEMBLE pour un inscrit : le serveur branche sur la
+   * présence du JWT (`token`), et ne lit `sessionToken` que pour étiqueter le
+   * socket. Un anonyme n'envoie que `sessionToken`, qui est alors son identité.
+   */
   private resolveHandshakeCredentials(): Record<string, string> {
     const token = authManager.getAuthToken();
-    if (token) return { token };
+    if (token) {
+      const sessionToken = authManager.getSessionToken();
+      return sessionToken ? { token, sessionToken } : { token };
+    }
 
     const sessionToken = authManager.getAnonymousSession()?.token;
     return sessionToken ? { sessionToken } : {};
