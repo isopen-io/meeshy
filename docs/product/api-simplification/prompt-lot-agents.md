@@ -298,6 +298,109 @@ lot suivant continue d'écrire.
 - inventer des identifiants : ils sont hors dépôt, dans `apps/ios/fastlane/.env`.
 ```
 
+## Le prompt de BOUCLE pour Claude Code **web**
+
+Une session web (claude.ai/code) n'a ni Xcode, ni SDK Android, ni forcément
+l'accès SSH au serveur de staging. Le prompt ci-dessous en tient compte : il
+choisit des lots que la session peut RÉELLEMENT prouver, et il refuse de fermer
+une issue qu'il n'a pas pu mesurer — c'est la seule façon honnête de boucler
+sans surveillance.
+
+À coller après `/loop` :
+
+```
+Tu tiens une boucle de livraison API sur isopen-io/meeshy, branche `dev`.
+Chaque itération = UN LOT. Tu ne t'arrêtes pas entre deux lots.
+
+═══ AU DÉMARRAGE DE CHAQUE ITÉRATION ═══
+
+1. `git pull --rebase` puis lis docs/product/api-simplification/prompt-lot-agents.md
+   — c'est la procédure, tu la suis à la lettre. Lis aussi CLAUDE.md.
+
+2. Prends la file :
+       gh project item-list 1 --owner isopen-io --format json --limit 900
+   Ne prends QUE des issues `Status = Todo` des milestones 65 à 73.
+   Une issue `In Progress` appartient à quelqu'un — sauf si son dernier
+   commentaire de réservation date de plus de 2 h ET qu'aucun commit ne la
+   référence ; tu le dis alors dans ton commentaire de reprise.
+
+3. Compose un lot de 4 à 6 issues **par disjonction de fichiers**.
+   PRIVILÉGIE celles dont les surfaces sont `gateway` et/ou `web` : tu ne peux
+   pas exécuter `xcodebuild` ni `gradlew`, donc une issue iOS/Android partirait
+   sans gate. Si tu en prends une quand même, tu le DIS dans le commit et tu
+   laisses l'issue ouverte pour qu'une session locale passe le gate.
+
+4. Réserve : `Status = In Progress` + un commentaire daté nommant ta session.
+
+═══ ÉCRITURE ═══
+
+5. Un sous-agent par issue, avec le prompt du § « Le prompt » du document,
+   en remplaçant {{ISSUE}}, {{TERRITOIRE}}, {{CONSIGNES}}.
+   Les fichiers-carrefour sont à TOI, jamais à eux. Ils déclarent, tu appliques.
+
+═══ INTÉGRATION ═══
+
+6. Applique les édits carrefour toi-même, en série.
+
+7. Gates — **UNE À LA FOIS, jamais en parallèle** :
+       cd services/gateway && npm run type-check && npx jest --silent
+       cd apps/web        && npx jest --silent
+   Trois gates simultanés produisent des faux échecs (mesuré : 10, tous verts
+   isolément). Un ensemble d'échecs DISJOINT sur un code identique est un flake :
+   relance la suite SEULE avant de conclure à une régression.
+
+8. Gates verts → un commit par issue, `git commit -F <fichier> -- <chemins>`.
+   JAMAIS `-a`, JAMAIS `add -A` : d'autres sessions travaillent dans ce dépôt.
+   JAMAIS de backticks dans un message : le shell les exécute.
+   Puis UN SEUL `git push origin HEAD:dev`.
+
+═══ LA RÈGLE DU TEMPS MORT ═══
+
+9. **Le push démarre le build. NE L'ATTENDS PAS.** Repars au point 2 et compose
+   le lot suivant. Les agents du lot N+1 écrivent pendant que le lot N construit.
+
+═══ FERMETURE — seulement ce qui est PROUVÉ ═══
+
+10. Quand le build du lot N est fini (`gh run list --branch dev --workflow Docker`),
+    vérifie que staging le porte :
+        curl -s https://gate.staging.meeshy.me/health
+    Si le SHA court de ton commit y est : rejoue les `a_mesurer_en_integration`
+    de chaque agent, ferme les issues VERTES avec leur preuve (mesure collée),
+    et repasse les rouges en `Todo` avec la mesure qui a échoué.
+
+    Si staging ne porte PAS ton commit — tu n'as pas l'accès SSH pour déployer —
+    n'invente rien : laisse les issues `In Progress`, commente
+    « livré sur dev en <sha>, gates verts, EN ATTENTE de déploiement staging
+    pour mesure », et continue le lot suivant. Une session locale déploiera.
+
+    **Ne ferme JAMAIS une issue sans mesure rejouée.** La fin se prouve.
+
+11. Si le build CI est ROUGE : c'est prioritaire sur tout. Lis le log, corrige,
+    re-pousse. Le lot suivant continue d'écrire pendant ce temps.
+
+═══ QUAND S'ARRÊTER ═══
+
+Quand plus aucune issue `Todo` ne reste dans les milestones 65 à 73, fais un
+dernier point : ce qui est fermé, ce qui attend un déploiement, ce qui attend un
+gate local. Puis arrête la boucle.
+
+═══ INTERDITS ═══
+
+- pousser sur `main`, déployer en production — staging seulement ;
+- fermer une issue sans mesure rejouée en intégration ;
+- `git commit -a`, `git add -A`, `git stash`, `git checkout` (arbre partagé) ;
+- inventer un identifiant : ils sont hors dépôt (`apps/ios/fastlane/.env`) ;
+- toucher une issue déjà `In Progress` chez quelqu'un d'autre.
+```
+
+### Pourquoi ce prompt refuse de fermer sans mesure
+
+C'est la seule protection contre une boucle qui « avance » en cochant des cases.
+Une session web sans accès SSH ne peut pas déployer ; si elle fermait quand même,
+la file se viderait sans qu'aucune ligne soit prouvée en intégration. Le prompt
+lui fait donc livrer, gater, pousser — et **rendre la main honnêtement** sur la
+seule étape qu'elle ne peut pas faire.
+
 ## Ce que ça a donné
 
 | | en série | par lot |
