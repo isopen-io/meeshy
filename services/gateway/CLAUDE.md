@@ -1139,18 +1139,40 @@ tour, et en cliquet :
 `routes/__tests__/response-payload-mismatch.ts`, gardé par
 `response-payload-mismatch.test.ts` (cycle 91 bis).
 
-Il apparie chaque bloc `response:` avec les `sendSuccess(reply, { … })` qui le
+Il apparie chaque bloc `response:` avec les `sendSuccess(reply, …)` qui le
 SUIVENT — le gestionnaire d'une route vit entre son schéma et le schéma suivant
-— et compare les jeux de clés : `total` (aucune clé envoyée n'est déclarée ⇒
-`data` sort à `{}`) contre `partial` (les clés supprimées, nommées). Il ne
-conclut jamais au vide quand la charge porte un `...spread`, qui peut apporter
-les clés déclarées.
+— et rend TROIS formes : `envelope` (le statut 2xx déclare des `properties` où
+`data` ne figure pas ⇒ la charge ENTIÈRE est supprimée, la réponse part à
+`{"success":true}`), `total` (`data` est déclaré, aucune clé envoyée n'y figure
+⇒ `data` sort à `{}`) et `partial` (les clés supprimées, nommées).
 
-Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
-jusqu'à la variable demanderait un typeur, pas un balayage.
+Il lit DEUX formes de charge utile : le littéral, et la **variable locale** que
+le handler compose sous ses propres yeux (`const p = { … }`, ou le reste d'une
+déstructuration `const { success: _s, ...p } = result`). C'est l'élargissement
+de #4192, et il n'est pas cosmétique : la limite d'avant — « un
+`sendSuccess(reply, maVariable)` lui échappe, et c'est assumé » — était écrite
+dans un doc-comment, donc INCAPABLE DE ROUGIR, et #4139 y a vécu en entier.
+Mesuré : sur le `password-reset.ts` d'avant le correctif a62555bb15, la sonde
+d'avant rend `[]`, celle d'après nomme les quatre schémas fautifs.
 
-**`FROZEN_MISMATCHES` est VIDE depuis le cycle 92 bis**, et c'est un état à défendre,
-pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
+Un jeu de clés est OUVERT dès qu'il porte un `...spread`, qu'il vienne du
+littéral, du reste d'une déstructuration (`result` est un objet INCONNU) ou
+d'une mutation de la variable avant l'envoi : sur un jeu ouvert, l'outil ne
+conclut JAMAIS à `total`. Il se tait de même sur un schéma OUVERT (`200: ref`,
+`{ ...enveloppe }`, `additionalProperties` non `false`) et sur
+`sendSuccess(reply, undefined | null)`, qui n'écrit aucune clé `data`.
+
+Sa limite qui SUBSISTE, redite parce qu'une limite qu'on déplace sans la redire
+redevient un angle mort silencieux : il ne résout QUE ce que le handler déclare
+lui-même — un appel de fonction, un import, un paramètre, une variable de module
+ou un ternaire laissent la charge inconnue, et il se TAIT plutôt que de deviner.
+Elle a une TAILLE, et c'est ce qui la rend actionnable : sur `routes/` au moment
+de #4192, 268 charges littérales, 124 par variable — 20 vides, 14 résolues, et
+**90 hors de portée**. « Une limite assumée » sans chiffre ne dit pas s'il y a
+un trou d'un site ou de quatre-vingt-dix.
+
+**`FROZEN_MISMATCHES` a été VIDE du cycle 92 bis à #4192**, et c'est un état à
+défendre, pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
 entier PAR DÉCISION, le temps que son gate de présence soit prêt. Quand le
 cliquet tombe : ouvrir l'ÉMETTEUR (le seul discriminant, cycle 91 bis) avant de
 geler quoi que ce soit, et ne geler que ce qu'une raison ÉCRITE justifie de
