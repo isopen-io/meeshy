@@ -22,7 +22,47 @@ import {
 } from '@/hooks/conversations/use-focal-scroller';
 import { DEFAULT_READING_MODE, isFlatReadingMode, type ReadingMode } from '@/lib/conversations/reading-mode';
 import { calendarDayDiff } from '@meeshy/shared/utils/calendar-date';
+import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
+
+/**
+ * Égalité de langue conforme au Prisme : `currentDisplayLanguage`, `originalLanguage`
+ * et les clés de traduction sont verbatim et peuvent être région-tagués (`en-US`),
+ * 3-lettres (`fra`) ou legacy (`iw`). Miroir de `useMessageDisplay.sameLanguage` —
+ * SSOT `normalizeLanguageForDedup` (packages/shared/utils/language-normalize.ts).
+ */
+const sameLanguage = (a?: string, b?: string): boolean =>
+  !!a && !!b && normalizeLanguageForDedup(a) === normalizeLanguageForDedup(b);
+
+type PrismMessageShape = {
+  readonly originalLanguage?: string;
+  readonly translations?: unknown;
+};
+
+/**
+ * Dépouille la carte des traductions d'un message (`{ language|targetLanguage,
+ * content|translatedContent }[]`) en `Record<langue → texte>` keyé par la langue
+ * STOCKÉE — la forme qu'attend `resolvePrismTranslation`. La clé rendue plus tard
+ * est comparée par `sameLanguage` (normalisée), donc verbatim suffit ici.
+ */
+const buildTranslationRecord = (translations: unknown): Record<string, string> => {
+  const record: Record<string, string> = {};
+  if (!Array.isArray(translations)) return record;
+  for (const entry of translations as ReadonlyArray<{
+    language?: string;
+    targetLanguage?: string;
+    content?: string;
+    translatedContent?: string;
+  }>) {
+    const key = entry?.language || entry?.targetLanguage;
+    const text = entry?.content ?? entry?.translatedContent;
+    if (typeof key === 'string' && key.trim() !== '' && typeof text === 'string' && text.trim() !== '') {
+      record[key] = text;
+    }
+  }
+  return record;
+};
 
 interface MessagesDisplayProps {
   messages: Message[];
@@ -123,27 +163,40 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   // États des traductions en cours (fallback si pas fourni par le parent)
   const [localTranslatingStates, setLocalTranslatingStates] = useState<Set<string>>(new Set());
 
-  // Fonction pour déterminer la langue d'affichage préférée pour un message
+  // Prisme ORDONNÉ du lecteur (rangs 1→4 + repli rang 1). `usedLanguages` est
+  // reconstruit en ligne par certains hôtes (`bubble-stream-page`) donc son
+  // IDENTITÉ change à chaque rendu ; on referme la boucle à la source en le
+  // mémoïsant sur ses PRIMITIVES jointes, jamais sur l'objet qui les porte
+  // (cf. CLAUDE.md § TranslationToggle). `SharedConversationPreview` passe `[]` :
+  // le repli garde le rang 1 (`userLanguage`) comme prisme minimal.
+  const usedLanguagesKey = usedLanguages.join(',');
+  const orderedLanguages = useMemo(
+    () => (usedLanguages.length > 0 ? usedLanguages : [userLanguage]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [usedLanguagesKey, userLanguage]
+  );
+
+  // Langue d'affichage préférée d'un message : on DESCEND le prisme ordonné et on
+  // rend la première langue SERVIE — par une traduction, ou l'original si celui-ci
+  // gagne à son rang / si aucune langue du lecteur n'est servie. La descente n'est
+  // pas réécrite ici : elle délègue à `resolvePrismTranslation` (SSOT du Prisme de
+  // contenu, `@meeshy/shared`), jumelle de `usePostTranslation`. L'ancienne
+  // implémentation ne consultait que le rang 1 (`userLanguage`) : un francophone
+  // dont le navigateur est en anglais (locale appareil au rang 4) voyait un message
+  // espagnol EN espagnol alors qu'une traduction anglaise existait — la violation
+  // du Prisme #3 sur la surface la plus importante (le corps du message).
   const getPreferredDisplayLanguage = useCallback((message: unknown): string => {
-    
-    // Si le message est dans la langue de l'utilisateur, l'afficher tel quel
-    if (message.originalLanguage === userLanguage) {
-      return message.originalLanguage;
-    }
-    
-    // Chercher une traduction dans la langue de l'utilisateur
-    const translationsArray = Array.isArray(message.translations) ? message.translations : [];
-    const userLanguageTranslation = translationsArray.find((t: unknown) =>
-      (t.language || t.targetLanguage) === userLanguage
-    );
-    
-    if (userLanguageTranslation) {
-      return userLanguage;
-    }
-    
-    // Sinon, afficher dans la langue originale
-    return message.originalLanguage || 'fr';
-  }, [userLanguage]);
+    const { originalLanguage, translations } = (message ?? {}) as PrismMessageShape;
+    const original = originalLanguage || 'fr';
+
+    const resolved = resolvePrismTranslation({
+      translations: buildTranslationRecord(translations),
+      originalLanguage: original,
+      preferredLanguages: orderedLanguages,
+    });
+
+    return resolved ? resolved.language : original;
+  }, [orderedLanguages]);
 
   // Fonction pour forcer la traduction
   const handleForceTranslation = useCallback(async (messageId: string, targetLanguage: string, model?: TranslationModel) => {
@@ -298,46 +351,49 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     });
   }, [displayMessages, getPreferredDisplayLanguage]);
 
-  // Effet pour détecter les nouvelles traductions et changer automatiquement l'affichage
+  // Effet pour détecter les nouvelles traductions et changer automatiquement
+  // l'affichage. Comme l'init, il DESCEND le prisme ordonné (via le même
+  // `getPreferredDisplayLanguage`) : quand une traduction d'un rang QUELCONQUE
+  // (1→4) arrive par socket, la bulle bascule vers elle. L'ancienne version ne
+  // basculait que sur une traduction du rang 1 (`userLanguage`), laissant un
+  // message affiché dans sa langue d'origine dès que seule une traduction de rang
+  // inférieur était servie.
   useEffect(() => {
     setMessageDisplayStates(prev => {
       const messagesToUpdate: { [messageId: string]: string } = {};
-      
-      // Parcourir tous les messages pour voir si de nouvelles traductions sont disponibles
+
       displayMessages.forEach(message => {
         const currentState = prev[message.id];
         if (!currentState) return;
-        
-        // Si le message n'est pas dans la langue utilisateur et qu'une traduction est disponible
-        if (message.originalLanguage !== userLanguage) {
-          const translationsArray = Array.isArray(message.translations) ? message.translations : [];
-          const userLanguageTranslation = translationsArray.find((t: unknown) =>
-            (t.language || t.targetLanguage) === userLanguage
-          );
-          
-          // Si une traduction dans la langue utilisateur est disponible et qu'on ne l'affiche pas encore
-          if (userLanguageTranslation && currentState.currentDisplayLanguage !== userLanguage) {
-            messagesToUpdate[message.id] = userLanguage;
-          }
+
+        const preferred = getPreferredDisplayLanguage(message);
+        const original = message.originalLanguage || 'fr';
+
+        // On n'auto-bascule que vers une TRADUCTION nouvellement servie par le
+        // prisme (jamais un retour forcé à l'original), et seulement si on ne
+        // l'affiche pas déjà. Comparaison normalisée (région/casse) comme dans
+        // `useMessageDisplay` : un état `en` et un préféré `en-US` sont la même
+        // langue et ne doivent pas provoquer de bascule.
+        if (
+          !sameLanguage(preferred, original) &&
+          !sameLanguage(preferred, currentState.currentDisplayLanguage)
+        ) {
+          messagesToUpdate[message.id] = preferred;
         }
       });
-      
-      // Mettre à jour tous les messages qui ont de nouvelles traductions
-      if (Object.keys(messagesToUpdate).length > 0) {
-        
-        const newState = { ...prev };
-        Object.entries(messagesToUpdate).forEach(([messageId, language]) => {
-          newState[messageId] = {
-            ...prev[messageId],
-            currentDisplayLanguage: language
-          };
-        });
-        return newState;
-      }
-      
-      return prev;
+
+      if (Object.keys(messagesToUpdate).length === 0) return prev;
+
+      const newState = { ...prev };
+      Object.entries(messagesToUpdate).forEach(([messageId, language]) => {
+        newState[messageId] = {
+          ...prev[messageId],
+          currentDisplayLanguage: language
+        };
+      });
+      return newState;
     });
-  }, [displayMessages, userLanguage]);
+  }, [displayMessages, getPreferredDisplayLanguage]);
 
   /**
    * Le « data sticker » de catégorisation : un libellé de jour collant en tête
