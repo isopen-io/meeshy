@@ -134,9 +134,15 @@ struct OutboxDispatcher: OutboxDispatching {
     /// transient and the flusher's exponential backoff will retry.
     private func dispatchBlockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: BlockUserPayload.self)
+        // `PUT /directory/blocks/{id}` (#4164) — et c'est CE chemin-ci qui rend
+        // la migration urgente : le rejeu hors ligne rejoue des mutations
+        // enregistrées avant une mise à jour, et l'ancienne route rendait `409`
+        // sur un blocage DÉJÀ appliqué. Le dispatcher traitait donc un succès
+        // comme un échec 4xx non transitoire, et l'enregistrement mourait en
+        // `.exhausted` alors que le serveur avait écrit ce qu'il fallait.
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/users/\(payload.targetUserId)/block",
-            method: "POST",
+            endpoint: "/directory/blocks/\(payload.targetUserId)",
+            method: "PUT",
             body: try JSONEncoder().encode([String: String]()),
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
@@ -163,7 +169,7 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UnblockUserPayload.self)
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/users/\(payload.targetUserId)/block",
+            endpoint: "/directory/blocks/\(payload.targetUserId)",
             method: "DELETE",
             body: nil,
             queryItems: nil,

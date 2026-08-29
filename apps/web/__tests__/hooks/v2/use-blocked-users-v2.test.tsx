@@ -5,13 +5,13 @@ import { useBlockedUsersV2 } from '@/hooks/v2/use-blocked-users-v2';
 import type { BlockedUser } from '@/types/contacts';
 
 const mockGet = jest.fn();
-const mockPost = jest.fn();
+const mockPut = jest.fn();
 const mockDelete = jest.fn();
 
 jest.mock('@/services/api.service', () => ({
   apiService: {
     get: (...args: unknown[]) => mockGet(...args),
-    post: (...args: unknown[]) => mockPost(...args),
+    put: (...args: unknown[]) => mockPut(...args),
     delete: (...args: unknown[]) => mockDelete(...args),
   },
 }));
@@ -47,13 +47,13 @@ describe('useBlockedUsersV2', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(mockGet).toHaveBeenCalledWith('/users/me/blocked-users');
+    expect(mockGet).toHaveBeenCalledWith('/directory/blocks');
     expect(result.current.blockedUsers).toHaveLength(1);
     expect(result.current.blockedUsers[0].id).toBe('blocked1');
   });
 
   it('blocks a user via mutation', async () => {
-    mockPost.mockResolvedValue({ data: { success: true, data: { message: 'User blocked' } } });
+    mockPut.mockResolvedValue({ data: { success: true, data: { message: 'User blocked' } } });
 
     const { result } = renderHook(() => useBlockedUsersV2(), { wrapper: createWrapper() });
 
@@ -63,7 +63,9 @@ describe('useBlockedUsersV2', () => {
       await result.current.blockUser('userToBlock');
     });
 
-    expect(mockPost).toHaveBeenCalledWith('/users/userToBlock/block');
+    // `PUT` sur l'ENSEMBLE : bloquer est une appartenance, donc idempotente.
+    // L'ancienne route rendait 409 au second appel (#4164).
+    expect(mockPut).toHaveBeenCalledWith('/directory/blocks/userToBlock');
   });
 
   it('unblocks a user via mutation', async () => {
@@ -80,7 +82,7 @@ describe('useBlockedUsersV2', () => {
       await result.current.unblockUser('userToUnblock');
     });
 
-    expect(mockDelete).toHaveBeenCalledWith('/users/userToUnblock/block');
+    expect(mockDelete).toHaveBeenCalledWith('/directory/blocks/userToUnblock');
   });
 
   it('checks if a user is blocked via isBlocked', async () => {
