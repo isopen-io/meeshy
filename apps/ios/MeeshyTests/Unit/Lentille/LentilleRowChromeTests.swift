@@ -93,7 +93,13 @@ final class LentilleRowChromeTests: XCTestCase {
         let code = try rowSource()
         let header = try viewBlock("headerLine", in: code)
         XCTAssertFalse(header.contains("LentilleRowTimestamp("), "plus d'heure sur la ligne du nom")
-        XCTAssertFalse(header.contains("Text(\"·\")"), "plus de séparateur « · » sur la ligne du nom")
+        // Les DEUX écritures du séparateur : la littérale et `MetaSeparator`, qui
+        // l'a remplacée au 251i. Une garde NÉGATIVE restée sur l'ancien nom ne
+        // rougit pas quand le nom change — elle passe au vert en cessant de voir.
+        for spelling in ["Text(\"·\")", "MetaSeparator("] {
+            XCTAssertFalse(header.contains(spelling),
+                           "plus de séparateur « · » sur la ligne du nom (graphie « \(spelling) »)")
+        }
         let date = try viewBlock("dateLine", in: code)
         let spacer = try XCTUnwrap(date.range(of: "Spacer(minLength: 0)"))
         let stamp = try XCTUnwrap(date.range(of: "timestampText"))

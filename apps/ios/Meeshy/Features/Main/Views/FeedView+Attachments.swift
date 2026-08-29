@@ -1096,7 +1096,7 @@ struct FeedComposerSheet: View {
                             Text(quoted.author)
                                 .font(MeeshyFont.relative(13, weight: .semibold))
                                 .foregroundColor(theme.accentText(quoted.authorColor))
-                            Text("·").foregroundColor(theme.textMuted)
+                            MetaSeparator().foregroundColor(theme.textMuted)
                             Text(quoted.timestamp, style: .relative)
                                 .font(MeeshyFont.relative(11))
                                 .foregroundColor(theme.textMuted)

@@ -598,7 +598,12 @@ export class CallService {
     if (!this.heartbeatDbWriteTimers.has(key)) {
       const timer = setTimeout(() => {
         this.heartbeatDbWriteTimers.delete(key);
-        void this.persistHeartbeatToDb(callId, participantId);
+        // Détachée DANS un `setTimeout` : il n'y a aucun `try/catch` englobant à
+        // invoquer, et le rappel se déclenche longtemps après le heartbeat qui
+        // l'a armé. Un rejet n'aurait donc nulle part où être vu, et son seul
+        // effet observable serait l'arrêt du process (leçon 230).
+        void this.persistHeartbeatToDb(callId, participantId)
+          .catch(err => logger.warn('Failed to persist heartbeat to DB', { callId, participantId, err }));
       }, this.HEARTBEAT_DB_DEBOUNCE_MS);
       timer.unref?.();
       this.heartbeatDbWriteTimers.set(key, timer);
@@ -1766,9 +1771,21 @@ export class CallService {
     });
     const isDirectCall = conversation?.type === 'direct';
 
-    // Check if this is the last active participant
-    const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
-    const isLastParticipant = activeParticipants.length === 0 || isDirectCall;
+    // Vague 183 — `isLastParticipant` is decided FRESH inside the
+    // transaction (see below), never from `call.participants` here. That
+    // snapshot was read via the `findUnique` above, itself several awaits
+    // before the transaction even starts (this very `conversation.findUnique`
+    // sits in between) — a window wide enough that a GROUP call's last two
+    // participants leaving within milliseconds of each other BOTH see the
+    // OTHER as still active off their own stale snapshot, BOTH compute
+    // `isLastParticipant=false`, and NEITHER attempts the version-guarded
+    // terminal write (there is nothing for the two writers to conflict on).
+    // Result: an `active` CallSession with zero live `CallParticipant` rows —
+    // invisible to CallCleanupService's heartbeat tier (which requires
+    // `staleParticipants.length > 0`, never true against zero rows) and
+    // reaped only by its 2h wall-clock cap, during which the conversation's
+    // `activeCallId` claim also stays locked, blocking any new call.
+    let isLastParticipant = isDirectCall;
 
     // Audit P1-29 — distinguish "leave before the call was ever answered"
     // (callee declined or initiator cancelled before media negotiation
@@ -1798,6 +1815,20 @@ export class CallService {
         where: { id: callParticipant.id },
         data: { leftAt }
       });
+
+      // Vague 183 — fresh, in-transaction read: does any OTHER participant
+      // still show `!leftAt` right now, not several awaits ago? This is what
+      // closes (narrows — see the doc comment above `isLastParticipant`'s
+      // declaration) the TOCTOU race: the outer `call.participants` snapshot
+      // can no longer be the sole basis for "does this leave end the call".
+      const remainingActive = await tx.callParticipant.count({
+        where: {
+          callSessionId: callId,
+          id: { not: callParticipant.id },
+          OR: [{ leftAt: null }, { leftAt: { isSet: false } }]
+        }
+      });
+      isLastParticipant = isDirectCall || remainingActive === 0;
 
       // If last participant, end the call (status depends on pre/post-answer).
       if (isLastParticipant) {
@@ -1870,10 +1901,23 @@ export class CallService {
     );
 
     if (leaveOutcome === 'conflict') {
-      logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write — returning current session', {
-        callId, userId
+      // Vague 182 (#4202/Vague 181 follow-up) — this branch used to silently
+      // RETURN the fresh session, the identical anti-pattern #3581 fixed on
+      // endCall()'s own conflict branch (see its doc comment). The loser of
+      // this race is exactly "already ended by someone else": a resolved
+      // promise here is indistinguishable from "I just ended it" to every
+      // caller (CallEventsHandler's call:leave/call:force-leave,
+      // AuthHandler's anonymous-disconnect loop, routes/calls.ts's
+      // leave/kick route), which fall through to re-broadcast call:ended,
+      // re-post the call-summary, and (for a `missed` outcome) re-fire the
+      // missed-call notification for a call this leaveCall() did not
+      // actually end. Throw the same CallAlreadyEndedError endCall() throws
+      // so every caller absorbs it as the idempotent no-op it is.
+      const current = await this.getCallSession(callId);
+      logger.warn('⚠️ Leave-triggered call end lost race to a concurrent terminal write', {
+        callId, userId, currentStatus: current.status
       });
-      return this.getCallSession(callId);
+      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
     }
 
     if (isLastParticipant) {
@@ -2084,9 +2128,23 @@ export class CallService {
     // delayed/retried `call:end` and get silently overwritten back to
     // `ended`/`completed` — reopening the exact "phantom completed call"
     // bug the C3/C4 pre-answer fix above was meant to close.
+    //
+    // Issue #3581 (2026-08-28) — this guard used to RETURN the current
+    // session instead of throwing. `CallEventsHandler`'s `call:end` handler
+    // has no way to tell "endCall() just genuinely ended the call" apart
+    // from "endCall() no-oped on an already-terminal call" from a resolved
+    // promise alone, so it fell straight through to re-broadcast
+    // `call:ended` to the room, re-post the call-summary system message, and
+    // (when the terminal status is `missed`) re-fire the missed-call
+    // notification — on every retried/duplicate `call:end`. Throwing
+    // `CallAlreadyEndedError` (same class `joinCallAttempt` already uses for
+    // the identical "already terminal" condition) lets both callers
+    // (`CallEventsHandler`, `routes/calls.ts`) special-case this as the
+    // idempotent no-op it is, without touching the broadcast/summary/
+    // notification side effects a SECOND time.
     if (TERMINAL_STATUSES.includes(call.status)) {
-      logger.warn('⚠️ Call already in terminal state', { callId, currentStatus: call.status });
-      return this.getCallSession(callId);
+      logger.info('ℹ️ endCall() no-op — call already in terminal state', { callId, currentStatus: call.status });
+      throw new CallAlreadyEndedError(call.endReason ?? CallEndReason.completed);
     }
 
     // CVE-004: Verify user has permission to end the call (initiator or moderator role)
@@ -2271,10 +2329,22 @@ export class CallService {
     );
 
     if (outcome === 'conflict') {
-      logger.warn('⚠️ Call end lost race to a concurrent terminal write — returning current session', {
-        callId, endedBy
+      // Issue #3581 follow-up — this branch used to silently RETURN the
+      // fresh session, same as the stale-read guard above did before #3581.
+      // The loser of this race is exactly the "already ended by someone
+      // else" case that fix exists for: a resolved promise here is
+      // indistinguishable from "I just ended it" to both callers
+      // (CallEventsHandler, routes/calls.ts), which fall through to
+      // re-broadcast call:ended, re-post the call-summary, and (for a
+      // `missed` outcome) re-fire the missed-call notification for a call
+      // this request did not actually end. Throw the same
+      // CallAlreadyEndedError the stale-read guard throws so both callers
+      // absorb it as the idempotent no-op it is.
+      const current = await this.getCallSession(callId);
+      logger.warn('⚠️ Call end lost race to a concurrent terminal write', {
+        callId, endedBy, currentStatus: current.status
       });
-      return this.getCallSession(callId);
+      throw new CallAlreadyEndedError(current.endReason ?? CallEndReason.completed);
     }
 
     this.clearHeartbeats(callId);

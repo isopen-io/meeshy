@@ -971,7 +971,7 @@ struct ReelPageView: View {
     }
 
     private var metaDot: some View {
-        Text("·").font(.caption).foregroundColor(.white.opacity(0.55))
+        MetaSeparator().font(.caption).foregroundColor(.white.opacity(0.55))
     }
 
     private func statInline(icon: String, count: Int, a11yLabel: String) -> some View {
@@ -1367,22 +1367,18 @@ private struct ReelMetaRow: View {
                 // tap a flag to read that language; the active one is underlined.
                 HStack(spacing: 6) {
                     ForEach(codes, id: \.self) { code in
-                        let display = LanguageDisplay.from(code: code)
-                        let isActive = selectedLanguage?.lowercased() == code.lowercased()
-                        Button { onSelectLanguage(code) } label: {
-                            VStack(spacing: 1) {
-                                Text(display?.flag ?? code.uppercased())
-                                    .font(isActive ? .caption : .caption2)
-                                if isActive {
-                                    RoundedRectangle(cornerRadius: 1)
-                                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                                        .frame(width: 10, height: 1.5)
-                                }
-                            }
-                            .contentShape(Rectangle())
+                        // Registre `.overlay` : la rangée flotte au-dessus de la
+                        // vidéo, dont le tap pilote la lecture. Des cibles de
+                        // 44 pt y prendraient une bande de 44 pt au geste de
+                        // lecture — 32 pt suffisent et restent au-dessus des
+                        // ~16 pt que servait la puce d'origine.
+                        LanguageFlagChip(
+                            code: code,
+                            isActive: selectedLanguage?.lowercased() == code.lowercased(),
+                            metrics: .overlay
+                        ) {
+                            onSelectLanguage(code)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(display?.name ?? code.uppercased())
                     }
                 }
             }

@@ -1118,7 +1118,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // crash/restart wiped, so pre-answer calls interrupted by the restart
         // resolve to `missed` (with their push notification) on the nominal
         // ringing budget instead of ringing until the GC tier.
-        void callEventsHandler.rehydrateActiveCalls(cleanupManager.getIO());
+        // `.catch` OBLIGATOIRE sur une promesse détachée (leçon 230) : le
+        // `try/catch` de ce bloc n'attrape qu'un `throw` synchrone, et un rejet
+        // sans écouteur termine le process sous le `--unhandled-rejections=throw`
+        // par défaut de Node 22 — le démarrage de la passerelle emporté par une
+        // ré-hydratation d'appels dont tout le contrat est d'être best-effort.
+        void callEventsHandler
+          .rehydrateActiveCalls(cleanupManager.getIO())
+          .catch((error: unknown) => logger.warn('[GWY] rehydrateActiveCalls failed', { error }));
       } else {
         logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
       }

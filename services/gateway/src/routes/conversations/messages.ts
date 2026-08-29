@@ -4,6 +4,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { aggregateAttachmentReactions } from '../../socketio/serializeAttachmentForSocket';
 import { broadcastReadStatus } from '../../socketio/broadcastReadStatus';
+import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { recordViewOnceConsumption } from '../../services/messaging/recordViewOnceConsumption';
 import { scheduleViewOnceBurn } from '../../services/messaging/scheduleViewOnceBurn';
@@ -1397,7 +1398,7 @@ export function registerMessagesRoutes(
           } catch (error) {
             logger.warn('Error marking messages as received:', error);
           }
-        })();
+        })().catch((error: unknown) => logger.warn('Error marking messages as received:', error));
       }
       timings.markAsReceived = performance.now() - t0; // ~0 : dispatch non-bloquant désormais
 
@@ -2273,22 +2274,20 @@ export function registerMessagesRoutes(
           pinnedAt: now.toISOString(),
           pinnedBy: userId
         };
-        const manager = fastify.socketIOHandler.getManager();
-        // `ROOMS.conversation` / `SERVER_EVENTS`, et pas les chaînes brutes
-        // équivalentes : ces deux lignes (ici et au dépinglage) étaient les
-        // SEULES du service à composer un nom de room à la main. Le balayage
-        // d'audience de la passerelle grepe `to(ROOMS.conversation(` — cf. la
-        // note laissée dans `participants.ts` § PARTICIPANT_ROLE_UPDATED, qui
-        // le nomme explicitement — donc l'épingle lui était invisible.
-        manager?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_PINNED, pinPayload);
-        // Replay the pin to offline participants on reconnect (parity with
-        // edit/delete/reaction offline delivery) so their pin state converges.
-        void manager?.enqueueOfflineMessageMutation({
+        // `broadcastMessageMutation` — le site UNIQUE de cette famille — plutôt
+        // que la room et la file re-codées ici (cycle 130 bis). Il porte les deux
+        // gardes que la copie manuscrite n'avait pas : l'émission de room dans
+        // un `try` (une levée d'adaptateur rendait 500 sur une épingle DÉJÀ
+        // commise, et sautait la mise en file au passage), et le `.catch` sur la
+        // promesse détachée qu'exige la leçon 230.
+        await broadcastMessageMutation({
+          manager: fastify.socketIOHandler.getManager(),
           conversationId,
           actorUserId: userId,
           eventType: 'pinned',
           messageId,
-          payload: pinPayload
+          payload: pinPayload,
+          onError: (error) => logger.warn('[PIN] broadcast side-channel failed', { messageId, error })
         });
       }
 
@@ -2381,16 +2380,16 @@ export function registerMessagesRoutes(
           messageId,
           conversationId
         };
-        const manager = fastify.socketIOHandler.getManager();
-        manager?.getIO().to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.MESSAGE_UNPINNED, unpinPayload);
-        // Replay the unpin to offline participants on reconnect (parity with
-        // edit/delete/reaction offline delivery) so their pin state converges.
-        void manager?.enqueueOfflineMessageMutation({
+        // Même site unique que le jumeau qui épingle, pour les mêmes deux
+        // gardes — les deux sens du même geste ne se diffusent pas autrement.
+        await broadcastMessageMutation({
+          manager: fastify.socketIOHandler.getManager(),
           conversationId,
           actorUserId: userId,
           eventType: 'unpinned',
           messageId,
-          payload: unpinPayload
+          payload: unpinPayload,
+          onError: (error) => logger.warn('[UNPIN] broadcast side-channel failed', { messageId, error })
         });
       }
 

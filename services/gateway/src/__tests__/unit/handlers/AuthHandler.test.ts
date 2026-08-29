@@ -44,6 +44,7 @@ jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../../middleware/validation';
 import { AuthHandler } from '../../../socketio/handlers/AuthHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 // ─── Factories ─────────────────────────────────────────────────────────────────
@@ -339,6 +340,43 @@ describe('handleDisconnection', () => {
     });
     await handler.handleDisconnection(socket);
     expect(services.callService.leaveCall).toHaveBeenCalledTimes(2);
+  });
+
+  // Vague 182 (#4202/Vague 181 follow-up) — leaveCall() throws
+  // CallAlreadyEndedError when this leave lost the race to a concurrent
+  // terminal write, not when it genuinely failed: the call is already
+  // correctly closed by whichever path won. The loop must absorb it via
+  // `absorbAlreadyEndedCallLeave` instead of falling into the generic
+  // `forceCleanupCallParticipant` fallback, which would force-end an
+  // already-ended call a second time.
+  it('absorbs CallAlreadyEndedError as a no-op instead of force-cleaning up an already-ended call', async () => {
+    const socket = makeSocket('sock-1');
+    const services = makeServices();
+    (services.callService.leaveCall as jest.MockedFunction<any>)
+      .mockRejectedValue(new CallAlreadyEndedError('completed'));
+    const callParticipants = [
+      { callSessionId: 'call-1', participantId: 'cp-1', callSession: { id: 'call-1' } },
+    ];
+    const prisma = makePrisma({ callParticipants });
+    const connectedUsers = new Map([['p-1', { id: 'p-1', socketId: 'sock-1', isAnonymous: true, language: 'en', resolvedLanguages: [] }]]);
+    const socketToUser = new Map([['sock-1', 'p-1']]);
+    const userSockets = new Map([['p-1', new Set(['sock-1'])]]);
+    const forceCleanupCallParticipant = jest.fn<any>().mockResolvedValue(undefined);
+    const absorbAlreadyEndedCallLeave = jest.fn<any>().mockResolvedValue(undefined);
+    const handler = new AuthHandler({
+      prisma,
+      ...services,
+      connectedUsers,
+      socketToUser,
+      userSockets,
+      forceCleanupCallParticipant,
+      absorbAlreadyEndedCallLeave,
+    });
+    await handler.handleDisconnection(socket);
+    expect(absorbAlreadyEndedCallLeave).toHaveBeenCalledWith(
+      expect.objectContaining({ callId: 'call-1', error: expect.any(CallAlreadyEndedError) })
+    );
+    expect(forceCleanupCallParticipant).not.toHaveBeenCalled();
   });
 
   it('updates anonymous online status on disconnect', async () => {

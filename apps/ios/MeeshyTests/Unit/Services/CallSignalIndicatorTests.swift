@@ -349,7 +349,7 @@ final class CallHangupFastPathTests: XCTestCase {
             "captionsCycleButton must drive its 3-state cycle via advanceCaptionsMode() — " +
             "replaces the old transcriptionToggleButton/translationToggleButton pair."
         )
-        // The button's own doc comment (Step 3) NAMES .callToggleAccessibility(isToggle:
+        // The button's own doc comment (Step 3) NAMES .toggleStateAccessibility(isToggle:
         // true, ...) to explain why it's deliberately NOT used — strip comment lines
         // before asserting, or that comment's own text trips a false positive here.
         let code = body
@@ -357,7 +357,7 @@ final class CallHangupFastPathTests: XCTestCase {
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")
         XCTAssertFalse(
-            code.contains(".callToggleAccessibility(isToggle: true"),
+            code.contains(".toggleStateAccessibility(isToggle: true"),
             "captionsCycleButton is a 3-state cycle, not a binary toggle — it must not use " +
             "the .isToggle accessibility trait (that implies exactly 2 states)."
         )

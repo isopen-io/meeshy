@@ -124,10 +124,27 @@ function buildPrisma(message: { id: string; conversationId: string; deletedAt?: 
   };
 }
 
-function buildSocket() {
-  const emit = jest.fn((_event: string, _payload: unknown) => undefined);
+/**
+ * `emitThrows` modélise ce que fait socket.io quand l'adaptateur ou l'encodeur
+ * est en défaut : `io.to(room).emit(...)` LÈVE. Le dépôt l'écrit lui-même dans
+ * `emitWithSeq`, et c'est la seule façon de voir ce que la diffusion de
+ * l'épingle emportait avec elle quand elle n'était pas gardée.
+ *
+ * `enqueueRejects` modélise l'autre moitié : une mise en file qui REJETTE.
+ * Détachée sans `.catch`, elle ne remonte à personne — la promesse est
+ * abandonnée, donc l'appelant résout de toute façon — et son seul effet
+ * observable est l'arrêt du process sous Node 22 (leçon 230). C'est pourquoi
+ * son témoin écoute `unhandledRejection` plutôt que le retour de la route.
+ */
+function buildSocket(opts: { emitThrows?: boolean; enqueueRejects?: boolean } = {}) {
+  const emit = jest.fn((_event: string, _payload: unknown) => {
+    if (opts.emitThrows) throw new Error('adapter down');
+    return undefined;
+  });
   const to = jest.fn((_room: string) => ({ emit }));
-  const enqueueOfflineMessageMutation = jest.fn().mockResolvedValue(undefined);
+  const enqueueOfflineMessageMutation = jest.fn((_params: unknown) =>
+    opts.enqueueRejects ? Promise.reject(new Error('redis down')) : Promise.resolve(undefined)
+  );
   return {
     emit,
     to,
@@ -141,9 +158,12 @@ function buildSocket() {
   };
 }
 
-async function buildApp(message: { id: string; conversationId: string; deletedAt?: Date | null } | null) {
+async function buildApp(
+  message: { id: string; conversationId: string; deletedAt?: Date | null } | null,
+  socketOpts: { emitThrows?: boolean; enqueueRejects?: boolean } = {}
+) {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  const socket = buildSocket();
+  const socket = buildSocket(socketOpts);
   (app as any).socketIOHandler = socket.handler;
   (app as any).notificationService = null;
 
@@ -369,6 +389,131 @@ describe('épingler / dépingler un message supprimé', () => {
       expect(res.statusCode).toBe(200);
       expect(update).toHaveBeenCalledTimes(1);
       expect(socket.emit).toHaveBeenCalledWith('message:pinned', expect.objectContaining({ messageId: MESSAGE_ID }));
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+/**
+ * L'épingle passe par `broadcastMessageMutation` — le site UNIQUE de la famille
+ * des mutations de message (cycle 130).
+ *
+ * Elle re-codait à la main deux des trois audiences de ce helper, et y perdait
+ * les deux gardes que le helper porte :
+ *
+ *  1. **l'émission de room n'était pas gardée.** `io.to(room).emit(...)` LÈVE
+ *     quand l'adaptateur ou l'encodeur est en défaut. L'épingle étant DÉJÀ
+ *     commise en base à ce moment-là, la levée remontait au `catch` de la route,
+ *     qui répondait 500 pour une écriture réussie — et, la levée ayant sauté la
+ *     suite, la mise en file hors-ligne n'avait jamais lieu. Un incident
+ *     COSMÉTIQUE emportait la seule garantie DURABLE du chemin, ce qui est
+ *     exactement l'inversion que le cycle 116 a corrigée sur les deux
+ *     producteurs de `message:new` ;
+ *  2. **la mise en file était détachée sans `.catch`** — la forme que la
+ *     leçon 230 interdit, et dont le seul effet observable est l'arrêt du
+ *     process sous le `--unhandled-rejections=throw` par défaut de Node 22.
+ *
+ * Le second ne peut pas s'attester par le retour de la route : la promesse est
+ * abandonnée, donc la route résout `200` que la garde soit là ou non. Le seul
+ * témoin qui distingue les deux est le verdict du RUNTIME — d'où l'écoute de
+ * `unhandledRejection` et le passage par la phase « check » (`setImmediate`),
+ * moment où Node tranche.
+ */
+async function captureUnhandledRejections(body: () => Promise<void>): Promise<unknown[]> {
+  const captured: unknown[] = [];
+  const onUnhandled = (reason: unknown) => { captured.push(reason); };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await body();
+    await new Promise<void>(resolve => setImmediate(resolve));
+    await new Promise<void>(resolve => setImmediate(resolve));
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+  return captured;
+}
+
+describe('la diffusion de l’épingle est un canal LATÉRAL — elle ne décide ni du statut ni du rejeu', () => {
+  beforeEach(() => {
+    mockResolveConversationId.mockResolvedValue(CONV_ID);
+    mockCanAccessConversation.mockResolvedValue(true);
+  });
+
+  it('PUT rend 200 quand l’émission de room LÈVE — l’épingle est déjà commise', async () => {
+    const { app, update } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { emitThrows: true });
+    try {
+      const res = await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(res.statusCode).toBe(200);
+      expect(update).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('PUT met TOUJOURS en file pour les absents, même quand l’émission de room LÈVE', async () => {
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { emitThrows: true });
+    try {
+      await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(socket.enqueueOfflineMessageMutation).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'pinned', messageId: MESSAGE_ID, conversationId: CONV_ID })
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('DELETE rend 200 et met en file même quand l’émission de room LÈVE', async () => {
+    const { app, socket } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { emitThrows: true });
+    try {
+      const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect(res.statusCode).toBe(200);
+      expect(socket.enqueueOfflineMessageMutation).toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'unpinned', messageId: MESSAGE_ID })
+      );
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('une mise en file qui REJETTE ne laisse aucun rejet sans écouteur — PUT', async () => {
+    const { app } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { enqueueRejects: true });
+    try {
+      const unhandled = await captureUnhandledRejections(async () => {
+        const res = await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+        expect(res.statusCode).toBe(200);
+      });
+      expect(unhandled).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('une mise en file qui REJETTE ne laisse aucun rejet sans écouteur — DELETE', async () => {
+    const { app } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID }, { enqueueRejects: true });
+    try {
+      const unhandled = await captureUnhandledRejections(async () => {
+        const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+        expect(res.statusCode).toBe(200);
+      });
+      expect(unhandled).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
+
+  /**
+   * L'épingle ne DÉPLACE pas la liste des conversations — ni son aperçu, ni son
+   * ordre, ni son compteur —, donc `broadcastMessageMutation` ne lui demande pas
+   * la passe d'aperçu. C'est le TYPE qui la dispense (`prisma` n'existe que sur
+   * `edited` et `deleted`), et ce témoin garde l'arbitrage de coût qui va avec :
+   * un `findUnique` de conversation par épinglage, pour zéro delta observable.
+   */
+  it('n’ouvre aucune passe d’aperçu de conversation', async () => {
+    const { app, prisma } = await buildApp({ id: MESSAGE_ID, conversationId: CONV_ID });
+    try {
+      await app.inject({ method: 'PUT', url: `/conversations/${CONV_ID}/messages/${MESSAGE_ID}/pin` });
+      expect((prisma as any).conversation?.findUnique).toBeUndefined();
     } finally {
       await app.close();
     }

@@ -216,6 +216,22 @@ export const SocketPostReactionRequestSyncSchema = z.object({
 
 export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
 
+export const SocketAttachmentReactionAddSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: z.string().min(1).max(10),
+});
+
+export type SocketAttachmentReactionAddData = z.infer<typeof SocketAttachmentReactionAddSchema>;
+
+export const SocketAttachmentReactionRemoveSchema = z.object({
+  attachmentId: mongoId,
+  messageId: mongoId,
+  emoji: z.string().min(1).max(10),
+});
+
+export type SocketAttachmentReactionRemoveData = z.infer<typeof SocketAttachmentReactionRemoveSchema>;
+
 // Empty content is intentionally permitted: the message may carry attachments
 // (photo/audio/file) whose caption is being cleared. The attachment-aware
 // emptiness check lives in MessageHandler.handleMessageEdit (and the REST

@@ -34,19 +34,103 @@ data class StoryDraftFilterSnapshot(
 )
 
 /**
+ * The durable form of one on-canvas text element of a story composer draft — the flat,
+ * primitive-only mirror of `:feature:stories` `StoryTextElement`. Every styled field the
+ * composer owns is projected onto a primitive here so the snapshot stays object-graph-free
+ * and needs no polymorphic serialiser: the element's style / alignment / size enums ride as
+ * their Kotlin enum [style]/[align]/[size] **names** (a blank or unknown name decodes to the
+ * element's own default at the mapper), its backing rides as the already-`@Serializable`
+ * [StoryTextBackgroundStyle] tagged union ([background], `null` = no backing), and its
+ * outline / fade / timing pairs and its normalised position/scale/rotation ride as bare
+ * scalars. The reverse mapping (names → enums, [background] → the sealed backing) lives in
+ * `:feature:stories` alongside the types it rebuilds, keeping this module free of the
+ * composer's enums.
+ *
+ * Every field is defaulted so a legacy/partial blob decodes rather than throwing: a missing
+ * [text] is empty, a missing enum name resolves to the element default, and a missing
+ * position/scale/rotation decodes to the canvas centre, unit scale and upright rotation.
+ */
+@Serializable
+data class StoryDraftTextElementSnapshot(
+    val id: String,
+    val text: String = "",
+    val style: String = "",
+    val color: String = "",
+    val align: String = "",
+    val size: String = "",
+    val background: StoryTextBackgroundStyle? = null,
+    val outlineWidth: Float = 0f,
+    val outlineColor: String? = null,
+    val fadeIn: Float = 0f,
+    val fadeOut: Float = 0f,
+    val startSeconds: Float = 0f,
+    val durationSeconds: Float = 0f,
+    val x: Float = CANVAS_CENTER,
+    val y: Float = CANVAS_CENTER,
+    val scale: Float = UNIT_SCALE,
+    val rotationDeg: Float = 0f,
+) {
+    /** True once the element carries publishable content — non-blank [text]. */
+    val isPublishable: Boolean get() = text.isNotBlank()
+
+    companion object {
+        /** Normalised canvas centre — where a fresh element sits (mirror of `StoryTextElement.CENTER`). */
+        const val CANVAS_CENTER: Float = 0.5f
+
+        /** At-rest scale — the element renders at its intrinsic size. */
+        const val UNIT_SCALE: Float = 1f
+    }
+}
+
+/**
+ * The durable form of one on-canvas emoji sticker of a story composer draft — the flat,
+ * primitive-only mirror of `:feature:stories` `StoryStickerElement`. A sticker carries far
+ * less than a text element — no style/alignment/size enums, no backing, no outline/fade/timing
+ * pairs — so every field is already a bare primitive: its stable [id], its [emoji] glyph and
+ * its normalised on-canvas [x]/[y] position, [scale] and [rotationDeg]. The reverse mapping
+ * (this → `StoryStickerElement`) lives in `:feature:stories` alongside the type it rebuilds,
+ * keeping this module free of the composer's canvas types.
+ *
+ * Every field is defaulted so a legacy/partial blob decodes rather than throwing: a missing
+ * [emoji] is empty, and a missing position/scale/rotation decodes to the canvas centre, unit
+ * scale and upright rotation — the same durable canvas neutrals a text element decays to,
+ * reused from [StoryDraftTextElementSnapshot] so the geometry defaults live in one place.
+ */
+@Serializable
+data class StoryDraftStickerElementSnapshot(
+    val id: String,
+    val emoji: String = "",
+    val x: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val y: Float = StoryDraftTextElementSnapshot.CANVAS_CENTER,
+    val scale: Float = StoryDraftTextElementSnapshot.UNIT_SCALE,
+    val rotationDeg: Float = 0f,
+) {
+    /** True once the sticker carries publishable content — a non-blank [emoji]. */
+    val isPublishable: Boolean get() = emoji.isNotBlank()
+}
+
+/**
  * The durable form of one slide of an in-progress story composer draft — the fields this
  * persistence slice round-trips faithfully: the slide's stable [id], its caption [text],
  * the [mediaIds] attached to it (uploaded ids and offline `cmid` placeholders alike), its
- * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), and its photo [filter]
- * (`null` = none). Richer on-canvas content (text/sticker elements, backgrounds, pinned
- * duration) is deliberately **absent** here — a draft that carries any of it is not yet
- * persistable (see [me.meeshy] `StoryComposerAutosave`), so a restore from this snapshot
- * is never lossy.
+ * persisted 9:16 canvas [transform] (pan/zoom, `null` = identity), its photo [filter]
+ * (`null` = none), its pinned on-screen [durationSecondsPin] (`null` = duration derived
+ * from content, not pinned by the author), its colour/gradient [background] (the wire
+ * string of [StoryBackgroundValue], `null` = no author backdrop), the [backgroundMediaId]
+ * designated as its looping backdrop (`null` = none), whether that backdrop
+ * [backgroundLoop]s (defaults `true`, matching the reader's `loop ?: true`), its on-canvas
+ * text [elements] ([StoryDraftTextElementSnapshot]) and its on-canvas [stickers]
+ * ([StoryDraftStickerElementSnapshot]). With stickers now carried, **every** dimension of a
+ * composer slide round-trips through this snapshot — a restore is no longer lossy for any
+ * content, so `:feature:stories` `StoryComposerAutosave` no longer gates a draft as
+ * "not yet persistable".
  *
- * Every field is a primitive, a list of primitives, or the primitive-only
- * [StoryDraftTransformSnapshot], so the snapshot serialises with no deep object graph and
- * no polymorphic serialiser — the deliberate cost of keeping this cut thin and its
- * round-trip trivially total.
+ * Every field is a primitive, a list of primitives, or a primitive-only nested value
+ * ([StoryDraftTransformSnapshot], [StoryDraftFilterSnapshot], [StoryDraftTextElementSnapshot],
+ * [StoryDraftStickerElementSnapshot]) — the [background] rides as its already-serialisable
+ * [StoryBackgroundValue] wire string rather than a polymorphic value — so the snapshot
+ * serialises with no deep object graph and no polymorphic serialiser, the deliberate cost of
+ * keeping this cut thin and its round-trip trivially total.
  */
 @Serializable
 data class StoryDraftSlideSnapshot(
@@ -55,14 +139,28 @@ data class StoryDraftSlideSnapshot(
     val mediaIds: List<String> = emptyList(),
     val transform: StoryDraftTransformSnapshot? = null,
     val filter: StoryDraftFilterSnapshot? = null,
+    val durationSecondsPin: Double? = null,
+    val background: String? = null,
+    val backgroundMediaId: String? = null,
+    val backgroundLoop: Boolean = true,
+    val elements: List<StoryDraftTextElementSnapshot> = emptyList(),
+    val stickers: List<StoryDraftStickerElementSnapshot> = emptyList(),
 ) {
     /**
-     * True once the slide carries content worth restoring: a caption or attached media. A
-     * canvas [transform] and a photo [filter] are fidelity that ride along with such
-     * content — a pan/zoom or a filter with no media to frame or tint is meaningless — so
-     * they deliberately do **not** make a slide worth restoring on their own.
+     * True once the slide carries content worth restoring: a caption, attached media, a
+     * publishable (non-blank) on-canvas text [elements] entry, or a publishable (non-blank
+     * emoji) [stickers] entry. A canvas [transform], a photo [filter], a pinned
+     * [durationSecondsPin] and a colour [background] are fidelity that ride along with such
+     * content — a pan/zoom, a filter, a duration pin or a backdrop with no media to frame,
+     * tint, time or sit behind is meaningless — so they deliberately do **not** make a slide
+     * worth restoring on their own. ([backgroundMediaId] can only ever name an attached media,
+     * so it never appears without a [mediaIds] entry that already makes the slide worth
+     * restoring; a **blank** text element or sticker likewise carries nothing to restore, so
+     * only a publishable one counts.)
      */
-    val hasContent: Boolean get() = text.isNotBlank() || mediaIds.isNotEmpty()
+    val hasContent: Boolean
+        get() = text.isNotBlank() || mediaIds.isNotEmpty() ||
+            elements.any { it.isPublishable } || stickers.any { it.isPublishable }
 }
 
 /**

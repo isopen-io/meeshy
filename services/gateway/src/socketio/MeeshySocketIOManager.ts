@@ -453,6 +453,12 @@ export class MeeshySocketIOManager {
         this.callEventsHandler.broadcastParticipantLeftResult({ io: this.io, ...opts }),
       forceCleanupCallParticipant: (opts) =>
         this.callEventsHandler.forceCleanupParticipationAfterLeaveFailure({ io: this.io, ...opts }),
+      // Vague 182 — idempotent no-op counterpart to the fallback above, for
+      // when leaveCall() lost the race to a concurrent terminal write
+      // instead of genuinely failing (see absorbAlreadyEndedLeave's doc
+      // comment).
+      absorbAlreadyEndedCallLeave: (opts) =>
+        this.callEventsHandler.absorbAlreadyEndedLeave(this.io, opts.callId, opts.error),
     });
 
     this.adminAgentHandler = new AdminAgentHandler({
@@ -3717,7 +3723,13 @@ export class MeeshySocketIOManager {
           messageId: reaction.targetMessageId,
           emoji: reaction.emoji,
           payload: updateEvent,
-        });
+        }).catch((error: unknown) =>
+          logger.warn('[AGENT] offline reaction enqueue rejected', {
+            conversationId: normalizedConversationId,
+            messageId: reaction.targetMessageId,
+            error,
+          })
+        );
 
         const authorParticipant = message.senderId
           ? await this.prisma.participant.findUnique({

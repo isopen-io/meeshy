@@ -269,7 +269,7 @@ struct MessageTranscriptionDetailView: View {
 
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        Text(display?.flag ?? "\u{1F310}")
+                        Text(LanguageFlagChip.flag(for: audio.targetLanguage))
                             .font(.subheadline)
                         Text(display?.name ?? audio.targetLanguage)
                             .font(.footnote.weight(.semibold))

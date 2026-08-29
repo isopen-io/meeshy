@@ -139,6 +139,14 @@ class ConversationListViewModelTest {
         every { categoryEvents } returns events
     }
 
+    private fun preferencesSocket(
+        events: MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData> =
+            MutableSharedFlow(),
+    ): me.meeshy.sdk.socket.PreferencesSocketManager =
+        mockk<me.meeshy.sdk.socket.PreferencesSocketManager> {
+            every { conversationPreferencesUpdated } returns events
+        }
+
     private fun storyRepo(): me.meeshy.sdk.story.StoryRepository =
         mockk<me.meeshy.sdk.story.StoryRepository>(relaxed = true) {
             every { storiesStream(any(), any()) } returns kotlinx.coroutines.flow.emptyFlow()
@@ -164,6 +172,7 @@ class ConversationListViewModelTest {
         starredStore: StarredMessagesStore = InMemoryStarredMessagesStore(),
         categoryRepository: CategoryRepository = categoryRepo(),
         categorySocketManager: me.meeshy.sdk.socket.CategorySocketManager = categorySocket(),
+        preferencesSocketManager: me.meeshy.sdk.socket.PreferencesSocketManager = preferencesSocket(),
         session: SessionRepository = session(),
         messageRepo: MessageRepository = messageRepository(),
         lockStore: ConversationLockStore = InMemoryConversationLockStore(),
@@ -171,7 +180,7 @@ class ConversationListViewModelTest {
         statusBarCache: StatusBarCache = statusBarCache(),
     ) = ConversationListViewModel(
         repo, messageRepo, socket, workManager, draftStore, starredStore,
-        categoryRepository, categorySocketManager, connection, session, lockStore,
+        categoryRepository, categorySocketManager, preferencesSocketManager, connection, session, lockStore,
         storyRepository, statusBarCache,
     )
 
@@ -425,6 +434,65 @@ class ConversationListViewModelTest {
         advanceUntilIdle()
 
         assertThat(vm.state.value.categories).isEmpty()
+    }
+
+    /**
+     * Le geste fait sur un AUTRE appareil arrive jusqu'au CACHE (#4127). La ligne
+     * `UserConversationPreferences` etant par UTILISATEUR, epingler depuis le web
+     * n'atteignait Android par aucun chemin : ni `conversation:updated` (l'ecrivain
+     * de preferences ne l'emet pas), ni une relecture, que rien ne declenchait.
+     *
+     * Le temoin s'arrete a l'ecrivain de cache et non a l'etat rendu, parce que
+     * c'est la que la valeur passe : `ConversationRepository.applyRemoteConversation
+     * Preferences` ecrit la ligne Room, dont `conversationsStream` est l'observateur.
+     * L'arbitrage de version vit dans le port pur, couvert cote `:sdk-core`.
+     */
+    @Test
+    fun a_preferences_socket_event_reaches_the_conversation_cache() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val events =
+            MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData>()
+        viewModel(repo, preferencesSocketManager = preferencesSocket(events))
+        advanceUntilIdle()
+
+        val event = me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData(
+            userId = "u1",
+            conversationId = "c1",
+            version = 3,
+            reset = false,
+            preferences = me.meeshy.sdk.model.ConversationPreferencesWirePayload(isPinned = true),
+        )
+        events.emit(event)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { repo.applyRemoteConversationPreferences(event) }
+    }
+
+    /**
+     * Et il n'y repond PAS par une relecture de liste : la charge PORTE l'instantane
+     * complet et versionne, donc redemander la liste couterait une requete pour une
+     * information qu'on tient deja — exactement le triplement que la pompe de
+     * [refreshRequests] existe pour eviter.
+     */
+    @Test
+    fun a_preferences_socket_event_triggers_no_list_refresh() = runTest(dispatcher) {
+        val repo = repositoryReturning(flowOf(CacheResult.Empty))
+        val events =
+            MutableSharedFlow<me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData>()
+        viewModel(repo, preferencesSocketManager = preferencesSocket(events))
+        advanceUntilIdle()
+
+        events.emit(
+            me.meeshy.sdk.model.UserPreferencesConversationUpdatedSocketData(
+                userId = "u1",
+                conversationId = "c1",
+                version = 3,
+                preferences = me.meeshy.sdk.model.ConversationPreferencesWirePayload(isPinned = true),
+            ),
+        )
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { repo.refresh() }
     }
 
     @Test

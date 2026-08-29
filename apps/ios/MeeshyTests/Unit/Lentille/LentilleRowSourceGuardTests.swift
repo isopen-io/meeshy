@@ -480,11 +480,18 @@ final class LentilleRowSourceGuardTests: XCTestCase {
             header.contains("LentilleRowTimestamp"),
             "headerLine rend encore l'horodatage — l'heure appartient à sa propre bande."
         )
-        XCTAssertFalse(
-            header.contains(#"Text("·")"#),
-            "headerLine garde le point médian qui séparait le nom de l'heure — sans heure à " +
-            "séparer, il ne sépare plus rien."
-        )
+        // Les DEUX écritures du point médian. `MetaSeparator` (251i) a rendu le
+        // séparateur muet pour VoiceOver et l'a sorti de `Text("·")` : une garde
+        // qui ne connaîtrait que l'ancienne graphie passerait au vert pendant
+        // que le point serait toujours là, sous son nouveau nom. **Renommer une
+        // chose, c'est devoir relire ce qui la CHERCHE par son ancien nom.**
+        for spelling in [#"Text("·")"#, "MetaSeparator("] {
+            XCTAssertFalse(
+                header.contains(spelling),
+                "headerLine garde le point médian (« \(spelling) ») qui séparait le nom de " +
+                "l'heure — sans heure à séparer, il ne sépare plus rien."
+            )
+        }
 
         guard let dateStart = code.range(of: "private var dateLine: some View {") else {
             XCTFail("`dateLine` n'existe pas : la date n'a pas de ligne à elle")

@@ -1,5 +1,5 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
+import { sanitizeEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { ConflictError } from '../errors/custom-errors';
 
@@ -26,8 +26,13 @@ export class AttachmentReactionService {
   constructor(private readonly prisma: PrismaClient) {}
 
   async addAttachmentReaction(o: AddAttachmentReactionOptions): Promise<{ changed: boolean }> {
+    // Miroir EXACT de `ReactionService.addReaction` (la jumelle) : `sanitizeEmoji`
+    // rend `null` pour un non-emoji, et `null` est la seule preuve d'invalidité —
+    // le repasser à `isValidEmoji(emoji: string)` faisait `null.trim()`, donc un
+    // `TypeError` interne remontait au client à la place du refus propre, et la
+    // branche `throw` était morte.
     const emoji = sanitizeEmoji(o.emoji);
-    if (!isValidEmoji(emoji)) throw new Error('Invalid emoji');
+    if (!emoji) throw new Error('Invalid emoji format');
 
     // Idempotency: the participant already holding exactly this emoji on this
     // attachment (optimistic double-fire, a socket retry after a lost ACK, or a
@@ -90,11 +95,19 @@ export class AttachmentReactionService {
     // idempotent: an already-absent reaction (retry, double-tap, second device)
     // reports `false` and skips the ATTACHMENT_REACTION_REMOVED broadcast.
     // Mirrors ReactionService.removeReaction's `count > 0` contract.
+    // Comme la jumelle `ReactionService.removeReaction` : on refuse un emoji
+    // invalide AVANT le `deleteMany`. Passer `sanitizeEmoji(o.emoji)` (donc
+    // possiblement `null`) directement dans le `where` faisait « réussir » un
+    // remove malformé — et, l'`emoji: null` ne ciblant plus un emoji précis,
+    // risquait d'emporter les autres réactions du participant.
+    const emoji = sanitizeEmoji(o.emoji);
+    if (!emoji) throw new Error('Invalid emoji format');
+
     const result = await this.prisma.attachmentReaction.deleteMany({
       where: {
         attachmentId: o.attachmentId,
         participantId: o.participantId,
-        emoji: sanitizeEmoji(o.emoji),
+        emoji,
       },
     });
     return result.count > 0;

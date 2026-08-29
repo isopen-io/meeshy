@@ -80,6 +80,11 @@ public final class UserPreferencesManager: ObservableObject {
     public nonisolated static let appGroupSuiteName = "group.me.meeshy.apps"
     public nonisolated static let appGroupNotificationPrefsKey = keyPrefix + PreferenceCategory.notification.rawValue
     private static let minSyncInterval: TimeInterval = 5 * 60
+    /// Fenêtre de regroupement des diffusions de catégorie
+    /// (`observeRemotePreferenceBroadcast`). `internal` pour que les témoins
+    /// dérivent leur attente de la valeur de production plutôt que d'en
+    /// recopier une jumelle.
+    static let remoteRefreshCoalescingWindow: TimeInterval = 0.3
 
     // MARK: - Init
 
@@ -102,6 +107,8 @@ public final class UserPreferencesManager: ObservableObject {
 
         observeAuth()
         observeForeground()
+        observeRemotePreferenceBroadcast()
+        observeSocketReconnection()
     }
 
     // MARK: - Typed Update Methods (local-first)
@@ -530,5 +537,136 @@ public final class UserPreferencesManager: ObservableObject {
                 Task { [weak self] in await self?.fetchFromBackend() }
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Private: Remote broadcast (troisième déclencheur)
+
+    /// Le déclencheur VIF, à côté des deux déclencheurs de CYCLE DE VIE
+    /// ci-dessus. Les deux répondent à des questions différentes, et aucun ne
+    /// couvre l'autre :
+    ///
+    /// - `observeAuth` / `observeForeground` rattrapent ce qu'on a MANQUÉ
+    ///   pendant qu'on était absent — mais ils ne se déclenchent que quand
+    ///   l'app change d'état, et le retour au premier plan est de surcroît
+    ///   étranglé à `minSyncInterval` (5 min) ;
+    /// - une diffusion dit qu'un réglage VIENT de changer ailleurs, pendant
+    ///   qu'on est là. Sans elle, un utilisateur qui coupe ses notifications
+    ///   depuis le web garde un iPhone qui sonne selon l'ancienne règle tant
+    ///   qu'il ne quitte pas puis ne rouvre pas l'app — et un aller-retour
+    ///   dans les 5 minutes ne rattrape rien non plus, l'étranglement le
+    ///   sautant. Le bloc `notification` est miroité dans l'App Group que lit
+    ///   `NSEPreferencesGate` (`appGroupNotificationPrefsKey`), donc « périmé »
+    ///   s'entend littéralement.
+    ///
+    /// L'événement ne PORTE aucune valeur (le gateway émet `{ userId,
+    /// category }`, cf. `preferences-broadcast.ts`) : c'est une INVALIDATION,
+    /// donc le geste est une relecture, pas une application de charge utile.
+    /// `fetchFromBackend()` est réutilisé tel quel — il porte déjà la garde
+    /// d'authentification, le veto `pendingCategories` (via `applyRemote`) et
+    /// la politique « un échec réseau ne remet rien à zéro ». L'écho que le
+    /// gateway renvoie à l'appareil ÉMETTEUR passe donc par le même veto que
+    /// le reste : la catégorie qu'on est en train d'éditer n'est pas écrasée.
+    ///
+    /// L'étranglement de 5 minutes N'EST PAS appliqué ici : il garde un
+    /// déclencheur qui se produit sans qu'aucune donnée n'ait bougé (rouvrir
+    /// l'app), pas un déclencheur qui est la PREUVE qu'elle a bougé.
+    private func observeRemotePreferenceBroadcast() {
+        observeRemotePreferenceBroadcast(
+            MessageSocketManager.shared.userPreferencesUpdated.eraseToAnyPublisher()
+        )
+    }
+
+    /// `internal` : seam d'injection pour les tests, qui poussent leur propre
+    /// sujet plutôt que le publisher du socket partagé — même couture que
+    /// `service` / `isAuthenticatedOverride`.
+    func observeRemotePreferenceBroadcast(
+        _ publisher: AnyPublisher<UserPreferencesUpdatedEvent, Never>
+    ) {
+        publisher
+            .filter { Self.namesUserLevelCategory($0) }
+            // La remise à zéro globale (`DELETE /me/preferences`) émet UNE FOIS
+            // PAR CATÉGORIE effacée — sept événements pour un geste. Sans
+            // regroupement, c'est sept `GET /me/preferences` complets (il n'y a
+            // pas de `GET` par catégorie : `PreferenceServiceProviding` n'expose
+            // que `getAllPreferences()`). La fenêtre collapse la rafale en une
+            // relecture, et garantit en prime que le `GET` part APRÈS le dernier
+            // événement de la rafale.
+            .debounce(for: .seconds(Self.remoteRefreshCoalescingWindow), scheduler: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in await self?.fetchFromBackend() }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Private: Socket reconnection (quatrième déclencheur — PÉRENNE)
+
+    /// Le second déclencheur PÉRENNE, à côté des deux déclencheurs de CYCLE DE
+    /// VIE (`observeAuth` / `observeForeground`) et du déclencheur VIF
+    /// (`observeRemotePreferenceBroadcast`) — à parité d'Android (#4197,
+    /// `PreferencesSyncCoordinator`) et du web (#4209,
+    /// `startMirroredPreferenceRehydration`).
+    ///
+    /// Une diffusion n'atteint que les appareils PRÉSENTS pour l'entendre, et
+    /// rien ne la rejoue à la reconnexion : un abonnement enregistre un écouteur,
+    /// il ne demande pas d'arriéré (leçon 310). Quand le socket tombe puis se
+    /// reconnecte alors que l'app reste au PREMIER PLAN — redéploiement gateway,
+    /// bascule WiFi↔cellulaire, coupure transitoire —, aucun changement de cycle
+    /// de vie ne se produit : `observeAuth`/`observeForeground` ne fire pas, et
+    /// le bloc reste périmé jusqu'au prochain aller-retour d'app ou à une
+    /// nouvelle diffusion. La reconnexion est le déclencheur qui manquait.
+    ///
+    /// `didReconnect` ne fire qu'après une reconnexion RÉELLE (garde
+    /// `hadPreviousConnection` côté `MessageSocketManager`) : pas de relecture au
+    /// premier connect (couvert par `observeAuth`/`initialize`), pas sur un état
+    /// `CONNECTED` qui se répète. Aucun étranglement de 5 min ici (contrairement
+    /// à `observeForeground`) : une reconnexion est la PREUVE d'une fenêtre
+    /// pendant laquelle une annonce a pu être manquée — comme la diffusion.
+    ///
+    /// `fetchFromBackend()` est réutilisé tel quel : il porte déjà la garde
+    /// d'authentification, le veto `pendingCategories` (via `applyRemote`, qui
+    /// protège un geste local en vol que l'outbox draine encore au moment de la
+    /// reconnexion) et la politique « un échec réseau ne remet rien à zéro ».
+    private func observeSocketReconnection() {
+        observeSocketReconnection(
+            MessageSocketManager.shared.didReconnect.eraseToAnyPublisher()
+        )
+    }
+
+    /// `internal` : seam d'injection pour les tests, qui poussent leur propre
+    /// sujet plutôt que le publisher du socket partagé — même couture que
+    /// `observeRemotePreferenceBroadcast(_:)`.
+    func observeSocketReconnection(_ publisher: AnyPublisher<Void, Never>) {
+        publisher
+            // `didReconnect` peut être émis depuis un thread de rappel socket ;
+            // on livre le sink sur le main, comme le fait `.debounce(scheduler:)`
+            // du déclencheur de diffusion.
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { [weak self] in await self?.fetchFromBackend() }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Décision pure : cet événement annonce-t-il une catégorie USER-LEVEL ?
+    ///
+    /// `user:preferences-updated` est une UNION de trois scopes (catégorie,
+    /// conversation, communauté) sur un seul nom d'événement. Une relecture
+    /// des sept blocs user-level ne doit répondre qu'au premier : sans ce
+    /// filtre, chaque épinglage ou sourdine venu d'un autre appareil coûterait
+    /// un `GET /me/preferences` complet.
+    ///
+    /// Deux conditions, et la seconde n'est pas redondante. Le scope
+    /// conversation est déjà routé vers un publisher SÉPARÉ
+    /// (`userPreferencesConversationUpdated`) par le discriminant du décodeur,
+    /// donc `conversationId` est toujours `nil` ici EN PRODUCTION — mais un
+    /// `category` hors des sept noms gelés reste possible (charge fabriquée,
+    /// gateway plus récent, scope à venir), et une catégorie inconnue n'est
+    /// pas une raison de relire. On exige donc que le nom TOMBE dans
+    /// `PreferenceCategory` plutôt que de faire confiance à l'absence d'un
+    /// champ voisin.
+    ///
+    /// `nonisolated` : lecture de deux champs immuables, aucun état isolé.
+    nonisolated static func namesUserLevelCategory(_ event: UserPreferencesUpdatedEvent) -> Bool {
+        event.conversationId == nil && PreferenceCategory(rawValue: event.category) != nil
     }
 }

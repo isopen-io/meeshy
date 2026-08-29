@@ -16,7 +16,11 @@ import { enqueueForOfflineParticipants } from '../offlineParticipantQueue';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { emitServerEvent } from '../serverEmit';
 import type { QueuedPayloadFor } from '../queuedEventContract';
-import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import {
+  SocketAttachmentReactionAddSchema,
+  SocketAttachmentReactionRemoveSchema,
+} from '../../validation/socket-event-schemas.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentReactionHandler' });
 
@@ -69,19 +73,21 @@ export class AttachmentReactionHandler {
     callback?: AckOf<'attachment:reaction-add'>
   ): Promise<void> {
     try {
-      if (!data?.attachmentId || !data?.messageId || !data?.emoji) {
-        callback?.({ success: false, error: 'Invalid payload' });
+      // Frontière socket : même garde que les trois jumelles de réaction
+      // (`Reaction`/`CommentReaction`/`PostReaction`). Le schéma `mongoId`
+      // rejette un `messageId`/`attachmentId` non-ObjectId — dont un id
+      // optimiste non réconcilié (`cid_*`), qui ferait throw prisma (P2023) —
+      // et borne l'emoji comme les jumelles, avant tout aller-retour DB.
+      const schema = action === 'add'
+        ? SocketAttachmentReactionAddSchema
+        : SocketAttachmentReactionRemoveSchema;
+      const schemaValidation = validateSocketEvent(schema, data);
+      if (schemaValidation.success === false) {
+        callback?.({ success: false, error: schemaValidation.error });
         return;
       }
-      // Garde : un messageId optimiste non réconcilié (cid_*) ferait throw
-      // prisma (P2023). Mirror de ReactionHandler._resolveParticipantId.
-      if (!isValidObjectId(data.messageId) || !isValidObjectId(data.attachmentId)) {
-        logger.warn('attachment reaction — invalid/unreconciled id, skipping', {
-          messageId: data.messageId, attachmentId: data.attachmentId,
-        });
-        callback?.({ success: false, error: 'Could not resolve participant' });
-        return;
-      }
+      const validated = schemaValidation.data;
+
       const userIdOrToken = this.deps.socketToUser.get(socket.id);
       if (!userIdOrToken) {
         callback?.({ success: false, error: 'User not authenticated' });
@@ -98,14 +104,14 @@ export class AttachmentReactionHandler {
       const resolved = await resolveParticipantFromMessage({
         prisma: this.deps.prisma,
         userIdOrToken,
-        messageId: data.messageId,
+        messageId: validated.messageId,
         connectedUsers: this.deps.connectedUsers,
       });
       if (!resolved) {
         callback?.({ success: false, error: 'Could not resolve participant' });
         return;
       }
-      const conversationId = await this.deps.service.resolveConversationId(data.messageId);
+      const conversationId = await this.deps.service.resolveConversationId(validated.messageId);
       if (!conversationId) {
         callback?.({ success: false, error: 'Message not found' });
         return;
@@ -115,18 +121,18 @@ export class AttachmentReactionHandler {
       // pourrait réagir à une PJ d'une autre conversation en passant un messageId
       // dont il EST participant + un attachmentId étranger.
       const att = await this.deps.prisma.messageAttachment.findUnique({
-        where: { id: data.attachmentId },
+        where: { id: validated.attachmentId },
         select: { messageId: true },
       });
-      if (!att || att.messageId !== data.messageId) {
+      if (!att || att.messageId !== validated.messageId) {
         callback?.({ success: false, error: 'Attachment not found' });
         return;
       }
 
       if (action === 'add') {
         const { changed } = await this.deps.service.addAttachmentReaction({
-          attachmentId: data.attachmentId, messageId: data.messageId,
-          participantId: resolved.participantId, emoji: data.emoji,
+          attachmentId: validated.attachmentId, messageId: validated.messageId,
+          participantId: resolved.participantId, emoji: validated.emoji,
         });
         if (!changed) {
           // Idempotent no-op: the participant already had exactly this emoji on
@@ -140,7 +146,7 @@ export class AttachmentReactionHandler {
         }
       } else {
         const removed = await this.deps.service.removeAttachmentReaction({
-          attachmentId: data.attachmentId, participantId: resolved.participantId, emoji: data.emoji,
+          attachmentId: validated.attachmentId, participantId: resolved.participantId, emoji: validated.emoji,
         });
         if (!removed) {
           // Idempotent: the reaction is already absent. Reply success (nothing
@@ -154,16 +160,16 @@ export class AttachmentReactionHandler {
         }
       }
 
-      const reactionSummary = await this.deps.service.getReactionSummary(data.attachmentId);
+      const reactionSummary = await this.deps.service.getReactionSummary(validated.attachmentId);
       const event = action === 'add'
         ? SERVER_EVENTS.ATTACHMENT_REACTION_ADDED
         : SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED;
       const payload = {
-        attachmentId: data.attachmentId,
-        messageId: data.messageId,
+        attachmentId: validated.attachmentId,
+        messageId: validated.messageId,
         conversationId,
         participantId: resolved.participantId,
-        emoji: data.emoji,
+        emoji: validated.emoji,
         action,
         reactionSummary,
         timestamp: new Date().toISOString(),
@@ -174,8 +180,10 @@ export class AttachmentReactionHandler {
         conversationId,
         resolved.participantId,
         action === 'add' ? 'attachment-reaction-added' : 'attachment-reaction-removed',
-        data,
+        validated,
         payload,
+      ).catch((error: unknown) =>
+        logger.error('attachment reaction offline enqueue rejected', { conversationId, error })
       );
 
       callback?.({ success: true });

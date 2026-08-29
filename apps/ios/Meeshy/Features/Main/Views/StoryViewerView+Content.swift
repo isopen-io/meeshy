@@ -2769,11 +2769,11 @@ struct StoryCommentRowView: View, Equatable {
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
+                MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
+            MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
                 .font(MeeshyFont.relative(10))
@@ -2785,53 +2785,23 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var languageSwitcher: some View {
-        let origCode = comment.originalLanguage
-        let origDisplay = LanguageDisplay.from(code: origCode)
-        let targetDisplay = LanguageDisplay.from(code: userLang)
-
-        return HStack(spacing: 4) {
-            languageFlag(
-                flag: origDisplay?.flag ?? "?",
-                color: origDisplay?.color ?? LanguageDisplay.defaultColor,
-                isActive: showOriginal
-            )
-            .onTapGesture {
+        HStack(spacing: 4) {
+            LanguageFlagChip(code: comment.originalLanguage ?? "",
+                             isActive: showOriginal,
+                             metrics: .overlay) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showOriginal = true
                 }
-                HapticFeedback.light()
             }
 
-            languageFlag(
-                flag: targetDisplay?.flag ?? "?",
-                color: targetDisplay?.color ?? LanguageDisplay.defaultColor,
-                isActive: !showOriginal
-            )
-            .onTapGesture {
+            LanguageFlagChip(code: userLang, isActive: !showOriginal, metrics: .overlay) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showOriginal = false
                 }
-                HapticFeedback.light()
             }
 
-            Image(systemName: "translate")
-                .font(MeeshyFont.relative(9, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo400.opacity(0.85))
+            TranslationsBadge(metrics: .overlay)
         }
-    }
-
-    private func languageFlag(flag: String, color: String, isActive: Bool) -> some View {
-        VStack(spacing: 1) {
-            Text(flag)
-                .font(MeeshyFont.relative(isActive ? 12 : 10))
-                .scaleEffect(isActive ? 1.05 : 1.0)
-            if isActive {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color(hex: color))
-                    .frame(width: 10, height: 1.5)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: isActive)
     }
 
     private var contentText: some View {
@@ -2898,6 +2868,22 @@ struct StoryCommentRowView: View, Equatable {
             .buttonStyle(.plain)
             .disabled(isInFlight)
             .frame(minHeight: 44)
+            // Ce « j'aime » n'avait AUCUNE étiquette : VoiceOver n'en tirait
+            // que le cœur et le compteur. Sa JUMELLE de `FeedCommentsSheet` —
+            // le même contrôle, sur la même entité — porte le vocabulaire
+            // complet depuis toujours ; il est repris ici à l'identique plutôt
+            // que réinventé (253i, #4266).
+            //
+            // Un « j'aime » n'est PAS un `.isToggle` : son nom dit l'ACTION
+            // (« J'aime » / « Je n'aime plus ») et sa valeur porte le COMPTE,
+            // pas un « Activé ». C'est le patron que la jumelle a établi.
+            .accessibilityElement(children: .ignore)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel(isLiked
+                ? String(localized: "a11y.comment.unlike", defaultValue: "Je n'aime plus", bundle: .main)
+                : String(localized: "a11y.comment.like", defaultValue: "J'aime", bundle: .main))
+            .accessibilityValue(LocalizedNumber.exact(likeCount))
+            .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
             Button(action: onReply) {
                 HStack(spacing: 3) {

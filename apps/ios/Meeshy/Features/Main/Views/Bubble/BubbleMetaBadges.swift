@@ -28,7 +28,20 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.system(.caption2, design: .default).weight(.semibold))
                     .minimumScaleFactor(0.8)
                     .rotationEffect(.degrees(isSaving ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSaving)
+                    // `meeshyAnimation` plutôt que les deux `@Environment` que
+                    // déclarent les autres sites : cette vue est `Equatable`
+                    // par SYNTHÈSE, et une propriété stockée `@Environment`
+                    // (non `Equatable`) la casserait. Le modificateur du SDK
+                    // lit l'environnement lui-même et laisse la vue sans état.
+                    //
+                    // Rien à choisir comme valeur de repos ici : 360° ≡ 0°, le
+                    // glyphe arrêté est exactement celui que la rotation
+                    // traverse — et le « Saving… » juste à droite continue de
+                    // dire ce que la rotation disait.
+                    .meeshyAnimation(
+                        .linear(duration: 1).repeatForever(autoreverses: false),
+                        value: isSaving
+                    )
                 Text(String(localized: "bubble.meta.saving", defaultValue: "Saving…", bundle: .main))
                     .font(.caption2.weight(.medium))
                     .italic()

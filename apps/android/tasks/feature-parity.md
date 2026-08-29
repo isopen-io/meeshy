@@ -4045,7 +4045,7 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       EXACTLY the 3 link-carrying tests; the null-default, blank-drop, `withRepostOf` and
       `onRepostSource`-state tests stay green). **Pending**: cloning the source story's slide
       CONTENT (caption/text-elements/effects) into the composer as an editable starting point.
-- [~] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
+- [x] Draft save/restore with media persistence + lost-media detection / re-capture prompt —
       **caption + media + structure + audience + repost persistence done** (slice
       `story-composer-draft-autosave`, 2026-08-26): the composer now survives leaving and
       reopening — iOS `StoryDraftStore.save/load` + `resetLocalState`/`isEmpty` purge parity.
@@ -4117,15 +4117,119 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       Mutation-RED-proven twice: re-adding the filter to the rich-content gate reddens EXACTLY the 3
       filter-persistence autosave tests; removing the `filter == null` pristine guard reddens EXACTLY the
       one pristine test; everything else stays green.
-      **Pending**: widening the snapshot to carry the remaining rich on-canvas content — text/sticker
-      elements, background (+loop/media), pinned duration — lifts the rest of the fidelity gate.
+      **Pinned-duration persistence done** (slice `story-draft-persist-duration`, 2026-08-28): the third
+      fidelity-gate dimension is lifted — a slide's author-pinned on-screen duration
+      (`StorySlide.durationSecondsPin: Double?`) now round-trips through the snapshot, so a user who set a
+      slide's timeline duration and left the composer gets it back on return. New nullable primitive
+      `StoryDraftSlideSnapshot.durationSecondsPin: Double? = null` (`null` = duration derived from content,
+      not pinned, so legacy blobs and fresh slides decode without inventing a default); `toDraftSnapshot`/
+      `toDeck` map `StorySlide.durationSecondsPin` ↔ the field; `deckHasRichContent` no longer counts a
+      pinned duration (now representable), while `deckIsPristine` gained an explicit `durationSecondsPin ==
+      null` check so a silently pinned duration on an empty canvas still counts as touched and a restore
+      never clobbers it. A pinned duration is *fidelity* not *content* — it never makes a draft worth
+      restoring on its own (a duration with no media to time is meaningless). +13 tests (5
+      `StoryComposerDraftSnapshotTest` duration round-trip/legacy-null/worth-restoring/changed/cleared, 6
+      `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways/round-trip + 2 resolve Save, 2
+      `StoryComposerViewModelTest` persist-duration/restore-duration; the pre-existing `deckHasRichContent
+      is true for a pinned duration` test flipped to assert the new persistable behaviour).
+      Mutation-RED-proven twice: re-adding the duration to the rich-content gate reddens EXACTLY the 4
+      duration gate/save tests (3 autosave + 1 VM persist); removing the `durationSecondsPin == null`
+      pristine guard reddens EXACTLY the one pristine test; everything else stays green.
+      **Background persistence done** (slice `story-draft-persist-background`, 2026-08-29): the fourth
+      fidelity-gate dimension is lifted — a slide's author-chosen colour/gradient backdrop
+      (`StorySlide.background: StoryBackgroundValue?`) and its designated looping-background media
+      (`backgroundMediaId: String?` / `backgroundLoop: Boolean`) now round-trip through the snapshot, so a
+      user who picked a backdrop (or set a video-background loop) and left the composer gets it back on
+      return. The backdrop rides as its already-total `StoryBackgroundValue.serialized()` wire string — no
+      polymorphic serialiser — restored through the tolerant `StoryBackgroundValue.parse` (a malformed value
+      decays to a solid colour, never throws). New fields `StoryDraftSlideSnapshot.background: String? = null`
+      / `backgroundMediaId: String? = null` / `backgroundLoop: Boolean = true` (legacy blobs and fresh slides
+      decode to no-backdrop + looping default); `toDraftSnapshot`/`toDeck` map the three ↔ the deck fields;
+      `deckHasRichContent` no longer counts a background (now representable — the gate now holds only
+      text/sticker elements), while `deckIsPristine` gained explicit `background == null && backgroundMediaId
+      == null` checks so a silently-picked backdrop on an empty canvas still counts as touched and a restore
+      never clobbers it (`backgroundLoop` needs no check — it can only leave its `true` default once a
+      background media is designated, which the media check already rejects). A backdrop is *fidelity* not
+      *content* — it never makes a draft worth restoring on its own (a colour with no other content is not
+      publishable; a background media always rides an existing `mediaIds` entry). +18 tests (6
+      `StoryComposerDraftSnapshotTest` round-trip/legacy-defaults/worth-restoring/changed-bg/cleared-bg/
+      changed-media-id/changed-loop, 10 `StoryComposerAutosaveTest` gate-false×2/pristine-false/map-both-ways
+      ×3/round-trip×2 + 2 resolve Save, 2 `StoryComposerViewModelTest` persist-bg/restore-bg; the pre-existing
+      `deckHasRichContent is true for a background` test flipped to assert the new persistable behaviour).
+      Mutation-RED-proven twice: re-adding the background to the rich-content gate reddens EXACTLY the 5
+      background gate/save tests (4 autosave + 1 VM persist); removing the `background/backgroundMediaId ==
+      null` pristine guards reddens EXACTLY the one pristine test; everything else stays green.
+      **Text-element persistence done** (slice `story-draft-persist-text-elements`, 2026-08-29): the fifth
+      fidelity-gate dimension is lifted — a slide's on-canvas text elements (`StoryTextElement`, with every
+      styled field: text, style, colour, alignment, size, backing, outline, fade, timing, position/scale/
+      rotation) now round-trip through the snapshot, so a user who typed and styled on-canvas text and left
+      the composer gets it back on return. New flat, primitive-only `StoryDraftTextElementSnapshot` on
+      `StoryDraftSlideSnapshot.elements` (the three enums ride as their Kotlin `.name`, tolerant to an
+      unknown name at restore; the sealed `StoryTextBackground` rides as the already-`@Serializable`
+      `StoryTextBackgroundStyle` tagged union via the single-source `toStyleWire()`/`resolve()` — no new
+      tagged-union spelling, no polymorphic serialiser; the outline/fade/timing pairs and the position ride
+      as scalars); `toDraftSnapshot`/`toDeck` map `StorySlide.elements` ↔ the list via `toDraftSnapshot()`/
+      `toTextElement()`; `deckHasRichContent` no longer counts text elements (now representable — the gate
+      now holds only stickers), while `deckIsPristine` gained an explicit `elements.isEmpty()` check so a
+      silently-added text element still counts as touched and a restore never clobbers it. A **publishable**
+      (non-blank) text element makes a slide worth restoring (a text-element-only slide publishes, iOS
+      parity); a blank one carries nothing to restore. +21 tests (10 `StoryComposerDraftSnapshotTest`
+      element round-trip/rides-a-slide/legacy-empty/legacy-defaults/publishable×2/worth-restoring×2/
+      changed-element/added-element, 9 `StoryComposerAutosaveTest` gate-false/pristine-false/map-both-ways×2/
+      round-trip/tolerant-decode + 2 resolve Save + the flipped `a draft with a text element resolves to
+      Save`, 2 `StoryComposerViewModelTest` persist-elements/restore-elements; the pre-existing VM
+      rich-content purge test retargeted from a (now-liftable) text element to a still-gated sticker).
+      Mutation-RED-proven three times: re-adding the elements arm to `deckHasRichContent` reddens EXACTLY the
+      5 text-element persistence tests (4 autosave + 1 VM persist); removing the `elements.isEmpty()`
+      pristine guard reddens EXACTLY the one pristine test; dropping the `elements.any { isPublishable }`
+      arm from `hasContent` reddens EXACTLY the worth-restoring test; everything else stays green.
+      **Sticker persistence done — the fidelity gate is RETIRED** (slice `story-draft-persist-sticker-elements`,
+      2026-08-29): the sixth and LAST rich dimension is lifted — a slide's on-canvas emoji stickers
+      (`StoryStickerElement`: id/emoji/normalised x,y/scale/rotation) now round-trip through the snapshot, so a
+      user who placed and transformed a sticker and left the composer gets it back on return. New flat,
+      primitive-only `StoryDraftStickerElementSnapshot` on `StoryDraftSlideSnapshot.stickers` (thinner than a
+      text element — no enums, no backing, no outline/fade/timing; the position/scale/rotation ride as scalars,
+      the canvas-geometry defaults reused from `StoryDraftTextElementSnapshot.CANVAS_CENTER`/`UNIT_SCALE` so the
+      neutrals live in one place); `toDraftSnapshot`/`toDeck` map `StorySlide.stickers` ↔ the list via
+      `toDraftSnapshot()`/`toStickerElement()` (the latter re-`normalised()` so a corrupt out-of-range blob
+      decays into the canvas). A **publishable** (non-blank emoji) sticker makes a slide worth restoring; a blank
+      one carries nothing. With every dimension now representable, `deckHasRichContent` would be constant
+      `false` — so it, its `resolve` "rich content → purge" arm and its `deckIsPristine` call are **retired**
+      (not left as a dead branch): `resolve` now always projects a snapshot and decides purely on
+      `isWorthRestoring` + changed, and `deckIsPristine` checks `stickers.isEmpty()` explicitly. +21 tests (12
+      `StoryComposerDraftSnapshotTest` sticker round-trip/rides-a-slide/legacy-empty/legacy-defaults/
+      publishable×2/worth-restoring×2/changed/added, 7 `StoryComposerAutosaveTest` map-both-ways/round-trip/
+      re-normalise/pristine-false/sticker-only-Save/added-Save + the flipped `a draft that gained a sticker now
+      saves it`, 2 `StoryComposerViewModelTest` persist-stickers/restore-stickers flipped from the old
+      does-not-save; the six retired-function `deckHasRichContent is …` unit tests removed with the function).
+      Mutation-RED-proven three times: dropping the `stickers.any { isPublishable }` arm from `hasContent`
+      reddens EXACTLY the worth-restoring test; removing the `stickers.isEmpty()` pristine guard reddens EXACTLY
+      the one pristine test; dropping the `toDeck` sticker restore reddens EXACTLY the 3 restore tests;
+      everything else stays green. Full local CI-mirror gate (`assembleDebug testDebugUnitTest`, ALL modules)
+      BUILD SUCCESSFUL.
 - [~] Offline publish queue done (durable outbox `PUBLISH_STORY` lane, auto-retry on
       reconnect via `OutboxFlushWorker`); **failed-publish recovery** done (exhausted publishes
-      surface a Retry/Discard strip above the tray — no silent loss); preview-before-publish and
-      RAW background publish-all still pending.
+      surface a Retry/Discard strip above the tray — no silent loss); **RAW background publish-all**
+      done (slice `story-publish-queue-media-only`, 2026-08-29): `StoryRepository.decodeStoryPublish`
+      no longer requires text — a media-only (image/video, no caption) publish, exactly what the
+      composer's `toCreateStoryRequest` emits (`content = null`, `mediaIds = [...]`), now decodes and
+      so surfaces BOTH its optimistic self-ring AND its failure-recovery strip instead of being
+      silently dropped; `Pending`/`FailedStoryPublish.content` are nullable and carry `mediaIds`, the
+      strip shows a localised `stories_publish_media_summary` when there is no caption. +14 tests,
+      mutation-RED-proven (dropping the media clause reddens exactly the 3 media-only decode tests).
+      A media-preview THUMBNAIL in the ring (needs the local media URI on the outbox row) still pending.
 - [x] Visibility selection (Public / Friends / Community / Private) — accent `FilterChip` row
       in the composer; wire value carried on `StoryVisibility.wire` → `CreateStoryRequest.visibility`.
-- [ ] thumbHash blur-placeholder generation per slide
+- [~] thumbHash blur-placeholder per slide — **display/read path DONE** (slice
+      `story-slide-thumbhash-placeholder`, 2026-08-29): the viewer now decodes a slide's ThumbHash into an
+      instant blur behind the loading background image (no black flash on cold load), mirroring iOS
+      `StorySlideRenderer`. Pure `StorySlidePlaceholder` resolver (`:feature:stories`) picks the hash — slide-level
+      `StoryEffects.thumbHash` (modern composer) → the flat background `FeedMedia.thumbHash` (legacy/RAW), first
+      non-blank trimmed wins, else null — carried on `StorySlideView.backgroundThumbHash` and painted via the
+      already-shipped `rememberThumbHashPainter` (the exact idiom the feed's `AsyncImage` uses). +13 tests,
+      mutation-RED-proven (reversing the cascade reddens exactly the priority test). Pending: write-path
+      **generation** (encode a ThumbHash from the composed slide bitmap into `effects.thumbHash` at publish) —
+      needs `Bitmap`→RGBA, so it is a separate follow-up using the already-ported `ThumbHash.encode`.
 - [ ] **V2 timeline editor**: multi-track, Quick + Pro modes, size-class adaptive, zoomable
 - [ ] Clip add / move / trim / split / delete with full undo/redo (command stack, FIFO 50, persisted)
 - [~] Keyframe animation (position/scale/opacity, easing) per clip/element — **reader/playback
@@ -5630,10 +5734,22 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       stateful `nonisolated` class with unbounded `Int` counters (untestable without a live GPU); Android
       is a total reducer whose two counters are **clamped** so state is O(1) over a multi-minute call.
       +30 behavioural tests. Mutation (RED proof): removing the over-budget clamp fails **exactly** the
-      unbounded-counter test (17 tests, 1 failed, no collateral). **Pending:** the WebRTC `VideoProcessor`/
-      `VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation blur + face-detect smoothing)
-      that applies `effectiveConfig` per captured frame, the low-light boost pass (folding `FrameLuminance`),
-      and the accent-coherent filter panel UI (preset chips + advanced toggles).
+      unbounded-counter test (17 tests, 1 failed, no collateral). **Low-light-boost decision core landed**
+      (slice `call-low-light-boost`): the pure `core:model` `LowLightBoostPolicy` is the SSOT for the
+      automatic low-light pass — a total, side-effect-free port of iOS `VideoFilterPipeline.applyLowLightBoost`
+      (§14.2.4). `plan(averageBrightness)` decides whether to lift a dim frame and by how much: `null` (forward
+      untouched) for no reading or any normalized brightness `≥ 0.3`, else a `LowLightBoost`
+      (exposureEv/noiseReductionLevel/noiseReductionSharpness/saturation) scaled by
+      `boostFactor = (0.3 − normalized)/0.3` at exact iOS numeric parity (EV×1.5, noise×0.02, sharpness 0.4,
+      saturation 1+×0.2). **SOTA hardening over iOS:** `boostFactor` is **clamped to 0..1** so a degenerate
+      negative reading can never over-boost (iOS never clamps — its luma is always 0..255). `planForFrame(...)`
+      is the actuator's one-call seam that **folds `FrameLuminance.averageOfYPlane`** straight into `plan` —
+      literally the "folding `FrameLuminance`" clause. +13 behavioural tests. Mutation (RED proof): dropping
+      the clamp fails **exactly** the negative-reading test (13 tests, 1 failed, no collateral). **Pending:**
+      the WebRTC `VideoProcessor`/`VideoSink` actuator (RenderEffect/GPU colorimetry + ML-Kit segmentation
+      blur + face-detect smoothing) that applies `effectiveConfig` per captured frame, the actuator glue that
+      applies the `LowLightBoost` filters to the frame, and the accent-coherent filter panel UI (preset
+      chips + advanced toggles).
 - [ ] In-call audio effects (voice changer, baby/demon voice, looping background sound)
 - [~] Camera-covered ("dark frame") detection during video calls — **pure detection
       core landed** (slice `call-dark-frame-detection`): the `core:model`

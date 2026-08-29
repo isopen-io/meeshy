@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import GRDB
 @testable import MeeshySDK
 
@@ -388,6 +389,242 @@ final class UserPreferencesManagerTests: XCTestCase {
 
         let count = try await pool.read { db in try OutboxRecord.fetchCount(db) }
         XCTAssertEqual(count, 0, "not authenticated yet — must not attempt delivery")
+    }
+
+    // MARK: - namesUserLevelCategory (scope de la diffusion — décision pure)
+    //
+    // `user:preferences-updated` est une UNION de trois scopes sur un seul nom
+    // d'événement. Ce prédicat est ce qui empêche la relecture des sept blocs
+    // user-level de partir sur un scope qui ne la concerne pas.
+
+    func test_namesUserLevelCategory_acceptsEverySevenServerCategories() {
+        for category in PreferenceCategory.allCases {
+            let event = UserPreferencesUpdatedEvent(userId: "u1", category: category.rawValue)
+            XCTAssertTrue(
+                UserPreferencesManager.namesUserLevelCategory(event),
+                "les sept noms du gateway (preferences-broadcast.ts) doivent tous déclencher : \(category.rawValue)"
+            )
+        }
+    }
+
+    func test_namesUserLevelCategory_rejectsEventNamingAConversation() {
+        let event = UserPreferencesUpdatedEvent(
+            userId: "u1", category: PreferenceCategory.notification.rawValue, conversationId: "conv1"
+        )
+
+        XCTAssertFalse(
+            UserPreferencesManager.namesUserLevelCategory(event),
+            "un scope conversation ne doit JAMAIS coûter un GET /me/preferences complet, même quand son `category` porte par hasard un nom user-level"
+        )
+    }
+
+    func test_namesUserLevelCategory_rejectsUnknownCategoryName() {
+        for unknown in ["pin", "mute", "reaction", "conversation", ""] {
+            let event = UserPreferencesUpdatedEvent(userId: "u1", category: unknown)
+            XCTAssertFalse(
+                UserPreferencesManager.namesUserLevelCategory(event),
+                "une catégorie hors des sept noms gelés n'est pas une raison de relire : \(unknown)"
+            )
+        }
+    }
+
+    // MARK: - observeRemotePreferenceBroadcast (le troisième déclencheur)
+    //
+    // Le déclencheur VIF, à côté des deux déclencheurs de cycle de vie. Les
+    // témoins ci-dessous poussent leur propre sujet dans le seam d'injection
+    // plutôt que le publisher du socket partagé.
+
+    func test_remoteBroadcast_categoryScope_refetchesAndAppliesRemoteValue() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var remote = UserPreferences.defaults
+        remote.notification.newMessageEnabled = false
+        mock.allPreferencesResult = remote
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: "notification"))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "une diffusion de scope catégorie relit — sans attendre un retour au premier plan")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "et la valeur relue atteint le bloc en mémoire")
+    }
+
+    func test_remoteBroadcast_burstOfSevenCategories_collapsesIntoASingleRead() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        // `DELETE /me/preferences` émet UNE FOIS PAR CATÉGORIE effacée, et il
+        // n'existe pas de GET par catégorie : sans regroupement, une remise à
+        // zéro globale coûte sept lectures complètes.
+        for category in PreferenceCategory.allCases {
+            subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: category.rawValue))
+        }
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "sept événements pour un geste ⇒ une seule relecture")
+    }
+
+    func test_remoteBroadcast_conversationScope_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(
+            userId: "u1", category: "notification", conversationId: "conv1", isPinned: true
+        ))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "chaque épinglage venu d'un autre appareil ne doit pas coûter une lecture des sept blocs")
+    }
+
+    func test_remoteBroadcast_notAuthenticated_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { false }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: "privacy"))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "la garde d'authentification de fetchFromBackend vaut aussi sur ce chemin")
+    }
+
+    /// L'ÉCHO. Le gateway renvoie la diffusion au compte ÉMETTEUR : l'appareil
+    /// qui vient de basculer un interrupteur reçoit l'annonce de son propre
+    /// geste, et la relecture qu'elle déclenche court contre le PATCH encore
+    /// en vol. Sans le veto `pendingCategories`, le réglage que l'utilisateur
+    /// vient de changer REVIENT tout seul à l'ancienne valeur — pire qu'un
+    /// réglage périmé, puisqu'il l'a vu changer puis se défaire (cycle 132,
+    /// leçon 310, tranchée ici par le veto qui existait déjà).
+    func test_remoteBroadcast_echoOfOwnPendingEdit_doesNotUndoTheGesture() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        // Valeur SERVEUR périmée : celle d'avant le geste local.
+        mock.allPreferencesResult = .defaults
+        XCTAssertTrue(UserNotificationPreferences.defaults.newMessageEnabled,
+                      "précondition : la valeur serveur périmée est bien l'inverse du geste ci-dessous")
+
+        manager.updateNotification { $0.newMessageEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "précondition : le geste local est marqué pending avant son debounce")
+
+        let subject = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+        manager.observeRemotePreferenceBroadcast(subject.eraseToAnyPublisher())
+
+        subject.send(UserPreferencesUpdatedEvent(userId: "u1", category: "notification"))
+        await Self.settleCoalescingWindow()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "précondition : la relecture a bien eu lieu")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "l'écho de son propre geste ne doit pas rendre à l'utilisateur la valeur qu'il vient de quitter")
+    }
+
+    // MARK: - observeSocketReconnection (le quatrième déclencheur — PÉRENNE)
+    //
+    // Le second déclencheur PÉRENNE, à parité d'Android (#4197) et du web
+    // (#4209) : une reconnexion socket relit les blocs, car une diffusion émise
+    // pendant la coupure n'est jamais rejouée. Les témoins poussent leur propre
+    // sujet dans le seam d'injection plutôt que le publisher du socket partagé.
+
+    func test_socketReconnect_refetchesAndAppliesRemoteValue() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var remote = UserPreferences.defaults
+        remote.notification.newMessageEnabled = false
+        mock.allPreferencesResult = remote
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "une reconnexion relit — une diffusion manquée pendant la coupure n'est jamais rejouée")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "et la valeur relue atteint le bloc en mémoire")
+    }
+
+    func test_socketReconnect_notAuthenticated_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { false }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "la garde d'authentification de fetchFromBackend vaut aussi sur ce chemin")
+    }
+
+    /// Le veto `pendingCategories`. Une reconnexion RELIT pendant que l'outbox
+    /// draine encore le geste local en vol : sans le veto (via `applyRemote`), la
+    /// valeur SERVEUR périmée écraserait le réglage que l'utilisateur vient de
+    /// changer — pire qu'un bloc périmé, puisqu'il l'a vu changer puis se défaire
+    /// (leçon 310, tranchée par le veto qui existait déjà).
+    func test_socketReconnect_pendingLocalEdit_isNotUndone() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        // Valeur SERVEUR périmée : celle d'avant le geste local.
+        mock.allPreferencesResult = .defaults
+        XCTAssertTrue(UserNotificationPreferences.defaults.newMessageEnabled,
+                      "précondition : la valeur serveur périmée est bien l'inverse du geste ci-dessous")
+
+        manager.updateNotification { $0.newMessageEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "précondition : le geste local est marqué pending avant son debounce")
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "précondition : la relecture a bien eu lieu")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "une relecture déclenchée par la reconnexion ne rend pas à l'utilisateur la valeur qu'il vient de quitter")
+    }
+
+    /// Attend la fenêtre de regroupement de production, plus une marge pour le
+    /// `Task` que le sink lance et le hop d'acteur de `fetchFromBackend()`.
+    /// La fenêtre est LUE sur le code de production, jamais recopiée.
+    private static func settleCoalescingWindow() async {
+        let window = UserPreferencesManager.remoteRefreshCoalescingWindow
+        try? await Task.sleep(nanoseconds: UInt64((window + 0.35) * 1_000_000_000))
+    }
+
+    /// Le chemin de reconnexion n'a PAS de fenêtre de regroupement (un
+    /// `didReconnect` par reconnexion réelle, `fetchFromBackend` idempotent) :
+    /// on n'attend que le `Task` du sink et le hop d'acteur.
+    private static func settleReconnect() async {
+        try? await Task.sleep(nanoseconds: 350_000_000)
     }
 }
 

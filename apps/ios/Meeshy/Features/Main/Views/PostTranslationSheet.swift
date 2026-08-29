@@ -83,7 +83,7 @@ struct PostTranslationSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     let display = LanguageDisplay.from(code: post.originalLanguage)
-                    Text(display?.flag ?? languageFlag(post.originalLanguage ?? "?"))
+                    Text(LanguageFlagChip.flag(for: post.originalLanguage ?? ""))
                     Text("\(String(localized: "feed.post.translation.original", defaultValue: "Original", bundle: .main)) (\(display?.name ?? post.originalLanguage ?? "?"))")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -131,7 +131,7 @@ struct PostTranslationSheet: View {
                 } label: {
                     HStack(spacing: 10) {
                         let display = LanguageDisplay.from(code: lang)
-                        Text(display?.flag ?? languageFlag(lang))
+                        Text(LanguageFlagChip.flag(for: lang))
                             .font(.title3)
 
                         VStack(alignment: .leading, spacing: 2) {
@@ -187,7 +187,7 @@ struct PostTranslationSheet: View {
             ForEach(missingLanguages, id: \.self) { lang in
                 HStack(spacing: 10) {
                     let display = LanguageDisplay.from(code: lang)
-                    Text(display?.flag ?? languageFlag(lang))
+                    Text(LanguageFlagChip.flag(for: lang))
                         .font(.title3)
 
                     Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
@@ -251,7 +251,7 @@ struct PostTranslationSheet: View {
         }
     }
 
-    private func languageFlag(_ code: String) -> String {
-        LanguageDisplay.from(code: code)?.flag ?? "\u{1F310}"
-    }
+    // `languageFlag` a vécu ici : il refaisait la lecture que `display` venait
+    // de faire, puis repliait sur 🌐 — un glyphe qui ne distingue AUCUNE langue
+    // d'une autre, là où la source unique rend le code en capitales (#4260).
 }

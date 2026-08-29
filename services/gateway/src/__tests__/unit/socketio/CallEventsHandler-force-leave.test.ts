@@ -22,6 +22,11 @@ const mockCreateCallSummaryMessage5 = jest.fn<any>();
 const mockClearRingingTimeout5 = jest.fn<any>();
 
 jest.mock('../../../services/CallService', () => ({
+  // Vague 182 — `CallAlreadyEndedError` must be the REAL class: the
+  // per-participant catch below now does
+  // `error instanceof CallAlreadyEndedError`, which mis-resolves under a
+  // mock that omits it.
+  ...(jest.requireActual('../../../services/CallService') as object),
   CallService: jest.fn().mockImplementation(() => ({
     leaveCall: mockLeaveCall5,
     createCallSummaryMessage: mockCreateCallSummaryMessage5,
@@ -85,6 +90,7 @@ jest.mock('../../../utils/logger', () => ({
 // ---------------------------------------------------------------------------
 
 import { CallEventsHandler } from '../../../socketio/CallEventsHandler';
+import { CallAlreadyEndedError } from '../../../services/CallService';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../../middleware/validation';
@@ -551,6 +557,38 @@ describe('CallEventsHandler — call:force-leave handler', () => {
         .flat();
       expect(roomsPassedToIo).toContain(ROOMS.user('still-ringing-callee'));
       expect(roomEmit).toHaveBeenCalledWith(CALL_EVENTS.ENDED, expect.objectContaining({ callId: CALL_ID }));
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Vague 182 (#4202/Vague 181 follow-up) — the per-participant catch must
+  // absorb CallAlreadyEndedError as an idempotent no-op instead of falling
+  // into forceEndOrphanedCallAfterOptimisticBroadcast, which would force-end
+  // an already-ended call a second time.
+  // -------------------------------------------------------------------------
+
+  describe('per-participant catch absorbs CallAlreadyEndedError as a no-op', () => {
+    it('does NOT force-end the call or re-broadcast, and continues the loop cleanly', async () => {
+      const prisma = makePrisma({
+        callSessionFindMany: jest.fn<any>().mockResolvedValue([
+          makeActiveCallWithParticipant(USER_ID),
+        ]),
+      });
+      mockLeaveCall5.mockRejectedValue(new CallAlreadyEndedError('completed'));
+
+      const { socket, handlers, directEmit } = makeSocket();
+      const { io, roomEmit } = makeIo();
+
+      const handler = new CallEventsHandler(prisma);
+      handler.setupCallEvents(socket as any, io, () => USER_ID);
+      await handlers['call:force-leave'](FORCE_LEAVE_DATA);
+
+      expect(roomEmit).not.toHaveBeenCalled();
+      expect(mockCreateCallSummaryMessage5).not.toHaveBeenCalled();
+      expect(directEmit).not.toHaveBeenCalledWith(
+        CALL_EVENTS.ERROR,
+        expect.anything()
+      );
     });
   });
 });

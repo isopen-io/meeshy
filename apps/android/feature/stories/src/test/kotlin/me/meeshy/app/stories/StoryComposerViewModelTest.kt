@@ -30,6 +30,7 @@ import me.meeshy.sdk.net.api.CreateStoryRequest
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
+import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.story.InMemoryStoryComposerDraftStore
@@ -2625,15 +2626,137 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `persistDraft does not save a draft carrying rich on-canvas content`() = runTest {
+    fun `persistDraft saves the selected slide's pinned duration`() = runTest {
         val store = InMemoryStoryComposerDraftStore()
         val vm = viewModel(draftStore = store)
-        vm.onTextChange("caption")
-        vm.onAddTextElement() // rich content the snapshot can't represent
+        vm.onTextChange("timed")
+        vm.onSlideDurationChange(22.0)
 
         vm.persistDraft()
 
-        assertThat(store.load()).isNull()
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.slides.single().durationSecondsPin).isEqualTo(22.0)
+    }
+
+    @Test
+    fun `onEnterComposer restores a persisted pinned duration`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "resume", durationSecondsPin = 30.0),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.deck.selectedSlide.durationSecondsPin).isEqualTo(30.0)
+    }
+
+    @Test
+    fun `persistDraft saves the selected slide's colour background`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("backdropped")
+        vm.onSlideBackgroundChange(me.meeshy.sdk.model.StoryBackgroundValue.Gradient("FF2E63", "08D9D6"))
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        assertThat(saved!!.slides.single().background).isEqualTo("gradient:FF2E63:08D9D6")
+    }
+
+    @Test
+    fun `onEnterComposer restores a persisted colour background`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(id = "s1", text = "resume", background = "9B59B6"),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.selectedSlideBackground)
+            .isEqualTo(me.meeshy.sdk.model.StoryBackgroundValue.Hex("9B59B6"))
+    }
+
+    @Test
+    fun `persistDraft saves the selected slide's on-canvas stickers`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onTextChange("caption")
+        vm.onAddSticker("🎉")
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        val slide = saved!!.slides.single()
+        assertThat(slide.text).isEqualTo("caption")
+        assertThat(slide.stickers.single().emoji).isEqualTo("🎉")
+    }
+
+    @Test
+    fun `onEnterComposer restores persisted stickers`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    stickers = listOf(
+                        me.meeshy.sdk.model.StoryDraftStickerElementSnapshot(id = "k1", emoji = "😀"),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        assertThat(vm.state.value.selectedSlideStickers.single().emoji).isEqualTo("😀")
+    }
+
+    @Test
+    fun `persistDraft saves the selected slide's on-canvas text elements`() = runTest {
+        val store = InMemoryStoryComposerDraftStore()
+        val vm = viewModel(draftStore = store)
+        vm.onAddTextElement()
+        vm.onTextChange("on canvas") // rewrites the editing element, not the caption
+        vm.onTextElementStyle(vm.state.value.selectedTextElement!!.id, StoryTextStyle.NEON)
+
+        vm.persistDraft()
+
+        val saved = store.load()
+        assertThat(saved).isNotNull()
+        val element = saved!!.slides.single().elements.single()
+        assertThat(element.text).isEqualTo("on canvas")
+        assertThat(element.style).isEqualTo("NEON")
+    }
+
+    @Test
+    fun `onEnterComposer restores persisted on-canvas text elements`() = runTest {
+        val stored = StoryComposerDraftSnapshot(
+            slides = listOf(
+                StoryDraftSlideSnapshot(
+                    id = "s1",
+                    elements = listOf(
+                        StoryDraftTextElementSnapshot(id = "e1", text = "resumed", style = "HANDWRITING"),
+                    ),
+                ),
+            ),
+            selectedId = "s1",
+        )
+        val vm = viewModel(draftStore = InMemoryStoryComposerDraftStore(stored))
+
+        vm.onEnterComposer()
+
+        val element = vm.state.value.selectedSlideTextElements.single()
+        assertThat(element.text).isEqualTo("resumed")
+        assertThat(element.style).isEqualTo(StoryTextStyle.HANDWRITING)
     }
 
     @Test

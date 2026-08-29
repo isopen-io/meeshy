@@ -103,6 +103,7 @@ import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption
 import me.meeshy.ui.component.LanguageQuickStrip
 import me.meeshy.ui.component.audio.AudioTrackSurface
+import me.meeshy.ui.component.media.rememberThumbHashPainter
 import me.meeshy.ui.component.video.ReelVideoSurface
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
@@ -412,6 +413,9 @@ fun StoryViewerScreen(
                     model = imageUrl,
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
+                    // Instant blur behind the loading image — no black flash on cold
+                    // load (decoded from the slide's ThumbHash; null → plain background).
+                    placeholder = rememberThumbHashPainter(slide.backgroundThumbHash),
                     // Resolved (loaded or failed) → the countdown gate may open.
                     onSuccess = { viewModel.onImageResolved(imageUrl) },
                     onError = { viewModel.onImageResolved(imageUrl) },

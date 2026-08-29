@@ -3,6 +3,12 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { trackPreferenceWrite } from '@/lib/preferences/preference-write-lock';
+// Ce qu'une écriture a le droit d'envoyer : les clés que L'APPELANT a soumises,
+// et rien d'autre. La loi et son motif vivent en UN site, partagé avec les deux
+// écrans de réglages qui tiennent leur propre état local et portaient la MÊME
+// classe de défaut sans jamais passer par ce store.
+import { submittedKeys } from '@/lib/preferences/submitted-preference-keys';
 import { DEFAULT_PUBLICATION_VISIBILITY } from '@meeshy/shared/types/post';
 import type {
   NotificationPreference,
@@ -88,6 +94,17 @@ export interface UserPreferencesState {
   // Loading states
   isLoading: boolean;
   isInitialized: boolean;
+  /**
+   * Quand cette SESSION a lu des préférences du serveur — `null` tant qu'elle
+   * n'en a lu aucune.
+   *
+   * Une seule question, et c'est ce qui le rend utilisable : son unique lecteur
+   * (`preference-rehydration`) demande « cet onglet a-t-il été rempli ? », pas
+   * « quand l'a-t-il été la dernière fois ». Le champ n'est donc PAS persisté
+   * (voir `partialize` et la migration v2) : restauré d'une session
+   * précédente, il répondrait à la seconde question en faisant croire à la
+   * première.
+   */
   lastSyncedAt: string | null;
 
   // Error state
@@ -99,12 +116,20 @@ export interface UserPreferencesActions {
   initialize: () => Promise<void>;
   reset: () => void;
 
-  // Sync with backend
-  syncAll: () => Promise<void>;
-  syncNotifications: () => Promise<void>;
-  syncEncryption: () => Promise<void>;
-  syncEncryptionKeys: () => Promise<void>;
-  syncPrivacy: () => Promise<void>;
+  /**
+   * Les cinq lectures rendent le SUCCÈS plutôt que de l'absorber : `true` ⇒ des
+   * données SERVEUR ont été lues et appliquées.
+   *
+   * `false` couvre indistinctement l'absence de jeton, le réseau tombé, un
+   * statut non-2xx et une enveloppe sans données — quatre façons de n'avoir
+   * rien lu. Ce qui a été appliqué au store, jamais ce qui a été tenté : c'est
+   * la seule question à laquelle `lastSyncedAt` doit répondre.
+   */
+  syncAll: () => Promise<boolean>;
+  syncNotifications: () => Promise<boolean>;
+  syncEncryption: () => Promise<boolean>;
+  syncEncryptionKeys: () => Promise<boolean>;
+  syncPrivacy: () => Promise<boolean>;
 
   updateNotifications: (prefs: Partial<StoreNotificationPreferences>) => Promise<void>;
   updateEncryption: (prefs: Partial<EncryptionPreferences>) => Promise<void>;
@@ -206,31 +231,31 @@ const DEFAULT_STATE: UserPreferencesState = {
  * La réécriture est ciblée : seul l'ANCIEN DÉFAUT littéral est remplacé. Une
  * valeur posée par l'utilisateur via `updateStory` (`PRIVATE`, ou `FRIENDS`
  * re-choisi après la bascule — version courante) survit intacte.
+ *
+ * v2 (2026-08-28) — `lastSyncedAt` cesse d'être persisté (voir sa
+ * documentation d'état). Retirer le champ de `partialize` ne suffit PAS : la
+ * fusion par défaut de `persist` repose l'état persisté PAR-DESSUS l'état
+ * initial, donc un blob écrit par la v1 réinjecterait son horodatage à chaque
+ * chargement jusqu'à la première écriture. C'est la migration qui le retire.
  */
-export const USER_PREFERENCES_STORE_VERSION = 1;
+export const USER_PREFERENCES_STORE_VERSION = 2;
 
+/**
+ * Ce que `partialize` écrit — plus `lastSyncedAt`, que seules les versions ≤ 1
+ * écrivaient et que la migration v2 retire.
+ */
 export type PersistedUserPreferences = Partial<
   Pick<
     UserPreferencesState,
-    | 'notifications'
-    | 'encryption'
-    | 'encryptionKeys'
-    | 'privacy'
-    | 'language'
-    | 'story'
-    | 'lastSyncedAt'
+    'notifications' | 'encryption' | 'encryptionKeys' | 'privacy' | 'language' | 'story'
   >
->;
+> & { lastSyncedAt?: string | null };
 
 const LEGACY_DEFAULT_STORY_VISIBILITY: StoryPreferences['defaultVisibility'] = 'FRIENDS';
 
-export const migrateUserPreferences = (
-  persistedState: PersistedUserPreferences | null | undefined,
-  version: number,
+const migrateStoryDefaultVisibility = (
+  state: PersistedUserPreferences,
 ): PersistedUserPreferences => {
-  const state = persistedState ?? {};
-  if (version >= USER_PREFERENCES_STORE_VERSION) return state;
-
   const story = state.story;
   if (!story || story.defaultVisibility !== LEGACY_DEFAULT_STORY_VISIBILITY) return state;
 
@@ -238,6 +263,44 @@ export const migrateUserPreferences = (
     ...state,
     story: { ...story, defaultVisibility: DEFAULT_STORY_PREFERENCES.defaultVisibility },
   };
+};
+
+const dropPersistedLastSyncedAt = ({
+  lastSyncedAt: _lastSyncedAt,
+  ...state
+}: PersistedUserPreferences): PersistedUserPreferences => state;
+
+/**
+ * Les étapes s'appliquent en CHAÎNE, chacune portant la version qui l'a
+ * introduite : un blob v0 les traverse toutes, un blob v1 les suivantes. Une
+ * sortie anticipée sur la version courante ne dirait plus laquelle sauter, et
+ * la table rend la garde impossible à oublier en ajoutant la prochaine.
+ */
+const MIGRATIONS: ReadonlyArray<{
+  to: number;
+  apply: (state: PersistedUserPreferences) => PersistedUserPreferences;
+}> = [
+  { to: 1, apply: migrateStoryDefaultVisibility },
+  { to: 2, apply: dropPersistedLastSyncedAt },
+];
+
+/**
+ * Une version ABSENTE est la plus ANCIENNE, jamais la plus récente. Un blob
+ * antérieur au versionnage n'en porte aucune, et `persist` transmet alors
+ * `undefined` : comparé à un nombre, il rend `false` des DEUX côtés — donc un
+ * `from < step.to` non normalisé sauterait toutes les étapes pour les états qui
+ * en ont le plus besoin.
+ */
+export const migrateUserPreferences = (
+  persistedState: PersistedUserPreferences | null | undefined,
+  version: number | undefined,
+): PersistedUserPreferences => {
+  const from = typeof version === 'number' && Number.isFinite(version) ? version : 0;
+
+  return MIGRATIONS.reduce(
+    (state, step) => (from < step.to ? step.apply(state) : state),
+    persistedState ?? {},
+  );
 };
 
 // ============================================================================
@@ -263,8 +326,12 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         set({ isLoading: true, error: null });
 
         try {
-          await get().syncAll();
-          set({ isInitialized: true, lastSyncedAt: new Date().toISOString() });
+          const hydrated = await get().syncAll();
+          set(
+            hydrated
+              ? { isInitialized: true, lastSyncedAt: new Date().toISOString() }
+              : { isInitialized: true, error: 'Failed to load preferences' },
+          );
         } catch (error) {
           console.error('[UserPreferencesStore] Initialization error:', error);
           set({ error: 'Failed to load preferences', isInitialized: true });
@@ -281,41 +348,54 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
       // SYNC METHODS
       // ========================================================================
 
+      /**
+       * `some`, jamais `every` : une lecture qui aboutit a rempli le store, et
+       * c'est ce que `lastSyncedAt` doit dire.
+       *
+       * Exiger les quatre ferait dépendre l'horodatage du point de terminaison
+       * le plus fragile — `/me/preferences/privacy` a été absent pendant toute
+       * une période, son `catch` en garde encore la trace. Un `every` aurait
+       * alors supprimé l'horodatage à VIE, et le rattrapage de reconnexion
+       * serait devenu dû à CHAQUE connexion, pour zéro fraîcheur de plus.
+       */
       syncAll: async () => {
-        await Promise.all([
+        const reads = await Promise.all([
           get().syncNotifications(),
           get().syncEncryption(),
           get().syncEncryptionKeys(),
           get().syncPrivacy(),
         ]);
+        return reads.some(Boolean);
       },
 
       syncNotifications: async () => {
         const token = authManager.getAuthToken();
-        if (!token) return;
+        if (!token) return false;
 
         try {
           const response = await fetch(buildApiUrl('/me/preferences/notification'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              const { id, userId, isDefault, createdAt, updatedAt, ...prefs } = data.data;
-              set(state => ({
-                notifications: { ...state.notifications, ...prefs }
-              }));
-            }
-          }
+          if (!response.ok) return false;
+
+          const data = await response.json();
+          if (!data.success || !data.data) return false;
+
+          const { id, userId, isDefault, createdAt, updatedAt, ...prefs } = data.data;
+          set(state => ({
+            notifications: { ...state.notifications, ...prefs }
+          }));
+          return true;
         } catch (error) {
           console.error('[UserPreferencesStore] Error syncing notifications:', error);
+          return false;
         }
       },
 
       syncEncryption: async () => {
         const token = authManager.getAuthToken();
-        if (!token) return;
+        if (!token) return false;
 
         try {
           // Encryption preferences are now part of privacy preferences
@@ -323,46 +403,48 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              // Extract encryption-related fields from privacy preferences
-              const {
-                encryptionPreference,
-                autoEncryptNewConversations,
-                showEncryptionStatus,
-                warnOnUnencrypted
-              } = data.data;
+          if (!response.ok) return false;
 
-              set(state => ({
-                encryption: {
-                  ...state.encryption,
-                  encryptionPreference: encryptionPreference || 'optional',
-                  autoEncryptNewConversations: autoEncryptNewConversations ?? false,
-                  showEncryptionStatus: showEncryptionStatus ?? true,
-                  warnOnUnencrypted: warnOnUnencrypted ?? false,
-                }
-              }));
+          const data = await response.json();
+          if (!data.success || !data.data) return false;
+
+          // Extract encryption-related fields from privacy preferences
+          const {
+            encryptionPreference,
+            autoEncryptNewConversations,
+            showEncryptionStatus,
+            warnOnUnencrypted
+          } = data.data;
+
+          set(state => ({
+            encryption: {
+              ...state.encryption,
+              encryptionPreference: encryptionPreference || 'optional',
+              autoEncryptNewConversations: autoEncryptNewConversations ?? false,
+              showEncryptionStatus: showEncryptionStatus ?? true,
+              warnOnUnencrypted: warnOnUnencrypted ?? false,
             }
-          }
+          }));
+          return true;
         } catch (error) {
           console.error('[UserPreferencesStore] Error syncing encryption:', error);
+          return false;
         }
       },
 
       syncEncryptionKeys: async () => {
         const token = authManager.getAuthToken();
-        if (!token) return;
+        if (!token) return false;
 
         try {
           const response = await fetch(buildApiUrl('/me/preferences/encryption'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
-          if (!response.ok) return;
+          if (!response.ok) return false;
 
           const data = await response.json();
-          if (!data.success || !data.data) return;
+          if (!data.success || !data.data) return false;
 
           const { hasSignalKeys, signalRegistrationId, lastKeyRotation } = data.data;
 
@@ -373,46 +455,50 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
               lastKeyRotation: lastKeyRotation ?? null,
             }
           });
+          return true;
         } catch (error) {
           // Le dernier statut connu reste affiché : une panne réseau n'est pas
           // la preuve que l'utilisateur a perdu ses clés.
           console.error('[UserPreferencesStore] Error syncing encryption keys:', error);
+          return false;
         }
       },
 
       syncPrivacy: async () => {
         const token = authManager.getAuthToken();
-        if (!token) return;
+        if (!token) return false;
 
         try {
           const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
-          if (response.ok) {
-            const data = await response.json();
-            if (data.success && data.data) {
-              // Filter out encryption-related fields (they're synced separately)
-              const {
-                id,
-                userId,
-                createdAt,
-                updatedAt,
-                encryptionPreference,
-                autoEncryptNewConversations,
-                showEncryptionStatus,
-                warnOnUnencrypted,
-                ...prefs
-              } = data.data;
+          if (!response.ok) return false;
 
-              set(state => ({
-                privacy: { ...state.privacy, ...prefs }
-              }));
-            }
-          }
+          const data = await response.json();
+          if (!data.success || !data.data) return false;
+
+          // Filter out encryption-related fields (they're synced separately)
+          const {
+            id,
+            userId,
+            createdAt,
+            updatedAt,
+            encryptionPreference,
+            autoEncryptNewConversations,
+            showEncryptionStatus,
+            warnOnUnencrypted,
+            ...prefs
+          } = data.data;
+
+          set(state => ({
+            privacy: { ...state.privacy, ...prefs }
+          }));
+          return true;
         } catch (error) {
           // Privacy endpoint might not exist yet - use defaults
           console.warn('[UserPreferencesStore] Privacy endpoint not available, using defaults');
+          return false;
         }
       },
 
@@ -424,19 +510,27 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
+        // `StoreNotificationPreferences` est un `Pick` de 14 des 33 champs du
+        // schéma : un remplacement construit sur cette tranche remettait aux
+        // défauts les dix-neuf autres — `callsEnabled`, `dndDays`,
+        // `dndUtcOffsetMinutes`, les sept bascules sociales — dès que
+        // l'hydratation n'avait pas abouti.
+        const submitted = submittedKeys(prefs);
+        if (Object.keys(submitted).length === 0) return;
+
         // Optimistic update
         set(state => ({
-          notifications: { ...state.notifications, ...prefs }
+          notifications: { ...state.notifications, ...submitted }
         }));
 
         try {
           const response = await fetch(buildApiUrl('/me/preferences/notification'), {
-            method: 'PUT',
+            method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(get().notifications),
+            body: JSON.stringify(submitted),
           });
 
           if (!response.ok) {
@@ -454,41 +548,42 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
+        const submitted = submittedKeys(prefs);
+        if (Object.keys(submitted).length === 0) return;
+
         // Optimistic update
         set(state => ({
-          encryption: { ...state.encryption, ...prefs }
+          encryption: { ...state.encryption, ...submitted }
         }));
 
-        try {
-          // Encryption preferences are stored in privacy preferences
-          // We need to merge with existing privacy prefs
-          const currentPrivacy = get().privacy;
-          const updatedEncryption = get().encryption;
+        return trackPreferenceWrite(async () => {
+          try {
+            // Le chiffrement vit dans le document `privacy`, et c'est tout ce
+            // que ce site en sait : il n'a rien à dire des réglages de
+            // confidentialité voisins. Les réaffirmer depuis la tranche locale
+            // — ce que faisait `...currentPrivacy` — annulait un réglage changé
+            // sur un AUTRE appareil à chaque bascule de chiffrement, et
+            // estampait les huit défauts de la tranche quand l'hydratation
+            // n'avait pas abouti.
+            const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(submitted),
+            });
 
-          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
-            method: 'PATCH',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              ...currentPrivacy,
-              encryptionPreference: updatedEncryption.encryptionPreference,
-              autoEncryptNewConversations: updatedEncryption.autoEncryptNewConversations,
-              showEncryptionStatus: updatedEncryption.showEncryptionStatus,
-              warnOnUnencrypted: updatedEncryption.warnOnUnencrypted,
-            }),
-          });
-
-          if (!response.ok) {
-            // Revert on error
-            await get().syncEncryption();
-            throw new Error('Failed to update encryption preferences');
+            if (!response.ok) {
+              // Revert on error
+              await get().syncEncryption();
+              throw new Error('Failed to update encryption preferences');
+            }
+          } catch (error) {
+            console.error('[UserPreferencesStore] Error updating encryption:', error);
+            throw error;
           }
-        } catch (error) {
-          console.error('[UserPreferencesStore] Error updating encryption:', error);
-          throw error;
-        }
+        });
       },
 
       updateEncryptionLocalSettings: async (settings) => {
@@ -501,29 +596,40 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         const token = authManager.getAuthToken();
         if (!token) return;
 
+        const submitted = submittedKeys(prefs);
+        if (Object.keys(submitted).length === 0) return;
+
         // Optimistic update
         set(state => ({
-          privacy: { ...state.privacy, ...prefs }
+          privacy: { ...state.privacy, ...submitted }
         }));
 
-        try {
-          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
-            method: 'PUT',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(get().privacy),
-          });
+        return trackPreferenceWrite(async () => {
+          try {
+            // `PATCH`, jamais `PUT` : la tranche `privacy` ne porte PAS le bloc
+            // chiffrement du même document (`syncPrivacy` l'en retire), donc un
+            // remplacement construit sur elle remettait `encryptionPreference`,
+            // `autoEncryptNewConversations`, `showEncryptionStatus` et
+            // `warnOnUnencrypted` aux défauts de Zod — à chaque bascule d'un
+            // réglage sans rapport.
+            const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+              method: 'PATCH',
+              headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(submitted),
+            });
 
-          if (!response.ok) {
-            await get().syncPrivacy();
-            throw new Error('Failed to update privacy preferences');
+            if (!response.ok) {
+              await get().syncPrivacy();
+              throw new Error('Failed to update privacy preferences');
+            }
+          } catch (error) {
+            console.error('[UserPreferencesStore] Error updating privacy:', error);
+            throw error;
           }
-        } catch (error) {
-          console.error('[UserPreferencesStore] Error updating privacy:', error);
-          throw error;
-        }
+        });
       },
 
       updateLanguage: (prefs) => {
@@ -610,7 +716,6 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         privacy: state.privacy,
         language: state.language,
         story: state.story,
-        lastSyncedAt: state.lastSyncedAt,
       }),
     }
   )
