@@ -1,7 +1,12 @@
 /**
  * Unit tests for links/messages routes
- * Tests POST /links/:identifier/messages (anonymous) and
- * POST /links/:identifier/messages/auth (authenticated).
+ * Tests POST /links/:identifier/messages (anonymous).
+ *
+ * `POST /links/:identifier/messages/auth` a été RETIRÉE (#4188) : porte morte
+ * sur les quatre clients, et pour le fil global `meeshy` elle écrivait un
+ * `User.id` dans `Message.senderId` — colonne qui attend un `Participant.id` —
+ * en court-circuitant la garde d'appartenance. Absence verrouillée par
+ * `dead-doors-are-not-mounted.test.ts`.
  *
  * @jest-environment node
  */
@@ -203,44 +208,3 @@ describe('POST /links/:identifier/messages — anonymous', () => {
   });
 });
 
-// ─── POST /links/:identifier/messages/auth (authenticated) ───────────────────
-
-describe('POST /links/:identifier/messages/auth — authenticated', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp();
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValue(mockShareLink);
-    (app as any).prisma.participant.findFirst.mockResolvedValue({ id: PART_ID, conversationId: CONV_ID });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 404 when share link not found', async () => {
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'POST', url: '/links/' + IDENTIFIER + '/messages/auth', payload: VALID_BODY });
-    expect(res.statusCode).toBe(404);
-  });
-
-  it('returns 410 when share link is inactive', async () => {
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({ ...mockShareLink, isActive: false });
-    const res = await app.inject({ method: 'POST', url: '/links/' + IDENTIFIER + '/messages/auth', payload: VALID_BODY });
-    expect(res.statusCode).toBe(410);
-  });
-
-  it('returns 403 when user is not a participant', async () => {
-    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'POST', url: '/links/' + IDENTIFIER + '/messages/auth', payload: VALID_BODY });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns 201 on successful message send', async () => {
-    const res = await app.inject({ method: 'POST', url: '/links/' + IDENTIFIER + '/messages/auth', payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-    expect(res.json().success).toBe(true);
-  });
-
-  it('returns 500 on service error', async () => {
-    (app as any).prisma.conversationShareLink.findUnique.mockRejectedValueOnce(new Error('DB'));
-    const res = await app.inject({ method: 'POST', url: '/links/' + IDENTIFIER + '/messages/auth', payload: VALID_BODY });
-    expect(res.statusCode).toBe(500);
-  });
-});

@@ -2,7 +2,12 @@
  * Extended unit tests for links/messages routes.
  * Covers branches missing from messages.test.ts:
  * - anonymous route: inactive link, expired link, canSendMessages=false, 201 success
- * - auth route: expired link, meeshy conversation path, non-registered user
+ *
+ * Les trois blocs de la route `/messages/auth` ont disparu avec elle (#4188) :
+ * porte morte sur les quatre clients, et le chemin `meeshy` qu'ils couvraient
+ * était précisément celui qui fabriquait un participant SYNTHÉTIQUE
+ * `{ id: userId }` — un `User.id` dans une colonne qui attend un
+ * `Participant.id`, garde d'appartenance court-circuitée.
  *
  * @jest-environment node
  */
@@ -198,63 +203,3 @@ describe('POST /links/:identifier/messages — success', () => {
   });
 });
 
-// ─── Auth route — expired share link ─────────────────────────────────────────
-
-describe('POST /links/:identifier/messages/auth — expired share link', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 410 when share link has expired', async () => {
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
-      ...mockShareLink, isActive: true, expiresAt: new Date('2020-01-01'),
-    });
-    const res = await app.inject({ method: 'POST', url: `/links/${IDENTIFIER}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(410);
-  });
-});
-
-// ─── Auth route — meeshy global conversation ──────────────────────────────────
-
-describe('POST /links/:identifier/messages/auth — meeshy global conversation', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('auto-creates participant when conversation is meeshy and participant not found', async () => {
-    (app as any).prisma.conversationShareLink.findUnique.mockResolvedValueOnce({
-      ...mockShareLink,
-      conversation: { id: CONV_ID, identifier: 'meeshy', title: 'Meeshy', type: 'group' },
-    });
-    (app as any).prisma.participant.findFirst.mockResolvedValueOnce(null);
-    const res = await app.inject({ method: 'POST', url: `/links/${IDENTIFIER}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(201);
-  });
-});
-
-// ─── Auth route — non-registered user ────────────────────────────────────────
-
-describe('POST /links/:identifier/messages/auth — non-registered user', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    const _app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-    mockAuthMiddleware.mockImplementation(async (req: any) => {
-      req.authContext = { type: 'anonymous', userId: 'anon', hasFullAccess: false, registeredUser: null };
-    });
-    _app.decorate('prisma', {
-      conversationShareLink: { findUnique: jest.fn().mockResolvedValue(mockShareLink) },
-      participant: { findFirst: jest.fn().mockResolvedValue(null) },
-      message: { create: jest.fn() },
-    });
-    _app.decorate('socketIOHandler', { getManager: () => null });
-    await registerMessageRoutes(_app);
-    await _app.ready();
-    app = _app;
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 403 when auth user is not registered', async () => {
-    const res = await app.inject({ method: 'POST', url: `/links/${IDENTIFIER}/messages/auth`, payload: VALID_BODY });
-    expect(res.statusCode).toBe(403);
-  });
-});
