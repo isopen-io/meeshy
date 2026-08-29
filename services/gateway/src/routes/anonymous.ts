@@ -20,6 +20,15 @@ import {
   userMinimalSchema
 } from '@meeshy/shared/types/api-schemas';
 
+// #4165 — plafond de l'échantillon de participants actifs lu par
+// `GET /anonymous/link/:identifier` pour estimer les langues parlées d'un
+// lien AVANT de le rejoindre (voir le `findMany` de ce handler). Aligné sur
+// le plafond de `validatePagination` (`utils/pagination.ts`) : ce n'est pas
+// une pagination cliente (aucun `offset`/`limit` en entrée), donc pas
+// d'appel à l'utilitaire lui-même, mais le MÊME nombre — un aperçu avant de
+// rejoindre n'a pas besoin d'un échantillon plus large qu'une page de liste.
+const LINK_PREVIEW_LANGUAGE_SAMPLE_CAP = 100;
+
 // Schemas de validation
 const joinAnonymousSchema = z.object({
   firstName: z.string().min(1, 'Le prenom est requis').max(50),
@@ -913,11 +922,24 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             isActive: true
           }
         }),
+        // BORNÉ (#4165). Sans `take`, cette requête ramenait TOUT participant
+        // actif de la conversation — sur un lien viral, potentiellement des
+        // dizaines de milliers de lignes — pour n'en tirer qu'un ENSEMBLE de
+        // langues (`spokenLanguages`, quelques éléments au plus). Le coût
+        // était proportionnel au fil ; le résultat exposé, minuscule. Cette
+        // route s'appelle AVANT de rejoindre (aperçu public) : un échantillon
+        // aligné sur le plafond de pagination du dépôt est un compromis
+        // assumé — une langue portée UNIQUEMENT par des participants au-delà
+        // de l'échantillon peut manquer à `spokenLanguages`. `memberCount`/
+        // `anonymousCount` restent EXACTS : ce sont des `.count()` séparés,
+        // non affectés par ce plafond.
         fastify.prisma.participant.findMany({
           where: {
             conversationId: shareLink.conversation.id,
             isActive: true
           },
+          orderBy: { joinedAt: 'asc' },
+          take: LINK_PREVIEW_LANGUAGE_SAMPLE_CAP,
           select: {
             type: true,
             language: true,

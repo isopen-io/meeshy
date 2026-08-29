@@ -12,6 +12,7 @@ import {
   affiliateRelationSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
+import { affiliateStatsResponseSchema } from './affiliate-response-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { generateUniquePublicIdentifier } from '../utils/public-identifier';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
@@ -400,23 +401,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
-        200: {
-          description: 'Affiliate statistics retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            // `additionalProperties: true` est INDISPENSABLE : un schéma
-            // `type: 'object'` SANS `properties` fait sérialiser `{}` par
-            // fast-json-stringify. La route répondait donc `data: {}` — les
-            // compteurs, la liste des filleuls et les tokens étaient effacés
-            // à la sérialisation, sans qu'aucune erreur ne le signale.
-            data: {
-              type: 'object',
-              additionalProperties: true,
-              description: 'Affiliate statistics and metrics'
-            }
-          }
-        },
+        200: affiliateStatsResponseSchema,
         400: {
           description: 'Bad request - invalid filter parameters',
           ...errorResponseSchema

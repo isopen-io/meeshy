@@ -411,14 +411,15 @@ async function runOffLoop(job: OffLoopJob, budgetMs: number): Promise<OffLoopOut
       // la propriété qui rend ce délai maximal réel. On ne l'attend pas — le
       // gateway n'a aucune raison de retenir sa réponse le temps que V8 rende
       // la main sur un motif qu'on a déjà décidé de refuser.
-      //
-      // Le `.catch` n'est PAS une formalité de balayage. `terminate()` rend une
-      // promesse, et un fil déjà mort la REJETTE : sans garde, ce rejet
-      // remonterait en `unhandledRejection` — c'est-à-dire que le mécanisme
-      // qui protège le gateway d'un motif explosif ferait tomber le processus
-      // qu'il protège. Le rejet n'apprend rien (le fil est parti, c'est ce
-      // qu'on voulait), donc il s'avale ici, au SITE.
-      worker.terminate().catch(() => { /* fil déjà mort : c'est le résultat visé */ });
+      // `.catch` OBLIGATOIRE sur une promesse DÉTACHÉE (loi du dépôt, leçon 230),
+      // et les deux gardes sont disjointes : le `try` d'au-dessus n'attrape que
+      // le `throw` SYNCHRONE de `new Worker`, jamais le rejet de cette
+      // promesse-ci. Sans écouteur, ce rejet termine le PROCESS sous le
+      // `--unhandled-rejections=throw` par défaut de Node 22 — toute la
+      // passerelle tombée parce qu'un fil qu'on avait déjà décidé d'abandonner
+      // a mal fini de mourir. Le repli est muet À DESSEIN : ce module n'importe
+      // aucun logger, et l'issue de `terminate()` n'apprend rien à personne.
+      void worker.terminate().catch(() => undefined);
       resolve();
     };
 

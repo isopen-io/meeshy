@@ -19,6 +19,20 @@ export const LIMITE_MAX_BLOCAGES = 100;
 const LIMITE_DEFAUT_BLOCAGES = 50;
 
 /**
+ * Adresses successeurs des trois alias historiques (#4164), servis depuis
+ * `routes/users/blocking.ts` — jamais depuis ce fichier, qui ne porte que les
+ * routes CANONIQUES. Site UNIQUE pour ne pas répéter le chemin dans trois
+ * doc-comments qui pourraient diverger de celui-ci (#4274, critère 2 : une
+ * route dépréciée doit dire PAR QUOI elle est remplacée). `item` prend l'id
+ * RÉSOLU : le sursis doit pointer vers la ressource exacte, jamais vers un
+ * gabarit `:userId` que le client ne peut pas suivre tel quel.
+ */
+export const BLOCKS_SUCCESSOR_PATH = {
+  item: (userId: string): string => `/api/v1/directory/blocks/${userId}`,
+  list: '/api/v1/directory/blocks',
+} as const;
+
+/**
  * Ce qu'un blocage sert — le minimum pour dessiner une ligne de liste.
  *
  * Aucune présence : on ne sert pas l'état de connexion de quelqu'un qu'on a

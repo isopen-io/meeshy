@@ -11,7 +11,7 @@ import { requireUserModifyAccess } from '../../middleware/admin-user-auth.middle
 import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../../utils/response';
-import { depreciee } from '../../utils/deprecation';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 
 /**
@@ -65,11 +65,20 @@ import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
  * l'information dont une console a besoin pour migrer, et c'est exactement la
  * traduction que l'alias applique déjà en corps.
  */
+const DEPUIS = '2026-08-29';
+
+/**
+ * Le successeur porte l'id RÉSOLU, jamais le gabarit `:userId` : un `Link`
+ * que le client ne peut pas suivre tel quel n'indique aucune migration.
+ */
+const versLaFicheDe = (suffixe: string) => (request: FastifyRequest): string =>
+  `/api/v1/admin/users/${encodeURIComponent((request.params as { userId: string }).userId)}${suffixe}`;
+
 const ANNONCE = {
-  compte: { depuis: '2026-08-29', successeur: '/api/v1/admin/users/:userId' },
-  securite: { depuis: '2026-08-29', successeur: '/api/v1/admin/users/:userId/security' },
-  verifications: { depuis: '2026-08-29', successeur: '/api/v1/admin/users/:userId/verifications' },
-  consentements: { depuis: '2026-08-29', successeur: '/api/v1/admin/users/:userId/consents' },
+  compte: { depuis: DEPUIS, successeur: versLaFicheDe(''), retraitLe: dateDeRetrait(DEPUIS) },
+  securite: { depuis: DEPUIS, successeur: versLaFicheDe('/security'), retraitLe: dateDeRetrait(DEPUIS) },
+  verifications: { depuis: DEPUIS, successeur: versLaFicheDe('/verifications'), retraitLe: dateDeRetrait(DEPUIS) },
+  consentements: { depuis: DEPUIS, successeur: versLaFicheDe('/consents'), retraitLe: dateDeRetrait(DEPUIS) },
 } as const;
 
 type Deps = {

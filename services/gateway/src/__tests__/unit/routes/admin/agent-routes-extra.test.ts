@@ -101,6 +101,14 @@ function makePrisma(): any {
     agentGlobalProfile: {
       deleteMany: jest.fn<any>(),
     },
+    // #4165 — `GET /configs` interroge désormais `conversation` DIRECTEMENT
+    // (filtre relationnel `agentConfig`/`agentAnalytic`/`agentUserRoles`),
+    // plutôt que d'assembler l'univers des conversationIds à la main depuis
+    // les trois `findMany` ci-dessus.
+    conversation: {
+      findMany: jest.fn<any>(),
+      count: jest.fn<any>(),
+    },
     message: {
       findMany: jest.fn<any>(),
       count: jest.fn<any>(),
@@ -248,7 +256,20 @@ describe('Agent Admin Routes — extra coverage', () => {
   // GET /configs — early return when no conversations
   // ──────────────────────────────────────────────────────────────────────────
   describe('GET /configs', () => {
-    it('returns empty pagination when allConvIds.length === 0', async () => {
+    it('returns empty pagination when no conversation has any agent activity', async () => {
+      // #4165 — l'univers des conversations "avec une activité agent" est
+      // désormais un `where` relationnel posé DIRECTEMENT sur
+      // `conversation.findMany`/`.count` (`agentConfig`/`agentAnalytic`/
+      // `agentUserRoles`), plus un ramassage manuel par trois `findMany` sur
+      // les tables agent elles-mêmes — d'où le nom du test, mis à jour : il
+      // n'y a plus d'`allConvIds` à observer, seulement le résultat de la
+      // requête `conversation` bornée.
+      prisma.conversation.findMany.mockResolvedValue([]);
+      prisma.conversation.count.mockResolvedValue(0);
+      // `pageConvIds` est vide, mais les trois `findMany` de détail sont
+      // APPELÉS quand même (`where: { conversationId: { in: [] } }`) — sans
+      // valeur résolue explicite, le double nu rend `undefined` (jamais une
+      // promesse), et `configs.map(...)` lève.
       prisma.agentConfig.findMany.mockResolvedValue([]);
       prisma.agentUserRole.findMany.mockResolvedValue([]);
       prisma.agentAnalytic.findMany.mockResolvedValue([]);
@@ -266,7 +287,8 @@ describe('Agent Admin Routes — extra coverage', () => {
     });
 
     it('returns 500 when DB throws', async () => {
-      prisma.agentConfig.findMany.mockRejectedValue(new Error('DB error'));
+      prisma.conversation.findMany.mockRejectedValue(new Error('DB error'));
+      prisma.conversation.count.mockResolvedValue(0);
 
       app = buildApp(prisma);
       await app.ready();

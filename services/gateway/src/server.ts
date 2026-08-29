@@ -622,10 +622,17 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // — #4178, #4181, #4182, #4184 — font d'un compteur a ZERO le critere de
     // retrait d'une adresse depreciee et INTERDISENT de le prouver par revue de
     // code client : sans cette ligne, elles restent inatteignables par
-    // construction. Appel DIRECT sur la racine, jamais `register` — un hook pose
-    // dans un contexte encapsule ne verrait aucune des routes de production, et
-    // le compteur rendrait un tapis de zeros credible. Cout mesure : 0,32 a
-    // 0,65 us par requete, aucune E/S, aucune promesse.
+    // construction.
+    //
+    // Deux contraintes de POSE, et non une seule. Appel DIRECT sur la racine,
+    // jamais `register` : un hook pose dans un contexte encapsule ne verrait
+    // aucune des routes de production, et le compteur rendrait un tapis de
+    // zeros credible. Et arme sur `onResponse`, ou le routage est DEJA resolu :
+    // c'est ce qui fait rendre a `routeOptions.url` le GABARIT, jamais l'URL
+    // concrete — sans quoi un identifiant d'utilisateur entrerait dans la cle
+    // d'agregat au premier appel d'une route parametree.
+    //
+    // Cout mesure : 0,32 a 0,65 us par requete, aucune E/S, aucune promesse.
     registerRouteUsageHook(this.server);
     logger.info('✅ Route usage counter hook registered');
 

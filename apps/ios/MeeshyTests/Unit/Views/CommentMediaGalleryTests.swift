@@ -147,7 +147,7 @@ final class CommentMediaGalleryTests: XCTestCase {
     func test_snapshot_pagesThroughRepliesMediaToo() {
         let flat = CommentMediaGallery.flatten(
             topLevel: [comment("p1", media: [media("m1")])],
-            replies: ["p1": [comment("r1", parentId: "p1", media: [media("m2")])]]
+            replies: ["p1": [comment("r1", media: [media("m2")], parentId: "p1")]]
         )
         let snapshot = CommentMediaGallery.snapshot(from: flat)
 
@@ -191,7 +191,7 @@ final class CommentMediaGalleryTests: XCTestCase {
         XCTAssertNotEqual(
             CommentMediaGallery.signature(topLevel: top, replies: [:]),
             CommentMediaGallery.signature(
-                topLevel: top, replies: ["p1": [comment("r1", parentId: "p1", media: [media("m1")])]]
+                topLevel: top, replies: ["p1": [comment("r1", media: [media("m1")], parentId: "p1")]]
             )
         )
     }

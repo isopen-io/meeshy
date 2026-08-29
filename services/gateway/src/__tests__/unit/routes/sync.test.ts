@@ -10,6 +10,15 @@ import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 const USER_ID = '507f1f77bcf86cd799439000';
 /** Un `Participant.id` — c'est CE que porte `authContext.userId` d'un anonyme. */
 const PARTICIPANT_ID = '507f1f77bcf86cd799439aaa';
+/**
+ * Une valeur `scope=` à la forme ObjectId valide (issue #4171, critère 2) —
+ * `scope` était `z.string().optional()` avant ce lot, et les témoins de
+ * portée utilisaient des identifiants lisibles (`cX`, `c-autre`) qui ne
+ * survivent plus à la validation. La VALEUR du `conversationId` mocké derrière
+ * (`c1`, `cX`, peu importe) reste libre — seule la clé de la QUERY STRING doit
+ * être un ObjectId.
+ */
+const SCOPE_ID = '507f1f77bcf86cd799439ccc';
 
 type TestAuthContext = {
   userId?: string;
@@ -186,9 +195,9 @@ describe('GET /sync — messages collection', () => {
     const prisma = makePrisma();
     const app = await buildApp(prisma);
 
-    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&scope=cX` });
+    await app.inject({ method: 'GET', url: `/sync?since=${SINCE}&collections=messages&scope=${SCOPE_ID}` });
     expect(prisma.participant.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ conversationId: 'cX' }) }),
+      expect.objectContaining({ where: expect.objectContaining({ conversationId: SCOPE_ID }) }),
     );
     await app.close();
   });
@@ -1055,13 +1064,13 @@ describe('GET /sync — sessions anonymes (lien de partage)', () => {
 
     const res = await app.inject({
       method: 'GET',
-      url: `/sync?since=${SINCE}&collections=messages&scope=c-autre`,
+      url: `/sync?since=${SINCE}&collections=messages&scope=${SCOPE_ID}`,
     });
 
     expect(prisma.participant.findMany.mock.calls[0]![0]!.where).toEqual({
       id: PARTICIPANT_ID,
       isActive: true,
-      conversationId: 'c-autre',
+      conversationId: SCOPE_ID,
     });
     const msgs = res.json().data.collections.messages;
     expect(msgs.added).toEqual([]);

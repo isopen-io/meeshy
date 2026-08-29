@@ -1,4 +1,4 @@
-import type { FastifyReply, onRequestHookHandler } from 'fastify';
+import type { FastifyReply, FastifyRequest, onRequestHookHandler } from 'fastify';
 
 /**
  * L'annonce qu'une adresse est en sursis — le SITE UNIQUE (#4274).
@@ -49,16 +49,65 @@ import type { FastifyReply, onRequestHookHandler } from 'fastify';
  * retire pas sur une revue de code client, mais sur un **compteur d'accès à
  * zéro sur deux versions publiées**, la queue des versions déjà installées
  * étant longue — un profil s'ouvre depuis un lien partagé. Ce compteur n'existe
- * pas encore (#4275). Aucune date de retrait n'est donc DÉRIVABLE aujourd'hui,
- * et une date posée « pour avoir quelque chose » serait pire que son absence :
- * un client la croirait. `Deprecation` et le successeur partent toujours ;
- * `Sunset` ne part que le jour où le compteur l'aura fait naître.
+ * pas encore (#4275). Une date posée « pour avoir quelque chose » serait pire
+ * que son absence : un client la croirait. `Deprecation` et le successeur
+ * partent toujours ; `Sunset` ne part que dérivé d'une règle écrite.
+ *
+ * ## La fenêtre de 180 jours, et pourquoi son ancre est FIXE
+ *
+ * `docs/product/api-simplification/identity.md` § « Ordre des étapes », point 5,
+ * est le seul endroit du dépôt où la règle de retrait est CHIFFRÉE : « retrait
+ * des alias, six mois après le montage double ». C'est la fenêtre par défaut
+ * retenue ici, et {@link dateDeRetrait} la dérive.
+ *
+ * Elle se dérive de `depuis` — le jour où l'adresse EST devenue dépréciée —
+ * **jamais de l'instant de la requête**. Une dérivation ancrée sur « maintenant »
+ * repousse l'échéance d'un jour chaque jour : le client qui rappelle demain lit
+ * une date plus lointaine qu'hier, et le retrait n'arrive jamais. Un `Sunset`
+ * qui recule perpétuellement n'annonce rien — il ment avec l'autorité d'un
+ * en-tête normalisé. Le retrait RÉEL reste gouverné par le compteur d'accès nul
+ * (#4275) ; cette date INFORME le client, elle ne décide pas à sa place.
+ *
+ * ## Le successeur peut dépendre de la requête
+ *
+ * `Link: </api/v1/admin/users/:userId>` n'est pas suivable : le client ne sait
+ * pas résoudre le gabarit. Le successeur accepte donc une FONCTION de la
+ * requête, évaluée à chaque appel, qui rend le chemin avec ses paramètres
+ * résolus. `request.params` est peuplé par le routeur AVANT la chaîne
+ * `onRequest` — c'est ce qui permet au hook de le lire sans quitter sa place,
+ * et donc de garder l'annonce sur les branches 401 / 403 / 429.
  */
+
+/**
+ * Fenêtre de retrait par défaut, en jours — la règle d'`identity.md` § 5.
+ *
+ * Une route dont la règle diffère (permanente, ou liée à une publication de
+ * store précise) passe son propre `fenetreJours` — jamais une date en dur au
+ * site d'appel.
+ */
+export const FENETRE_DE_RETRAIT_JOURS = 180;
+
+const MS_PAR_JOUR = 24 * 60 * 60 * 1000;
+
+/**
+ * Dérive le jour du retrait depuis le jour de dépréciation.
+ *
+ * L'ancre est `depuis`, jamais « maintenant » : c'est ce qui rend l'échéance
+ * STABLE d'un appel à l'autre.
+ */
+export function dateDeRetrait(depuis: string, fenetreJours: number = FENETRE_DE_RETRAIT_JOURS): string {
+  const ancre = instantDe('depuis', depuis);
+  return new Date(ancre + fenetreJours * MS_PAR_JOUR).toISOString();
+}
+
 export type AdresseDepreciee = {
   /** Jour où l'adresse EST devenue dépréciée — ISO 8601, jamais « maintenant ». */
   readonly depuis: string;
-  /** Chemin absolu (ou URL) de l'adresse qui la remplace. */
-  readonly successeur: string;
+  /**
+   * Chemin absolu (ou URL) de l'adresse qui la remplace — ou une FONCTION de la
+   * requête quand ce chemin porte des paramètres à résoudre.
+   */
+  readonly successeur: string | ((request: FastifyRequest) => string);
   /** Jour du retrait, quand — et seulement quand — un compteur l'a établi. */
   readonly retraitLe?: string;
 };
@@ -108,9 +157,12 @@ function successeurDe(brut: string): string {
  * de la route, une adresse mal écrite fait échouer le démarrage — bruyamment —
  * plutôt que de servir en silence une annonce fausse pendant des mois.
  */
-export function enTetesDeDepreciation(adresse: AdresseDepreciee): EnTetesDeDepreciation {
+export function enTetesDeDepreciation(
+  adresse: AdresseDepreciee,
+  request?: FastifyRequest
+): EnTetesDeDepreciation {
   const depuis = instantDe('depuis', adresse.depuis);
-  const successeur = successeurDe(adresse.successeur);
+  const successeur = successeurDe(resoudreSuccesseur(adresse.successeur, request));
 
   const enTetes: EnTetesDeDepreciation = {
     Deprecation: `@${Math.floor(depuis / 1000)}`,
@@ -135,8 +187,30 @@ export function enTetesDeDepreciation(adresse: AdresseDepreciee): EnTetesDeDepre
  * `prev`, et les écraser ferait de l'annonce de dépréciation une régression de
  * pagination. L'annonce s'AJOUTE, elle ne remplace pas.
  */
-export function annoncerDepreciation(reply: FastifyReply, adresse: AdresseDepreciee): void {
-  poser(reply, enTetesDeDepreciation(adresse));
+export function annoncerDepreciation(
+  reply: FastifyReply,
+  adresse: AdresseDepreciee,
+  request?: FastifyRequest
+): void {
+  poser(reply, enTetesDeDepreciation(adresse, request));
+}
+
+/**
+ * Rend le chemin successeur.
+ *
+ * Une adresse dont le successeur est une FONCTION ne peut être composée sans
+ * requête : la réclamer ici — plutôt que de servir un gabarit non suivable —
+ * fait échouer bruyamment l'appelant qui s'est trompé de forme.
+ */
+function resoudreSuccesseur(
+  successeur: AdresseDepreciee['successeur'],
+  request?: FastifyRequest
+): string {
+  if (typeof successeur !== 'function') return successeur;
+  if (request === undefined) {
+    throw new Error('[deprecation] un successeur dérivé de la requête exige une requête');
+  }
+  return successeur(request);
 }
 
 function poser(reply: FastifyReply, enTetes: EnTetesDeDepreciation): void {
@@ -152,13 +226,28 @@ function poser(reply: FastifyReply, enTetes: EnTetesDeDepreciation): void {
 /**
  * Le hook à poser sur une route en sursis : `onRequest: depreciee(...)`.
  *
- * La validation et la composition ont lieu UNE fois, à l'enregistrement ; le
- * chemin chaud n'écrit que trois en-têtes.
+ * Un successeur STATIQUE est validé et composé UNE fois, à l'enregistrement :
+ * une adresse mal écrite fait échouer le démarrage — bruyamment — plutôt que de
+ * servir en silence une annonce fausse pendant des mois, et le chemin chaud
+ * n'écrit alors que trois en-têtes déjà prêts.
+ *
+ * Un successeur DÉRIVÉ de la requête ne peut pas l'être : son chemin dépend de
+ * paramètres qui n'existent qu'à l'appel. Ce qui EST validable à
+ * l'enregistrement l'est quand même — les deux dates — pour que la forme d'une
+ * annonce ne se découvre jamais en production.
  */
 export function depreciee(adresse: AdresseDepreciee): onRequestHookHandler {
-  const enTetes = enTetesDeDepreciation(adresse);
-  return function annonce(_request, reply, done) {
-    poser(reply, enTetes);
+  if (typeof adresse.successeur !== 'function') {
+    const enTetes = enTetesDeDepreciation(adresse);
+    return function annonce(_request, reply, done) {
+      poser(reply, enTetes);
+      done();
+    };
+  }
+
+  enTetesDeDepreciation({ ...adresse, successeur: '/' });
+  return function annonceResolue(request, reply, done) {
+    poser(reply, enTetesDeDepreciation(adresse, request));
     done();
   };
 }

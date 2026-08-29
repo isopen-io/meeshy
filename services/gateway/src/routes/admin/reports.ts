@@ -11,7 +11,9 @@ import type {
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { requirePermission } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
-import { depreciee } from '../../utils/deprecation';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
+
+const DEPUIS_REPORTS = '2026-08-29';
 
 // Schemas de validation Zod
 const updateReportSchema = z.object({
@@ -35,7 +37,7 @@ const requireModeratorPermission = requirePermission('canModerateContent');
  * compris, et ce compteur est l'objet de #4275. Une date posée ici serait
  * inventée, et un client la croirait.
  */
-const ADAPTATEUR_SIGNALEMENT = { depuis: '2026-08-29', successeur: '/api/v1/reports' } as const;
+const ADAPTATEUR_SIGNALEMENT = { depuis: DEPUIS_REPORTS, successeur: '/api/v1/reports', retraitLe: dateDeRetrait(DEPUIS_REPORTS) } as const;
 
 export async function reportRoutes(fastify: FastifyInstance) {
   const reportService = getReportService(fastify.prisma);

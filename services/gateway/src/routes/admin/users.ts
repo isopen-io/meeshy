@@ -33,6 +33,15 @@ import { conversationActiveMemberCountSelect } from '../conversations/utils/acti
 const createUserSchema = createUserValidationSchema;
 const resetPasswordSchema = resetPasswordValidationSchema;
 
+// #4165 — plafonds de l'énumération, en amont de `GET
+// /admin/users/:userId/reported-messages`, des conversations puis des
+// messages d'un utilisateur (`Report.reportedEntityId` étant polymorphe, voir
+// le commentaire au site d'appel). Larges par rapport à un usage normal :
+// couvrent un compte qui aurait rejoint 2 000 conversations ou envoyé 20 000
+// messages, tout en éliminant le scan réellement illimité que l'audit signale.
+const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
+const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
+
 // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
 // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
 // sanitizeUsers masque. Sans canViewPresence, les bornes sont IGNORÉES en
@@ -770,9 +779,27 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       const emptyPage = () => sendPaginatedSuccess(reply, [], { total: 0, offset: offsetNum, limit: limitNum, hasMore: false });
 
+      // BORNÉ (#4165), et c'est un compromis À DOCUMENTER, pas un simple
+      // `take` ajouté : `Report.reportedEntityId` est POLYMORPHE (message,
+      // user, conversation, community, post, story — `schema.prisma`, aucune
+      // relation Prisma déclarée), donc aucune requête ne peut pousser
+      // "expéditeur du message = userId" DANS `report.findMany` lui-même. Il
+      // faut D'ABORD énumérer les messages de l'utilisateur pour construire le
+      // filtre `reportedEntityId IN […]` — c'est cette énumération qui était
+      // SANS `take` : sur un compte très actif (des dizaines de milliers de
+      // messages), CHAQUE page de signalements repayait la totalité de son
+      // historique. Ordonnées par récence, les deux requêtes plafonnent large
+      // (bien au-delà d'un usage normal) : au-delà, ce sont les conversations/
+      // messages les plus ANCIENS qui sortent du périmètre — les plus probables
+      // d'être déjà résolus, les moins probables d'être encore sous
+      // modération active. Une borne exacte demanderait une relation dédiée
+      // sur `Report` (hors territoire de ce lot, `schema.prisma` étant un
+      // fichier-carrefour).
       const participants = await fastify.prisma.participant.findMany({
         where: { userId, type: 'user' },
-        select: { id: true }
+        select: { id: true },
+        orderBy: { joinedAt: 'desc' },
+        take: REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP
       });
       const participantIds = participants.map((p) => p.id);
       if (participantIds.length === 0) return emptyPage();
@@ -780,7 +807,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Message ids authored by the user (bounded by the user's own messages).
       const userMessages = await fastify.prisma.message.findMany({
         where: { senderId: { in: participantIds } },
-        select: { id: true }
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+        take: REPORTED_MESSAGES_MESSAGE_SCAN_CAP
       });
       const messageIds = userMessages.map((m) => m.id);
       if (messageIds.length === 0) return emptyPage();
@@ -809,10 +838,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       ]);
 
       const reportedMessageIds = [...new Set(reports.map((r) => r.reportedEntityId))];
+      // Déjà borné IMPLICITEMENT : `reportedMessageIds` dérive de `reports`,
+      // la page ≤ `limitNum` posée ci-dessus par `report.findMany`. `take`
+      // explicite quand même (#4165) — la borne ne doit pas dépendre d'un
+      // raisonnement à distance sur la taille d'un tableau amont.
       const messages = reportedMessageIds.length > 0
         ? await fastify.prisma.message.findMany({
             where: { id: { in: reportedMessageIds } },
-            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true }
+            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true },
+            take: reportedMessageIds.length
           })
         : [];
       const messageMap = new Map(messages.map((m) => [m.id, m]));

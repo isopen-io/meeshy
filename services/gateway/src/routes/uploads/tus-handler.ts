@@ -26,6 +26,33 @@ const logger = enhancedLogger.child({ module: 'TusHandler' });
 const UPLOAD_PATH = process.env.UPLOAD_PATH || '/app/uploads';
 const TUS_TEMP_PATH = path.join(UPLOAD_PATH, '.tus-resumable');
 
+/**
+ * Repli DÉFENSIF, jamais la source de vérité (#4277, critère 2). Sert
+ * UNIQUEMENT si l'appelant ne fournit aucune `basePath` — un
+ * `buildFakeFastify()` de test (aucune option) ou, TRANSITOIREMENT, l'ancien
+ * appel `server.register(registerTusRoutes)` de `route-registration.ts` tant
+ * que son édit d'enregistrement (#4277) n'est pas appliqué. Valeur IDENTIQUE
+ * à l'ancienne adresse codée en dur : aucun comportement ne change tant que
+ * l'enregistrement ne fournit rien.
+ */
+const DEFAULT_UPLOADS_PATH = '/api/v1/uploads';
+
+/**
+ * Options du plugin. `basePath` est volontairement PAS nommée `prefix` :
+ * Fastify réserve cette clé pour SA propre prépondération d'URLs relatives
+ * (`fastify.get('/x', …)` → `<prefix>/x`) — un mécanisme que ce module
+ * n'utilise pas, parce que le serveur TUS sous-jacent a besoin de la MÊME
+ * chaîne absolue pour son option `path` (base du calcul du `Location` renvoyé
+ * au client à la création d'un upload, `@tus/server` `BaseHandler.generateUrl`)
+ * ET pour les deux routes Fastify qui l'exposent. Mélanger les deux
+ * mécanismes de préfixage (`prefix` Fastify + URL déjà absolue) les
+ * additionnerait silencieusement — vérifié : `/api/v1/uploads/api/v1/uploads`.
+ * Une seule chaîne, construite ici, sert donc les deux consommateurs.
+ */
+export type TusRoutesOptions = {
+  readonly basePath?: string;
+};
+
 function getMaxFileSize(): number {
   return Math.max(...Object.values(UPLOAD_LIMITS));
 }
@@ -70,13 +97,19 @@ function clientMeasuredMetadata(rawDuration: string | undefined): { duration: nu
   return { duration };
 }
 
-export async function registerTusRoutes(fastify: FastifyInstance): Promise<void> {
+export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoutesOptions = {}): Promise<void> {
   const prisma = fastify.prisma;
   if (!prisma) {
     throw new Error('[TUS] Prisma client not available');
   }
 
   await fs.mkdir(TUS_TEMP_PATH, { recursive: true });
+
+  // Résolu UNE fois, réutilisé par `path` (options TUS, ci-dessous) et par les
+  // deux enregistrements de route : une seule lecture de `opts.basePath`,
+  // jamais une par site, pour qu'un futur repli ne puisse pas diverger entre
+  // la construction du serveur TUS et les routes qui l'exposent.
+  const uploadsPath = opts.basePath || DEFAULT_UPLOADS_PATH;
 
   const metadataManager = new MetadataManager(UPLOAD_PATH);
   const publicUrl = buildPublicUrl();
@@ -144,7 +177,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
   }
 
   const tusServer = new Server({
-    path: '/api/v1/uploads',
+    path: uploadsPath,
     datastore: uploadDataStore,
     maxSize: getMaxFileSize(),
     respectForwardedHeaders: true,
@@ -547,7 +580,7 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
 
   fastify.route({
     method: [...TUS_COLLECTION_METHODS],
-    url: '/api/v1/uploads',
+    url: uploadsPath,
     handler: (req, reply) => {
       tusServer.handle(req.raw, reply.raw);
     },
@@ -555,11 +588,11 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
 
   fastify.route({
     method: [...TUS_UPLOAD_METHODS],
-    url: '/api/v1/uploads/*',
+    url: `${uploadsPath}/*`,
     handler: (req, reply) => {
       tusServer.handle(req.raw, reply.raw);
     },
   });
 
-  logger.info('[TUS] Resumable upload routes registered at /api/v1/uploads/*');
+  logger.info(`[TUS] Resumable upload routes registered at ${uploadsPath}/*`);
 }

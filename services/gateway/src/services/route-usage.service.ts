@@ -61,6 +61,19 @@
  * (dimension 3) et rendrait les temoins dependants d'une horloge reelle ;
  * l'horloge est injectable, donc la fenetre se MESURE au lieu de s'attendre.
  *
+ * ## Non-persistance — la limite qu'aucun reglage de fenetre ne referme
+ *
+ * Cet agregat vit EN MEMOIRE du processus et disparait a chaque redeploiement.
+ * Ce n'est pas un detail : un compte a zero peut vouloir dire « personne
+ * n'appelle plus cette route » OU « le gateway a redemarre il y a moins que la
+ * fenetre » — indiscernables depuis le seul compte. C'est pourquoi l'instantane
+ * porte `observingSince`, `observedForMs` et `instanceId` : un lecteur voit
+ * combien de trafic l'instantane reflete REELLEMENT, et un redemarrage change
+ * l'identifiant d'instance, donc se REMARQUE au lieu de se deguiser en preuve.
+ * Allonger la fenetre ne referme pas ce point — elle rendrait la configuration
+ * malhonnete pour un agregat qui ne survit pas au redeploiement. Le fermer
+ * demande une persistance (Redis, metriques scrapees) : hors de portee ici.
+ *
  * L'agregat est MUTABLE a dessein — c'est le mecanisme meme, et le chemin le
  * plus chaud du gateway le traverse a chaque reponse. Tout ce qui franchit la
  * frontiere (echantillon en entree, instantane en sortie) est `readonly`.
@@ -152,6 +165,15 @@ const PLATEFORMES = new Set(['ios', 'android', 'web', 'desktop', 'bot']);
 const FORMAT_VERSION = /^\d{1,4}(\.\d{1,4}){0,3}$/;
 
 /**
+ * Plafond de longueur applique AVANT le motif.
+ *
+ * Le motif est deja borne, donc il ne peut pas exploser ; ce plafond est une
+ * ceinture sur l'ENTREE elle-meme — un en-tete d'un megaoctet ne traverse meme
+ * pas le moteur d'expressions, et ne peut pas devenir une cle.
+ */
+const LONGUEUR_VERSION_MAX = 32;
+
+/**
  * Plateforme, dans l'ordre de ce qui est le plus fiable.
  *
  * L'en-tete d'abord : iOS pose `X-Meeshy-Platform` et `X-App-Platform`
@@ -188,6 +210,7 @@ export function normaliserPlateforme(
 export function normaliserVersion(versionHeader: string | undefined): string {
   const brut = versionHeader?.trim();
   if (!brut) return 'absent';
+  if (brut.length > LONGUEUR_VERSION_MAX) return 'invalid';
   return FORMAT_VERSION.test(brut) ? brut : 'invalid';
 }
 

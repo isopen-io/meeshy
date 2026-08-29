@@ -651,6 +651,10 @@ async function fetchCommunityConversations(
         participants,
         _count: { messages: 12, participants: 2 },
       }]),
+      // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
+      // part de la page (`.count()`), en plus du `.findMany` déjà mocké — un
+      // seul élément ici, comme le tableau ci-dessus.
+      count: jest.fn<any>().mockResolvedValue(1),
     },
   } as any);
   await communityRoutes(app);

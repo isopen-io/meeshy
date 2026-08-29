@@ -35,19 +35,66 @@ interface ClearHistoryBody {
   beforeDate: string; // ISO date string
 }
 
-export default async function userDeletionsRoutes(fastify: FastifyInstance) {
+/**
+ * Options du plugin. `basePath` — jamais `prefix` — pour la même raison que
+ * `routes/uploads/tus-handler.ts` (#4277) : ce module construit lui-même des
+ * URLs ABSOLUES (`${basePath}/conversations/…`) ; les combiner avec le
+ * mécanisme de préfixage NATIF de Fastify (déclenché par la clé réservée
+ * `prefix` sur `server.register()`) additionnerait les deux — vérifié :
+ * `server.register(userDeletionsRoutes, { prefix: '/api/v1' })` avec des
+ * routes internes déjà absolues sert `/api/v1/api/v1/user/deleted-conversations`,
+ * jamais `/api/v1/user/deleted-conversations`.
+ */
+export type UserDeletionsRoutesOptions = {
+  readonly basePath?: string;
+};
+
+/**
+ * Base absolue des sept routes ci-dessous (#4277, critère 3). AVANT ce lot,
+ * le module était monté via `server.register(userDeletionsRoutes, { prefix: '' })`
+ * ET portait le chemin COMPLET codé en dur dans chaque route
+ * (`/api/conversations/…`) — une troisième convention d'adressage dans le
+ * même fichier de `route-registration.ts`, aux côtés de `${API_PREFIX}` seul
+ * et de `${API_PREFIX}/sous-chemin`. `opts.basePath` est désormais la SEULE
+ * source ; le repli `/api` ne sert que si l'appelant n'en fournit AUCUNE —
+ * l'appel actuel de `route-registration.ts` (`prefix: ''`, sans `basePath`)
+ * ou les harnais de test existants (`app.register(userDeletionsRoutes)`,
+ * sans options), ce qui préserve EXACTEMENT l'adresse d'aujourd'hui tant que
+ * l'édit d'enregistrement de #4277 n'est pas appliqué.
+ *
+ * PAS `/api/v1` : `DELETE …/conversations/:conversationId/delete-for-me`
+ * PARTAGE son adresse finale sous `/api/v1` avec un DOUBLON déjà vivant —
+ * `routes/conversations/delete-for-me.ts` (`registerDeleteForMeRoutes`,
+ * monté dans `conversationRoutes` sous `${API_PREFIX}`), une implémentation
+ * plus récente et plus complète (transfert de propriété, clôture,
+ * diffusion Socket.IO) que celle-ci n'a jamais reçue. Faire remonter CETTE
+ * route à `/api/v1` ferait lever Fastify au démarrage
+ * (`FST_ERR_DUPLICATED_ROUTE`) — mesuré sur le manifeste (#4276) :
+ * `DELETE /api/v1/conversations/:id/delete-for-me` y figure déjà. Les six
+ * AUTRES routes de ce fichier n'ont AUCUN doublon (vérifié :
+ * `grep -rn` sur `services/gateway/src/routes` ne rend qu'un hit HORS
+ * commentaire, celui-ci) et pourraient migrer sans risque — mais un fichier
+ * scindé en deux conventions d'adressage reproduirait exactement le défaut
+ * que ce critère referme. Suivi à part : quelle implémentation du
+ * « delete-for-me » de conversation doit rester ?
+ */
+export default async function userDeletionsRoutes(
+  fastify: FastifyInstance,
+  opts: UserDeletionsRoutesOptions = {}
+) {
   const prisma = fastify.prisma;
   const authMiddleware = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
     allowAnonymous: false,
   });
+  const basePath = opts.basePath || '/api';
 
   /**
    * DELETE /api/conversations/:conversationId/delete-for-me
    * Soft-delete a conversation from the user's view only
    */
   fastify.delete<{ Params: ConversationIdParams }>(
-    '/api/conversations/:conversationId/delete-for-me',
+    `${basePath}/conversations/:conversationId/delete-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -121,7 +168,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Restore a previously deleted conversation for the user
    */
   fastify.post<{ Params: ConversationIdParams }>(
-    '/api/conversations/:conversationId/restore-for-me',
+    `${basePath}/conversations/:conversationId/restore-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -193,7 +240,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Clear all messages before a certain date (delete for user only)
    */
   fastify.post<{ Params: ConversationIdParams; Body: ClearHistoryBody }>(
-    '/api/conversations/:conversationId/clear-history',
+    `${basePath}/conversations/:conversationId/clear-history`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -308,7 +355,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Soft-delete a message from the user's view only
    */
   fastify.delete<{ Params: MessageIdParams }>(
-    '/api/messages/:messageId/delete-for-me',
+    `${basePath}/messages/:messageId/delete-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -393,7 +440,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Restore a previously deleted message for the user
    */
   fastify.post<{ Params: MessageIdParams }>(
-    '/api/messages/:messageId/restore-for-me',
+    `${basePath}/messages/:messageId/restore-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -466,7 +513,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Bulk delete multiple messages from the user's view
    */
   fastify.delete<{ Body: { messageIds: string[] } }>(
-    '/api/messages/bulk/delete-for-me',
+    `${basePath}/messages/bulk/delete-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -570,7 +617,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Get list of conversations the user has deleted (for potential restoration)
    */
   fastify.get(
-    '/api/user/deleted-conversations',
+    `${basePath}/user/deleted-conversations`,
     {
       preValidation: [authMiddleware],
       schema: {

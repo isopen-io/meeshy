@@ -43,6 +43,7 @@ import {
 } from '../../services/messaging/messageEditContent';
 import { emitMentionCreated } from '../../socketio/emitMentionCreated';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
+import { validatePagination } from '../../utils/pagination';
 import { broadcastMessageMutation } from '../../socketio/broadcastMessageMutation';
 import { buildMessageEditedCore } from '../../socketio/messageEditedPayload';
 import type {
@@ -1158,16 +1159,24 @@ export function registerMessagesAdvancedRoutes(
 
   fastify.get<{
     Params: ConversationParams;
+    Querystring: { offset?: string; limit?: string };
   }>('/conversations/:id/reactions', {
     schema: {
-      description: 'Get all reactions from all messages in a conversation. Returns reactions grouped by message ID with emoji counts and user information. Useful for loading full conversation context at once.',
+      description: 'Get reactions from messages in a conversation, one page of the most recent reaction rows at a time (grouped by message ID, with emoji counts and user information).',
       tags: ['conversations', 'reactions'],
-      summary: 'Get all conversation reactions',
+      summary: 'Get conversation reactions (paginated)',
       params: {
         type: 'object',
         required: ['id'],
         properties: {
           id: { type: 'string', description: 'Conversation ID or identifier' }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: { type: 'string', description: 'Number of reaction rows to skip (default: 0)' },
+          limit: { type: 'string', description: 'Maximum number of reaction rows to scan for this page (default: 100, max: 100)' }
         }
       },
       response: {
@@ -1180,10 +1189,12 @@ export function registerMessagesAdvancedRoutes(
               properties: {
                 reactions: {
                   type: 'array',
-                  description: 'All reactions grouped by message'
+                  description: 'This page of reactions, grouped by message'
                 },
-                // Le handler sert aussi `total` ; non déclaré, il était retiré.
-                total: { type: 'number', description: 'Total reaction rows across the conversation' }
+                total: { type: 'number', description: 'Total reaction rows across the conversation (not just this page)' },
+                // #4165 critère 2 : de quoi demander la suite, maintenant que
+                // cette route rend une PAGE plutôt que la conversation entière.
+                hasMore: { type: 'boolean', description: 'Whether more reaction rows exist beyond this page' }
               }
             }
           }
@@ -1221,24 +1232,45 @@ export function registerMessagesAdvancedRoutes(
         reader: historyReaderFromAuthContext(authRequest.authContext)
       });
 
-      // Récupérer toutes les réactions de tous les messages de la conversation
-      const reactions = await prisma.reaction.findMany({
-        where: {
-          message: applyHistoryFloor({ conversationId: conversationId, deletedAt: null }, reactionsFloor)
-        },
-        include: {
-          participant: {
-            select: {
-              id: true,
-              displayName: true,
-              avatar: true,
-              type: true,
-              user: { select: { username: true } }
+      const reactionsWhere = {
+        message: applyHistoryFloor({ conversationId: conversationId, deletedAt: null }, reactionsFloor)
+      };
+
+      // BORNÉ (#4165) — c'était le PIRE cas nommé par l'audit : `findMany` sur
+      // TOUTE la conversation, sans `take` ni pagination, une jointure
+      // participant par ligne. Un fil actif de plusieurs dizaines de milliers
+      // de réactions payait cette charge à CHAQUE ouverture de l'écran de
+      // détail. `take`/`skip` posent la borne DANS la requête Prisma (pas un
+      // slice après coup) ; `total` reste le VRAI compte (via `.count()`, sur
+      // le MÊME `where` — un aller-retour indexé, sans commune mesure avec le
+      // `findMany` qu'il remplace) pour que `hasMore` et l'affichage d'un
+      // total exact restent corrects malgré la troncature de la page.
+      const { offset, limit } = validatePagination(
+        request.query.offset,
+        request.query.limit,
+        { defaultLimit: 100, maxLimit: 100 }
+      );
+
+      const [reactions, total] = await Promise.all([
+        prisma.reaction.findMany({
+          where: reactionsWhere,
+          include: {
+            participant: {
+              select: {
+                id: true,
+                displayName: true,
+                avatar: true,
+                type: true,
+                user: { select: { username: true } }
+              }
             }
-          }
-        },
-        orderBy: { createdAt: 'desc' }
-      });
+          },
+          orderBy: { createdAt: 'desc' },
+          skip: offset,
+          take: limit
+        }),
+        prisma.reaction.count({ where: reactionsWhere })
+      ]);
 
       // Grouper les réactions par messageId et emoji
       const reactionsByMessage = new Map<string, any>();
@@ -1273,7 +1305,8 @@ export function registerMessagesAdvancedRoutes(
 
       return sendSuccess(reply, {
         reactions: reactionsArray,
-        total: reactions.length
+        total,
+        hasMore: offset + reactions.length < total
       });
 
     } catch (error) {

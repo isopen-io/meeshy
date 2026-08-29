@@ -24,8 +24,12 @@ import {
   getConversationMessagesWithDetails,
   countConversationMessages,
   shareLinkIncludeStructure,
+  findActiveUserParticipant,
+  findLinkMembers,
+  findLinkAnonymousParticipants,
+  countLinkParticipantsByType,
+  countOnlineAnonymousParticipants,
 } from '../../../../routes/links/utils/prisma-queries';
-import { HISTORY_FLOOR_PARTICIPANT_SELECT } from '../../../../services/historyFloor';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,6 +49,13 @@ function makeMockPrisma(overrides: Record<string, unknown> = {}): PrismaClient {
       findFirst: jest.fn(),
     },
     message: {
+      findMany: jest.fn(),
+      count: jest.fn(),
+    },
+    // #4165 — les cinq requêtes ciblées qui remplacent l'ancienne relation
+    // `participants` chargée en bloc SANS `take` sur `shareLinkIncludeStructure`.
+    participant: {
+      findFirst: jest.fn(),
       findMany: jest.fn(),
       count: jest.fn(),
     },
@@ -467,74 +478,192 @@ describe('countConversationMessages', () => {
 // shareLinkIncludeStructure
 // ---------------------------------------------------------------------------
 
-describe('shareLinkIncludeStructure — participant fields read by callers', () => {
-  // `retrieval.ts` décide `userType: 'member'` avec
-  // `member.userId === user.id && member.isActive`. Un `where: { isActive: true }`
-  // ne PROJETTE pas le champ : sans `isActive` dans le `select`, la propriété
-  // arrive `undefined` et aucun membre n'est jamais reconnu — la conversation
-  // partagée s'ouvrait en aperçu pour ses propres membres.
-  it('selects isActive on conversation participants', () => {
-    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
-      .participants as Record<string, any>;
+// #4165 — cette section a été RÉÉCRITE, pas assouplie : la relation
+// `participants` chargée en bloc SANS `take` sur `shareLinkIncludeStructure`
+// (au plus 5 000 lignes sur "meeshy", le salon public, à CHAQUE appel de
+// `GET /links/:identifier`) est le pire cas nommé par #4165. Chaque garantie
+// que l'ancien `select` monolithique portait a un TÉMOIN ci-dessous, sur son
+// NOUVEAU site — aucune n'a été retirée, chacune a changé d'adresse :
+//
+//   ancien select (`participants.select.X`)         → nouveau site
+//   isActive / userId (reconnaître LE lecteur)       → findActiveUserParticipant
+//   lastActiveAt (F2, servi à ADMIN)                 → findLinkAnonymousParticipants
+//   HISTORY_FLOOR_PARTICIPANT_SELECT (role, etc.)    → loadReaderHistoryFloor
+//                                                       (services/historyFloor.ts,
+//                                                       NON modifié par #4165 —
+//                                                       retrieval.ts l'appelle
+//                                                       directement, couvert
+//                                                       par `links-retrieval.test.ts`
+//                                                       § « plancher d'historique »)
+//   anonymousSession.profile (identité affichée)     → findLinkAnonymousParticipants
+//   user.role (bypass plateforme ADMIN/BIGBOSS)      → loadReaderHistoryFloor,
+//                                                       select INCHANGÉ (SSOT),
+//                                                       jamais recopié ici
+describe('shareLinkIncludeStructure — la relation participants EN BLOC a disparu', () => {
+  // La preuve POSITIVE du correctif #4165 : plus aucune relation à profondeur
+  // non bornée sur la conversation d'un lien. Une régression qui la
+  // réintroduirait (avec ou sans `take`) doit faire tomber CE témoin.
+  it("ne charge plus `participants` du tout — la SOURCE du findMany sans take a été retirée, pas seulement bornée", () => {
+    const conversationSelect = shareLinkIncludeStructure.conversation.select as Record<string, any>;
 
-    expect(participants.select.isActive).toBe(true);
+    expect(conversationSelect.participants).toBeUndefined();
+  });
+});
+
+describe('findActiveUserParticipant — reconnaît LE lecteur (remplace isActive/userId sur la relation en bloc)', () => {
+  // `retrieval.ts` décidait `userType: 'member'` avec
+  // `member.userId === user.id && member.isActive` sur un tableau chargé en
+  // bloc. Cette requête CIBLÉE porte exactement les deux mêmes conditions,
+  // dans son `where` plutôt que dans un `select` à parcourir — indépendante
+  // de l'effectif de la conversation : la conversation partagée ne s'ouvrait
+  // en aperçu pour ses PROPRES membres que si l'un des deux se perdait.
+  it('filtre par conversationId, userId, type user ET isActive — les quatre conditions de reconnaissance', async () => {
+    const prisma = makeMockPrisma();
+    const findFirst = prisma.participant.findFirst as jest.Mock;
+    findFirst.mockResolvedValue({ id: 'part-1' });
+
+    await findActiveUserParticipant(prisma, OBJECT_ID, 'user-42');
+
+    expect(findFirst).toHaveBeenCalledWith({
+      where: { conversationId: OBJECT_ID, userId: 'user-42', type: 'user', isActive: true },
+      select: { id: true },
+    });
   });
 
-  it('selects userId on conversation participants', () => {
-    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
-      .participants as Record<string, any>;
+  it('rend null quand aucune ligne active ne matche — le lecteur reste "anonymous", jamais "member" par défaut', async () => {
+    const prisma = makeMockPrisma();
+    (prisma.participant.findFirst as jest.Mock).mockResolvedValue(null);
 
-    expect(participants.select.userId).toBe(true);
+    const result = await findActiveUserParticipant(prisma, OBJECT_ID, 'user-42');
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('findLinkMembers — page bornée, sans présence (les membres ne montrent jamais isOnline/lastActiveAt)', () => {
+  it('filtre type user + isActive, et borne au plafond demandé', async () => {
+    const prisma = makeMockPrisma();
+    const findMany = prisma.participant.findMany as jest.Mock;
+    findMany.mockResolvedValue([]);
+
+    await findLinkMembers(prisma, OBJECT_ID, 50);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { conversationId: OBJECT_ID, type: 'user', isActive: true },
+      orderBy: { joinedAt: 'asc' },
+      take: 50,
+      select: expect.objectContaining({ id: true, role: true, joinedAt: true }),
+    });
   });
 
-  // F2 (2026-08-26) : `retrieval.ts` sert `lastActiveAt` à un viewer ADMIN/BIGBOSS
-  // pour les participants anonymes. Sans ce champ dans le `select`, le site n'a
-  // RIEN de vrai à servir et fabriquait `joinedAt` à la place — une date
-  // d'arrivée n'est pas une dernière activité. `Participant.lastActiveAt` est
-  // bien écrit (`StatusService`, `routes/anonymous.ts`, `MaintenanceService`).
-  it('selects lastActiveAt on conversation participants (served to ADMIN by retrieval.ts)', () => {
-    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
-      .participants as Record<string, any>;
+  // `retrieval.ts` sert TOUJOURS `isOnline: false, lastActiveAt: null` pour un
+  // membre — lien consultable sans authentification, présence jamais
+  // divulguée. Ne pas les CHARGER ici n'est pas un oubli : c'est payer une
+  // colonne que le handler écraserait de toute façon.
+  it("ne sélectionne NI isOnline NI lastActiveAt sur l'utilisateur — jamais servis pour un membre", async () => {
+    const prisma = makeMockPrisma();
+    const findMany = prisma.participant.findMany as jest.Mock;
+    findMany.mockResolvedValue([]);
 
-    expect(participants.select.lastActiveAt).toBe(true);
+    await findLinkMembers(prisma, OBJECT_ID);
+
+    const call = findMany.mock.calls[0][0] as Record<string, any>;
+    const userSelect = call.select.user.select as Record<string, unknown>;
+    expect(userSelect).not.toHaveProperty('isOnline');
+    expect(userSelect).not.toHaveProperty('lastActiveAt');
   });
 
-  // #3893 point 1 : ce `select` recopiait à la main les champs du SSOT
-  // (`HISTORY_FLOOR_PARTICIPANT_SELECT`) au lieu de l'étaler — un champ ajouté
-  // à la SSOT n'y arriverait pas silencieusement. Ce témoin compare les DEUX
-  // valeurs plutôt que de lister les clés à la main : il tombe dès que le
-  // `select` de ce fichier diverge de la SSOT, y compris pour un champ qui
-  // n'existe pas encore.
-  it('étale HISTORY_FLOOR_PARTICIPANT_SELECT — tout champ y ajouté arrive ici sans édition manuelle', () => {
-    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
-      .participants as Record<string, any>;
+  it('utilise le plafond par défaut quand aucun `take` explicite n’est fourni', async () => {
+    const prisma = makeMockPrisma();
+    const findMany = prisma.participant.findMany as jest.Mock;
+    findMany.mockResolvedValue([]);
 
-    for (const [key, value] of Object.entries(HISTORY_FLOOR_PARTICIPANT_SELECT)) {
-      // `anonymousSession` et `user` sont volontairement plus RICHES ici
-      // (`profile` en plus de `rights` ; profil affiché en plus du rôle,
-      // exposés à la carte d'arrivée) — pas de simples miroirs. Chacun a son
-      // propre témoin ci-dessous, qui vérifie que le champ qui COMPTE pour
-      // `historyFloorFor` (`rights`, `role`) survit malgré la réécriture.
-      if (key === 'anonymousSession' || key === 'user') continue;
-      expect(participants.select[key]).toEqual(value);
-    }
+    await findLinkMembers(prisma, OBJECT_ID);
+
+    const call = findMany.mock.calls[0][0] as Record<string, unknown>;
+    expect(call.take).toBeGreaterThan(0);
+  });
+});
+
+describe('findLinkAnonymousParticipants — page bornée, AVEC présence gatée par le viewer', () => {
+  it('filtre type anonymous + isActive, et borne au plafond demandé', async () => {
+    const prisma = makeMockPrisma();
+    const findMany = prisma.participant.findMany as jest.Mock;
+    findMany.mockResolvedValue([]);
+
+    await findLinkAnonymousParticipants(prisma, OBJECT_ID, 50);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { conversationId: OBJECT_ID, type: 'anonymous', isActive: true },
+      orderBy: { joinedAt: 'asc' },
+      take: 50,
+      select: expect.objectContaining({
+        id: true,
+        displayName: true,
+        avatar: true,
+        language: true,
+        isOnline: true,
+        lastActiveAt: true,
+        joinedAt: true,
+        permissions: true,
+      }),
+    });
   });
 
-  it('anonymousSession reste plus RICHE que la SSOT — `profile` en plus de `rights`', () => {
-    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
-      .participants as Record<string, any>;
+  // F2 (2026-08-26) : `retrieval.ts` sert `lastActiveAt` à un viewer
+  // ADMIN/BIGBOSS pour les participants anonymes. Sans ce champ dans le
+  // `select`, le site n'a RIEN de vrai à servir et fabriquait `joinedAt` à la
+  // place — une date d'arrivée n'est pas une dernière activité.
+  it('sélectionne isOnline ET lastActiveAt — le seul des deux appelants où la présence EST servie (gatée par le viewer)', async () => {
+    const prisma = makeMockPrisma();
+    const findMany = prisma.participant.findMany as jest.Mock;
+    findMany.mockResolvedValue([]);
 
-    expect(participants.select.anonymousSession).toEqual({ select: { profile: true, rights: true } });
+    await findLinkAnonymousParticipants(prisma, OBJECT_ID);
+
+    const call = findMany.mock.calls[0][0] as Record<string, any>;
+    expect(call.select.isOnline).toBe(true);
+    expect(call.select.lastActiveAt).toBe(true);
   });
 
-  // #3892 : `user` est réécrit après le spread de la SSOT (profil affiché en
-  // plus du rôle) — ce site est le SEUL appelant de HISTORY_FLOOR_PARTICIPANT_SELECT
-  // à redéclarer `user`, donc le seul où `role` (le champ que lit le bypass
-  // plateforme ADMIN/BIGBOSS de `historyFloorFor`) pouvait se perdre en silence.
-  it('user.role reste servi malgré la réécriture — le bypass plateforme ADMIN/BIGBOSS en dépend', () => {
-    const participants = (shareLinkIncludeStructure.conversation.select as Record<string, any>)
-      .participants as Record<string, any>;
+  // L'identité d'un anonyme vit dans `anonymousSession.profile` — `firstName`,
+  // `lastName`, `username`. `rights` (nécessaire au plancher d'historique)
+  // n'a plus besoin d'être chargé ICI : `loadReaderHistoryFloor` le lit dans
+  // SA propre requête (`services/historyFloor.ts`), jamais modifiée par #4165.
+  it('sélectionne anonymousSession.profile — pas `rights`, désormais lu ailleurs', async () => {
+    const prisma = makeMockPrisma();
+    const findMany = prisma.participant.findMany as jest.Mock;
+    findMany.mockResolvedValue([]);
 
-    expect(participants.select.user.select.role).toBe(true);
+    await findLinkAnonymousParticipants(prisma, OBJECT_ID);
+
+    const call = findMany.mock.calls[0][0] as Record<string, any>;
+    expect(call.select.anonymousSession).toEqual({ select: { profile: true } });
+  });
+});
+
+describe('countLinkParticipantsByType / countOnlineAnonymousParticipants — les VRAIS totaux, indépendants du plafond d’affichage', () => {
+  it('compte séparément les membres et les participants anonymes actifs', async () => {
+    const prisma = makeMockPrisma();
+    const count = prisma.participant.count as jest.Mock;
+    count.mockResolvedValueOnce(12).mockResolvedValueOnce(340);
+
+    const result = await countLinkParticipantsByType(prisma, OBJECT_ID);
+
+    expect(count).toHaveBeenNthCalledWith(1, { where: { conversationId: OBJECT_ID, type: 'user', isActive: true } });
+    expect(count).toHaveBeenNthCalledWith(2, { where: { conversationId: OBJECT_ID, type: 'anonymous', isActive: true } });
+    expect(result).toEqual({ totalMembers: 12, totalAnonymousParticipants: 340 });
+  });
+
+  it('compte les anonymes EN LIGNE — même prédicat isOnline que la liste gatée', async () => {
+    const prisma = makeMockPrisma();
+    const count = prisma.participant.count as jest.Mock;
+    count.mockResolvedValue(7);
+
+    await countOnlineAnonymousParticipants(prisma, OBJECT_ID);
+
+    expect(count).toHaveBeenCalledWith({
+      where: { conversationId: OBJECT_ID, type: 'anonymous', isActive: true, isOnline: true },
+    });
   });
 });

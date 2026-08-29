@@ -44,6 +44,7 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { applyDeprecationHeaders } from '../../utils/deprecation';
 import { gateProfilePresence, getOptionalAuth } from './presence-gate';
 import { contactLookupScope, blockedIdsOfViewer } from '../../services/ContactDirectoryService';
 import { searchTokensFor } from '../../utils/search-tokens';
@@ -827,6 +828,7 @@ export async function getUserByUsername(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: UsernameParams }>, reply: FastifyReply) => {
     try {
       const { username } = request.params;
+      applyDeprecationHeaders(reply, { successorPath: `/api/v1/directory/people/${encodeURIComponent(username)}` });
 
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
       //
@@ -894,6 +896,7 @@ export async function getUserById(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
+      applyDeprecationHeaders(reply, { successorPath: `/api/v1/directory/people/${encodeURIComponent(id)}` });
 
       // ALIAS de `GET /directory/people/:handle` (#4161, critère 9).
       //
@@ -1014,6 +1017,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
     try {
       const { id } = request.params;
+      applyDeprecationHeaders(reply, { successorPath: `/api/v1/directory/people/${encodeURIComponent(id)}` });
 
       /* istanbul ignore next — Fastify params schema (pattern:^[a-fA-F\d]{24}$) rejects invalid ids before handler */
       if (!isValidObjectId(id)) {

@@ -31,7 +31,7 @@ jest.mock('../../../services/admin/report.service', () => ({
     getReportById: jest.fn<any>().mockResolvedValue(null),
     updateReport: jest.fn<any>().mockResolvedValue({}),
     deleteReport: jest.fn<any>().mockResolvedValue(undefined),
-    getReportsForEntity: jest.fn<any>().mockResolvedValue([]),
+    getReportsForEntity: jest.fn<any>().mockResolvedValue({ reports: [], total: 0 }),
     assignModerator: jest.fn<any>().mockResolvedValue({}),
     getModeratorReports: jest.fn<any>().mockResolvedValue([]),
   }),

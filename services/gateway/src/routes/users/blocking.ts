@@ -5,7 +5,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import {
   bloquer, debloquer, listerBloques, repondreBlocage, LIMITE_MAX_BLOCAGES,
 } from '../directory/blocks';
-import { depreciee } from '../../utils/deprecation';
+import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 
 /**
  * Les trois ALIAS des routes de blocage (#4164).
@@ -27,9 +27,18 @@ import { depreciee } from '../../utils/deprecation';
  * echouer un blocage que l'utilisateur croit pose — le cout le plus cher que
  * ce module puisse produire.
  */
+const DEPUIS = '2026-08-29';
+
+/**
+ * Le successeur porte l'id RÉSOLU, jamais le gabarit `:userId` : un `Link`
+ * que le client ne peut pas suivre tel quel n'indique aucune migration.
+ */
+const blocDeLaCible = (request: FastifyRequest): string =>
+  `/api/v1/directory/blocks/${encodeURIComponent((request.params as { userId: string }).userId)}`;
+
 const ANNONCE = {
-  ensemble: { depuis: '2026-08-29', successeur: '/api/v1/directory/blocks' },
-  membre: { depuis: '2026-08-29', successeur: '/api/v1/directory/blocks/:userId' },
+  ensemble: { depuis: DEPUIS, successeur: '/api/v1/directory/blocks', retraitLe: dateDeRetrait(DEPUIS) },
+  membre: { depuis: DEPUIS, successeur: blocDeLaCible, retraitLe: dateDeRetrait(DEPUIS) },
 } as const;
 
 const paramsCible = {

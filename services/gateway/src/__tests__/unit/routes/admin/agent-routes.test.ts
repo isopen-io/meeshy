@@ -127,19 +127,25 @@ describe('Agent Admin Routes', () => {
   describe('GET /configs', () => {
     it('returns paginated configs aggregated by conversation', async () => {
       const configs = [{ id: '1', conversationId: 'c1', enabled: true, manualUserIds: [] }];
-      // First findMany call (configConvIds), then second (page configs)
-      mockPrisma.agentConfig.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])
-        .mockResolvedValueOnce(configs);
-      mockPrisma.agentUserRole.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])
-        .mockResolvedValueOnce([
-          { conversationId: 'c1', userId: 'u1' },
-          { conversationId: 'c1', userId: 'u2' },
-        ]);
-      mockPrisma.agentAnalytic.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      // #4165 — `GET /configs` ne fait plus DEUX appels à chacun de ces trois
+      // `findMany` (un pour rassembler l'univers des conversationIds via
+      // `select: {conversationId}`, un pour la page) : le premier est
+      // retiré, remplacé par le `where` relationnel de `conversation.findMany`
+      // ci-dessous (`agentConfig`/`agentAnalytic`/`agentUserRoles` — voir
+      // `admin/agent.ts`). Un seul appel désormais par `findMany` : une seule
+      // valeur mockée, celle de l'ancien SECOND appel (la donnée de détail).
+      // Laisser les deux `mockResolvedValueOnce` chaînés serait pire qu'une
+      // valeur fausse pour CE test : `jest.clearAllMocks()` (le `beforeEach`
+      // ci-dessus) ne VIDE PAS la queue d'un `mockResolvedValueOnce` non
+      // consommé — la valeur en trop fuit alors dans le PROCHAIN test qui
+      // rappelle le même mock (mesuré : c'est exactement ce qui faisait
+      // échouer le test `GET /configs/:conversationId` juste en dessous).
+      mockPrisma.agentConfig.findMany.mockResolvedValueOnce(configs);
+      mockPrisma.agentUserRole.findMany.mockResolvedValueOnce([
+        { conversationId: 'c1', userId: 'u1' },
+        { conversationId: 'c1', userId: 'u2' },
+      ]);
+      mockPrisma.agentAnalytic.findMany.mockResolvedValueOnce([]);
       mockPrisma.conversation = {
         findMany: jest.fn<any>().mockResolvedValueOnce([
           { id: 'c1', title: 'Conv 1', type: 'group' },
