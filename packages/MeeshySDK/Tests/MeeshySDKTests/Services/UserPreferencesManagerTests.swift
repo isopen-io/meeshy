@@ -540,12 +540,91 @@ final class UserPreferencesManagerTests: XCTestCase {
                        "l'écho de son propre geste ne doit pas rendre à l'utilisateur la valeur qu'il vient de quitter")
     }
 
+    // MARK: - observeSocketReconnection (le quatrième déclencheur — PÉRENNE)
+    //
+    // Le second déclencheur PÉRENNE, à parité d'Android (#4197) et du web
+    // (#4209) : une reconnexion socket relit les blocs, car une diffusion émise
+    // pendant la coupure n'est jamais rejouée. Les témoins poussent leur propre
+    // sujet dans le seam d'injection plutôt que le publisher du socket partagé.
+
+    func test_socketReconnect_refetchesAndAppliesRemoteValue() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        var remote = UserPreferences.defaults
+        remote.notification.newMessageEnabled = false
+        mock.allPreferencesResult = remote
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1,
+                       "une reconnexion relit — une diffusion manquée pendant la coupure n'est jamais rejouée")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "et la valeur relue atteint le bloc en mémoire")
+    }
+
+    func test_socketReconnect_notAuthenticated_doesNotRefetch() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { false }
+        mock.allPreferencesResult = .defaults
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 0,
+                       "la garde d'authentification de fetchFromBackend vaut aussi sur ce chemin")
+    }
+
+    /// Le veto `pendingCategories`. Une reconnexion RELIT pendant que l'outbox
+    /// draine encore le geste local en vol : sans le veto (via `applyRemote`), la
+    /// valeur SERVEUR périmée écraserait le réglage que l'utilisateur vient de
+    /// changer — pire qu'un bloc périmé, puisqu'il l'a vu changer puis se défaire
+    /// (leçon 310, tranchée par le veto qui existait déjà).
+    func test_socketReconnect_pendingLocalEdit_isNotUndone() async throws {
+        let mock = MockPreferenceService()
+        manager.service = mock
+        manager.isAuthenticatedOverride = { true }
+        // Valeur SERVEUR périmée : celle d'avant le geste local.
+        mock.allPreferencesResult = .defaults
+        XCTAssertTrue(UserNotificationPreferences.defaults.newMessageEnabled,
+                      "précondition : la valeur serveur périmée est bien l'inverse du geste ci-dessous")
+
+        manager.updateNotification { $0.newMessageEnabled = false }
+        XCTAssertTrue(manager.pendingCategories.contains(.notification),
+                      "précondition : le geste local est marqué pending avant son debounce")
+
+        let subject = PassthroughSubject<Void, Never>()
+        manager.observeSocketReconnection(subject.eraseToAnyPublisher())
+
+        subject.send(())
+        await Self.settleReconnect()
+
+        XCTAssertEqual(mock.getAllPreferencesCallCount, 1, "précondition : la relecture a bien eu lieu")
+        XCTAssertFalse(manager.notification.newMessageEnabled,
+                       "une relecture déclenchée par la reconnexion ne rend pas à l'utilisateur la valeur qu'il vient de quitter")
+    }
+
     /// Attend la fenêtre de regroupement de production, plus une marge pour le
     /// `Task` que le sink lance et le hop d'acteur de `fetchFromBackend()`.
     /// La fenêtre est LUE sur le code de production, jamais recopiée.
     private static func settleCoalescingWindow() async {
         let window = UserPreferencesManager.remoteRefreshCoalescingWindow
         try? await Task.sleep(nanoseconds: UInt64((window + 0.35) * 1_000_000_000))
+    }
+
+    /// Le chemin de reconnexion n'a PAS de fenêtre de regroupement (un
+    /// `didReconnect` par reconnexion réelle, `fetchFromBackend` idempotent) :
+    /// on n'attend que le `Task` du sink et le hop d'acteur.
+    private static func settleReconnect() async {
+        try? await Task.sleep(nanoseconds: 350_000_000)
     }
 }
 
