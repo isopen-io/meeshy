@@ -50,15 +50,34 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > conclusion de l'étape `Run iOS tests`, jamais le compteur de l'étape qui
 > résume.
 >
-> ### 252i — en cours
+> ### 252i — la garde de 249i ne pouvait pas voir la neuvième copie (issue #4260)
 >
-> - Base `9286ce92`. Résultat NÉGATIF déjà acquis, à ne pas refaire : les
->   **boutons à icône seule sans nom VoiceOver** ne sont pas une famille de
->   défauts. Un balayage naïf en rend 102 ; un balayage conscient des accolades
->   qui exclut les labels portant un `Text` en rend **3** ; les 3 sont
->   **délibérés et documentés** (`.accessibilityHidden` avec l'action réexposée
->   en `.accessibilityAction`, ou agrégation du conteneur en
->   `children: .ignore`). **Famille vide.**
+> - Base `9286ce92`. Analyse : `docs/analyses/uiux/2026-08-29-iteration-252i-language-flag-role.md`.
+> - **#4248 avait soldé huit copies de la puce de langue ; `FocalRow` en portait
+>   deux de plus, invisibles à sa garde** — celle-ci interdit une FORME (le
+>   soulignement dessiné, les clés réservées) et les deux copies disaient leur
+>   état par l'OPACITÉ et par un fond de puce. **Une garde bâtie sur les
+>   instances qu'on a trouvées généralise à ces instances, pas au concept** :
+>   celle de 252i interroge le RÔLE (qui décide du drapeau, qui le nomme).
+> - **Régression silencieuse évitée de justesse** : la copie lisait
+>   `LanguageData` (78 langues), la source unique `LanguageDisplay` (41). Router
+>   l'une vers l'autre rendait « WO » là où la rangée montrait 🇸🇳, pour
+>   39 langues, sans qu'aucun test ne rougisse. **Une source unique doit être
+>   plus riche que la plus riche des copies qu'elle remplace.**
+> - **Décision produit ISOLÉE, pas tranchée** : les deux tables divergent sur UN
+>   code — `pt`, 🇵🇹 vs 🇧🇷 — et un banc épingle 🇧🇷. `ComposerLanguageFlag`
+>   garde sa table, sous une **exemption nommée** dans la garde, jusqu'à ce que
+>   le porteur tranche (suite n° 1 de l'analyse).
+> - Preuve : secondes réponses à « quel drapeau ? » **10 → 0** ; étiquettes au
+>   nom nu **2 → 0** ; copies du contrôle **2 → 0** ; catalogue inchangé (3408).
+> - **Résultat NÉGATIF acquis, à ne pas refaire** : les *boutons à icône seule
+>   sans nom VoiceOver* ne sont pas une famille de défauts. 102 candidats bruts,
+>   **3** après un balayage correct, et les 3 sont délibérés et documentés.
+>   **Famille vide.**
+> - **Quatre scanners avant un nombre publiable** (102 → 20 → 13 → 40/15/16/9).
+>   Un compteur n'est pas une mesure tant qu'on n'a pas vérifié qu'il rate ce
+>   qu'il doit rater : **toute mesure inclut un témoin dont on connaît la
+>   réponse.**
 >
 > ---
 >

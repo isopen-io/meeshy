@@ -105,8 +105,19 @@ enum DefaultComposerLanguage {
 /// `nonisolated` au niveau du type : la cible app compile sous
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non.
 nonisolated enum ComposerLanguageFlag {
-    /// Code hors du référentiel `LanguageData` → code brut en capitales,
-    /// jamais un bouton vide.
+    /// Code hors référentiel → code brut en capitales, jamais un bouton vide.
+    ///
+    /// Cette règle a été REDÉCOUVERTE ici, mot pour mot, sans savoir que #4248
+    /// l'avait déjà choisie pour la puce de langue : deux sites, même
+    /// raisonnement, aucun ne connaissait l'autre.
+    ///
+    /// **Ce site NE rejoint PAS la source unique, et la raison est mesurée**
+    /// (252i, #4260) : sur les 39 codes que les deux tables partagent, elles
+    /// s'accordent sur 38 et divergent sur UN — `pt`, que `LanguageDisplay`
+    /// rend 🇵🇹 et `LanguageData` 🇧🇷. Le banc voisin épingle `pt-BR` → 🇧🇷.
+    /// Trancher « quel drapeau porte le portugais » est une décision PRODUIT,
+    /// pas un détail de refactor : elle a son issue, et ce helper garde sa
+    /// table jusqu'à ce qu'elle soit prise.
     static func label(for code: String) -> String {
         let base = MeeshyUser.normalizeLanguageCode(code) ?? code.lowercased()
         return LanguageData.info(for: base)?.flag ?? code.uppercased()

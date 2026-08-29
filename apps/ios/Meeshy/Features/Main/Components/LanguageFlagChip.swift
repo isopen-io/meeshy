@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK   // `LanguageData` (78 langues) — `LanguageDisplay` vit dans MeeshyUI, pas elle.
 import MeeshyUI
 
 /// **Le drapeau qui change la langue lue — une seule fois pour huit surfaces.**
@@ -144,12 +145,35 @@ struct LanguageFlagChip: View {
     /// personne ; « JA » se lit, se reconnaît et s'annonce. Le `"?"` ne reste
     /// que pour le cas où il n'y a **rien** à dire — aucun code du tout, ce
     /// qu'une source optionnelle peut rendre.
-    static func flag(for code: String) -> String {
+    /// **Deux tables, dans cet ordre — et la seconde n'est pas un luxe.**
+    ///
+    /// `LanguageDisplay` porte 41 langues, avec la couleur dont la puce a
+    /// besoin ; `LanguageData` en porte **78**, dont l'écrasante majorité des
+    /// langues africaines et sud-asiatiques du produit (wolof, yoruba, igbo,
+    /// persan, ourdou, tamoul, serbe…) et les alias (`fil` → `tl`).
+    ///
+    /// Le 252i (#4260) a failli livrer la régression que cet ordre empêche :
+    /// `FocalRow` lisait `LanguageData`, et le router vers une source unique
+    /// qui n'aurait lu que `LanguageDisplay` aurait rendu « WO » là où la
+    /// rangée montrait 🇸🇳 — silencieusement, pour 39 langues, et seulement
+    /// chez les locuteurs concernés. **Une source unique doit être plus riche
+    /// que la plus riche des copies qu'elle remplace, jamais leur
+    /// intersection.**
+    /// Le troisième essai — la NORMALISATION — vient en dernier et ne change
+    /// rien à ce que #4248 a testé (`"xx"` → `"XX"`, `""` → `"?"`) : il ne
+    /// s'exerce que sur les codes RÉGIONAUX, `pt-BR` ou `zh-Hans`, qu'aucune
+    /// table n'indexe tels quels et que toutes deux servent sous leur base.
+    nonisolated static func flag(for code: String) -> String {
         if let flag = LanguageDisplay.from(code: code)?.flag { return flag }
+        if let flag = LanguageData.info(for: code.lowercased())?.flag { return flag }
+        if let base = MeeshyUser.normalizeLanguageCode(code) {
+            if let flag = LanguageDisplay.from(code: base)?.flag { return flag }
+            if let flag = LanguageData.info(for: base)?.flag { return flag }
+        }
         return Self.rawName(for: code) ?? "?"
     }
 
-    private static func rawName(for code: String) -> String? {
+    nonisolated private static func rawName(for code: String) -> String? {
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed.uppercased()
     }
@@ -194,8 +218,17 @@ struct LanguageFlagChip: View {
 
     /// Le nom NATIF de la langue, ou son code faute de mieux — le même repli que
     /// `flag(for:)`, pour que l'écrit et le parlé ne divergent jamais.
-    static func spokenName(for code: String) -> String {
-        LanguageDisplay.from(code: code)?.name ?? Self.rawName(for: code) ?? Self.flag(for: code)
+    /// Même ordre que `flag(for:)`, pour la même raison : ce que VoiceOver
+    /// PRONONCE doit couvrir les 78 langues, pas les 41. Sans la seconde table,
+    /// un lecteur wolof entendait « Afficher en WO ».
+    nonisolated static func spokenName(for code: String) -> String {
+        if let name = LanguageDisplay.from(code: code)?.name { return name }
+        if let name = LanguageData.info(for: code.lowercased())?.nativeName { return name }
+        if let base = MeeshyUser.normalizeLanguageCode(code) {
+            if let name = LanguageDisplay.from(code: base)?.name { return name }
+            if let name = LanguageData.info(for: base)?.nativeName { return name }
+        }
+        return Self.rawName(for: code) ?? Self.flag(for: code)
     }
 
     /// La valeur du contrôle quand c'est CETTE langue qu'on lit.
@@ -253,5 +286,31 @@ struct TranslationsBadge: View {
         Image(systemName: "translate")
             .font(metrics.flagFont(isActive: false).weight(.medium))
             .foregroundColor(MeeshyColors.indigo400)
+    }
+}
+
+// MARK: - Le VOCABULAIRE, pour les sites qui ne peuvent pas prendre la VUE
+
+/// **Une source unique de CONTRÔLE a deux moitiés : la vue et le vocabulaire.**
+///
+/// `LanguageFlagChip` est un `Button`. Un site qui rend déjà son drapeau dans
+/// son propre bouton — la bande magnifiée de `FocalRow`, dont la puce porte un
+/// fond `focusChip` que la vue partagée ne dessine pas — ne peut pas l'adopter
+/// sans imbriquer un bouton dans un bouton. Il lui reste à dire la MÊME chose :
+/// le drapeau produit par la même table avec le même repli, l'étiquette
+/// d'ACTION plutôt que le nom nu, l'état porté par un trait plutôt que par la
+/// seule apparence.
+///
+/// Ce modificateur est cette moitié-là. Sans lui, chaque site qui garde son
+/// dessin ré-écrit trois lignes d'accessibilité — et c'est très exactement
+/// ainsi que les copies 9 et 10 ont divergé (252i, #4260) : elles disaient
+/// « Français » là où la source unique dit « Afficher en Français », et ne
+/// disaient rien du tout de l'état actif.
+extension View {
+    func languageFlagAccessibility(code: String, isActive: Bool) -> some View {
+        self
+            .accessibilityLabel(LanguageFlagChip.spokenLabel(for: code))
+            .accessibilityValue(isActive ? LanguageFlagChip.shownValue() : "")
+            .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
