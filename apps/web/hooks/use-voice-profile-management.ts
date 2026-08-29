@@ -80,7 +80,16 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const grantConsent = useCallback(async () => {
     try {
-      const res = await apiService.post<{ success: boolean }>('/voice/consent', { granted: true });
+      // #4180 — `/voice/consent` n'existe PAS (404 systématique avant ce
+      // correctif : voir services/gateway/src/routes/voice-profile.ts, monté
+      // sous `/voice/profile`). La route RÉELLE et SEULE écrivaine légitime
+      // du consentement est `POST /voice/profile/consent` : elle horodate
+      // `User.voiceProfileConsentAt` côté SERVEUR
+      // (`VoiceProfileService.updateConsent`), jamais depuis une date que
+      // le client fournirait — c'est la propriété que #4180 exige d'un
+      // consentement opposable.
+      const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true };
+      const res = await apiService.post<{ success: boolean }>('/voice/profile/consent', payload);
       if (res.success) {
         setHasConsent(true);
         toast.success('Voice recording consent granted');
@@ -107,8 +116,16 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const grantVoiceCloningConsent = useCallback(async () => {
     try {
+      // #4180 — `/voice/voice-cloning-consent` n'existe pas davantage : le
+      // web n'avait AUCUN moyen d'accorder le clonage vocal (404 muet, pas
+      // de fausse assurance, mais aucun consentement enregistrable non
+      // plus — un trou fonctionnel RGPD réel). Même route unique que
+      // grantConsent ci-dessus ; `voiceRecordingConsent: true` est envoyé
+      // avec pour respecter la dépendance que la route applique déjà
+      // (le clonage EXIGE le consentement d'enregistrement — voir la chaîne
+      // dans VoiceProfileService.updateConsent).
       const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true, voiceCloningConsent: true };
-      const res = await apiService.post<{ success: boolean }>('/voice/voice-cloning-consent', payload);
+      const res = await apiService.post<{ success: boolean }>('/voice/profile/consent', payload);
       if (res.success) {
         setHasVoiceCloningConsent(true);
         toast.success('Voice cloning enabled');
@@ -122,8 +139,13 @@ export function useVoiceProfileManagement(): UseVoiceProfileManagementReturn {
 
   const revokeVoiceCloningConsent = useCallback(async () => {
     try {
+      // #4180 — même route que ci-dessus. `voiceCloningConsent: false` fait
+      // écrire `User.voiceCloningEnabledAt = null` côté serveur
+      // (VoiceProfileService.updateConsent) : la RÉVOCATION a désormais un
+      // effet SERVEUR observable, que `ConsentValidationService` lit sans
+      // plus jamais le contredire via un blob de préférences périmé.
       const payload: VoiceProfileConsentRequest = { voiceRecordingConsent: true, voiceCloningConsent: false };
-      const res = await apiService.post<{ success: boolean }>('/voice/voice-cloning-consent', payload);
+      const res = await apiService.post<{ success: boolean }>('/voice/profile/consent', payload);
       if (res.success) {
         setHasVoiceCloningConsent(false);
         toast.success('Voice cloning disabled');
