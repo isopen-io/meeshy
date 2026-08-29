@@ -5825,7 +5825,20 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       of a `call:ended`/`call:missed` frame's `callId`, a `CallSignalManager.endedCalls`
       identity stream (parallel to `incomingOffers`), and a `CallViewModel.onRemoteEnded`
       fold that auto-dismisses the banner + cancels its timer (no `emitEnd`) only for the
-      *pending* call's id. +15 tests. The **identity-aware active-call teardown** landed (slice
+      *pending* call's id. +15 tests. The **long-haul RTT recalibration** landed (slice
+      `call-quality-rtt-longhaul-parity`, 2026-08-29): the three Android RTT boundaries had been
+      ported at iOS's PRE-recalibration values (fair `200` / poor `300` / critical `500`) and never
+      followed iOS's move out to `300`/`500`/`800`. On a healthy Africa↔Asia call (RTT 250-450 ms,
+      already 155-221 ms on the backbone before the mobile last mile) Android misclassified the tier —
+      a 250 ms hop showed FAIR not GOOD, a 350 ms call showed POOR (weak-link error hue) not FAIR, a
+      550 ms link showed CRITICAL not POOR — so the very calls this ladder exists to serve were
+      painted red at 00:06 while iOS showed them healthy. `CallQualityThresholds.{VIDEO_FAIR_RTT_MS,
+      VIDEO_POOR_RTT_MS,POOR_RTT_MS}` are now at exact iOS `WebRTCTypes.QualityThresholds` parity;
+      packet-loss bands (the true congestion signal) were already correct and unchanged. +9 tests
+      (both-sides-of-boundary re-pins at 300/500/800 + three named intercontinental regressions),
+      RED-proven (9 fail against the stale constants, compile healthy). **Pending:** the WebRTC stats
+      source that feeds real quality samples.
+      The **identity-aware active-call teardown** landed (slice
       `call-ended-identity-teardown`, 2026-07-03): `call:ended`/`call:missed` are now `null` in
       `CallSignalMapper.map` (off the identity-less `events`); the single pure `endedSignal →
       CallEndedSignal(callId, event)` decode on `endedCalls: SharedFlow<CallEndedSignal>` is the
