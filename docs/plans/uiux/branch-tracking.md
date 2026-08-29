@@ -14,6 +14,78 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
+> **POINTEUR iOS AUTORITAIRE (mis à jour 249i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> - **Synchronisation 249i** : branche `claude/intelligent-noether-6zxsbz` **repartie de `origin/main` `b1eeb470`** · itération **249i**. Une seule PR ouverte au départ (**#4246**, gateway) — aucun fichier commun, aucun conflit possible.
+> - **248i est MERGÉE** (`MediaKindLabel`, neuf tables d'étiquettes de média → une).
+>
+> ### 249i — huit copies d'un contrôle, et chacune n'avait raison que sur un tiers
+>
+> 248i laisse une règle en héritage : *une énumération de sites affirme aussi « ce
+> sont les sites où la règle s'applique », et cette moitié-là n'est presque jamais
+> vérifiée.* La question posée cette fois n'est donc pas « quelle surface est
+> fausse ? » mais **« quel CONTRÔLE le dépôt recopie-t-il ? »**. Réponse : **la
+> puce de langue** du Prisme Linguistique — le drapeau qu'on appuie pour lire une
+> autre langue —, **huit implémentations**, dix puces, cinq fichiers.
+>
+> - **Aucune des huit n'était complètement fausse.** L'une avait le bon contrôle
+>   et la bonne cible mais annonçait un nom de langue nu ; deux annonçaient
+>   parfaitement leur état mais posaient leur cible **APRÈS** le geste ; trois
+>   n'avaient ni nom ni état ni cible. C'est ce qui les a tenues hors des revues :
+>   **une surface qui figure déjà dans la colonne des sites conformes ne se
+>   rouvre pas.**
+> - **⚠️ LE DÉFAUT LE PLUS INSTRUCTIF : un `.meeshyTapTarget(44)` posé après le
+>   `.onTapGesture` qu'il doit agrandir.** `contentShape` définit la zone sensible
+>   DE LA VUE À LAQUELLE IL S'APPLIQUE ; l'idiome SwiftUI l'écrit AVANT le geste.
+>   Posé après, le 44 est du bon côté de la revue et du mauvais côté de l'idiome.
+>   **Un modificateur qui DÉCLARE une cible ne la fait pas respecter** — forme,
+>   côté interaction, de la règle du cycle 124. Le correctif ne réordonne pas : il
+>   supprime la question, la zone sensible d'un `Button` ÉTANT le cadre de son
+>   label. Mesuré : **4 occurrences sur `main`, 0 partout dans l'app après**.
+> - **⚠️ ET LE SAVOIR ÉTAIT DÉJÀ ÉCRIT.** La copie du pied de bulle
+>   (`BubbleFooter.footerFlagPill`) portait huit lignes de doc-comment expliquant
+>   pourquoi un `onTapGesture` n'y marche pas (`BubbleSwipeContainer` avale le tap)
+>   et pourquoi le `contentShape` doit vivre DANS le label. **Rien n'avait voyagé
+>   vers les sept autres** : un savoir enfermé dans la fonction qui l'applique ne
+>   protège que cette fonction. Chercher, avant d'écrire une puce, s'il en existe
+>   une qui a déjà payé le problème.
+> - **Correctif** : `LanguageFlagChip` (+ `TranslationsBadge`), `Button` natif,
+>   cadre et `contentShape` DANS le label, nom « Afficher en %@ », valeur
+>   « Affichée », trait `.isSelected`, haptique. **Trois registres de cible, tous
+>   argumentés** : `.standard` **44 pt** (HIG, fil/détail/commentaires), `.compact`
+>   22 pt (pied de bulle — élargir grandirait CHAQUE bulle traduite), `.overlay`
+>   32 pt (story/reel — la rangée flotte sur un tap qui pilote la lecture).
+>   **Écarté : le `padding` négatif** qui élargit sans coûter de place — deux puces
+>   à 4 pt d'écart verraient leurs zones se CHEVAUCHER, et une frappe imprécise
+>   servirait la MAUVAISE langue, pire que le défaut corrigé.
+> - **Rechute de 248i sur un autre vocabulaire** : `a11y.post.show_language` et
+>   `a11y.comment.show_language` sont **identiques dans les sept locales** (idem
+>   pour la paire `*_shown`) — quatre entrées pour deux notions. Renommées
+>   `a11y.language.{show,shown}` (une clé au nom d'un ÉCRAN ne se réutilise pas
+>   sans mentir), jumelles retirées. Catalogue **3409 → 3406**, backlog non
+>   traduit **122 → 121**. Balayage préalable sur **tous** les `sourceRoots`, SDK
+>   compris (règle 248i).
+> - **⚠️ UNE GARDE SUIT SON HÔTE, ELLE NE SE RACCOURCIT PAS.**
+>   `BubbleFooterAccessibilityTests` verrouillait le trait `.isSelected` DANS
+>   `footerFlagPill` ; la règle a déménagé dans la source unique. La garde vérifie
+>   désormais les DEUX moitiés — le pied de bulle délègue, la source unique
+>   annonce. N'exiger que la délégation l'aurait rendue verte sur la régression
+>   exacte qu'elle interdit. C'est la leçon 248i (`NumericAccessibilityValueGuard`)
+>   rejouée, et elle s'est présentée SPONTANÉMENT dès qu'un lot déplace une règle.
+> - **Preuve hors toolchain** : 3 compteurs répliqués et exécutés sur `origin/main`
+>   (extrait par `git archive`) et sur la branche — copies du soulignement
+>   **8 → 0**, clés hors source unique **8 → 0**, cibles posées après leur geste
+>   **4 → 0** ; clés orphelines 0, catalogue reparsé, diff **94/235** histogram.
+> - **⚠️ Trois doutes assumés, à SOLDER au retour de CI** (leçon 247i) :
+>   (1) `.accessibilityAddTraits(isActive ? .isSelected : [])` sur un `Button` ;
+>   (2) `Font` comparé par `XCTAssertNotEqual` entre deux `MeeshyFont.relative` ;
+>   (3) `metrics.flagFont(...).weight(.medium)` sur un `Font` déjà construit.
+> - **Suites 250i+** : (a) mesurer la rangée méta du fil en Dynamic Type XXL —
+>   le remède serait le passage à la ligne, jamais la réduction de cible ;
+>   (b) `FeedPostCard:1364`, la paire de drapeaux de l'aperçu d'un commentaire,
+>   non interactive et non nommée ; (c) **`InteractiveProgressBar` est désormais
+>   la seule cible sub-44 connue qui ne soit pas une décision documentée** — huit
+>   boutons d'étape de 5 à 8 pt de haut ; (d) carry-over SDK de 248i.
+
 > **POINTEUR iOS AUTORITAIRE (mis à jour 248i, 2026-08-27)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 > - **Synchronisation 248i** : branche `claude/intelligent-noether-do61b0` **repartie de `origin/main` `40ea0579`** · itération **248i** · **PR [#3934](https://github.com/isopen-io/meeshy/pull/3934)** · tête `3667ad3e`. PR ouvertes au départ : **#3931** (iOS, clé de dédup du Prisme — `packages/MeeshySDK` + tests, **aucun fichier commun**) et **#3861** (gateway). Aucun conflit de fichier possible.
 > - **✅ Verdict CI — suite COMPLÈTE : 8685 passés / 0 échec / 5 sautés sur 8690** (`"result": "Passed"`, `testFailures: []`, run [33042166760](https://github.com/isopen-io/meeshy/actions/runs/33042166760), job **`Build app + tests unitaires`**, `COMPILE_ONLY: false`, simulateur iPhone 16 Pro / iOS 18.2). Les 16 autres checks de la PR sont verts (Trivy neutre, Voice E2E sauté par construction).

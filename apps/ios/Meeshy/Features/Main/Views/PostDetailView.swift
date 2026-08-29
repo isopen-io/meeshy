@@ -416,11 +416,13 @@ struct PostDetailView: View {
         return all.filter { $0 != activeLang }
     }
 
+    /// Le retour haptique appartient à `LanguageFlagChip` — seul appelant de
+    /// cette méthode — et non aux deux sorties de sa logique.
     private func handleFlagTap(_ code: String) {
         guard let post = displayPost else { return }
         let isOriginal = code == post.originalLanguage?.lowercased()
         let hasContent = isOriginal || post.translations?.keys.contains(where: { $0.lowercased() == code }) == true
-        if !hasContent { HapticFeedback.light(); return }
+        if !hasContent { return }
         if isOriginal {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 activeDisplayLangCode = code; secondaryLangCode = nil
@@ -431,7 +433,6 @@ struct PostDetailView: View {
                 secondaryLangCode = isShowing ? nil : code
             }
         }
-        HapticFeedback.light()
     }
 
     // Scrollable post-detail content (text, media, repost, actions, comments).
@@ -1291,39 +1292,13 @@ struct PostDetailView: View {
                             Text("·").font(.caption).foregroundColor(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
-                                let display = LanguageDisplay.from(code: code)
-                                let isActive = code == secondaryLangCode
-                                VStack(spacing: 1) {
-                                    Text(display?.flag ?? "?")
-                                        .font(isActive ? .caption : .caption2)
-                                        .scaleEffect(isActive ? 1.05 : 1.0)
-                                    if isActive {
-                                        RoundedRectangle(cornerRadius: 1)
-                                            .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                                            .frame(width: 10, height: 1.5)
-                                    }
+                                LanguageFlagChip(code: code, isActive: code == secondaryLangCode) {
+                                    handleFlagTap(code)
                                 }
-                                .animation(.easeInOut(duration: 0.2), value: isActive)
-                                .onTapGesture { handleFlagTap(code) }
-                                .accessibilityElement(children: .ignore)
-                                .accessibilityAddTraits(.isButton)
-                                .accessibilityLabel(String(format: String(localized: "a11y.post.show_language", defaultValue: "Afficher en %@", bundle: .main), display?.name ?? code))
-                                .accessibilityValue(isActive ? String(localized: "a11y.post.language_shown", defaultValue: "Affichée", bundle: .main) : "")
-                                .meeshyTapTarget(44)
                             }
 
                             if post.translations?.isEmpty == false {
-                                Image(systemName: "translate")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundColor(MeeshyColors.indigo400)
-                                    .onTapGesture {
-                                        HapticFeedback.light()
-                                        showTranslationSheet = true
-                                    }
-                                    .accessibilityAddTraits(.isButton)
-                                    .accessibilityLabel(String(localized: "a11y.post.translations", defaultValue: "Traductions", bundle: .main))
-                                    .accessibilityHint(String(localized: "a11y.post.translations.hint", defaultValue: "Affiche les langues disponibles", bundle: .main))
-                                    .meeshyTapTarget(44)
+                                TranslationsBadge { showTranslationSheet = true }
                             }
                         }
                     }
@@ -1716,22 +1691,8 @@ struct PostDetailView: View {
         if !flags.isEmpty {
             Text("·").font(.caption2).foregroundColor(theme.textMuted)
             ForEach(flags, id: \.self) { code in
-                let display = LanguageDisplay.from(code: code)
-                let isActive = code == repostSecondaryLangCode
-                VStack(spacing: 1) {
-                    Text(display?.flag ?? "?")
-                        .font(isActive ? .caption : .caption2)
-                        .scaleEffect(isActive ? 1.05 : 1.0)
-                    if isActive {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                            .frame(width: 8, height: 1.5)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.2), value: isActive)
-                .onTapGesture {
-                    let isOriginal = code == origLang
-                    if isOriginal {
+                LanguageFlagChip(code: code, isActive: code == repostSecondaryLangCode) {
+                    if code == origLang {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                             repostActiveDisplayLangCode = code
                             repostSecondaryLangCode = nil
@@ -1741,12 +1702,11 @@ struct PostDetailView: View {
                             repostSecondaryLangCode = repostSecondaryLangCode == code ? nil : code
                         }
                     }
-                    HapticFeedback.light()
                 }
             }
-            Image(systemName: "translate")
-                .font(.caption2.weight(.medium))
-                .foregroundColor(MeeshyColors.indigo400)
+            // Décorative ici : le repartage n'ouvre pas la liste des langues,
+            // et les drapeaux voisins portent déjà l'information « traduit ».
+            TranslationsBadge()
         }
     }
 
