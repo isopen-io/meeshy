@@ -114,6 +114,63 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingStepViews.swift",
         // 226i — share-link creation, the largest remaining gap after 225i (55 keys).
         "apps/ios/Meeshy/Features/Main/Views/CreateShareLinkView.swift",
+        // 263i (#4309) — quarante écrans qui passaient DÉJÀ les deux règles
+        // (chaque clé traduite dans les six locales requises ET `defaultValue`
+        // inline égal à la valeur du catalogue). Les épingler ne change pas une
+        // ligne de production : cela interdit seulement qu'ils REDESCENDENT.
+        //
+        // La liste s'arrête à quarante parce que 92 autres fichiers sont tout
+        // aussi propres, mais que le parseur qui les a élus n'est pas
+        // compilable ici : on épingle un lot que la CI valide, puis on poursuit.
+        //
+        // Ce qui MANQUE à cette liste dit l'essentiel :
+        // `NotificationSettingsView` (53 clés), `SecurityView` (44),
+        // `ConversationView` (43), `MyStoriesView` (42), `GlobalSearchView`
+        // (34)… en sont ABSENTS non par oubli mais parce que leurs
+        // `defaultValue` inline divergent de la valeur du catalogue — 648 clés
+        // dans tout le dépôt. `test_pinnedScreenDefaultsMatchCatalog` le refuse
+        // à raison : le catalogue est ce qui S'AFFICHE, donc un `defaultValue`
+        // divergent est du texte mort qui ment au lecteur (#4308).
+        "apps/ios/Meeshy/Features/Main/Views/SettingsView.swift",  // 87
+        "apps/ios/Meeshy/Features/Main/Components/SyncPillLabels.swift",  // 53
+        "apps/ios/Meeshy/Features/Main/Views/ParticipantProfileSheet.swift",  // 43
+        "apps/ios/Meeshy/Features/Main/Views/ProfileView.swift",  // 37
+        "apps/ios/Meeshy/Features/Main/Views/VoiceProfileManageView.swift",  // 34
+        "apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Sidebar.swift",  // 32
+        "apps/ios/Meeshy/Features/Main/Views/NearbyDiscoveryView.swift",  // 31
+        "apps/ios/Meeshy/Features/Main/Components/ConversationLockSheet.swift",  // 30
+        "apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift",  // 22
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/ConversationContextMenuView.swift",  // 21
+        "apps/ios/Meeshy/Features/Main/Views/LoginView.swift",  // 20
+        "apps/ios/Meeshy/Features/Main/Components/NearbyDiscoverabilityControl.swift",  // 17
+        "apps/ios/Meeshy/Features/Main/Components/LocationSharingSettingsSection.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Views/OnboardingView.swift",  // 16
+        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleConversationRow.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/AudioFullscreenView.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Views/CallBubbleView.swift",  // 14
+        "apps/ios/Meeshy/Features/Main/Focal/Lens/ReadingModeLensSheet.swift",  // 13
+        "apps/ios/Meeshy/Features/Main/Views/ActiveSessionsView.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Views/ConversationListQuickActions.swift",  // 12
+        "apps/ios/Meeshy/Features/Main/Components/MediaKindLabel.swift",  // 11
+        "apps/ios/Meeshy/Features/Main/Lentille/Mode/LentilleModeLabels.swift",  // 10
+        "apps/ios/Meeshy/Features/Main/Lentille/Row/LentilleBridgeLine.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/ViewModels/StoryViewModel.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift",  // 9
+        "apps/ios/Meeshy/Features/Main/Views/StoryExportShareSheet.swift",  // 9
+        "apps/ios/Meeshy/Features/Contacts/DiscoverViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerLeadingRail.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/CallEffectsOverlay.swift",  // 7
+        "apps/ios/Meeshy/Features/Main/Views/FriendRequestListView.swift",  // 7
+        "apps/ios/Meeshy/Features/Auth/Onboarding/OnboardingAnimations.swift",  // 6
+        "apps/ios/Meeshy/Features/Main/Composer/StickerLibraryPaste.swift",  // 6
     ]
 
     /// Keys exempt from `fullyLocalizedScreens`, each with the reason it is not
