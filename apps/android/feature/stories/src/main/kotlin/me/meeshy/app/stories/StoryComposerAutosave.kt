@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryComposerDraftSnapshot
 import me.meeshy.sdk.model.StoryDraftFilterSnapshot
 import me.meeshy.sdk.model.StoryDraftSlideSnapshot
@@ -27,9 +28,10 @@ sealed interface StoryDraftPersist {
  * ## Fidelity gate
  *
  * The [StoryComposerDraftSnapshot] round-trips a slide's caption, media, identity, its
- * 9:16 canvas pan/zoom [StorySlide.transform], its photo [StorySlide.filter] and its
- * pinned [StorySlide.durationSecondsPin] — but **not** its remaining on-canvas rich
- * content (text/sticker elements, background). So a draft carrying any of that would
+ * 9:16 canvas pan/zoom [StorySlide.transform], its photo [StorySlide.filter], its pinned
+ * [StorySlide.durationSecondsPin] and its colour/media [StorySlide.background] /
+ * [StorySlide.backgroundMediaId] / [StorySlide.backgroundLoop] — but **not** its remaining
+ * on-canvas rich content (text/sticker elements). So a draft carrying any of that would
  * restore lossily — a silent partial the
  * user never asked for. This layer
  * refuses that: a deck with still-unrepresentable rich content is treated as *not yet
@@ -81,31 +83,36 @@ object StoryComposerAutosave {
 
     /**
      * Whether [deck] is a freshly opened composer: exactly one slide, blank, with no media,
-     * no rich content, an identity canvas transform, no photo filter and no pinned duration —
-     * the only state a stored draft may be restored into. The transform, filter and duration
-     * pin are checked explicitly here (all three are persistable, so no longer part of
-     * [deckHasRichContent]) so a silently panned canvas, a picked filter or a pinned duration
-     * still counts as touched and a restore never clobbers it.
+     * no rich content, an identity canvas transform, no photo filter, no pinned duration and
+     * no colour/media backdrop — the only state a stored draft may be restored into. The
+     * transform, filter, duration pin and background are checked explicitly here (all are
+     * persistable, so no longer part of [deckHasRichContent]) so a silently panned canvas, a
+     * picked filter, a pinned duration or a chosen backdrop still counts as touched and a
+     * restore never clobbers it. ([backgroundLoop] needs no check: it can only differ from its
+     * `true` default once a [StorySlide.backgroundMediaId] is designated, which this predicate
+     * already rejects.)
      */
     fun deckIsPristine(deck: StorySlideDeck): Boolean =
         deck.size == 1 && !deck.hasText && !deck.hasMedia && !deckHasRichContent(deck) &&
-            deck.slides.all { it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null }
+            deck.slides.all {
+                it.transform.isIdentity && it.filter == null && it.durationSecondsPin == null &&
+                    it.background == null && it.backgroundMediaId == null
+            }
 
     /**
      * Whether any slide carries on-canvas content the snapshot cannot represent: a text or
-     * sticker element, or a colour/media background. Such a deck is not yet persistable. The
-     * 9:16 canvas transform, the photo filter and the pinned duration are **not** here — all
-     * three are now round-tripped by the snapshot ([StorySlide.transform] ↔
+     * sticker element. Such a deck is not yet persistable. The 9:16 canvas transform, the
+     * photo filter, the pinned duration and the colour/media background are **not** here — all
+     * are now round-tripped by the snapshot ([StorySlide.transform] ↔
      * [StoryDraftTransformSnapshot]; [StorySlide.filter]/[StorySlide.filterIntensity] ↔
      * [StoryDraftFilterSnapshot]; [StorySlide.durationSecondsPin] ↔
-     * [StoryDraftSlideSnapshot.durationSecondsPin]).
+     * [StoryDraftSlideSnapshot.durationSecondsPin]; [StorySlide.background] wire string /
+     * [StorySlide.backgroundMediaId] / [StorySlide.backgroundLoop] ↔
+     * [StoryDraftSlideSnapshot.background]/[StoryDraftSlideSnapshot.backgroundMediaId]/[StoryDraftSlideSnapshot.backgroundLoop]).
      */
     fun deckHasRichContent(deck: StorySlideDeck): Boolean =
         deck.slides.any { slide ->
-            slide.elements.isNotEmpty() ||
-                slide.stickers.isNotEmpty() ||
-                slide.background != null ||
-                slide.backgroundMediaId != null
+            slide.elements.isNotEmpty() || slide.stickers.isNotEmpty()
         }
 
     private fun purgeOrNone(previous: StoryComposerDraftSnapshot?): StoryDraftPersist =
@@ -126,6 +133,9 @@ fun StorySlideDeck.toDraftSnapshot(
             transform = it.transform.toDraftSnapshot(),
             filter = it.toFilterSnapshot(),
             durationSecondsPin = it.durationSecondsPin,
+            background = it.background?.serialized(),
+            backgroundMediaId = it.backgroundMediaId,
+            backgroundLoop = it.backgroundLoop,
         )
     },
     selectedId = selectedId,
@@ -138,8 +148,10 @@ fun StorySlideDeck.toDraftSnapshot(
  * Rebuilds a deck from a stored [StoryComposerDraftSnapshot], or `null` when the blob is
  * structurally broken (no slides, or a selection that names no present slide) — the deck
  * invariants would otherwise throw. The persistable fields (id / caption / media / canvas
- * transform / photo filter / pinned duration) are restored; every still-gated richer field
- * takes its fresh-slide default.
+ * transform / photo filter / pinned duration / colour+media background) are restored; every
+ * still-gated richer field takes its fresh-slide default. A persisted [StoryDraftSlideSnapshot.background]
+ * wire string is parsed by the tolerant [StoryBackgroundValue.parse] (a malformed value decays
+ * to a solid colour, never throws), so a corrupt backdrop never breaks the restore.
  */
 fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
     if (!isStructurallyValid) return null
@@ -153,6 +165,9 @@ fun StoryComposerDraftSnapshot.toDeck(): StorySlideDeck? {
                 filter = it.filter?.filter,
                 filterIntensity = it.filter?.intensity ?: StoryFilterMatrix.DEFAULT_INTENSITY,
                 durationSecondsPin = it.durationSecondsPin,
+                background = it.background?.let(StoryBackgroundValue::parse),
+                backgroundMediaId = it.backgroundMediaId,
+                backgroundLoop = it.backgroundLoop,
             )
         },
         selectedId = selectedId,

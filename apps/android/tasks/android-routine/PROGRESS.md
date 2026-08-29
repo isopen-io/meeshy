@@ -2,6 +2,76 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-29 **a story draft's colour/media background survives leaving the composer** (slice
+> `story-draft-persist-background`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
+> FOURTH dimension of the fidelity gate, after the canvas transform, the photo filter and the pinned
+> duration). Before this, a slide's `StoryBackgroundValue` backdrop (solid/gradient) and its designated
+> looping-background media (`backgroundMediaId` + `backgroundLoop`) counted as unrepresentable "rich
+> content": a user who picked a backdrop and left came back to it gone — or, if that backdrop was the only
+> non-primitive touch, saw the whole draft purged rather than restored lossily. The backdrop already had a
+> total wire projection (`StoryBackgroundValue.serialized()`/`parse()`, C11), so it never needed a
+> polymorphic serialiser — the object-list dimensions (text/sticker elements) do, and stay gated.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → empty — nothing of mine to merge.
+> Prior slice (`story-draft-persist-duration`) is on `main` (#4229, HEAD `def5a765`). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count`
+> = 0/0). Diff verified `apps/android` only (5 files: 2 main + 3 test).
+>
+> **The fix — three primitive fields (wire-string + media id + loop) + two mapper lines each side + a
+> decoupled gate** (mirrors the duration slice, but three fields because the backdrop and its media/loop
+> travel together). (1) `core:model`: `StoryDraftSlideSnapshot.background: String? = null` (the
+> `StoryBackgroundValue` wire string; `null` = no backdrop), `backgroundMediaId: String? = null`,
+> `backgroundLoop: Boolean = true` (matches the reader's `loop ?: true`; legacy blob and fresh slide both
+> decode to no-backdrop + looping). `hasContent` unchanged — a backdrop is fidelity, not restore-triggering
+> content (a colour with no other content is not publishable; a background media always rides an existing
+> `mediaIds` entry). (2) `:feature:stories` `StoryComposerAutosave`: `toDraftSnapshot` carries
+> `it.background?.serialized()` / `it.backgroundMediaId` / `it.backgroundLoop`; `toDeck` restores via the
+> tolerant `StoryBackgroundValue.parse` (a malformed value decays to a solid colour, never throws) +
+> verbatim media id/loop. (3) The gate is DECOUPLED: `deckHasRichContent` drops the two background arms (now
+> the gate holds only `elements`/`stickers`), and `deckIsPristine` gains `it.background == null &&
+> it.backgroundMediaId == null` so a silently-picked backdrop on an empty canvas still counts as touched
+> (`backgroundLoop` needs no check — it can only leave `true` once a media is designated, already rejected).
+>
+> **Tests: +18.** 6 `StoryComposerDraftSnapshotTest` (background/media/loop survive JSON round-trip; legacy
+> blob → null/looping default; colour-alone never worth restoring; changed/cleared background, changed media
+> id, changed loop are different content), 10 `StoryComposerAutosaveTest` (gate now false for a colour
+> background AND a background-media designation; blank slide with a backdrop not pristine; `toDraftSnapshot`
+> carries background/media+loop/undesignated-default; `toDeck` restores background/media+loop; colour bg AND
+> media+loop survive deck↔snapshot↔deck; a media slide with a colour bg resolves to **Save** carrying it;
+> choosing a bg on a saved draft resolves to **Save** not None), 2 `StoryComposerViewModelTest` end-to-end
+> (`persistDraft` saves the colour background; `onEnterComposer` restores it). The pre-existing
+> `deckHasRichContent is true for a background` test was flipped to assert the new persistable behaviour (a
+> genuine behaviour change, not a weakening). Non-tautological: each drives a real deck/snapshot through the
+> mapper/gate and asserts the transformed result. **Mutation-RED-proven TWICE**: re-adding
+> `slide.background != null || slide.backgroundMediaId != null` to `deckHasRichContent` reddens EXACTLY the 5
+> background gate/save tests (4 autosave + 1 VM persist); removing `&& it.background == null &&
+> it.backgroundMediaId == null` from `deckIsPristine` reddens EXACTLY `a single blank slide with a colour
+> background is not pristine` (1 failed); every other test stays green in both. Restored after each.
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools + `platforms;android-35`/`build-tools;35.0.0`,
+> then `sdkmanager --channel=3 "platforms;android-37.0"` (preview compileSdk 37). **Pristine android-37.0
+> alone worked** this container — AGP mapped compileSdk 37 → android-37.0 on first `./gradlew`, no hash
+> error, no copy→patch needed.
+>
+> **Verified — FULL local CI-mirror gate GREEN this run**: `./gradlew assembleDebug testDebugUnitTest`
+> (ALL modules) **BUILD SUCCESSFUL in 4m 29s**, 0 failed tasks; plus the three touched suites green in
+> isolation (StoryComposerDraftSnapshotTest, StoryComposerAutosaveTest, StoryComposerViewModelTest) and both
+> mutation proofs (5 RED then 1 RED, restored after each). Reviewer
+> **PASS** (diff `apps/android` only — 2 main + 3 test; SDK purity — the three fields are `:core:model`
+> primitives, the mapper/gate are `:feature:stories` orchestration; SSOT — `StorySlide.background`/
+> `backgroundMediaId`/`backgroundLoop` stay the deck's SSOT, the snapshot projects the wire string; no
+> tautological tests; no coverage floor lowered; the one flipped test asserts the NEW correct behaviour).
+>
+> **Next**: the two remaining fidelity-gate dimensions are the object-list ones — text elements
+> (`StoryTextElement`) and stickers (`StoryStickerElement`) → their own `@Serializable` mirror snapshots,
+> largest, one slice each. These are the LAST rich dimensions; once both land, the fidelity gate collapses
+> to nothing and `deckHasRichContent` becomes `false` (every dimension representable) — at which point the
+> gate and its purge branch should be retired, not left as dead code. A text element carries id + text +
+> normalised position + style fields (font, colour, alignment, size, rotation, scale); a sticker carries id
+> + emoji + position + scale + rotation. Each maps to a flat `@Serializable` mirror (no polymorphism needed
+> — all primitives). Scout `feature-parity.md` E. Stories read-only before branching. Do text elements
+> first (the composer's primary rich feature), stickers second.
+
 > On 2026-08-28 **a story draft's pinned on-screen duration survives leaving the composer** (slice
 > `story-draft-persist-duration`, feature-parity E. Stories — the "Draft save/restore …" line; lifts the
 > THIRD dimension of the fidelity gate, after the canvas transform and the photo filter). Before this, a
