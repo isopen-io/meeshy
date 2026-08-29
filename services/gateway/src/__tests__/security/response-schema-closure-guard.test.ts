@@ -327,55 +327,69 @@ export function sweepMissingSuccessSchemas(routesDir: string): ReadonlyArray<Mis
 // qui a posé ce témoin (issue #4168) plutôt que d'être répété 33 fois ici.
 // =============================================================================
 
-const FROZEN_OPEN_RESPONSE_SCHEMAS: ReadonlyArray<OpenResponseSite> = [
-  { file: 'admin/content.ts', line: 422, statusCode: '200' },
-  { file: 'admin/content.ts', line: 622, statusCode: '200' },
-  { file: 'admin/posts.ts', line: 145, statusCode: '200' },
-  { file: 'admin/posts.ts', line: 446, statusCode: '200' },
-  { file: 'conversations/messages.ts', line: 1733, statusCode: '200' },
-  { file: 'conversations/messages.ts', line: 1735, statusCode: '200' },
-  { file: 'conversations/threads.ts', line: 187, statusCode: '200' },
-  { file: 'me/export.ts', line: 83, statusCode: '200' },
-  { file: 'me/export.ts', line: 88, statusCode: '200' },
-  { file: 'me/export.ts', line: 94, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 83, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 84, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 85, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 86, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 87, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 88, statusCode: '200' },
-  { file: 'me/preferences/index.ts', line: 89, statusCode: '200' },
-  { file: 'me/preferences/preference-router-factory.ts', line: 125, statusCode: '200' },
-  { file: 'me/preferences/preference-router-factory.ts', line: 164, statusCode: '200' },
-  { file: 'me/preferences/preference-router-factory.ts', line: 280, statusCode: '200' },
-  { file: 'user-stats.ts', line: 203, statusCode: '200' },
-  { file: 'users/preferences.ts', line: 374, statusCode: '200' },
-  { file: 'voice-profile.ts', line: 649, statusCode: '200' },
+/**
+ * CLÉ SANS NUMÉRO DE LIGNE, et c'est une loi du dépôt : « l'inventaire est clé
+ * par fichier + champ + code de statut, JAMAIS par numéro de ligne — une clé de
+ * ligne dérive à la première édition et transforme le cliquet en bruit »
+ * (`services/gateway/CLAUDE.md`). La première version de ce témoin l'ignorait,
+ * et elle a rougi le jour même : une session voisine a inséré une ligne dans
+ * `conversations/messages.ts`, et deux sites INCHANGÉS sont passés de 1733/1735
+ * à 1734/1736. Un cliquet qui rougit sur une insertion sans rapport apprend à
+ * ses lecteurs à le regeler sans lire — c'est-à-dire à ne plus le lire.
+ *
+ * Plusieurs sites d'un même fichier partagent le même code de statut : la valeur
+ * est donc leur NOMBRE. Un site ouvert de plus fait rougir (le compte monte), un
+ * site réparé aussi (le compte descend) — et le retirer de cet inventaire fait
+ * partie du correctif qui l'a réparé. La CIBLE est un objet vide.
+ */
+const FROZEN_OPEN_RESPONSE_SCHEMAS: Readonly<Record<string, number>> = {
+  'admin/content.ts|200': 2,
+  'admin/posts.ts|200': 2,
+  'conversations/messages.ts|200': 2,
+  'conversations/threads.ts|200': 1,
+  'me/export.ts|200': 3,
+  'me/preferences/index.ts|200': 7,
+  'me/preferences/preference-router-factory.ts|200': 3,
+  'user-stats.ts|200': 1,
+  'users/preferences.ts|200': 1,
+  'voice-profile.ts|200': 1,
+};
+
+/**
+ * Même règle qu'au-dessus. Ici le discriminant naturel n'est pas un compte mais
+ * la ROUTE elle-même : (méthode, chemin) identifie le site sans ambiguïté et
+ * survit à toute édition du fichier.
+ */
+const FROZEN_MISSING_SUCCESS_SCHEMAS: readonly string[] = [
+  'auth/revoke-all-sessions.ts|get|/revoke-all-sessions|no-response-key',
+  'conversations/ban.ts|patch|/conversations/:id/participants/:userId/ban|no-response-key',
+  'conversations/ban.ts|patch|/conversations/:id/participants/:userId/unban|no-response-key',
+  'conversations/core.ts|get|/conversations/:id/analysis|response-no-success-code',
+  'conversations/delete-for-me.ts|delete|/conversations/:id/delete-for-me|no-response-key',
+  'conversations/leave.ts|post|/conversations/:id/leave|no-response-key',
+  'invitations.ts|post|/invitations/email|no-response-key',
+  'me/delete-account.ts|get|/account/deletion|no-response-key',
+  'posts/interactions.ts|post|/posts/:postId/impression|no-response-key',
+  'posts/interactions.ts|post|/posts/impressions/batch|no-response-key',
 ];
 
-const FROZEN_MISSING_SUCCESS_SCHEMAS: ReadonlyArray<MissingSuccessSite> = [
-  { file: 'auth/revoke-all-sessions.ts', line: 26, method: 'get', path: '/revoke-all-sessions', kind: 'no-response-key' },
-  { file: 'conversations/ban.ts', line: 31, method: 'patch', path: '/conversations/:id/participants/:userId/ban', kind: 'no-response-key' },
-  { file: 'conversations/ban.ts', line: 208, method: 'patch', path: '/conversations/:id/participants/:userId/unban', kind: 'no-response-key' },
-  { file: 'conversations/core.ts', line: 2148, method: 'get', path: '/conversations/:id/analysis', kind: 'response-no-success-code' },
-  { file: 'conversations/delete-for-me.ts', line: 23, method: 'delete', path: '/conversations/:id/delete-for-me', kind: 'no-response-key' },
-  { file: 'conversations/leave.ts', line: 24, method: 'post', path: '/conversations/:id/leave', kind: 'no-response-key' },
-  { file: 'invitations.ts', line: 20, method: 'post', path: '/invitations/email', kind: 'no-response-key' },
-  { file: 'me/delete-account.ts', line: 409, method: 'get', path: '/account/deletion', kind: 'no-response-key' },
-  { file: 'posts/interactions.ts', line: 481, method: 'post', path: '/posts/:postId/impression', kind: 'no-response-key' },
-  { file: 'posts/interactions.ts', line: 544, method: 'post', path: '/posts/impressions/batch', kind: 'no-response-key' },
-];
+/** Compte les sites ouverts par (fichier, code de statut) — la clé stable. */
+function compterParFichierEtStatut(sites: ReadonlyArray<OpenResponseSite>): Record<string, number> {
+  return sites.reduce<Record<string, number>>((acc, s) => {
+    const cle = `${s.file}|${s.statusCode}`;
+    return { ...acc, [cle]: (acc[cle] ?? 0) + 1 };
+  }, {});
+}
 
-function byFileThenLine<T extends { readonly file: string; readonly line: number }>(a: T, b: T): number {
-  return a.file === b.file ? a.line - b.line : a.file.localeCompare(b.file);
+/** Clé stable d'un site sans schéma de succès : la ROUTE, jamais sa ligne. */
+function cleDeRoute(s: MissingSuccessSite): string {
+  return `${s.file}|${s.method}|${s.path}|${s.kind}`;
 }
 
 describe('Aucun schéma de réponse OUVERT (additionalProperties: true) hors inventaire figé', () => {
   it("n'introduit aucun site neuf sous services/gateway/src/routes/", () => {
-    const found = [...sweepOpenResponseSchemas(ROUTES_DIR)].sort(byFileThenLine);
-    const frozen = [...FROZEN_OPEN_RESPONSE_SCHEMAS].sort(byFileThenLine);
-
-    expect(found).toEqual(frozen);
+    expect(compterParFichierEtStatut(sweepOpenResponseSchemas(ROUTES_DIR)))
+      .toEqual(FROZEN_OPEN_RESPONSE_SCHEMAS);
   });
 
   it("critères 1 et 2 de #4168 — les trois routes nommées par l'issue et leurs deux jumelles fermées par ce lot ne portent PLUS additionalProperties:true, indépendamment de l'inventaire figé", () => {
@@ -392,10 +406,8 @@ describe('Aucun schéma de réponse OUVERT (additionalProperties: true) hors inv
 
 describe('Aucun schéma de réponse ABSENT (pas de code de succès déclaré) hors inventaire figé', () => {
   it("n'introduit aucun site neuf sous services/gateway/src/routes/", () => {
-    const found = [...sweepMissingSuccessSchemas(ROUTES_DIR)].sort(byFileThenLine);
-    const frozen = [...FROZEN_MISSING_SUCCESS_SCHEMAS].sort(byFileThenLine);
-
-    expect(found).toEqual(frozen);
+    expect(sweepMissingSuccessSchemas(ROUTES_DIR).map(cleDeRoute).sort())
+      .toEqual([...FROZEN_MISSING_SUCCESS_SCHEMAS].sort());
   });
 
   it('les cinq routes fermées par #4168 lot 1 déclarent toutes un code de succès', () => {
