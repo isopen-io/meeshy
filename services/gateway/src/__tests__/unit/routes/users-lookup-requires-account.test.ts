@@ -122,9 +122,34 @@ describe('… et les filtres que la jumelle authentifiée applique déjà', () =
     await app.inject({ method: 'GET', url });
 
     const where = findFirst.mock.calls[0][0].where as Record<string, unknown>;
-    // Sans ces deux clauses, un compte désactivé restait consultable et
-    // `deactivatedAt` était servi.
-    expect(where).toMatchObject({ isActive: true, deletedAt: null });
+    // Sans ces clauses, un compte désactivé restait consultable et
+    // `deactivatedAt` était servi. La forme du « non supprimé » est traitée par
+    // le témoin suivant — elle n'est PAS `deletedAt: null` seul.
+    expect(where).toMatchObject({ isActive: true });
+
+    await app.close();
+  });
+
+  it.each(PORTES)('$nom : n’écarte PAS une ligne dont `deletedAt` est ABSENT', async ({ url }) => {
+    const { prisma, findFirst } = buildApp({ authentifie: true, cible: null });
+    const app = await monter(prisma, true);
+
+    await app.inject({ method: 'GET', url });
+
+    const where = findFirst.mock.calls[0][0].where as Record<string, any>;
+
+    // Le piège que le dépôt documente (`packages/shared/CLAUDE.md` § « Absent
+    // vs null ») : sur le connecteur MongoDB, Prisma enveloppe les filtres
+    // scalaires, si bien qu'un `{ deletedAt: null }` NU ne matche que les
+    // documents où le champ est présent-et-nul. Mesuré en intégration : les 222
+    // comptes ont `deletedAt` ABSENT — la clause seule écartait tout le monde,
+    // et la route rendait 404 sur des comptes parfaitement vivants.
+    //
+    // Ce témoin porte sur la FORME de la clause, parce qu'un double Prisma ne
+    // reproduit pas la sémantique du connecteur : aucun test d'intégration de
+    // handler ne pouvait attraper ce défaut.
+    expect(where.deletedAt).toBeUndefined();
+    expect(JSON.stringify(where.AND)).toContain('isSet');
 
     await app.close();
   });

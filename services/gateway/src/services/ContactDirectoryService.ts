@@ -146,7 +146,18 @@ export function contactLookupScope(options: {
 }): Record<string, unknown> {
   return {
     isActive: true,
-    deletedAt: null,
+    // `deletedAt: null` seul serait un PIÈGE, et le dépôt le documente
+    // (`packages/shared/CLAUDE.md` § « Absent vs null ») : sur le connecteur
+    // MongoDB, Prisma enveloppe les filtres scalaires, si bien que
+    // `{ deletedAt: null }` ne matche QUE les documents où le champ est
+    // présent-et-nul. Il n'existe pas dans les lignes créées avant que la
+    // colonne soit ajoutée — mesuré en intégration : les 222 comptes ont
+    // `deletedAt` ABSENT. La clause seule écartait donc TOUT LE MONDE.
+    //
+    // `AND` et non `OR` à la racine : l'appelant pose lui-même un `OR` pour sa
+    // liste d'identifiants (`ContactDirectoryService.match`), et deux `OR`
+    // frères s'écraseraient en silence.
+    AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
     id: { notIn: [...options.blockedByViewer] },
     NOT: { blockedUserIds: { has: options.viewerId } },
   };
@@ -189,7 +200,12 @@ export class ContactDirectoryService {
       where: {
         id: { notIn: [excludeUserId, ...blockedUserIds] },
         isActive: true,
-        deletedAt: null,
+        // Même piège que dans `contactLookupScope` ci-dessus : `deletedAt: null`
+        // seul n'atteint aucune ligne dont le champ est ABSENT — c'est-à-dire
+        // toutes celles créées avant l'ajout de la colonne. Cette route étant
+        // sans appelant (le chemin iOS qui l'utilisait est mort), personne ne
+        // l'a vu.
+        AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }],
         // Un compte qui a bloqué le demandeur ne doit pas ressortir de son
         // carnet d'adresses — le blocage vaut dans les deux sens.
         NOT: { blockedUserIds: { has: excludeUserId } },
