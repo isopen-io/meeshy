@@ -203,7 +203,14 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'conversations/ban.ts': 2,
   'conversations/core.ts': 8,
   'conversations/leave.ts': 1,
-  'conversations/messages.ts': 5,
+  // 5 -> 3 : #4177 a retire du travail MORT, pas ajoute une borne. Trois lectures
+  // (currentUserReactions au niveau du message, currentUserConsumption par piece
+  // jointe, et le bloc reactions brut sous include_reactions) etaient calculees
+  // puis jetees a la serialisation -- aucun schema ne les declarait, donc elles
+  // n'atteignaient AUCUN client. Deux d'entre elles etaient des findMany nus.
+  // Un cliquet qui descend parce que le travail a disparu est la seule facon
+  // agreable de le voir descendre.
+  'conversations/messages.ts': 3,
   // Cinq, et non sept : deux sites ont suivi le geste de retrait d'un
   // participant dans son propre fichier (#4176). Le compte total est inchangé.
   'conversations/participants.ts': 5,
@@ -215,7 +222,12 @@ const FROZEN_UNBOUNDED_FINDMANY: Readonly<Record<string, number>> = {
   'directory/availability.ts': 1,
   'directory/blocks.ts': 1,
   'directory/presence.ts': 2,
-  'links/creation.ts': 2,
+  // DEPLACE, pas ajoute : #4169 a fait converger les deux portes de creation de
+  // lien de partage vers un ecrivain unique (mintConversationShareLink), et les
+  // deux sites non bornes l'ont suivi tels quels depuis links/creation.ts. Le
+  // total du depot est inchange ; seule la CLE change, parce que ce cliquet est
+  // indexe par FICHIER. Ne pas lire cette ligne comme une nouvelle dette.
+  'links/utils/share-link-mint.ts': 2,
   'me/export.ts': 2,
   'posts/hashtag.ts': 1,
   // `posts/interactions.ts` a perdu le sien en meme temps que ses routes : il
