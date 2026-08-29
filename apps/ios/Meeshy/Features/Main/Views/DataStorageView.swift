@@ -82,7 +82,7 @@ struct DataStorageView: View {
 
     private var cacheSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.data.storage.section.cache", defaultValue: "Cache media", bundle: .main), icon: "externaldrive.fill", color: accentColor)
+            sectionHeader(title: String(localized: "settings.data.storage.section.cache", defaultValue: "Cache média", bundle: .main), icon: "externaldrive.fill", color: accentColor)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
@@ -90,7 +90,7 @@ struct DataStorageView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 8) {
-                            Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
+                            Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache média", bundle: .main))
                                 .font(MeeshyFont.relative(14, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
 
@@ -101,7 +101,7 @@ struct DataStorageView: View {
                                 .foregroundColor(Color(hex: accentColor))
                         }
 
-                        Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et videos mis en cache", bundle: .main))
+                        Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et vidéos mis en cache", bundle: .main))
                             .font(MeeshyFont.relative(12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                     }

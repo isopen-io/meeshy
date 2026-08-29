@@ -43,12 +43,12 @@ struct ProfileLanguagePickerSheet: View {
                     .padding(.top, 8)
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Search a language", bundle: .main))
+            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Rechercher une langue", bundle: .main))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Close", bundle: .main)) { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
                         .foregroundColor(MeeshyColors.indigo500)
                 }
             }
@@ -66,7 +66,7 @@ struct ProfileLanguagePickerSheet: View {
                     .font(.title3)
                     .foregroundColor(theme.textMuted)
                     .frame(width: 36)
-                Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main))
+                Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main))
                     .font(.body.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -84,7 +84,7 @@ struct ProfileLanguagePickerSheet: View {
                         : Color.clear)
             )
         }
-        .accessibilityLabel(Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main)))
+        .accessibilityLabel(Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main)))
         .accessibilityAddTraits(selectedCode.isEmpty ? .isSelected : [])
     }
 
@@ -129,6 +129,6 @@ struct ProfileLanguagePickerSheet: View {
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityHint(isSelected
             ? Text("")
-            : Text(String(localized: "language-picker.select.hint", defaultValue: "Sets this as your language", bundle: .main)))
+            : Text(String(localized: "language-picker.select.hint", defaultValue: "Définit cette langue", bundle: .main)))
     }
 }

@@ -38,7 +38,7 @@ struct KeypadTab: View {
     private var inputBar: some View {
         HStack(spacing: 10) {
             TextField(
-                String(localized: "keypad.input.placeholder", defaultValue: "Numero ou nom", bundle: .main),
+                String(localized: "keypad.input.placeholder", defaultValue: "Numéro ou nom", bundle: .main),
                 text: $viewModel.input
             )
             .font(MeeshyFont.relative(26, weight: .medium, design: .rounded))
@@ -46,7 +46,7 @@ struct KeypadTab: View {
             .multilineTextAlignment(.center)
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
-            .accessibilityLabel(String(localized: "keypad.input.a11y", defaultValue: "Champ numero ou nom", bundle: .main))
+            .accessibilityLabel(String(localized: "keypad.input.a11y", defaultValue: "Champ numéro ou nom", bundle: .main))
 
             if !viewModel.input.isEmpty {
                 Button {
@@ -106,14 +106,14 @@ struct KeypadTab: View {
         case .loaded:
             // A search actually ran and returned nothing.
             hintMessage(
-                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouve", bundle: .main),
-                subtitle: String(localized: "keypad.no-match.subtitle", defaultValue: "Verifiez le numero ou le nom saisi.", bundle: .main)
+                title: String(localized: "keypad.no-match.title", defaultValue: "Aucun contact trouvé", bundle: .main),
+                subtitle: String(localized: "keypad.no-match.subtitle", defaultValue: "Vérifiez le numéro ou le nom saisi.", bundle: .main)
             )
         default:
             // Idle / too-short / error: prompt without falsely claiming a
             // completed search found nothing.
             hintMessage(
-                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numero ou un nom", bundle: .main),
+                title: String(localized: "keypad.prompt.title", defaultValue: "Composez un numéro ou un nom", bundle: .main),
                 subtitle: String(localized: "keypad.prompt.subtitle", defaultValue: "Trouvez une personne par numéro de téléphone ou par nom.", bundle: .main)
             )
         }
@@ -165,7 +165,7 @@ struct KeypadTab: View {
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(resultRowAccessibilityLabel(for: user, name: name, presence: presence))
-            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvre le profil", bundle: .main))
+            .accessibilityHint(String(localized: "keypad.result.open-profile.a11y", defaultValue: "Ouvrir le profil", bundle: .main))
 
             dialMenu(for: user, displayName: name)
         }

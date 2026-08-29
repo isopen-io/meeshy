@@ -33,7 +33,7 @@ struct FocalDeletedRow: View, Equatable {
     let isDark: Bool
 
     var body: some View {
-        Text(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
+        Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
             .font(MeeshyFont.relative(FocalMetrics.Text.size, weight: .regular))
             .italic()
             .foregroundColor(ThemeManager.shared.textMuted)
@@ -48,7 +48,7 @@ struct FocalBurnedRow: View, Equatable {
     let isDark: Bool
 
     var body: some View {
-        Text(String(localized: "bubble.system.burned", defaultValue: "Seen and deleted", bundle: .main))
+        Text(String(localized: "bubble.system.burned", defaultValue: "Vu et supprimé", bundle: .main))
             .font(MeeshyFont.relative(FocalMetrics.Text.size, weight: .regular))
             .italic()
             .foregroundColor(ThemeManager.shared.textMuted)

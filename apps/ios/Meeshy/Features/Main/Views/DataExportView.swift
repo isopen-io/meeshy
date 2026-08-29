@@ -89,7 +89,7 @@ struct DataExportView: View {
 
             Spacer()
 
-            Text(String(localized: "settings.data.export.title", defaultValue: "Export de donnees", bundle: .main))
+            Text(String(localized: "settings.data.export.title", defaultValue: "Export de données", bundle: .main))
                 .font(MeeshyFont.relative(17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -272,8 +272,8 @@ struct DataExportView: View {
                         .font(MeeshyFont.relative(16, weight: .semibold))
                 }
                 Text(exportComplete
-                    ? String(localized: "settings.data.export.button.done", defaultValue: "Export termine", bundle: .main)
-                    : String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
+                    ? String(localized: "settings.data.export.button.done", defaultValue: "Export terminé", bundle: .main)
+                    : String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes données", bundle: .main))
                     .font(MeeshyFont.relative(15, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -285,7 +285,7 @@ struct DataExportView: View {
             )
         }
         .disabled(isExporting)
-        .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
+        .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes données", bundle: .main))
         .accessibilityHint(isExporting
             ? String(localized: "settings.data.export.hint.exporting", defaultValue: "Export en cours", bundle: .main)
             : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos données", bundle: .main))

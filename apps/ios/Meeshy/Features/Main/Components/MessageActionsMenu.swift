@@ -113,14 +113,14 @@ struct MessageActionsMenu: View {
 
     private func label(_ a: PrimaryAction) -> String {
         switch a {
-        case .edit: return String(localized: "action.edit", defaultValue: "Éditer", bundle: .main)
+        case .edit: return String(localized: "action.edit", defaultValue: "Modifier", bundle: .main)
         case .translate: return String(localized: "action.translate", defaultValue: "Traduire", bundle: .main)
         case .copy: return String(localized: "action.copy", defaultValue: "Copier", bundle: .main)
         case .saveMedia: return String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)
         case .compose: return String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
         case .pin: return String(localized: "action.pin", defaultValue: "Épingler", bundle: .main)
         case .unpin: return String(localized: "action.unpin", defaultValue: "Désépingler", bundle: .main)
-        case .star: return String(localized: "action.star", defaultValue: "Favori", bundle: .main)
+        case .star: return String(localized: "action.star", defaultValue: "Ajouter aux favoris", bundle: .main)
         case .unstar: return String(localized: "action.unstar", defaultValue: "Retirer des favoris", bundle: .main)
         case .more: return String(localized: "action.more", defaultValue: "Plus…", bundle: .main)
         case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)

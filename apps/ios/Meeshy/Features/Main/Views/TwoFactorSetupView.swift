@@ -59,7 +59,7 @@ struct TwoFactorSetupView: View {
                     .padding(.top, MeeshySpacing.lg)
                 }
             }
-            .navigationTitle(String(localized: "2fa_setup_title", defaultValue: "Configurer 2FA"))
+            .navigationTitle(String(localized: "2fa_setup_title", defaultValue: "Configurer la 2FA"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -218,7 +218,7 @@ struct TwoFactorSetupView: View {
                     if verifying {
                         ProgressView().scaleEffect(0.7).tint(.white)
                     }
-                    Text(String(localized: "2fa_verify_button", defaultValue: "Verifier et activer"))
+                    Text(String(localized: "2fa_verify_button", defaultValue: "Vérifier et activer"))
                         .font(MeeshyFont.relative(15, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -353,7 +353,7 @@ struct TwoFactorSetupView: View {
                 HapticFeedback.light()
                 initiateSetup()
             } label: {
-                Text(String(localized: "2fa_retry", defaultValue: "Reessayer"))
+                Text(String(localized: "2fa_retry", defaultValue: "Réessayer"))
                     .font(MeeshyFont.relative(14, weight: .semibold))
                     .foregroundColor(tfaColor)
             }
@@ -422,7 +422,7 @@ struct TwoFactorDisableView: View {
                         .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                         .accessibilityHidden(true)
 
-                    Text(String(localized: "2fa_disable_title", defaultValue: "Desactiver l'authentification a deux facteurs"))
+                    Text(String(localized: "2fa_disable_title", defaultValue: "Désactiver l'authentification à deux facteurs"))
                         .font(MeeshyFont.relative(16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .multilineTextAlignment(.center)
@@ -503,7 +503,7 @@ struct TwoFactorDisableView: View {
                     Spacer()
                 }
             }
-            .navigationTitle(String(localized: "2fa_disable_nav_title", defaultValue: "Desactiver 2FA"))
+            .navigationTitle(String(localized: "2fa_disable_nav_title", defaultValue: "Désactiver la 2FA"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -581,7 +581,7 @@ struct TwoFactorBackupCodesView: View {
                                     verificationCode = ""
                                     viewModel.clearError()
                                 } label: {
-                                    Text(String(localized: "2fa_retry", defaultValue: "Reessayer"))
+                                    Text(String(localized: "2fa_retry", defaultValue: "Réessayer"))
                                         .font(MeeshyFont.relative(14, weight: .semibold))
                                         .foregroundColor(tfaColor)
                                 }

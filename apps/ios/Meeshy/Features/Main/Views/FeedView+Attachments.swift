@@ -338,7 +338,7 @@ extension FeedView {
             }
             feedCleanupAttachments()
             HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main))
             Task {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
@@ -524,7 +524,7 @@ extension FeedView {
                 // les deux cas, mais dire « publié » sans réseau serait faux.
                 FeedbackToastManager.shared.showSuccess(
                     NetworkMonitor.shared.isOffline
-                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main)
+                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
                         : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
                 )
             }
@@ -930,7 +930,7 @@ struct FeedComposerSheet: View {
                 Image(systemName: forcePlainPost ? "doc.text" : "play.rectangle.on.rectangle.fill")
                     .font(MeeshyFont.relative(10))
                 Text(forcePlainPost
-                    ? String(localized: "feed.composer.type.post", defaultValue: "Post", bundle: .main)
+                    ? String(localized: "feed.composer.type.post", defaultValue: "Publier", bundle: .main)
                     : String(localized: "feed.composer.type.reel", defaultValue: "Réel", bundle: .main))
                     .font(MeeshyFont.relative(12))
             }
@@ -1757,7 +1757,7 @@ struct FeedComposerSheet: View {
             ).rawValue
             onDismiss()
             HapticFeedback.success()
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main))
             Task {
                 await viewModel.createOfflineMediaPost(
                     localMediaURLs: sources,
@@ -1880,7 +1880,7 @@ struct FeedComposerSheet: View {
                 HapticFeedback.success()
                 FeedbackToastManager.shared.showSuccess(
                     NetworkMonitor.shared.isOffline
-                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Post en attente d'envoi", bundle: .main)
+                        ? String(localized: "feed.post.toast.pendingOffline", defaultValue: "Publication en attente d'envoi", bundle: .main)
                         : String(localized: "feed.post.toast.audioPublished", defaultValue: "Post audio publié", bundle: .main)
                 )
             }

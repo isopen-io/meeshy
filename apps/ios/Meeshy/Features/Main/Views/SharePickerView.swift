@@ -167,8 +167,8 @@ struct SharePickerView: View {
         case .text: return String(localized: "share.content.text", defaultValue: "Texte", bundle: .main)
         case .url: return String(localized: "share.content.url", defaultValue: "Lien", bundle: .main)
         case .image: return String(localized: "share.content.image", defaultValue: "Image", bundle: .main)
-        case .message: return String(localized: "share.content.message", defaultValue: "Message transf\u{00e9}r\u{00e9}", bundle: .main)
-        case .story: return String(localized: "share.content.story", defaultValue: "Story partag\u{00e9}e", bundle: .main)
+        case .message: return String(localized: "share.content.message", defaultValue: "Message transféré", bundle: .main)
+        case .story: return String(localized: "share.content.story", defaultValue: "Story partagée", bundle: .main)
         }
     }
 
@@ -179,9 +179,9 @@ struct SharePickerView: View {
         case .url(let url):
             return url.absoluteString
         case .image:
-            return String(localized: "share.preview.image", defaultValue: "Photo \u{00e0} partager", bundle: .main)
+            return String(localized: "share.preview.image", defaultValue: "Photo à partager", bundle: .main)
         case .message(let msg):
-            return msg.content.isEmpty ? String(localized: "share.preview.media", defaultValue: "[M\u{00e9}dia]", bundle: .main) : String(msg.content.prefix(120))
+            return msg.content.isEmpty ? String(localized: "share.preview.media", defaultValue: "[Média]", bundle: .main) : String(msg.content.prefix(120))
         case .story(let item, let authorName):
             if let content = item.content, !content.isEmpty {
                 return String(content.prefix(120))
@@ -214,7 +214,7 @@ struct SharePickerView: View {
                         .font(MeeshyFont.relative(16))
                         .foregroundColor(theme.textMuted)
                 }
-                .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
+                .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -234,7 +234,7 @@ struct SharePickerView: View {
             Spacer()
             ProgressView()
                 .tint(MeeshyColors.indigo400)
-                .accessibilityLabel(String(localized: "share.loading", defaultValue: "Chargement des conversations\u{2026}", bundle: .main))
+                .accessibilityLabel(String(localized: "share.loading", defaultValue: "Chargement des conversations…", bundle: .main))
             Spacer()
         }
     }
@@ -326,12 +326,12 @@ struct SharePickerView: View {
                 .font(.system(size: 26))
                 .foregroundColor(MeeshyColors.success)
                 .transition(.scale.combined(with: .opacity))
-                .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoy\u{00e9}", bundle: .main))
+                .accessibilityLabel(String(localized: "share.sent", defaultValue: "Envoyé", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 26, height: 26)
-                .accessibilityLabel(String(localized: "share.sending", defaultValue: "Envoi en cours\u{2026}", bundle: .main))
+                .accessibilityLabel(String(localized: "share.sending", defaultValue: "Envoi en cours…", bundle: .main))
         } else {
             Button {
                 shareToConversation(conv)
@@ -342,7 +342,7 @@ struct SharePickerView: View {
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)
-            .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Send to", bundle: .main)) \(conv.displayName)")
+            .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Envoyer à", bundle: .main)) \(conv.displayName)")
         }
     }
 
@@ -352,10 +352,10 @@ struct SharePickerView: View {
         switch type {
         case .direct: return String(localized: "conversation.type.direct", defaultValue: "Direct", bundle: .main)
         case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
-        case .public: return String(localized: "conversation.type.public", defaultValue: "Publique", bundle: .main)
-        case .global: return String(localized: "conversation.type.global", defaultValue: "Globale", bundle: .main)
-        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaut\u{00e9}", bundle: .main)
-        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
+        case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
+        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
+        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Channel", bundle: .main)
         case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
         case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Communication", bundle: .main)
         }

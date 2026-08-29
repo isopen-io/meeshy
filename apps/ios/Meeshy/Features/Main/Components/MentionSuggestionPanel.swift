@@ -109,6 +109,6 @@ struct MentionSuggestionPanel: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(String(localized: "composer.mention.loading", defaultValue: "Loading mentions", bundle: .main))
+        .accessibilityLabel(String(localized: "composer.mention.loading", defaultValue: "Chargement des mentions", bundle: .main))
     }
 }

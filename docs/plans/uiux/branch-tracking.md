@@ -39,8 +39,41 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 264i | [#4312](https://github.com/isopen-io/meeshy/pull/4312) | `66f6dfc3` | #4311 |
 > | 265i | [#4315](https://github.com/isopen-io/meeshy/pull/4315) | `24c556b8` | #4313 |
 > | 266i | [#4320](https://github.com/isopen-io/meeshy/pull/4320) | `6fc9486c` | #4319 |
+> | 267i | [#4323](https://github.com/isopen-io/meeshy/pull/4323) | `a9b5ee8c` | #4322 |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `6fc9486c` — base de 267i.
+> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `a9b5ee8c` — base de 268i.
+>
+> ### 268i — le code disait « Reply » là où l'app affiche « Répondre » (#4308, avancée)
+>
+> | mesure | valeur |
+> |---|---|
+> | littéraux réconciliés | **498** dans **105** fichiers |
+> | écrans épinglés | 135 → **240** |
+> | clés gardées | 1 210 → **2 761** |
+> | règle A / règle B | **0** / **0** |
+> | fichiers bloqués | 164 → **59** |
+>
+> - **La contrainte héritée était fausse, et mesurable.** #4308 disait « à faire
+>   avec un compilateur : beaucoup contiennent des apostrophes (`J'aime`) et des
+>   accents ». Or **ni l'apostrophe ni l'accent ne s'échappent en Swift** — seuls
+>   `"` et `\`. Mesuré : **500 des 504** divergences ne demandent AUCUN
+>   échappement, **0** contient un guillemet, un antislash ou un saut de ligne.
+>   L'énoncé a suffi à figer la tâche plusieurs itérations. **Vérifier la
+>   contrainte qu'on hérite avant de la transmettre.**
+> - Remplacement sur les **bornes absolues** du littéral (segment à parenthèses
+>   équilibrées), vérifiées avant écriture, appliquées de droite à gauche ; trois
+>   contrôles par fichier (clés identiques, lignes identiques, appels
+>   identiques). Diff **+487 / −487**, neutre en lignes — plusieurs de ces
+>   fichiers sont dans la dette de taille de #4302.
+> - **#4308 NE se ferme pas** : 186 divergences réconciliables restent (dans des
+>   fichiers que la règle A bloque de toute façon), ~30 clés sont ABSENTES du
+>   catalogue (il leur manque une entrée, pas un alignement), et 4 sont
+>   PLURIELLES.
+> - **Défaut de la garde trouvé en passant** : la règle B ne peut PAS être
+>   satisfaite par une clé plurielle — elle compare au `stringUnit` PLAT, qu'un
+>   pluriel n'a pas. Trois fichiers sont inépinglables **par construction**. Même
+>   famille que le correctif 226i, qui avait appris la pluralité à
+>   `loadTranslations` et l'a oubliée pour `values`.
 >
 > ### 267i — le solde du cliquet i18n, pris avec la confiance que la CI a rendue (#4322)
 >

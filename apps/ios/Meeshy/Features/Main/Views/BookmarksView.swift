@@ -39,7 +39,7 @@ struct BookmarksView: View {
         var label: String {
             switch self {
             case .all: return String(localized: "bookmarks.filter.all", defaultValue: "Tout", bundle: .main)
-            case .posts: return String(localized: "bookmarks.filter.posts", defaultValue: "Posts", bundle: .main)
+            case .posts: return String(localized: "bookmarks.filter.posts", defaultValue: "Postes", bundle: .main)
             case .reels: return String(localized: "bookmarks.filter.reels", defaultValue: "Réels", bundle: .main)
             }
         }
@@ -83,9 +83,9 @@ struct BookmarksView: View {
                                 Task {
                                     do {
                                         try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-                                        FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Post reported", bundle: .main))
+                                        FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.reported", defaultValue: "Publication signalée", bundle: .main))
                                     } catch {
-                                        FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Error reporting post", bundle: .main))
+                                        FeedbackToastManager.shared.showError(String(localized: "feed.post.reportError", defaultValue: "Erreur lors du signalement", bundle: .main))
                                     }
                                 }
                             },

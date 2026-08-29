@@ -323,7 +323,7 @@ extension ConversationView {
 
     private func quickReactionActionsRow(messageId: String) -> some View {
         HStack(spacing: 8) {
-            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Repondre"), color: MeeshyColors.indigo300Hex) {
+            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Répondre"), color: MeeshyColors.indigo300Hex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                     triggerReply(for: msg)
                 }
@@ -341,7 +341,7 @@ extension ConversationView {
             // Le bouton disparaît plutôt que d'offrir une action condamnée
             // (`Message.isForwardable`).
             if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? true {
-                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transferer"), color: MeeshyColors.warningHex) {
+                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transférer"), color: MeeshyColors.warningHex) {
                     composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
                     closeReactionBar()
                 }

@@ -219,7 +219,7 @@ struct EmojiPickerView: View {
                             .font(MeeshyFont.relative(14))
                             .foregroundColor(.secondary)
                     }
-                    .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
+                    .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(.horizontal, 10)
@@ -268,7 +268,7 @@ struct EmojiPickerView: View {
                     // Quick reactions (only when on recent tab and not searching)
                     if searchText.isEmpty && selectedCategory == .recent {
                         VStack(alignment: .leading, spacing: 8) {
-                            sectionHeader(icon: "face.smiling", title: String(localized: "emoji.quickReactions", defaultValue: "Reactions rapides"))
+                            sectionHeader(icon: "face.smiling", title: String(localized: "emoji.quickReactions", defaultValue: "Réactions rapides"))
 
                             LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 12) {
                                 ForEach(recentEmojis.prefix(9), id: \.self) { emoji in
@@ -281,7 +281,7 @@ struct EmojiPickerView: View {
                         Divider().padding(.vertical, 4)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            sectionHeader(icon: "clock", title: String(localized: "emoji.recent", defaultValue: "Utilises recemment"))
+                            sectionHeader(icon: "clock", title: String(localized: "emoji.recent", defaultValue: "Utilisés récemment"))
 
                             LazyVGrid(columns: columns, spacing: 8) {
                                 ForEach(frequentEmojis.prefix(24), id: \.self) { emoji in

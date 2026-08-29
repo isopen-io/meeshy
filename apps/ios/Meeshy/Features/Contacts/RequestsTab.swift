@@ -279,7 +279,7 @@ struct RequestsTab: View {
                         Capsule().stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                     )
             }
-            .accessibilityLabel(String(format: String(localized: "contacts.requests.cancel-a11y", defaultValue: "Annuler la demande envoyee a %@", bundle: .main), name))
+            .accessibilityLabel(String(format: String(localized: "contacts.requests.cancel-a11y", defaultValue: "Annuler la demande envoyée à %@", bundle: .main), name))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)

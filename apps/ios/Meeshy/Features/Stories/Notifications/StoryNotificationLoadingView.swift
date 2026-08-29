@@ -14,7 +14,7 @@ public struct StoryNotificationLoadingView: View {
     public init() {}
 
     private var loadingMessage: String {
-        String(localized: "loading.message", defaultValue: "Loading…", bundle: .main)
+        String(localized: "loading.message", defaultValue: "Chargement…", bundle: .main)
     }
 
     public var body: some View {

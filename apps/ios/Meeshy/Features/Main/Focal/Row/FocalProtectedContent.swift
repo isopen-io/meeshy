@@ -68,7 +68,7 @@ struct FocalProtectedContent<Content: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Hidden content", bundle: .main))
+        .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Contenu masqué", bundle: .main))
         .accessibilityHint(String(localized: "bubble.content.hidden.hint", defaultValue: "Toucher pour révéler le contenu", bundle: .main))
     }
 }
