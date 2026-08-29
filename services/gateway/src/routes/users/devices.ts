@@ -13,10 +13,8 @@ import type { AuthenticatedRequest, IdParams, FriendRequestBody, FriendRequestAc
 import type { NotificationService } from '../../services/notifications/NotificationService';
 import type { EmailService } from '../../services/EmailService';
 import { validatePagination } from '../../utils/pagination';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { viewerFromRequest } from './presence-gate';
+import { servirParties } from '../directory/friend-requests-core';
 
 /**
  * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
@@ -33,44 +31,11 @@ export const friendRequestsPaginationSchema = {
   }
 } as const;
 
-/** Profil inline porté par une demande d'ami (`sender` / `receiver`). */
-type InlineProfile = { id: string; isOnline: boolean | null; lastActiveAt: Date | null };
-type FriendRequestRow = { sender?: InlineProfile | null; receiver?: InlineProfile | null };
-
-/**
- * Applique le gate de présence sur les deux profils inline de chaque demande.
- *
- * Les DEUX côtés passent par le résolveur, y compris le lecteur lui-même : la
- * politique le reconnaît (`isSelf` ⇒ visible) et une seule branche vaut mieux
- * qu'un cas particulier. Une page vide n'ouvre aucune requête.
- */
-async function gateFriendRequestPresence<T extends FriendRequestRow>(
-  fastify: FastifyInstance,
-  request: FastifyRequest,
-  rows: T[],
-): Promise<T[]> {
-  const ids = [
-    ...new Set(
-      rows
-        .flatMap((row) => [row.sender?.id, row.receiver?.id])
-        .filter((id): id is string => typeof id === 'string'),
-    ),
-  ];
-  if (ids.length === 0) return rows;
-
-  const visibility = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
-    viewerFromRequest(request),
-    ids,
-  );
-  const gate = <P extends InlineProfile | null | undefined>(profile: P) =>
-    profile ? applyPresenceVisibilityAsOffline(profile, visibility.get(profile.id)) : profile;
-
-  return rows.map((row) => ({
-    ...row,
-    ...(row.sender !== undefined ? { sender: gate(row.sender) } : {}),
-    ...(row.receiver !== undefined ? { receiver: gate(row.receiver) } : {}),
-  })) as T[];
-}
+// #4254 — le gate de présence des deux parties d'une demande n'a plus qu'UN
+// site : `servirParties` (`routes/directory/friend-requests-core.ts`). Ce
+// module en portait une SECONDE copie, `gateFriendRequestPresence`, qui disait
+// la même loi avec ses propres mots — une règle retapée à chaque site est une
+// règle qu'un site finira par ne pas avoir.
 
 /**
  * Get all friend requests for authenticated user
@@ -108,8 +73,10 @@ export async function getFriendRequests(fastify: FastifyInstance) {
                   receiverId: { type: 'string' },
                   status: { type: 'string', enum: ['pending', 'accepted', 'rejected'] },
                   createdAt: { type: 'string', format: 'date-time' },
-                  sender: userMinimalSchema,
-                  receiver: userMinimalSchema
+                  // `lastActiveAt` est CHARGÉ et GATÉ par `servirParties` ;
+                  // `userMinimalSchema` seul le SUPPRIMAIT à la sérialisation.
+                  sender: { ...userMinimalSchema, properties: { ...userMinimalSchema.properties, lastActiveAt: { type: 'string', format: 'date-time', nullable: true } } },
+                  receiver: { ...userMinimalSchema, properties: { ...userMinimalSchema.properties, lastActiveAt: { type: 'string', format: 'date-time', nullable: true } } }
                 }
               }
             },
@@ -185,7 +152,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
       // pas : la politique partagée masque quand même la présence d'un ami qui
       // a coupé `showOnlineStatus`, et le blocage comme la désactivation de
       // compte se résolvent ici et nulle part ailleurs.
-      const gated = await gateFriendRequestPresence(fastify, request, friendRequests);
+      const gated = await servirParties(fastify, request, friendRequests as unknown as Record<string, unknown>[]);
 
       return sendPaginatedSuccess(reply, gated, buildPaginationMeta(totalCount, offsetNum, limitNum, gated.length));
     } catch (error) {

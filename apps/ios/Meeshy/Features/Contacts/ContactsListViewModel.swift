@@ -168,16 +168,18 @@ final class ContactsListViewModel: ObservableObject {
             // `allFriendRequests` couvre les deux sens via `/users/friend-requests`,
             // donc on pagine jusqu'à épuisement au lieu de fusionner deux endpoints.
             var collected: [FriendRequest] = []
-            var offset = 0
+            var cursor: String?
             let pageSize = 100
             while collected.count < Self.friendsFetchCap {
-                let page = try await friendService.allFriendRequests(status: "accepted", offset: offset, limit: pageSize)
+                let page = try await friendService.friendRequests(
+                    direction: .any, status: "accepted", q: nil, cursor: cursor, limit: pageSize
+                )
                 collected.append(contentsOf: page.data)
-                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
-                // le repli sur la taille de page garde le comportement correct.
                 let more = page.pagination?.hasMore ?? (page.data.count == pageSize)
-                if !more || page.data.isEmpty { break }
-                offset += pageSize
+                cursor = page.pagination?.nextCursor
+                // Sans curseur, redemander la même page tournerait en rond
+                // jusqu'au plafond en collectant des doublons.
+                if !more || page.data.isEmpty || cursor == nil { break }
             }
 
             friends = FriendListAggregator.aggregate(

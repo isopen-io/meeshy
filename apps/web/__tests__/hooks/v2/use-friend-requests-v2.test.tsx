@@ -74,6 +74,34 @@ const makeFriendRequest = (overrides: Partial<FriendRequest> = {}): FriendReques
   ...overrides,
 });
 
+/**
+ * Les TROIS listings visent désormais la MÊME adresse (#4254) — ils ne se
+ * distinguent plus par l'URL mais par `direction` / `status`. Le double doit
+ * donc aiguiller sur les paramètres, jamais sur le chemin : un `if (url === …)`
+ * répondrait la même chose aux trois requêtes.
+ */
+const ENDPOINT = '/directory/friend-requests';
+type Params = Record<string, string | undefined>;
+
+/** Quel des trois listings cette requête demande-t-elle ? */
+const listing = (params?: Params): 'received' | 'sent' | 'accepted' | 'autre' => {
+  if (params?.status === 'accepted' && params?.direction === 'any') return 'accepted';
+  if (params?.direction === 'received') return 'received';
+  if (params?.direction === 'sent') return 'sent';
+  return 'autre';
+};
+
+const page = (data: FriendRequest[], pagination: Record<string, unknown> = {}) =>
+  Promise.resolve({
+    data: {
+      success: true,
+      data,
+      pagination: { limit: 100, hasMore: false, nextCursor: null, ...pagination },
+    },
+  });
+
+const PAGE_VIDE = () => page([]);
+
 describe('useFriendRequestsV2', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -81,7 +109,9 @@ describe('useFriendRequestsV2', () => {
     friendRequestNewHandler = null;
     friendRequestAcceptedHandler = null;
     friendRequestRejectedHandler = null;
-    mockGet.mockResolvedValue({ data: { success: true, data: [], pagination: { total: 0 } } });
+    mockGet.mockResolvedValue({
+      data: { success: true, data: [], pagination: { limit: 100, hasMore: false, nextCursor: null } },
+    });
   });
 
   it('fetches received and sent requests on mount', async () => {
@@ -98,22 +128,25 @@ describe('useFriendRequestsV2', () => {
       expect(result.current.isLoading).toBe(false);
     });
 
-    expect(mockGet).toHaveBeenCalledWith('/friend-requests/received', { offset: '0', limit: '100' });
-    expect(mockGet).toHaveBeenCalledWith('/friend-requests/sent', { offset: '0', limit: '100' });
+    // `status: 'pending'` reproduit le filtre que `/friend-requests/received`
+    // appliquait EN DUR côté serveur ; `sent` n'en portait aucun, et c'est la
+    // seule source de l'onglet « refusées ».
+    expect(mockGet).toHaveBeenCalledWith(ENDPOINT, {
+      direction: 'received', status: 'pending', limit: '100',
+    });
+    expect(mockGet).toHaveBeenCalledWith(ENDPOINT, { direction: 'sent', limit: '100' });
+    expect(mockGet).not.toHaveBeenCalledWith('/friend-requests/received', expect.anything());
+    expect(mockGet).not.toHaveBeenCalledWith('/users/friend-requests', expect.anything());
   });
 
   it('separates requests by status', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/friend-requests/received') {
-        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r1', status: 'pending' })], pagination: { total: 1 } } });
+    mockGet.mockImplementation((_url: string, params?: Params) => {
+      switch (listing(params)) {
+        case 'received': return page([makeFriendRequest({ id: 'r1', status: 'pending' })]);
+        case 'sent': return page([makeFriendRequest({ id: 'r3', status: 'rejected' })]);
+        case 'accepted': return page([makeFriendRequest({ id: 'r2', status: 'accepted' })]);
+        default: return PAGE_VIDE();
       }
-      if (url === '/friend-requests/sent') {
-        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r3', status: 'rejected' })], pagination: { total: 1 } } });
-      }
-      if (url === '/users/friend-requests') {
-        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r2', status: 'accepted' })], pagination: { total: 1 } } });
-      }
-      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
     });
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
@@ -128,17 +161,13 @@ describe('useFriendRequestsV2', () => {
   });
 
   it('computes stats from all requests', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/friend-requests/received') {
-        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 'r1', status: 'pending' })], pagination: { total: 1 } } });
+    mockGet.mockImplementation((_url: string, params?: Params) => {
+      switch (listing(params)) {
+        case 'received': return page([makeFriendRequest({ id: 'r1', status: 'pending' })]);
+        case 'sent': return page([makeFriendRequest({ id: 's2', status: 'rejected' })]);
+        case 'accepted': return page([makeFriendRequest({ id: 's1', status: 'accepted' })]);
+        default: return PAGE_VIDE();
       }
-      if (url === '/friend-requests/sent') {
-        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 's2', status: 'rejected' })], pagination: { total: 1 } } });
-      }
-      if (url === '/users/friend-requests') {
-        return Promise.resolve({ data: { success: true, data: [makeFriendRequest({ id: 's1', status: 'accepted' })], pagination: { total: 1 } } });
-      }
-      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
     });
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
@@ -152,41 +181,67 @@ describe('useFriendRequestsV2', () => {
     expect(result.current.stats.refused).toBe(1);
   });
 
-  // `/users/friend-requests` n'a AUCUNE recherche texte serveur : le sélecteur
-  // de transfert filtre localement `connected`. Une seule page rendait donc
-  // inatteignable tout ami au-delà d'elle — le Volet C prescrit « paginé
-  // jusqu'à épuisement ». Jumeau iOS : ForwardPickerViewModelTests
+  // Le sélecteur de transfert filtre `connected` LOCALEMENT : une seule page
+  // rendrait inatteignable tout ami au-delà d'elle — le Volet C prescrit
+  // « paginé jusqu'à épuisement ». Jumeau iOS : ForwardPickerViewModelTests
   // .test_search_paginatesFriendsUntilExhausted_findsFriendBeyondTheFirstPage
-  it('pagine les relations acceptées jusqu’à épuisement', async () => {
-    const firstPage = Array.from({ length: 100 }, (_, i) =>
+  //
+  // Le témoin porte sur le CURSEUR, pas sur le nombre de pages : c'est le
+  // critère 4 de #4254, et il est écrit pour ne pouvoir passer QUE si la
+  // seconde page est demandée avec le `nextCursor` de la première. Un témoin
+  // posé sur la seule première page ne verrait aucune différence entre les
+  // deux modèles de pagination — c'est exactement ce que la bascule risque de
+  // casser en silence.
+  const CURSEUR = '2026-08-01T00:00:00.000Z';
+
+  it('demande la SECONDE page avec le `nextCursor` de la première, jamais un `offset`', async () => {
+    const premierePage = Array.from({ length: 100 }, (_, i) =>
       makeFriendRequest({ id: `acc-${i}`, status: 'accepted' }),
     );
-    mockGet.mockImplementation((url: string, params?: Record<string, string>) => {
-      if (url === '/users/friend-requests') {
-        if (params?.offset === '0') {
-          return Promise.resolve({
-            data: { success: true, data: firstPage, pagination: { total: 101, hasMore: true } },
-          });
-        }
-        return Promise.resolve({
-          data: {
-            success: true,
-            data: [makeFriendRequest({ id: 'acc-100', status: 'accepted' })],
-            pagination: { total: 101, hasMore: false },
-          },
-        });
+    mockGet.mockImplementation((_url: string, params?: Params) => {
+      if (listing(params) !== 'accepted') return PAGE_VIDE();
+      if (params?.cursor === undefined) {
+        return page(premierePage, { hasMore: true, nextCursor: CURSEUR });
       }
-      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
+      // Une seconde page servie UNIQUEMENT sur le bon curseur : si le hook
+      // repassait à l'offset (ou oubliait le curseur), il redemanderait la
+      // première page et collecterait 200 doublons au lieu de 101 lignes.
+      if (params.cursor !== CURSEUR) return PAGE_VIDE();
+      return page([makeFriendRequest({ id: 'acc-100', status: 'accepted' })]);
     });
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
 
     await waitFor(() => expect(result.current.connected).toHaveLength(101));
-    expect(mockGet).toHaveBeenCalledWith('/users/friend-requests', {
-      offset: '100',
-      limit: '100',
+    expect(mockGet).toHaveBeenCalledWith(ENDPOINT, {
+      direction: 'any',
       status: 'accepted',
+      limit: '100',
+      cursor: CURSEUR,
     });
+    // Aucun appel ne porte d'`offset` : le modèle de pagination a bien changé.
+    for (const appel of mockGet.mock.calls) {
+      expect((appel[1] as Params | undefined)?.offset).toBeUndefined();
+    }
+  });
+
+  it("s'arrête quand le serveur annonce `hasMore` sans curseur — sinon la boucle tourne sur la même page", async () => {
+    const premierePage = Array.from({ length: 100 }, (_, i) =>
+      makeFriendRequest({ id: `acc-${i}`, status: 'accepted' }),
+    );
+    mockGet.mockImplementation((_url: string, params?: Params) =>
+      listing(params) === 'accepted'
+        ? page(premierePage, { hasMore: true, nextCursor: null })
+        : PAGE_VIDE(),
+    );
+
+    const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
+
+    await waitFor(() => expect(result.current.connected).toHaveLength(100));
+    const appelsAcceptes = mockGet.mock.calls.filter(
+      (appel) => listing(appel[1] as Params | undefined) === 'accepted',
+    );
+    expect(appelsAcceptes).toHaveLength(1);
   });
 
   it('sends a friend request via mutation', async () => {
@@ -224,12 +279,9 @@ describe('useFriendRequestsV2', () => {
 
   it('reflète connected de façon optimiste dès acceptRequest, avant toute résolution réseau', async () => {
     const received = [makeFriendRequest({ id: 'r1', senderId: 'other', receiverId: 'me', status: 'pending' })];
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/friend-requests/received') {
-        return Promise.resolve({ data: { success: true, data: received, pagination: { total: 1 } } });
-      }
-      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
-    });
+    mockGet.mockImplementation((_url: string, params?: Params) =>
+      listing(params) === 'received' ? page(received) : PAGE_VIDE(),
+    );
 
     let resolvePatch: (value: unknown) => void = () => {};
     mockPatch.mockImplementation(() => new Promise((resolve) => { resolvePatch = resolve; }));
@@ -252,12 +304,9 @@ describe('useFriendRequestsV2', () => {
 
   it('retire optimistiquement une relation connectée dès cancelRequest, avant toute résolution réseau', async () => {
     const accepted = [makeFriendRequest({ id: 'r1', senderId: 'other', receiverId: 'me', status: 'accepted' })];
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/users/friend-requests') {
-        return Promise.resolve({ data: { success: true, data: accepted, pagination: { total: 1 } } });
-      }
-      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
-    });
+    mockGet.mockImplementation((_url: string, params?: Params) =>
+      listing(params) === 'accepted' ? page(accepted) : PAGE_VIDE(),
+    );
 
     let resolveDelete: (value: unknown) => void = () => {};
     mockPatch.mockImplementation(() => new Promise((resolve) => { resolveDelete = resolve; }));
@@ -401,29 +450,22 @@ describe('useFriendRequestsV2', () => {
   });
 
   it('inclut une relation acceptée où l’utilisateur est le receveur', async () => {
-    mockGet.mockImplementation((url: string) => {
-      if (url === '/users/friend-requests') {
-        return Promise.resolve({
-          data: {
-            success: true,
-            data: [
-              {
-                id: 'r1',
-                senderId: 'other',
-                receiverId: 'me',
-                status: 'accepted',
-                createdAt: '2026-01-01T00:00:00Z',
-                updatedAt: '2026-01-01T00:00:00Z',
-                sender: { id: 'other', username: 'other' },
-                receiver: { id: 'me', username: 'me' },
-              },
-            ],
-            pagination: { total: 1, offset: 0, limit: 100, hasMore: false },
-          },
-        });
-      }
-      return Promise.resolve({ data: { success: true, data: [], pagination: { total: 0 } } });
-    });
+    mockGet.mockImplementation((_url: string, params?: Params) =>
+      listing(params) === 'accepted'
+        ? page([
+            {
+              id: 'r1',
+              senderId: 'other',
+              receiverId: 'me',
+              status: 'accepted',
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-01-01T00:00:00Z',
+              sender: { id: 'other', username: 'other' },
+              receiver: { id: 'me', username: 'me' },
+            } as FriendRequest,
+          ])
+        : PAGE_VIDE(),
+    );
 
     const { result } = renderHook(() => useFriendRequestsV2(), { wrapper: createWrapper() });
 

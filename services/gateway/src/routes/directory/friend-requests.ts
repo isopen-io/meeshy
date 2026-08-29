@@ -4,7 +4,7 @@ import { logError } from '../../utils/logger';
 import {
   sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError, sendGone,
 } from '../../utils/response';
-import { errorResponseSchema, friendRequestSchema } from '@meeshy/shared/types/api-schemas';
+import { errorResponseSchema, friendRequestSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
@@ -27,6 +27,50 @@ export const BUDGET_ENVOIS_PAR_JOUR = 100;
 const FENETRE_BUDGET_SECONDES = 24 * 60 * 60;
 
 /**
+ * La partie d'une demande, PRÉSENCE COMPRISE — déclarée ICI, pas dans le schéma
+ * partagé.
+ *
+ * `userMinimalSchema` déclare `isOnline` et TAIT `lastActiveAt` ;
+ * fast-json-stringify supprime donc la seconde colonne, celle sur laquelle les
+ * trois clients trient (`FriendListAggregator`, `sortContacts`). L'élargir
+ * globalement pousserait `lastActiveAt` sur les dizaines de réponses qui
+ * emploient ce schéma partagé — dont plusieurs chargent la colonne sans passer
+ * par la loi de visibilité : un champ déclaré est un champ SERVI, et la règle du
+ * dépôt est de décider de sa visibilité dans le lot qui le rend visible. Le
+ * grain juste est donc LOCAL, pour les deux routes de ce fichier, qui gatent à
+ * la source (`servirParties`).
+ */
+const partieAvecPresenceSchema = {
+  ...userMinimalSchema,
+  properties: {
+    ...userMinimalSchema.properties,
+    firstName: { type: 'string', nullable: true, description: 'Given name' },
+    lastName: { type: 'string', nullable: true, description: 'Family name' },
+    lastActiveAt: {
+      type: 'string',
+      format: 'date-time',
+      nullable: true,
+      description: 'Last activity — served only when the presence law allows it',
+    },
+  },
+} as const;
+
+/**
+ * Une demande dont les deux parties portent leur présence GATÉE.
+ *
+ * Le schéma PARTAGÉ garde ses deux `userMinimalSchema` : il décrit la forme
+ * historique, que les alias de `routes/friends.ts` servent encore.
+ */
+const demandeAvecPresenceSchema = {
+  ...friendRequestSchema,
+  properties: {
+    ...friendRequestSchema.properties,
+    sender: { ...partieAvecPresenceSchema, description: 'Sender user info' },
+    receiver: { ...partieAvecPresenceSchema, description: 'Receiver user info' },
+  },
+} as const;
+
+/**
  * La CHARGE d'une demande, `conversation` COMPRISE.
  *
  * Le schéma partagé ne la déclare pas — et c'est le défaut : le handler
@@ -37,7 +81,7 @@ const FENETRE_BUDGET_SECONDES = 24 * 60 * 60;
 const demandeAvecConversationSchema = {
   type: 'object',
   properties: {
-    ...friendRequestSchema.properties,
+    ...demandeAvecPresenceSchema.properties,
     conversation: {
       type: 'object',
       nullable: true,
@@ -126,7 +170,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
           type: 'object',
           properties: {
             success: { type: 'boolean', example: true },
-            data: { type: 'array', items: friendRequestSchema },
+            data: { type: 'array', items: demandeAvecPresenceSchema },
             pagination: {
               type: 'object',
               properties: {
@@ -150,7 +194,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
         direction?: DirectionDemande; status?: string; q?: string; cursor?: string; limit?: string;
       };
 
-      const resultat = await listerDemandes(fastify, {
+      const resultat = await listerDemandes(fastify, request, {
         acteurId: request.user!.userId,
         ...query,
       });
@@ -189,7 +233,7 @@ export async function directoryFriendRequestsRoutes(fastify: FastifyInstance) {
       response: {
         201: {
           type: 'object',
-          properties: { success: { type: 'boolean', example: true }, data: friendRequestSchema },
+          properties: { success: { type: 'boolean', example: true }, data: demandeAvecPresenceSchema },
         },
         400: errorResponseSchema,
         401: errorResponseSchema,

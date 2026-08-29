@@ -120,10 +120,11 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
   //
   // Elle n'est pas recâblée sur un équivalent réel de « tous les utilisateurs » :
   // servir l'annuaire entier de la plateforme comme carnet d'adresses serait un
-  // défaut de confidentialité, pas une fonctionnalité. `useFriendRequestsV2`
-  // pagine déjà `/users/friend-requests?status=accepted` jusqu'à épuisement, dans
-  // les DEUX sens — on le CONSOMME plutôt que de réécrire cette pagination, qui
-  // porte ses propres bornes et son propre plafond.
+  // défaut de confidentialité, pas une fonctionnalité.
+  // `useFriendRequestsV2` pagine `/directory/friend-requests?direction=any&status=accepted`
+  // jusqu'à épuisement, par CURSEUR, dans les DEUX sens — on le CONSOMME plutôt
+  // que de réécrire cette pagination, qui porte ses propres bornes et son
+  // propre plafond.
   const currentUser = useUser();
   const {
     connected,

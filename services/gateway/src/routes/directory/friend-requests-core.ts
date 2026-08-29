@@ -4,12 +4,31 @@ import { withMutationLog } from '../../utils/withMutationLog';
 import { logError } from '../../utils/logger';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
 import { validatePagination } from '../../utils/pagination';
+import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
+import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
+import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
 
 /** Le plafond d'une page de demandes. */
 export const LIMITE_MAX_DEMANDES = 100;
 const LIMITE_DEFAUT_DEMANDES = 20;
 
-/** Ce qu'un profil de demande porte — le minimum pour dessiner une ligne. */
+/**
+ * Ce qu'un profil de demande porte — le minimum pour dessiner une ligne, PLUS
+ * la présence.
+ *
+ * Les TROIS clients déclarent `isOnline` / `lastActiveAt` sur la partie d'une
+ * demande — `FriendRequestUser` (iOS, `FriendModels.swift`), le même type porté
+ * en Kotlin (`core/model/.../Friend.kt`), et `FriendRequest.sender?: User` côté
+ * web. Aucun ne les recevait : la projection ne les chargeait pas. Le coût
+ * n'était pas seulement une pastille absente — `FriendListAggregator.aggregate`
+ * (iOS) TRIE la liste de contacts sur `isOnline` puis `lastActiveAt`, et
+ * `useContactsV2` en dérive son ensemble `onlineUserIds` initial : deux tris
+ * sur des champs toujours nuls, donc un ordre arbitraire jusqu'à ce qu'un
+ * `user:status` arrive par socket — pour ceux qui en reçoivent un.
+ *
+ * Ces deux colonnes ne sortent JAMAIS brutes : {@link servirParties} est le
+ * site unique par lequel toute ligne de demande quitte ce module.
+ */
 const PROJECTION_PARTIE = {
   id: true,
   username: true,
@@ -17,12 +36,78 @@ const PROJECTION_PARTIE = {
   lastName: true,
   displayName: true,
   avatar: true,
+  isOnline: true,
+  lastActiveAt: true,
 } as const;
 
 export const INCLUDE_PARTIES = {
   sender: { select: PROJECTION_PARTIE },
   receiver: { select: PROJECTION_PARTIE },
 } as const;
+
+/** Les deux clés d'une demande qui portent une personne — et donc une présence. */
+const CLES_PARTIES = ['sender', 'receiver'] as const;
+
+type PartieAvecPresence = {
+  readonly id: string;
+  readonly isOnline: boolean | null;
+  readonly lastActiveAt?: Date | null;
+};
+
+/**
+ * La LOI DE VISIBILITÉ DE LA PRÉSENCE appliquée aux deux parties d'une demande
+ * — le site UNIQUE par lequel une ligne de demande sort de ce module.
+ *
+ * ## Pourquoi ici, et pas dans la route de listing
+ *
+ * Trois producteurs rendent une ligne portant `INCLUDE_PARTIES` : l'ENVOI, la
+ * RÉPONSE et le LISTING. Le premier s'adresse à un INCONNU par définition —
+ * envoyer une demande à quelqu'un qu'on ne connaît pas ne doit pas apprendre
+ * s'il est en ligne, ni quand il l'était. Un gate posé sur le seul listing
+ * aurait donc laissé la fuite exactement là où elle est la plus grave, et
+ * `routes/friends.ts` — l'alias historique de l'envoi, qui appelle le même
+ * cœur — l'aurait servie sans que rien ne le signale.
+ *
+ * Directive du 2026-08-25 : hors amitié ACCEPTÉE (ou soi-même, ou ADMIN+), ni
+ * `isOnline` ni `lastActiveAt` ne sont servis. La loi n'est pas réécrite ici :
+ * `resolveForTargets` la résout par VIEWER, `applyPresenceVisibilityAsOffline`
+ * l'applique, et une entrée absente de la carte est masquée
+ * (`presenceMissingEntryPolicy`) — fail-closed.
+ *
+ * L'acceptation est servie APRÈS l'écriture du statut : la loi lit alors une
+ * amitié acceptée et rend la présence du nouvel ami, sans cas particulier.
+ */
+export async function servirParties<T extends Record<string, unknown>>(
+  fastify: FastifyInstance,
+  request: FastifyRequest,
+  demandes: readonly T[]
+): Promise<T[]> {
+  const viewer = viewerFromRequest(request);
+
+  const identifiants = demandes.flatMap((demande) =>
+    CLES_PARTIES.flatMap((cle) => {
+      const partie = demande[cle] as PartieAvecPresence | null | undefined;
+      return partie?.id ? [partie.id] : [];
+    })
+  );
+
+  if (identifiants.length === 0) return [...demandes];
+
+  const carte = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(viewer, identifiants);
+  const surEntreeAbsente = presenceMissingEntryPolicy(viewer);
+
+  return demandes.map((demande) => {
+    const servie: Record<string, unknown> = { ...demande };
+    for (const cle of CLES_PARTIES) {
+      const partie = servie[cle] as (PartieAvecPresence & Record<string, unknown>) | null | undefined;
+      if (!partie?.id) continue;
+      servie[cle] = applyPresenceVisibilityAsOffline(partie, carte.get(partie.id), {
+        onMissingEntry: surEntreeAbsente,
+      });
+    }
+    return servie as T;
+  });
+}
 
 export type Refus = { code: number; message: string; codeMetier?: string };
 export type Resultat<T> = { valeur: T } | { refus: Refus };
@@ -143,7 +228,13 @@ export async function envoyerDemande(
     });
   }
 
-  return { valeur: demande as unknown as Record<string, unknown> };
+  // La ligne ne sort JAMAIS brute : le destinataire d'une demande est, par
+  // définition, quelqu'un dont on n'est pas encore l'ami — sa présence est donc
+  // masquée par la loi, et l'alias `routes/friends.ts` en bénéficie sans le
+  // savoir puisqu'il appelle ce même cœur.
+  const [servie] = await servirParties(fastify, request, [demande as unknown as Record<string, unknown>]);
+
+  return { valeur: servie };
 }
 
 /**
@@ -286,7 +377,10 @@ async function trancherDemande(
         rejecterId: acteurId,
       });
     }
-    return misAJour as unknown as Record<string, unknown>;
+    // Un REFUS ne crée pas d'amitié : la loi masque donc la présence de celui
+    // qu'on vient d'éconduire, exactement comme avant la demande.
+    const [refusee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
+    return refusee;
   }
 
   fastify.socialEvents?.invalidateFriendsCache(demande.senderId);
@@ -318,7 +412,11 @@ async function trancherDemande(
   // Elle est désormais servie dans les DEUX cas — créée ou déjà existante :
   // « je viens de la créer » n'est pas une propriété qui intéresse l'appelant,
   // qui veut savoir OÙ parler.
-  return { ...(misAJour as unknown as Record<string, unknown>), conversation };
+  // Servie APRÈS l'écriture du statut : la loi lit une amitié désormais
+  // ACCEPTÉE et rend la présence du nouvel ami, sans cas particulier ici.
+  const [acceptee] = await servirParties(fastify, request, [misAJour as unknown as Record<string, unknown>]);
+
+  return { ...acceptee, conversation };
 }
 
 /** La conversation directe des deux amis — créée si elle n'existe pas. */
@@ -397,6 +495,7 @@ export type PageDeDemandes = {
  */
 export async function listerDemandes(
   fastify: FastifyInstance,
+  request: FastifyRequest,
   params: {
     acteurId: string;
     direction?: DirectionDemande;
@@ -424,7 +523,19 @@ export async function listerDemandes(
   // Le curseur est l'HORODATAGE, pas l'identifiant : c'est la clé de tri, et
   // les deux index composés se terminent par elle. Un curseur sur l'id ferait
   // trier en mémoire ce que l'index sait rendre ordonné.
-  const borne = params.cursor ? { createdAt: { lt: new Date(params.cursor) } } : {};
+  //
+  // Il est VALIDÉ avant d'atteindre Prisma. C'est la porte que les clients
+  // s'apprêtent à emprunter : ils PERSISTENT un curseur (cache disque iOS,
+  // cache React Query web) et le renvoient au réveil. Une valeur tronquée ou
+  // d'un format d'une version voisine produisait `Invalid Date`, que Prisma
+  // rejette — soit un 500 sur une liste, là où le contrat doit dire 400 et où
+  // le client sait alors repartir de la première page.
+  const borneDate = params.cursor ? new Date(params.cursor) : null;
+  if (borneDate && Number.isNaN(borneDate.getTime())) {
+    return { refus: { code: 400, message: 'cursor must be an ISO 8601 timestamp' } };
+  }
+
+  const borne = borneDate ? { createdAt: { lt: borneDate } } : {};
 
   const filtreTexte = params.q
     ? {
@@ -454,9 +565,18 @@ export async function listerDemandes(
   const hasMore = lignes.length > taille;
   const page = hasMore ? lignes.slice(0, taille) : lignes;
 
+  // Le curseur se lit sur la ligne BRUTE — `servirParties` ne touche qu'aux
+  // parties, mais faire dépendre la pagination d'une projection filtrée serait
+  // exactement le genre de couplage qui casse une page sur un cas de bord.
+  const items = await servirParties(
+    fastify,
+    request,
+    page as unknown as Array<Record<string, unknown>>
+  );
+
   return {
     valeur: {
-      items: page as unknown as Array<Record<string, unknown>>,
+      items,
       hasMore,
       nextCursor: hasMore
         ? (page[page.length - 1] as unknown as { createdAt: Date }).createdAt.toISOString()
