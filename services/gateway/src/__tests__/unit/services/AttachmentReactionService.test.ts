@@ -35,6 +35,7 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 }));
 
 import { AttachmentReactionService } from '../../../services/AttachmentReactionService';
+import { CLOSED_CONVERSATION_REACTION_ERROR } from '../../../services/ReactionService';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -59,7 +60,14 @@ function makePrisma(overrides: Record<string, any> = {}) {
       upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
     },
     message: {
-      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+      // Défaut : un message VIVANT (non supprimé, non système) dans une
+      // conversation OUVERTE — la garde d'admission d'écriture le laisse passer.
+      // Les témoins de garde surchargent ce défaut avec la forme fautive.
+      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({
+        deletedAt: null,
+        messageType: 'text',
+        conversation: { isActive: true, closedAt: null },
+      }),
     },
     ...overrides,
   } as any;
@@ -189,11 +197,127 @@ describe('addAttachmentReaction', () => {
   });
 });
 
+// ─── addAttachmentReaction : garde d'admission d'écriture (parité ReactionService) ──
+//
+// 5e transport de réaction conversation-scoped du dépôt. Comme la jumelle
+// `ReactionService.addReaction`, l'ajout est refusé quand le conteneur est
+// TERMINAL (conversation close) ou le message n'est plus réagissable (supprimé,
+// système). La garde se relit CHEZ ELLE : le service charge lui-même l'état du
+// message, il ne le reçoit pas de l'appelant. `isConversationClosed` (la SSOT de
+// la règle terminale) n'est PAS mocké ici — le vrai code tranche.
+describe('addAttachmentReaction — garde d’admission d’écriture', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  function liveMessage(overrides: Record<string, any> = {}) {
+    return { deletedAt: null, messageType: 'text', conversation: { isActive: true, closedAt: null }, ...overrides };
+  }
+
+  it('refuse l’ajout dans une conversation CLOSE (closedAt) et ne persiste rien', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma();
+    prisma.message.findUnique.mockResolvedValue(liveMessage({ conversation: { isActive: true, closedAt: new Date() } }));
+    const svc = new AttachmentReactionService(prisma);
+
+    await expect(
+      svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+    ).rejects.toThrow(CLOSED_CONVERSATION_REACTION_ERROR);
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+    expect(prisma.attachmentReaction.count).not.toHaveBeenCalled();
+  });
+
+  it('refuse l’ajout dans une conversation close HÉRITÉE (isActive:false sans closedAt)', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma();
+    prisma.message.findUnique.mockResolvedValue(liveMessage({ conversation: { isActive: false, closedAt: null } }));
+    const svc = new AttachmentReactionService(prisma);
+
+    await expect(
+      svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+    ).rejects.toThrow(CLOSED_CONVERSATION_REACTION_ERROR);
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuse l’ajout sur une pièce jointe d’un message SUPPRIMÉ', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma();
+    prisma.message.findUnique.mockResolvedValue(liveMessage({ deletedAt: new Date() }));
+    const svc = new AttachmentReactionService(prisma);
+
+    await expect(
+      svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+    ).rejects.toThrow('deleted message');
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuse l’ajout sur une pièce jointe d’un message SYSTÈME', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma();
+    prisma.message.findUnique.mockResolvedValue(liveMessage({ messageType: 'system' }));
+    const svc = new AttachmentReactionService(prisma);
+
+    await expect(
+      svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+    ).rejects.toThrow('system message');
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('refuse l’ajout quand le message est introuvable (défense en profondeur)', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma();
+    prisma.message.findUnique.mockResolvedValue(null);
+    const svc = new AttachmentReactionService(prisma);
+
+    await expect(
+      svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+    ).rejects.toThrow('Message not found');
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('LAISSE PASSER l’ajout dans une conversation vivante (message texte, non supprimé)', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma();
+    prisma.message.findUnique.mockResolvedValue(liveMessage());
+    const svc = new AttachmentReactionService(prisma);
+
+    const result = await svc.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MSG_ID, participantId: PARTICIPANT_ID, emoji: '👍' });
+
+    expect(result).toEqual({ changed: true });
+    expect(prisma.attachmentReaction.upsert).toHaveBeenCalledTimes(1);
+  });
+});
+
 // ─── removeAttachmentReaction ─────────────────────────────────────────────────
 
 describe('removeAttachmentReaction', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('N’EST PAS gardé par l’état terminal : un retrait réussit dans une conversation CLOSE (parité removeReaction)', async () => {
+    makeEmoji('👍');
+    const prisma = makePrisma({
+      attachmentReaction: {
+        findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+        findMany: (jest.fn() as jest.Mock<any>).mockResolvedValue([]),
+        deleteMany: (jest.fn() as jest.Mock<any>).mockResolvedValue({ count: 1 }),
+        upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
+      },
+      message: {
+        findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ deletedAt: null, messageType: 'text', conversation: { isActive: false, closedAt: new Date() } }),
+      },
+    });
+    const svc = new AttachmentReactionService(prisma);
+
+    expect(await svc.removeAttachmentReaction({ attachmentId: ATTACH_ID, participantId: PARTICIPANT_ID, emoji: '👍' })).toBe(true);
+    // Le retrait ne consulte même pas l'état du message.
+    expect(prisma.message.findUnique).not.toHaveBeenCalled();
   });
 
   it('calls deleteMany with sanitized emoji', async () => {

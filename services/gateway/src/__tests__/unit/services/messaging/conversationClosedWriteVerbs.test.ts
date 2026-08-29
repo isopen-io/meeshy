@@ -7,12 +7,18 @@
  * Trois autres verbes écrivent dans le même conteneur terminal, et aucun ne
  * posait la question :
  *
- * | verbe            | unité de convergence            | transports couverts |
- * |------------------|----------------------------------|---------------------|
- * | envoyer          | `admitConversationWrite`         | 3 (déjà gardé)      |
- * | **réagir**       | `ReactionService.addReaction`    | 3                   |
- * | **éditer**       | `admitMessageEdit`               | 4                   |
- * | retirer / effacer| — *délibérément NON gardé, § 3*  | —                   |
+ * | verbe                 | unité de convergence                      | transports couverts |
+ * |-----------------------|-------------------------------------------|---------------------|
+ * | envoyer               | `admitConversationWrite`                  | 3 (déjà gardé)      |
+ * | **réagir**            | `ReactionService.addReaction`             | 3                   |
+ * | **réagir (pièce jointe)** | `AttachmentReactionService.addAttachmentReaction` | 1 (socket)  |
+ * | **éditer**            | `admitMessageEdit`                        | 4                   |
+ * | retirer / effacer     | — *délibérément NON gardé, § 3*           | —                   |
+ *
+ * La réaction PAR-PIÈCE-JOINTE est le 5e transport de réaction et le seul qui ne
+ * converge PAS vers `addReaction` (la famille attachment place la résolution dans
+ * son handler et garde le service comme couche de lignes). Il applique la même
+ * garde depuis l'itération 281 — voir la section « réagir (pièce jointe) » plus bas.
  *
  * Ce fichier énonce l'invariant UNE fois pour la famille entière : un conteneur
  * mort n'accepte aucun CONTENU NEUF, et continue d'accepter le RETRAIT de ce
@@ -25,6 +31,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 import { admitMessageEdit, MESSAGE_EDIT_WINDOW_MS } from '../../../../services/messaging/messageEditAdmission';
 import { ReactionService } from '../../../../services/ReactionService';
+import { AttachmentReactionService } from '../../../../services/AttachmentReactionService';
 
 const AUTHOR = 'user-author';
 const MODERATOR = 'user-moderator';
@@ -230,6 +237,54 @@ describe('réagir — un fil terminé n\'accepte plus de contenu neuf', () => {
     ).rejects.toThrow();
 
     expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ─────────────────── RÉAGIR (PIÈCE JOINTE) — 5e transport ────────────────────
+
+const ATTACH_ID = '507f1f77bcf86cd799439033';
+
+function buildAttachmentReactionPrisma(conversationRow: Record<string, unknown>) {
+  return {
+    message: {
+      findUnique: jest.fn<any>(async () => ({
+        conversationId: CONV,
+        deletedAt: null,
+        messageType: 'text',
+        conversation: { ...conversationRow },
+      })),
+    },
+    attachmentReaction: {
+      findUnique: jest.fn<any>(async () => null),
+      count: jest.fn<any>(async () => 0),
+      deleteMany: jest.fn<any>(async () => ({ count: 1 })),
+      upsert: jest.fn<any>(async () => ({})),
+    },
+  } as Record<string, any>;
+}
+
+describe('réagir (pièce jointe) — un fil terminé n\'accepte plus de contenu neuf', () => {
+  it.each(CLOSED_SHAPES)('refuse la pose d\'une réaction de pièce jointe ($label)', async ({ row }) => {
+    const prisma = buildAttachmentReactionPrisma(row);
+    const service = new AttachmentReactionService(prisma as never);
+
+    await expect(
+      service.addAttachmentReaction({ attachmentId: ATTACH_ID, messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+    ).rejects.toThrow(/closed conversation/i);
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  it('laisse passer un fil VIVANT', async () => {
+    const prisma = buildAttachmentReactionPrisma(ALIVE);
+    const service = new AttachmentReactionService(prisma as never);
+
+    const result = await service.addAttachmentReaction({
+      attachmentId: ATTACH_ID, messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '👍',
+    });
+
+    expect(result).toEqual({ changed: true });
+    expect(prisma.attachmentReaction.upsert).toHaveBeenCalled();
   });
 });
 

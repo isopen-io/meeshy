@@ -2,6 +2,8 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { ConflictError } from '../errors/custom-errors';
+import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
+import { CLOSED_CONVERSATION_REACTION_ERROR } from './ReactionService.js';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -33,6 +35,30 @@ export class AttachmentReactionService {
     // branche `throw` était morte.
     const emoji = sanitizeEmoji(o.emoji);
     if (!emoji) throw new Error('Invalid emoji format');
+
+    // Garde d'admission d'écriture — parité EXACTE avec la jumelle
+    // `ReactionService.addReaction`. La réaction par-pièce-jointe est le 5e
+    // transport de réaction conversation-scoped, le seul qui ne converge PAS
+    // vers `addReaction` ; sans ce bloc, il écrivait une ligne et diffusait
+    // `ATTACHMENT_REACTION_ADDED` dans une conversation CLOSE — une room que les
+    // clients ont retirée de leur cache sur `conversation:closed` (le symptôme
+    // exact que le cycle 31 a corrigé pour l'ENVOI). La garde se relit CHEZ ELLE :
+    // le service charge lui-même l'état terminal plutôt que de le recevoir de son
+    // appelant (« un paramètre dont l'absence désactive une garde est un demi-
+    // correctif »). `isConversationClosed` est la SSOT de la règle terminale.
+    // Le RETRAIT reste ouvert, comme `removeReaction` — voir la méthode plus bas.
+    const message = await this.prisma.message.findUnique({
+      where: { id: o.messageId },
+      select: {
+        deletedAt: true,
+        messageType: true,
+        conversation: { select: { isActive: true, closedAt: true } },
+      },
+    });
+    if (!message) throw new Error('Message not found');
+    if (message.deletedAt) throw new Error('Cannot react to a deleted message');
+    if (message.messageType === 'system') throw new Error('Cannot react to a system message');
+    if (isConversationClosed(message.conversation)) throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
 
     // Idempotency: the participant already holding exactly this emoji on this
     // attachment (optimistic double-fire, a socket retry after a lost ACK, or a

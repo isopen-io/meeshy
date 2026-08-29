@@ -28,7 +28,14 @@ function makePrisma(existingReactionCount: number) {
       upsert: (jest.fn() as jest.Mock<any>).mockResolvedValue({}),
     },
     message: {
-      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+      // Message vivant dans une conversation ouverte : la garde d'admission
+      // d'écriture (parité `ReactionService.addReaction`) le laisse passer, si
+      // bien que ces témoins exercent bien la règle du PLAFOND.
+      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({
+        deletedAt: null,
+        messageType: 'text',
+        conversation: { isActive: true, closedAt: null },
+      }),
     },
   } as any;
 }
