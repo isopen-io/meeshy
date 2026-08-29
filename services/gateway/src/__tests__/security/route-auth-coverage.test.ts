@@ -391,6 +391,19 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   },
   // --- Santé / méta ---
   { method: 'GET', url: '/health', why: 'sonde de santé infra' },
+  {
+    method: 'GET',
+    url: '/api/v1/health/ready',
+    why:
+      "sonde de DISPONIBILITÉ (S0, #4219) : un orchestrateur l'appelle sans jeton, " +
+      "c'est son unique raison d'être. Elle ne divulgue RIEN de l'infrastructure — son " +
+      "corps ENTIER est `{ success, data: { status: 'ready' } }` en 200 et " +
+      "`{ success: false, error: 'not-ready', code: 'NOT_READY' }` en 503 : ni version, " +
+      "ni build, ni environnement, ni hôte, ni compteur, ni le message du pilote de base " +
+      "(qui porte l'hôte et le port dans son texte). Contrairement à `GET /health`, elle " +
+      'ne lit aucune collection : `$runCommandRaw({ ping: 1 })`, verdict mémoïsé 2 s, ce ' +
+      "qui borne le coût de l'exemption de débit qu'une sonde exige.",
+  },
   { method: 'GET', url: '/info', why: "métadonnées statiques du service, aucune donnée d'utilisateur" },
   { method: 'GET', url: '/api/v1/languages', why: 'liste statique de langues supportées' },
   { method: 'GET', url: '/api/v1/app/min-version', why: 'plancher de version applicative pour le bootstrap de la porte cliente (spec R6) — config statique lue avant toute session, aucune donnée utilisateur' },
@@ -637,16 +650,12 @@ describe('Sécurité — couverture d\'authentification de toutes les routes du 
     // propre) ou replier l'écran sur `/health` et `/admin/analytics/*` ?
     // Suivi en #4219. Cette liste doit rester vide ou décroître : elle n'est
     // pas un endroit où ranger ce qu'on n'a pas eu le temps de faire.
-    const SUIVIS = new Set([
-      // #4219 — l'onglet santé de l'administration lit trois sondes absentes.
-      '/api/v1/health/ready',
-      '/api/v1/health/metrics',
-      '/api/v1/health/circuit-breakers',
-      // #4222 — la modale « créer un groupe » du tableau de bord poste vers
-      // une route qui n'a jamais existé ; corriger exige de décider d'abord ce
-      // qu'est un « groupe » (conversation de groupe ou communauté).
-      '/api/v1/groups',
-    ]);
+    // VIDE depuis le lot 1 du 2026-08-29 : #4219 a SERVI les trois sondes de
+    // santé, #4222 a décidé qu'un « groupe » est une COMMUNAUTÉ et a repointé la
+    // modale. Une liste de suivi qui ne survit pas à sa propre résolution est ce
+    // qui a rendu ces deux corrections visibles — laisser les entrées après le
+    // correctif ferait rougir la garde, et c'est voulu.
+    const SUIVIS = new Set<string>([]);
 
     const restants = [...fantômes.values()].filter(({ url }) => !SUIVIS.has(url));
     expect(restants.map(({ url, site }) => `${url}  ← ${site}`)).toEqual([]);

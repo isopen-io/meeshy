@@ -95,6 +95,7 @@ import userDeletionsRoutes from './routes/user-deletions';
 import { pushTokenRoutes } from './routes/push-tokens';
 import { postRoutes } from './routes/posts';
 import { appRoutes } from './routes/app';
+import { healthProbeRoutes } from './routes/health';
 
 // API versioning
 const API_VERSION = 'v1';
@@ -389,6 +390,15 @@ export async function registerAllRoutes(server: FastifyInstance, deps: RouteRegi
     // Register app bootstrap routes (GET /app/min-version — porte de version cliente)
     await server.register(appRoutes, { prefix: API_PREFIX });
     logger.info('✓ App bootstrap routes registered');
+
+    // Les trois sondes de santé (#4219). Elles ne peuvent PAS vivre sous le
+    // `GET /health` ci-dessus : celui-ci compte les utilisateurs, interroge le
+    // traducteur et rend la version, le SHA de build et l'environnement — c'est
+    // un point de DIAGNOSTIC, pas une sonde de disponibilité. `/health/ready`
+    // est S0 (un orchestrateur l'appelle sans jeton, son corps entier est
+    // `{ status }`) ; `/health/metrics` et `/health/circuit-breakers` sont S5.
+    await server.register(healthProbeRoutes, { prefix: `${API_PREFIX}/health` });
+    logger.info('✓ Health probe routes registered');
 
     logger.info('✓ REST API routes configured successfully');
 }

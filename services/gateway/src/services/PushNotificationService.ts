@@ -15,7 +15,7 @@ import {
 } from '@meeshy/shared/types/preferences';
 import { isWithinDnd } from '@meeshy/shared/utils/notification-dnd';
 import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
-import { CircuitBreaker } from '../utils/circuitBreaker';
+import { CircuitBreaker, circuitBreakerManager } from '../utils/circuitBreaker';
 import {
   isNotificationRevocationPush,
   NOTIFICATION_REVOCATION_TTL_MS,
@@ -232,6 +232,12 @@ export class PushNotificationService {
 
   constructor(prisma: PrismaClient) {
     this.prisma = prisma;
+    // Les deux disjoncteurs existaient sans être ENREGISTRÉS : la table servie
+    // par `/health/circuit-breakers` (#4219) ne montrait donc que `cacheStore`.
+    // Un disjoncteur absent du registre est un disjoncteur qu'aucun écran ne
+    // peut voir s'ouvrir.
+    circuitBreakerManager.register('fcm', this.fcmCircuitBreaker);
+    circuitBreakerManager.register('apns', this.apnsCircuitBreaker);
   }
 
   /**

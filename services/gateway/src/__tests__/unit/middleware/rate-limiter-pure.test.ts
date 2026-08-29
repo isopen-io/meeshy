@@ -332,6 +332,9 @@ describe('registerGlobalRateLimiter', () => {
       expect(opts.allowList({ url: '/health', ip: '8.8.8.8' })).toBe(true);
       expect(opts.allowList({ url: '/healthz', ip: '8.8.8.8' })).toBe(true);
       expect(opts.allowList({ url: '/ready', ip: '8.8.8.8' })).toBe(true);
+      // La sonde de disponibilité de #4219 : un 429 la ferait conclure
+      // « instance morte » et redémarrer le conteneur.
+      expect(opts.allowList({ url: '/api/v1/health/ready', ip: '8.8.8.8' })).toBe(true);
     });
 
     /**

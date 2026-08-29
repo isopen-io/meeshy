@@ -100,7 +100,14 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     // ici, ce sont des CHEMINS de sonde, jamais une plage d'adresses.
     allowList: (request: FastifyRequest) => {
       const path = request.url.split('?')[0];
-      return path === '/health' || path === '/healthz' || path === '/ready';
+      // `/api/v1/health/ready` rejoint les sondes exemptées (#4219), pour la
+      // raison écrite au-dessus : un 429 sur une sonde de disponibilité fait
+      // conclure « instance morte » et redémarrer le conteneur. L'exemption
+      // n'ouvre pas d'amplificateur anonyme — le verdict est mémoïsé 2 s dans
+      // `routes/health/index.ts`, donc une cadence infinie coûte un ping toutes
+      // les 2 s, quoi qu'il arrive.
+      return path === '/health' || path === '/healthz' || path === '/ready'
+        || path === '/api/v1/health/ready';
     },
     errorResponseBuilder: (request, context) => {
       return {
