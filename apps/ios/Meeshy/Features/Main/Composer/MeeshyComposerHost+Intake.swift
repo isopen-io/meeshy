@@ -643,6 +643,56 @@ extension MeeshyComposerHost {
     /// image n'a pas de durée, et `ComposerMediaProbe.durationMs` la
     /// classerait `nil` de toute façon — l'appeler ici serait un aller-retour
     /// pour rien.
+    /// **Ce qu'un COLLAGE pose** (#4092) — et il ne pose pas comme l'atelier.
+    ///
+    /// L'atelier a `posePastedItems`, qui route vers `addCapturedMedia` et
+    /// `addRecordingToBackground` : deux helpers qui portent son état de
+    /// CHARGEMENT (`isLoadingMedia`, `mediaLoadProgress`), une orchestration de
+    /// vue que le meuble n'a pas et n'a pas à recopier.
+    ///
+    /// Le meuble a le sien, et il est déjà écrit : `ingestCameraCapture` pose
+    /// une image ou une vidéo dans `documentLocalMedia`, en sondant le mime et
+    /// la durée. Un collage d'image EST une capture, du point de vue de ce qui
+    /// arrive dans le document — la seule différence est d'où viennent les
+    /// octets.
+    ///
+    /// **Ce n'est donc pas une réécriture de `posePastedItems`, c'est le même
+    /// geste branché sur l'ingestion de CE meuble.** Recopier les helpers de
+    /// l'atelier aurait apporté avec eux un état de chargement dont rien ici ne
+    /// se sert (leçon 336 : emprunter ce qui décide, pas ce qui orchestre).
+    ///
+    /// Le TEXTE, lui, garde sa règle partagée : `StoryPastePolicy` décide s'il
+    /// devient la description ou un objet de scène, et cette question ne dépend
+    /// pas de la surface qui colle.
+    func handlePastedItems(_ items: [StoryPastedItem]) {
+        for item in items {
+            switch item {
+            case .image(let image):
+                Task { await ingestCameraCapture(.photo(image)) }
+            case .video(let url):
+                Task { await ingestCameraCapture(.video(url)) }
+            case .audio(let url):
+                // Un son collé rejoint la scène comme un son EMPRUNTÉ le ferait
+                // — c'est le même objet, et `addAudioObject` en est le site
+                // unique. Le fichier voyage par `loadedAudioURLs`.
+                viewModel.attachPastedAudio(url: url)
+            case .text(let contenu):
+                switch StoryPastePolicy.placement(forText: contenu) {
+                case .description(let texte):
+                    documentText = texte
+                case .textObject(let texte):
+                    if let objet = viewModel.addText() {
+                        viewModel.updateTextContent(id: objet.id, text: texte)
+                        viewModel.exitTextEditingMode()
+                    }
+                case nil:
+                    break   // coller le vide n'est pas une erreur, c'est un geste sans matière
+                }
+            }
+        }
+        HapticFeedback.light()
+    }
+
     func ingestCameraCapture(_ result: CameraResult) async {
         switch result {
         case .photo(let image):

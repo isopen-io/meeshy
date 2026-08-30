@@ -50,6 +50,31 @@ struct ComposerLeadingRail: View {
     /// Le `(x)` — termine l'outil en cours et rend le rail à ses portes.
     var onExitTool: (() -> Void)?
 
+    /// **Le slot de bouton SYSTÈME** (#4092, le collage).
+    ///
+    /// Les sept portes sont des `Button` qui RAPPELLENT l'hôte : le rail peint
+    /// un glyphe, l'hôte fait le reste. Ce patron ne peut pas porter le
+    /// collage, et la raison est dans `BlankCanvasPasteStarter` :
+    ///
+    /// > « `PasteButton` et non un `Button` qui lirait `UIPasteboard.general`.
+    /// > Deux propriétés qu'un bouton maison n'a pas : le système accorde
+    /// > l'accès au presse-papier SANS la bannière « Coller depuis … », et le
+    /// > bouton se désactive de lui-même quand le presse-papier ne porte rien
+    /// > d'acceptable — donc jamais d'affordance qui ne ferait rien. »
+    ///
+    /// Une huitième porte construite sur le patron ordinaire perdrait les deux :
+    /// elle ferait paraître la bannière à chaque tap, et resterait peinte devant
+    /// un presse-papier vide — ce que la loi 4 interdit précisément.
+    ///
+    /// D'où un slot où l'hôte rend la vue ENTIÈRE au lieu d'un rappel. Le rail
+    /// ne sait pas ce qu'elle fait ; il sait seulement OÙ elle va.
+    var systemEntry: AnyView?
+
+    /// La porte APRÈS laquelle le bouton système se place. `nil` ⇒ en fin de
+    /// liste. L'ordre vient de la maquette (`3b` : dessin · sticker · COLLAGE ·
+    /// mention · lieu), pas d'une commodité de rendu.
+    var systemEntryAfter: ComposerRailDoor?
+
     @State private var lastTapped: String?
 
     private var isEmpty: Bool {
@@ -71,6 +96,21 @@ struct ComposerLeadingRail: View {
                 case .doors(let doors):
                     ForEach(doors, id: \.rawValue) { door in
                         doorButton(door)
+                        // Le bouton système se glisse à SA place dans l'ordre,
+                        // jamais en bout de rail : la maquette range le collage
+                        // entre le sticker et la mention, et une entrée qu'on
+                        // relègue à la fin cesse d'être trouvable là où le doigt
+                        // l'attend.
+                        if let systemEntry, systemEntryAfter == door {
+                            systemEntry
+                                .frame(width: ComposerRailGeometry.railWidth,
+                                       height: ComposerRailGeometry.railWidth)
+                        }
+                    }
+                    if let systemEntry, systemEntryAfter == nil {
+                        systemEntry
+                            .frame(width: ComposerRailGeometry.railWidth,
+                                   height: ComposerRailGeometry.railWidth)
                     }
                 case .tool(let controls):
                     ForEach(controls) { control in

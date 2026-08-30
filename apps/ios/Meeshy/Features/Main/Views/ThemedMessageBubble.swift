@@ -36,6 +36,73 @@ import MapKit
 import MeeshySDK
 import MeeshyUI
 
+/// **Le double tap est le geste de la barre de réaction rapide** (#4020).
+///
+/// Écrit comme une fonction PURE de la nature de la bulle plutôt qu'en `if`
+/// dans le corps de la vue : c'est ce qui le rend mesurable, et ce qui empêche
+/// la seconde surface — les cellules média — d'en écrire une deuxième version.
+/// Deux gestes identiques gouvernés par deux conditions distinctes divergent au
+/// premier ajustement de l'une, en silence.
+///
+/// **Le geste ne remplace rien.** Il coexiste avec le simple tap (plein écran
+/// d'un média) et l'appui long (menu complet) : il ne fait qu'ajouter un chemin
+/// COURT vers ce que la capsule « + » ouvrait déjà, et il passe par le MÊME
+/// rappel (`onAddReaction`) — donc par le même ancrage de barre, résolu en
+/// UIKit avec le cadre de la cellule.
+nonisolated enum QuickReactionGesture {
+
+    /// `true` seulement pour une bulle STANDARD.
+    ///
+    /// Les quatre autres natures n'ont rien à réagir, et le geste y ouvrirait
+    /// une barre dont le serveur refuserait l'effet — un contrôle qui a l'air
+    /// de marcher, ce que la loi 4 de la doctrine composer interdit :
+    ///
+    /// - `.deleted` — le contenu n'existe plus ;
+    /// - `.burned` — une vue unique consommée ne se réagit pas après coup ;
+    /// - `.ephemeralExpired` — le message n'est plus là ;
+    /// - `.system` — un avis n'est la parole de personne.
+    static func acceptsDoubleTap(kind: BubbleContent.Kind) -> Bool {
+        switch kind {
+        case .standard:
+            return true
+        case .deleted, .burned, .ephemeralExpired, .system:
+            return false
+        }
+    }
+}
+
+/// Le geste lui-même, en TYPE NOMMÉ plutôt qu'en chaîne posée dans le corps.
+///
+/// Deux raisons, et la seconde a déjà coûté un crash au dépôt :
+///
+/// 1. le geste s'applique à DEUX surfaces (la bulle, puis les cellules média) :
+///    un type le rend applicable sans le recopier ;
+/// 2. chaque modificateur empilé dans une fermeture de `body` enrichit le type
+///    générique que SwiftUI doit copier, et la copie de témoin devient récursive
+///    assez profondément pour épuiser la pile — le débordement par PROFONDEUR DE
+///    TYPE que #4361 a payé sur la zone de description. Un type nommé referme
+///    cette profondeur derrière un seul `some View`.
+///
+/// `isEnabled` plutôt qu'un `if` chez l'appelant : une branche conditionnelle
+/// dans un `@ViewBuilder` change l'IDENTITÉ de la vue, ce qui recrée son état à
+/// chaque bascule. Ici l'identité est stable et seule la reconnaissance du geste
+/// s'éteint.
+struct QuickReactionDoubleTap: ViewModifier {
+
+    let isEnabled: Bool
+    let onOpen: () -> Void
+
+    func body(content: Content) -> some View {
+        content.onTapGesture(count: 2) {
+            guard isEnabled else { return }
+            // La même vibration que la capsule « + » : c'est le MÊME acte,
+            // atteint par un chemin plus court.
+            HapticFeedback.light()
+            onOpen()
+        }
+    }
+}
+
 struct ThemedMessageBubble: View {
     // MARK: - Public init API (preserved unchanged for all call sites)
 
@@ -255,6 +322,15 @@ struct ThemedMessageBubble: View {
                 EmptyView()
             } else {
                 standardLayout(content: content)
+                    // #4020 — le double tap ouvre la barre de réaction rapide.
+                    // Posé ICI, sur la seule branche que la règle accepte : le
+                    // `switch` au-dessus a déjà écarté système, supprimé et
+                    // brûlé, et `isEphemeralExpired` vient d'écarter le
+                    // quatrième. La règle est tout de même consultée — elle
+                    // reste la SOURCE, l'aiguillage n'en est qu'un chemin.
+                    .modifier(QuickReactionDoubleTap(
+                        isEnabled: QuickReactionGesture.acceptsDoubleTap(kind: content.kind),
+                        onOpen: { onAddReaction?(message.id) }))
             }
         }
     }

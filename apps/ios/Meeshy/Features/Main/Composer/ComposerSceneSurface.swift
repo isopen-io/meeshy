@@ -76,6 +76,13 @@ struct ComposerSceneSurface: View {
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
 
+    /// Le bouton SYSTÈME du rail — le collage (#4092). Une vue entière, parce
+    /// qu'un `PasteButton` doit ÊTRE le bouton pour garder son privilège : accès
+    /// au presse-papier sans bannière, et extinction automatique quand il n'y a
+    /// rien à coller.
+    var railSystemEntry: AnyView?
+    var railSystemEntryAfter: ComposerRailDoor?
+
     /// Les contrôleurs SERVIS — déjà filtrés par `ComposerTrailingRailPolicy`.
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
@@ -179,7 +186,9 @@ struct ComposerSceneSurface: View {
                                         plateauTint: plateauTint,
                                         onDoor: onRailDoor,
                                         onToolControl: onRailToolControl,
-                                        onExitTool: onRailExitTool)
+                                        onExitTool: onRailExitTool,
+                                        systemEntry: railSystemEntry,
+                                        systemEntryAfter: railSystemEntryAfter)
                         .padding(.leading, ComposerRailGeometry.outerMargin)
                         .padding(.bottom, ComposerRailGeometry.gutter)
                 }
