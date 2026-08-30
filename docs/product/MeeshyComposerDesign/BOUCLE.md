@@ -5,7 +5,7 @@ Ce fichier est le contrat complet ; le prompt `/loop` s'y réfère au lieu de le
 
 ---
 
-## Les sept lois
+## Les huit lois
 
 **1. PRÉSERVER ET COMPLÉTER, jamais supprimer.** La maquette est une **cible**, pas une liste
 d'autorisations. Ce que l'app porte en plus du document **se conserve**. Un élément absent de la
@@ -41,6 +41,25 @@ Le substitut n'est toléré que pendant le chargement, et il s'efface dès que l
 intermédiaire, sans attendre la fermeture d'une feuille. Un réglage qui ne prend effet qu'au
 « Appliquer » fait choisir à l'aveugle. **Corollaire :** un éditeur temps réel doit porter un
 **snapshot** pour que l'annulation restaure vraiment ce qui existait avant.
+
+**8. LE PRISME N'AFFICHE QUE CE DONT ON A BESOIN, AU MOMENT OÙ ON EN A BESOIN**
+(directive porteur, 2026-08-30). Énoncée sur le `⋯` — *« le menu ⋯ apparaît quand il y a du
+contenu pour appliquer des options »* — et **à maintenir pour TOUS** les contrôles, pas seulement
+celui-là. Un contrôle dont l'objet n'existe pas ENCORE est absent, et il paraît à l'instant où son
+objet apparaît.
+
+C'est la **jumelle temporelle de la loi 4** : la loi 4 juge la CAPACITÉ (un contrôle sans effet est
+absent), celle-ci juge le MOMENT. Les deux se répondent, et aucune ne remplace l'autre.
+
+Deux exceptions, **nommées** — une exception implicite est une infraction :
+- **l'action terminale** (`Publier`) reste peinte et grisée avec sa raison : la masquer laisserait
+  l'auteur sans savoir par où sortir ;
+- **les FORMATS impossibles** restent au menu, éteints avec leur raison (#4030) — un format
+  enseigne une règle du produit, là où un contrôle ne fait qu'agir.
+
+Tenue par `ComposerProgressiveDisclosureGuardTests`, qui épingle chaque chrome optionnel derrière sa
+condition. Le cliquet n'existe pas pour les quatre sites qui obéissent déjà : il existe pour le
+CINQUIÈME contrôle, celui qu'on ajoutera sans y penser.
 
 > **Ce que la loi 7 ne dit PAS.** Elle gouverne l'**effet**, pas le bouton. Les captures cibles
 > portent des `OK` (`1c`), `APPLIQUER` (`2l`), `ENREGISTRER` (`3c`) — et ce ne sont pas des
@@ -252,4 +271,4 @@ et les dimensions restantes — chaque dimension non mûre devient une issue.
 5. **Chaque vignette de la vue montre la vraie donnée** (loi 6) — vérifié sur la capture, pas sur le code.
 6. **Chaque réglage de la vue s'y voit en direct** (loi 7) — la modification et son annulation, toutes deux filmées ou capturées.
 7. **L'entrée et la sortie de la vue sont câblées** — le chemin complet depuis le fil a été parcouru au simulateur.
-8. **La revue est conduite par Opus** et conclut sur les sept lois, une par une.
+8. **La revue est conduite par Opus** et conclut sur les huit lois, une par une.
