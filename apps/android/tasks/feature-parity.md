@@ -3743,12 +3743,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       `undo`, and any fresh action (`commit`, a real `delete`) invalidates it, while a property tweak
       (recolour/resize/smooth) is NOT a new stroke so it leaves redo intact. `StoryDrawingStroke` /
       `StoryDrawingStrokePoint` / `StrokeTool` (pen/marker/eraser) / `StrokeSmoothing` (raw/curve/line)
-      mirror the iOS models with the exact gateway wire strings; `createdAt` is deliberately omitted
-      (the reducer never reads it — draw order is the list order — so the value type stays clock-free).
+      mirror the iOS models with the exact gateway wire strings.
       Two deliberate improvements over iOS: `undo`/`delete`/`select`/mutate no-ops return the same board
       unchanged, and `delete` of an absent id keeps the redo history (iOS clears it unconditionally).
       +33 tests, RED-proven (dropping `commit`'s `redoStack = emptyList()` fails exactly the
-      redo-invalidation test). Pending: `StoryEffects.drawingStrokes` wire serialization + the Compose
+      redo-invalidation test).
+      **Wire serialization done** (`story-drawing-strokes-wire`): the stroke wire model was promoted
+      from `:feature:stories` to `:core:model` (`StoryDrawingStroke`/`StoryDrawingStrokePoint`/
+      `StrokeTool`/`StrokeSmoothing`, now `@Serializable` with `@SerialName` = the exact gateway strings)
+      so it is the SINGLE type the reducer AND the `StoryEffects.drawingStrokes` wire field both hold —
+      exactly as iOS keeps one `MeeshySDK/Models/StoryDrawingStroke` for both (no divergent twin).
+      `createdAt` is now carried as an optional `Double?` passthrough (epoch seconds) for round-trip
+      fidelity; the reducer still never reads it. `StoryEffects.drawingStrokes` decodes flat on the v1
+      wire and rides the v3 `kind:"drawing"` object's `payload.strokes`, projected back by
+      `CanvasV3Projection` (port of iOS `CanvasV3Migration.swift:580-583`); the legacy PKDrawing blob
+      (`payload.data`) has no Android renderer and is read as nothing to paint, an empty/absent `strokes`
+      normalises to `null`. +9 tests, RED-proven (neutering the projection branch fails exactly the 3
+      strokes-projection tests, oracle = shared `v1-legacy-rich` v1/v3 fixture pair). Pending: the Compose
       capture surface (variable-width pressure render) + composer VM wiring — device/Compose-bound.
 - [x] Emoji sticker picker — **categorised + searchable** (`story-sticker-picker-search`): a pure
       `StickerCatalog` (8 iOS-parity categories — smileys/animals/food/activities/travel/objects/

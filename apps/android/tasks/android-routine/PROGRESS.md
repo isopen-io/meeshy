@@ -2,6 +2,62 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the drawing-stroke wire model reached `:core:model` and the v3 `drawing` object now
+> projects — the JVM-testable serialization half the prior run named as next** (slice
+> `story-drawing-strokes-wire`, feature-parity §Stories "Freehand drawing layer" line: the "Wire
+> serialization done" block). Android decoded every v3 family EXCEPT `drawing`, which
+> `CanvasV3Projection` explicitly dropped, and `StoryEffects` had no `drawingStrokes` field at all — so a
+> published story's freehand strokes were invisible on Android whichever wire form the gateway served.
+> iOS keeps ONE `StoryDrawingStroke` (in SDK core, `MeeshySDK/Models/`) shared by both its `StoryEffects`
+> wire and its editor ViewModel; Android's prior slice had placed the twin in `:feature:stories`, which
+> both blocked the wire (a `:core:model` `StoryEffects` field can't reference a `:feature` type) and
+> risked a divergent twin.
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4336/#4267 (both jcnm: gateway),
+> neither a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to merge.
+> Prior slice (`story-drawing-board`) is on `main` (#4331). Branched off freshly-fetched `origin/main`;
+> local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff verified
+> `apps/android` only (5 modified + 2 new files, no `local.properties`).
+>
+> **The change — one promotion, one field, one projection branch.** (1) Moved the four wire types
+> (`StoryDrawingStroke`/`StoryDrawingStrokePoint`/`StrokeTool`/`StrokeSmoothing`) from `:feature:stories`
+> into a new `:core:model` `StoryDrawingStroke.kt`, now `@Serializable` with `@SerialName` = the exact
+> gateway strings (`pen`/`marker`/`eraser`, `raw`/`curve`/`line`) mirrored beside the existing `.wire`
+> accessor the board test pins; `StoryDrawingBoard` re-imports them (behaviour identical, board's 27 tests
+> unchanged). (2) Added `StoryEffects.drawingStrokes: List<StoryDrawingStroke>? = null`. (3) `CanvasV3Projection`
+> gained a `kind:"drawing"` branch → `asDrawingStrokes()` reads `payload.strokes` (mapNotNull decodeWire,
+> empty/absent → `null`, last drawing object wins as iOS assigns), ignoring the legacy `payload.data`
+> PKDrawing blob. `createdAt` became an optional `Double?` passthrough (round-trip fidelity; reducer still
+> never reads it). SSOT win: the reducer and the wire now share ONE type. Blast radius: `:core:model` all
+> additive; the two `:feature:stories` touches are the type move + one import.
+>
+> **Tests: +9, RED-proven.** `CanvasV3ProjectionTest` +5: strokes project from the shared `v1-legacy-rich`
+> v1/v3 fixture pair (structural equality) + a value-pinning test (tool/smoothing/pressure/width/
+> captureVersion/createdAt), `data`-only object → null, present-but-empty `strokes` → null (distinct
+> `takeIf` branch), unknown payload key on a stroke tolerated. `StoryDrawingStrokeWireTest` +4: the enum
+> wire strings, a full round-trip, minimal-stroke defaults + `createdAt` as a number. **RED**: neutering
+> the projection branch (`drawingStrokes = null`) → BUILD FAILED on EXACTLY the 3 strokes-projection tests,
+> no collateral (the `data`-only/empty tests still pass, correctly null→null; the wire test is
+> projection-independent).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL** (0 failed). Reviewer **PASS** (diff `apps/android` only — 5
+> modified + 2 new, no `local.properties`; SDK purity — the wire model + projection are stateless
+> `:core:model` building blocks, the reducer stays in `:feature:stories`; SSOT — ONE `StoryDrawingStroke`
+> now, the feature twin removed; behaviour over implementation — decode asserted through the production
+> `StoryEffectsWireSerializer` path against the shared cross-platform fixture oracle; no tautological
+> tests; no coverage floor lowered — new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the drawing layer's only remaining pieces are all device/Compose-bound — the Compose capture
+> surface (`detectDragGestures`/`Canvas` overlay, pressure → variable-width render, eraser hit-test) and
+> composer VM wiring holding a `StoryDrawingBoard` per slide, which decode/encode via `StoryEffects.drawingStrokes`
+> now that the wire is in place. Those wait for a Compose-instrumented or device-capable run. For a pure-core
+> next slice, consider another Feed/Stories reducer or an earlier build-order area (Auth→Conversations→Chat)
+> value type. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-29 **the pure freehand-drawing board landed — the JVM-testable heart of the Stories drawing
 > layer** (slice `story-drawing-board`, feature-parity §Stories "Freehand drawing layer (pen/marker/eraser,
 > colour, width, undo/redo/clear)" `[ ]`→`[~]`). Android had NO drawing model at all; iOS keeps the

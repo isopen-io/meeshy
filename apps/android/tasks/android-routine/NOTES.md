@@ -5,6 +5,24 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — a wire model belongs in the layer that carries the wire, not the layer that first drew it (slice `story-drawing-strokes-wire`)
+The prior slice placed the drawing wire types (`StoryDrawingStroke` &c.) in `:feature:stories` because the
+board reducer was the first consumer. But the SAME type is the payload of `StoryEffects.drawingStrokes`, which
+lives in `:core:model` — and a `:core:model` field cannot reference a `:feature:*` type (dependency points the
+other way). So the wire could not be wired at all until the model was promoted to `:core:model`. iOS had it
+right from the start: `StoryDrawingStroke` sits in `MeeshySDK/Models/` (SDK core), shared by both its
+`StoryEffects` wire and its editor ViewModel — ONE type, no twin. **When a value type is BOTH an editor's
+edit-state AND a field's wire payload, it belongs in the shared/core layer; the feature reducer imports it.**
+The tell that a placement is wrong: you reach to add a serialized field somewhere and the type you need is
+"below" you in the module graph. Promote the type (one move + an import re-point, behaviour identical), don't
+mint a second one — a structurally-identical twin across layers is the divergence CLAUDE.md forbids.
+
+Corollary on `createdAt`: the board slice dropped it as "the reducer never reads it → clock-free". True for the
+REDUCER, but the field is also a wire payload, and iOS's decoder REQUIRES the key. Dropping it would make an
+Android v1 re-serialize emit a stroke iOS then fails to decode. So it came back as an optional `Double?`
+PASSTHROUGH — the reducer still never reads it, but the wire round-trips whole. **"The reducer doesn't read
+it" justifies not branching on a field; it does not justify dropping it from a type that also serializes.**
+
 ## 2026-08-29 — an undo/redo reducer's ONE invariant is "what repopulates the redo stack", and every op is judged by it (slice `story-drawing-board`)
 Porting iOS's drawing undo/redo (`StoryComposerViewModel+DrawingEditing`) to a pure immutable
 `StoryDrawingBoard`, the whole correctness story reduces to a single rule: **`redoStack` is populated ONLY by

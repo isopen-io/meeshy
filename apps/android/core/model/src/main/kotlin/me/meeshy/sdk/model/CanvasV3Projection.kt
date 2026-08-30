@@ -15,9 +15,11 @@ import kotlinx.serialization.json.jsonPrimitive
  * (`CanvasV3Migration.swift:522-706`).
  *
  * Rien ne se peint en v3 : le document est rabattu sur les familles que le
- * viewer Android peint déjà. Les familles absentes du modèle Android
- * (`place`, `drawing`) sont ignorées plutôt que fabriquées — un objet qu'on ne
- * sait pas rendre ne doit pas coûter les autres.
+ * viewer Android peint déjà. La famille `place` absente du modèle Android est
+ * ignorée plutôt que fabriquée — un objet qu'on ne sait pas rendre ne doit pas
+ * coûter les autres. La famille `drawing`, elle, projette ses traits éditables
+ * (`payload.strokes`) sur [StoryEffects.drawingStrokes] ; seul le blob PKDrawing
+ * legacy (`payload.data`, base64) reste ignoré, faute de rendu Android.
  */
 private const val SCENE_ASPECT = 9.0 / 16.0
 private const val BAND_ANCHOR_TOP = 0.08
@@ -189,6 +191,19 @@ private fun ObjectV3.asAudio(at: Pair<Double, Double>): StoryAudioPlayerObject =
     sourceLanguage = locale,
 )
 
+/**
+ * Les traits éditables d'un objet `drawing`. Port de la branche `.drawing` d'iOS
+ * (`CanvasV3Migration.swift:580-583`) : seul `payload.strokes` est lu — le
+ * `payload.data` (PKDrawing legacy en base64) n'a pas de rendu Android. Un objet
+ * `drawing` sans trait exploitable rend `null` (idiome des autres familles :
+ * `medias/stickers/audios` normalisent aussi le vide en `null`), si bien qu'un
+ * `data`-seul, tolérable au décodeur, ne fabrique pas une couche de dessin vide.
+ */
+private fun ObjectV3.asDrawingStrokes(): List<StoryDrawingStroke>? =
+    (payload["strokes"] as? JsonArray)
+        ?.mapNotNull { decodeWire<StoryDrawingStroke>(it as? JsonObject) }
+        ?.takeIf { it.isNotEmpty() }
+
 private fun transitionOf(wire: JsonObject?): StoryTransitionEffect? {
     val raw = wire?.str("type") ?: return null
     return runCatching {
@@ -223,6 +238,7 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
     val medias = mutableListOf<StoryMediaObject>()
     val stickers = mutableListOf<StorySticker>()
     val audios = mutableListOf<StoryAudioPlayerObject>()
+    var drawingStrokes: List<StoryDrawingStroke>? = null
 
     for (item in scene.objects) {
         val at = item.position(scene.carrierAspect)
@@ -235,6 +251,9 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
             item.kind == "text" -> item.asText(at)?.let { texts += it }
             item.kind == "sticker" -> item.asSticker(at)?.let { stickers += it }
             item.kind == "audio" -> audios += item.asAudio(at)
+            // Le dernier objet `drawing` gagne, comme iOS (`drawingStrokes = decode(...)`,
+            // une affectation, pas une accumulation) ; l'écrivain n'en émet qu'un.
+            item.kind == "drawing" -> drawingStrokes = item.asDrawingStrokes()
             else -> Unit
         }
     }
@@ -254,6 +273,7 @@ fun StoryEffects.Companion.rendering(document: CanvasV3, sceneIndex: Int = 0): S
         mediaObjects = medias.ifEmpty { null },
         stickerObjects = stickers.ifEmpty { null },
         audioPlayerObjects = audios.ifEmpty { null },
+        drawingStrokes = drawingStrokes,
         backgroundAudioId = soundId,
         backgroundAudioVolume = sound?.volume?.toFloat(),
         backgroundAudioStart = sound?.bounds?.start,

@@ -307,6 +307,15 @@ data class StoryEffects(
     val textObjects: List<StoryTextObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject>? = null,
     val audioPlayerObjects: List<StoryAudioPlayerObject>? = null,
+    /**
+     * Editable freehand strokes — parity with iOS `StoryEffects.drawingStrokes`. On
+     * the v1 wire they sit at this flat key; on the v3 wire they ride the
+     * `kind:"drawing"` scene object's `payload.strokes`, projected back here by
+     * [CanvasV3Projection]. The legacy PKDrawing blob (`drawingData` on iOS) has no
+     * Android renderer and is not modelled — a future writer's base64 `data` is read
+     * as nothing to paint, never as a decode failure.
+     */
+    val drawingStrokes: List<StoryDrawingStroke>? = null,
     val backgroundAudioVariants: List<StoryAudioVariant>? = null,
     val thumbHash: String? = null,
     val backgroundTransform: StoryBackgroundTransform? = null,
