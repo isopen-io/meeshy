@@ -117,14 +117,11 @@ struct MeeshyApp: App {
                     }
                     .opacity(showSplash ? 0 : 1)
 
-                    if showSplash {
-                        // onFinish is kept as a no-op so the existing component
-                        // signature is preserved ; dismissal is driven by the
-                        // `.task` block once boot work completes.
-                        SplashScreen(onFinish: {})
-                            .transition(.opacity.combined(with: .scale(scale: 1.1)))
-                            .zIndex(1)
-                    }
+                    // #4363 — il ne se RETIRE plus, il s'efface : un retrait
+                    // interrompu laisse la vue hit-testable. Voir `fullScreenGate`.
+                    SplashScreen(onFinish: {})
+                        .fullScreenGate(isPresented: showSplash)
+                        .zIndex(1)
                 }
                 // `!isAuthenticated` protège d'un ACCIDENT — un lien traité
                 // avant la fin de `checkExistingSession`, qui échouerait un

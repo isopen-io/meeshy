@@ -211,6 +211,11 @@ public struct StoryComposerView: View {
     /// propose jamais à l'utilisateur un choix qui sera refusé.
     let allowedVisibilities: [PostVisibility]?
 
+    /// **La réserve basse déclarée par le meuble** (#4361) — la hauteur de sa
+    /// zone de saisie de description. Le canvas se rétracte au-dessus ; il ne se
+    /// fait pas recouvrir.
+    @Environment(\.storyComposerCanvasBottomReservation) var hostCanvasBottomReservation
+
     @State var visibility: String
     @State var visibilityUserIds: [String]
     @State var audiencePickerMode: PostVisibility?

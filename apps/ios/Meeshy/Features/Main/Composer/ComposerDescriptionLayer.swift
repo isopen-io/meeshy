@@ -269,3 +269,17 @@ nonisolated enum ComposerDescriptionCopy {
                defaultValue: "Écrire la description", bundle: .main)
     }
 }
+
+/// La hauteur RENDUE de la zone de saisie de description (#4361), remontée au
+/// meuble pour qu'il la déclare en réserve basse à l'atelier.
+///
+/// Mesurée, jamais supposée : la zone grandit avec le texte et le clavier la
+/// pousse. Une constante ferait remonter la scène du mauvais nombre de points
+/// dès la deuxième ligne.
+struct ComposerDescriptionEditorHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
