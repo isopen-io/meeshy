@@ -393,6 +393,16 @@ struct MeeshyComposerHost: View {
     /// l'encastrement vient de libérer.
     @State var requestedSceneBand: ComposerSceneBand?
 
+    /// **La durée du fichier source, MESURÉE, par objet (#4082).**
+    ///
+    /// Le modèle ne la porte pas de façon fiable : une vidéo a
+    /// `intrinsicDuration`, un son n'a que `duration` — et celle-ci DEVIENT la
+    /// durée de la fenêtre au premier rognage. Rouvrir la bande sur cette
+    /// valeur montrerait une source rétrécie à chaque passage, et la queue
+    /// coupée deviendrait irrécupérable : un rognage qui ne se défait pas n'est
+    /// pas un rognage. Seul le fichier dit la vérité, et il faut la lui demander.
+    @State var trimSourceDurations: [String: Double] = [:]
+
     /// **La couche d'écriture de la description, par-dessus l'atelier** (#4124).
     /// `false` ⇒ rien n'est monté : la scène occupe tout ce que le chrome lui
     /// laisse, et le bas ne porte plus de champ permanent.

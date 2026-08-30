@@ -339,3 +339,71 @@ public extension StoryComposerViewModel {
         return audio?.isBackground == true ? .background : .foreground
     }
 }
+
+// MARK: - Rogner la source d'un objet (#4082)
+
+public extension StoryComposerViewModel {
+
+    /// **Écrire une fenêtre de source sur l'objet sélectionné.**
+    ///
+    /// UN seul site écrit les trois champs, et c'est `MediaTrimRule.fields` qui
+    /// les rend ensemble : `sourceStart`/`sourceEnd` disent où lire dans le
+    /// fichier, `duration` combien de temps l'objet occupe la slide. Écrire les
+    /// deux premiers sans le troisième laisserait `contentDerivedDuration`
+    /// compter l'ancienne longueur — la story attendrait dans le vide après la
+    /// fin du clip rogné, sans que rien n'ait l'air faux.
+    ///
+    /// **Rien n'est ré-encodé.** Le fichier source reste celui que l'auteur a
+    /// posé : la doctrine de publication d'une story veut que le serveur
+    /// reçoive la source d'origine et les objets qui la décrivent, jamais un
+    /// composite. C'est ce qui sépare cette écriture des trois éditeurs de
+    /// média du dépôt, qui cuisent un nouveau fichier au confirm.
+    func setSourceTrim(id: String, bounds: MediaTrimBounds, sourceDuration: Double) {
+        let champs = MediaTrimRule.fields(for: bounds, sourceDuration: sourceDuration)
+        var effets = currentEffects
+
+        if let index = effets.mediaObjects?.firstIndex(where: { $0.id == id }) {
+            effets.mediaObjects?[index].sourceStart = champs.start
+            effets.mediaObjects?[index].sourceEnd = champs.end
+            effets.mediaObjects?[index].duration = champs.duration
+            currentEffects = effets
+            return
+        }
+        guard let index = effets.audioPlayerObjects?.firstIndex(where: { $0.id == id }) else { return }
+        effets.audioPlayerObjects?[index].sourceStart = champs.start
+        effets.audioPlayerObjects?[index].sourceEnd = champs.end
+        effets.audioPlayerObjects?[index].duration = Float(champs.duration)
+        currentEffects = effets
+    }
+
+    /// La fenêtre COURANTE d'un objet, et la source sur laquelle elle se lit.
+    ///
+    /// `nil` quand l'objet n'a pas de source à rogner — c'est le même verdict
+    /// que `StorySceneObjectPredicates.hasTrimmableSource`, rendu ici avec la
+    /// matière plutôt qu'avec un booléen : l'hôte a besoin de l'URL, de la
+    /// durée et des bornes, et les redemander une à une multiplierait les
+    /// occasions de les désaccorder.
+    ///
+    /// **`sourceDuration` est une ESTIMATION, et l'hôte doit la remplacer par la
+    /// mesure du fichier.** Une vidéo porte `intrinsicDuration`, la durée native
+    /// de l'asset, qui survit au rognage ; un son n'a pas ce champ, et sa
+    /// `duration` DEVIENT celle de la fenêtre dès le premier rognage. Rouvrir la
+    /// bande sur cette valeur montrerait une source rétrécie, et la queue coupée
+    /// deviendrait irrécupérable — un rognage qui ne se défait pas n'est pas un
+    /// rognage. Le repli composé ici (`sourceEnd`, sinon début + fenêtre) est le
+    /// meilleur MINORANT tiré du modèle ; seul `AVURLAsset` dit la vérité, et
+    /// c'est une mesure asynchrone qui n'a pas sa place dans un accesseur.
+    func sourceTrim(id: String) -> (url: URL, bounds: MediaTrimBounds, sourceDuration: Double, isVideo: Bool)? {
+        if let media = currentEffects.mediaObjects?.first(where: { $0.id == id }),
+           media.kind == .video,
+           let url = loadedVideoURLs[id] {
+            let duree = media.intrinsicDuration ?? media.duration ?? 0
+            return (url, media.trimBounds(sourceDuration: duree), duree, true)
+        }
+        guard let audio = currentEffects.audioPlayerObjects?.first(where: { $0.id == id }),
+              let url = loadedAudioURLs[id] else { return nil }
+        let fenetre = Double(audio.duration ?? 0)
+        let duree = max(audio.sourceEnd ?? 0, (audio.sourceStart ?? 0) + fenetre)
+        return (url, audio.trimBounds(sourceDuration: duree), duree, false)
+    }
+}

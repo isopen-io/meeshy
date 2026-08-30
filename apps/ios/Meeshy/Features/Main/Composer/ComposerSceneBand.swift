@@ -82,17 +82,37 @@ struct ComposerSceneBandView: View {
     var openingEffect: StoryTransitionEffect?
     var onPickOpening: ((StoryTransitionEffect?) -> Void)?
 
+    /// **Le contenu de la bande `timeline`, composé par l'HÔTE** (#4082).
+    ///
+    /// Même motif que `toolOptions` et `railSystemEntry` du meuble : ce qui
+    /// exige de connaître l'objet sélectionné, ses URL chargées et le ViewModel
+    /// est composé là où ces trois choses vivent, et voyage jusqu'ici en vue
+    /// opaque. La bande reste ignorante de ce qu'elle porte — c'est ce qui lui
+    /// permet de rester une règle de PLACE.
+    ///
+    /// `nil` ⇒ la bande n'a rien à montrer, et `ComposerSceneCapabilities.bands(canTrimSelection:)`
+    /// ne l'aura alors jamais servie : les deux disent la même chose depuis les
+    /// deux bouts, et c'est voulu — la seconde est ce qui l'empêche d'être
+    /// demandée, la première ce qui l'empêche de paraître vide si elle l'était.
+    var timelineContent: AnyView?
+
     var body: some View {
         switch band {
         case .palette:
             palette
-        case .timeline, .textStyles:
-            // Aucun contenu : ces deux contextes appartiennent au critère mais
-            // n'ont pas d'hôte ici (la timeline vit dans l'atelier ; les 18
-            // styles exigent un objet `text` sélectionné, qu'aucune porte de
-            // cette surface ne pose encore). `ComposerSceneBand.opened` ne les
-            // sert donc jamais, et sa garde le prouve — c'est là que l'absence
-            // est tenue, pas ici.
+        case .timeline:
+            // La bande de ROGNAGE depuis #4082. Elle n'a de contenu que quand
+            // l'hôte lui en compose un — pour un objet sans source à rogner,
+            // `bands(canTrimSelection:)` ne la sert pas et on n'arrive jamais
+            // ici. Le `EmptyView` de repli n'est donc pas une bande vide
+            // tolérée : c'est la trace de la loi 4, tenue des deux côtés.
+            if let timelineContent { timelineContent } else { EmptyView() }
+        case .textStyles:
+            // Aucun contenu : ce contexte appartient au critère mais n'a pas
+            // d'hôte ici — les 18 styles exigent un objet `text` sélectionné,
+            // qu'aucune porte de cette surface ne pose encore (#4083).
+            // `ComposerSceneBand.opened` ne le sert donc jamais, et sa garde le
+            // prouve : c'est là que l'absence est tenue, pas ici.
             EmptyView()
         }
     }

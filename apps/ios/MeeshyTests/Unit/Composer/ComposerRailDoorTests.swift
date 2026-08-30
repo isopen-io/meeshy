@@ -312,9 +312,52 @@ final class ComposerSceneCapabilitiesTests: XCTestCase {
     func test_lesBandesServies_ontTouteUnContenu() {
         XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette])
         XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.timeline),
-                       "La timeline vit dans l'atelier (#4075) — la servir peindrait une bande vide.")
+                       "Le jeu de BASE ne sert pas la timeline : elle n'a de contenu que pour un objet rognable (#4082).")
         XCTAssertFalse(ComposerSceneCapabilities.bands.contains(.textStyles),
                        "Les 18 styles exigent un objet `text` sélectionné, qu'aucune porte ne pose (#4401).")
+    }
+
+    /// **La bande de rognage n'est servie que quand elle a de quoi se remplir**
+    /// (#4082). Le témoin s'écrit sur les DEUX verdicts : n'éprouver que le cas
+    /// « servie » laisserait passer une bande servie en permanence, c'est-à-dire
+    /// exactement le défaut que la loi 4 refuse.
+    func test_laTimeline_nEstServieQuePourUnObjetRognable() {
+        XCTAssertTrue(
+            ComposerSceneCapabilities.bands(canTrimSelection: true).contains(.timeline),
+            "un objet à rogner sélectionné doit rendre la bande ouvrable")
+        XCTAssertFalse(
+            ComposerSceneCapabilities.bands(canTrimSelection: false).contains(.timeline),
+            "sans objet rognable, la bande occuperait 170 pt pour ne rien montrer")
+        XCTAssertTrue(
+            ComposerSceneCapabilities.bands(canTrimSelection: false).contains(.palette),
+            "la condition ne doit RETIRER aucune bande de base")
+    }
+
+    /// **Rogner est offert par l'OBJET, pas par le meuble.** Le meuble déclare
+    /// savoir le faire (`controllers`) ; c'est la règle du SDK qui décide qu'une
+    /// image et un texte n'ont pas de source à rogner.
+    func test_leRognage_estServiParLeMeuble_etRefuseParUnObjetSansSource() {
+        XCTAssertTrue(ComposerSceneCapabilities.controllers.contains(.trim),
+                      "le meuble sait ouvrir la bande de rognage depuis #4082")
+
+        let sansSource = StoryCanvasContextAction.offered(
+            isLocked: false, isBackground: false, sharesPlaneWithAnother: false,
+            hasEditor: false, canLeaveScene: false, hasTrimmableSource: false)
+        XCTAssertFalse(sansSource.contains(.trim),
+                       "une image n'a pas de fenêtre de source — l'action doit être ABSENTE, pas grisée")
+
+        let avecSource = StoryCanvasContextAction.offered(
+            isLocked: false, isBackground: false, sharesPlaneWithAnother: false,
+            hasEditor: false, canLeaveScene: false, hasTrimmableSource: true)
+        XCTAssertTrue(avecSource.contains(.trim))
+
+        // Un objet VERROUILLÉ — le badge d'attribution d'une republication — ne
+        // se rogne pas plus qu'il ne se duplique : le rognage change ce que
+        // l'attribution montre.
+        let verrouille = StoryCanvasContextAction.offered(
+            isLocked: true, isBackground: false, sharesPlaneWithAnother: false,
+            hasEditor: false, canLeaveScene: false, hasTrimmableSource: true)
+        XCTAssertFalse(verrouille.contains(.trim))
     }
 
     /// **Loi 4 — ce qui n'a pas de chemin reste ABSENT.** Cette garde est le

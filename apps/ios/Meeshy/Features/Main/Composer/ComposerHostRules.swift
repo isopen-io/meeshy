@@ -374,8 +374,12 @@ nonisolated enum ComposerSceneCapabilities {
     /// Les contrôleurs du rail *trailing*. Passés à
     /// `ComposerTrailingRailPolicy.actions`, qui leur applique ensuite ce que
     /// l'OBJET admet (verrouillé, fond, seul de son plan).
+    /// `.trim` y est entrée au #4082 : le meuble sait désormais ouvrir la bande
+    /// de rognage sous la scène. Ce jeu dit ce que CE meuble sait faire ; ce
+    /// qu'un OBJET admet reste à la règle du SDK, qui n'offre le rognage qu'à
+    /// une vidéo ou un son (`hasTrimmableSource`).
     static let controllers: Set<StoryCanvasContextAction> = [
-        .duplicate, .delete, .bringForward, .sendBackward
+        .duplicate, .delete, .bringForward, .sendBackward, .trim
     ]
 
     /// Les bandes contextuelles du bas de scène. Passées à
@@ -389,6 +393,22 @@ nonisolated enum ComposerSceneCapabilities {
     /// styles exigent un objet `text` SÉLECTIONNÉ, qu'aucune porte de cette
     /// surface ne pose encore (#4083).
     static let bands: Set<ComposerSceneBand> = [.palette]
+
+    /// **`timeline` est servie SEULEMENT quand elle a de quoi se remplir**
+    /// (#4082) — c'est-à-dire quand l'objet sélectionné a une source à rogner.
+    ///
+    /// Sans cette condition, la bande deviendrait un membre permanent du jeu
+    /// servi, et `ComposerSceneBand.opened` l'ouvrirait sur une sélection qui
+    /// n'a rien à rogner : une bande VIDE occupant les ≈ 170 pt que
+    /// l'encastrement des rails vient de libérer, c'est-à-dire précisément le
+    /// résultat que la règle `opened(_:served:)` existe pour interdire.
+    ///
+    /// Le jeu de base reste `bands` : il dit ce qui est servi quel que soit
+    /// l'état, et c'est lui que les gardes interrogent pour vérifier
+    /// qu'aucune bande sans hôte n'y est entrée par distraction.
+    static func bands(canTrimSelection: Bool) -> Set<ComposerSceneBand> {
+        canTrimSelection ? bands.union([.timeline]) : bands
+    }
 }
 
 
