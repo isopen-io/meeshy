@@ -74,7 +74,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// URL. `hasAnyCachedImageVariant` est la sonde JUSTE — un revert vers
     /// `cachedImage(for: resolved)` (bare, sans bucket) fait rougir ce test.
     func test_isResident_readsThroughHasAnyCachedImageVariant_notTheBareSlotAlone() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let fn = try block(from: "nonisolated static func isResident(_ url: String) -> Bool {", upTo: "}\n}", in: code)
         XCTAssertTrue(fn.contains("DiskCacheStore.hasAnyCachedImageVariant(for: resolved)"))
         XCTAssertFalse(fn.contains("DiskCacheStore.cachedImage(for: resolved) != nil"),
@@ -252,7 +252,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// que le plein format n'est pas résident, pour ne pas régresser vers un
     /// thumbHash ~32px étiré plein écran sur lien lent.
     func test_imagePage_inWindow_mountsTheFullFormatForced_withAThumbnailLoadingStage() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let page = try block(from: "struct GalleryImagePage: View, Equatable", upTo: "struct GalleryVideoPage", in: code)
         // `upTo: "targetSize: Self.previewSize"` — pas `"} else {"` : la
         // structure interne `if let mount { … } else { emptyStateGlyph }`
@@ -281,7 +281,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// produisait le défaut (`mount?.fullURL` toujours atteignable même quand
     /// `mount == nil`, au lieu d'un branchement explicite).
     func test_imagePage_withoutMount_neverOptionalChainsIntoAnInfiniteSpinner() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let page = try block(from: "struct GalleryImagePage: View, Equatable", upTo: "struct GalleryVideoPage", in: code)
         let inWindow = try block(from: "if rendersFullPixels {", upTo: "targetSize: Self.previewSize", in: page)
         XCTAssertFalse(inWindow.contains("fullUrl: mount?.fullURL"),
@@ -294,7 +294,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// première frame — `isPlaying` bascule avant, et retirer le poster sur ce
     /// seul signal laissait un écran noir.
     func test_videoPage_keepsThePoster_untilTheSurfaceComposedItsFirstFrame() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let page = try block(from: "struct GalleryVideoPage: View, Equatable", upTo: "private var dismissGesture", in: code)
         XCTAssertTrue(page.contains("if !isPlayerActive || !surfaceReady {"),
                       "le poster ne se retire que sur la première frame composée")
@@ -304,7 +304,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// L'extraction vit DANS la tâche gardée par `isWindowed` : hors fenêtre,
     /// une page vidéo n'extrait rien (leçon 292 — vingt vidéos, vingt extractions).
     func test_videoPage_resolvesItsPoster_insideTheWindowedTask() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let task = try block(from: ".task(id: \"\\(attachment.id)#\\(isWindowed)\")", upTo: ".onReceive(", in: code)
         XCTAssertTrue(task.contains("guard isWindowed else { return }"))
         XCTAssertTrue(task.contains("resolvePosterIfNeeded()"),
@@ -321,7 +321,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// (dernier recours forcé), sinon la vignette pourrait rester affichée
     /// indéfiniment au lieu d'un plein format net.
     func test_videoPage_thumbnailLayer_servesThePoster_thenTheServerThumbnailForced_neverAsAStage() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let layer = try block(from: "private var thumbnailLayer: some View {", upTo: "private var playOrDownloadButton", in: code)
         XCTAssertTrue(layer.contains("if let poster {"))
         XCTAssertTrue(layer.contains("thumbnailUrl: nil"), "la vignette serveur n'est montée qu'en DERNIER recours, comme source plein format forcée")
@@ -335,7 +335,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// Préchauffage : image → la variante AFFICHÉE ; vidéo → le poster net
     /// extrait SEULEMENT si le fichier est déjà sur l'appareil (jamais de réseau).
     func test_prewarm_video_extractsThePosterOnlyFromALocalFile() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let warm = try block(from: "enum GalleryPrewarm {", upTo: "enum GalleryRenderWindow {", in: code)
         XCTAssertTrue(warm.contains("VideoPosterResolver.warmIfLocal("))
         XCTAssertTrue(warm.contains("GalleryImageSource.fullscreenURL(for:"))
@@ -363,7 +363,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// ouverte : elle résout son poster en intention AMBIANTE. Seule la page
     /// courante — celle que l'utilisateur regarde — porte le geste.
     func test_videoPage_onlyTheActivePageCarriesTheUserGesture() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let resolve = try block(from: "private func resolvePosterIfNeeded() async {",
                                 upTo: "private var playOrDownloadButton", in: code)
         XCTAssertTrue(resolve.contains("intent: isActive ? .userOpened : .ambientPrewarm"),
@@ -377,7 +377,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
     /// arrive après coup, et sans ce relais le poster resterait absent jusqu'au
     /// démontage de la page.
     func test_videoPage_becomingActive_replaysTheResolutionWithTheGesture() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         let task = try block(from: ".task(id: isActive) {", upTo: ".task(id: isPlayerActive)", in: code)
         XCTAssertTrue(task.contains("guard isWindowed, isActive, poster == nil else { return }"))
         XCTAssertTrue(task.contains("resolvePosterIfNeeded()"))

@@ -45,7 +45,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
-        "ConversationMediaGalleryView.swift",
         "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
         "ConversationView.swift",
@@ -134,7 +133,7 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// AUTRE découpage, il aurait laissé 229 lignes de mou — de quoi accueillir
     /// en silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont
     /// le cran est trop haut ne rougit pas : il attend.
-    private static let legacyLineCeiling = 76_402
+    private static let legacyLineCeiling = 75_175
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
