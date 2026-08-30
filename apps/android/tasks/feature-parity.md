@@ -6733,6 +6733,24 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       (`selectedCategory` + `filteredNotifications` projection + `selectCategory`, `loadMore`
       ALL-gated) and the `NotificationsScreen` 11-chip `FilterChip` bar (accent-coherent, per-category
       empty state). EN/FR/ES/PT strings. +25 tests (18 core + 7 VM).
+- [x] In-app real-time notification toast — **shipped 2026-08-30** (slice
+      `notification-toast-orchestrator`): the stateful glue that finally makes the three previously
+      ORPHAN §M building blocks live — `NotificationToastPolicy` (active-screen/dedup/push/DND/per-type
+      gate), the new pure `ToastDedupWindow`, and the `MeeshyNotificationToast` atom. Port of the toast
+      half of iOS `NotificationToastManager` (`handleNewNotification`/`showToast`/`onConversationOpened`).
+      New pure `:core:model` `ToastDedupWindow` (immutable, 2 s TTL, `admit(id, now)→(window,isDuplicate)`,
+      prune-on-admit, blank-id-safe, referential-stable) replaces iOS's mutable `Set<String>` + one 2 s
+      removal `Task` per id. `NotificationToastViewModel` (`:feature:notifications`) threads it through the
+      policy off the `notificationReceived` socket seam, exposes `currentToast: StateFlow<ApiNotification?>`,
+      auto-dismisses after 7 s (iOS parity, cancelled when replaced), and offers
+      `onConversationOpened/Closed`, `onPostOpened/Closed`, `dismiss` hooks. `NotificationToastClock`
+      (interface + `@Binds`) makes both the dedup millis and the DND `LocalDateTime` test-pinnable.
+      `NotificationToastHost` composable mounts the atom (slide-in, tap-to-open) with pure
+      `notificationToastSenderName`/`notificationToastSubtitle` projections. +25 tests (13 `ToastDedupWindow`
+      + 6 host projection + 14 VM incl. the 2 s dedup window, 7 s auto-dismiss and its non-clobber, and every
+      active-screen hook), RED-proven (dedup boundary `<`→`<=`; VM `isDuplicate`→`false`; auto-dismiss guard).
+      **Still open (§M):** placing `NotificationToastHost` at the app scaffold + calling the
+      `onConversationOpened/Closed` hooks from the chat/feed screens (cross-cutting app wiring).
 - [~] Notification list — real-time socket updates — **shipped 2026-08-17** (slice
       `notification-realtime-socket`): `MessageSocketManager` now listens for `notification:new`
       (gateway's socket payload is the durable `ApiNotification` shape plus toast-only

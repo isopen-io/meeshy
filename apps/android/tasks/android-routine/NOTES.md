@@ -5,6 +5,26 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — a behaviour test can't isolate a REDUNDANT guard, and that's correct (slice `notification-toast-orchestrator`)
+The toast VM cancels the pending 7 s dismiss when a newer toast appears (`dismissJob?.cancel()`, iOS parity)
+AND the dismiss body re-checks `_currentToast.value?.id == notification.id` before clearing. I tried to
+RED-prove the cancel by deleting it — the suite stayed GREEN, because the id-guard ALREADY protects the
+user-visible behaviour (an older toast's timer never dismisses a newer toast). That's not a missing test: it's
+proof the cancel is a resource-hygiene optimisation, not a correctness mechanism, so a *behaviour* test rightly
+can't distinguish the two. Lesson: when a mutation doesn't turn a test red, first ask whether the mutated line
+is redundant to the behaviour before "strengthening" the test to catch it — asserting the cancel directly would
+be testing the implementation, which the rubric forbids. I renamed the test to
+`anOlderToastsTimerDoesNotDismissANewerToast` (what it proves) and RED-proved the two REAL behaviours instead:
+the VM dedup (`isDuplicate`→`false` fails `aDuplicateDelivery…`) and the auto-dismiss (guard→`false` fails
+`aShownToastAutoDismisses…`), plus the pure `ToastDedupWindow` boundary (`<`→`<=` fails the TTL tests).
+
+## 2026-08-30 — three orphan pure §M blocks were waiting for ONE orchestrator (slice `notification-toast-orchestrator`)
+`NotificationToastPolicy`, `NotificationTypeToggle` and the `MeeshyNotificationToast` atom were each built by a
+prior slice and merged with ZERO callers — the routine's incremental §M cadence (pure core now, wiring later).
+The honest "make it real" slice is the ViewModel that composes all three off the socket seam; it clears the
+orphan debt on the policy in one move. Grep `NotificationToastPolicy`/`MeeshyNotificationToast` for callers
+before adding a fourth pure block — if the third is still uncalled, wire it instead of stacking a fourth.
+
 ## 2026-08-30 — Adding a REQUIRED field to a `@Serializable` wire body breaks its "every key present" decode fixtures (slice `notification-prefs-calls-friend-content`)
 `NotificationPreferenceSyncBody` fields are non-nullable with NO Kotlin defaults (a wire contract carries every
 key), so adding `callsEnabled`/`friendContentEnabled` to the data class made `kotlinx.serialization` throw
