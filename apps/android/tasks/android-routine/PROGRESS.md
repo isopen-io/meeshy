@@ -2,6 +2,62 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the pure canvas-reprojection core landed — the JVM-testable heart of reposting a story's
+> canvas into a post of a different aspect ratio** (slice `story-canvas-reprojection`, feature-parity §F
+> "Quote / repost posts … canvas reprojection + 'items repositioned' banner" `[ ]`→`[~]`). Android had NO
+> reprojection at all; iOS keeps the geometry in a pure `CanvasReprojector` (`MeeshyUI/Story/Canvas`)
+> precisely so it is unit-testable without a live canvas — only the PencilKit `PKDrawing` reprojection and
+> the composer banner glue are device-bound. So the reprojector is a pure `:feature:stories` value type
+> (the established home of the Story pure resolvers — `StoryKeyframeResolver`, `StoryClipTransitionResolver`,
+> `StoryMediaFadeResolver`), not device-bound (dimensions 2/11/13).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4360/#4336/#4267 (all jcnm:
+> web/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine
+> to merge. Prior slice (`story-drawing-strokes-wire`) is on `main` (#4355). Branched off freshly-fetched
+> `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` = 0/0). Diff
+> verified `apps/android` only (1 new main + 1 new test + tracking docs, no `local.properties`).
+>
+> **The change — one pure reprojector, center-anchored.** `:feature:stories` `CanvasReprojector(source,
+> target)` reprojects normalized `[0,1]` positions center-anchored (`(0.5,0.5)` a fixed point, scaled by
+> `source/target` per axis), clamps out-of-bounds back into `[0,1]` and reports each with a
+> `ReprojectionWarning.Clamped(originalX, originalY)` (the ORIGINAL coords, not the clamped ones — the banner
+> hint targets the pre-move position). `reproject(text/media/sticker)` mutate only the position (scale/aspect/
+> rotation invariant); `reproject(audio)` is identity (no spatial position). Batch `reprojectAll(CanvasObjects)
+> → RepostReprojection{objects, warnings}` walks text→media→sticker→audio, collecting warnings in encounter
+> order and exposing `repositionedCount`/`hasClampedItems` — the pure decision the "N item(s) repositioned for
+> the new aspect ratio" banner reads (iOS `RepostReprojectionResult`). **SOTA over iOS:** a degenerate target
+> (non-positive width/height, which iOS's raw `CGSize` division turns into `Infinity`/`NaN`) is an identity
+> reprojection — a malformed canvas size can never corrupt coordinates. Blast radius: all-new files, zero
+> existing call sites touched. Deliberately EXCLUDED (out of scope, faithful boundary): the `RepostPayload`
+> extractor + its source-aspect→size mapping, drawing-stroke reprojection (Android's pure `StoryDrawingStroke`
+> model ≠ iOS's PencilKit blob), `StoryLocationObject` (no Android model), and the Compose banner glue.
+>
+> **Tests: +15, RED-proven.** `CanvasReprojectorTest`: centered-stays-centered (9:16→1:1), width-match keeps x
+> fixed, bottom item clamps to 1 with warning, top item clamps to 0, warning reports ORIGINAL coords, a taller
+> target pulls an off-center item toward center (no clamp), an in-bounds item is still moved on aspect change,
+> media aspect-ratio invariant, sticker rotation invariant, audio identity (same instance, no warning),
+> degenerate target → identity (never NaN), and three `reprojectAll` banner cases (counts every clamp across
+> families / all-centered → 0 / empty set → empty). **RED**: suppressing the clamp warning (`… else null` →
+> `null`) → BUILD FAILED on EXACTLY the 4 warning/count tests (bottom-clamp, top-clamp, original-coords,
+> reprojectAll-count), the other 10 stay green (value-clamp via `coerceIn` is independent of the warning).
+>
+> **SDK bootstrap** — `dl.google.com` 200; cmdline-tools (11076708) + `platforms;android-35`/`android-37.0`/
+> `build-tools;35.0.0`/`platform-tools`; local `platforms/android-37 → android-37.0` symlink for `compileSdk=37`.
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module
+> testDebugUnitTest) **BUILD SUCCESSFUL in 4m 38s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff
+> `apps/android` only — 1 main + 1 test + tracking docs, no `local.properties`; SDK purity — pure
+> `:feature:stories` reducer, no `android.*`, no orchestration, no shared Meeshy singletons; SSOT — a faithful
+> port of iOS `CanvasReprojector`, no re-implementation; no tautological tests; no coverage floor lowered — new
+> pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: the repost-canvas feature's remaining pieces are all extractor/device/Compose-bound — the
+> `RepostPayload` extractor + source-aspect→size mapping (needs `StoryEffects.canvasAspect` confirmed on the
+> wire), drawing-stroke reprojection (once the `StoryDrawingStroke` coordinate space is confirmed), and the
+> Compose banner + `UnifiedPostComposer` import wiring — the latter wait for a Compose-instrumented run. For a
+> pure-core next slice, consider another Feed/Stories reducer or an earlier build-order area
+> (Auth→Conversations→Chat) value type. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-30 **the drawing-stroke wire model reached `:core:model` and the v3 `drawing` object now
 > projects — the JVM-testable serialization half the prior run named as next** (slice
 > `story-drawing-strokes-wire`, feature-parity §Stories "Freehand drawing layer" line: the "Wire

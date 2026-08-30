@@ -4926,7 +4926,27 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       post composer now covers every base attachment/option iOS's `composerOverlay` toolbar
       exposes except on-device transcription and the emoji picker.
 - [ ] Unified post composer (Post / Status / Story tabs)
-- [ ] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+- [~] Quote / repost posts (incl. reposts of stories) with canvas reprojection + "items repositioned" banner
+      — **pure canvas-reprojection core shipped** (slice `story-canvas-reprojection`, 2026-08-30): the
+      JVM-testable heart of reposting a story's canvas into a post of a different aspect ratio. Pure
+      `:feature:stories` `CanvasReprojector(source, target)` ports iOS `CanvasReprojector`
+      (`MeeshyUI/Story/Canvas`): normalized `[0,1]` positions are reprojected center-anchored
+      (`(0.5,0.5)` a fixed point, scaled by the source/target aspect ratio), out-of-bounds results
+      clamped back into `[0,1]` and reported with a `ReprojectionWarning.Clamped(originalX, originalY)`;
+      scale/aspect/rotation invariant. `reproject(text/media/sticker)` per family; `reproject(audio)`
+      identity (no spatial position). Batch `reprojectAll(CanvasObjects) → RepostReprojection` collects
+      warnings in encounter order and exposes `repositionedCount`/`hasClampedItems` — the pure decision
+      the "N item(s) repositioned for the new aspect ratio" banner reads (iOS
+      `RepostReprojectionResult`/`reprojectionWarnings.count`). **SOTA over iOS:** a degenerate target
+      (non-positive width/height, which iOS's raw `CGSize` division turns into `Infinity`/`NaN`) is an
+      identity reprojection — a malformed canvas size can never corrupt coordinates. +15 tests
+      (`CanvasReprojectorTest`), mutation-RED-proven (suppressing the clamp warning reddens EXACTLY the
+      4 warning/count tests, the 10 centered/invariance/identity/empty tests stay green). **Pending
+      (device/Compose-bound):** the `RepostPayload` extractor from a `StorySlide`/`StoryItem` (needs the
+      source-canvas-aspect → size mapping, iOS `repostSourceCanvasSize`), reprojecting the freehand
+      `StoryDrawingStroke` set (Android's pure stroke model, not iOS's PencilKit blob — its own
+      follow-up once the stroke coordinate space is confirmed), `StoryLocationObject` (no Android model
+      yet), and the Compose "items repositioned" banner glue + `UnifiedPostComposer` import wiring.
 - [x] Post reactions (heart like) — optimistic toggle + live `post:liked`/`post:unliked` socket
       count sync **done** (slice `feed-realtime-like-sync`, 2026-07-17)
 - [x] Bookmark / un-bookmark — optimistic `toggleBookmark` (flips `isBookmarkedByMe` + count,
