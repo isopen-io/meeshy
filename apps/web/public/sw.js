@@ -16,8 +16,42 @@
 const APP_BUILD_VERSION = '__RUNTIME_BUILD_VERSION__' !== '__RUNTIME' + '_BUILD_VERSION__'
   ? '__RUNTIME_BUILD_VERSION__'
   : `DEV_${Date.now()}`;
-const SW_VERSION = '1.3.2';
+const SW_VERSION = '1.4.0';
 const CACHE_NAME = `meeshy-cache-${APP_BUILD_VERSION}`;
+
+/**
+ * V3_ZONE_PREFIXES — les chemins que Traefik envoie à `apps/web-v3`.
+ *
+ * Ce worker est enregistré sur `scope: '/'` : sa portée est l'origine ENTIÈRE,
+ * la zone v3 comprise. Traefik n'est donc PAS le seul aiguilleur de
+ * `meeshy.me` — ce worker en est un second, et il sert en cache-first jusque
+ * sur les NAVIGATIONS (§ 3 du listener `fetch`). Sans le garde-fou ci-dessous :
+ *
+ *   - un visiteur revenant, qui a déjà ouvert la route sur le legacy, se voit
+ *     resservir la réponse LEGACY gardée en cache — la bascule n'a lieu que
+ *     pour les navigateurs neufs ;
+ *   - retirer le `PathPrefix` ne vide aucun Cache Storage, et `CACHE_NAME` ne
+ *     change qu'au REBUILD d'image alors qu'ajouter ou retirer un préfixe est
+ *     un `docker compose up -d` sans rebuild : le RETOUR ARRIÈRE est inerte,
+ *     exactement là où on en a le plus besoin.
+ *
+ * Cette liste est le JUMEAU CLIENT de la règle du routeur `frontend-v3`
+ * (`docker-compose.prod.yml`). Toute issue qui ajoute un `PathPrefix` à ce
+ * routeur ajoute le même préfixe ici, dans le MÊME commit ; tout retrait
+ * retire les deux. Référence : `docs/product/MeeshyWebV3Design/conception-web-v3.md`
+ * § 4.4 bis (qui autorise explicitement cette modification d'`apps/web`), § 4.9
+ * et § 9.8 ; issue isopen-io/meeshy#4416.
+ *
+ * `/__v3` est permanent : c'est le préfixe des actifs de la v3
+ * (`assetPrefix: '/__v3'`), servis dès que la zone est en ligne.
+ */
+const V3_ZONE_PREFIXES = ['/__v3'];
+
+function belongsToV3Zone(pathname) {
+  return V3_ZONE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
 
 // Assets critiques pour l'App Shell (chargement instantané)
 const PRECACHE_ASSETS = [
@@ -83,6 +117,15 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // 0. ZONE v3 — ne RIEN intercepter de ce que Traefik envoie à `apps/web-v3`.
+  //    Ne pas intercepter, c'est laisser le navigateur parler au routeur : la
+  //    règle Traefik redevient la seule autorité, dans les DEUX sens (ajout ET
+  //    retrait d'un `PathPrefix`). Ce test passe AVANT celui de la méthode :
+  //    une navigation de la zone v3 ne doit toucher ce worker à aucun titre.
+  if (belongsToV3Zone(url.pathname)) {
+    return;
+  }
 
   // 1. Ignorer le streaming WebSocket et les uploads volumineux
   if (url.pathname.startsWith('/socket.io') || request.method !== 'GET') {

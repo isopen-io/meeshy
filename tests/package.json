@@ -14,7 +14,7 @@
     "test:e2e:debug": "./run-status-tests.sh e2e --debug",
     "test:e2e:headed": "./run-status-tests.sh e2e --headed",
     "test:manual": "./run-status-tests.sh manual",
-    "test:coverage": "cd ../gateway && pnpm test:coverage",
+    "test:coverage": "cd ../services/gateway && bun run test:coverage",
     "playwright:install": "playwright install --with-deps",
     "playwright:report": "playwright show-report",
     "ci": "playwright test --project=chromium-desktop",
@@ -32,7 +32,7 @@
     "socket.io-client": "^4.8.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.0",
+    "@playwright/test": "^1.62.1",
     "@types/node": "^22.18.10",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"

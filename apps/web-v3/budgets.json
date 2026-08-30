@@ -1,0 +1,225 @@
+{
+  "_source": "docs/product/MeeshyWebV3Design/conception-web-v3.md § 8.3 (plafonds par ecran), § 8.4 (budget cumulatif par groupe), et la PART du § 8.5 que ce fichier peut porter — voir `_transverses_ailleurs`.",
+  "_unite": "octets. Le JS est pese gzip -9, morceau par morceau, tel que le manifeste de build le sert. Les octets reseau sont ceux que CDP rapporte (`encodedDataLength`), donc deja compresses.",
+  "_espace_de_noms": "les cles de `routes` sont des CHEMINS PUBLICS parametres (scripts/lib/routes.mjs). Le budget de bundle y traduit les entrees du manifeste ; la mesure de poids reseau y traduit les URLs servies. Une seule table pour les deux. Le NOM d'un parametre n'en fait PAS partie : `/chats/:lien` (matrice : `join`, `rights`), `/chats/:identifiant` (`thread`) et `/chats/:id` (`rich`) sont QUATRE vues et UNE URL — le serveur ne voit qu'un segment. Une seule ligne les gouverne donc, et `budgetDeChemin()` refuse de trancher si deux lignes attrapent le meme chemin.",
+  "_statuts": "GATE = plafond ferme, casse la CI. CIBLE = valeur a confirmer par la premiere mesure (§ 8.3) ; jusque-la elle est RAPPORTEE et le ratchet (mesures/derniere.json) interdit toute regression.",
+  "_conditions_de_mesure": "les plafonds de TEMPS (`premier_pixel_ms`, `lcp_ms`) sont ecrits pour « 3G Fast simule, p75 » (§ 8.3). Ils ne sont confrontes qu'a une mesure BRIDEE (`mesure-reseau.mjs --reseau 3g-fast`, defaut) et sur `--tirages` >= 1 rendus au rang p75 ; une mesure sans bridage les sort en `sans-conditions`, jamais en `vert`.",
+  "_transverses_ailleurs": "le § 8.5 porte SEPT gates. Ce fichier en porte quatre (CLS, CSS, polices web, connexions tenues apres le premier pixel — bloc `transverses`) plus le HTML de `/l/:token`. Les trois autres vivent ailleurs et n'ont AUCUN plafond ici : `axe` serious/critical (e2e/visual/v3-a11y.spec.ts), « 0 requete pendant que l'onglet est hidden » et le battement unique (e2e/visual/v3-lifecycle.spec.ts, § 6.5), le sprite (<= 12 Ko, 1 requete, cache immuable, symboles complets — gate du lot L0, packages/icons). Ce paragraphe existe pour qu'aucun lecteur ne lise « § 8.5 » comme une couverture complete : un fichier qui DECLARE une restriction ne la fait pas respecter.",
+  "groupes": {
+    "(public)": {
+      "socle": 97280,
+      "ecran": 97280,
+      "statut": "CIBLE",
+      "note": "95 Ko — lecture partagee. Interdits sur ce groupe : socket.io-client, framer-motion, lucide-react, TanStack Query."
+    },
+    "(connected)": {
+      "socle": 153600,
+      "ecran": 133120,
+      "statut": "CIBLE",
+      "note": "socle 150 Ko + ecran 130 Ko au plus haut (composer / reglages). Les ecrans plus contraints se nomment ci-dessous."
+    },
+    "(racine)": {
+      "socle": 97280,
+      "ecran": 97280,
+      "statut": "CIBLE",
+      "note": "Rien n'est cense vivre hors des deux groupes ; le plafond y est celui du role premier."
+    }
+  },
+  "transverses": {
+    "_source": "§ 8.5. Ils s'appliquent au GROUPE, pas a la route : c'est la ligne de route qui declare son `groupe`, et la mesure de poids reseau y lit ces plafonds.",
+    "(public)": {
+      "cls": 0.05,
+      "statut_cls": "GATE",
+      "css_octets": 20480,
+      "statut_css": "CIBLE",
+      "polices_web": 0,
+      "statut_polices": "GATE",
+      "connexions_tenues_apres_premier_pixel": 0,
+      "statut_connexions": "GATE",
+      "note": "CLS <= 0,05 (width/height obligatoires sur chaque next/image) ; aucune police web (pile systeme) ; CSS <= 20 Ko gzip ; « GATE neuf » du § 8.3 : zero requete encore pendante apres le premier pixel."
+    },
+    "(connected)": {
+      "css_octets": 20480,
+      "statut_css": "CIBLE",
+      "note": "Inter autorise via next/font sur ce groupe (§ 8.5), donc aucun plafond de police. Le CLS et les connexions tenues n'ont de plafond que sur (public) — la conception ne leur en donne pas ici, et en inventer un serait un chiffre sans source."
+    },
+    "(racine)": {
+      "css_octets": 20480,
+      "statut_css": "CIBLE"
+    }
+  },
+  "heritage_de_groupe": {
+    "_loi": "ces routes de la matrice n'ont PAS de plafond propre : elles sont gouvernees par le plafond de leur GROUPE (§ 8.4). La declaration est explicite pour qu'« aucun plafond nomme » ne se confonde jamais avec « ligne oubliee » — une URL qu'aucune ligne ne couvre sort en `sans-plafond`, pas en `vert`.",
+    "(public)": ["/login", "/signup"],
+    "(connected)": [
+      "/feed",
+      "/feed/reels",
+      "/search",
+      "/stories/new",
+      "/contacts",
+      "/links",
+      "/notifications",
+      "/notifications/preferences",
+      "/settings/profile",
+      "/settings/profile/edit",
+      "/settings/privacy",
+      "/settings/security",
+      "/settings/security/password",
+      "/settings/media",
+      "/settings/message",
+      "/settings/notification",
+      "/settings/application",
+      "/calls",
+      "/calls/:id",
+      "/communities"
+    ]
+  },
+  "routes": {
+    "/l/:token": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 0,
+      "statut": "GATE",
+      "requetes_avant_premier_pixel": 1,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 600,
+      "statut_premier_pixel": "CIBLE",
+      "html_octets": 4096,
+      "statut_html": "GATE",
+      "note": "Route Handler : 302 en un hop. Aucun <script> hors ThemeScript inline (<= 400 o). HTML <= 4 Ko transfere, hors sprite — c'est le critere de fin ECRIT de la ligne 1 de la matrice, donc un GATE. Le beacon part APRES.",
+      "echantillon": "_ECHANTILLON_LIEN_"
+    },
+    "/l/:token/expired": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 10240,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 2,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 900,
+      "statut_premier_pixel": "CIBLE",
+      "hors_matrice": "la matrice range l'ecran `linkExpired` sous la meme route `/l/:token` que `linkRedirect` ; le § 8.3 lui donne son propre chemin et son propre plafond. Les deux disent la meme chose : c'est l'ETAT expire du meme lien.",
+      "note": "RSC pur + ThemeScript. Deux requetes : HTML + CSS.",
+      "echantillon": "_ECHANTILLON_LIEN_EXPIRE_"
+    },
+    "/stories/:id": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 97280,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 3,
+      "statut_requetes": "GATE",
+      "lcp_ms": 2000,
+      "statut_lcp": "CIBLE",
+      "note": "Lecture partagee. Trois requetes : HTML + CSS + sprite externe. Zero connexion serveur tenue apres le premier pixel (bloc `transverses`).",
+      "echantillon": "_ECHANTILLON_STORY_"
+    },
+    "/post/:id": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 97280,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 3,
+      "statut_requetes": "GATE",
+      "lcp_ms": 2000,
+      "statut_lcp": "CIBLE",
+      "note": "`/post/:id`, PAS `/posts/:id` : c'est l'URL que le legacy sert deja (apps/web/app/post/[postId]) et donc celle des liens deja partages. La cohabitation du § 4 se fait par PathPrefix sur l'URL SERVIE — un `s` de plus casserait tous les liens en circulation.",
+      "echantillon": "_ECHANTILLON_POST_"
+    },
+    "/reels/:id": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 97280,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 3,
+      "statut_requetes": "GATE",
+      "lcp_ms": 2000,
+      "statut_lcp": "CIBLE",
+      "echantillon": "_ECHANTILLON_REEL_"
+    },
+    "/moods/:id": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 97280,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 3,
+      "statut_requetes": "GATE",
+      "lcp_ms": 2000,
+      "statut_lcp": "CIBLE",
+      "echantillon": "_ECHANTILLON_MOOD_"
+    },
+    "/chats/:lien": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 107520,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 4,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 2200,
+      "statut_premier_pixel": "CIBLE",
+      "ecran_cumule_apres_jonction": 168960,
+      "requetes_avant_premier_pixel_apres_jonction": 6,
+      "premier_pixel_ms_apres_jonction": 2800,
+      "note": "UNE ligne pour QUATRE vues de la matrice (`join`, `rights`, `thread`, `rich`) : elles partagent une seule URL. Apercu de lien, non rejoint : resolveSharedAccess() cote SERVEUR, l'historique servi est dans le HTML. Les trois plafonds `_apres_jonction` (165 Ko cumules, 6 requetes, 2,8 s) portent le MEME chemin d'URL une fois rejoint : ils ne se mesurent pas a l'ouverture mais apres le tap, par le gate de cycle de vie (§ 9.7). Dont 12 796 o mesures de socket.io-client, charges AU TAP — jamais avant.",
+      "echantillon": "_ECHANTILLON_LIEN_"
+    },
+    "/chats/:lien/medias": {
+      "groupe": "(public)",
+      "role_premier": true,
+      "ecran": 107520,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 4,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 2200,
+      "statut_premier_pixel": "CIBLE",
+      "note": "Vue `media` de la matrice (P0, `/chats/:id/medias`). Elle n'avait AUCUNE ligne : un ecran du role premier sans plafond. Meme regime que la conversation dont elle est l'onglet.",
+      "echantillon": "_ECHANTILLON_LIEN_"
+    },
+    "/": {
+      "groupe": "(connected)",
+      "ecran": 81920,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 8,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 3000,
+      "statut_premier_pixel": "CIBLE",
+      "note": "Accueil connecte. Le socle du groupe (150 Ko) et le code d'ecran (80 Ko) sont deux termes, pour qu'un depassement designe un coupable."
+    },
+    "/chats": {
+      "groupe": "(connected)",
+      "ecran": 81920,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 8,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 3000,
+      "statut_premier_pixel": "CIBLE"
+    },
+    "/composer": {
+      "groupe": "(connected)",
+      "ecran": 133120,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 10,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 3500,
+      "statut_premier_pixel": "CIBLE"
+    },
+    "/settings": {
+      "groupe": "(connected)",
+      "ecran": 133120,
+      "statut": "CIBLE",
+      "requetes_avant_premier_pixel": 10,
+      "statut_requetes": "GATE",
+      "premier_pixel_ms": 3500,
+      "statut_premier_pixel": "CIBLE"
+    }
+  },
+  "echantillons": {
+    "_loi": "un chemin PARAMETRE ne s'ouvre pas sans identifiant. Tant qu'un echantillon vaut `null`, sa ligne sort en `non-mesuree` NOMMEE dans le rapport — jamais silencieusement absente du perimetre, ce qui rendait « 4/4 vertes » atteignable sans avoir jamais charge un ecran du role premier. Poser un identifiant reel de la base de dev, ou passer --echantillons <fichier.json>.",
+    "_ECHANTILLON_LIEN_": null,
+    "_ECHANTILLON_LIEN_EXPIRE_": null,
+    "_ECHANTILLON_STORY_": null,
+    "_ECHANTILLON_POST_": null,
+    "_ECHANTILLON_REEL_": null,
+    "_ECHANTILLON_MOOD_": null
+  }
+}

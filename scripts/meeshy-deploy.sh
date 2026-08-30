@@ -720,6 +720,21 @@ else
     echo "⚠️  Frontend en cours de démarrage..."
 fi
 
+# Zone Web v3 (servie sous le préfixe /__v3, port 3300).
+#
+# Sans ce démarrage, le service `frontend-v3` du compose reste DÉCLARÉ et
+# jamais lancé : Traefik n'enregistre aucun routeur `frontend-v3`, et les
+# chunks `/__v3/_next/*` retombent sur le plancher attrape-tout `frontend`.
+echo "🧪 Démarrage Web v3..."
+docker-compose up -d frontend-v3
+sleep 2
+
+if docker-compose exec -T frontend-v3 wget -q -O /dev/null http://localhost:3300/__v3 >/dev/null 2>&1; then
+    echo "✅ Web v3 prêt"
+else
+    echo "⚠️  Web v3 en cours de démarrage..."
+fi
+
 echo "📊 État final des services:"
 docker-compose ps
 

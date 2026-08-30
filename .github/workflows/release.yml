@@ -249,14 +249,28 @@ jobs:
             context: .
             dockerfile: ./apps/web/Dockerfile
             image: meeshy-web
+            version_file: apps/web/VERSION
+          # La zone v3. Sans elle, une release coupait `meeshy-web:vX.Y.Z`,
+          # `meeshy-gateway:vX.Y.Z`, `meeshy-translator:vX.Y.Z` et AUCUNE image
+          # v3 — pendant que `docker.yml` l'étiquetait `0.0.0` sur main. Deux
+          # schémas de versionnement pour un même déploiement, donc une seule
+          # marche arrière possible pour la zone neuve (retirer le PathPrefix)
+          # là où toutes les autres peuvent revenir à une image antérieure.
+          - service: web-v3
+            context: .
+            dockerfile: ./apps/web-v3/Dockerfile
+            image: meeshy-web-v3
+            version_file: apps/web-v3/VERSION
           - service: gateway
             context: .
             dockerfile: ./services/gateway/Dockerfile
             image: meeshy-gateway
+            version_file: services/gateway/VERSION
           - service: translator
             context: .
             dockerfile: ./services/translator/Dockerfile
             image: meeshy-translator
+            version_file: services/translator/VERSION
 
     permissions:
       contents: read
@@ -272,17 +286,14 @@ jobs:
         id: service-version
         env:
           SERVICE_NAME: ${{ matrix.service }}
+          # Le chemin vient de la MATRICE, plus d'un `if/elif` en dur : un
+          # if/elif est un inventaire à tenir à jour, et un service ajouté sans
+          # sa branche sortait avec `VERSION_FILE` VIDE — donc sur le fallback,
+          # silencieusement.
+          VERSION_FILE: ${{ matrix.version_file }}
           FALLBACK_VERSION: ${{ needs.version.outputs.version }}
         run: |
           # Lire la version depuis le fichier VERSION créé par sync-versions.js
-          if [[ "$SERVICE_NAME" == "web" ]]; then
-            VERSION_FILE="apps/web/VERSION"
-          elif [[ "$SERVICE_NAME" == "gateway" ]]; then
-            VERSION_FILE="services/gateway/VERSION"
-          elif [[ "$SERVICE_NAME" == "translator" ]]; then
-            VERSION_FILE="services/translator/VERSION"
-          fi
-
           VERSION=$(cat "$VERSION_FILE" 2>/dev/null || echo "$FALLBACK_VERSION")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 $SERVICE_NAME version: $VERSION"

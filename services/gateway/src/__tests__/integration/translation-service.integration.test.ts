@@ -8,7 +8,7 @@
  *
  * To run these tests:
  * 1. Ensure DATABASE_URL is set in your environment
- * 2. Run: npm test -- --config=jest.config.status-tests.json --testPathPattern=translation-service.integration
+ * 2. Run: bun run test -- --config=jest.config.status-tests.json --testPathPatterns=translation-service.integration
  *
  * For full integration with Translator service:
  * 1. Start the Translator service (Python)

@@ -16,6 +16,16 @@ const VERSION_FILES = [
     type: 'package.json'
   },
   {
+    // Zone v3 (`apps/web-v3`). Sans cette entrée, `apps/web-v3/VERSION`
+    // n'existait jamais : `release.yml` retombait sur son fallback et l'image
+    // v3 n'avait aucun numéro à elle, donc aucun retour arrière possible vers
+    // une image antérieure.
+    packagePath: 'apps/web-v3/package.json',
+    versionPath: 'apps/web-v3/VERSION',
+    name: 'web-v3',
+    type: 'package.json'
+  },
+  {
     packagePath: 'services/gateway/package.json',
     versionPath: 'services/gateway/VERSION',
     name: 'gateway',

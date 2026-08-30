@@ -33,8 +33,7 @@ NC='\033[0m' # No Color
 
 # Directories
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-GATEWAY_DIR="$SCRIPT_DIR/../gateway"
-FRONTEND_DIR="$SCRIPT_DIR/../frontend"
+GATEWAY_DIR="$SCRIPT_DIR/../services/gateway"
 
 # Functions
 log_info() {
@@ -101,29 +100,29 @@ case $TEST_TYPE in
         # Backend tests
         log_info "[1/5] Running unit tests..."
         cd "$GATEWAY_DIR"
-        pnpm test -- --testPathPattern="__tests__/unit" ${COVERAGE:+--coverage}
+        bun run test:unit ${COVERAGE:+-- --coverage}
         log_success "Unit tests completed"
         echo ""
 
         log_info "[2/5] Running integration tests..."
-        pnpm test -- --testPathPattern="__tests__/integration" --runInBand
+        bun run test:integration -- --runInBand
         log_success "Integration tests completed"
         echo ""
 
         log_info "[3/5] Running performance tests..."
-        pnpm test -- --testPathPattern="__tests__/performance" --runInBand --maxWorkers=1
+        bun run test:performance -- --runInBand --maxWorkers=1
         log_success "Performance tests completed"
         echo ""
 
         log_info "[4/5] Running resilience tests..."
-        pnpm test -- --testPathPattern="__tests__/resilience" --runInBand
+        bun run test:resilience -- --runInBand
         log_success "Resilience tests completed"
         echo ""
 
         # E2E tests
         log_info "[5/5] Running E2E tests..."
         cd "$SCRIPT_DIR"
-        pnpm exec playwright test --project=chromium-desktop
+        bunx playwright test --project=chromium-desktop
         log_success "E2E tests completed"
         echo ""
 
@@ -134,10 +133,10 @@ case $TEST_TYPE in
         log_info "Running unit tests..."
         cd "$GATEWAY_DIR"
 
-        CMD="pnpm test -- --testPathPattern=\"__tests__/unit\""
-        [ "$COVERAGE" = true ] && CMD="$CMD --coverage"
+        CMD="bun run test:unit"
+        [ "$COVERAGE" = true ] && CMD="$CMD -- --coverage"
         [ "$WATCH" = true ] && CMD="$CMD --watch"
-        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --testPathPattern=\"__tests__/unit\""
+        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --config=jest.config.json"
 
         eval $CMD
         log_success "Unit tests completed"
@@ -147,9 +146,9 @@ case $TEST_TYPE in
         log_info "Running integration tests..."
         cd "$GATEWAY_DIR"
 
-        CMD="pnpm test -- --testPathPattern=\"__tests__/integration\" --runInBand"
-        [ "$COVERAGE" = true ] && CMD="$CMD --coverage"
-        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --testPathPattern=\"__tests__/integration\" --runInBand"
+        CMD="bun run test:integration -- --runInBand"
+        [ "$COVERAGE" = true ] && CMD="$CMD -- --coverage"
+        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --config=jest.config.temp.json --testPathPatterns=\"integration\" --runInBand"
 
         eval $CMD
         log_success "Integration tests completed"
@@ -160,7 +159,7 @@ case $TEST_TYPE in
         log_warning "This may take several minutes..."
         cd "$GATEWAY_DIR"
 
-        pnpm test -- --testPathPattern="__tests__/performance" --runInBand --maxWorkers=1
+        bun run test:performance -- --runInBand --maxWorkers=1
         log_success "Performance tests completed"
         ;;
 
@@ -168,7 +167,7 @@ case $TEST_TYPE in
         log_info "Running resilience tests..."
         cd "$GATEWAY_DIR"
 
-        pnpm test -- --testPathPattern="__tests__/resilience" --runInBand
+        bun run test:resilience -- --runInBand
         log_success "Resilience tests completed"
         ;;
 
@@ -176,7 +175,7 @@ case $TEST_TYPE in
         log_info "Running E2E tests with Playwright..."
         cd "$SCRIPT_DIR"
 
-        CMD="pnpm exec playwright test"
+        CMD="bunx playwright test"
         [ "$DEBUG" = true ] && CMD="$CMD --debug"
         [ "$HEADED" = true ] && CMD="$CMD --headed"
 
@@ -185,7 +184,7 @@ case $TEST_TYPE in
 
         # Show report
         log_info "Generating HTML report..."
-        pnpm exec playwright show-report
+        bunx playwright show-report
         ;;
 
     manual)

@@ -1,0 +1,59 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": false,
+    "skipLibCheck": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "types": ["node", "jest"],
+    "plugins": [{ "name": "next" }],
+    // Ces chemins ne resolvent QUE dans le depot : dans l'image, le Dockerfile
+    // pose le paquet partage a plat (`./packages/shared`), deux crans plus bas
+    // que `../../`. Ce n'est pas un defaut et il ne faut pas le « corriger » en
+    // ajoutant un second candidat : le `bun install --no-save` de l'etape
+    // `deps` injecte `workspaces: ['packages/shared']` dans le manifeste, donc
+    // `node_modules/@meeshy/shared` existe, et TypeScript comme webpack y
+    // retombent quand aucun candidat de `paths` n'existe. C'est exactement le
+    // montage de `apps/web`, dont l'image de production est vive. Un second
+    // candidat serait de plus REFUSE par SWC sur une entree sans joker
+    // (« should be an array with one element »), donc par `next/jest`.
+    "paths": {
+      "@/*": ["./*"],
+      "@meeshy/shared": ["../../packages/shared/types/index.ts"],
+      "@meeshy/shared/*": ["../../packages/shared/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "next-env.d.ts", ".next/types/**/*.ts"],
+
+  // `packages` n'est pas un repertoire de la zone dans le DEPOT — il l'est dans
+  // l'IMAGE. `apps/web-v3/Dockerfile` copie `packages/shared/` puis le contenu
+  // d'`apps/web-v3/` A PLAT dans le meme `/app` : le glob `**/*.ts` ci-dessus,
+  // relatif au tsconfig, ratisse alors 375 fichiers du paquet partage que le
+  // tsconfig PROPRE de `packages/shared` exclut (il n'inclut que
+  // types/utils/encryption/agent/providers/api). `prisma/migrations/
+  // migrate-user-roles.ts` (role 'MODO', disparu de l'enum) et `seed.ts`
+  // (module './client' genere, absent du contexte) suffisent a faire echouer
+  // `next build` — et donc l'image.
+  //
+  // La zone legacy porte le meme glob sans en souffrir pour UNE raison :
+  // `apps/web/next.config.ts:18` pose `typescript.ignoreBuildErrors: true`. La
+  // v3 nait sans ce drapeau (`__tests__/zone.test.ts` l'interdit), donc le glob
+  // doit etre borne ici.
+  //
+  // C'est un EXCLUDE et non une liste d'includes : un include enumere se perime
+  // au premier repertoire ajoute a la zone, et le prix de l'oubli serait un
+  // repertoire jamais type-checke — un silence, pas une erreur. L'exclude
+  // echoue OUVERT pour la zone, FERME pour ce qui n'en fait pas partie.
+  // Un fichier de `packages/shared` reellement IMPORTE par la zone reste
+  // type-checke : `exclude` ne borne que le glob, jamais la resolution.
+  "exclude": ["node_modules", ".next", "packages"]
+}

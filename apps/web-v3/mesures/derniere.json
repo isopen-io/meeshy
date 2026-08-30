@@ -1,0 +1,8 @@
+{
+  "_loi": "le MEILLEUR etat atteint, par mesure. Une valeur ne remonte jamais : le gate echoue sur toute remontee, meme quand le plafond CIBLE de budgets.json tient encore (§ 8.3, « ratchet strictement decroissant »). Ce fichier est COMMITE — c'est ce qui rend la regression detectable d'une CI a l'autre.",
+  "_porte": "des OCTETS et des COMPTES seulement. Les temps (FCP, LCP) varient d'un tirage a l'autre et n'entrent pas dans un cliquet.",
+  "_enregistre_par": "node apps/web-v3/scripts/check-bundle-budget.mjs --enregistrer",
+  "_etat": "VIDE : la zone est un squelette, son manifeste ne porte aucune route, donc il n'y a rien a cliqueter. La premiere route construite remplira ce fichier — et a partir de la, elle ne pourra plus grossir sans faire rougir la CI.",
+  "genere_le": null,
+  "valeurs": {}
+}

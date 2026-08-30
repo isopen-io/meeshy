@@ -87,6 +87,18 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # AVANT toute installation, et ce n'est pas un détail d'ordonnancement :
+      # les deux étapes d'install ci-dessous tournent SANS lockfile gelé
+      # (`bun install`, `pnpm install --no-frozen-lockfile`). Elles RÉÉCRIVENT
+      # le lock sur le runner. Une garde placée après elles lirait un fichier
+      # déjà réaligné et resterait verte sur un dépôt divergent — elle gagerait
+      # le comportement du runner, pas celui du dépôt.
+      #
+      # Zéro dépendance : Node seul, aucun `node_modules` requis. C'est ce qui
+      # lui permet de tourner ici (issue #4397).
+      - name: Lockfile/manifest coherence guard
+        run: node scripts/check-lockfile-manifests.mjs --self-test && node scripts/check-lockfile-manifests.mjs
+
       - name: Cache bun dependencies
         if: env.PACKAGE_MANAGER == 'bun'
         uses: actions/cache@v6
@@ -145,6 +157,21 @@ jobs:
       - name: Type-check (contract packages — blocking)
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent
 
+      # La zone v3 nait a ZERO erreur de types, et son verdict lui appartient.
+      #
+      # `scripts/check-type-debt.sh` est un cliquet gage sur `apps/web` et sur
+      # sa seule baseline (`WEB_BASELINE`). Y verser `apps/web-v3` lui offrirait
+      # un budget d'erreurs qu'elle n'a pas contracte, et ferait de la premiere
+      # erreur de la zone neuve une depense silencieuse dans le budget de la
+      # zone legacy. Deux zones, deux verdicts.
+      #
+      # L'ordre compte autant que la separation : cette etape passe AVANT le
+      # cliquet. Les etapes d'un job s'arretent a la premiere qui echoue — mise
+      # apres, une dette legacy qui rougit masquerait le verdict de la v3, qui
+      # ne serait alors jamais rendu.
+      - name: Type-check (apps/web-v3 — blocking, no ratchet)
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/web-v3
+
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
 
@@ -157,6 +184,25 @@ jobs:
       # toutes avant même que le job iOS ne démarre.
       - name: ViewBuilder statement-chaining guard
         run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
+
+      # Chaîne d'images : sélection docker, verdict de types propre à la zone
+      # v3, `next build` en CI, routage et démarrage de chaque zone frontend,
+      # cohérence des DEUX usines à versions (docker.yml et release.yml).
+      #
+      # Ici, dans `quality`, et pas dans la suite jsdom d'`apps/web-v3` où il a
+      # d'abord été écrit : il ne rend aucune surface, il gage le DÉPÔT, et le
+      # répertoire qui l'hébergeait sera renommé au lot L8 — ce qui aurait
+      # supprimé en silence le seul garde de la sélection des cinq services
+      # (issue #4399).
+      - name: Docker pipeline coherence guard
+        run: node scripts/check-docker-pipeline.mjs --self-test && node scripts/check-docker-pipeline.mjs
+
+      # Environnement de dev : chaque zone web déclarée dans `apps/*` a sa
+      # fenêtre tmux et son origine navigateur. Le garde DÉRIVE la liste des
+      # zones vivantes du dépôt ; celui qu'il remplace n'énumérait que les
+      # précédents MORTS, et restait donc vert sur une zone jamais câblée.
+      - name: Dev web zones wiring guard
+        run: node scripts/check-dev-zones.mjs --self-test && node scripts/check-dev-zones.mjs
 
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
@@ -177,6 +223,18 @@ jobs:
           - name: web
             path: apps/web
             filter: '@meeshy/web'
+          # La zone v3. Sa suite ne gage QUE la zone : sa configuration Next
+          # (assetPrefix, port, aucune erreur ignorée au build), la portée de
+          # son tsconfig dans l'arbre APLATI que son Dockerfile fabrique, et le
+          # rendu de ses premières surfaces (langue du document, script de
+          # thème). Les invariants de DÉPÔT qui vivaient ici — sélection
+          # docker, ordre des étapes de `quality`, compose de production,
+          # Makefile — sont partis dans `scripts/check-docker-pipeline.mjs` et
+          # `scripts/check-dev-zones.mjs`, exécutés par le job `quality` : ils
+          # ne rendent aucune surface, et ce répertoire sera renommé au lot L8.
+          - name: web-v3
+            path: apps/web-v3
+            filter: '@meeshy/web-v3'
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
@@ -258,10 +316,11 @@ jobs:
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
         run: |
-          # Web tests must use Jest (configured with Next.js)
-          if [ "${{ matrix.package.name }}" = "web" ]; then
+          # Web tests must use Jest (configured with Next.js) — les deux zones
+          # web (legacy et v3) passent par `next/jest`, donc par le même chemin.
+          if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v3" ]; then
             cd ${{ matrix.package.path }}
-            echo "Running web tests with Jest via bun..."
+            echo "Running ${{ matrix.package.name }} tests with Jest via bun..."
             bun run test:coverage
           else
             bun run test:coverage --filter=${{ matrix.package.filter }}
@@ -1185,6 +1244,32 @@ jobs:
         if: env.PACKAGE_MANAGER == 'pnpm'
         run: |
           cd apps/web
+          pnpm run build
+
+      # Build web v3 zone (like in Dockerfiles)
+      #
+      # Sans cette étape, `next build` de la zone v3 ne tournait NULLE PART
+      # avant un merge : `docker.yml` n'a aucun déclencheur `pull_request`
+      # (push sur main/dev, tags, dispatch), donc la seule commande qui
+      # compilait la zone était celle du `Dockerfile` — APRÈS le merge. Les
+      # deux seuls jobs qui connaissaient la zone (`quality` type-check et la
+      # matrice `test`) restent VERTS sur une régression de build : mesuré en
+      # posant un `app/page.tsx` serveur qui importe `useState` — `tsc
+      # --noEmit` rc=0, `jest` 71 tests verts, `next build` rc=1.
+      #
+      # `type-check` ne remplace pas `build` : Next compile aussi le graphe
+      # client/serveur, les frontières `'use client'` et le tracing des routes,
+      # qu'aucun `tsc` ne voit.
+      - name: Build web v3 zone (bun)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          cd apps/web-v3
+          bun run build
+
+      - name: Build web v3 zone (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: |
+          cd apps/web-v3
           pnpm run build
 
   # ===========================================================================

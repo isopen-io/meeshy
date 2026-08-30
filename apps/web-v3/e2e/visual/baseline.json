@@ -1,0 +1,102 @@
+{
+  "_loi": "statut « mesure » ⇒ des nombres et une date ; tout autre statut ⇒ tous les champs a null et une raison. Verifiable : node apps/web-v3/scripts/baseline.mjs --verifier apps/web-v3/e2e/visual/baseline.json",
+  "cible": "https://meeshy.me — apps/web (zone legacy) en production, telle que servie a la date ci-dessous",
+  "genere_par": "node apps/web-v3/scripts/baseline.mjs",
+  "genere_le": "2026-08-30T12:30:00.063Z",
+  "mesure_le": null,
+  "statut": "a-etablir",
+  "a_completer": [
+    "accueil : page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://meeshy.me/ — rejouer « node apps/web-v3/scripts/baseline.mjs https://meeshy.me/ » depuis une machine qui atteint la cible, avec un identifiant reel",
+    "linkRedirect : URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404 — rejouer « node apps/web-v3/scripts/baseline.mjs https://meeshy.me/l/<token> » depuis une machine qui atteint la cible, avec un identifiant reel",
+    "story : URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404 — rejouer « node apps/web-v3/scripts/baseline.mjs https://meeshy.me/story/<id> » depuis une machine qui atteint la cible, avec un identifiant reel",
+    "reel : URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404 — rejouer « node apps/web-v3/scripts/baseline.mjs https://meeshy.me/reel/<id> » depuis une machine qui atteint la cible, avec un identifiant reel",
+    "post : URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404 — rejouer « node apps/web-v3/scripts/baseline.mjs https://meeshy.me/post/<id> » depuis une machine qui atteint la cible, avec un identifiant reel"
+  ],
+  "instrument": {
+    "fichier": "scripts/lib/poids-reseau.mjs",
+    "methode": "Chromium (Playwright) en 390x844 dSF 3 ; octets = CDP Network.loadingFinished.encodedDataLength ; FCP/LCP/CLS = PerformanceObserver de la page ; « requetes avant le premier pixel » = requetes ACHEVEES avant le FCP (une requete pendante ou echouee n'a pas de fin et n'y entre pas)",
+    "conditions": {
+      "reseau": "3g-fast",
+      "tirages": 3,
+      "rang": "p75",
+      "bridage": "CDP Network.emulateNetworkConditions, profil « 3g-fast » (scripts/lib/poids-reseau.mjs, PROFILS_RESEAU)"
+    }
+  },
+  "ecrans": [
+    {
+      "id": "accueil",
+      "url": "https://meeshy.me/",
+      "commande": "node apps/web-v3/scripts/baseline.mjs https://meeshy.me/",
+      "statut": "a-etablir",
+      "raison": "page.goto: net::ERR_TUNNEL_CONNECTION_FAILED at https://meeshy.me/",
+      "statut_http": null,
+      "conditions": null,
+      "octets_total": null,
+      "requetes_total": null,
+      "requetes_avant_premier_pixel": null,
+      "premier_pixel_ms": null,
+      "lcp_ms": null,
+      "cls": null
+    },
+    {
+      "id": "linkRedirect",
+      "url": "https://meeshy.me/l/<token>",
+      "commande": "node apps/web-v3/scripts/baseline.mjs https://meeshy.me/l/<token>",
+      "statut": "a-etablir",
+      "raison": "URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404",
+      "statut_http": null,
+      "conditions": null,
+      "octets_total": null,
+      "requetes_total": null,
+      "requetes_avant_premier_pixel": null,
+      "premier_pixel_ms": null,
+      "lcp_ms": null,
+      "cls": null
+    },
+    {
+      "id": "story",
+      "url": "https://meeshy.me/story/<id>",
+      "commande": "node apps/web-v3/scripts/baseline.mjs https://meeshy.me/story/<id>",
+      "statut": "a-etablir",
+      "raison": "URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404",
+      "statut_http": null,
+      "conditions": null,
+      "octets_total": null,
+      "requetes_total": null,
+      "requetes_avant_premier_pixel": null,
+      "premier_pixel_ms": null,
+      "lcp_ms": null,
+      "cls": null
+    },
+    {
+      "id": "reel",
+      "url": "https://meeshy.me/reel/<id>",
+      "commande": "node apps/web-v3/scripts/baseline.mjs https://meeshy.me/reel/<id>",
+      "statut": "a-etablir",
+      "raison": "URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404",
+      "statut_http": null,
+      "conditions": null,
+      "octets_total": null,
+      "requetes_total": null,
+      "requetes_avant_premier_pixel": null,
+      "premier_pixel_ms": null,
+      "lcp_ms": null,
+      "cls": null
+    },
+    {
+      "id": "post",
+      "url": "https://meeshy.me/post/<id>",
+      "commande": "node apps/web-v3/scripts/baseline.mjs https://meeshy.me/post/<id>",
+      "statut": "a-etablir",
+      "raison": "URL a completer : l'identifiant reel (token, id) n'a pas ete fourni a la commande — sans lui, la mesure porterait sur une 404",
+      "statut_http": null,
+      "conditions": null,
+      "octets_total": null,
+      "requetes_total": null,
+      "requetes_avant_premier_pixel": null,
+      "premier_pixel_ms": null,
+      "lcp_ms": null,
+      "cls": null
+    }
+  ]
+}

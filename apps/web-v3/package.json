@@ -1,0 +1,37 @@
+{
+  "name": "@meeshy/web-v3",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3300",
+    "dev:https": "next dev -p 3300 --experimental-https",
+    "build": "next build",
+    "start": "next start -p 3300 -H 0.0.0.0",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit",
+    "budget": "node scripts/check-bundle-budget.mjs",
+    "reseau": "node scripts/mesure-reseau.mjs",
+    "baseline": "node scripts/baseline.mjs",
+    "rapport": "node scripts/rapport-verification.mjs",
+    "test": "jest --maxWorkers=50%",
+    "test:coverage": "jest --coverage --maxWorkers=50%",
+    "test:watch": "jest --watch",
+    "clean": "rm -rf .next node_modules"
+  },
+  "dependencies": {
+    "next": "15.5.23",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "eslint": "^10.8.1",
+    "eslint-config-next": "16.3.1",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "typescript": "^6.0.3"
+  }
+}

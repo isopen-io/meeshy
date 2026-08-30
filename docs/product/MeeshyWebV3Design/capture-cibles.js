@@ -37,7 +37,12 @@ const VENDOR = {
   'react-dom@18.3.1/umd/react-dom.production.min.js': 'react-dom/umd/react-dom.production.min.js',
   '@babel/standalone@7.29.0/babel.min.js': '@babel/standalone/babel.min.js',
 };
-const PKGS = ['react@18.3.1', 'react-dom@18.3.1', '@babel/standalone@7.29.0', '@phosphor-icons/web@2.1.1', '@fontsource/inter@5.2.8', 'playwright-core@1.62.1'];
+// `pngjs` et `pixelmatch` ne servent pas a la CAPTURE : ils servent a la
+// COMPARAISON (`compare-rendu.js`), qui charge ses paquets depuis ce meme cache
+// sans jamais le remplir. Les omettre rendait la mesure de rendu inlancable sur
+// toute machine neuve — un defaut invisible dans chacun des deux fichiers lu
+// seul. Gate : apps/web-v3/__tests__/machine-de-verification.test.ts.
+const PKGS = ['react@18.3.1', 'react-dom@18.3.1', '@babel/standalone@7.29.0', '@phosphor-icons/web@2.1.1', '@fontsource/inter@5.2.8', 'playwright-core@1.62.1', 'pngjs@5.0.0', 'pixelmatch@7.2.0'];
 const INTER_WEIGHTS = [400, 500, 600, 700];
 
 const MIME = { '.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html; charset=utf-8', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.svg': 'image/svg+xml', '.png': 'image/png', '.json': 'application/json' };

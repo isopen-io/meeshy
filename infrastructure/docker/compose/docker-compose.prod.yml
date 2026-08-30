@@ -405,6 +405,43 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=3100"
       - "traefik.http.routers.frontend.priority=1"
 
+  # Zone v3 sur ${DOMAIN}, servie par PREFIXE — jamais par sous-domaine.
+  #
+  # Les liens `/l/<token>` deja partages pointent l'APEX : un sous-domaine ne
+  # les servirait jamais, et c'est le role PREMIER de la v3. La bascule se fait
+  # donc en ajoutant un PathPrefix a la regle ci-dessous, une route a la fois ;
+  # le retour arriere est le retrait de ce meme prefixe, sans rebuild d'image et
+  # sans toucher au routeur legacy, qui reste le plancher attrape-tout
+  # (priority=1) tant qu'il sert encore quelque chose.
+  #
+  # `/__v3` figure en PERMANENCE dans la regle : c'est l'assetPrefix de la zone
+  # (`apps/web-v3/next.config.ts`), donc l'adresse de ses chunks. Sans lui, la
+  # premiere page v3 demanderait `/_next/static/*` au routeur legacy et
+  # tomberait en page blanche.
+  #
+  # Aucun healthcheck : la zone ne sert rien sous `/` — ce chemin appartient au
+  # routeur legacy jusqu'a la derniere etape de la bascule — et une sonde qui
+  # interroge une route qui n'est pas la sienne mesure autre chose qu'elle.
+  frontend-v3:
+    image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
+    container_name: meeshy-frontend-v3
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - meeshy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3`))"
+      - "traefik.http.routers.frontend-v3.entrypoints=websecure"
+      - "traefik.http.routers.frontend-v3.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-v3.middlewares=compress@file"
+      - "traefik.http.services.frontend-v3.loadbalancer.server.port=3300"
+      - "traefik.http.routers.frontend-v3.priority=100"
+
   # ===========================================================================
   agent:
     image: ${AGENT_IMAGE:-isopen/meeshy-agent:latest}

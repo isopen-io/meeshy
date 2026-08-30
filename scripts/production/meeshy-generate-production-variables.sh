@@ -412,6 +412,10 @@ DOCKER_DEFAULT_PLATFORM=linux/amd64
 TRANSLATOR_IMAGE=isopen/meeshy-translator:latest
 GATEWAY_IMAGE=isopen/meeshy-gateway:latest
 FRONTEND_IMAGE=isopen/meeshy-web:latest
+# Zone v3 (préfixe /__v3). Le compose de prod lit ${FRONTEND_V3_IMAGE} : sans
+# producteur, le levier d'épinglage n'existait pas et la zone ne pouvait tourner
+# que sur `:latest`, donc sans retour arrière vers une image antérieure.
+FRONTEND_V3_IMAGE=isopen/meeshy-web-v3:latest
 
 # ===== PERFORMANCE OPTIMIZATION =====
 PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:256

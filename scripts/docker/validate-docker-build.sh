@@ -291,12 +291,14 @@ main() {
     # Get versions from VERSION files
     GATEWAY_VERSION=$(cat services/gateway/VERSION 2>/dev/null || echo "latest")
     WEB_VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "latest")
+    WEB_V3_VERSION=$(cat apps/web-v3/VERSION 2>/dev/null || echo "latest")
     TRANSLATOR_VERSION=$(cat services/translator/VERSION 2>/dev/null || echo "latest")
 
     case "$target" in
         --all|all)
             validate_image "${DOCKER_REGISTRY}/meeshy-gateway:v${GATEWAY_VERSION}" "gateway"
             validate_image "${DOCKER_REGISTRY}/meeshy-web:v${WEB_VERSION}" "web"
+            validate_image "${DOCKER_REGISTRY}/meeshy-web-v3:v${WEB_V3_VERSION}" "web-v3"
             validate_image "${DOCKER_REGISTRY}/meeshy-translator:v${TRANSLATOR_VERSION}" "translator"
             ;;
         gateway)
@@ -304,6 +306,9 @@ main() {
             ;;
         web|frontend)
             validate_image "${DOCKER_REGISTRY}/meeshy-web:v${WEB_VERSION}" "web"
+            ;;
+        web-v3|frontend-v3)
+            validate_image "${DOCKER_REGISTRY}/meeshy-web-v3:v${WEB_V3_VERSION}" "web-v3"
             ;;
         translator)
             validate_image "${DOCKER_REGISTRY}/meeshy-translator:v${TRANSLATOR_VERSION}" "translator"

@@ -226,8 +226,13 @@ services:
       # docs/runbooks/2026-06-10-socket-lang-filter-activation.md).
       # SOCKET_LANG_FILTER: false
       NODE_ENV: development
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3100}
+      # :3300 est la zone v3 (`apps/web-v3`). En dev les deux zones tournent sur
+      # des PORTS differents, donc en CROSS-ORIGIN — alors qu'en prod elles sont
+      # servies same-origin derriere le meme Traefik. Sans cette origine, le
+      # premier ecran v3 qui appelle la passerelle est refuse par CORS, et le
+      # symptome ne ressemble pas a une erreur de configuration.
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3100,http://localhost:3300}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3100,http://localhost:3300}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3100}
       PUBLIC_URL: http://localhost:3000
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-in-production}

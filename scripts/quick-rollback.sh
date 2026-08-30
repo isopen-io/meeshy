@@ -195,7 +195,7 @@ docker-compose stop gateway frontend
 
 # Supprimer les conteneurs actuels
 echo "🗑️  Suppression des conteneurs actuels..."
-docker-compose rm -f gateway frontend
+docker-compose rm -f gateway frontend frontend-v3
 
 # Redémarrer avec les versions précédentes
 echo "🚀 Redémarrage avec les versions précédentes..."
@@ -236,6 +236,13 @@ for i in {1..5}; do
     sleep 2
 done
 
+# Zone Web v3 (préfixe /__v3) — elle est retirée par le `rm -f` ci-dessus au
+# même titre que le frontend legacy ; ne pas la redémarrer laisserait la zone
+# ÉTEINTE après un rollback, donc `/__v3/*` sur le plancher attrape-tout.
+echo "🧪 Redémarrage de la zone Web v3..."
+docker-compose up -d frontend-v3
+sleep 3
+
 echo ""
 echo "📊 État des services après le rollback:"
 docker-compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
@@ -245,6 +252,7 @@ echo "🎉 ROLLBACK TERMINÉ AVEC SUCCÈS !"
 echo "================================="
 echo "✅ Gateway: Restauré à la version précédente"
 echo "✅ Frontend: Restauré à la version précédente"
+echo "✅ Web v3: Restauré à la version précédente"
 echo "✅ Base de données: Préservée"
 echo "✅ Infrastructure: Préservée"
 EOF

@@ -240,14 +240,25 @@ start_application_services() {
         # Démarrer le Frontend
         echo "Démarrage du Frontend..."
         docker compose up -d frontend
-        
+
         # Attendre que le Frontend soit prêt
         echo "Attente que le Frontend soit prêt..."
         sleep 3
-        
+
+        # Démarrer la zone v3 (servie sous le préfixe /__v3).
+        #
+        # Un service DÉCLARÉ dans le compose que rien ne démarre est un contrôle
+        # inerte : le conteneur n'existe pas, le routeur `frontend-v3` ne
+        # s'enregistre jamais auprès de Traefik, et `/__v3/_next/*` retombe sur
+        # le plancher attrape-tout `frontend` — la page blanche que le § 4.4 de
+        # la conception a été écrit pour empêcher.
+        echo "Démarrage de la zone Web v3..."
+        docker compose up -d frontend-v3
+        sleep 2
+
         # Vérifier le statut des services applicatifs
         echo "=== STATUT DES SERVICES APPLICATIFS ==="
-        docker compose ps gateway translator frontend
+        docker compose ps gateway translator frontend frontend-v3
 EOF
     
     if [ $? -eq 0 ]; then

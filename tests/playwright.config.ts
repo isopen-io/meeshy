@@ -97,7 +97,7 @@ export default defineConfig({
   // Web server configuration (optional - auto-start frontend/backend)
   webServer: process.env.CI ? undefined : [
     {
-      command: 'cd ../frontend && npm run dev',
+      command: 'cd ../apps/web && bun run dev',
       url: FRONTEND_URL,
       timeout: 120000,
       reuseExistingServer: !process.env.CI,
@@ -105,7 +105,7 @@ export default defineConfig({
       stderr: 'pipe'
     },
     {
-      command: 'cd ../gateway && npm run dev',
+      command: 'cd ../services/gateway && bun run dev',
       url: GATEWAY_URL,
       timeout: 120000,
       reuseExistingServer: !process.env.CI,

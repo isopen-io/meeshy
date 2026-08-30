@@ -195,7 +195,13 @@ ssh -o StrictHostKeyChecking=no root@$SERVER_IP << 'EOF'
     echo "  → Frontend..."
     docker-compose up -d frontend
     sleep 5
-    
+
+    # 7. Zone Web v3 (préfixe /__v3, port 3300) — un service déclaré que rien
+    #    ne démarre n'enregistre aucun routeur Traefik.
+    echo "  → Web v3..."
+    docker-compose up -d frontend-v3
+    sleep 3
+
     echo ""
     echo "✅ Tous les services démarrés"
 EOF

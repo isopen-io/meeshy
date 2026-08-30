@@ -25,7 +25,33 @@
 
 **Règle de lecture du tableau** : une version marquée « **résolu** » a été lue dans `bun.lock` à la date de ce document. Une version marquée « **déclaré** » vient d'un `package.json` et **diverge** du lockfile — c'est un fait, pas une approximation. Un poids marqué « **mesuré** » a été produit par une commande reproductible, citée. Un poids marqué « **à établir (L-0.5)** » n'a pas de chiffre : il n'y en aura qu'après le premier `next build` de `apps/web-v3`, et **aucun agent n'a le droit d'en inventer un**.
 
-> **Fait à traiter en L-0.5** : `bun.lock` est en retard sur les `package.json`. Mesuré : `react@19.2.7` / `react-dom@19.2.7` résolus alors que `apps/web/package.json` déclare `^19.2.8` ; `zustand@5.0.14` résolu (pas 5.0.15) ; `idb-keyval@6.3.0` résolu (pas 6.2.2) ; `@playwright/test` résolu **deux fois** — `1.61.1` à la racine (harnais `tests/playwright.config.ts`, mort : il pointe `../frontend`) et `1.62.1` pour le workspace `@meeshy/web`. Une issue L-0.5 « le lockfile et les manifestes disent la même chose » précède toute mesure de poids.
+> **Fait TRAITÉ en L-0.5 (#4397, 2026-08-30)** — et la cause n'était ni celle annoncée, ni celle qu'une première passe a cru trouver. L'énoncé initial disait « `bun.lock` est en retard sur les `package.json` » ; mesuré, **aucun des écarts n'était un retard de lock**, et `bun install` seul n'en aurait corrigé aucun.
+>
+> **La cause racine est que ce dépôt a DEUX lockfiles vivants, et qu'un seul champ d'`overrides` sur deux était rempli.** `bun.lock` **et** `pnpm-lock.yaml` sont tous deux opérationnels — `apps/web/Dockerfile` construit l'image de production par `bun install --no-save` OU par `corepack … && pnpm install --no-frozen-lockfile` selon une branche (lignes 89 et 94), et `ci.yml` lance **les deux** dans chacun de ses neuf jobs. Or la racine ne déclarait que le champ **npm** `overrides` : **bun l'honore, pnpm ne le lit pas** (pnpm ne lit que `pnpm.overrides`, alors absent — la racine ne portait qu'un `pnpm.peerDependencyRules`). Conséquence mesurée avant correctif : `bun.lock` résolvait `react@19.2.7`, `pnpm-lock.yaml` résolvait `react@19.2.8`. **Selon le gestionnaire qui construisait, l'app VIVE tournait sur deux React différents.** Dire « l'override décide » était donc vrai d'un lockfile sur deux.
+>
+> Détail par paquet :
+> - `react` / `react-dom` : l'`overrides` de la racine pinait `19.2.7`, **SOUS le plancher `^19.2.8`** déclaré par `apps/web`. Porté à `19.2.8` — dans `overrides` **et** dans le nouveau `pnpm.overrides`, miroir complet des quinze clés.
+> - `idb-keyval` : `bun.lock` était **en avance** (`6.3.0`), `pnpm-lock.yaml` **en retard** (`6.2.2`) — les deux locks divergeaient sur un paquet que personne ne surveillait. Manifeste porté à `^6.3.0`, les deux locks régénérés à `6.3.0`.
+> - `@playwright/test` **résolu deux fois dans les DEUX locks** — `1.61.1`/`1.59.1` à la racine (`^1.59.1`), `1.62.1` sous `@meeshy/web` (`^1.62.1`). Racine et `tests/` portés à `^1.62.1` ⇒ **une seule copie de `@playwright/test` et de `playwright-core`, dans `bun.lock` ET dans `pnpm-lock.yaml`** (vérifié : `playwright-core@1.62.1` unique dans chacun). Cette phrase n'était vraie que d'un lock sur deux avant la régénération de `pnpm-lock.yaml`.
+> - `zustand` : **le fait annoncé était faux**. Aucun manifeste n'a jamais déclaré `5.0.15` ; `apps/web` déclare `^5.0.14` et le lock résout `5.0.14` — aligné.
+>
+> **Garde permanente : `scripts/check-lockfile-manifests.mjs`**, lancée par le job `quality` de `ci.yml` **avant toute installation** — les deux étapes d'install y tournent sans lockfile gelé et RÉÉCRIVENT le lock sur le runner ; une garde placée après elles gagerait le comportement du runner, pas celui du dépôt. Elle ne dépend d'aucun `node_modules` (Node seul), résout la racine par `git rev-parse --show-toplevel` (jamais un compte de `..`), et porte six invariants sur `react`, `react-dom`, `idb-keyval`, `@playwright/test` :
+>
+> | # | Invariant | Ce qu'il attrape |
+> |---|---|---|
+> | 1 | toute plage déclarée est `X.Y.Z` ou `^X.Y.Z` | fail-closed : une plage non supportée est une violation, pas un silence |
+> | 2 | **une seule** résolution dans **chaque** lockfile | la double copie de `@playwright/test` |
+> | 3 | la résolution **satisfait** chaque plage déclarée | `19.2.7` sous `^19.2.8` |
+> | 4 | les deux lockfiles résolvent la **même** version | la divergence bun ↔ pnpm |
+> | 5 | `overrides` et `pnpm.overrides` sont un **miroir** clé par clé | la cause racine ci-dessus, avant qu'elle ne reparaisse |
+> | 6 | le harnais `tests/` vise ce qui existe, avec **un** gestionnaire, **zéro** option de CLI retirée et **zéro** script inexistant | `../frontend`, `pnpm` mêlé à `bun`, `--testPathPattern` |
+> | 6e | les scripts que le harnais **APPELLE** ne portent pas non plus d'option retirée | la même casse migrée un maillon plus loin |
+>
+> **Le choix « satisfait », et non « égale le plancher », est délibéré** (§ arbitrage de #4397). Le critère de fin dit « une résolution UNIQUE **cohérente** avec les manifestes » : un `^19.2.8` DÉCLARE accepter tout 19.x ≥ 19.2.8, et une garde exigeant l'égalité rougirait au premier patch amont sans que le dépôt puisse la réparer par ses propres canaux. Ce n'est pas un relâchement : une plage **sans** caret (`19.2.8` des `overrides`, `15.5.23` de `next`) n'est satisfaite que par l'égalité — la garde est exactement aussi stricte que ce que chaque manifeste déclare. Corollaire d'entretien livré avec : `.github/dependabot.yml` gagne un écosystème npm `/tests`, qu'aucun des quatre existants ne visitait alors qu'il déclare `@playwright/test`. **`/apps/web-v3` devra y être ajouté par l'issue qui commite ce squelette** — il n'est pas versionné à ce jour, et `bun.lock` a donc été régénéré sur un arbre qui ne le contient pas.
+>
+> **Le harnais était mort plus profond que « il vise `../frontend` ».** Trois couches, toutes mesurées : (1) il pointait des répertoires disparus ; (2) il lançait `pnpm` dans un dépôt passé à bun, et `--testPathPattern=`, **renommé `--testPathPatterns=` par Jest 30** — la passerelle est sur `jest@30.4.2`, donc jest REFUSAIT de démarrer ; (3) il recomposait à la main un motif que `jest.config.json` **ignore** (`testPathIgnorePatterns` couvre `integration/`, `performance/`, `resilience/`) : même réparé, trois de ses cinq modes auraient sélectionné **zéro test**. Correctif : le harnais **délègue** désormais aux scripts nommés de `services/gateway/package.json` (`test:unit`, `test:integration`, `test:performance`, `test:resilience`) — une seule définition des drapeaux du runner, dans le manifeste. Et ces quatre scripts portaient **eux-mêmes** `--testPathPattern=` : corrigés dans le même lot, mesuré `--listTests` ⇒ 11 / 2 / 2 fichiers là où il n'y en avait aucun. `FRONTEND_DIR` était une variable MORTE (affectée, jamais relue) : **supprimée**, pas réparée.
+>
+> RED mesuré sur la garde TELLE QUE LIVRÉE, sur l'arbre d'avant correctif : **37 violations** (dont les 15 clés d'`overrides` non miroitées et les 3 divergences de lock que la première passe n'avait pas vues). GREEN après : `0`. `--self-test` : 11 cas, dont deux figeant des faux positifs mesurés (`@types/react` compté comme `react` ; `engines.pnpm` lu comme une invocation).
 
 | Préoccupation | Choix | Version EXACTE | Poids gzip (client) | Pourquoi | Alternative rejetée |
 |---|---|---|---|---|---|
@@ -36,7 +62,7 @@
 | **Styles & jetons** | Tailwind (utilitaires) + `packages/design-tokens/tokens.css` — **unique** table de custom properties, importée par `apps/web-v3/app/globals.css` | `tailwindcss@3.4.19` (résolu) | CSS purgé — **à établir (L-0.5)**, plafond 20 Ko gzip/route | Ferme les trois têtes de `apps/web` : `:root` shadcn HSL + `--gp-*` de `globals.css` + `components/v2/theme.ts` (objet JS hex dupliqué), plus 254 hex en dur dans 41 `.tsx`. `ds-shim.css` (déjà commité dans `docs/product/MeeshyWebV3Design/`) est la reconstitution des jetons de la planche : il **alimente** `tokens.css`, il ne le remplace pas. | **Tailwind v4** : gain de build réel, hors chemin critique ; chantier séparé. |
 | **Thème dark/light/system sans FOUC** | **UNE** source : `darkMode: ["class"]`. `ThemeScript` inline **obligatoire dans le layout racine**, y compris `(public)` : il lit `localStorage` puis, à défaut, `matchMedia('(prefers-color-scheme: dark)')`, et pose la classe **avant le premier pixel**. `color-scheme` suit la classe. **ZÉRO `@media (prefers-color-scheme)` dans `tokens.css`.** | — | **≤ 400 o inline** (gate) | L'hybride « media pour les tokens + classe pour Tailwind » est une **jumelle divergente** : utilisateur en préférence explicite CLAIRE sur OS SOMBRE ⇒ tokens sombres, utilitaires `dark:` clairs. `prefers-color-scheme` ne gouverne donc QUE la valeur par défaut de la classe, jamais un token. | **`next-themes`** : déclaré dans `apps/web/package.json`, **0 import** — l'activer ajouterait un moteur ; il ne sera pas installé dans la v3. **Deux moteurs simultanés** (le défaut actuel de `apps/web` : `app/layout.tsx:100` + `app/(connected)/layout.tsx:24-25`, clés `meeshy-app` vs `gp-theme-mode`). |
 | **État client** | Zustand, UI éphémère uniquement (ouverture de feuille, brouillon, filtre) | `zustand@5.0.14` (**résolu** ; le doc précédent disait 5.0.15) | ~0,6 Ko — **à confirmer (L-0.5)** | Convention `CLAUDE.md`. Le thème et le cache réseau en sortent. | **Redux Toolkit / Jotai** : réécriture sans capacité manquante. |
-| **Cache persistant** | TanStack Query + persister IndexedDB (`idb-keyval`), `staleTime: Infinity`, `VOLATILE_ROOTS` | `@tanstack/react-query@5.101.4` (**résolu**) / `idb-keyval@6.3.0` (**résolu**) | **à établir (L-0.5)** | Sous-système déjà cache-first. Toute donnée serveur passe par `useQuery` — interdit de refaire `hooks/conversations/use-participants.ts` (188 lignes `useState`/`useEffect`, rappelé sans garde par `components/conversations/ConversationLayout.tsx:493`). | **SWR** : 2ᵉ lib de cache. |
+| **Cache persistant** | TanStack Query + persister IndexedDB (`idb-keyval`), `staleTime: Infinity`, `VOLATILE_ROOTS` | `@tanstack/react-query@5.101.4` (**résolu**) / `idb-keyval@6.3.0` (**déclaré et résolu**, #4397) | **à établir (L-0.5)** | Sous-système déjà cache-first. Toute donnée serveur passe par `useQuery` — interdit de refaire `hooks/conversations/use-participants.ts` (188 lignes `useState`/`useEffect`, rappelé sans garde par `components/conversations/ConversationLayout.tsx:493`). | **SWR** : 2ᵉ lib de cache. |
 | **Delta / rattrapage** | `GET /sync` (`services/gateway/src/routes/sync.ts` — ETag/304, cursor keyset, `hasGap`, plafond 512 Ko/page, `allowAnonymous: true` lignes 452-473) | existant | 0 Ko | **Aucun appelant `/sync` dans `apps/web`** (grep vérifié), alors que le web réimplémente deux moteurs plus pauvres. Un 304 quasi-vide remplace un JSON complet à chaque reprise. | **Garder les deux moteurs maison** : double maintenance d'une idée déjà payée. |
 | **Transport temps réel — LECTURE anonyme** | **AUCUN.** Rendu serveur + revalidation au retour de focus (`visibilitychange:visible` → `router.refresh()`). | — | **0 Ko, 0 connexion tenue** | Le fan-out temps réel d'un post **existe déjà** sur le socket (`ROOMS.post` — `packages/shared/types/socketio-events.ts:113`, `POST_JOIN`/`POST_LEAVE` `:683-684`, `PostReactionHandler.handleJoinPost:471-521`) et il est **auth-gaté par décision écrite** (`PostReactionHandler.ts:470` : « anonymous sockets cannot subscribe to post rooms »). En construire un second dupliquerait `resolveConsumptionTarget`, c'est-à-dire la garde de VISIBILITÉ. | **SSE (`EventSource`)** : **ANNULÉ, pas différé**. `grep -rn "text/event-stream" services/gateway/src` = **0 occurrence** (tout est à construire) ; SSE tient une connexion par visiteur ET par contenu (il ne multiplexe pas) — l'argument de « scalabilité » se réfute lui-même ; et le lecteur anonyme est de toute façon bloqué **en amont** par deux `requiredAuth` (§ 5). |
 | **Transport temps réel — PARTICIPATION** | **UN** Manager `socket.io-client`, chargé en `await import()` **au tap « Rejoindre »**, jamais à la lecture | `socket.io-client@4.8.3` (résolu) | **12 796 o gzip (ESM) / 14 626 o (UMD) — mesuré** `gzip -9` | La participation est bidirectionnelle (envoyer, frappe, accusés) : SSE y est structurellement inapte. L'anonyme est **déjà** supporté (`AuthHandler.ts:93-108` → `_authenticateAnonymousUser:320`), backoff durci (`connection.service.ts:203-206` : 1 s→30 s, jitter 0.5). **Fait serveur à écrire correctement** : `grep -rn "\.of(" services/gateway/src` = **0 occurrence** — le gateway n'a **aucun namespace** Socket.IO ; tout vit dans le namespace par défaut et la séparation se fait par **ROOMS**. Les 3 `io(...)` de `apps/web` sont 3 connexions redondantes vers le même namespace. | **WebTransport** (non supporté WebKit ⇒ mort pour les navigateurs in-app iOS). **WebSocket brut** (réimplémente backoff/ACK/multiplexage déjà durcis). |
@@ -44,7 +70,7 @@
 | **i18n** | Dictionnaire clé→valeur, import dynamique par namespace (patron de `apps/web/hooks/use-i18n.ts`, LRU 80) ; `Intl.*` natif ; **`RTL_LOCALES` posant `dir="rtl"`** ; **règle neuve : `lang="xx"` sur tout nœud rendu par le Prisme dans une langue ≠ langue d'interface** | — | 0 Ko + JSON à la demande | Vérifié dans `apps/web` : `grep 'lang={'` ne remonte que 3 fichiers, et `components/v2/TranslationToggle.tsx` n'en pose dans **aucune** branche de rendu — un lecteur d'écran anglais prononce une bulle française en phonétique anglaise. Défaut de Prisme au sens du cycle 123 (« qu'est-ce qui part À CÔTÉ »). | **`next-intl`** (408 Ko, explicitement désactivé dans `apps/web/next.config.ts:2-6`). |
 | **Formulaires** | `<form action={serverAction}>` natif + **Zod** partagé (`packages/shared`) exécuté serveur ; `useFormStatus`/`useActionState` ; **aucun formulaire du rôle premier ne dépend du JS pour se soumettre** | `zod@4.4.3` (résolu) | 0 Ko nouveau | Rejoindre en anonyme doit fonctionner sans hydratation. Zod est déjà la validation partagée gateway↔web. | **react-hook-form** : ~12 Ko pour 4 champs, casse la soumission sans JS. |
 | **Tests unitaires** | Jest + React Testing Library + **`jest-axe`** sur tout composant `(public)` | `jest@30.4.2` (résolu) | 0 (devDep) | TDD non négociable ; `jest-axe` transforme l'a11y en cycle RED/GREEN. | **Vitest** : 2ᵉ runner. |
-| **Tests visuels** | Playwright + `pixelmatch`/`pngjs`/`sharp` pour un **score par région** ; `@axe-core/playwright` pour le structurel | `@playwright/test@1.62.1` (résolu pour `@meeshy/web` ; **1.61.1 aussi résolu à la racine** — double résolution à solder en L-0.5) ; `pngjs@5.0.0`, `sharp@0.35.3` (résolus) | 0 (devDep) | `apps/web/e2e/message-composer-animations.spec.ts` prouve déjà `toHaveScreenshot` + Web Vitals dans ce dépôt ; il manque un **score chiffré** cible-vs-rendu. Chromium local : `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH`). | **`toHaveScreenshot` seul** : verdict binaire, inutilisable comme gate gradué. |
+| **Tests visuels** | Playwright + `pixelmatch`/`pngjs`/`sharp` pour un **score par région** ; `@axe-core/playwright` pour le structurel | `@playwright/test@1.62.1` (**résolution unique dans les DEUX lockfiles** depuis #4397 : racine, `apps/web` et `tests/` déclarent tous `^1.62.1` ; `playwright-core@1.62.1` unique dans `bun.lock` comme dans `pnpm-lock.yaml`) ; `pngjs@5.0.0`, `sharp@0.35.3` (résolus) | 0 (devDep) | `apps/web/e2e/message-composer-animations.spec.ts` prouve déjà `toHaveScreenshot` + Web Vitals dans ce dépôt ; il manque un **score chiffré** cible-vs-rendu. Chromium local : `/opt/pw-browsers` (`PLAYWRIGHT_BROWSERS_PATH`). | **`toHaveScreenshot` seul** : verdict binaire, inutilisable comme gate gradué. |
 | **Analyse de bundle** | `@next/bundle-analyzer` + `scripts/check-bundle-budget.mjs` lisant **`apps/web-v3/.next/app-build-manifest.json`** ; **échec CI si un plafond de route est dépassé** | — | 0 | Mesuré : **ce script n'existe pas** (`find . -name check-bundle-budget.mjs` = rien) — il est livré par L-0.5. La v3 naît **sans** `ignoreBuildErrors` : son type-check va dans le job BLOQUANT `ci.yml:142`, **jamais** dans le ratchet de dette `ci.yml:144-145` (gagé sur `apps/web`, `WEB_BASELINE=1194`). | **Mesure manuelle ponctuelle** : ne tient pas sur des dizaines d'itérations d'agents. |
 
 ---
@@ -100,10 +126,10 @@ apps/web-v3/                     # NOUVEAU package Next — port 3300, assetPref
       l/[token]/route.ts         #   Route Handler : resolve+click+302+OG. 0 Ko JS.
       l/[token]/expired/page.tsx
       stories/[id]/page.tsx      #   + îlot progression/traduction
-      posts/[id]/page.tsx        #   post + commentaires
+      post/[id]/page.tsx         #   post + commentaires — `/post/:id`, PAS `/posts/:id` (§ 8.3)
       reels/[id]/page.tsx
       moods/[id]/page.tsx        #   Post type=STATUS
-      chats/[key]/page.tsx       #   join / rights / thread — resolveSharedAccess() SERVEUR
+      chats/[lien]/page.tsx      #   join / rights / thread / rich — resolveSharedAccess() SERVEUR
       login/  signup/
     (connected)/                 # RÔLE SECONDAIRE — AuthGuard ICI, et nulle part ailleurs
       layout.tsx                 #   QueryProvider, PresenceProvider. PAS de CallManager (§ 8).
@@ -177,7 +203,9 @@ Le patron « PathPrefix + priorité au-dessus du frontend » est **déjà pratiq
       - "traefik.http.routers.frontend-v3.priority=100"
 ```
 
-**Migrer une route = ajouter un `PathPrefix` à cette ligne. Revenir en arrière = l'enlever.** Rien d'autre ne bouge.
+**Migrer une route = ajouter un `PathPrefix` à cette ligne. Revenir en arrière = l'enlever.** Côté SERVEUR, rien d'autre ne bouge.
+
+> **Correction (2026-08-30) — « rien d'autre ne bouge » était FAUX côté CLIENT.** Traefik n'est pas le seul aiguilleur de l'origine : un **Service Worker legacy** est enregistré sur `scope: '/'` chez tout visiteur de `apps/web` et intercepte les navigations en **cache-first**. Une règle Traefik ne le concerne pas — il sert ce qu'il a gardé, y compris après le retrait du `PathPrefix`. **Le retour arrière n'est donc pas inerte : il est INOPÉRANT tant que le § 4.4 bis n'est pas livré.**
 
 ### 4.4 La collision `/_next/*` — défaut neuf, non relevé par la revue
 
@@ -186,6 +214,26 @@ Mesuré : `grep -n "assetPrefix\|basePath" apps/web/next.config.ts apps/web/next
 **Correctif obligatoire, à écrire en L-0.5** : `apps/web-v3/next.config.ts` pose **`assetPrefix: '/__v3'`** (Next sert alors `${assetPrefix}/_next/...`, `/_next/image` suit) et `PathPrefix('/__v3')` figure **en permanence** dans la règle du routeur v3. **Aucun `basePath`** : il changerait les URLs publiques, or `/l/:token` et `/stories/:id` doivent rester à l'identique. C'est le patron Multi-Zones de Next, Traefik jouant le routeur de zone.
 
 **Corollaire** : `tout chemin absent de la règle` **`frontend-v3`** `est servi par apps/web`. Les 23 routes `app/admin/*` et les 12 routes d'authentification existantes (`auth/magic-link`, `auth/magic-link/validate`, `auth/verify-2fa`, `auth/verify-email`, `auth/verify-phone`, `forgot-password`, `forgot-password/check-email`, `reset-password`, `signup/affiliate/[token]`, `account/deletion`, `settings/verify-email-change`, `auth-status`) restent donc servies **par défaut, sans action**. La matrice du § 10 est **honnêtement incomplète**, pas faussement exhaustive.
+
+### 4.4 bis Le SECOND intercepteur same-origin — le Service Worker legacy (issue #4416)
+
+Le § 4.4 a posé la bonne question à un intercepteur (Traefik) et **ne l'a pas posée au second**. Mesuré le 2026-08-30 :
+
+- `apps/web/utils/service-worker-registration.ts:95-97` — `navigator.serviceWorker.register(swPath, { scope: '/', updateViaCache: 'none' })`, `swPath` valant `/sw.js` par défaut (`:80`) : la portée est **l'origine ENTIÈRE**, `/__v3` compris.
+- `apps/web/app/layout.tsx:93` — `<ServiceWorkerInitializer />` est monté **sans condition** dans la coquille racine du legacy : tout visiteur de `meeshy.me` l'a installé.
+- `apps/web/public/sw.js:143` — la branche 3 s'applique quand `request.mode === 'navigate'` **ou** que `destination` vaut `style` / `script` / `font` / `image` ; `:155` rend `cachedResponse || fetchPromise`. C'est du cache-first **sur les NAVIGATIONS**, pas seulement sur les actifs.
+
+Trois conséquences, toutes sur le rôle PREMIER :
+
+1. **La bascule n'a pas lieu pour un visiteur revenant.** Qui a déjà ouvert `/l/<token>`, `/stories/:id` ou `/post/:id` sur le legacy se voit resservir la réponse LEGACY gardée en cache ; la v3 n'est jamais jointe. Seuls les navigateurs neufs basculent.
+2. **Des actifs de la v3 entrent dans le cache du legacy** — mais pas ceux qu'on croit. `/__v3/_next/static/*.js` était **déjà** laissé passer, par ACCIDENT : la règle « 1bis » de `sw.js` (`url.pathname.includes('/static/')`, écrite pour les pièces jointes) l'attrape au passage. Ce qui était bel et bien intercepté : `/__v3/_next/image?…` (`destination === 'image'`, aucun `/static/` dans le chemin) et toute autre route d'actif hors `/static/`. **Une protection obtenue par coïncidence n'en est pas une** : elle disparaît le jour où la règle 1bis change pour sa propre raison.
+3. **Le retour arrière est INERTE.** Retirer le `PathPrefix` ne vide aucun Cache Storage. Et le `CACHE_NAME` (`meeshy-cache-${APP_BUILD_VERSION}`, purgé à l'`activate`) ne change qu'au **rebuild d'image** : or ajouter ou retirer un `PathPrefix` est un `docker compose up -d` **sans rebuild** (§ 4.2). Le cache survit donc exactement à l'opération dont il fausse le résultat.
+
+**Correctif, à déployer AVANT le premier `PathPrefix` de contenu (étape 2 du § 4.9)** : `apps/web/public/sw.js` porte une liste `V3_ZONE_PREFIXES` et un `return` sec **en tête** de son listener `fetch`. Ne rien intercepter, c'est laisser le navigateur parler à Traefik — donc obéir à la règle du routeur, dans les deux sens.
+
+> **Autorisation explicite de modifier `apps/web`.** La règle de ce chantier est « `apps/web` reste vif ; on n'y touche que si la conception le dit explicitement ». **La conception le dit ici, pour ce fichier et cette liste seulement** : `public/sw.js` (la constante `V3_ZONE_PREFIXES` et le garde-fou en tête de `fetch`). Aucune suppression, aucun autre fichier. La liste est le **jumeau CLIENT** de la règle du routeur `frontend-v3` : toute issue qui ajoute un `PathPrefix` ajoute le même préfixe ici, dans le même commit — c'est une étape obligatoire du § 10.4.
+
+La voie alternative — un Service Worker de la v3 qui réclame l'origine et désenregistre le legacy — est **écartée** : elle fait dépendre le retour arrière d'un second worker à déployer et à retirer, alors que le rôle premier doit tenir **sans JS**. Un `return` dans le worker déjà installé est le seul correctif qui rende le retrait du `PathPrefix` immédiatement effectif.
 
 ### 4.5 L'interdit des liens universels iOS
 
@@ -198,6 +246,8 @@ Mesuré : `grep -n "assetPrefix\|basePath" apps/web/next.config.ts apps/web/next
 - **Port 3300.** Vérifié libre : `grep -rn "3300" Makefile docker-compose*.yml apps/web/package.json` = **0 occurrence**. Pris : 3000 gateway, 3001 mongo-ui, 3100 web, 3200 agent, 5555/5558 ZMQ, 6379, 7843, 8000, 27017.
 - **Nettoyage préalable obligatoire (L-0.5)** : le `Makefile` référence un précédent **mort et en conflit** — `WEB_V2_DIR := apps/web_v2` (ligne 88), `WEB_V2_PID` (:102), fenêtres tmux `web_v2` (:1213-1214 et :1534-1535) — or `apps/` ne contient que `android`, `docs`, `ios`, `web` : **`apps/web_v2` n'existe pas**, et cette fenêtre morte est assignée au **port 3200, déjà celui de l'agent**. Laisser ce précédent cassé garantit qu'un agent le copiera.
 - Fenêtre tmux `web_v3` sur 3300 dans `_dev-tmux-domain` (Makefile:1198) et `_dev-tmux-network` (Makefile:1529).
+
+> **Correction (2026-08-30) — les cibles tmux sont TROIS, pas deux.** L'énumération ci-dessus a été écrite à la main et a manqué `dev-tmux` (Makefile:1750), la cible du dev nominal — celle que la plupart des sessions lancent. Le trou n'a pas été trouvé en relisant la liste mais par un garde qui la DÉRIVE : `scripts/check-dev-zones.mjs` lit les zones dans `apps/*/package.json` (port du script `dev`) et exige que **toute cible make lançant une zone web les lance TOUTES**. Même leçon que pour les résolveurs de Prisme : une énumération porte deux affirmations, « ces sites appliquent la règle » (vérifiable) et « ce sont les sites où elle s'applique » (presque jamais vérifiée). Le garde remplace `apps/web-v3/__tests__/dev-environment.test.ts`, qui n'assertait que des ABSENCES (plus de `web_v2`, plus de `:3200`) et restait donc vert alors qu'aucune des deux exigences de ce § n'était livrée.
 - **CORS** : en dev les deux zones sont sur des **ports différents** (donc cross-origin) alors qu'en prod elles sont same-origin. Ajouter l'origine `:3300` à `CORS_ORIGINS`/`ALLOWED_ORIGINS` — `docker-compose.dev.yml:229-230`, `Makefile:333-334`, `:1134`, `:1455`.
 
 ### 4.7 CI/CD — la v3 ne se construit pas aujourd'hui
@@ -210,6 +260,16 @@ Mesuré :
 **À livrer en L-0.5** : entrée `paths: 'apps/web-v3/**'`, détecteur `*"apps/web-v3/"*`, entrée de matrice d'image `meeshy-web-v3`, entrée dans la matrice de tests, et **type-check dans le job BLOQUANT `ci.yml:142`, jamais dans le ratchet `ci.yml:144-145`** (gagé sur `apps/web`) — la v3 naît à zéro erreur.
 
 > **Piège de nommage** : le dispatch `docker.yml:133` teste `*"web"*`. Un service nommé `web-v3` déclencherait **aussi** le build du legacy. Nommer la clé de service et le filtre de façon **disjointe**.
+
+> **Correction (2026-08-30) — l'énumération ci-dessus a QUATRE portes d'entrée, pas trois, et il existe une TROISIÈME usine à images.**
+>
+> 1. **`ci.yml` a un quatrième job**, `build` (« like in Dockerfiles »), qui construit `packages/shared`, `services/gateway`, `services/agent` et `apps/web`. Sans entrée v3, `next build` de la zone ne tournait **nulle part avant un merge** : `docker.yml` n'a aucun déclencheur `pull_request`, donc la seule compilation de la zone était celle du `Dockerfile`, **après** le merge. Mesuré : un `app/page.tsx` serveur important `useState` laisse `tsc --noEmit` à rc=0 et la suite jest à 71 verts, pendant que `next build` sort rc=1.
+> 2. **`.github/workflows/release.yml` est une seconde usine à images**, déclenchée sur `paths: 'apps/*/package.json'` — donc réveillée par le manifeste v3 — dont la matrice ne portait que `web`, `gateway`, `translator`. Sans entrée v3 ni fichier `apps/web-v3/VERSION` (`scripts/sync-versions.js`), une release coupait trois images étiquetées `vX.Y.Z` et aucune pour la zone neuve, que `docker.yml` étiquetait `0.0.0`. **Conséquence sur le § 4.9** : « retirer le PathPrefix » aurait été la SEULE marche arrière de la zone, le retour à une image antérieure n'existant pas pour elle. La zone rejoint donc le versionnement du dépôt.
+> 3. **`docker-compose.prod.yml` déclare `frontend-v3` ; aucune voie de déploiement ne le démarrait.** Toutes lancent les services par NOM (`docker compose up -d gateway|translator|frontend`) : `deploy-start-services.sh`, `meeshy-deploy.sh`, `deploy-production-full.sh`, `quick-rollback.sh` — plus `FRONTEND_V3_IMAGE`, que `meeshy-generate-production-variables.sh` n'émettait pas. **Un service déclaré que rien ne démarre est un contrôle inerte** : le routeur `frontend-v3` ne s'enregistre jamais auprès de Traefik et `/__v3/_next/*` retombe sur le plancher attrape-tout — exactement la page blanche que le § 4.4 a été écrit pour empêcher, et l'étape 1 du § 4.9 **paraît franchie sans l'être**.
+>
+> Les trois sont gagées par `scripts/check-docker-pipeline.mjs --self-test`, exécuté dans le job `quality`. Il **dérive** ses listes (zones frontend du compose, services de `sync-versions.js`, scripts qui montent l'application) plutôt que de les énumérer.
+
+> **Correction (2026-08-30) — le glob du tsconfig de la zone se lit dans l'IMAGE, pas dans le dépôt.** `apps/web-v3/tsconfig.json` reprenait d'`apps/web` le motif `include: ["**/*.ts", …]` / `exclude: ["node_modules", ".next"]`. Chez la zone legacy ce motif est inoffensif pour UNE raison : `apps/web/next.config.ts:18` pose `typescript.ignoreBuildErrors: true`. La v3 naît sans ce drapeau — c'est le point de vente de L-0.5. Or le `Dockerfile` copie `packages/shared/` **puis** le contenu d'`apps/web-v3/` dans le MÊME `/app` : le glob, relatif au tsconfig, ratissait alors **375 fichiers** du paquet partagé que le tsconfig propre de `packages/shared` exclut, dont `prisma/migrations/migrate-user-roles.ts` (rôle `'MODO'`, disparu de l'enum) et `seed.ts`. Mesuré dans une reproduction fidèle de la copie : la commande MÊME du Dockerfile (`bun run build`) échouait sur `Type '"MODO"' is not assignable to type …`. `exclude: [… , "packages"]` la fait repasser au vert (`✓ Generating static pages (2/2)`). **Le défaut ne vivait ni dans un fichier de la zone ni dans le tsconfig lu seul, mais dans leur rencontre** — d'où le témoin `apps/web-v3/__tests__/tsconfig-image-scope.test.ts`, qui simule l'aplatissement et dérive les racines étrangères **du Dockerfile**.
 
 ### 4.8 Prod — comment ça arrive sur la machine
 
@@ -229,7 +289,18 @@ Mesuré :
 
 **C'est SEULEMENT à l'étape 7 que le décommissionnement de `apps/web` devient un lot légitime.**
 
+**Prérequis de l'étape 2, sans lequel aucune ligne de ce tableau n'est vraie** : le garde-fou `V3_ZONE_PREFIXES` du § 4.4 bis est **déployé** dans `apps/web/public/sw.js`, et chaque `PathPrefix` ajouté à la colonne 2 est ajouté **au même commit** à cette liste. Sans lui, la colonne « Retour arrière » ment : le Service Worker legacy continue de servir ce qu'il a gardé.
+
 **Point de vigilance** : entre les étapes 2 et 4, `/l` est en v3 et `/chats` encore en legacy — un utilisateur franchit une frontière de zone. Même origine ⇒ cookie et `localStorage` suivent ; mais la navigation client-side de Next **ne traverse pas** une zone. D'où le corollaire 4 du § 3.2 : **tout lien sortant du périmètre v3 est un `<a>` réel**, testable par un lint.
+
+> **« Suivent » n'est pas « sont lus ».** Le cookie et le `localStorage` traversent la frontière, mais seulement si la v3 les LIT. Deux données le sont explicitement, et la liste est ouverte — toute donnée d'expérience persistée par le legacy doit être posée ici ou déclarée abandonnée :
+>
+> | Donnée | Clé legacy | Ce que la v3 en fait |
+> |---|---|---|
+> | Langue d'interface | cookie `meeshy-interface-language` | lue par `lib/a11y/server-locale.ts`, même nom de cookie |
+> | Thème | `gp-theme-mode` (`components/v2/ThemeProvider.tsx`), puis `meeshy-app`.`state.theme` (`stores/app-store.ts`) | lues **en repli** par le `ThemeScript`, jamais écrites ; retrait daté à l'étape 7 |
+>
+> Sans ces lectures, un utilisateur ayant choisi CLAIR dans le legacy sur un OS SOMBRE quitte `/conversations` en clair et ouvre `/l/<token>` en SOMBRE pendant toute la fenêtre étapes 2 → 6 — le cas `explicit-light-on-dark` que le § 9.6 nomme « le seul qui attrape une jumelle ».
 
 ### 4.10 Le bac de répétition
 
@@ -295,7 +366,7 @@ La v3 introduit **trois surfaces qui servent du texte sans lecteur identifiable*
 
 | Surface v3 | Destinataire | Langue servie | Pourquoi |
 |---|---|---|---|
-| `generateMetadata` (`title`, `description`) de `/stories/:id`, `/posts/:id`, `/reels/:id`, `/moods/:id` | crawler (WhatsApp, Facebook, Slack, iMessage) | **la langue d'ORIGINE du contenu** (`Post.originalLanguage`), jamais une traduction | Les plateformes **mettent l'aperçu en cache PAR URL** : une seule langue est servie à tous les destinataires du lien. Aucun prisme utilisateur n'existe pour un crawler ; le seul signal serait `Accept-Language`, **absent** chez WhatsApp et Facebook. Servir la langue de l'auteur est le seul choix stable et honnête |
+| `generateMetadata` (`title`, `description`) de `/stories/:id`, `/post/:id`, `/reels/:id`, `/moods/:id` | crawler (WhatsApp, Facebook, Slack, iMessage) | **la langue d'ORIGINE du contenu** (`Post.originalLanguage`), jamais une traduction | Les plateformes **mettent l'aperçu en cache PAR URL** : une seule langue est servie à tous les destinataires du lien. Aucun prisme utilisateur n'existe pour un crawler ; le seul signal serait `Accept-Language`, **absent** chez WhatsApp et Facebook. Servir la langue de l'auteur est le seul choix stable et honnête |
 | `app/api/og/[type]/[id]/route.tsx` (texte **gravé** dans l'image) | crawler | idem — langue d'origine | Même cache par URL, et l'image n'est pas re-négociable |
 | HTML de repli de `/l/:token` (sans JS) | crawler **et** humain | idem — langue d'origine ; l'humain est immédiatement redirigé (302) | Le repli n'est vu que par une machine ou par un navigateur sans JS |
 | **Variante de partage délibéré** | humain qui choisit | `?lang=xx` en query, honoré par `generateMetadata` **et** par `api/og` | Permet de partager délibérément une traduction — l'URL diffère, donc le cache plateforme aussi |
@@ -343,7 +414,7 @@ La v3 introduit **trois surfaces qui servent du texte sans lecteur identifiable*
 
 ### 6.3 État par état
 
-**A. PREMIÈRE ARRIVÉE** (`/l/:token` → `/chats/:key`, visiteur non joint)
+**A. PREMIÈRE ARRIVÉE** (`/l/:token` → `/chats/:lien`, visiteur non joint)
 *Fait* : aucun jeton, aucun socket, aucun battement. `resolveSharedAccess()` s'exécute en RSC ; l'aperçu du lien est lu **serveur-à-serveur** avec projection explicite des champs (§ 5.1).
 *Affiche* : l'aperçu + le CTA « Rejoindre » ; si `requireAccount`, connexion/inscription avec `?next=` conservé.
 *Appelle au tap* : `POST /anonymous/join/:linkId` → 201 `{ sessionToken, participant, id }`. Puis, **dans cet ordre** : écriture du jeton dans `meeshy.guest.<linkKey>`, `await import('socket.io-client')`, ouverture de la connexion, démarrage du battement (si cet onglet est le porteur élu).
@@ -456,12 +527,18 @@ node apps/web-v3/scripts/baseline.mjs https://meeshy.me/l/<token> /story/<id> /r
 
 **Statut** : `GATE` = plafond ferme, casse la CI. `CIBLE` = valeur à confirmer par la première mesure de L-0.5 ; jusque-là le gate enregistre la valeur mesurée et interdit toute **régression** (ratchet strictement décroissant).
 
+> **Où vit le ratchet.** `apps/web-v3/mesures/derniere.json`, **commité**, écrit par `node apps/web-v3/scripts/check-bundle-budget.mjs --enregistrer` : le **minimum** atteint par clé. Toute remontée d'une valeur enregistrée est un **échec (rc=1)**, même sous le plafond CIBLE — c'est là toute la seconde moitié de la phrase ci-dessus. Sans lui, une seule ligne de `budgets.json` pouvait faire rougir le gate de bundle (`/l/:token`, écran **0 o GATE**, c'est-à-dire la route **sans bundle**, absente du manifeste) : le gate ne pouvait littéralement pas échouer. Le ratchet ne porte que des **octets** et des **comptes** — un cliquet sur un temps (FCP, LCP), grandeur bruitée d'un tirage à l'autre, se ferait désactiver en une semaine.
+
+> **L'espace de noms des routes est tranché ici, une fois.** C'est **`/post/:id`** (pas `/posts/:id`) et **`/chats/:lien`** (pas `/chats/:key`) : ce sont les chemins que la matrice, `ordre.md` **et le legacy en production** servent déjà (`apps/web/app/post/[postId]`, `/chats/<linkKey>`), donc ceux des liens **déjà en circulation** — et la cohabitation du § 4 se fait par `PathPrefix` sur l'**URL servie**. Un `s` de plus casserait tous les liens partagés. Le **nom** d'un paramètre, lui, n'appartient pas à l'espace de noms : `/chats/:lien`, `/chats/:identifiant` et `/chats/:id` sont **quatre vues de la matrice** (`join`, `rights`, `thread`, `rich`) et **une seule URL** — une seule ligne de budget les gouverne, et `budgetDeChemin()` **refuse de trancher** si deux lignes attrapent le même chemin. Témoin : `apps/web-v3/__tests__/couverture-budgets.test.ts` croise `matrice.json` et `budgets.json` dans les deux sens.
+
+**« 3G Fast simulé, p75 » est une CONDITION DE MESURE, pas une figure de style.** Les plafonds de temps ci-dessous ne se confrontent qu'à une mesure **bridée** (`Network.emulateNetworkConditions`, profil `3g-fast` déclaré une seule fois dans `scripts/lib/poids-reseau.mjs`) et sur **N tirages rendus au rang p75** : `node apps/web-v3/scripts/mesure-reseau.mjs --reseau 3g-fast --tirages 5` (valeurs par défaut). Une mesure faite **sans bridage** sort ces plafonds en **`sans-conditions`**, jamais en `vert` — comparer un FCP de 44 ms sur loopback à un plafond de 600 ms écrit pour la 3G compare deux grandeurs différentes. Le profil et le nombre de tirages voyagent **avec** le chiffre (`rapport.conditions`, `baseline.json.instrument.conditions`) : une mesure qui ne dit pas à quelle balance elle a été pesée ne se compare à rien.
+
 | Écran | JS gzip | Requêtes avant 1ᵉʳ pixel utile | Premier pixel utile (3G Fast simulé, p75) | Notes |
 |---|---|---|---|---|
 | `/l/:token` — redirection | **0 Ko — GATE** (aucun `<script>` **sauf** le ThemeScript inline, ≤ 400 o) | **1 — GATE** | ≤ 600 ms (TTFB→302) — CIBLE | Route Handler ; le beacon part **après**. **HTML ≤ 4 Ko gzip, hors sprite** (la redirection ne rend aucune icône) |
 | `/l/:token/expired` | ≤ 10 Ko — CIBLE | 2 (HTML + CSS) — GATE | ≤ 900 ms — CIBLE | RSC pur + ThemeScript |
-| **Lecture partagée** (`/stories/:id`, `/posts/:id`, `/reels/:id`, `/moods/:id`) | **≤ 95 Ko — CIBLE** | **≤ 3 (HTML + CSS + sprite externe) — GATE** | LCP ≤ 2,0 s — CIBLE | **Interdits sur cette route** (GATE ESLint + gate de bundle) : `socket.io-client`, `framer-motion`, `lucide-react`, TanStack Query. **GATE neuf : 0 connexion serveur tenue après le premier pixel** (assertion CDP : aucune requête `pending`) |
-| **Aperçu de lien** (`/chats/:key`, non rejoint) | ≤ 105 Ko — CIBLE | ≤ 4 — GATE | ≤ 2,2 s — CIBLE | `resolveSharedAccess()` **serveur** ; l'historique servi (si `allowViewHistory`) est dans le HTML |
+| **Lecture partagée** (`/stories/:id`, `/post/:id`, `/reels/:id`, `/moods/:id`) | **≤ 95 Ko — CIBLE** | **≤ 3 (HTML + CSS + sprite externe) — GATE** | LCP ≤ 2,0 s — CIBLE | **Interdits sur cette route** (GATE ESLint + gate de bundle) : `socket.io-client`, `framer-motion`, `lucide-react`, TanStack Query. **GATE neuf : 0 connexion serveur tenue après le premier pixel** (assertion CDP : aucune requête `pending`) |
+| **Aperçu de lien** (`/chats/:lien`, non rejoint) | ≤ 105 Ko — CIBLE | ≤ 4 — GATE | ≤ 2,2 s — CIBLE | `resolveSharedAccess()` **serveur** ; l'historique servi (si `allowViewHistory`) est dans le HTML |
 | **Conversation anonyme** (après « Rejoindre ») | ≤ 165 Ko cumulé — CIBLE | ≤ 6 — GATE | ≤ 2,8 s après le tap — CIBLE | Dont **12 796 o mesurés** de `socket.io-client` chargés **au tap**, jamais avant. Prefetch autorisé au `pointerdown` du CTA |
 | **Accueil connecté / chats** | **socle `(connected)` ≤ 150 Ko** + **code d'écran ≤ 80 Ko** — CIBLES, **rendues séparément dans le rapport** | ≤ 8 — GATE | ≤ 3,0 s — CIBLE | Deux termes, pour qu'un dépassement **désigne un coupable**. `CallManager` **n'est PAS dans le layout** (voir ci-dessous) |
 | **Composer / réglages** | socle ≤ 150 Ko + écran ≤ 130 Ko — CIBLES | ≤ 10 — GATE | ≤ 3,5 s — CIBLE | Plafond haut assumé ; c'est du confort |
@@ -480,6 +557,8 @@ Le rapport de `check-bundle-budget.mjs` rend **trois lignes par groupe**, pas un
 C'est ce rapport que la passe Opus lit pour répondre à sa question (d) — sinon la question ne peut recevoir qu'une réponse d'opinion.
 
 ### 8.5 Gates transverses
+
+> **Qui porte chacun.** Quatre vivent dans `budgets.json` (bloc `transverses`, par **groupe** de routes) et sont confrontés par `scripts/lib/poids-reseau.mjs` : **CLS**, **CSS**, **aucune police web sur `(public)`**, et le **« GATE neuf »** du § 8.3 — *0 connexion serveur tenue après le premier pixel*, mesuré comme *aucune requête encore pendante* (`requetes_en_cours`). Le **HTML ≤ 4 Ko** de `/l/:token` y est aussi, en GATE, sur sa ligne de route. Les trois autres vivent **ailleurs** et n'ont **aucun plafond** dans `budgets.json` : `axe` (`e2e/visual/v3-a11y.spec.ts`), l'onglet `hidden` et le battement unique (`e2e/visual/v3-lifecycle.spec.ts`, § 6.5), le **sprite** (existence, ≤ 12 Ko, 1 requête, cache immuable, symboles complets — gate du lot **L0**, `packages/icons`). `budgets.json` le dit dans son champ `_transverses_ailleurs` : un fichier qui **annonce** une couverture qu'il n'a pas fabrique exactement l'illusion qu'un chiffre inventé.
 
 - **CLS ≤ 0,05** sur toute route `(public)` ⇒ `width`/`height` obligatoires sur chaque `next/image`. *(État de `apps/web`, mesuré : **8 fichiers** importent `next/image` — 9 si l'on compte la mention dans `middleware.ts` — sur ~1240 fichiers `.ts/.tsx` hors tests.)*
 - **Aucune police web** sur `(public)` (pile système). Inter autorisé sur `(connected)` via `next/font`, non bloquant.
@@ -533,6 +612,8 @@ node docs/product/MeeshyWebV3Design/capture-cibles.js <dir>    # sortie ailleurs
 | Accessibilité | `apps/web-v3/e2e/visual/v3-a11y.spec.ts` | `@axe-core/playwright` |
 | Poids réseau | `apps/web-v3/e2e/visual/v3-network-vitals.spec.ts` | CDP, `encodedDataLength`, FCP/LCP/CLS |
 | Budget | `apps/web-v3/scripts/check-bundle-budget.mjs` + `budgets.json` | lit `apps/web-v3/.next/app-build-manifest.json` |
+| Ratchet | `apps/web-v3/mesures/derniere.json` | **commité** : le minimum atteint par clé. Toute remontée est un échec, même sous le plafond CIBLE (§ 8.3) |
+| Croisement matrice ↔ budgets | `apps/web-v3/__tests__/couverture-budgets.test.ts` | **toute route de la matrice a un plafond**, et **toute ligne de plafond sert une route** — le même croisement que ci-dessus, appliqué à la table des budgets. Il attrape ce qui avait laissé `/post/:id` sans plafond |
 | Ligne de base | `apps/web-v3/e2e/visual/baseline.json` | mesurée **sur la prod actuelle**, commitée, datée |
 | Jetons & icônes | `packages/design-tokens/`, `packages/icons/` + `scripts/build-sprite.ts` | mesuré : `packages/` ne contient aujourd'hui que `MeeshySDK` et `shared` |
 
@@ -555,7 +636,7 @@ Déjà décrit en 9.1. Les 37 PNG sont **committés et régénérables d'une com
 ```bash
 cd apps/web-v3
 bun run lint                                   # eslint-plugin-jsx-a11y strict + les lints de zone (§3)
-bun run test -- --testPathPattern='(public)'   # jest + jest-axe sur chaque composant du rôle premier
+bun run test -- --testPathPatterns='(public)'   # jest + jest-axe sur chaque composant du rôle premier
 bunx playwright test e2e/visual/v3-a11y.spec.ts
 ```
 
@@ -596,12 +677,24 @@ Capture : `viewport 390×844`, `deviceScaleFactor: 3` — **le même cadre que `
 ### 9.7 Gate D — budget et cycle de vie
 
 ```bash
-cd apps/web-v3 && bun run build && node scripts/check-bundle-budget.mjs
-bunx playwright test e2e/visual/v3-network-vitals.spec.ts
+cd apps/web-v3 && bun run build && node scripts/check-bundle-budget.mjs   # plafonds + RATCHET (§ 8.3)
+node scripts/mesure-reseau.mjs --base <cible> --reseau 3g-fast --tirages 5  # bridé, p75, couverture
 bunx playwright test e2e/visual/v3-lifecycle.spec.ts
 ```
 
 `v3-lifecycle.spec.ts` **teste un cycle de vie, pas des pixels** (§ 6.5) : deux `page` dans un **même `context`** (cas E), `Network.emulateNetworkConditions` via CDP (cas D), `page.goBack()` pour le bfcache (cas C), mutation directe de `isActive` en base (cas F), et l'anti-régression **« `visibilitychange:hidden` seul ⇒ zéro requête mutante »**.
+
+### 9.8 Gate E — la frontière de zone (bloquant)
+
+Trois cas que ni le rendu, ni les pixels, ni le budget n'attrapent : ils portent sur ce qui SURVIT au passage d'une zone à l'autre. Les deux premiers vivent dans `apps/web` — c'est là qu'est l'intercepteur.
+
+| Cas | Mise en place | Ce qui doit être vrai |
+|---|---|---|
+| **SW legacy actif + `PathPrefix` ajouté** | ouvrir une route sur le legacy (le SW se cache la réponse), ajouter le `PathPrefix`, rouvrir la même URL | **la v3 est jointe** — la réponse legacy en cache n'est jamais resservie |
+| **SW legacy actif + `PathPrefix` retiré** | l'inverse, sans rebuild d'image | **le legacy reprend** — la réponse v3 en cache n'est jamais resservie |
+| **Thème et langue traversent la frontière** | choisir CLAIR + `es` sur le legacy (OS en `dark`), ouvrir une route v3 | classe `light`, `<html lang="es">` — jamais l'OS, jamais `fr` |
+
+Témoins unitaires qui les gagent aujourd'hui, avant que la route existe (issue #4416) : `apps/web/__tests__/public/sw.v3-zone.test.ts` (les deux premiers, sur le fichier SOURCE de `public/sw.js`) et `apps/web-v3/__tests__/{theme-script,document-language}.test.tsx` (le troisième, sur le HTML SERVI).
 
 ---
 

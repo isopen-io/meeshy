@@ -277,6 +277,44 @@ updates:
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
+  # Harnais de tests racine (issue #4397).
+  #
+  # POURQUOI CETTE ENTRÉE EXISTE : `tests/package.json` déclare
+  # `@playwright/test`, comme la racine et comme `apps/web`. Il n'est pas un
+  # workspace (`workspaces` ne liste que `apps/*`, `services/*`, `packages/*`),
+  # donc AUCUN des quatre écosystèmes npm ci-dessus ne le visitait — et
+  # `scripts/check-lockfile-manifests.mjs` exige de `@playwright/test` une
+  # résolution UNIQUE satisfaisant les TROIS déclarations. Un bump qui n'aurait
+  # visité que deux des trois manifestes laissait donc `tests/` en arrière, et
+  # la garde rouge sans canal pour la réparer autrement qu'à la main.
+  - package-ecosystem: "npm"
+    directory: "/tests"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    labels:
+      - "dependencies"
+      - "tests"
+    commit-message:
+      prefix: "chore(deps-tests)"
+      include: "scope"
+    reviewers:
+      - "isopen-io/meeshy-maintainers"
+    groups:
+      playwright:
+        patterns:
+          - "@playwright/*"
+          - "playwright*"
+    allow:
+      - dependency-type: "direct"
+    versioning-strategy: increase
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
   # ===========================================================================
   # GITHUB ACTIONS - Workflows CI/CD
   # ===========================================================================
