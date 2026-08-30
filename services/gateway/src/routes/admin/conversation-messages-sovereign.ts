@@ -49,49 +49,9 @@ import { requireSovereign, withAudit } from '../../middleware/authorize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
-import { maskedAttachment } from '../../services/notifications/NotificationService';
+import { messageContentIsProtected } from './media-protection';
 
 const REASON_MIN_LENGTH = 10;
-
-/**
- * Les six colonnes de protection lues sur CHAQUE message — le plancher
- * structurel que `messageContentIsProtected` exige de son appelant. Le reste
- * de la ligne (Prisma-inféré depuis le `select` littéral plus bas) n'a pas
- * besoin d'un type nommé : laisser l'inférence porter le contrat évite un
- * second endroit où la forme peut diverger de la requête qui la produit.
- */
-interface MessageProtectionFields {
-  readonly isViewOnce: boolean;
-  readonly isBlurred: boolean;
-  readonly effectFlags: number;
-  readonly expiresAt: Date | null;
-  readonly isEncrypted: boolean;
-  readonly encryptionMode: string | null;
-}
-
-/**
- * `true` si le CONTENU d'un message ne doit pas voyager en clair : vue
- * unique / flou / effet masquant (`maskedAttachment`, colonnes homonymes sur
- * `Message`), expiration éphémère déjà consommée, ou message chiffré (le
- * serveur ne détient de toute façon jamais son texte en clair — voir
- * `MessageProcessor.getEncryptionContext`, qui écrit `content: ''` pour tout
- * message chiffré : cette garde est un SIGNAL explicite pour l'admin, pas un
- * retrait de fuite qui n'existait pas).
- *
- * EXPORTÉ depuis #4384 : `GET /admin/messages` (`routes/admin/content.ts`) pose
- * exactement la même question sur exactement la même colonne, et la seule chose
- * qu'une seconde écriture puisse produire est une divergence — c'est la raison
- * pour laquelle `mediaAttachmentIsProtected` vit déjà dans un module partagé
- * (`routes/admin/media-protection.ts`). L'appelant reste seul juge de la FORME
- * du masquage ; ce prédicat ne rend que le verdict.
- */
-export function messageContentIsProtected(message: MessageProtectionFields): boolean {
-  if (maskedAttachment(message)) return true;
-  if (message.expiresAt && message.expiresAt.getTime() <= Date.now()) return true;
-  if (message.isEncrypted === true) return true;
-  if (message.encryptionMode) return true;
-  return false;
-}
 
 export function registerConversationMessagesSovereignRoute(fastify: FastifyInstance): void {
   fastify.get<{

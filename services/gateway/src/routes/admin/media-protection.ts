@@ -88,3 +88,54 @@ export function mediaAttachmentIsProtected(
   }
   return maskedAttachment(attachment);
 }
+
+/**
+ * Fragment de `select` Prisma pour la question TEXTE, qui exige DEUX colonnes
+ * de plus que la question MÉDIA : `isEncrypted` et `encryptionMode`. Un
+ * message chiffré n'a pas de pendant côté pièce jointe dans
+ * `mediaAttachmentIsProtected`, et sans ces deux colonnes chargées
+ * `messageContentIsProtected` ne peut rien trancher — « un champ de
+ * protection présent au modèle et absent de toute requête » ne garde rien
+ * (#4384, puis #4388 qui le remonte ici).
+ */
+export const messageContentProtectionSelect = {
+  ...messageProtectionSelect,
+  isEncrypted: true,
+  encryptionMode: true,
+} as const;
+
+export interface MessageContentProtectionContext extends MessageProtectionContext {
+  readonly isEncrypted?: boolean | null;
+  readonly encryptionMode?: string | null;
+}
+
+/**
+ * `true` si le CONTENU d'un message ne doit pas voyager en clair : vue
+ * unique / flou / effet masquant (`maskedAttachment`, colonnes homonymes sur
+ * `Message`), expiration éphémère déjà consommée, ou message chiffré (le
+ * serveur ne détient de toute façon jamais son texte en clair — voir
+ * `MessageProcessor.getEncryptionContext`, qui écrit `content: ''` pour tout
+ * message chiffré : cette garde est un SIGNAL explicite pour l'admin, pas un
+ * retrait de fuite qui n'existait pas).
+ *
+ * ## Pourquoi il vit ICI et non dans un fichier de route (#4388)
+ *
+ * Il a d'abord été écrit dans `routes/admin/conversation-messages-sovereign.ts`,
+ * puis exporté par #4384 quand `GET /admin/messages` a posé la même question
+ * sur la même colonne — une route importait alors d'une autre route. Rien n'en
+ * cassait ; mais le prochain à chercher « ce texte peut-il voyager ? » l'aurait
+ * cherché dans CE module, où vit déjà son jumeau MÉDIA, ne l'y aurait pas
+ * trouvé, et l'aurait RÉÉCRIT — la classe de défaut exacte que ce fichier a
+ * été créé pour fermer, un cran plus haut. Les deux moitiés de la question
+ * « ce contenu a-t-il le droit de voyager ? » ont désormais le même toit.
+ *
+ * L'appelant reste seul juge de la FORME du masquage ; ce prédicat ne rend que
+ * le verdict.
+ */
+export function messageContentIsProtected(message: MessageContentProtectionContext): boolean {
+  if (maskedAttachment(message)) return true;
+  if (message.expiresAt && new Date(message.expiresAt).getTime() <= Date.now()) return true;
+  if (message.isEncrypted === true) return true;
+  if (message.encryptionMode) return true;
+  return false;
+}

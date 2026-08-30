@@ -23,7 +23,9 @@ import { requirePermission, requireSovereign, withAudit } from '../../middleware
 import {
   attachmentProtectionSelect,
   messageProtectionSelect,
+  messageContentProtectionSelect,
   mediaAttachmentIsProtected,
+  messageContentIsProtected,
   type MessageProtectionContext
 } from './media-protection';
 // #4384 — le prédicat de CONTENU, réutilisé et non recopié. Il vit chez la
@@ -33,7 +35,6 @@ import {
 // même colonne du même modèle. Une seconde écriture ne pourrait que diverger,
 // et elle divergerait en silence : c'est exactement la classe de défaut que
 // `media-protection.ts` ferme pour les MÉDIAS.
-import { messageContentIsProtected } from './conversation-messages-sovereign';
 
 /**
  * Plafond de SCAN de `GET /admin/translations` (#4165).
@@ -268,17 +269,12 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             originalLanguage: true,
             isEdited: true,
             createdAt: true,
-            ...messageProtectionSelect,
-            // #4384 — les DEUX dimensions qu'un TEXTE exige et qu'un média
-            // n'a pas. `messageProtectionSelect` est la forme du prédicat
-            // MÉDIA : elle s'arrête aux cinq colonnes que
-            // `mediaAttachmentIsProtected` lit. Un message CHIFFRÉ n'a pas de
-            // pendant côté pièce jointe dans ce prédicat-là, et sans ces deux
-            // colonnes chargées `messageContentIsProtected` ne peut rien
-            // trancher — « un champ de protection présent au modèle et absent
-            // de toute requête » ne garde rien.
-            isEncrypted: true,
-            encryptionMode: true,
+            // #4388 — la forme du prédicat TEXTE, qui ÉTEND celle du prédicat
+            // MÉDIA de `isEncrypted` / `encryptionMode`. Ces deux colonnes
+            // étaient posées en clair ici (#4384) : les tenir avec le prédicat
+            // qui les lit est ce qui empêche « un champ de protection présent
+            // au modèle et absent de toute requête », qui ne garde rien.
+            ...messageContentProtectionSelect,
             sender: {
               select: {
                 id: true,
