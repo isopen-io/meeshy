@@ -373,14 +373,23 @@ describe('RouteUsageCounter — la charge porte ses angles morts', () => {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('ROUTES_SURVEILLEES — les adresses depreciees, instrumentees en priorite', () => {
-  it('couvre les onze issues qui attendent un zero', () => {
-    // Les quatre dernieres sont arrivees avec #4470 : ce sont les issues des
-    // alias servis HORS `/api/v1/`, dont le zero de ce compteur est le seul
-    // argument de retrait — #4277 (alias racine de l'analyse vocale), #4317
-    // (delete-for-me de conversation), #4324 (lecture d'octets legacy), #4376
-    // (gestes Socket.IO non versionnes).
+  it('couvre les vingt-trois issues qui attendent un zero', () => {
+    // Quatre sont arrivees avec #4470 : les issues des alias servis HORS
+    // `/api/v1/`, dont le zero de ce compteur est le seul argument de retrait
+    // — #4277 (alias racine de l'analyse vocale), #4317 (delete-for-me de
+    // conversation), #4324 (lecture d'octets legacy), #4376 (gestes Socket.IO
+    // non versionnes).
+    //
+    // Douze sont arrivees avec #4488, qui a pris le probleme par l'autre bout :
+    // trente-sept adresses SOUS le prefixe posaient `depreciee(...)` sans
+    // figurer ici. Cette liste-ci reste un INVENTAIRE, donc une liste en
+    // retard par construction — ce qui garantit la couverture est le balayage
+    // `__tests__/security/deprecation-coverage-sweep.ts`, qui part du CODE.
     const issues = new Set(ROUTES_SURVEILLEES.map((r) => r.issue));
-    expect([...issues].sort()).toEqual([4154, 4155, 4161, 4178, 4181, 4182, 4184, 4277, 4317, 4324, 4376]);
+    expect([...issues].sort()).toEqual([
+      4149, 4154, 4155, 4158, 4161, 4164, 4167, 4169, 4170, 4178, 4181, 4182,
+      4184, 4277, 4283, 4317, 4324, 4346, 4349, 4350, 4351, 4353, 4376,
+    ]);
   });
 
   it('porte les vingt-huit routes par categorie de preferences (#4181)', () => {

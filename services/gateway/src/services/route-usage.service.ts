@@ -600,6 +600,78 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   { method: 'POST', route: '/api/v1/admin/users/:userId/voice-consent', issue: 4154 },
   { method: 'POST', route: '/api/v1/admin/users/:userId/reset-password', issue: 4154 },
 
+  // ── Les trente-sept adresses DEPRECIEES sous `/api/v1/` (#4488) ───────────
+  //
+  // #4470 avait enumere les adresses hors prefixe ; la surface D'A COTE — meme
+  // dispositif, meme doctrine, sous le prefixe — etait restee dehors. Trente-
+  // sept adresses posaient `depreciee(...)` sans qu'aucun seau ne les
+  // materialise : leur `Deprecation` partait, leur successeur partait, et
+  // personne ne pouvait savoir si on les appelait encore. Une annonce dont
+  // aucun compteur ne peut tirer la consequence n'annonce rien.
+  //
+  // Elles ne se trouvent PAS en relisant cette liste — qui est juste pour ce
+  // qu'elle contient — mais en partant des sites de depreciation du code et en
+  // exigeant la reciproque. C'est ce que fait le balayage
+  // `__tests__/security/deprecation-coverage-sweep.ts`, seul temoin du depot
+  // dont la fleche va du CODE vers cette liste.
+
+  // #4149 — les neuf listes de posts convergent sur `GET /social/posts?scope=`
+  { method: 'GET', route: '/api/v1/posts/feed', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/feed/stories', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/stories/mine', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/feed/reels', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/feed/statuses', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/feed/statuses/discover', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/user/:userId', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/community/:communityId', issue: 4149 },
+  { method: 'GET', route: '/api/v1/posts/bookmarks', issue: 4149 },
+
+  // #4346 — les trois listes restantes rejoignent la meme union
+  { method: 'GET', route: '/api/v1/posts/hashtag/:tag', issue: 4346 },
+  { method: 'GET', route: '/api/v1/posts/nearby', issue: 4346 },
+  { method: 'GET', route: '/api/v1/sounds/:id/posts', issue: 4346 },
+
+  // #4283 — les cinq portes de demande d'ami cessent de diverger de `/directory`
+  { method: 'POST', route: '/api/v1/friend-requests', issue: 4283 },
+  { method: 'GET', route: '/api/v1/friend-requests/received', issue: 4283 },
+  { method: 'GET', route: '/api/v1/friend-requests/sent', issue: 4283 },
+  { method: 'PATCH', route: '/api/v1/friend-requests/:id', issue: 4283 },
+  { method: 'DELETE', route: '/api/v1/friend-requests/:id', issue: 4283 },
+
+  // #4167 — les trois portes anonymes deleguent a la loi d'admission unique
+  { method: 'POST', route: '/api/v1/anonymous/join/:linkId', issue: 4167 },
+  { method: 'POST', route: '/api/v1/anonymous/refresh', issue: 4167 },
+  { method: 'POST', route: '/api/v1/anonymous/leave', issue: 4167 },
+
+  // #4170 — `GET /links` absorbe les trois lectures et les deux ecritures
+  { method: 'GET', route: '/api/v1/links/my-links', issue: 4170 },
+  { method: 'GET', route: '/api/v1/links/stats', issue: 4170 },
+  { method: 'PATCH', route: '/api/v1/links/:linkId/toggle', issue: 4170 },
+  { method: 'PATCH', route: '/api/v1/links/:linkId/extend', issue: 4170 },
+
+  // #4164 — `/directory/blocks` devient l'ENSEMBLE des blocages
+  { method: 'POST', route: '/api/v1/users/:userId/block', issue: 4164 },
+  { method: 'DELETE', route: '/api/v1/users/:userId/block', issue: 4164 },
+  { method: 'GET', route: '/api/v1/users/me/blocked-users', issue: 4164 },
+
+  // Le partage de conversation, trois adresses et trois lots distincts
+  { method: 'POST', route: '/api/v1/conversations/:id/new-link', issue: 4169 },
+  { method: 'GET', route: '/api/v1/conversations/:conversationId/links', issue: 4351 },
+  { method: 'POST', route: '/api/v1/conversations/join/:linkId', issue: 4353 },
+
+  // #4349 — les cinq adaptateurs de la collection unique d'accuses de lecture
+  { method: 'GET', route: '/api/v1/conversations/:conversationId/read-statuses', issue: 4349 },
+  { method: 'POST', route: '/api/v1/conversations/:conversationId/mark-as-read', issue: 4349 },
+  { method: 'POST', route: '/api/v1/conversations/:conversationId/mark-as-received', issue: 4349 },
+  { method: 'POST', route: '/api/v1/conversations/:conversationId/messages/:messageId/delivery-receipt', issue: 4349 },
+  { method: 'POST', route: '/api/v1/conversations/:id/mark-read', issue: 4349 },
+
+  // #4350 — lire ses propres permissions n'est pas un geste d'administration
+  { method: 'GET', route: '/api/v1/admin/me/permissions', issue: 4350 },
+
+  // #4158 — la disponibilite d'un identifiant passe par `/directory`
+  { method: 'GET', route: '/api/v1/auth/check-availability', issue: 4158 },
+
   // ── Les neuf alias DEPRECIES hors `/api/v1/` (#4470) ──────────────────────
   //
   // Ils sont la raison d'etre de `horsPrefixe`. Chacun est servi UNIQUEMENT
