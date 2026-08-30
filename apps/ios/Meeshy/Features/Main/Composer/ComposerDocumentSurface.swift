@@ -354,7 +354,33 @@ struct ComposerDocumentSurface: View {
     }
 
     /// L'écran document HISTORIQUE — texte long seul, sans scène.
+    ///
+    /// **L'avatar dit QUI publie (#4071).** La maquette `1a` le pose à gauche du
+    /// champ, et il n'est pas décoratif : le composer s'ouvre depuis le fil, où
+    /// plusieurs comptes peuvent se succéder, et la seule chose qui distingue
+    /// « je publie » de « je réponds » est le visage à côté du curseur. Il est
+    /// posé par la loi 8 sans y contrevenir — il ne dépend d'aucun contenu,
+    /// c'est une propriété de la SESSION, présente dès l'ouverture.
     private var textOnlyContent: some View {
+        HStack(alignment: .top, spacing: 12) {
+            MeeshyAvatar(
+                name: AuthManager.shared.currentUser?.displayName
+                    ?? AuthManager.shared.currentUser?.username ?? "M",
+                context: .feedComposer,
+                avatarURL: AuthManager.shared.currentUser?.avatar,
+                // Loi 6 — une vignette montre la DONNÉE. Le ThumbHash évite le
+                // rond vide pendant que l'image arrive : le substitut porte
+                // déjà les couleurs du vrai avatar.
+                thumbHash: AuthManager.shared.currentUser?.avatarThumbHash
+            )
+            .padding(.leading, 16)
+            .padding(.top, 10)
+            .accessibilityHidden(true)
+            textOnlyField
+        }
+    }
+
+    private var textOnlyField: some View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text(ComposerDocumentCopy.placeholder)
