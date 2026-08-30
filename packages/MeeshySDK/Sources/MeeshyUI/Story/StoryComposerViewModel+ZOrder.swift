@@ -77,7 +77,15 @@ extension StoryComposerViewModel {
         persistZIndex(0, for: id)
     }
 
-    func bringForward(id: String) {
+    /// **`public` parce que l'empilement se commande depuis le MEUBLE, pas
+    /// seulement depuis l'atelier.** Le rail des contrôleurs du composer unifié
+    /// ne servait que `duplicate` et `delete` — les deux seules primitives que
+    /// le SDK exposait — et son commentaire attribuait l'absence des deux
+    /// autres au fait que « l'empilement ne vit que sur la `StoryCanvasUIView` ».
+    /// C'était faux : il vit ICI, sur le modèle, depuis toujours ; seul le
+    /// niveau d'accès le retenait. Un contrôle absent pour cause de `internal`
+    /// ressemble, à la lecture, à un contrôle absent pour cause de règle.
+    public func bringForward(id: String) {
         let all = allElementsSortedByZ()
         guard let index = all.firstIndex(where: { $0.id == id }) else { return }
         guard index < all.count - 1 else { return }
@@ -95,7 +103,7 @@ extension StoryComposerViewModel {
         zIndexMap[next.id] = newNextZ
     }
 
-    func sendBackward(id: String) {
+    public func sendBackward(id: String) {
         let all = allElementsSortedByZ()
         guard let index = all.firstIndex(where: { $0.id == id }) else { return }
         let currentZ = zIndex(for: id)

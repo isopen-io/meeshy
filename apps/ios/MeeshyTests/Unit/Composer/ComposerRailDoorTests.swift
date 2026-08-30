@@ -216,3 +216,252 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
                        "Deux portes qui s'annoncent pareil sont indiscernables à VoiceOver.")
     }
 }
+
+/// **Ce que le MEUBLE sert réellement sur la scène** (#4092 · #4074).
+///
+/// `ComposerRailDoor.offered` et `ComposerTrailingRailPolicy.actions` sont
+/// justes et testées depuis #4062/#4063 — elles filtrent ce qu'on leur donne.
+/// Ce qu'aucune suite n'interrogeait, c'est **ce qu'on leur donne** : les deux
+/// `Set` vécurent en littéraux dans le corps de `sceneSurface`, où rien ne peut
+/// les lire. Résultat mesuré le 2026-08-30 : la porte `sticker` et l'empilement
+/// étaient absents de l'écran, chacun pour un motif écrit en commentaire — et
+/// les deux motifs étaient faux (la primitive existait, seul son `internal` la
+/// retenait).
+///
+/// D'où la forme de cette suite : elle interroge la CAPACITÉ, pas le filtre.
+final class ComposerSceneCapabilitiesTests: XCTestCase {
+
+    /// **Le fusible.** Deux ensembles vides passeraient toutes les gardes
+    /// positives qui suivent sans qu'aucune ne rougisse.
+    func test_lesDeuxEnsembles_sontNonVides() {
+        XCTAssertGreaterThanOrEqual(ComposerSceneCapabilities.doors.count, 5)
+        XCTAssertGreaterThanOrEqual(ComposerSceneCapabilities.controllers.count, 3)
+    }
+
+    /// **La porte sticker est SERVIE.** Elle était déclarée au rail canonique et
+    /// absente de l'ensemble servi : peinte nulle part, et son `case` du
+    /// `switch` documenté « injoignable ». Le chemin existait pourtant en
+    /// entier — `StickerPickerView` (publique) → `addSticker(emoji:)`.
+    func test_laPorteSticker_estServie() {
+        XCTAssertTrue(ComposerSceneCapabilities.doors.contains(.sticker),
+                      "Sans elle, poser un sticker sur la scène est impossible depuis le composer unifié.")
+    }
+
+    /// Le rail rend bien la porte une fois le format appliqué — la capacité ne
+    /// vaut que si elle traverse la règle qui la consomme.
+    func test_laPorteSticker_atteintLeRail_surUnFormatAScene() {
+        let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                              format: .story,
+                                              allowsCapture: true)
+        XCTAssertTrue(portes.contains(.sticker))
+    }
+
+    /// **Et elle disparaît d'un `status`**, qui n'a pas de scène : un sticker
+    /// est un objet, et un objet sans scène n'a nulle part où se poser.
+    func test_laPorteSticker_disparaitDunStatus() {
+        let portes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                              format: .status,
+                                              allowsCapture: true)
+        XCTAssertFalse(portes.contains(.sticker))
+    }
+
+    /// **L'empilement est SERVI.** Son absence était attribuée à la
+    /// `StoryCanvasUIView` ; il vit en réalité sur le MODÈLE, et y persiste son
+    /// `zIndex` dans la slide — donc jusqu'au reader et à la publication.
+    func test_lEmpilement_estServi() {
+        XCTAssertTrue(ComposerSceneCapabilities.controllers.contains(.bringForward))
+        XCTAssertTrue(ComposerSceneCapabilities.controllers.contains(.sendBackward))
+    }
+
+    /// La bande de la scène passe par la même capacité — sans quoi le littéral
+    /// qu'elle portait aurait survécu à la garde négative de la suite suivante.
+    func test_seuleLaPalette_estUneBandeServie() {
+        XCTAssertEqual(ComposerSceneCapabilities.bands, [.palette],
+                       "Une bande servie sans contenu occuperait le bas de l'écran pour rien.")
+    }
+
+    /// **Loi 4 — ce qui n'a pas de chemin reste ABSENT.** Cette garde est le
+    /// contrepoids des deux précédentes : elle rougit si quelqu'un « complète »
+    /// l'ensemble par ressemblance de nom, avant que l'inspecteur (#4073) et la
+    /// sortie de scène (#4038) n'aient leur destination.
+    func test_edition_etSortieDeScene_restentAbsentes() {
+        XCTAssertFalse(ComposerSceneCapabilities.controllers.contains(.edit),
+                       "L'inspecteur par kind n'est pas monté : servir `edit` ouvrirait un éditeur inexistant.")
+        XCTAssertFalse(ComposerSceneCapabilities.controllers.contains(.leaveScene),
+                       "Rien ne dit encore ce que l'objet DEVIENT hors de la scène (#4038).")
+    }
+}
+
+/// **Le meuble LIT la règle, et route ce qu'elle sert** (#4092 · #4074).
+///
+/// La suite au-dessus prouve la capacité ; celle-ci prouve qu'elle atteint
+/// l'écran. Sans elle, les deux ensembles pourraient être justes pendant que la
+/// surface continue de servir ses anciens littéraux — la forme exacte du défaut
+/// que #4120 a déjà payée une fois.
+final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// **Le fusible.** Un chemin cassé rendrait toutes les gardes vertes.
+    func test_laSourceDuMeuble_estLisibleEtNonVide() throws {
+        let source = try hostSource()
+        XCTAssertGreaterThan(source.count, 5_000)
+        XCTAssertTrue(source.contains("ComposerSceneCapabilities"))
+    }
+
+    /// Les deux ensembles servis viennent de la RÈGLE.
+    func test_lesDeuxRails_lisentLaRegle() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("served:ComposerSceneCapabilities.doors"),
+                      "Le rail leading doit lire la capacité, pas un littéral.")
+        XCTAssertTrue(source.contains("served:ComposerSceneCapabilities.controllers"),
+                      "Le rail trailing doit lire la capacité, pas un littéral.")
+    }
+
+    /// **La garde NÉGATIVE** — et c'est elle qui tient dans le temps. Un `Set`
+    /// littéral réécrit sur place laisserait les tests de capacité verts tout en
+    /// servant autre chose à l'écran.
+    func test_aucunEnsembleServi_neRedeviensUnLitteral() throws {
+        let source = compact(try hostSource())
+        XCTAssertFalse(source.contains("served:[."),
+                       "Un ensemble servi écrit en littéral échappe à toute interrogation.")
+    }
+
+    /// La porte sticker OUVRE son portail — et le portail est celui du meuble,
+    /// jamais d'une surface (#4120).
+    func test_laPorteSticker_ouvreSonPortail() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.sticker:HapticFeedback.light()showsStickerPicker=true"),
+                      "La porte doit poser l'état de présentation du meuble.")
+        XCTAssertTrue(source.contains(".sheet(isPresented:$showsStickerPicker){stickerPickerSheet}"),
+                      "Sans lecteur au-dessus de l'aiguillage, le booléen part et personne ne le lit.")
+    }
+
+    /// La feuille POSE un objet — elle n'écrit pas dans le texte, ce que fait
+    /// sa voisine `emojiPickerSheet`. Confondre les deux est ce qui a tenu la
+    /// porte fermée.
+    func test_laFeuilleSticker_poseUnObjetParLeViewModel() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("viewModel.addSticker(emoji:emoji)"))
+        XCTAssertTrue(source.contains("viewModel.addSticker(image:item.thumbnail,"))
+    }
+
+    /// L'empilement route vers le MODÈLE, jamais vers la vue UIKit.
+    func test_lEmpilement_routeVersLeViewModel() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.bringForward:viewModel.bringForward(id:id)"))
+        XCTAssertTrue(source.contains("case.sendBackward:viewModel.sendBackward(id:id)"))
+    }
+}
+
+/// **La porte média ouvre les TROIS sources** (#4092 · leçon 335, seconde
+/// instance sur le même écran).
+///
+/// `handleRailDoor(.media)` allait droit à la photothèque. Dès qu'une scène
+/// existait, la CAMÉRA et l'IMPORT DE FICHIER — deux des sept entrées de la
+/// rangée canonique — quittaient l'écran, sans qu'aucune règle les retire.
+///
+/// Le commentaire d'à côté décrivait pourtant le bon mécanisme : « le rail
+/// n'ayant qu'UNE porte pour les trois sources », `allowsCapture` gouverne « le
+/// SÉLECTEUR, en aval ». Le sélecteur n'existait pas — et un commentaire qui
+/// décrit un mécanisme absent ne se fait contredire par rien.
+final class ComposerMediaSourcePolicyTests: XCTestCase {
+
+    /// **Le fusible.**
+    func test_lesTroisSources_sontOffertesQuandLaCaptureEstPermise() {
+        XCTAssertEqual(ComposerMediaSourcePolicy.offered(allowsCapture: true),
+                       [.photoLibrary, .camera, .files])
+    }
+
+    /// `allowsCapture` retire la CAMÉRA — jamais la bibliothèque ni les
+    /// fichiers. Reprendre un contenu déjà publié interdit de filmer, pas
+    /// d'ajouter une image qu'on possède.
+    func test_sansCapture_seuleLaCameraTombe() {
+        let sources = ComposerMediaSourcePolicy.offered(allowsCapture: false)
+        XCTAssertEqual(sources, [.photoLibrary, .files])
+        XCTAssertFalse(sources.contains(.camera))
+    }
+
+    /// L'ordre est celui de la rangée canonique — la position que les doigts
+    /// connaissent, pas l'ordre de déclaration d'un `enum`.
+    func test_lOrdre_suitCeluiDeLaRangeeCanonique() {
+        let outils = ComposerMediaSourcePolicy.offered(allowsCapture: true)
+            .map(ComposerMediaSourcePolicy.namingTool)
+        XCTAssertEqual(outils, [.photo, .camera, .document])
+        let rang = { (t: ComposerDocumentTool) in
+            ComposerDocumentTool.canonicalRow.firstIndex(of: t) ?? .max
+        }
+        XCTAssertEqual(outils.map(rang), outils.map(rang).sorted(),
+                       "Deux ordres pour un même trio se lisent comme deux gestes.")
+    }
+
+    /// **Le libellé n'est pas réécrit.** Une seconde table dirait « Photos »
+    /// d'un côté et « Photothèque » de l'autre pour un seul sélecteur, et
+    /// dédoublerait sept traductions.
+    func test_chaqueSource_estNommeeParLaRangeeDuDocument() {
+        for source in ComposerMediaSourcePolicy.offered(allowsCapture: true) {
+            let libelle = ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))
+            XCTAssertFalse(libelle.isEmpty)
+        }
+        XCTAssertEqual(
+            Set(ComposerMediaSourcePolicy.offered(allowsCapture: true)
+                .map { ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool($0)) }).count,
+            3, "Deux sources qui s'annoncent pareil sont indiscernables.")
+    }
+
+    /// **Le titre de la feuille est le libellé de la porte.** Une clé neuve
+    /// pour la même phrase, ce sont sept traductions à faire diverger.
+    func test_leTitreDeLaFeuille_estLeLibelleDeLaPorte() {
+        XCTAssertEqual(ComposerMediaSourcePolicy.chooserTitle,
+                       ComposerRailCopy.label(.media))
+        XCTAssertFalse(ComposerMediaSourcePolicy.chooserTitle.isEmpty)
+    }
+}
+
+/// Le câblage de la porte média — la règle atteint l'écran.
+final class ComposerMediaSourceWiringGuardTests: XCTestCase {
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSourceDuMeuble_estLisible() throws {
+        XCTAssertTrue(try hostSource().contains("ComposerMediaSourcePolicy"))
+    }
+
+    /// **La garde du défaut d'origine.** La porte média n'appelle plus l'outil
+    /// PHOTO en direct : c'était le raccourci qui faisait disparaître deux
+    /// sources sur trois dès qu'une scène existait.
+    func test_laPorteMedia_neVaPlusDroitALaPhototheque() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("case.media:presentMediaSources()"))
+        XCTAssertFalse(source.contains("case.media:handleDocumentTool(.photo)"),
+                       "Ce raccourci retire la caméra et l'import de fichier sans qu'aucune règle les refuse.")
+    }
+
+    /// Le choix a son lecteur AU-DESSUS de l'aiguillage, comme tout portail du
+    /// meuble (#4120) — et il lit la règle, jamais une seconde liste.
+    func test_leChoixDeSource_estMonteEtLitLaRegle() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("isPresented:$showsMediaSourceChooser"))
+        XCTAssertTrue(source.contains("ComposerMediaSourcePolicy.offered(allowsCapture:profile.allowsCapture)"))
+    }
+
+    /// **Une source unique se présente directement** — une feuille de choix à un
+    /// seul élément demande un geste pour zéro décision.
+    func test_uneSourceUnique_neDemandeAucunChoix() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("guardsources.count>1else{"),
+                      "Sans ce garde-fou, un profil à source unique paie une feuille pour rien.")
+    }
+}

@@ -244,6 +244,19 @@ struct MeeshyComposerHost: View {
     /// c'est le meuble qui possède le texte où l'emoji atterrit, et une surface
     /// qui porterait le sélecteur devrait posséder sa destination — donc cesser
     /// d'être la simple présentation qu'elle est.
+    /// **La porte STICKER de la scène** — distincte du sélecteur d'emoji juste
+    /// au-dessus, et la distinction est celle du NIVEAU du modèle : l'emoji
+    /// s'insère dans le TEXTE du document, le sticker POSE un objet sur la
+    /// scène. Même patron de présentation, deux gestes qui ne se remplacent
+    /// pas.
+    /// **Le choix de la SOURCE, quand la porte média en offre plusieurs.**
+    /// La rangée du document a trois entrées distinctes (Photos · Caméra ·
+    /// Fichier) ; le rail n'a qu'une porte, donc le choix se fait ici — sans
+    /// quoi deux des trois sources disparaissent dès qu'une scène existe.
+    @State var showsMediaSourceChooser = false
+
+    @State var showsStickerPicker = false
+
     @State var showsEmojiPicker = false
 
     /// **La langue DÉCLARÉE du document (T2.2).** Semée sur
@@ -903,6 +916,21 @@ struct MeeshyComposerHost: View {
         // **Le sixième outil (T2.6)**, même patron que le lieu juste au-dessus.
         .sheet(isPresented: $showsAudioComposer) { documentAudioComposerSheet }
         .sheet(isPresented: $showsEmojiPicker) { emojiPickerSheet }
+        .sheet(isPresented: $showsStickerPicker) { stickerPickerSheet }
+        .confirmationDialog(ComposerMediaSourcePolicy.chooserTitle,
+                            isPresented: $showsMediaSourceChooser,
+                            titleVisibility: .visible) {
+            // Les boutons SORTENT de la règle : les écrire à la main ferait de
+            // ce bloc une seconde liste, que `allowsCapture` cesserait de
+            // gouverner au premier oubli.
+            ForEach(ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture),
+                    id: \.self) { source in
+                Button(ComposerDocumentCopy.label(ComposerMediaSourcePolicy.namingTool(source))) {
+                    presentMediaIntake(source)
+                }
+            }
+            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { }
+        }
         .sheet(isPresented: $showsReferencePicker) { referencePickerSheet }
         .sheet(isPresented: $showsDocumentLanguagePicker) { documentLanguagePickerSheet }
         // **L'ingestion de fichiers LOCAUX (T2.3).** Le commentaire qui vivait

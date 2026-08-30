@@ -100,6 +100,37 @@ describe('certifyPatterns — la sonde hors boucle d\'événements', () => {
     clearTimeout(timer);
     expect(tick).toHaveBeenCalled();
   }, 15000);
+
+  /**
+   * #4420 — le budget mesure ce que le MOTIF coûte, jamais ce que le FIL a
+   * coûté à naître, ni ce que ses VOISINS ont pris.
+   *
+   * Le délai courait depuis `new Worker(..., { eval: true })`, dont le
+   * démarrage — compilation de la source, levée d'un isolate V8 — se mesure à
+   * une dizaine de millisecondes au repos et bien davantage sous charge. Les
+   * 250 ms de `DEFAULT_PROBE_BUDGET_MS` étaient donc un budget « démarrage +
+   * exécution de tous les motifs », alors qu'ils sont écrits, documentés et
+   * testés comme un budget d'exécution. Quand le démarrage les épuisait,
+   * AUCUN motif n'avait été annoncé — et la boucle de verdict refusait les
+   * motifs les plus sains du dépôt avec le code d'un motif dangereux.
+   *
+   * Le témoin de cette propriété ne peut pas être une DURÉE : le défaut ne se
+   * manifeste que lorsque le démarrage dépasse le budget, ce qui dépend de la
+   * charge de la machine et ne se reproduit pas à volonté. Ce qui se prouve,
+   * et qui suffit à interdire le retour du défaut, est que les deux délais
+   * sont SÉPARÉS — un délai de démarrage réglable, dont le dépassement rend
+   * une indisponibilité de mesure et non un verdict sur le motif. Remettre un
+   * minuteur unique armé à la création du fil fait retomber ce témoin.
+   */
+  it("dit que la mesure est INDISPONIBLE, jamais qu'un motif sain a explosé, quand le fil ne démarre pas à temps", async () => {
+    // Le sens de la panne ne change pas — ne pas pouvoir mesurer REFUSE
+    // toujours. Ce qui change est la vérité du refus : `UNSUPPORTED_RUNTIME`
+    // dit à l'administrateur que la machine n'a pas répondu ;
+    // `BACKTRACKING_BUDGET` lui disait que son mot-clé explosait, et l'envoyait
+    // réécrire un motif qui n'avait rien.
+    const refusals = await certifyPatterns(['\\bfilm\\b'], { startupBudgetMs: 0 });
+    expect(refusals.map((r) => r.code)).toEqual(['UNSUPPORTED_RUNTIME']);
+  }, 15000);
 });
 
 describe('countMatchesOffLoop — l\'exécution sur le texte de l\'appelant', () => {

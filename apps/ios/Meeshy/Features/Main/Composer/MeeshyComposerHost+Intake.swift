@@ -372,7 +372,7 @@ extension MeeshyComposerHost {
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
-        case .media:   handleDocumentTool(.photo)
+        case .media:   presentMediaSources()
         case .sound:   handleDocumentTool(.microphone)
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
@@ -383,10 +383,13 @@ extension MeeshyComposerHost {
             HapticFeedback.light()
             editsSceneDescription = true
         case .sticker:
-            // Injoignable : `railDoors` ne la sert pas, et la loi 4 veut qu'une
-            // porte sans effet ne soit pas peinte. Le `switch` reste exhaustif
-            // pour qu'ajouter son chemin oblige à passer ici.
-            break
+            // **Le portail vit sur le MEUBLE** (#4120), comme les six autres :
+            // la feuille est montée au-dessus de l'aiguillage des surfaces, pas
+            // sur l'une d'elles. Poser le booléen ici et le lire ailleurs est
+            // précisément la chaîne que l'inventaire de
+            // `ComposerIntakePortalsTests` tient.
+            HapticFeedback.light()
+            showsStickerPicker = true
         }
     }
 
@@ -401,10 +404,14 @@ extension MeeshyComposerHost {
             viewModel.deleteElement(id: id)
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
-        case .edit, .leaveScene, .bringForward, .sendBackward:
-            // Injoignables : `served` ne les contient pas. L'empilement ne vit
-            // que sur la `StoryCanvasUIView` ; l'y router demanderait de porter
-            // la primitive sur le MODÈLE — un lot en soi.
+        case .bringForward: viewModel.bringForward(id: id)
+        case .sendBackward: viewModel.sendBackward(id: id)
+        case .edit, .leaveScene:
+            // Injoignables : `ComposerSceneCapabilities.controllers` ne les
+            // contient pas, et le `switch` reste exhaustif pour que les servir
+            // oblige à passer ici. `edit` attend l'inspecteur par kind (#4073) ;
+            // `leaveScene` attend qu'une règle dise ce que l'objet DEVIENT une
+            // fois dehors (#4038).
             break
         }
     }
@@ -435,6 +442,30 @@ extension MeeshyComposerHost {
     /// question que `ComposerMediaIntake` pose. `handleDocumentTool` ne la
     /// pose jamais lui-même : il reste aiguillé sur l'EFFET, cette fonction
     /// sur l'INTAKE.
+    /// **La porte média ouvre les TROIS sources, pas la photothèque seule.**
+    ///
+    /// Elle allait droit à `handleDocumentTool(.photo)` : dès qu'une scène
+    /// existait, la caméra et l'import de fichier — deux des sept entrées de la
+    /// rangée canonique — quittaient l'écran. Le commentaire d'à côté disait
+    /// pourtant que le rail « n'a qu'UNE porte pour les trois sources » et que
+    /// `allowsCapture` gouvernerait « le SÉLECTEUR, en aval » ; ce sélecteur
+    /// n'existait pas.
+    ///
+    /// **Une source unique se présente DIRECTEMENT.** Une feuille de choix à un
+    /// seul élément demande un geste pour zéro décision — et le cas n'est pas
+    /// théorique : il n'a simplement pas de producteur aujourd'hui, la règle
+    /// n'ôtant que la caméra. Le rendre impossible à écrire coûterait plus que
+    /// de le traiter.
+    func presentMediaSources() {
+        HapticFeedback.light()
+        let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
+        guard sources.count > 1 else {
+            if let seule = sources.first { presentMediaIntake(seule) }
+            return
+        }
+        showsMediaSourceChooser = true
+    }
+
     func presentMediaIntake(_ intake: ComposerMediaIntake) {
         switch intake {
         case .photoLibrary:
@@ -566,6 +597,39 @@ extension MeeshyComposerHost {
             showsEmojiPicker = false
         }
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// **La porte STICKER de la scène** — et ce qu'elle ne fait PAS.
+    ///
+    /// Elle ne se confond pas avec `emojiPickerSheet`, sa voisine d'apparence :
+    /// celle-là INSÈRE un glyphe dans le texte du document, celle-ci POSE un
+    /// `StorySticker` sur la scène — un objet déplaçable, ordonnable et
+    /// minutable, qui survit à la publication et au reader. Deux gestes, deux
+    /// niveaux du modèle ; les confondre était le raccourci qui a tenu la porte
+    /// fermée (« `showsEmojiPicker` insère dans le TEXTE, ce qui n'est pas la
+    /// même chose » — la phrase était juste, la conclusion non).
+    ///
+    /// **La feuille reste OUVERTE après une pose**, comme sous l'atelier : on
+    /// pose rarement un seul sticker, et refermer à chaque glyphe ferait payer
+    /// une réouverture par objet. Le `swipe-down` natif la ferme.
+    ///
+    /// Les deux rappels vont au VIEWMODEL, jamais au canvas : muter par le
+    /// modèle est ce qui garde publication, reader et export d'accord — et le
+    /// meuble n'a aucune référence à la vue UIKit.
+    var stickerPickerSheet: some View {
+        StickerPickerView(onStickerSelected: { emoji in
+            viewModel.addSticker(emoji: emoji)
+            HapticFeedback.light()
+        }, onLibraryStickerSelected: { item in
+            // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
+            // `loadedImages` jusqu'à ce que la publication le téléverse et
+            // remplisse `postMediaId`.
+            viewModel.addSticker(image: item.thumbnail,
+                                 provider: StoryStickerLibraryItem.provider)
+            HapticFeedback.light()
+        })
+        .presentationDetents([.medium])
         .presentationDragIndicator(.visible)
     }
 
