@@ -490,6 +490,39 @@ extension MeeshyComposerHost {
     /// théorique : il n'a simplement pas de producteur aujourd'hui, la règle
     /// n'ôtant que la caméra. Le rendre impossible à écrire coûterait plus que
     /// de le traiter.
+    /// **Un contrôleur d'outil a été tapé** — on déplie son panneau, ou on le
+    /// replie s'il l'était déjà.
+    ///
+    /// L'identifiant porte sa famille en préfixe (`drawing.` / `text.`), et
+    /// c'est ce qui permet à cette fonction de rester une seule : le rail ne
+    /// connaît pas les deux énumérés du SDK, et le meuble n'a pas à se demander
+    /// dans quel mode il est — l'identifiant le dit.
+    func handleRailToolControl(_ control: ComposerToolControl) {
+        HapticFeedback.light()
+        if let brut = control.id.split(separator: ".", maxSplits: 1).last.map(String.init) {
+            if control.id.hasPrefix("drawing."), let outil = DrawingEditTool(rawValue: brut) {
+                // Régler le PINCEAU, jamais un trait déjà posé : la sélection
+                // par-trait est un autre geste, et laisser les deux ouverts
+                // ferait régler l'un en croyant régler l'autre.
+                viewModel.selectStroke(nil)
+                viewModel.setExpandedDrawingTool(control.isExpanded ? nil : outil)
+            } else if control.id.hasPrefix("text."), let outil = TextEditTool(rawValue: brut) {
+                viewModel.setExpandedTool(control.isExpanded ? nil : outil)
+            }
+        }
+    }
+
+    /// **Le `(x)`** — termine l'outil en cours, quel qu'il soit, et rend le rail
+    /// à ses portes. Il ne détruit rien : ce qui a été posé reste sur la scène.
+    func handleRailExitTool() {
+        HapticFeedback.light()
+        if viewModel.isDrawingActive {
+            viewModel.endDrawing()
+        } else if viewModel.textEditingMode.activeTextId != nil {
+            viewModel.exitTextEditingMode()
+        }
+    }
+
     func presentMediaSources() {
         HapticFeedback.light()
         let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)

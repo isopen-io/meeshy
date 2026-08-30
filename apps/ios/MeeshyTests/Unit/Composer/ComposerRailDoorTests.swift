@@ -205,8 +205,14 @@ final class ComposerLeadingRailSourceGuardTests: XCTestCase {
     /// hors de portée du pouce sur le côté LOIN de la main.
     func test_lesPortes_sontPousseesVersLeBas() throws {
         let source = compact(try railSource())
-        XCTAssertTrue(source.contains("Spacer(minLength:0)ForEach(doors"),
-                      "Le ressort doit PRÉCÉDER les portes : c'est lui qui les ancre en bas.")
+        // Le rail est MODAL depuis la directive du 2026-08-30 : un `switch`
+        // s'intercale entre le ressort et les entrées. Ce qui reste vrai — et
+        // qui est la seule chose que ce témoin doit dire — c'est que le ressort
+        // PRÉCÈDE tout ce qui se peint, portes comme contrôleurs.
+        XCTAssertTrue(source.contains("Spacer(minLength:0)switchmode{"),
+                      "Le ressort doit PRÉCÉDER les entrées : c'est lui qui les ancre en bas.")
+        XCTAssertTrue(source.contains("case.doors(letdoors):ForEach(doors"))
+        XCTAssertTrue(source.contains("case.tool(letcontrols):ForEach(controls)"))
     }
 
     /// **La vue ne décide de rien.** Elle reçoit `doors` déjà filtrées ; si elle
@@ -882,10 +888,13 @@ final class ComposerDrawingWiringGuardTests: XCTestCase {
     /// peuvent pas diverger.
     func test_lesReglages_suiventLeMode() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("drawingToolbar:viewModel.isDrawingActive"))
+        // La COUCHE DE CAPTURE reste gouvernée par le mode…
         XCTAssertTrue(source.contains("drawingSurface:viewModel.isDrawingActive"))
+        // …et les RÉGLAGES sont désormais dans le rail, résolus par la même
+        // question posée à `ComposerRailMode` (directive porteur 2026-08-30).
+        XCTAssertTrue(source.contains("drawing:viewModel.isDrawingActive"))
         XCTAssertFalse(source.contains("requestedSceneBand=.drawing"),
-                       "Le dessin n'ouvre plus de bande : ses réglages flottent sur la scène.")
+                       "Le dessin n'ouvre plus de bande de réglages : le RAIL les porte.")
     }
 
     /// **Le canvas RETIRE son calque persisté pendant le dessin**, sinon le
@@ -1049,7 +1058,7 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
     }
 
     func test_lesSources_sontLisibles() throws {
-        XCTAssertTrue(try hostSource().contains("StoryDrawingToolbar"))
+        XCTAssertTrue(try hostSource().contains("ComposerRailMode.resolve"))
         XCTAssertTrue(try surfaceSource().contains("struct ComposerSceneSurface"))
     }
 
@@ -1057,9 +1066,19 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
     /// pinceau (stylo / marqueur / gomme), la couleur, l'épaisseur, le lissage
     /// et l'annulation par TRAIT — quatre capacités qu'une bande écrite pour
     /// l'occasion perdait.
-    func test_leDessin_monteLeControleurDeLAtelier() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("StoryDrawingToolbar(viewModel:viewModel)"))
+    /// L'emprunt ne se prouve plus par le montage d'une barre, mais par
+    /// l'ÉNUMÉRÉ que le rail parcourt : `DrawingEditTool.allCases` — le pinceau
+    /// (stylo / marqueur / gomme), la couleur, l'épaisseur, le lissage. Une
+    /// liste écrite à la main ici serait la réécriture que ce lot a défaite.
+    func test_leDessin_monteLesOutilsDeLAtelier() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerRailMode.swift")
+        let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+        XCTAssertTrue(source.contains("DrawingEditTool.allCases.map"))
+        XCTAssertTrue(source.contains("symbolName:$0.sfSymbol"),
+                      "Les glyphes viennent du SDK, jamais d'une table recopiée.")
     }
 
     /// **La garde NÉGATIVE de la réécriture.** Elle rougit si une bande de
@@ -1071,10 +1090,17 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
                         + "que l'atelier possède (leçon 336).")
     }
 
-    /// Le texte MONTE aussi le contrôleur de l'atelier — les 18 styles.
-    func test_leTexte_monteLeControleurDeLAtelier() throws {
-        let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("StoryTextEditToolbar(viewModel:viewModel)"))
+    /// Le texte parcourt le SIEN — style, couleur, alignement, fond, cadrage,
+    /// contour, langue. Et le panneau d'OPTIONS, lui, vient du SDK en entier.
+    func test_leTexte_monteLesOutilsDeLAtelier() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerRailMode.swift")
+        let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+        XCTAssertTrue(source.contains("TextEditTool.allCases.map"))
+        XCTAssertTrue(compact(try hostSource()).contains("MeeshyToolOptionsPanel(viewModel:viewModel)"),
+                      "Les options — palette, glissière, 18 styles — viennent du SDK, pas d'une bande maison.")
     }
 
     /// **Poser un texte OUVRE son éditeur, dans le même geste.** Une coquille
@@ -1096,12 +1122,17 @@ final class ComposerSceneToolsBorrowGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("onInlineTextEditEnded:onInlineTextEditEnded"))
     }
 
-    /// **Les deux contrôleurs FLOTTENT sur la scène**, au-dessus de la couche
-    /// de capture — sinon ils ne recevraient pas leurs propres taps.
-    func test_lesDeuxControleurs_flottentSurLaScene() throws {
+    /// **La couche de capture est le SEUL overlay de la scène** depuis la
+    /// directive du 2026-08-30 : les contrôleurs sont au rail, leurs options
+    /// sous la scène. Trois couches empilées sur une scène déjà encadrée par
+    /// deux rails, c'était une de trop.
+    func test_laCapture_estLeSeulOverlayDeLaScene() throws {
         let source = compact(try surfaceSource())
-        XCTAssertTrue(source.contains(".overlay{drawingSurface}.overlay{drawingToolbar}.overlay{textToolbar}"),
-                      "L'ordre compte : la capture d'abord, les contrôleurs par-dessus.")
+        XCTAssertTrue(source.contains(".overlay{drawingSurface}"))
+        XCTAssertFalse(source.contains(".overlay{drawingToolbar}"),
+                       "Les réglages du pinceau vivent au rail, plus par-dessus la scène.")
+        XCTAssertFalse(source.contains(".overlay{textToolbar}"),
+                       "Idem pour ceux du texte.")
     }
 
     /// **Le modèle décide du sort d'une coquille vide, pas la vue.** Fermer

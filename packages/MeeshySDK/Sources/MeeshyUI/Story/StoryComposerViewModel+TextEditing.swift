@@ -32,7 +32,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// l'ordre des `case` porte aussi la sérialisation.
     static let all: [TextEditTool] = [.style, .color, .align, .background, .frame, .border, .language]
 
-    var sfSymbol: String {
+    public var sfSymbol: String {
         switch self {
         case .style:      return "textformat"
         case .color:      return "paintpalette.fill"
@@ -48,7 +48,7 @@ public nonisolated enum TextEditTool: String, CaseIterable, Sendable, Equatable 
     /// SPM sans annotation, tombe sous l'isolation par défaut du package. Seule
     /// la vue lit ce libellé — les helpers purs n'en ont pas besoin.
     @MainActor
-    var accessibilityLabel: String {
+    public var accessibilityLabel: String {
         switch self {
         case .style:      return String(localized: "story.textEdit.tool.style", defaultValue: "Style de texte", bundle: .module)
         case .color:      return String(localized: "story.textEdit.tool.color", defaultValue: "Couleur du texte", bundle: .module)
@@ -119,7 +119,7 @@ extension StoryComposerViewModel {
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.
-    func setExpandedTool(_ tool: TextEditTool?) {
+    public func setExpandedTool(_ tool: TextEditTool?) {
         guard case .active(let id, _) = textEditingMode else { return }
         textEditingMode = .active(textId: id, expandedTool: tool)
     }
