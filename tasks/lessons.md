@@ -20763,3 +20763,133 @@ mesures ») :
   RÉELLE.** La conception invitait à lancer `baseline.mjs http://127.0.0.1:8931/`
   « pour éprouver la chaîne » — ce qui écrivait un `baseline.json` de localhost,
   vert. Éprouver une chaîne se fait avec l'outil dont c'est le métier.
+
+## Leçon 352 — Une extraction déplace du code à travers DEUX frontières que rien ne signale, et la parade n'est pas celle qu'on croit
+
+**Trois occurrences en une soirée, quatre formes différentes, toutes de la même
+main.** Le 2026-08-31, en découpant `StoryViewerView+Sidebar.swift` (1 369
+lignes, deux vues) pour la vue `2f`, neuf gardes qui nommaient ce fichier sont
+devenues aveugles d'un coup. En les repointant, deux se sont révélées **déjà
+rouges sur `dev` depuis mes lots précédents** — et une suite complète, lancée
+plus tard le même soir, en a sorti quatre autres que personne ne regardait.
+
+Les frontières, et pourquoi elles ne se signalent pas :
+
+1. **les GARDES qui nomment un fichier.** Le code déplacé compile et se comporte
+   à l'identique ; c'est le chemin qui a changé sous la garde ;
+2. **l'AMNISTIE.** Les cliquets à liste de fichiers (`bearingFiles` des tailles
+   figées, `fullyLocalizedScreens`, `legacyOverBudget`) couvrent des NOMS. Le
+   code sort de leur couverture sans qu'une ligne change.
+
+### Ce qui coûte le plus n'est pas ce qui rougit
+
+| garde | ce qu'elle devient en perdant son fichier |
+|---|---|
+| POSITIVE (`XCTAssertTrue(text.contains(…))`) | **rouge** — désagréable, mais honnête |
+| NÉGATIVE (`XCTAssertFalse(…)`) | **verte en ne regardant plus rien** — elle se déguise en succès |
+
+Deux des neuf étaient négatives. Elles ne se plaignaient pas : elles avaient
+cessé d'interdire.
+
+Et une troisième forme, plus perverse encore, relevée par la session voisine sur
+`EditParityInventoryTests` : une garde qui MESURE une capacité et lit le fichier
+que le code vient de quitter **conclut que la capacité a disparu**.
+
+> **Une garde qui perd son sujet ne dit pas « j'ai perdu mon sujet ».** Elle dit
+> « la capacité a disparu », « un site interdit est apparu », « le composant
+> n'est pas utilisé » — et envoie chercher une régression qui n'existe pas.
+
+### La parade qui NE marche pas
+
+« `grep` le nom du fichier dans `MeeshyTests/` avant d'extraire » — je l'avais
+écrite en mémoire, et je ne l'appliquais qu'aux gardes que je CONNAISSAIS.
+Elle rate tout ce à quoi on ne pense pas : un cliquet d'accessibilité, une liste
+d'amnistie, une garde d'architecture nommée d'après un concept et non d'après la
+feature.
+
+Le glob ne sauve qu'un cran : `AppSourceGuard.unit(".../FeedPostCard.swift")`
+attrape bien `FeedPostCard+*`, mais `unit(".../FeedPostCard+Header.swift")` a
+pour base `FeedPostCard+Header` et ne rend que lui. Pire : `ReelPageView
++Info.swift` a pour base `ReelPageView`, **pas** `ReelsPlayerView` — l'extraction
+avait changé le TYPE porteur, pas seulement le fichier. Aucun motif ne relie les
+deux ; seule une liste explicite le dit.
+
+### La parade qui marche
+
+**Faire tourner la suite ENTIÈRE après une extraction.** Pas les classes qu'on
+croit concernées — celles-là sont précisément celles auxquelles on a pensé. Sur
+ce dépôt : ~9 345 tests, six minutes, et elle a sorti d'un coup les six rouges
+que trois runs ciblés successifs avaient laissés passer.
+
+### Corollaire — le même rouge se répare de deux façons OPPOSÉES
+
+Devant un cliquet qui rougit après une découpe, la question n'est pas « comment
+le faire passer » mais **« ce code est-il NOUVEAU ? »** :
+
+- **relocalisation pure** ⇒ inscrire le nouveau nom, **plafond inchangé** ;
+- **vrai ajout** ⇒ monter le plafond d'un cran, avec sa raison écrite.
+
+Les confondre avale en silence exactement l'ajout que le cliquet existe pour
+refuser. Les deux cas se sont présentés la même nuit, et une fois **dans le même
+fichier** : le carrousel de la vue `3f` porte un glyphe de lecture RELOCALISÉ
+depuis `galleryImageView` et une chevronnette AJOUTÉE — le nom entre dans la
+liste, le plafond monte d'un seul cran.
+
+### Corollaire de forme — nommer la SURFACE, pas le fichier
+
+`AccessibilityValueAttributionGuardTests` tenait une liste de fichiers de
+surfaces à portée. Elle tient désormais une table **surface → fichiers**,
+satisfaite dès qu'un des fichiers porte le composant. Une garde qui nomme un
+fichier mesure un CHEMIN ; ce qu'elle veut mesurer est une SURFACE.
+
+Sites : `RepostAttributionGuardTests`, `MediaSaveLabelGuardTests`,
+`AccessibilityValueAttributionGuardTests`, `BackgroundAnnouncementWiringGuard
+Tests`, `MuteButtonExistenceGuardTests`, `StoryViewerAnchorGlyphGuardTests`,
+`ReportMessageSheetPaletteTests`, `StoryRepublishWiringGuardTests`,
+`StoryHeaderMetaGuardTests`, `FixedFontSizeGuardTests`,
+`LocalizationConsistencyTests`, `FileSizeBudgetGuardTests`.
+
+## Leçon 353 — Un conteneur SANS taille intrinsèque ne se dimensionne pas par la mesure de ce qu'il contient
+
+Le carrousel de la vue `3f` (`FeedPostCardCarousel`) a échoué **deux fois** à se
+donner une hauteur, et les deux échecs partagent une cause que le symptôme
+cachait : **`TabView` n'a aucune taille intrinsèque**, alors que les deux
+mécanismes essayés supposent que la vue en a une.
+
+1. **Un `GeometryReader` maison** en `.background` + `@State`, recopié de
+   `FittedMediaHeight` **sans le `.frame(maxWidth: .infinity)` qui le précède
+   dans l'original**. Sans lui, la largeur reste la dimension LIBRE : elle
+   dépend de la hauteur qu'on vient de fixer à partir d'elle. La boucle de mise
+   en page ne converge plus et **l'app quitte en silence à l'ouverture du fil** —
+   sans rapport de crash, sans `fatal`, sans qu'aucun gate ne rougisse. Le
+   commentaire de `FittedMediaHeight` mettait en garde contre exactement ça ; je
+   l'avais lu, et j'ai réécrit le mécanisme au lieu de l'employer.
+
+2. **`fittedMediaHeight` lui-même**, le modificateur éprouvé. Correct, mais il ne
+   pose sa hauteur qu'à la passe SUIVANTE, une fois la largeur mesurée. À la
+   première, `height: nil` — et le `ZStack` prend alors la hauteur de son plus
+   grand enfant à taille intrinsèque, c'est-à-dire **le compteur**. Une bande de
+   quarante points au lieu d'un média.
+
+> **Une mesure de largeur qui gouverne une hauteur doit d'abord CONTRAINDRE la
+> largeur** — et un conteneur sans taille intrinsèque ne se mesure pas du tout :
+> il faut lui DONNER sa forme.
+
+`.aspectRatio(_:contentMode: .fit)` n'a rien à mesurer : la largeur est proposée
+par le parent, la hauteur en découle, dès la première passe.
+
+**Corollaire sur le site unique.** Le ratio ne recopie pas les bornes : il
+INTERROGE `postCardMediaHeight` sur une largeur de sonde et en déduit le
+rapport. Plancher, plafond et repli « dimensions absentes » restent définis là
+où ils servaient déjà le média unique. Pour que ce soit possible, la règle est
+passée `nonisolated` — arithmétique pure que l'isolation par défaut de la cible
+(`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`) rendait inappelable depuis une
+autre règle pure. **Une règle qu'on ne peut pas interroger hors du fil principal
+finit recopiée ailleurs : c'est ainsi qu'un site unique cesse d'en être un.**
+
+**Et le point de méthode, qui vaut au-delà de SwiftUI.** J'ai annoncé « j'ai la
+cause » quand j'avais « j'ai UNE cause » : le correctif (1) était juste et
+nécessaire, mais le témoin qui l'aurait relié au symptôme — un carrousel
+réellement instancié — n'existait pas dans mon environnement, et je ne l'ai su
+qu'en le cherchant après coup. **Chercher le témoin d'abord, annoncer ensuite.**
+Le défaut (2) n'a été vu que sur une CAPTURE, gate entièrement vert.
