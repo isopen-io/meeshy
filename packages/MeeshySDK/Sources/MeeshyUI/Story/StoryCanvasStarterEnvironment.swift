@@ -160,6 +160,17 @@ public nonisolated enum StoryPastedItem: @unchecked Sendable {
     case image(UIImage)
     case video(URL)
     case audio(URL)
+    /// **Le TEXTE, ajouté au #4378** (directive porteur 2026-08-30 : « coller
+    /// n'apparaisse que si on a une image, un texte ou vidéo »).
+    ///
+    /// Son absence n'était pas un oubli de câblage : le vocabulaire d'entrée du
+    /// canvas ne le NOMMAIT pas, si bien que coller du texte ne pouvait
+    /// strictement rien produire. Il était annoncé comme « appartenant à l'outil
+    /// texte » — une destination qu'aucun geste n'ouvrait depuis le collage.
+    ///
+    /// Où il va est décidé par `StoryPastePolicy` : au-delà de dix mots il
+    /// DÉCRIT la slide, en deçà il devient un objet de scène.
+    case text(String)
 }
 
 /// Résolution app-side d'un collage, **injectée par l'app**.

@@ -735,6 +735,26 @@ extension StoryComposerViewModel {
         return nil
     }
 
+    /// Écrit le CONTENU d'un objet texte déjà posé (#4378).
+    ///
+    /// Elle rejoint la famille des updaters d'élément — celle de
+    /// `updateElementLanguage` juste dessous — plutôt que d'ouvrir un troisième
+    /// site de CRÉATION. Le collage n'a pas à fabriquer un chemin d'insertion :
+    /// il emprunte `addText()`, qui existe et est éprouvé, puis remplit.
+    ///
+    /// Pourquoi ne pas passer par l'éditeur : `addText()` crée un objet vide ET
+    /// ouvre l'éditeur, ce qui est juste pour l'auteur qui écrit. Un collage
+    /// apporte déjà son texte ; le faire transiter par l'éditeur obligerait
+    /// l'auteur à valider ce qu'il vient de coller.
+    func updateTextContent(id: String, text: String) {
+        var effects = currentEffects
+        var texts = effects.textObjects
+        guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
+        texts[index].text = text
+        effects.textObjects = texts
+        currentEffects = effects
+    }
+
     func updateElementLanguage(elementId: String, language: String) {
         var effects = currentEffects
 
