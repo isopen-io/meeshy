@@ -226,6 +226,37 @@ npx tsx scripts/route-manifest.ts --check # vérifie sans écrire
 Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
 préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
 
+### Le manifeste recense ce que Meeshy EXPOSE comme API, pas tout ce que le gateway SERT (#4466)
+
+Une surface montée sur l'instance racine peut servir des routes qui ne sont pas
+de l'API Meeshy — l'interface de documentation d'une dépendance, par exemple
+(`swaggerUi` : `/docs`, `/docs/json`, `/docs/yaml` et ses actifs). **Elles ne
+rejoignent pas le manifeste**, et ce n'est pas un oubli : elles sont DÉCLARÉES
+hors périmètre dans `src/__tests__/route-manifest/root-mounted-surfaces.ts`,
+sous `kind: 'outside-manifest'`, avec leur raison.
+
+La règle tient à ce dont le manifeste est la source. `packages/shared/api/endpoints.ts`
+en dérive mécaniquement, et les gardes de contrat client s'y adossent : y faire
+entrer `/docs` publierait, à chaque client, des entrées **qu'aucun client
+n'appellera jamais**. Un catalogue d'API qui liste l'interface de sa propre
+documentation cesse de vouloir dire « ce que tu peux appeler ».
+
+> **La question à poser à une surface racine n'est pas « la sert-on ? » mais
+> « un client Meeshy peut-il l'appeler ? »** — la première est vraie de tout ce
+> que le processus écoute, y compris des actifs d'une dépendance ; la seconde
+> décrit le contrat.
+
+Les trois valeurs de la taxonomie, et ce qu'elles engagent :
+
+| `kind` | le collecteur | ce que ça exige |
+|---|---|---|
+| `declares-api-routes` | DOIT la monter | rien de plus — c'est le cas nominal |
+| `outside-manifest` | ne la monte pas | la RAISON écrite dans l'inventaire |
+| `no-routes` | rien à monter | vérifié : hook, décoration, parseur, en-têtes |
+
+Une surface racine absente des trois est un ROUGE (`root-mounted-surfaces.test.ts`) :
+le silence n'est pas une quatrième valeur.
+
 ## Une adresse hors `/api` est hors de tout ce qui s'ancre sur `/api` — jusqu'à son retrait INCLUS
 
 Déprécier une adresse ne la retire pas d'un périmètre : ça annonce sa fin. Les trois
