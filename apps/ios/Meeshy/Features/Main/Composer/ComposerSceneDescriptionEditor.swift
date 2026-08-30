@@ -47,7 +47,12 @@ struct ComposerSceneDescriptionEditor: View {
             // Six lignes : au-delà, la zone mangerait la scène qu'elle est
             // censée laisser voir. Le champ défile — il ne tronque pas.
             collapsedLineLimit: 6,
-            opensEditingOnAppear: true
+            opensEditingOnAppear: true,
+            // La coche du champ EST la validation (directive porteur
+            // 2026-08-30) : elle range la zone, comme le glissement vers le bas.
+            // Deux gestes, un seul acte — et plus de « Terminé » en doublon sur
+            // la barre du clavier.
+            onValidate: onDone
         )
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -68,21 +73,27 @@ struct ComposerSceneDescriptionEditor: View {
         // C'est le même geste que l'atelier fait pour son propre chrome
         // (`canvasChromeScheme`) : la vue ne devine pas son fond, on le lui dit.
         .environment(\.colorScheme, .dark)
-        // **« Terminé » au-dessus du clavier**, à la place que le système lui
-        // réserve — jamais un bouton flottant, qui se retrouverait sous le
-        // clavier dès que le texte grandit.
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                // `indigo400`, pas `indigo500` : c'est le jeton d'accent que le
-                // meuble mesure déjà au seuil composant (3:1). En introduire un
-                // second obligerait la suite de contraste à le mesurer sur les
-                // trois teintes de plateau — pour un bouton qui vit sur la barre
-                // de clavier, où aucune de ces teintes n'est le fond.
-                Button(ComposerDescriptionCopy.doneShort, action: onDone)
-                    .foregroundColor(MeeshyColors.indigo400)
-            }
-        }
+        // **Le glissement vers le BAS valide et ferme** (directive porteur
+        // 2026-08-30). Il remplace le « Terminé » de la barre de clavier, qui
+        // faisait DOUBLON avec la coche que le champ porte déjà — deux commandes
+        // pour un même acte, dont l'une occupait une barre système.
+        //
+        // Le geste va dans le sens du RANGEMENT : on repousse la zone vers le
+        // bas d'où elle est venue, et c'est aussi celui que le clavier suit
+        // quand il se retire. Un glissement vers le haut aurait dit l'inverse.
+        //
+        // Seuil de 40 pt et dominance verticale : sans eux, un glissement
+        // horizontal dans le champ — pour placer le curseur — fermerait la
+        // saisie au premier tremblement du pouce.
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { valeur in
+                    guard valeur.translation.height > 40,
+                          valeur.translation.height > abs(valeur.translation.width)
+                    else { return }
+                    onDone()
+                }
+        )
     }
 
     /// Le filet du haut dit où la scène s'arrête et où l'écriture commence, sans

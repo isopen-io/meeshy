@@ -376,10 +376,16 @@ extension MeeshyComposerHost {
         case .sound:   handleDocumentTool(.microphone)
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
-        case .description, .sticker:
-            // Injoignables : `railDoors` ne les sert pas, et la loi 4 veut
-            // qu'une porte sans effet ne soit pas peinte. Le `switch` reste
-            // exhaustif pour qu'ajouter leur chemin oblige à passer ici.
+        case .description:
+            // La SEULE façon d'ouvrir la description sur la scène incrustée
+            // depuis le 2026-08-30 : le champ permanent qui l'affichait dès
+            // qu'un texte existait a été retiré sur directive porteur.
+            HapticFeedback.light()
+            editsSceneDescription = true
+        case .sticker:
+            // Injoignable : `railDoors` ne la sert pas, et la loi 4 veut qu'une
+            // porte sans effet ne soit pas peinte. Le `switch` reste exhaustif
+            // pour qu'ajouter son chemin oblige à passer ici.
             break
         }
     }
