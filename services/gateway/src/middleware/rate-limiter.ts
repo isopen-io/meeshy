@@ -330,6 +330,28 @@ export function createSoundRouteRateLimitConfig(
  *              de demandes neuves.
  * - resend   : 5/h par compte, au-dessus du délai de 60 s déjà posé dans le
  *              handler (désormais fail-closed).
+ *
+ * ## `hook: 'preHandler'` — sans quoi la clé « par compte » est une fiction
+ *
+ * `config.rateLimit` s'applique par défaut au hook `onRequest`, qui court
+ * AVANT `preValidation` — donc avant que `unifiedAuth` ne pose `authContext`
+ * sur la requête. Un `keyGenerator` qui lit `authContext?.userId` y reçoit
+ * `undefined` et retombe sur son repli. Mesuré sur le vrai plugin
+ * (@fastify/rate-limit, `fastify.inject`), pas déduit : sans `hook`, le
+ * générateur voit `AUCUN-authContext` ; avec `hook: 'preHandler'`, il voit le
+ * compte. Le repli étant `ip:${request.ip}` et le gateway tournant sans
+ * `trustProxy` derrière Traefik, la clé valait l'adresse du conteneur proxy —
+ * la MÊME pour tout le monde. « 3/h par compte » était donc 3/h pour la
+ * PLATEFORME : le premier appelant privait tous les autres, et la protection
+ * se retournait en déni de service. C'est la découverte de #4147, portée ici.
+ *
+ * ## `skipOnError: false` — la panne du gardien n'est pas l'absence de garde
+ *
+ * `registerGlobalRateLimiter` pose `skipOnError: true`, valeur GLOBALE
+ * qu'@fastify/rate-limit fusionne par `Object.assign` dans toute config qui ne
+ * la redéclare pas. Un Redis indisponible ouvrait donc ces trois gestes en
+ * grand — exactement le motif que #4184 venait de fermer sur le limiteur de
+ * renvoi, rouvert une couche plus bas par un défaut hérité.
  */
 export function createContactChangeRateLimitConfig(
   type: 'initiate' | 'verify' | 'resend'
@@ -343,6 +365,8 @@ export function createContactChangeRateLimitConfig(
   return {
     max: cfg.max,
     timeWindow: '1 hour',
+    hook: 'preHandler' as const,
+    skipOnError: false,
     keyGenerator: (request: FastifyRequest) => {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const id = authContext?.userId ?? `ip:${request.ip}`;

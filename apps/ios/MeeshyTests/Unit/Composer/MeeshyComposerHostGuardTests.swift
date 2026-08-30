@@ -245,10 +245,25 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
         guard unOeilEstPeint else { return }
         let compacted = code.components(separatedBy: .whitespacesAndNewlines).joined()
+        // #4135 — le corps de l'œil est passé dans `performSoclePreview()`, un
+        // AIGUILLAGE : sous la scène il presse la télécommande (l'atelier rend
+        // l'aperçu avec ses médias préchargés), ailleurs il remet les slides au
+        // rappel. La règle protégée est inchangée — le meuble ne RIEN rend
+        // lui-même — mais son adresse a bougé, et une garde laissée sur
+        // l'ancienne aurait rougi pour un déménagement.
         XCTAssertTrue(
-            compacted.contains("varpreviewButton:someView{Button{onPreview("),
-            "L'œil doit REMETTRE les slides au rappel `onPreview` sans rien rendre lui-même. Tout autre "
-                + "corps est un quatrième chemin d'aperçu, et il mentira sur ce qui est publié (loi 6)."
+            compacted.contains("varpreviewButton:someView{Button{performSoclePreview()"),
+            "L'œil du socle ne fait que déclencher : tout corps de rendu ici serait un quatrième chemin "
+                + "d'aperçu, et il mentirait sur ce qui est publié (loi 6)."
+        )
+        XCTAssertTrue(
+            compacted.contains("case.scene:publishTrigger.requestPreview()"),
+            "Sous la scène, l'aperçu est EXÉCUTÉ par l'atelier : lui seul replie les effets du canvas "
+                + "courant et connaît les médias préchargés. Un aperçu rendu ici serait amputé."
+        )
+        XCTAssertTrue(
+            compacted.contains("case.document,.mood:onPreview("),
+            "… et les deux autres surfaces remettent bien les slides au rappel, sans rien rendre."
         )
     }
 
@@ -262,13 +277,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// no-op parfaitement légitime tant qu'aucun œil n'était peint, et un
     /// mensonge à la seconde où l'un l'est.
     func test_laPorteDuDocument_rendVraimentLApercu_pasUnNoOp() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        let raw = try AppSourceGuard.composerSurfaceSource()
         let code = AppSourceGuard.stripComments(raw)
         let compacted = code.components(separatedBy: .whitespacesAndNewlines).joined()
 
@@ -444,20 +453,32 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
     // MARK: - Lot 4.5 — QUI peint le chrome, et sous quelle surface
 
-    /// La règle qui a remplacé la constante `.atelier`.
+    /// **RETOURNÉE au #4135, et c'est une SUCCESSION de directives, pas un
+    /// reniement.**
     ///
-    /// Les deux blocages qui imposaient cette constante sont des blocages de la
-    /// SCÈNE — `visibilityMenu` est l'unique écrivain de `visibility` DE
-    /// L'ATELIER (un `@State` privé, que le sélecteur du socle ne peut pas
-    /// atteindre), et un œil peint ici rendrait un aperçu amputé des médias
-    /// préchargés DE L'ATELIER. Sous le document et sous le mood, il n'y a pas
-    /// d'atelier : aucune des deux raisons n'a d'objet. Une constante qui les
-    /// faisait valoir pour les trois surfaces était une constante mal placée.
-    func test_leChrome_cedeALAtelier_sousLaScene_etRevientAuMeuble_ailleurs() {
+    /// Elle affirmait que la scène cédait à l'atelier, pour deux blocages qui
+    /// étaient RÉELS et MESURÉS : `visibilityMenu` était l'unique écrivain de la
+    /// `visibility` de l'atelier — un `@State` privé que le socle ne pouvait pas
+    /// atteindre — et un œil peint au socle aurait rendu un aperçu amputé des
+    /// médias préchargés de l'atelier.
+    ///
+    /// Les deux sont LEVÉS, pas contournés :
+    /// - `ComposerPublishTrigger.requestedVisibility` porte l'audience du socle
+    ///   jusqu'à l'atelier, lue AU MOMENT DU GESTE ; `publishedVisibility(requested:atelier:)`
+    ///   dit laquelle est servie, et c'est cette valeur-là que la garde
+    ///   `test_lAudienceDuSocle_atteintLaPublication` éprouve — jamais l'affichage.
+    /// - `requestPreview()` fait EXÉCUTER l'aperçu par l'atelier ; le socle ne
+    ///   fait que presser.
+    ///
+    /// Ce que la garde protège maintenant : que les trois surfaces répondent la
+    /// MÊME chose. Une seule qui rendrait `.atelier` referait deux barres de
+    /// publication — c'est l'inverse du défaut d'avant, et il coûte autant.
+    func test_leChrome_revientAuMeuble_surLesTroisSurfaces() {
         XCTAssertEqual(
-            ComposerChromeOwnership.owner(for: .scene), .atelier,
-            "L'atelier du SDK peint sa propre rangée haute : lui reprendre le chrome retirerait à l'auteur "
-                + "le seul écrivain d'audience qu'il ait sous la scène."
+            ComposerChromeOwnership.owner(for: .scene), .host,
+            "Depuis #4135, le socle peint les trois commandes sous la scène : la télécommande porte "
+                + "l'audience jusqu'à l'atelier et lui fait exécuter l'aperçu. Rendre `.atelier` ici "
+                + "redonnerait à l'atelier une rangée que le socle peint déjà."
         )
         XCTAssertEqual(
             ComposerChromeOwnership.owner(for: .document), .host,
@@ -1119,8 +1140,36 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "Un bouton sans gate de matière publierait une page blanche depuis le socle."
         )
         XCTAssertTrue(
-            compacte.contains("publishDocument()"),
+            compacte.contains("performSoclePublish()"),
             "… et un bouton qui ne déclenche rien est l'affordance sans effet que ce chantier retire partout."
+        )
+        // #4135 — la flèche presse désormais un AIGUILLAGE, pas un chemin, et
+        // l'aiguillage est une DÉCLARATION VOISINE : la garde va l'y lire plutôt
+        // que d'élargir sa lecture au fichier entier, ce qui lui ferait accepter
+        // n'importe quel `requestPublish` écrit ailleurs.
+        guard let aiguillage = declarationBody(startingAt: "func performSoclePublish()", in: try hostCode()) else {
+            return XCTFail("L'aiguillage de la flèche est introuvable — la garde ne mesurerait RIEN")
+        }
+        let branche = compact(aiguillage)
+
+        XCTAssertTrue(
+            branche.contains("case.scene:publishTrigger.requestPublish("),
+            "Sous la scène, la flèche du socle presse la TÉLÉCOMMANDE : c'est l'atelier qui publie, et "
+                + "fabriquer un brouillon ici serait le second chemin d'envoi que la doctrine interdit."
+        )
+        XCTAssertTrue(
+            branche.contains("visibility:composerVisibility.rawValue"),
+            "… et elle lui apporte l'audience choisie AU SOCLE. Sans elle, l'atelier publierait sous la "
+                + "sienne, et le sélecteur du socle mentirait — la seule erreur irréversible d'une publication."
+        )
+        XCTAssertTrue(
+            branche.contains("visibilityUserIds:composerVisibilityUserIds"),
+            "… avec ses personnes nommées : un mode sans sa liste publierait vers un ensemble que "
+                + "personne n'a choisi."
+        )
+        XCTAssertTrue(
+            branche.contains("case.document,.mood:publishDocument()"),
+            "… et les deux autres surfaces gardent leur chemin de brouillon."
         )
     }
 
@@ -1538,9 +1587,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
                 "Le tray atteint la surface \(surface) en \(format) : son `onPublishDocument` REFUSE, et cette "
                     + "flèche ne publierait donc rien. Lui donner un vrai publieur, ou re-router la porte."
             )
+            // **RETOURNÉ au #4135.** La garde exigeait un socle VIDE sous la
+            // scène, parce que l'atelier y peignait les trois commandes. Il
+            // n'en peint plus aucune : c'est le socle qui les porte, et un
+            // socle vide serait maintenant une scène SANS chemin de départ.
             XCTAssertTrue(
-                ComposerChromeOwnership.socleZones(for: surface).isEmpty,
-                "… et le socle y serait peint, ce qui ferait deux barres de publication sous l'atelier."
+                ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
+                "… et le socle doit y peindre sa flèche : depuis #4135 l'atelier n'assemble plus que le `⋯`, "
+                    + "un socle vide laisserait la composition sans aucun chemin de départ."
             )
         }
     }
@@ -2910,13 +2964,7 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
     /// La surface doit continuer d'ÉCOUTER le texte : c'est l'autre porte, et
     /// la retirer ferait de la frappe `@` un caractère ordinaire.
     func test_laSurface_relaieChaqueFrappeAuControleurDeMention() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
 
         XCTAssertTrue(
             code.contains("mentionBox.controller.handleQuery(in: newText)"),

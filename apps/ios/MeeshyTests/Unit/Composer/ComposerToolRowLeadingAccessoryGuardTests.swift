@@ -21,7 +21,7 @@ import XCTest
 final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
 
     private func surfaceSource() throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: surfaceURL(), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
     }
 
     private func hostSource() throws -> String {

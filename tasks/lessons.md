@@ -19473,3 +19473,67 @@ laisse la trace dans les fichiers, même quand il ne la laisse pas dans l'histor
   que leur existence. C'est la seule mesure qui distingue un témoin d'une
   décoration — et elle vaut autant pour un lot de vérification que pour un lot
   d'écriture.
+
+## Leçon 330
+
+**Une garde de source qui balaie le DISQUE est rouge chez l'un et verte en CI — et personne ne peut la refermer.**
+
+La garde de chemins d'API du web (#4285) énumérait ses fichiers par `readdirSync`. Elle tombait
+donc sur `apps/web/components/debug/NotificationDebugPanel.tsx`, qui appelle
+`buildApiUrl('/notifications')` — et qui est **ignoré par `.gitignore:313`**. Résultat mesuré sur un
+arbre propre : la garde est rouge chez quiconque possède ce dossier local, verte en intégration
+continue.
+
+C'est pire qu'un faux positif ordinaire, parce qu'**aucun commit ne peut la rendre verte** : le
+fichier fautif n'est pas dans le dépôt. La seule issue offerte au développeur est de désactiver la
+garde ou de l'ignorer — et ce dépôt a déjà payé 464 témoins passés au vert en perdant leur
+protection (§ gardes négatives).
+
+> `git ls-files` est la seule réponse autoritative à « que contient le dépôt ? ». Une garde de
+> dépôt énumère le DÉPÔT ; le balayage disque ne reste qu'en repli, si git est indisponible —
+> mieux vaut une garde trop large qu'aucune garde.
+
+Et le correctif se prouve **dans les deux sens** : la garde doit encore rougir sur un littéral
+introduit dans un fichier SUIVI. Retirer un faux rouge sans vérifier cela, c'est retirer les dents
+en croyant retirer le bruit.
+
+Le piège se reconnaît à une question : *ce que ma garde balaie est-il ce que la CI verra ?* Il a une
+famille — le `.gitignore` de ce dépôt masque déjà `Cache/` du SDK et tout `Models/`, produisant des
+tests **verts par omission**. Ici l'omission joue dans l'autre sens, mais c'est la même racine :
+le disque et le dépôt ne sont pas le même ensemble.
+
+## Leçon 331
+
+**Vérifier ce qu'une fonction REND ne dit pas ce qu'elle REÇOIT — et j'ai fermé deux issues sur cette confusion.**
+
+`@fastify/rate-limit` applique `config.rateLimit` au hook `onRequest`, qui court **avant**
+`preValidation` — donc avant que l'authentification ne pose `authContext` sur la requête. Un
+`keyGenerator` qui lit `authContext?.userId` y reçoit `undefined` et retombe sur son repli,
+`ip:${request.ip}`. Le gateway tournant sans `trustProxy` derrière Traefik, cette adresse est celle
+du conteneur proxy : **la même pour tout le monde**.
+
+Un plafond « 3/h par compte » devient donc 3/h pour la PLATEFORME. C'est pire qu'un plafond absent :
+le premier appelant prive tous les autres, la protection se retourne en déni de service, et elle le
+fait silencieusement — le limiteur fonctionne, rend des 429 au bon rang, et rien ne signale que le
+seau est commun.
+
+**Comment je m'y suis pris pour ne pas le voir.** J'ai validé la clé en appelant le `keyGenerator`
+à la main et en lisant ce qu'il rendait. Cet appel-là ne peut PAS voir le défaut : il fournit
+lui-même l'`authContext` que le plugin, lui, n'a pas encore. J'ai ensuite écrit « clé par compte »
+dans deux commentaires de clôture (#4184, #4178).
+
+> **Un témoin d'intégration monte la vraie route sur le vrai plugin et lit la valeur RÉELLEMENT
+> calculée.** Dès qu'une valeur dépend d'un ORDRE (un hook, une phase, un middleware posé avant un
+> autre), l'appeler directement teste la fonction et pas le système — et c'est l'ordre qui était en
+> cause.
+
+Corollaire de garde : tenir la **cause** en plus du symptôme. Le témoin assère `hook === 'preHandler'`
+à côté de « la clé porte le userId », pour tomber même si quelqu'un fabrique la clé autrement.
+
+Corollaire de lot : un défaut hérité voyage avec celui qu'on corrige. `skipOnError: true`, posé
+globalement et fusionné par `Object.assign` dans toute config qui ne le redéclare pas, faisait
+échouer ces limiteurs dans le sens OUVERT — rouvrant une couche plus bas exactement ce que #4184
+venait de fermer sur son limiteur de renvoi.
+
+La découverte revient au lot #4147, dont le doc-comment l'énonce. **Je l'ai prouvée au lieu de la
+croire, et elle m'a rendu mes propres plafonds.** Détail et dette restante : issue #4347.

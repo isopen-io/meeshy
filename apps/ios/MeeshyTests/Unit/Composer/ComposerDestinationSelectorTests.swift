@@ -61,7 +61,7 @@ final class ComposerDestinationSelectorTests: XCTestCase {
             host.contains("ComposerDocumentDestination"),
             "L'enum de destination n'est plus référencé — l'éventail (`ComposerFormat`) est la seule source du mode."
         )
-        let surface = compact(try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"))
+        let surface = compact(try AppSourceGuard.composerSurfaceSource())
         XCTAssertFalse(
             surface.contains("enumComposerDocumentDestination"),
             "L'enum `ComposerDocumentDestination` est SUPPRIMÉ, jamais laissé en jumelle divergente."

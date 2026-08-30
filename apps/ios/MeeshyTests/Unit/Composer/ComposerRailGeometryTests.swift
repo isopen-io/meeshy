@@ -154,13 +154,7 @@ final class ComposerRailGeometryTests: XCTestCase {
     // MARK: - La garde de SOURCE : la règle est-elle CONSOMMÉE ?
 
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
     }
 
     private func compact(_ text: String) -> String {

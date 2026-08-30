@@ -72,8 +72,21 @@ extension MeeshyComposerHost {
     /// différence de l'atelier : la scène incrustée ne joue aucun son, il n'y a
     /// donc rien à faire taire — poster quand même laisserait un canvas MUET
     /// derrière l'aperçu, sans personne pour le rallumer sur cette surface.
-    var previewButton: some View {
-        Button {
+    /// **Sous la SCÈNE, l'œil est EXÉCUTÉ par l'atelier** (#4135) — le meuble ne
+    /// fait que presser. La raison est mesurée : l'atelier replie d'abord les
+    /// effets du canvas courant (`snapshotAllSlides`) et rend l'aperçu avec ses
+    /// médias PRÉCHARGÉS ; un aperçu peint et exécuté ici les ignorerait et
+    /// montrerait une scène amputée — ce qu'interdit la loi 6.
+    ///
+    /// Sous le DOCUMENT, rien ne change : la scène incrustée édite
+    /// `viewModel.currentSlide` en direct par un `Binding`, le tableau EST à
+    /// jour, et le replier une seconde fois écraserait la slide courante par une
+    /// copie plus ancienne.
+    func performSoclePreview() {
+        switch mountedSurface {
+        case .scene:
+            publishTrigger.requestPreview()
+        case .document, .mood:
             onPreview(
                 viewModel.slides,
                 viewModel.slideImages,
@@ -81,6 +94,12 @@ extension MeeshyComposerHost {
                 viewModel.loadedVideoURLs,
                 viewModel.loadedAudioURLs
             )
+        }
+    }
+
+    var previewButton: some View {
+        Button {
+            performSoclePreview()
         } label: {
             Image(systemName: "eye")
                 .font(.subheadline.weight(.semibold))
@@ -271,9 +290,31 @@ extension MeeshyComposerHost {
     /// son nom accessible à l'instant précis où il était occupé. L'état en vol
     /// est porté par `accessibilityValue`, et l'auteur le voit à la teinte qui
     /// retombe.
+    /// **Ce que la flèche du socle PRESSE, selon la surface** (#4135).
+    ///
+    /// Sous la scène, elle ne fabrique aucun brouillon : elle presse la
+    /// télécommande, en lui apportant le format ET l'audience choisis AU MOMENT
+    /// DU GESTE. C'est l'atelier qui publie — un second chemin d'envoi côté
+    /// meuble est ce que la doctrine, C2 et le lot 7 interdisent tous les trois.
+    ///
+    /// L'audience voyage avec ses personnes nommées, jamais seule : un mode sans
+    /// sa liste publierait vers un ensemble que personne n'a choisi.
+    func performSoclePublish() {
+        switch mountedSurface {
+        case .scene:
+            publishTrigger.requestPublish(
+                as: selectedFormat.postType,
+                visibility: composerVisibility.rawValue,
+                visibilityUserIds: composerVisibilityUserIds
+            )
+        case .document, .mood:
+            publishDocument()
+        }
+    }
+
     var publishButton: some View {
         Button {
-            publishDocument()
+            performSoclePublish()
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: "arrow.up.circle")
@@ -375,7 +416,11 @@ extension MeeshyComposerHost {
             visibility: composerVisibility,
             visibilityUserIds: composerVisibilityUserIds,
             isPublishing: isPublishingDocument,
-            repostOfId: intent.origin.repostedPostId
+            repostOfId: intent.origin.repostedPostId,
+            // Sous la scène, la matière est celle de l'ATELIER, relayée par la
+            // télécommande (#4135). Le meuble ne la recalcule pas : il ne voit
+            // ni le son de fond ni les traits de dessin.
+            atelierHasMatter: publishTrigger.canPublish
         )
     }
 

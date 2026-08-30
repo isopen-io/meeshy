@@ -45,13 +45,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// pour `ComposerDocumentSurface.swift` : c'est là que vit
     /// `DocumentComposerDoor.publish`, la porte d'envoi, jamais dans le meuble.
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.composerSurfaceSource()
     }
 
     private func surfaceCode() throws -> String {

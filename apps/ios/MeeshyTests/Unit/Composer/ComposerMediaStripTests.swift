@@ -64,7 +64,7 @@ final class ComposerMediaStripTests: XCTestCase {
             "Le ruban vit en DEUX exemplaires — l'ancien en bas, le rail en haut : deux inventaires du "
                 + "même média, à faire diverger au premier chemin d'ingestion qui n'alimente que l'un.")
         XCTAssertFalse(
-            try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+            try AppSourceGuard.composerSurfaceSource()
                 .contains("private var mediaStrip"),
             "L'ancien ruban est revenu dans le document : c'est le second inventaire que #4047 interdit."
         )

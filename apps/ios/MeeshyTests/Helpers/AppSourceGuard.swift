@@ -123,4 +123,23 @@ enum AppSourceGuard {
     static func composerHostSource() throws -> String {
         try unit(composerHostPath, alsoIncluding: composerHostCompanions)
     }
+
+    /// L'unité de la surface DOCUMENT : la vue, plus les deux fichiers de règles
+    /// pures qui en sont sortis au #4103 (`ComposerSurfaceRules`,
+    /// `ComposerDocumentRules`). Même raison que pour le meuble : sans l'unité,
+    /// toute garde négative dont l'interdit a suivi les règles passerait au vert
+    /// en lisant la moitié qui ne le contient plus.
+    static let composerSurfacePath = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    static let composerSurfaceCompanions = [
+        "Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift",
+        "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift"
+    ]
+
+    static func composerSurfaceURLs() -> [URL] {
+        unitURLs(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
+
+    static func composerSurfaceSource() throws -> String {
+        try unit(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
 }

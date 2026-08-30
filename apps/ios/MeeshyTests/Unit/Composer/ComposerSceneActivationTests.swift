@@ -71,7 +71,7 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 3 — la surface document PEINT un picker de couleur de fond, sur la palette
     // partagée du SDK (aucune palette recopiée).
     func test_laSurface_peintLePickerDeFond_surLaPalettePartagee() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let raw = try AppSourceGuard.composerSurfaceSource()
         XCTAssertTrue(raw.contains("private var backgroundStrip"),
                       "backgroundStrip introuvable ou source vide")
         let src = compact(raw)

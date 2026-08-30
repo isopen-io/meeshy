@@ -39,7 +39,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "BubbleStandardLayout.swift",
         "CallManager.swift",
         "CallView.swift",
-        "ComposerDocumentSurface.swift",
         "ComposerMoodSurface.swift",
         "ConversationDashboardView.swift",
         "ConversationInfoSheet.swift",
@@ -97,7 +96,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// tout ce que le fichier pesait, et non de sa seule part au-dessus de 1100 :
     /// un nom qui sort de la liste en sort ENTIER, sinon le cliquet garderait du
     /// mou au nom d'un fichier qu'il ne mesure plus.
-    private static let legacyLineCeiling = 85_271
+    /// **82 770 depuis #4103.** `ComposerDocumentSurface.swift` a quitté la dette
+    /// à son tour : ses 2 534 lignes se répartissent en `ComposerSurfaceRules`
+    /// (512, les règles de surface : routage, propriété du chrome, `⋯`, mémoire
+    /// d'audience), `ComposerDocumentRules` (1 004, les règles du document :
+    /// ingestion, envoi, refus, gate, libellés) et la VUE (1 043). Le plafond
+    /// baisse de tout ce que le fichier pesait — un nom qui sort de la liste en
+    /// sort ENTIER.
+    private static let legacyLineCeiling = 82_770
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
