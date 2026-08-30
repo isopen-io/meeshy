@@ -18,4 +18,8 @@
     <string name="notifications_category_calls">Appels</string>
     <string name="notifications_category_translations">Traductions</string>
     <string name="notifications_category_system">Système</string>
+    <string name="notification_banner_in_conversation">%1$s dans %2$s</string>
+    <string name="notification_banner_media_photo">📷 Photo</string>
+    <string name="notification_banner_media_video">🎥 Vidéo</string>
+    <string name="notification_banner_media_audio">🎵 Audio</string>
 </resources>

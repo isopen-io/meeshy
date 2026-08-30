@@ -370,4 +370,62 @@ final class RiverConversationMappingTests: XCTestCase {
         XCTAssertEqual(contents.first?.identity?.storyRing, StoryRingState.none)
         XCTAssertEqual(contents.first?.identity?.profileUser.participantId, "alice")
     }
+
+    // MARK: - #3946 — l'empreinte est évaluée à CHAQUE passe de body
+
+    /// Sa docstring promettait « jamais à chaque passe de body » ; son site
+    /// d'appel la contredisait — passée en argument d'`adaptiveOnChange(of:)`,
+    /// elle est réévaluée à chaque évaluation du body. La promesse ne pouvant
+    /// pas être tenue là où elle était écrite, c'est le COÛT qui a été rendu
+    /// négligeable : plus aucune allocation.
+    func test_fingerprint_buildsNoStringPerBodyPass() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Riviere
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy/Features/Main/Riviere/Core/RiverConversationMapping.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+
+        let start = try XCTUnwrap(source.range(of: "static func fingerprint(messages:"),
+                                  "`fingerprint` a disparu ou changé de signature — la garde ne vise plus rien.")
+        let body = String(source[start.lowerBound...].prefix(400))
+
+        XCTAssertFalse(body.contains("joined("),
+                       "L'empreinte reconstruit une chaîne de N identifiants à chaque passe de body : "
+                       + "sur un fil de mille messages, ~25 ko alloués par frame.")
+        XCTAssertTrue(body.contains("Hasher()"),
+                      "L'empreinte doit se calculer sans rien allouer — un `Hasher` parcourt les mêmes "
+                      + "identifiants et rend un entier.")
+    }
+
+    /// Le compte accompagne le hachage : deux fils distincts ne se fient pas
+    /// au seul digest.
+    func test_fingerprint_carriesTheCount_notOnlyADigest() {
+        let two = [message("m1", sender: "alice", minutes: 0), message("m2", sender: "bob", minutes: 1)]
+        XCTAssertEqual(RiverConversationMapping.fingerprint(messages: two).count, 2)
+    }
+
+    /// L'ORDRE compte : la loi donne des RANGS, et deux fils aux mêmes
+    /// identifiants dans un autre ordre ne se dessinent pas pareil.
+    func test_fingerprint_distinguishesOrder() {
+        let a = message("m1", sender: "alice", minutes: 0)
+        let b = message("m2", sender: "bob", minutes: 1)
+        XCTAssertNotEqual(
+            RiverConversationMapping.fingerprint(messages: [a, b]),
+            RiverConversationMapping.fingerprint(messages: [b, a]),
+            "un hachage insensible à l'ordre laisserait une réorganisation passer inaperçue"
+        )
+    }
+
+    /// Même fil, même empreinte — sinon la géométrie serait recalculée à
+    /// chaque passe, ce que l'empreinte existe précisément pour empêcher.
+    func test_fingerprint_isStableForTheSameThread() {
+        let thread = [message("m1", sender: "alice", minutes: 0), message("m2", sender: "bob", minutes: 1)]
+        XCTAssertEqual(
+            RiverConversationMapping.fingerprint(messages: thread),
+            RiverConversationMapping.fingerprint(messages: thread)
+        )
+    }
+
 }

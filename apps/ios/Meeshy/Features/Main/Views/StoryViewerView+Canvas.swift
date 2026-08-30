@@ -1725,11 +1725,11 @@ struct StoryCardView: View {
             // désormais la règle — dix MOTS, de l'ombre plutôt qu'une boîte, et
             // le plein écran ancré au coin bas-gauche quand on déplie (#4474).
             if currentVoiceCaption == nil, let description = currentStoryDescription {
-                MediaCaptionOverlay(
-                    caption: description,
-                    isExpanded: isCaptionExpanded,
-                    onToggle: onCaptionExpansionToggled
-                )
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
+                                        onToggle: onCaptionExpansionToggled)
+                }
                 .padding(.bottom, isCaptionExpanded ? 0 : topInset + 130)
                 .transition(.opacity)
             }

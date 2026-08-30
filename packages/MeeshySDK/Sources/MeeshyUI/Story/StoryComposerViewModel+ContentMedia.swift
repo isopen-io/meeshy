@@ -76,6 +76,50 @@ public nonisolated enum ComposerAudioPlacement {
     public static func isBackground(sceneAlreadyHasBackgroundAudio: Bool) -> Bool? {
         sceneAlreadyHasBackgroundAudio ? nil : true
     }
+
+    /// **Le choix de l'AUTEUR gagne sur la règle automatique (#4483).**
+    ///
+    /// La règle ci-dessus DEVINE : elle met en fond le premier son d'une scène
+    /// qui n'en a pas. C'est un bon défaut, et il reste le défaut — `nil`
+    /// signifie « l'auteur n'a rien dit », pas « premier plan ». Ce qui change
+    /// est qu'il devient possible de le contredire, ce que le porteur a demandé
+    /// (« de les mettre en background ou en foreground »).
+    public static func isBackground(chosen: ComposerAudioRole?,
+                                    sceneAlreadyHasBackgroundAudio: Bool) -> Bool? {
+        switch chosen {
+        case .background:
+            return true
+        case .foreground:
+            // `nil` et `false` disent tous deux « pas en fond » sur
+            // `StoryAudioPlayerObject`, et tout l'existant écrit `nil`. Écrire
+            // `false` ici changerait ce que la persistance voit sans qu'aucun
+            // témoin ne le demande.
+            return nil
+        case .none:
+            return isBackground(sceneAlreadyHasBackgroundAudio: sceneAlreadyHasBackgroundAudio)
+        }
+    }
+}
+
+/// **Le rôle de MIXAGE d'un son sur une scène — distinct de son CRÉDIT.**
+///
+/// La doctrine du composer affirmait qu'« une note vocale n'est JAMAIS un fond
+/// audio », au motif qu'un fond allume le crédit (« ♫ NUITS BLANCHES · @lume »).
+/// Elle confondait deux champs orthogonaux de `StoryAudioPlayerObject` :
+///
+/// | ce qui est en jeu | le champ qui le porte | qui l'écrit |
+/// |---|---|---|
+/// | le CRÉDIT | `soundId` + `soundAuthorUsername` | `addBorrowedSound`, et lui seul |
+/// | le rôle de MIXAGE | `isBackground` | n'importe quel son |
+///
+/// Un vocal mis en fond porte donc `isBackground = true` et `soundId = nil` : le
+/// bon mixage, sans ligne de crédit mensongère. Ce que la doctrine protégeait
+/// vraiment reste protégé.
+public nonisolated enum ComposerAudioRole: String, Equatable, Hashable, CaseIterable, Sendable {
+    /// Sous tout le reste, en boucle — la bande-son de la scène.
+    case background
+    /// Un objet parmi les autres, avec sa place et sa durée.
+    case foreground
 }
 
 /// **L'extension sous laquelle un média porté est MATÉRIALISÉ (#4038).**
@@ -236,5 +280,62 @@ public extension StoryComposerViewModel {
         guard let index = effects.audioPlayerObjects?.firstIndex(where: { $0.id == objectId }) else { return }
         effects.audioPlayerObjects?[index].waveformSamples = samples
         currentEffects = effects
+    }
+}
+
+public extension StoryComposerViewModel {
+
+    /// **Poser le rôle de mixage d'un son de la scène (#4483).**
+    ///
+    /// Deux invariants, et le second n'est pas celui qu'on croit.
+    ///
+    /// ## Un seul fond par slide
+    ///
+    /// Promouvoir un son RÉTROGRADE celui qui l'était — il ne disparaît pas, il
+    /// redevient un objet parmi les autres. `backgroundAudioId` (le champ
+    /// legacy) n'est PAS touché : `resolvedBackgroundAudio` élit d'abord un
+    /// objet `isBackground == true`, donc le legacy est déjà éclipsé. Le nuller
+    /// SUPPRIMERAIT une bande-son que l'auteur n'a pas demandé d'effacer.
+    ///
+    /// ## `false` n'est pas `nil`, et ici la nuance décide
+    ///
+    /// Sur `StoryAudioPlayerObject`, `nil` et `false` disent tous deux « pas en
+    /// fond » — sauf pour `resolvedBackgroundAudio`, qui ne consulte le fond
+    /// legacy QUE si **tous** les objets sont à `nil` (« l'auteur n'a rien
+    /// dit »). Rétrograder vers `nil` ferait donc REVIVRE un ancien fond que
+    /// personne n'a redemandé.
+    ///
+    /// D'où la règle : on écrit `false` — « l'auteur a parlé » — et seulement
+    /// quand l'objet était EFFECTIVEMENT le fond. Choisir « premier plan » sur
+    /// un son qui l'est déjà ne doit rien changer : écrire `false` là
+    /// éteindrait le legacy d'une slide qui s'en sert, sans que l'auteur ait
+    /// touché à ce son-là.
+    ///
+    /// L'historique suit tout seul : `currentEffects` est publié, et le
+    /// `historyTrigger` débouncé enregistre l'instantané.
+    func setAudioRole(id: String, role: ComposerAudioRole) {
+        var effects = currentEffects
+        guard var audios = effects.audioPlayerObjects,
+              let cible = audios.firstIndex(where: { $0.id == id }) else { return }
+
+        switch role {
+        case .background:
+            for autre in audios.indices where autre != cible && audios[autre].isBackground == true {
+                audios[autre].isBackground = false
+            }
+            audios[cible].isBackground = true
+        case .foreground:
+            guard audios[cible].isBackground == true else { return }
+            audios[cible].isBackground = false
+        }
+
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
+    }
+
+    /// Le rôle ACTUEL d'un son — ce que le sélecteur doit montrer coché.
+    func audioRole(id: String) -> ComposerAudioRole {
+        let audio = (currentEffects.audioPlayerObjects ?? []).first { $0.id == id }
+        return audio?.isBackground == true ? .background : .foreground
     }
 }

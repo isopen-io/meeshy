@@ -457,7 +457,7 @@ struct ConversationView: View {
     /// publishes from each `BubbleSwipeContainer`. The long-press handler
     /// looks up the target message's frame here at gesture fire time and
     /// passes it to `MessageOverlayMenu` as the source frame.
-    @State var frameTracker = MessageFrameTracker()
+    @State var frameTracker = MessageFrameBox()
 
     /// Publisher stable (référence identique à chaque body eval) : l'inline
     /// dans scrollToBottomButton reconstruisait l'abonnement au coordinator à

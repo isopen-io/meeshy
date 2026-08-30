@@ -571,16 +571,95 @@ extension MeeshyComposerHost {
         HapticFeedback.light()
     }
 
+    /// **Une porte, une feuille (#4483).** Elle ouvrait un choix à deux options
+    /// dont les branches n'atterrissaient pas au même endroit : emprunter posait
+    /// un son SUR LA SCÈNE, enregistrer le versait dans `documentLocalMedia` —
+    /// la liste du DOCUMENT. Un vocal enregistré depuis une scène n'atteignait
+    /// donc jamais cette scène.
     func presentSoundSources() {
         HapticFeedback.light()
-        showsSoundSourceChooser = true
+        presentedPortal = .sound
     }
 
+    /// Les provenances SECONDAIRES, offertes sous le micro dans la feuille.
+    /// `.record` n'y figure pas : c'est la surface principale, pas une porte.
     func presentSoundSource(_ source: ComposerSoundSource) {
         switch source {
-        case .library: presentedPortal = .soundLibrary
-        case .record:  handleDocumentTool(.microphone)
+        case .library:
+            presentedPortal = .soundLibrary
+        case .files:
+            railPosesNextMedia = true
+            showsFileImporter = true
+        case .record:
+            break
         }
+    }
+
+    /// **LA feuille du son.** L'enregistreur du SDK en est la surface — il porte
+    /// déjà ses deux entrées « Fichiers » et « Bibliothèque », que le composer
+    /// ne lui passait simplement jamais — et le rôle de mixage se pose SOUS le
+    /// bouton, à la place que le porteur a nommée.
+    ///
+    /// Le résultat va sur la SCÈNE (`attachPastedAudio`), jamais dans la liste
+    /// média du document : c'est tout le correctif.
+    var composerSoundSheet: some View {
+        UnifiedAudioRecorderSheet(
+            preferredLanguage: documentLanguage,
+            showsLanguageStrip: true,
+            onImportAudioFile: { presentSoundSource(.files) },
+            onOpenSoundLibrary: { presentSoundSource(.library) },
+            accessory: AnyView(soundRolePicker),
+            onRecordComplete: { url, _ in
+                viewModel.attachPastedAudio(url: url, role: chosenSoundRole)
+                presentedPortal = nil
+                HapticFeedback.light()
+            }
+        )
+    }
+
+    /// Fond ou premier plan — le choix appliqué à ce que la feuille va poser.
+    ///
+    /// La sélection affichée est le rôle qui s'appliquerait SANS choix : tant
+    /// que l'auteur n'a rien dit, la pastille montre ce que la règle
+    /// automatique ferait, et non un défaut arbitraire qui la contredirait.
+    @ViewBuilder
+    var soundRolePicker: some View {
+        let effectif = chosenSoundRole ?? automaticSoundRole
+        VStack(alignment: .leading, spacing: 6) {
+            Text(ComposerSoundRoleCopy.title)
+                .font(MeeshyFont.relative(12, weight: .semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(ComposerAudioRole.allCases, id: \.self) { role in
+                    Button {
+                        chosenSoundRole = role
+                        HapticFeedback.light()
+                    } label: {
+                        Text(ComposerSoundRoleCopy.label(role))
+                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(
+                                Capsule().fill(role == effectif
+                                               ? Color.accentColor.opacity(0.22)
+                                               : Color.primary.opacity(0.07))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(ComposerSoundRoleCopy.label(role))
+                    .accessibilityAddTraits(role == effectif ? [.isSelected] : [])
+                }
+            }
+        }
+        .padding(.top, 10)
+    }
+
+    /// Ce que la règle ferait si l'auteur ne disait rien — la source unique,
+    /// APPELÉE et jamais recopiée.
+    var automaticSoundRole: ComposerAudioRole {
+        ComposerAudioPlacement.isBackground(
+            sceneAlreadyHasBackgroundAudio: viewModel.currentEffects.resolvedBackgroundAudio != nil
+        ) == true ? .background : .foreground
     }
 
     /// L'étagère des sons. Le picker vient du SDK — le meuble ne fait que le

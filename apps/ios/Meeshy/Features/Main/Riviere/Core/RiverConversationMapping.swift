@@ -307,14 +307,41 @@ nonisolated enum RiverConversationMapping {
     }
 
     /// Empreinte du fil pour ne recalculer la géométrie que si les messages
-    /// QUI ONT UN RANG ont changé (ids + compte) — jamais à chaque passe de
-    /// body.
+    /// QUI ONT UN RANG ont changé (ids + compte).
     ///
     /// Lot 2 : les avis système en font désormais partie. Tant qu'ils étaient
     /// écartés de la loi, les ignorer ici était juste ; maintenant qu'ils
     /// occupent un rang, une arrivée qui n'aurait pas changé l'empreinte
     /// n'aurait jamais été redessinée.
-    static func fingerprint(messages: [MeeshyMessage]) -> String {
-        messages.lazy.filter { !$0.isDeleted }.map(\.id).joined(separator: "|")
+    ///
+    /// **Elle n'ALLOUE plus.** La docstring promettait « jamais à chaque passe
+    /// de body » et le site d'appel la contredisait : l'empreinte est passée en
+    /// ARGUMENT d'`adaptiveOnChange(of:)`, donc réévaluée à chaque évaluation
+    /// du body — et elle construisait alors une chaîne de N identifiants
+    /// (`map(\.id).joined(separator: "|")`), soit une allocation
+    /// proportionnelle au fil, à chaque passe. Sur une conversation de mille
+    /// messages, une chaîne de ~25 ko par frame.
+    ///
+    /// Le COMPARATEUR n'a jamais eu besoin de la chaîne : seule l'égalité
+    /// compte. Un `Hasher` parcourt les mêmes identifiants sans rien allouer,
+    /// et le compte l'accompagne pour que deux fils distincts n'aient pas à se
+    /// fier au seul hachage.
+    ///
+    /// L'empreinte ne vaut QUE dans le processus qui l'a calculée
+    /// (`Hasher` est ensemencé par exécution) — elle ne se persiste pas, ne se
+    /// journalise pas et ne voyage sur aucun fil.
+    struct Fingerprint: Equatable {
+        let count: Int
+        let digest: Int
+    }
+
+    static func fingerprint(messages: [MeeshyMessage]) -> Fingerprint {
+        var hasher = Hasher()
+        var count = 0
+        for message in messages where !message.isDeleted {
+            hasher.combine(message.id)
+            count += 1
+        }
+        return Fingerprint(count: count, digest: hasher.finalize())
     }
 }

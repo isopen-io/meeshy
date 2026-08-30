@@ -662,7 +662,9 @@ extension StoryComposerViewModel {
     }
 
     @discardableResult
-    func addAudioObject() -> StoryAudioPlayerObject? {
+    /// `role` nil ⇒ la règle automatique s'applique telle quelle : aucun site
+    /// d'appel existant ne change de comportement (#4483).
+    func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         // Auto-bascule en background si aucun audio n'est déjà en background
@@ -680,6 +682,7 @@ extension StoryComposerViewModel {
             // de vue, et interdit qu'un jour les deux divergent sur « un audio
             // écrase-t-il celui qui est déjà en fond ? ».
             isBackground: ComposerAudioPlacement.isBackground(
+                chosen: role,
                 sceneAlreadyHasBackgroundAudio: currentEffects.resolvedBackgroundAudio != nil
             ),
             sourceLanguage: declaredContentLanguage

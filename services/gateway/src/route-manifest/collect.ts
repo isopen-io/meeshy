@@ -220,9 +220,23 @@ export interface CollectedRoute {
   /** Meilleur effort — voir la note de module en tête de fichier. */
   module: string;
   onRequest?: unknown;
+  /**
+   * La CINQUIÈME forme de garde — 186 déclarations dans `routes/`, et le
+   * collecteur ne lisait pas cette phase du tout (#4318). `preValidation:
+   * [fastify.authenticate]` est aussi gardante qu'`onRequest`, et
+   * `routes/posts/core.ts`, `routes/calls.ts`, `routes/auth/*` l'emploient.
+   */
+  preValidation?: unknown;
   preHandler?: unknown;
   bodySchema?: any;
   querystringSchema?: any;
+  /**
+   * Vraie quand la route hérite d'une garde d'authentification posée par un
+   * hook d'INSTANCE (`fastify.addHook('preHandler', authMiddleware)`) plutôt
+   * que par ses propres `onRequest`/`preHandler`. Renseignée APRÈS
+   * `app.ready()` — voir `instrumentEncapsulatedAuthHooks`.
+   */
+  instanceAuthGuard?: boolean;
 }
 
 /** Étiquette portée par une route déclarée SANS passer par `server.register(...)` — voir la note de module en tête de fichier. */
@@ -270,6 +284,95 @@ function instrumentRegistrationForModuleLabels(app: FastifyInstance): () => stri
 }
 
 /**
+ * La QUATRIÈME forme d'authentification — celle qu'aucun marqueur de source ne
+ * pouvait attraper (#4318).
+ *
+ * Les trois premières vivent sur la route : `fastify.authenticate` par
+ * référence, son enrobage, et `createUnifiedAuthMiddleware(...)` reconnue par
+ * son appel interne. Toutes trois se lisent dans `routeOptions.onRequest` /
+ * `routeOptions.preHandler`, que le hook `onRoute` expose.
+ *
+ * La quatrième ne s'y trouve PAS : c'est un hook d'INSTANCE, posé une fois
+ * pour tout un contexte d'encapsulation —
+ *
+ * ```ts
+ * fastify.addHook('preHandler', authMiddleware);   // routes/me/preferences/index.ts
+ * ```
+ *
+ * — et Fastify ne le recopie sur aucune route. Le collecteur ne voyait donc
+ * rien, et le manifeste classait ces routes « public par construction ». La
+ * mesure sur staging (#4318, 2026-08-29) : dix routes ainsi annoncées, tirées
+ * au hasard, rendaient 401 sans jeton. **Une table qui annonce public sur une
+ * route gardée est pire qu'une table absente** — elle est crédible.
+ *
+ * ## Ce qu'on instrumente, et pourquoi c'est le même geste qu'au-dessus
+ *
+ * `instrumentRegistrationForModuleLabels` patche `register` pour savoir QUEL
+ * plugin déclare une route. Ici on patche `addHook` sur chaque contexte
+ * encapsulé pour savoir si CE contexte porte une garde — le même motif, un
+ * cran plus profond, comme la piste de l'issue l'annonçait.
+ *
+ * Le hook `onRegister` est déclenché par Fastify à la création de chaque
+ * nouveau contexte, AVANT que la fonction du plugin ne s'exécute : le patch
+ * est donc en place quand le plugin appelle `addHook`, quel que soit l'ordre
+ * de ses déclarations. Et l'`onRoute` posé sur ce même contexte ne capte que
+ * les routes qui y sont déclarées ET celles de ses descendants — exactement la
+ * portée d'un hook d'instance, jamais plus large : une route SŒUR, déclarée
+ * dans le contexte parent, n'exécute pas ce hook et n'est pas marquée.
+ *
+ * L'association ne peut se résoudre qu'après `app.ready()` : un contexte peut
+ * poser sa garde APRÈS avoir déclaré ses routes, et un marquage fait au vol
+ * raterait ce cas-là sans que rien ne le dise.
+ */
+function instrumentEncapsulatedAuthHooks(
+  app: FastifyInstance,
+  authenticateRef: unknown
+): () => ReadonlySet<string> {
+  interface ContexteEncapsule {
+    porteUneGarde: boolean;
+    readonly clesDeRoute: Set<string>;
+  }
+
+  const contextes: ContexteEncapsule[] = [];
+
+  const PHASES_DE_GARDE = new Set(['onRequest', 'preValidation', 'preHandler']);
+
+  app.addHook('onRegister', (instance: FastifyInstance) => {
+    const contexte: ContexteEncapsule = { porteUneGarde: false, clesDeRoute: new Set() };
+    contextes.push(contexte);
+
+    // Fastify type `addHook` par une surcharge par nom de phase que la
+    // réaffectation ci-dessous ne peut pas satisfaire structurellement — ce
+    // module n'a besoin que du comportement RUNTIME.
+    const original = instance.addHook.bind(instance) as (name: string, fn: unknown) => FastifyInstance;
+
+    (instance as unknown as { addHook: (name: string, fn: unknown) => FastifyInstance }).addHook =
+      function instrumentedAddHook(name: string, fn: unknown) {
+        if (PHASES_DE_GARDE.has(name) && hookLooksLikeAuth(fn, authenticateRef)) {
+          contexte.porteUneGarde = true;
+        }
+        return original(name, fn);
+      };
+
+    original('onRoute', (routeOptions: any) => {
+      const methods = Array.isArray(routeOptions.method) ? routeOptions.method : [routeOptions.method];
+      for (const method of methods) {
+        contexte.clesDeRoute.add(`${method} ${routeOptions.url}`);
+      }
+    });
+  });
+
+  return () => {
+    const gardees = new Set<string>();
+    for (const contexte of contextes) {
+      if (!contexte.porteUneGarde) continue;
+      for (const cle of contexte.clesDeRoute) gardees.add(cle);
+    }
+    return gardees;
+  };
+}
+
+/**
  * Monte le serveur Fastify ASSEMBLÉ — le VRAI graphe de routes
  * (`registerAllRoutes`), sur un stub Prisma et des décorations minimales — et
  * rend la table complète des routes captées par `onRoute`, HEAD/OPTIONS
@@ -310,6 +413,10 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
   });
   app.decorate('authenticate', authenticate);
 
+  // Doit précéder tout `register` : le hook `onRegister` ne voit que les
+  // contextes créés APRÈS sa pose.
+  const routesGardeesParInstance = instrumentEncapsulatedAuthHooks(app, authenticate);
+
   app.decorate('prisma', prismaStub);
   app.decorate('redis', undefined);
   app.decorate('mentionService', {} as any);
@@ -338,6 +445,7 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
         prefix: (routeOptions as any).prefix ?? '',
         module: currentModuleLabel(),
         onRequest: (routeOptions as any).onRequest,
+        preValidation: (routeOptions as any).preValidation,
         preHandler: (routeOptions as any).preHandler,
         bodySchema: schema?.body,
         querystringSchema: schema?.querystring,
@@ -390,6 +498,12 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
   await registerAllRoutes(app, deps);
   await app.ready();
 
+  // APRÈS `ready()` seulement — voir le doc de `instrumentEncapsulatedAuthHooks`.
+  const gardees = routesGardeesParInstance();
+  for (const route of routes) {
+    if (gardees.has(`${route.method} ${route.url}`)) route.instanceAuthGuard = true;
+  }
+
   return { app, routes };
 }
 
@@ -428,18 +542,44 @@ function hookSource(fn: unknown): string {
  * `routes/translation-non-blocking.ts`, `routes/attachments/download.ts`,
  * `routes/translation.ts`) : la source compilée de l'enrobage contient
  * toujours l'appel littéral `.authenticate(`, que `.toString()` révèle sans
- * ambiguïté plausible. Le résidu qui échapperait aux DEUX détections — une
- * authentification vérifiée entièrement À L'INTÉRIEUR d'un handler, sans
- * jamais apparaître comme hook — n'a été observé sur AUCUN site du dépôt.
+ * ambiguïté plausible.
+ *
+ * Le résidu — une authentification vérifiée entièrement À L'INTÉRIEUR d'un
+ * handler, sans jamais apparaître comme hook — était annoncé ici comme
+ * « n'a été observé sur AUCUN site du dépôt ». **C'était une quantification
+ * universelle jamais mesurée**, et elle était fausse : les quatre routes de
+ * `routes/uploads/tus-handler.ts` sont exactement ce cas. Elles sont désormais
+ * DÉCLARÉES dans `GARDES_HORS_HOOK` ci-dessous, avec leur raison — jamais
+ * devinées. C'est la leçon de #4318 : un doc-comment qui affirme plus que ce
+ * que son code mesure survit à toutes les relectures, parce qu'il rend le site
+ * crédible.
  */
-function hasAuthenticateHook(route: CollectedRoute, authenticateRef: unknown): boolean {
-  const hooks = [...asHookList(route.onRequest), ...asHookList(route.preHandler)];
-  return hooks.some(
-    (fn) =>
-      fn === authenticateRef ||
-      hookSource(fn).includes('.authenticate(') ||
-      hookSource(fn).includes(UNIFIED_AUTH_CALL_MARKER)
+function hookLooksLikeAuth(fn: unknown, authenticateRef: unknown): boolean {
+  return (
+    fn === authenticateRef ||
+    hookSource(fn).includes('.authenticate(') ||
+    hookSource(fn).includes(UNIFIED_AUTH_CALL_MARKER)
   );
+}
+
+/**
+ * Les TROIS phases où une garde peut vivre. Le collecteur n'en lisait que deux
+ * — `preValidation` manquait, et c'est la forme de 186 déclarations de
+ * `routes/` (#4318). Une phase oubliée ne rend pas un résultat approximatif :
+ * elle rend « aucune garde », donc « public ».
+ */
+function routeHooks(route: CollectedRoute): unknown[] {
+  return [
+    ...asHookList(route.onRequest),
+    ...asHookList(route.preValidation),
+    ...asHookList(route.preHandler),
+  ];
+}
+
+function hasAuthenticateHook(route: CollectedRoute, authenticateRef: unknown): boolean {
+  if (route.instanceAuthGuard === true) return true;
+  if (GARDES_HORS_HOOK.has(`${route.method} ${route.url}`)) return true;
+  return routeHooks(route).some((fn) => hookLooksLikeAuth(fn, authenticateRef));
 }
 
 /**
@@ -465,12 +605,43 @@ function hasAuthenticateHook(route: CollectedRoute, authenticateRef: unknown): b
  * échappe les caractères non-ASCII sous `tsx` et les préserve sous `ts-jest`,
  * ce qui ferait rougir le cliquet entre deux régénérations d'une MÊME route.
  */
+/**
+ * Les gardes qu'AUCUNE inspection de hook ne peut voir — déclarées, avec leur
+ * raison, jamais devinées (#4318).
+ *
+ * `routes/uploads/tus-handler.ts` monte le protocole TUS par `fastify.route`
+ * et confie l'authentification à `onIncomingRequest`, un point d'extension du
+ * serveur `@tus/server` — pas un hook Fastify. La garde y lève
+ * `{ status_code: 401, body: 'Authentication required' }` (l. 236, 249, 255).
+ * Elle est réelle et testée ; elle est simplement INVISIBLE à
+ * `routeOptions.onRequest / preValidation / preHandler`, les trois seules
+ * phases que le collecteur peut lire.
+ *
+ * Cet inventaire est le pendant de `ALLOWED_OUTSIDE_API_V1` et de
+ * `UNPREFIXED_MOUNT_DECISIONS` : **on n'interdit pas la forme, on exige la
+ * décision écrite.** Une entrée ici est une affirmation vérifiable — si la
+ * garde disparaît du handler, le témoin
+ * `route-auth-coverage.test.ts` § « rejette tout appelant totalement anonyme »
+ * rougit, puisqu'il interroge le serveur et ne lit pas cette table.
+ */
+const GARDES_HORS_HOOK: ReadonlySet<string> = new Set([
+  'POST /api/v1/uploads',
+  'POST /api/v1/uploads/*',
+  'PATCH /api/v1/uploads/*',
+  'DELETE /api/v1/uploads/*',
+  // `routes/auth/refresh` vérifie la SIGNATURE du jeton reçu dans le corps
+  // avant toute autre chose et répond 401 sans elle (`573581e27`). Aucun
+  // en-tête n'est exigé — d'où l'absence de hook — mais l'appelant doit
+  // prouver quelque chose, donc la route n'est pas « publique par
+  // construction ».
+  'POST /api/v1/auth/refresh',
+]);
+
 const UNIFIED_AUTH_CALL_MARKER = 'authMiddleware.createAuthContext(';
 
 /** Vrai si un hook contient l'appel INTERNE distinctif d'une des trois gardes nommées de `middleware/authorize.ts`. */
 function hasHookMarker(route: CollectedRoute, marker: string): boolean {
-  const hooks = [...asHookList(route.onRequest), ...asHookList(route.preHandler)];
-  return hooks.some((fn) => hookSource(fn).includes(marker));
+  return routeHooks(route).some((fn) => hookSource(fn).includes(marker));
 }
 
 /**

@@ -60,7 +60,7 @@ struct RiverConversationHost: View {
     @State private var laneWidthAtPinchStart: CGFloat = RiverMetrics.Lane.widthReference
     @GestureState private var isPinching = false
     @State private var geometry: RiverLaneResolver.RiverGeometry
-    @State private var fingerprint: String
+    @State private var fingerprint: RiverConversationMapping.Fingerprint
     /// Incrémenté quand le pane doit RE-CADRER le curseur : première
     /// géométrie peuplée, ou rangs préfixés (le curseur a changé de rang pour
     /// le MÊME message). Jamais pour un message qui s'ajoute en bout — un

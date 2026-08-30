@@ -67,12 +67,24 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// serait sur DEUX ensembles vides, ce qui passe.
     func test_lesEtatsDePresentation_sontLisiblesEtNombreux() throws {
         let etats = declaredPresentationStates(in: try hostSource())
-        // **Quatre depuis #4467**, et la baisse est le correctif : huit booléens
-        // de FEUILLE sont devenus un `ComposerPortal?`. Ce qui reste sont les
-        // présentations qui ne sont pas des feuilles — la photothèque,
-        // l'importateur — et les deux feuilles de choix.
-        XCTAssertGreaterThanOrEqual(etats.count, 4,
-            "Le meuble déclare au moins quatre sélecteurs — en lire moins veut dire que la lecture a cassé.")
+        // **Trois depuis #4483**, et la baisse est ENCORE le correctif. Le
+        // compte est passé de huit à quatre au #4467 (les feuilles devenues un
+        // `ComposerPortal?`), puis de quatre à trois ici : la porte du son
+        // n'offre plus un dialogue « emprunter / enregistrer » avant d'ouvrir
+        // quoi que ce soit — elle ouvre le micro, et les deux autres
+        // provenances vivent SOUS lui, dans la même feuille. Un sélecteur qui
+        // ne sélectionne plus rien n'a pas d'état à déclarer.
+        //
+        // Ce qui reste sont les présentations qui ne sont PAS des feuilles — la
+        // photothèque, l'importateur de fichiers — et l'unique dialogue de
+        // choix encore justifié, celui du média (caméra / photothèque /
+        // fichier ne posent pas le même objet).
+        //
+        // Le plancher reste un plancher : il garde contre la lecture qui casse
+        // (zéro état lu passerait sinon au vert), jamais contre une baisse
+        // voulue et motivée.
+        XCTAssertGreaterThanOrEqual(etats.count, 3,
+            "Le meuble déclare au moins trois sélecteurs — en lire moins veut dire que la lecture a cassé.")
         XCTAssertTrue(etats.contains("showsPhotoPicker"))
         XCTAssertTrue(etats.contains("showsFileImporter"))
     }

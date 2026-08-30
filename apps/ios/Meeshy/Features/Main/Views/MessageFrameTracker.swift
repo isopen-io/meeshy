@@ -67,3 +67,52 @@ struct MessageFrameTracker: Equatable {
         accessOrder.removeAll(where: { $0 == messageId })
     }
 }
+
+/// **La boîte qui empêche la mesure de réveiller la racine.**
+///
+/// `MessageFrameTracker` est une VALEUR, et une valeur tenue en `@State`
+/// invalide le body de son propriétaire à chaque mutation. Or son propriétaire
+/// est `ConversationView` — la racine du fil. En Bulles/Script/Focal la
+/// question ne se posait pas : la publication de préférence a été retirée du
+/// pont UIKit (`MessageListView`, audit fluidité 2026-08-21), donc la carte
+/// restait vide et stable. **En Rivière, le lecteur est un sous-arbre SwiftUI
+/// PUR** : chaque bulle publie sa frame, la préférence remonte jusqu'à la
+/// racine, `update(_:)` invalide `ConversationView`, qui reconstruit le pane,
+/// qui relayoute, qui republie — une boucle de rétroaction qui ne se referme
+/// jamais, et le mode le plus coûteux à l'idle du fil (mesures #3940 :
+/// +5,9 points de CPU sur Bulles, conversation INACTIVE).
+///
+/// La boîte casse la boucle sans rien retirer : une référence tenue en `@State`
+/// garde son identité, donc la muter ne réévalue AUCUN body. Et la lecture
+/// reste juste, parce qu'elle n'a jamais eu besoin de l'invalidation — la
+/// frame est lue au moment du GESTE (`overlayMenuContent`, sous
+/// `overlayState.showOverlayMenu`), et c'est ce drapeau-là qui provoque la
+/// passe de body où la valeur est relue. La carte est aussi fraîche qu'avant ;
+/// elle a cessé d'être une source de rendu.
+///
+/// C'est le principe « Zero Unnecessary Re-render » appliqué à une donnée qui
+/// est ÉCRITE à chaque frame et LUE une fois par geste : un tel couple ne doit
+/// jamais passer par l'invalidation.
+///
+/// La loi LRU reste dans la valeur, où elle est testée
+/// (`MessageFrameTrackerTests`) : la boîte ne fait que la porter.
+@MainActor
+final class MessageFrameBox {
+    private var tracker: MessageFrameTracker
+
+    init(maxEntries: Int = 200) {
+        tracker = MessageFrameTracker(maxEntries: maxEntries)
+    }
+
+    func update(_ newFrames: [String: CGRect]) {
+        tracker.update(newFrames)
+    }
+
+    func frame(for messageId: String) -> CGRect? {
+        tracker.frame(for: messageId)
+    }
+
+    func removeFrame(for messageId: String) {
+        tracker.removeFrame(for: messageId)
+    }
+}

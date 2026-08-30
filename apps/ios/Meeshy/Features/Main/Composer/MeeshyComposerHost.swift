@@ -253,7 +253,10 @@ struct MeeshyComposerHost: View {
     /// enregistrer un vocal ne posent pas le même objet — le premier devient le
     /// fond de la scène, le second jamais — donc la porte demande, elle ne
     /// devine pas.
-    @State var showsSoundSourceChooser = false
+    /// **Le rôle choisi pour le son que la feuille va poser (#4483).** `nil` =
+    /// « l'auteur n'a rien dit » — la règle automatique s'applique alors mot
+    /// pour mot, et c'est ce qui garantit qu'aucun geste existant ne change.
+    @State var chosenSoundRole: ComposerAudioRole?
 
 
     @State var showsMediaSourceChooser = false
@@ -966,16 +969,6 @@ struct MeeshyComposerHost: View {
             }
             Button(ComposerMediaSourcePolicy.cancel, role: .cancel) { }
         }
-        .confirmationDialog(ComposerSoundSourcePolicy.chooserTitle,
-                            isPresented: $showsSoundSourceChooser,
-                            titleVisibility: .visible) {
-            ForEach(ComposerSoundSourcePolicy.offered, id: \.self) { source in
-                Button(ComposerSoundSourcePolicy.label(source)) {
-                    presentSoundSource(source)
-                }
-            }
-            Button(ComposerSoundSourcePolicy.cancel, role: .cancel) { }
-        }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas
         // sur la surface qui l'affiche. Un instantané pris seulement pendant
         // que la scène est montée perdrait tout ce que le document a posé
@@ -1017,6 +1010,7 @@ struct MeeshyComposerHost: View {
             case .audio:        documentAudioComposerSheet
             case .emoji:        emojiPickerSheet
             case .sticker:      stickerPickerSheet
+            case .sound:        composerSoundSheet
             case .soundLibrary: soundLibrarySheet
             case .reference:    referencePickerSheet
             case .language:     documentLanguagePickerSheet
