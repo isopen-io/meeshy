@@ -1313,6 +1313,7 @@
 		E33627CC5FCC4E6B6D817218 /* ForwardPickerViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B8209E412FB4DCC1EB9FD0 /* ForwardPickerViewModelTests.swift */; };
 		E33E20A902E4C3882A89506B /* FaceRampViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EFD25A30CCCF21657F76D7C /* FaceRampViewModelTests.swift */; };
 		E347AA51DF5DBDDAD48B44A0 /* ConversationViewBodyTypeDepthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2562A9A11F020141CDF7CB5C /* ConversationViewBodyTypeDepthTests.swift */; };
+		E361231BB8C96DD687620EE6 /* PostDetailView+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA96FE4677B6D8E45C5C6B4C /* PostDetailView+Canvas.swift */; };
 		E372D7374248A6ED01D0E18A /* ComposerMoodSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8DC2F10794039EDAB28957B /* ComposerMoodSurface.swift */; };
 		E37997858C858C94474EDFE1 /* MockVoIPTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F33DD7EFBD73472554C2073 /* MockVoIPTokenStore.swift */; };
 		E3887C1A73453A40A54D17E9 /* ConversationPreferencesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34134AA467C27C6CCEB804C9 /* ConversationPreferencesTab.swift */; };
@@ -2706,6 +2707,7 @@
 		C9C1ACF8C1CBEAD516A279BB /* AgentGrammarGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGrammarGateTests.swift; sourceTree = "<group>"; };
 		CA68B1EED6C529A9554BE18D /* ConversationLockSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockSheet.swift; sourceTree = "<group>"; };
 		CA8F52CA9F8649E69DFA4CA4 /* MessageListViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListViewController.swift; sourceTree = "<group>"; };
+		CA96FE4677B6D8E45C5C6B4C /* PostDetailView+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PostDetailView+Canvas.swift"; sourceTree = "<group>"; };
 		CAF7DAC79A764D9ABC1CA450 /* ScrollPillStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollPillStateTests.swift; sourceTree = "<group>"; };
 		CB0B3A386CCD8465AA25E475 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		CB17F0DC67737FC110E36FB0 /* VoiceProfileManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceProfileManageView.swift; sourceTree = "<group>"; };
@@ -4382,6 +4384,7 @@
 				59A0D13CC0A92C4E7C213929 /* PiPVideoSampleBufferView.swift */,
 				AB6CABEC9AF8A6FD41EC9C5D /* PostDetailReachAndVisibility.swift */,
 				68BC8C60105FA31CAB8EF9A5 /* PostDetailView.swift */,
+				CA96FE4677B6D8E45C5C6B4C /* PostDetailView+Canvas.swift */,
 				6F5CFFE5F7F0DC332D2F4C1C /* PostTranslationSheet.swift */,
 				CE318505D4650808BA2C5FB5 /* PrivacyPolicyView.swift */,
 				A505F792B7F980536BD635BA /* PrivacySettingsView.swift */,
@@ -5908,6 +5911,7 @@
 				A0DEE765AF12CDD0D61B0EA7 /* PiPVideoRenderer.swift in Sources */,
 				94C0ACF6FD3CED3509BA6148 /* PiPVideoSampleBufferView.swift in Sources */,
 				166F8E5838BD5C357A72EDF7 /* PostDetailReachAndVisibility.swift in Sources */,
+				E361231BB8C96DD687620EE6 /* PostDetailView+Canvas.swift in Sources */,
 				EAE8987A4E117FCE06C711B9 /* PostDetailView.swift in Sources */,
 				02E863EF54A2655EFF19B5DD /* PostDetailViewModel.swift in Sources */,
 				83CFA13BFF5B3C4B1CE0CF70 /* PostModels.swift in Sources */,

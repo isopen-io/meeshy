@@ -139,7 +139,15 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// budget, donc le nom sort de la liste ENTIER, plafond compris. C'est le
     /// cliquet qui l'a exigé : la vue `2f` ajoutait à un fichier hors budget, ce
     /// que la directive 2026-08-28 interdit — extraire d'abord, ajouter ensuite.
-    private static let legacyLineCeiling = 73_390
+    /// **73 333 depuis #4086.** La section canvas quitte `PostDetailView.swift`
+    /// pour `PostDetailView+Canvas.swift` — la vue `2h` devait y AJOUTER une
+    /// garde de contenu au chemin republication, ce que la directive interdit
+    /// sur un fichier hors budget. Le cliquet a fait son travail : il a refusé
+    /// l'ajout, et l'extraction qui s'en est suivie nomme la responsabilité au
+    /// lieu de la diluer dans un `body` de 2 572 lignes. Le fichier reste en
+    /// dette (2 513) ; seul le plafond baisse — laisser 57 lignes de mou
+    /// accueillerait en silence le prochain ajout.
+    private static let legacyLineCeiling = 73_333
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
