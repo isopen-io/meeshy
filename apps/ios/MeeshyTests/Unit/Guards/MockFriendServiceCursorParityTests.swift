@@ -71,6 +71,30 @@ final class MockFriendServiceCursorParityTests: XCTestCase {
     /// cette propriété, les suites d'écran ne pourraient plus asserter que le
     /// second appel demande ce qui vient APRÈS la première page — elles
     /// n'auraient qu'un opaque, vrai mais muet.
+    /// **`direction` décide quel stub répond.** Le pont du SDK route
+    /// `.received` vers `receivedRequests` et `.any` vers `allFriendRequests` ;
+    /// un double qui ignorerait ce paramètre ferait répondre le mauvais stub, et
+    /// le symptôme serait un test d'un TOUT AUTRE écran qui rougit — c'est
+    /// exactement ce qui est arrivé à `NotificationActionHandlerTests` quand ce
+    /// double a repris l'exigence sans la reprendre entière.
+    func test_leDouble_routeParDirection_commeLePont() async throws {
+        let mock = MockFriendService()
+        mock.receivedRequestsResult = .success(page(["recu"], hasMore: false))
+        mock.allFriendRequestsResult = .success(page(["tous"], hasMore: false))
+        let service: FriendServiceProviding = mock
+
+        let recu = try await service.friendRequests(
+            direction: .received, status: "pending", q: nil, cursor: nil, limit: 50
+        )
+        XCTAssertEqual(recu.data.map(\.id), ["recu"],
+                       "`.received` doit passer par `receivedRequests`, jamais par `allFriendRequests`")
+
+        let tous = try await service.friendRequests(
+            direction: .any, status: "accepted", q: nil, cursor: nil, limit: 50
+        )
+        XCTAssertEqual(tous.data.map(\.id), ["tous"])
+    }
+
     func test_leCurseur_encodeLaPosition_etSeRelitEnDecalage() {
         XCTAssertEqual(MockFriendService.offset(fromCursor: MockFriendService.cursor(forOffset: 100)), 100)
         XCTAssertEqual(MockFriendService.offset(fromCursor: nil), 0,
