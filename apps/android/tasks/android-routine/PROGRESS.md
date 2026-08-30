@@ -2,6 +2,45 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **a system message renders as a centered notice, no longer as the arriver's own signed
+> bubble** (slice `chat-system-notice`, PR #4435, feature-parity "Message système → notice centrée" line).
+> Android had `Message.isSystemMessage` (`messageSource == "system"`) but used it ONLY for grouping — a
+> join/leave/legacy-summary row still went through the standard bubble path and rendered SIGNED by its
+> author. iOS classifies `.system` FIRST in `ThemedMessageBubble` and renders a centered `BubbleSystemNoticeView`
+> (or the richer call/join notices). This slice ships the foundation: the `.system` arm + the plain centered
+> notice; call/join notices are follow-up slices on top of it. Pure, JVM-testable (`BubbleRenderKind`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → only #4267 (jcnm gateway), no
+> `claude/apps/android/<slice-id>` slice, nothing of mine to merge. Branched off freshly-fetched `origin/main`
+> (`ddcf0133`). Diff verified `apps/android` only (7 files: 3 main + 2 test in `:core:model`/`:sdk-ui`, +2 the
+> presenter/bubble glue).
+>
+> **The change.** `:core:model` `BubbleRenderKind.Kind.System` + `resolve(isSystem = …, …)` checked FIRST
+> (`isSystem -> System` above deleted/burned/ephemeral, matching iOS `case .system` precedence) + `Kind.isSystem`
+> predicate. `:sdk-ui`: `BubbleContent.isSystem` (fed by `ApiMessage.isSystemMessage` in `BubbleContentBuilder`),
+> `rememberBubbleRenderKind` short-circuits on `isSystem` before any clock read, and `MessageBubble` renders a
+> centered avatar-less `BubbleSystemNoticeView` (port of iOS `BubbleSystemNoticeView`; subtle `backgroundTertiary`
+> capsule, muted centered text; a blank notice renders nothing). Coherent with Android's timeless bubbles (no
+> per-notice clock, unlike iOS — the thread's day-headers already carry time).
+>
+> **Tests: +10, RED-proven.** `BubbleRenderKindTest`: system→System, system wins over deleted / burned /
+> ephemeral-expired, never-system→Standard, `isSystem` predicate (+ System added to the two existing predicate
+> guards). `BubbleContentBuilderTest`: `messageSource == "system"` → `isSystem` true; `"user"` → false. **RED**:
+> removing the `isSystem -> Kind.System` first arm fails EXACTLY the four system cases (the base case + the
+> three precedence collisions), no collateral — verified 2026-08-30.
+>
+> **Verified.** `:core:model` + `:sdk-ui` `testDebugUnitTest` green locally (BUILD SUCCESSFUL 3m40s); full
+> `./apps/android/meeshy.sh check` + CI Android in flight on PR #4435. Reviewer PASS (diff `apps/android` only,
+> no `local.properties`; SDK purity — pure decision in `:core:model`, Compose glue in `:sdk-ui`; SSOT — the
+> single render-kind decision, no re-implementation; no tautological tests; no coverage floor lowered).
+>
+> **Next**: the enriched system notices on top of this arm — the **join notice** (`BubbleJoinNoticeView`: a
+> pure `JoinNoticePresentation` from participant metadata — givenName/username/isAnonymous/linkRules — + a
+> localized "X a rejoint la conversation" catalog honoring the Prisme; needs `ApiMessage` join metadata
+> decode) or the **call-summary notice** (`BubbleCallNoticeView`: pure per-viewer direction from a
+> `callSummary`). Both are pure cores with a live consumer (this `.system` branch). Read the iOS
+> `BubbleSystemViews.swift` / `BubbleCallNoticeView.swift` first.
+
 > On 2026-08-30 **the notification center gained its 11 category-filter chips — the pure heart plus the
 > ViewModel/Compose wiring, so a user can narrow the list to Messages / Reactions / Mentions / Social /
 > Contacts / Groups / Calls / Translations / System (or Unread)** (slice `notification-center-category-filter`,
