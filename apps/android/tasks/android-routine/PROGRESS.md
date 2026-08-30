@@ -2,6 +2,78 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **the in-app real-time notification toast is finally WIRED — the three pure §M building
+> blocks (`NotificationToastPolicy`, `NotificationTypeToggle`, the `MeeshyNotificationToast` atom), each
+> merged unwired by a prior slice, now come alive behind one orchestrator with a 2 s dedup window and a 7 s
+> auto-dismiss** (slice `notification-toast-orchestrator`, feature-parity §M "In-app real-time notification
+> toast" `[ ]`→`[x]`). iOS keeps the toast half of `NotificationToastManager` — `handleNewNotification`
+> (dedup `Set<String>` + one 2 s removal `Task` per id → policy gate → `showToast`) + `showToast` (7 s
+> `toastDismissTask`, cancelled on replace) + `onConversationOpened/onPostOpened` (dismiss a toast the user
+> just walked into). Android had the pure GATE (`NotificationToastPolicy.decide`) but NO caller, no dedup
+> window, no timer, no active-screen tracking — a complete dead end (grep confirmed zero callers of the
+> policy AND of `MeeshyNotificationToast`).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → `[]`. Prior slice on `main` (#4481
+> `notification-prefs-calls-friend-content`, commit `545869ce`). `origin/main` fetched (HEAD `122c5278`);
+> branched `claude/apps/android/notification-toast-orchestrator` off it. My working branch was 6 commits
+> behind main (predated #4435/#4464/#4481), so branching fresh off `origin/main` was mandatory to see the
+> `NotificationTypeToggle`/`callsEnabled`/`friendContentEnabled` those slices added. Diff verified
+> `apps/android` only (1 core main + 1 core test + 3 feature main + 2 feature test + tracking docs, no
+> `local.properties`).
+>
+> **The change — one pure value type + one orchestrator VM + one mount.** (1) New pure `:core:model`
+> `ToastDedupWindow` (immutable, generic-free): a capacity-free, TTL-bounded (default 2_000 ms — iOS parity)
+> map of id→seenAt. `admit(id, nowMillis)` prunes expired first (`now - seen < ttl`, boundary EXCLUSIVE like
+> iOS's 2 s removal), reports duplicate on a still-fresh id WITHOUT refreshing its timestamp (iOS schedules
+> the removal once at first sight, never reschedules), and is blank-id-safe + referentially stable (same
+> instance when nothing changed). **SOTA over iOS:** iOS spawns one detached coroutine per id to self-clean;
+> this is a clock-free pure value type pruned lazily on the next admit — every branch JVM-testable, the
+> "when" (the millis to pass) owned by the orchestrator. (2) `NotificationToastViewModel`
+> (`:feature:notifications`) subscribes to `MessageSocketManager.notificationReceived`, threads the window
+> through `NotificationToastPolicy.decide` (the same push/DND/per-type gate the settings slices built),
+> exposes `currentToast: StateFlow<ApiNotification?>`, schedules a 7 s auto-dismiss (cancelled + re-armed on
+> a newer toast; a stale timer also no-ops via an id re-check), and offers `onConversationOpened/Closed`,
+> `onPostOpened/Closed`, `dismiss` — the active-screen hooks that pull down a toast the user just opened.
+> `NotificationToastClock` (interface + `RealNotificationToastClock` + `@Binds`, the `CallClock` precedent)
+> exposes BOTH `nowMillis()` (dedup) and `localDateTime()` (DND) so a test pins each exactly. (3)
+> `NotificationToastHost` composable mounts `MeeshyNotificationToast` from the StateFlow (slide-in from top,
+> tap → `onOpen` + dismiss), fed by two pure projections `notificationToastSenderName`/`…Subtitle`.
+> Deliberately EXCLUDED (a genuinely cross-cutting follow-up, noted in §M): placing `NotificationToastHost`
+> at the app scaffold and calling the `onConversationOpened/Closed` hooks from every chat/feed screen.
+>
+> **Tests: +33, RED-proven.** `ToastDedupWindowTest` +13 (default 2 s TTL; first admit records; second within
+> window dups + no growth; 1 ms-before dup / exactly-at-TTL not-dup; a duplicate does NOT refresh the original
+> timestamp; distinct ids independent; expired pruned on next admit; blank never dups/stored + same instance;
+> dup-no-prune same instance; new id new instance; custom TTL; non-positive TTL rejected).
+> `NotificationToastHostTest` +6 (sender name displayName→username→brand fallback; subtitle
+> conversationTitle→content→empty). `NotificationToastViewModelTest` +14 (fresh surfaces; dedup within window
+> not re-surfaced; same id after window re-surfaces; open-conversation suppressed; push-off suppressed;
+> per-type-off suppressed; 7 s auto-dismiss; an older toast's timer doesn't dismiss a newer toast;
+> open-conversation/open-post dismiss a standing toast; different-conversation leaves it; open-post suppressed;
+> close-conversation re-opens suppression; `dismiss` clears). **RED proven by mutation:** the pure boundary
+> `<`→`<=` fails exactly `readmittingExactlyAtTheTtl`/`customTtlIsHonoured`/`aDuplicateDoesNotRefresh…` (13
+> tests, 3 failed); the VM `isDuplicate`→`false` fails exactly `aDuplicateDeliveryWithinTheWindow…` and the
+> auto-dismiss guard→`false` fails exactly `aShownToastAutoDismissesAfterSevenSeconds` (14 tests, 2 failed).
+> A NOTE captures why deleting `dismissJob?.cancel()` stayed GREEN — the id-guard already protects the
+> behaviour, so the cancel is hygiene, not correctness, and a behaviour test rightly can't isolate it.
+>
+> **SDK bootstrap WORKED this run:** `dl.google.com` reachable; cmdline-tools (11076708) +
+> `platforms;android-35` + `build-tools;35.0.0` + `platform-tools`; SDK auto-pulled `android-37.0`, and
+> `compileSdk = 37` resolved via the `android-37 → android-37.0` symlink (the documented fix). Kept
+> `local.properties` out of the diff (gitignored — `git check-ignore` confirmed).
+>
+> **Verified — full `./apps/android/meeshy.sh check` GREEN** (assembleDebug + all-module testDebugUnitTest).
+> Reviewer **PASS** (diff `apps/android` only; SDK purity — pure `:core:model` value type + `:feature`
+> orchestration/clock/mount, no `android.*` in the model; SSOT — one dedup window, the existing policy reused
+> as the single gate, no re-implementation; instant-app — `currentToast` StateFlow, pure synchronous decision,
+> no I/O; UDF — immutable StateFlow, cancellation-safe `viewModelScope`; no tautological tests — verdicts
+> derived from iOS behaviour, RED-proven; no coverage floor lowered).
+>
+> **Next**: mount `NotificationToastHost` at the app scaffold + call `onConversationOpened/Closed` /
+> `onPostOpened/Closed` from the chat and feed screens (cross-cutting app wiring — the last §M toast piece).
+> For a pure-core next slice, a Chat/Feed value type. Read the chosen box's iOS audit part read-only before
+> branching.
+
 > On 2026-08-30 **incoming-call and friend-content notifications now honour a REAL toggle instead of
 > being always-on — the last `isTypeEnabled` parity gap closes, and the user gets two reachable
 > Settings rows for them** (slice `notification-prefs-calls-friend-content`, feature-parity §M
