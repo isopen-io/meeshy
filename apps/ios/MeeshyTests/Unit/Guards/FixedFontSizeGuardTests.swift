@@ -157,6 +157,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
+        // **Le socle depuis le 2026-08-30** : la capsule annuler/rétablir a
+        // suivi les deux boutons descendus de la barre haute, et garde leur
+        // police figée — même cadre fixe, même raison (voir `totalCeiling`).
+        "Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
         // ont suivi `+Surfaces` et `+Intake`. La POPULATION ne bouge pas, donc
         // ni `totalCeiling` ni `textCeiling` ne baissent — seul le NOM change.
@@ -253,6 +257,15 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// il a exigé qu'on l'assume par écrit. Un +1 silencieux serait passé
     /// inaperçu — c'est la règle 1 qui ne voit pas les fichiers déjà porteurs,
     /// et cette règle-ci qui les rattrape.
+    ///
+    /// **Toujours 245 le même jour**, alors que les deux boutons ont DÉMÉNAGÉ
+    /// de la barre haute vers une capsule du socle : la barre en perd une, le
+    /// socle en gagne une, et la population ne bouge pas.
+    ///
+    /// Le réflexe était d'incrémenter — un fichier de plus dans la liste
+    /// ressemble à une dette de plus. **Un déménagement n'ajoute rien** ; seul
+    /// un site NEUF le fait. Le plafond se mesure, il ne se déduit pas du
+    /// nombre de noms dans la liste.
     private static let totalCeiling = 245
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée

@@ -385,7 +385,9 @@ final class ComposerSceneCapabilitiesWiringGuardTests: XCTestCase {
     /// porte fermée.
     func test_laFeuilleSticker_poseUnObjetParLeViewModel() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("viewModel.addSticker(emoji:emoji)"))
+        XCTAssertTrue(source.contains("viewModel.addSticker(emoji:emoji,scale:StorySticker.posedScale)"),
+                      "Un sticker se pose EN GRAND : à l'échelle de référence il faut l'agrandir "
+                        + "avant de le placer, soit deux gestes pour un.")
         XCTAssertTrue(source.contains("viewModel.addSticker(image:item.thumbnail,"))
     }
 
@@ -481,7 +483,9 @@ final class ComposerMediaSourceWiringGuardTests: XCTestCase {
     /// sources sur trois dès qu'une scène existait.
     func test_laPorteMedia_neVaPlusDroitALaPhototheque() throws {
         let source = compact(try hostSource())
-        XCTAssertTrue(source.contains("case.media:presentMediaSources()"))
+        XCTAssertTrue(source.contains("case.media:railPosesNextMedia=true;presentMediaSources()"),
+                      "La porte MARQUE l'origine avant d'ouvrir le choix — c'est ce qui garde "
+                        + "sa pose sur la scène courante (directive porteur 2026-08-30).")
         XCTAssertFalse(source.contains("case.media:handleDocumentTool(.photo)"),
                        "Ce raccourci retire la caméra et l'import de fichier sans qu'aucune règle les refuse.")
     }
@@ -705,15 +709,21 @@ final class ComposerHistoryWiringGuardTests: XCTestCase {
     }
 }
 
-/// La barre haute — les deux contrôles n'existent que s'ils agissent.
+/// **Le SOCLE — les deux contrôles n'existent que s'ils agissent** (directive
+/// porteur 2026-08-30).
+///
+/// Ils vécurent en barre haute. La vérification simulateur a nommé le défaut :
+/// « le bouton « Annuler » en haut à droite pendant un outil actif agit comme
+/// UNDO, pas comme fermeture ». En français le mot dit les deux, et le
+/// voisinage du chrome d'outil — dont le `(x)` ferme vraiment — tranchait pour
+/// le mauvais sens.
+///
+/// La collision se lève par la GÉOGRAPHIE, sans qu'aucun mot ne change : au
+/// socle, parmi ce qui décide de l'envoi, rien autour d'eux ne se ferme.
 final class ComposerTopBarHistoryGuardTests: XCTestCase {
 
     private func topBarSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     private func compact(_ t: String) -> String {
@@ -723,7 +733,7 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
     func test_laSource_estLisible() throws {
         let s = try topBarSource()
         XCTAssertGreaterThan(s.count, 800)
-        XCTAssertTrue(s.contains("struct ComposerTopBar"))
+        XCTAssertTrue(s.contains("var historyPair"))
     }
 
     /// **Loi 4 — un contrôle sans effet est ABSENT, jamais grisé.** Un
@@ -731,21 +741,44 @@ final class ComposerTopBarHistoryGuardTests: XCTestCase {
     /// rien promettre, sur une barre qui porte déjà quatre choses.
     func test_lesControles_nExistentQueSilsAgissent() throws {
         let source = compact(try topBarSource())
-        XCTAssertTrue(source.contains("ifcanUndo||canRedo{"))
-        XCTAssertTrue(source.contains("ifcanUndo{"))
-        XCTAssertTrue(source.contains("ifcanRedo{"))
-        XCTAssertFalse(source.contains(".disabled(!canUndo)"),
+        XCTAssertTrue(source.contains("ifcanUndoHistory||canRedoHistory{"))
+        XCTAssertTrue(source.contains("ifcanUndoHistory{"))
+        XCTAssertTrue(source.contains("ifcanRedoHistory{"))
+        XCTAssertFalse(source.contains(".disabled(!canUndoHistory)"),
                        "Griser au lieu d'absenter contredit la loi 4.")
+    }
+
+    /// **Ils sont posés ENTRE l'œil et Publier**, pas ailleurs sur la rangée :
+    /// c'est la place que la directive nomme, et elle porte le sens — parmi ce
+    /// qui décide de l'envoi.
+    func test_laPaire_estEntreLOeilEtPublier() throws {
+        let source = compact(try topBarSource())
+        XCTAssertTrue(source.contains("{previewButton}historyPairpublishButton"))
+    }
+
+    /// **UNE capsule, pas deux boutons voisins** : annuler et rétablir sont un
+    /// seul contrôle à deux sens, comme les chevrons d'un navigateur.
+    func test_lesDeux_partagentUneSeuleCapsule() throws {
+        let source = compact(try topBarSource())
+        XCTAssertTrue(source.contains(".adaptiveGlass(in:Capsule())"))
     }
 
     /// **Des PRIMITIVES, jamais le ViewModel.** La barre haute est une feuille
     /// de l'arbre : lui donner le composer entier la ferait se re-rendre à
     /// chaque frappe.
-    func test_laBarre_neRecoitAucunViewModel() throws {
-        let source = compact(try topBarSource())
-        XCTAssertFalse(source.contains("@ObservedObject"))
-        XCTAssertFalse(source.contains("@StateObject"))
-        XCTAssertTrue(source.contains("varcanUndo:Bool=false"))
+    /// **La barre haute ne porte plus rien de l'historique.** Ce témoin est le
+    /// contrepoids du déplacement : sans lui, les deux contrôles pourraient
+    /// revenir en haut sans que rien ne rougisse.
+    func test_laBarreHaute_nePorteplusLHistorique() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerTopBar.swift")
+        let source = compact(AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
+        XCTAssertFalse(source.contains("historyControls"))
+        XCTAssertFalse(source.contains("canUndo"))
+        XCTAssertTrue(source.contains("structComposerTopBar"),
+                      "…et le fichier lu est bien celui de la barre haute.")
     }
 }
 
