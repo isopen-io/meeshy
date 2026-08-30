@@ -3,6 +3,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
+import { broadcastTargetLanguages } from './broadcast-target-languages';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { BroadcastInAppSenderJob } from '../../jobs/broadcast-inapp-sender';
 import { EmailService } from '../../services/EmailService';
@@ -325,10 +326,15 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         _count: true,
       });
 
-      // Get unique target languages from recipients
-      const targetLanguages = recipientsByLanguage
-        .map((g: any) => g.systemLanguage)
-        .filter(Boolean) as string[];
+      // Get unique target languages from recipients — canonicalized (case-folded
+      // AND region-stripped) and deduped BEFORE translation, so region-tagged /
+      // mixed-case `systemLanguage` variants (`en-US`, `fr-FR`, `FR`) do not
+      // duplicate NLLB jobs, leak the source language past the service filter, or
+      // persist as separate targets. Mirror of PostService.audienceLanguages.
+      const targetLanguages = broadcastTargetLanguages(
+        recipientsByLanguage.map((g: any) => g.systemLanguage),
+        broadcast.sourceLanguage
+      );
 
       // Translate content
       const translationService = new BroadcastTranslationService();
