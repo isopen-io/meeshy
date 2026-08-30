@@ -107,6 +107,16 @@ struct ComposerSceneSurface: View {
     var onInlineTextChanged: ((String, String) -> Void)?
     var onInlineTextEditEnded: ((String) -> Void)?
 
+    /// **La bande de mention du texte de SCÈNE** (#4475), montée sous le canvas
+    /// pendant l'édition. `nil` ⇒ aucune requête `@` en cours, ou aucune
+    /// personne à proposer — dans les deux cas, rien de peint (loi 4).
+    ///
+    /// Elle vit ICI et pas dans le canvas : `StoryCanvasUIView` est du UIKit et
+    /// n'a aucune raison de connaître les amis de l'auteur. Ce qu'il donne — le
+    /// texte, à chaque frappe — suffit, et c'est le meuble qui en tire une
+    /// requête.
+    var mentionStrip: AnyView?
+
     /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
     /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
     /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
@@ -198,6 +208,10 @@ struct ComposerSceneSurface: View {
                 // Montée sans transition ni animation : la bande est un frère
                 // du canvas, et animer son insertion ferait varier la frame de
                 // `StoryCanvasUIView` sur chaque image du ressort.
+                // **La bande de mention passe avant tout le reste du bas** : une
+                // liste de personnes qui apparaît pendant qu'on écrit doit
+                // toucher le texte, pas se ranger sous des réglages.
+                if let mentionStrip { mentionStrip }
                 // Le panneau d'options passe AVANT la bande de fond : c'est
                 // l'outil ouvert qui a la priorité sur le bas de l'écran, et
                 // les deux ne coexistent jamais (ouvrir un outil ferme la

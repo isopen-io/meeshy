@@ -252,6 +252,40 @@ extension MeeshyComposerHost {
     /// `⋯`) : deux dérivations d'une même valeur auraient divergé au premier
     /// ajustement. Ce qui diffère est ce qui n'a de sens QUE sur une scène —
     /// les deux rails et la géométrie d'encastrement.
+    /// **La bande de mention du texte de scène** (#4475).
+    ///
+    /// Trois conditions, et la troisième est celle qu'on oublie :
+    /// 1. un texte est en cours d'édition — hors édition, il n'y a pas de
+    ///    frappe à interpréter ;
+    /// 2. une requête `@` est active ;
+    /// 3. **des personnes correspondent** — sans quoi la bande de verre serait
+    ///    peinte vide. « Aucun ami accepté » et « aucune correspondance » sont
+    ///    des états NOMINAUX, pas des chargements en attente : ce champ n'a
+    ///    aucun appel réseau qui remplirait la liste plus tard.
+    ///
+    /// **Le choix écrit dans l'OBJET, pas dans un champ de vue.** Le texte
+    /// courant vient du modèle et y retourne par `updateTextContent` — le même
+    /// site que la frappe. Un `@State` intermédiaire aurait fait diverger ce que
+    /// le canvas affiche de ce que la publication emporte.
+    var sceneMentionStrip: AnyView? {
+        if let id = viewModel.textEditingMode.activeTextId,
+           sceneMentionBox.controller.activeQuery != nil,
+           !sceneMentionBox.controller.suggestions.isEmpty,
+           let objet = viewModel.currentEffects.textObjects.first(where: { $0.id == id }) {
+            AnyView(
+                ComposerMentionStrip(
+                    controller: sceneMentionBox.controller,
+                    currentText: objet.text,
+                    onSelect: { remplace in
+                        viewModel.updateTextContent(id: id, text: remplace)
+                    }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            )
+        }
+        return nil
+    }
+
     var sceneSurface: some View {
         ComposerSceneSurface(
             localMedia: documentLocalMedia,
@@ -397,10 +431,19 @@ extension MeeshyComposerHost {
             editingTextId: viewModel.textEditingMode.activeTextId,
             onInlineTextChanged: { id, texte in
                 viewModel.updateTextContent(id: id, text: texte)
+                // La frappe nourrit la requête `@` — même contrat que le champ
+                // de description et celui du document, sur le troisième champ
+                // de saisie du composer (#4475).
+                sceneMentionBox.controller.handleQuery(in: texte)
             },
             // Le canvas dit que la saisie est finie ; c'est le MODÈLE qui décide
             // ce qu'il advient d'une coquille vide — il la supprime.
             onInlineTextEditEnded: { _ in viewModel.exitTextEditingMode() },
+            // **La bande n'existe que pendant l'édition ET avec des personnes à
+            // proposer.** Gater sur la seule requête peindrait une bande de
+            // verre vide quand aucun ami accepté ne correspond — un état
+            // NOMINAL, pas une erreur.
+            mentionStrip: sceneMentionStrip,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
