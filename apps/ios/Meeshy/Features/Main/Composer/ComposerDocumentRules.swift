@@ -21,7 +21,7 @@ import ImageIO
 /// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests non, et une
 /// valeur associée logée dans un `enum` `Equatable` nonisolated doit l'être
 /// elle aussi.
-nonisolated enum ComposerMediaIntake: Equatable {
+nonisolated enum ComposerMediaIntake: Equatable, Hashable, CaseIterable {
     /// La pellicule — `PhotosPicker`.
     case photoLibrary
     /// La capture en direct — `CameraView`.

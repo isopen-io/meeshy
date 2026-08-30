@@ -372,7 +372,7 @@ extension MeeshyComposerHost {
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
-        case .media:   handleDocumentTool(.photo)
+        case .media:   presentMediaSources()
         case .sound:   handleDocumentTool(.microphone)
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
@@ -442,6 +442,30 @@ extension MeeshyComposerHost {
     /// question que `ComposerMediaIntake` pose. `handleDocumentTool` ne la
     /// pose jamais lui-même : il reste aiguillé sur l'EFFET, cette fonction
     /// sur l'INTAKE.
+    /// **La porte média ouvre les TROIS sources, pas la photothèque seule.**
+    ///
+    /// Elle allait droit à `handleDocumentTool(.photo)` : dès qu'une scène
+    /// existait, la caméra et l'import de fichier — deux des sept entrées de la
+    /// rangée canonique — quittaient l'écran. Le commentaire d'à côté disait
+    /// pourtant que le rail « n'a qu'UNE porte pour les trois sources » et que
+    /// `allowsCapture` gouvernerait « le SÉLECTEUR, en aval » ; ce sélecteur
+    /// n'existait pas.
+    ///
+    /// **Une source unique se présente DIRECTEMENT.** Une feuille de choix à un
+    /// seul élément demande un geste pour zéro décision — et le cas n'est pas
+    /// théorique : il n'a simplement pas de producteur aujourd'hui, la règle
+    /// n'ôtant que la caméra. Le rendre impossible à écrire coûterait plus que
+    /// de le traiter.
+    func presentMediaSources() {
+        HapticFeedback.light()
+        let sources = ComposerMediaSourcePolicy.offered(allowsCapture: profile.allowsCapture)
+        guard sources.count > 1 else {
+            if let seule = sources.first { presentMediaIntake(seule) }
+            return
+        }
+        showsMediaSourceChooser = true
+    }
+
     func presentMediaIntake(_ intake: ComposerMediaIntake) {
         switch intake {
         case .photoLibrary:
