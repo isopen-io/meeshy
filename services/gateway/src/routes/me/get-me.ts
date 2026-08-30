@@ -325,9 +325,28 @@ export function meRateLimitKeyGenerator(request: FastifyRequest): string {
 
 export const ME_READ_RATE_LIMIT_MAX = 600;
 
+/**
+ * `hook: 'preHandler'` et `skipOnError: false` — sans eux, le critère 5 est
+ * ANNONCÉ et pas APPLIQUÉ.
+ *
+ * `config.rateLimit` s'applique par défaut au hook `onRequest`, qui court
+ * AVANT `preValidation` — donc avant que `unifiedAuth` ne pose `authContext`.
+ * `meRateLimitKeyGenerator` y recevait `undefined` et retombait sur
+ * `ip:${request.ip}` : la clé « par compte » que le doc-comment ci-dessus
+ * décrit valait, en pratique, l'adresse du conteneur Traefik — la même pour
+ * tout le monde, c'est-à-dire exactement le défaut que ce doc-comment dit
+ * éviter. Mesuré sur le vrai plugin, pas déduit. Découverte de #4147, portée
+ * ici parce qu'elle vide de son effet une clé correctement écrite.
+ *
+ * `skipOnError: true` est posé GLOBALEMENT par `registerGlobalRateLimiter` et
+ * fusionné par `Object.assign` dans toute config qui ne le redéclare pas : un
+ * Redis indisponible ouvrait la route en grand.
+ */
 export const meRouteRateLimitConfig = {
   max: ME_READ_RATE_LIMIT_MAX,
   timeWindow: '1 minute',
+  hook: 'preHandler' as const,
+  skipOnError: false,
   keyGenerator: meRateLimitKeyGenerator,
   errorResponseBuilder: () => ({
     success: false,
