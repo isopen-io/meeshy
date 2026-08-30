@@ -528,8 +528,8 @@ final class LocalizationConsistencyTests: XCTestCase {
     ///
     /// The omission was invisible from the map itself — a map is only ever read for the
     /// entries it has. It becomes visible from the FILESYSTEM, which is what this guard
-    /// reads: every `.xcstrings` in the iOS tree is either the app catalog or mapped to
-    /// the fragment of the target that owns it. The reverse direction is checked too, so
+    /// reads: every `Localizable.xcstrings` in the iOS tree is either the app catalog or
+    /// mapped to the fragment of the target that owns it. The reverse direction too, so
     /// a moved or renamed catalog cannot leave a dead entry behind — that would restore
     /// the exact same silent fallback.
     func test_everyPerTargetCatalogIsMapped() throws {
@@ -577,9 +577,18 @@ final class LocalizationConsistencyTests: XCTestCase {
         }
     }
 
-    /// Every `.xcstrings` under `directory`, build products excluded. Derived data is
-    /// skipped by DESCENT rather than by filtering its files: `apps/ios/Build` holds
-    /// tens of thousands of intermediates, and the catalog is copied into each of them.
+    /// Every `Localizable.xcstrings` under `directory`, build products excluded.
+    ///
+    /// The FILENAME is the scope, not the extension: a catalog is a string TABLE, and
+    /// `String(localized:)` without a `table:` argument resolves against `Localizable`
+    /// alone. `InfoPlist.xcstrings` — which two targets also ship — localizes Info.plist
+    /// values (bundle name, usage descriptions) that the system reads directly, so it is
+    /// no more mappable here than it is callable from code. Measured: no call site in
+    /// the iOS tree passes `table:`, so `Localizable` is the whole of what this suite
+    /// models.
+    ///
+    /// Derived data is skipped by DESCENT rather than by filtering its files:
+    /// `apps/ios/Build` holds tens of thousands of intermediates, each with its own copy.
     private func catalogFiles(under directory: URL) -> [URL] {
         guard let enumerator = FileManager.default.enumerator(
             at: directory,
@@ -592,7 +601,7 @@ final class LocalizationConsistencyTests: XCTestCase {
                 enumerator.skipDescendants()
                 continue
             }
-            if url.pathExtension == "xcstrings" { catalogs.append(url) }
+            if url.lastPathComponent == "Localizable.xcstrings" { catalogs.append(url) }
         }
         return catalogs
     }

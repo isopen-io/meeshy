@@ -18993,3 +18993,13 @@ catalogues du dépôt.
   les six mêmes langues (`gesendet` là où la bulle dit `Gesendet`). **Une famille
   à moitié traduite documente sa propre convention — c'est la ressource la moins
   chère et la plus sûre pour remplir l'autre moitié.**
+
+- **Un témoin qui n'a jamais été exécuté est une hypothèse.** Le premier jet de
+  `test_everyPerTargetCatalogIsMapped` élisait les catalogues par leur EXTENSION
+  (`.xcstrings`) et rougissait : deux cibles expédient aussi un
+  `InfoPlist.xcstrings`, qui localise des valeurs d'`Info.plist` lues par le
+  système — pas une table adressable depuis `String(localized:)`. Le critère juste
+  est le NOM DE FICHIER (`Localizable.xcstrings`), la table par défaut. Sans chaîne
+  d'outils Apple dans cet environnement, **simuler la garde ligne à ligne avant de
+  l'expédier à la CI** est le minimum : ici, la simulation a coûté deux minutes et
+  évité un cycle CI de cinquante.

@@ -152,6 +152,17 @@ vraiment.
 > énumération porte deux affirmations, « ces entrées sont justes » (vérifiable) et
 > « ce sont toutes les entrées » (presque jamais vérifiée).
 
+**Le témoin s'est trompé de critère au premier jet, et sa simulation l'a
+attrapé.** Écrit sur l'EXTENSION (`.xcstrings`), il rougissait : deux cibles
+expédient aussi un `InfoPlist.xcstrings`, qui n'a rien à faire dans cette carte.
+Un catalogue est une **table de chaînes**, et `String(localized:)` sans argument
+`table:` se résout contre `Localizable` seule ; `InfoPlist` localise des valeurs
+d'`Info.plist` que le système lit directement — pas plus mappable ici qu'appelable
+depuis le code. Le critère juste est donc le **nom de fichier**, pas l'extension
+(mesuré au passage : aucun site du dépôt iOS ne passe `table:`). **Un témoin qui
+n'a jamais été exécuté est une hypothèse** — sans chaîne Apple ici, le simuler
+ligne à ligne en Python est le minimum avant de l'expédier à la CI.
+
 ### 4.4 Le cliquet et les épingles
 
 | mesure | avant | après |
