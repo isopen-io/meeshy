@@ -325,9 +325,17 @@ final class StoryViewerScenePlayerGuardTests: XCTestCase {
             "L'overlay de description se peint sous le canvas gaté sur l'absence de transcription " +
             "vocale — les deux ne se chevauchent jamais."
         )
+        // **Repointée au #4474, jamais supprimée.** Ce que ce témoin mesure —
+        // « la description résolue est bien PEINTE par-dessus le canvas » —
+        // reste vrai ; c'est la FORME qui a changé. Le `Text(description)` nu
+        // était le défaut : dans un cartouche opaque, `lineLimit(4)`, et sous
+        // un `allowsHitTesting(false)` qui le rendait indépliable. La couche
+        // partagée reçoit la MÊME valeur résolue, ce que l'étiquette de son
+        // argument prouve.
         XCTAssertTrue(
-            canvas.contains("Text(description)"),
-            "Le texte de la description est bien PEINT par-dessus le canvas composé."
+            canvas.contains("MediaCaptionOverlay(") && canvas.contains("caption: description"),
+            "Le texte de la description est bien PEINT par-dessus le canvas composé — " +
+            "désormais par `MediaCaptionOverlay`, qui reçoit la description RÉSOLUE (#4474)."
         )
         XCTAssertTrue(
             canvas.contains("var currentStoryDescription"),

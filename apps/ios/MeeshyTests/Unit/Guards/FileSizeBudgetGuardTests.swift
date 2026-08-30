@@ -133,7 +133,7 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// AUTRE découpage, il aurait laissé 229 lignes de mou — de quoi accueillir
     /// en silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont
     /// le cran est trop haut ne rougit pas : il attend.
-    private static let legacyLineCeiling = 75_175
+    private static let legacyLineCeiling = 75_070
 
     // MARK: - Règle 1 — pas de 43ᵉ
 
