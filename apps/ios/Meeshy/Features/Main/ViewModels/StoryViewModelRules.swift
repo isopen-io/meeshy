@@ -8,6 +8,11 @@
 
 import Foundation
 import MeeshySDK
+// `ComposerReference` / `ComposerReferences` vivent dans MeeshyUI, pas dans le
+// SDK : `declaredMentions` les prend en entrée. Le découpage #4425 a sorti ces
+// règles d'un fichier qui importait déjà MeeshyUI pour ses vues — l'import
+// devait suivre les TYPES, pas rester avec le code qu'on laisse derrière.
+import MeeshyUI
 
 extension StoryViewModel {
     /// Garde « viewed monotone » raffinée (directive 2026-07-29) : une fois
