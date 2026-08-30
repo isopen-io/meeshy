@@ -442,3 +442,60 @@ describe('ParticipantProfileCard — octroi d’historique par date', () => {
     );
   });
 });
+
+/**
+ * #4393 — ce que le contrôle de date dit à qui ne voit pas l'écran.
+ *
+ * Un `data-testid` est un identifiant de TEST : il ne nomme personne. Un
+ * `<span>` voisin n'est pas un `<label for>`. Et une erreur seulement DESSINÉE
+ * n'apprend rien à qui ne regarde pas la zone où elle apparaît.
+ */
+describe('ParticipantProfileCard — l’octroi d’historique s’utilise sans voir', () => {
+  const hote = () =>
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: '2026-01-15T00:00:00Z' })}
+        onSetHistoryGrant={jest.fn()}
+      />
+    );
+
+  it('donne un NOM accessible au champ de date, pas seulement un identifiant de test', () => {
+    hote();
+
+    const champ = screen.getByTestId('participant-profile-history-grant-input');
+    expect(champ.getAttribute('aria-label')).toBe('Voit l’historique depuis');
+    // Et il se trouve PAR ce nom, ce qu'un lecteur d'écran fait aussi.
+    expect(screen.getByLabelText('Voit l’historique depuis')).toBe(champ);
+  });
+
+  it('annonce l’échec de l’écriture au lieu de seulement le dessiner', () => {
+    render(
+      <ParticipantProfileCard
+        profile={profile({ historyVisibleFrom: '2026-01-15T00:00:00Z' })}
+        onSetHistoryGrant={jest.fn()}
+        historyGrantError="Échec de l’octroi"
+      />
+    );
+
+    const erreur = screen.getByTestId('participant-profile-history-grant-error');
+    expect(erreur.getAttribute('role')).toBe('alert');
+    expect(screen.getByRole('alert').textContent).toBe('Échec de l’octroi');
+  });
+
+  it('offre au retrait une cible de 44 px, pas les 14 px de son icône', () => {
+    hote();
+
+    const retrait = screen.getByTestId('participant-profile-history-grant-clear');
+    // `h-11 w-11` = 44 px dans l'échelle Tailwind du projet.
+    expect(retrait.className).toContain('h-11');
+    expect(retrait.className).toContain('w-11');
+  });
+
+  it('nomme le retrait, dont l’icône est décorative', () => {
+    hote();
+
+    const retrait = screen.getByTestId('participant-profile-history-grant-clear');
+    expect(retrait.getAttribute('aria-label')).toBe('Retirer');
+    expect(retrait.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+  });
+});

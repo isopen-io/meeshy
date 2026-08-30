@@ -82,7 +82,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
-import { MemberRole } from '@meeshy/shared/types/role-types'
+import { MemberRole, memberRoleCasings } from '@meeshy/shared/types/role-types'
 
 /**
  * Ce que la loi a besoin de savoir d'un participant — et rien d'autre, pour que
@@ -204,13 +204,32 @@ const meneAuRangAdmin = (metadata: unknown): boolean => {
  * déjà.
  */
 /**
- * Le plafond des candidats. Aucune lecture de ce dépôt ne rend une collection
- * ENTIÈRE (#4165), et une élection n'a pas besoin du fil entier : au-delà,
- * concourent les participants les plus anciennement ARRIVÉS.
+ * Le plafond des ADMINISTRATEURS candidats.
+ *
+ * Il porte sur les administrateurs, pas sur les participants — et c'est ce qui
+ * le rend inoffensif (#4394). Un plafond posé sur « les 500 participants les
+ * plus anciennement arrivés » décidait de l'élection sans le dire : sur un fil
+ * de plusieurs milliers de membres, un administrateur arrivé tard n'entrait
+ * même pas dans l'ensemble, et le fil revenait au plus ancien membre comme s'il
+ * n'y avait aucun administrateur. Cadré sur le RANG, le plafond ne se referme
+ * que sur une conversation à plus de 500 administrateurs.
  */
-export const PLAFOND_CANDIDATS = 500
+export const PLAFOND_ADMINS = 500
 
-/** Le plafond de la trace, généreux devant celui des candidats. */
+/**
+ * Le plafond de la trace de rang, et pourquoi il ne peut pas changer l'élu.
+ *
+ * Ce qui gagne est la promotion la PLUS ANCIENNE. La lecture est ordonnée
+ * `createdAt asc` : tronquer à N garde donc exactement les N lignes les plus
+ * anciennes, et la ligne gagnante en fait partie par construction. La troncature
+ * ne peut perdre qu'une trace TARDIVE, qui ne gagne jamais.
+ *
+ * Le seul résidu tient en une phrase : il faudrait que les administrateurs
+ * ACTUELS de CETTE conversation aient collectivement enregistré 2 000
+ * changements de rang avant la promotion de celui qui devait gagner. Le
+ * `where` filtre déjà sur ces comptes-là et sur ce fil-là. `scripts/
+ * mesure-succession-plafonds.ts` compte les deux grandeurs en production.
+ */
 export const PLAFOND_TRACES = 2000
 
 /**
@@ -240,21 +259,43 @@ export async function resoudreSuccessionDuCreateur(
 
   if (await estDirectJamaisUtilise(prisma, conversationId)) return { kind: 'close' }
 
-  const candidats = await prisma.participant.findMany({
-    where: { conversationId, isActive: true, userId: { not: sortantUserId } },
+  // L'éligibilité est dans le `where`, pas seulement dans la loi pure — et
+  // c'est ce qui rend `take: 1` exact plus bas (#4394). Filtrée après coup, la
+  // lecture pouvait rendre une page entière d'invités sans compte et conclure
+  // « personne n'hérite » alors qu'un membre inscrit attendait juste derrière.
+  // Le sortant et l'invité s'excluent par la MÊME colonne, d'où le `AND` : deux
+  // contraintes `not` sur `userId` ne tiennent pas dans un seul filtre.
+  const eligibles = {
+    conversationId,
+    isActive: true,
+    AND: [{ userId: { not: sortantUserId } }, { userId: { not: null } }],
+  }
+
+  // Cadrée sur le RANG : `memberRoleCasings` parce qu'un `where` part tel quel
+  // vers la base et n'appelle aucune fonction — sans lui, une ligne écrite
+  // `ADMIN` sortirait de l'ensemble sans erreur, seulement plus PETIT (#4008).
+  const administrateurs = await prisma.participant.findMany({
+    where: { ...eligibles, role: { in: memberRoleCasings([MemberRole.ADMIN]) } },
     select: { id: true, userId: true, role: true, joinedAt: true },
     orderBy: { joinedAt: 'asc' },
-    take: PLAFOND_CANDIDATS,
+    take: PLAFOND_ADMINS,
   })
 
-  if (candidats.length === 0) return { kind: 'close' }
+  if (administrateurs.length === 0) {
+    // Le plus ancien membre éligible, EXACTEMENT — `take: 1` sur un `where` qui
+    // porte déjà l'éligibilité. Aucun plafond ne s'interpose ici.
+    const plusAnciens = await prisma.participant.findMany({
+      where: eligibles,
+      select: { id: true, userId: true, role: true, joinedAt: true },
+      orderBy: { joinedAt: 'asc' },
+      take: 1,
+    })
+    return elireSuccesseur(plusAnciens, [])
+  }
 
-  const identifiantsAdmins = candidats
-    .filter(candidat => estAdministrateur(candidat.role) && estEligible(candidat))
+  const identifiantsAdmins = administrateurs
     .map(candidat => candidat.userId)
     .filter((userId): userId is string => typeof userId === 'string' && userId.length > 0)
-
-  if (identifiantsAdmins.length === 0) return elireSuccesseur(candidats, [])
 
   const traces = await prisma.notification.findMany({
     where: {
@@ -280,5 +321,5 @@ export async function resoudreSuccessionDuCreateur(
     )
     .map(trace => ({ userId: trace.userId, promotedAt: trace.createdAt }))
 
-  return elireSuccesseur(candidats, promotions)
+  return elireSuccesseur(administrateurs, promotions)
 }
