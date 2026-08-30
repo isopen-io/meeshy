@@ -39,6 +39,7 @@ class GlobalSearchViewModelTest {
     private val socket = mockk<MessageSocketManager> {
         every { this@mockk.conversationUpdated } returns this@GlobalSearchViewModelTest.conversationUpdated
         every { this@mockk.conversationDeleted } returns this@GlobalSearchViewModelTest.conversationDeleted
+        every { this@mockk.conversationRestored } returns MutableSharedFlow()
     }
 
     // Horloge controlable : le TTL du cache de requetes se teste sans dormir.
