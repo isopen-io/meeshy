@@ -20518,3 +20518,26 @@ portés jusqu'ici :
   qu'on y était » ; ils n'étaient lus par personne (le corps servi les contient
   déjà). Retirés. Un champ décodé sans lecteur est le même angle mort que celui
   qu'on vient de corriger, dans l'autre sens.
+
+### Corollaire, payé dans le même lot : le double PARTIEL, quatrième exemplaire
+
+Le correctif ci-dessus a fait tomber quatre témoins du web sur un `TypeError`
+qui ne disait rien du comportement testé — `getActorDisplayName is not a
+function`. Les deux suites de `use-notifications-manager-rq` mockaient
+`@/utils/notification-helpers` par une fabrique qui ÉNUMÉRAIT quatre exports à
+la main. La bannière s'est mise à en lire deux de plus ; ils sont sortis
+`undefined`.
+
+C'est le **quatrième** exemplaire d'une règle déjà écrite, datée et motivée dans
+`services/gateway/CLAUDE.md` (« un double PARTIEL d'un module perd en silence
+tout ce que le module GAGNE », cycles 91, 93, 104). Elle n'avait jamais été
+portée côté web — elle l'est maintenant, dans `apps/web/CLAUDE.md`. Même forme
+que la leçon 307 : **une règle ne se propage pas depuis son énoncé, elle vaut là
+où quelqu'un l'a récitée.**
+
+Et la faute de MÉTHODE, qui est la mienne : le lot avait fait tourner
+`__tests__/utils/` — ses propres témoins, verts — et pas la suite complète. **Un
+lot lance les suites qui EXERCENT le module changé, jamais seulement celles
+qu'il vient d'écrire** ; ici la suite entière met trois minutes et aurait nommé
+le défaut avant la CI. Un module nouvellement importé par un consommateur
+existant est exactement le cas où ses doubles ont un inventaire en retard.
