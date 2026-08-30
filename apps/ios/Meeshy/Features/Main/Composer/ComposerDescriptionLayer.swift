@@ -67,6 +67,18 @@ struct ComposerDescriptionLayer: View {
     /// repos, où c'est le tap sur le texte qui déclenche l'édition.
     var opensEditingOnAppear: Bool = false
 
+    /// **Ce que la COCHE fait en plus de refermer l'édition** (directive porteur
+    /// 2026-08-30).
+    ///
+    /// Le calque, seul, repassait simplement en lecture — ce qui suffisait tant
+    /// qu'il vivait dans la surface en permanence. Monté par le meuble en zone
+    /// basse (#4361), la même coche doit RANGER la zone : sinon elle laisse à
+    /// l'écran un lecteur que personne n'a demandé, et l'auteur cherche un
+    /// second geste pour s'en débarrasser.
+    ///
+    /// `nil` = le site de montage garde le comportement d'origine.
+    var onValidate: (() -> Void)?
+
     /// **Occupe toute la hauteur qu'on lui donne** (#4124). Le champ compact
     /// convient au calque posé EN PLACE, où il légende une scène ; la couche
     /// plein écran, elle, est une surface d'écriture — le texte y part du haut
@@ -210,6 +222,7 @@ struct ComposerDescriptionLayer: View {
                 // sur une bande héritée d'une frappe précédente offrirait des
                 // suggestions pour un `@` que le curseur a quitté.
                 mentionBox.controller.clearSuggestions()
+                onValidate?()
             } label: {
                 Image(systemName: "checkmark")
                     .font(MeeshyFont.relative(14).weight(.semibold))

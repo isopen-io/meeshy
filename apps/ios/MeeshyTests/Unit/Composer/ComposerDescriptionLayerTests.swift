@@ -119,10 +119,29 @@ final class ComposerDescriptionLayerTests: XCTestCase {
         // dans `body` faisait déborder la pile par profondeur de type SwiftUI.
         // Ce que la garde protège est inchangé — UN calque, consommé par ses
         // hôtes, jamais redessiné — seule son adresse a suivi.
-        for fichier in ["ComposerSceneSurface.swift", "ComposerSceneDescriptionEditor.swift"] {
-            XCTAssertTrue(compact(try composer(fichier)).contains("ComposerDescriptionLayer("),
-                          "\(fichier) doit CONSOMMER le calque, jamais le redessiner.")
-        }
+        // **RETOURNÉ le 2026-08-30 : il n'y a plus qu'UN hôte.**
+        //
+        // > « La zone de description en bas ne doit pas être affichée si on ne
+        // > touche pas l'icône description, même si une description existe ! »
+        //
+        // `ComposerSceneSurface` peignait le calque en PERMANENCE, dès qu'un
+        // texte existait — la place que la scène centrée réclame. Elle ne le
+        // peint plus : la description s'ouvre par sa PORTE, et le meuble monte
+        // l'éditeur en zone basse.
+        //
+        // Ce que la garde protégeait — un seul rendu « en mode lecture », jamais
+        // deux à faire diverger — est RENFORCÉ, pas affaibli : il n'y a plus
+        // qu'un site au lieu de deux.
+        XCTAssertTrue(
+            compact(try composer("ComposerSceneDescriptionEditor.swift"))
+                .contains("ComposerDescriptionLayer("),
+            "L'éditeur nommé doit CONSOMMER le calque, jamais le redessiner."
+        )
+        XCTAssertFalse(
+            compact(try composer("ComposerSceneSurface.swift")).contains("ComposerDescriptionLayer("),
+            "La surface de scène ne peint plus la description : elle s'affichait dès qu'un texte "
+                + "existait, sans que personne ne l'ait demandée."
+        )
         XCTAssertTrue(
             compact(try composer("MeeshyComposerHost+Surfaces.swift"))
                 .contains("ComposerSceneDescriptionEditor("),

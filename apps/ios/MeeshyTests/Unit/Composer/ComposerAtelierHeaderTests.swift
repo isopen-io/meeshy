@@ -133,13 +133,43 @@ final class ComposerAtelierHeaderTests: XCTestCase {
         )
     }
 
-    /// « Terminé » se pose là où le système le met : au-dessus du clavier —
-    /// jamais un bouton flottant, qui passerait sous le clavier dès que le texte
-    /// grandit. La règle a survécu au changement de forme ; son adresse a bougé
-    /// vers le type nommé qui porte désormais la zone.
-    func test_leBoutonTermine_vitSurLaBarreDuClavier() throws {
-        let code = AppSourceGuard.stripComments(try editorSource())
-        XCTAssertTrue(compact(code).contains("placement:.keyboard"))
+    /// **RETOURNÉ le 2026-08-30, sur directive porteur** :
+    ///
+    /// > « Le bouton (terminé) au dessus du clavier quand on édite la
+    /// > description est inutile, un bouton Check existe déjà pour valider ; il
+    /// > faudra ajouter la gesture swipe down pour valider et fermer. »
+    ///
+    /// La garde protégeait la PLACE de « Terminé » — au-dessus du clavier, là où
+    /// le système le met, jamais flottant. La raison était bonne ; le bouton,
+    /// lui, faisait DOUBLON avec la coche que le champ porte déjà. Deux commandes
+    /// pour un même acte, dont l'une occupait une barre système.
+    ///
+    /// Ce qui se garde maintenant : qu'il n'y ait PLUS de barre de clavier, et
+    /// que les deux gestes qui restent — la coche et le glissement vers le bas —
+    /// fassent le MÊME acte. Un glissement qui fermerait sans valider perdrait la
+    /// frappe en cours.
+    func test_laValidation_aDeuxGestes_etUnSeulActe() throws {
+        let code = compact(AppSourceGuard.stripComments(try editorSource()))
+
+        XCTAssertFalse(
+            code.contains("placement:.keyboard"),
+            "La barre de clavier portait un « Terminé » en doublon de la coche du champ."
+        )
+        XCTAssertTrue(
+            code.contains("onValidate:onDone"),
+            "La coche du champ doit RANGER la zone, pas seulement repasser en lecture : sinon "
+                + "elle laisse à l'écran un lecteur que personne n'a demandé."
+        )
+        XCTAssertTrue(
+            code.contains("DragGesture(minimumDistance:20)") && code.contains("onDone()"),
+            "… et le glissement vers le bas fait le même acte."
+        )
+        XCTAssertTrue(
+            code.contains("valeur.translation.height>40")
+                && code.contains("valeur.translation.height>abs(valeur.translation.width)"),
+            "Seuil et dominance verticale : sans eux, un glissement horizontal dans le champ — "
+                + "pour placer le curseur — fermerait la saisie au premier tremblement du pouce."
+        )
     }
 
     private func editorSource() throws -> String {

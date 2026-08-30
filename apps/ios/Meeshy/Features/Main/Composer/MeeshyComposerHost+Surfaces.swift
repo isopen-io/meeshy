@@ -285,10 +285,16 @@ extension MeeshyComposerHost {
             onBackgroundTapped: { handleSceneBackgroundTap() },
             // Les portes que CE meuble sert. `sticker` en est absente : aucun
             // chemin ne pose un objet de ce kind — `showsEmojiPicker` insère
-            // dans le TEXTE, ce qui n'est pas la même chose. `description` non
-            // plus : rien ne donne le focus au champ depuis l'extérieur (#4065).
+            // dans le TEXTE, ce qui n'est pas la même chose.
+            //
+            // **`description` y entre le 2026-08-30**, et c'est ce qui rend le
+            // retrait du champ permanent possible : la porte devient le SEUL
+            // chemin vers la description, exactement comme l'icône de la rangée
+            // le fait sous l'atelier. Elle était retenue parce que « rien ne
+            // donne le focus au champ depuis l'extérieur » (#4065) — c'est le
+            // meuble qui le fait désormais, en ouvrant sa zone basse.
             railDoors: ComposerRailDoor.offered(
-                served: [.media, .sound, .place, .mention],
+                served: [.description, .media, .sound, .place, .mention],
                 format: selectedFormat,
                 allowsCapture: profile.allowsCapture
             ),
