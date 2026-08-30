@@ -328,6 +328,42 @@ describe('ZmqRequestSender', () => {
       expect(arg.targetLanguages).toEqual(['fr', 'en']);
     });
 
+    it('canonicalizes region-tagged targetLanguages so variants collapse to one NLLB target', async () => {
+      // `'fr-FR'` and `'fr'` are the SAME language: a raw `.toLowerCase()` dedup
+      // would emit `['fr', 'fr-fr']` — the ML worker pool would translate the
+      // same language twice, and `'fr-fr'` is not a valid NLLB target.
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['fr-FR', 'fr', 'FR'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['fr']);
+    });
+
+    it('sends only canonical language codes (no region subtags) to the translator', async () => {
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['pt-BR', 'en-US', 'es_ES'] })
+      );
+      const arg = firstSendArg(connectionManager);
+      expect(arg.targetLanguages).toEqual(['pt', 'en', 'es']);
+    });
+
+    it('sends the same canonical target set that the timeout retry re-requests', async () => {
+      // The retry path (ZmqTranslationClient) rebuilds `targetLanguages` from the
+      // canonical `pendingLanguages` set. The first send must therefore carry the
+      // same canonical codes, or the two sends of one request diverge.
+      const onTimeout = jest.fn();
+      await sender.sendTranslationRequest(
+        makeTranslationRequest({ targetLanguages: ['de-DE', 'de'] }),
+        'retry-parity-task'
+      );
+      const firstSend = firstSendArg(connectionManager);
+      sender.registerTimeout('retry-parity-task', 1000, onTimeout);
+      jest.advanceTimersByTime(1001);
+      const pendingLanguages = (onTimeout.mock.calls[0] as unknown[])[0] as string[];
+      expect(firstSend.targetLanguages).toEqual(pendingLanguages);
+      expect(firstSend.targetLanguages).toEqual(['de']);
+    });
+
     it('throws when deduped targetLanguages is empty', async () => {
       await expect(
         sender.sendTranslationRequest(makeTranslationRequest({ targetLanguages: [] }))

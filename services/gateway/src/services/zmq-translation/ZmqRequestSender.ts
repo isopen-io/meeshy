@@ -81,8 +81,16 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
-    // Dédupliquer les langues cibles (normalisation lowercase)
-    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    // Canonicaliser PUIS dédupliquer les langues cibles via la SSOT
+    // `normalizeLanguageCode` (`canonicalLanguage`) — la MÊME réduction que le
+    // jeu `pendingLanguages` ci-dessous et que le renvoi des seules langues
+    // manquantes (ZmqTranslationClient). Un `.toLowerCase()` brut comptait
+    // `'fr'` et `'fr-FR'` comme deux cibles : le pool ML traduisait la même
+    // langue deux fois et `'fr-fr'` n'est pas une cible NLLB valide. Depuis ce
+    // site — le point de passage UNIQUE de TOUT travail de traduction —, le
+    // translator ne reçoit plus que des codes canoniques, et la liste ENVOYÉE
+    // coïncide avec la liste SUIVIE.
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(canonicalLanguage))];
     if (uniqueTargetLanguages.length === 0) {
       throw new Error('targetLanguages must not be empty after deduplication');
     }
@@ -118,7 +126,7 @@ export class ZmqRequestSender {
     this.pendingRequests.set(taskId, {
       request: request,
       timestamp: Date.now(),
-      pendingLanguages: new Set(uniqueTargetLanguages.map(canonicalLanguage))
+      pendingLanguages: new Set(uniqueTargetLanguages)
     });
 
     this.stats.translationRequests++;
