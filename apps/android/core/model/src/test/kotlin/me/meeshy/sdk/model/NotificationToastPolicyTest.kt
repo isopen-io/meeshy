@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Pure decision core for the in-app real-time notification toast (feature-parity §M) — the
- * dedup/active-screen-suppression/push+DND gate extracted from iOS's impure
+ * dedup/active-screen-suppression/push+DND/per-type gate extracted from iOS's impure
  * `NotificationToastManager.handleNewNotification` guard-chain.
  */
 class NotificationToastPolicyTest {
@@ -15,10 +15,12 @@ class NotificationToastPolicyTest {
 
     private fun notification(
         id: String = "n1",
+        type: String = "system",
         conversationId: String? = "c1",
         postId: String? = null,
     ) = ApiNotification(
         id = id,
+        type = type,
         context = NotificationContext(conversationId = conversationId, postId = postId),
     )
 
@@ -118,6 +120,67 @@ class NotificationToastPolicyTest {
                 dndStartTime = "00:00",
                 dndEndTime = "23:59",
             ),
+            now = now,
+        )
+
+        assertThat(decision).isEqualTo(NotificationToastDecision.BlockedByPreferences)
+    }
+
+    @Test
+    fun decide_blocksWhenThisTypesPerTypeToggleIsOff() {
+        // memberLeftEnabled defaults to false → a member_left toast is suppressed.
+        val decision = NotificationToastPolicy.decide(
+            notification = notification(type = "member_left"),
+            activeConversationId = null,
+            activePostId = null,
+            isDuplicateDelivery = false,
+            preferences = UserNotificationPreferences(),
+            now = now,
+        )
+
+        assertThat(decision).isEqualTo(NotificationToastDecision.BlockedByPreferences)
+    }
+
+    @Test
+    fun decide_showsWhenThisTypesPerTypeToggleIsOn() {
+        val target = notification(type = "new_message")
+        val decision = NotificationToastPolicy.decide(
+            notification = target,
+            activeConversationId = null,
+            activePostId = null,
+            isDuplicateDelivery = false,
+            preferences = UserNotificationPreferences(),
+            now = now,
+        )
+
+        assertThat(decision).isEqualTo(NotificationToastDecision.Show(target))
+    }
+
+    @Test
+    fun decide_showsAToggleLessTypeEvenWhenTheNearbyToggleIsOff() {
+        // translation notifications have no per-type toggle → they survive even with
+        // reaction/system toggles off (push + DND still pass).
+        val target = notification(type = "translation_completed")
+        val decision = NotificationToastPolicy.decide(
+            notification = target,
+            activeConversationId = null,
+            activePostId = null,
+            isDuplicateDelivery = false,
+            preferences = UserNotificationPreferences(systemEnabled = false, reactionEnabled = false),
+            now = now,
+        )
+
+        assertThat(decision).isEqualTo(NotificationToastDecision.Show(target))
+    }
+
+    @Test
+    fun decide_pushMasterOverridesAnEnabledPerTypeToggle() {
+        val decision = NotificationToastPolicy.decide(
+            notification = notification(type = "new_message"),
+            activeConversationId = null,
+            activePostId = null,
+            isDuplicateDelivery = false,
+            preferences = UserNotificationPreferences(pushEnabled = false),
             now = now,
         )
 

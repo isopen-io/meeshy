@@ -6823,17 +6823,36 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       id already shown in the last 2s" boolean is precomputed by the caller — inherently
       stateful, not this pure function's job), then push-enabled + DND-window gating (both reuse
       already-existing pure predicates, `UserNotificationPreferences.pushEnabled`/
-      `DndWindow.isActive`). +8 tests. **Deliberately narrower than iOS's own gate**: the
-      PER-TYPE toggle check (iOS `isTypeEnabled`, an 80-case switch over `MeeshyNotificationType`)
-      is NOT ported — Android has no raw-wire-type→toggle resolver to reuse
-      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum);
-      building one is real, separate work, left open rather than invented under this slice's
-      budget. Until then every type passes once push+DND clear.
+      `DndWindow.isActive`). +8 tests. **The PER-TYPE toggle check was originally deferred**: iOS
+      `isTypeEnabled` is an 80-case switch over `MeeshyNotificationType`
+      and Android had no raw-wire-type→toggle resolver to reuse
+      (`NotificationTypeCatalog` maps a coarser 17-case UI category, not the 80-case wire enum).
+      **That resolver shipped 2026-08-30** (slice `notification-toast-per-type-gate`): new pure
+      `:core:model` `NotificationTypeToggle.isEnabled(type, preferences)` faithfully ports iOS
+      `isTypeEnabled`, keyed directly on the raw wire `type` string (both lowercase canonical and
+      legacy uppercase alias) so no `MeeshyNotificationType` enum is needed. The switch is
+      expressed once as data (type-set → prefs predicate) built into an immutable class-load
+      lookup — SOTA over iOS's per-call `switch` re-walk. Unknown types collapse onto
+      `systemEnabled` via the existing `NotificationTypeVocabulary.canonical` (iOS
+      `rawValue ?? .system`). Wired into `NotificationToastPolicy.decide` as a third preference
+      layer after push+DND (fail → `BlockedByPreferences`). **Faithful boundary**: iOS gates
+      incoming-call on `callsEnabled` and friend feed/story/mood on `friendContentEnabled`;
+      Android's model has neither field yet, so those types resolve to always-enabled exactly like
+      iOS's toggle-less power-user types (translation, gamification) — tracked follow-up below.
+      +21 tests (17 `NotificationTypeToggle` incl. all-on / all-off completeness sweeps over
+      `KNOWN_TYPES`, cross-grouping cases `STORY_REPLY`→storyReaction /
+      `comment_reaction`→commentLike / `community_joined`→memberLeft, unknown+blank→system;
+      4 `NotificationToastPolicy` incl. toggle-off→blocked / toggle-on→show / toggle-less→show /
+      push-master-overrides-type).
       **Still open**: the STATEFUL wiring (dedup-window bookkeeping, the 7s dismiss timer, a
       Hilt-singleton `CoroutineScope`, `onConversationOpened/Closed`/`onPostOpened/Closed` hooks
       called from `ChatViewModel`/post-detail lifecycle — Android has no equivalent to iOS's
-      `ConversationSocketHandler.init`/`deinit` today), the per-type toggle resolver noted
-      above, and sub-slice (3) (UI mount + navigation).
+      `ConversationSocketHandler.init`/`deinit` today) and sub-slice (3) (UI mount + navigation).
+- [ ] `callsEnabled` + `friendContentEnabled` notification toggles (model field + sync-body
+      mapping + Settings ▸ Notifications rows) — iOS gates incoming-call and friend
+      feed/story/mood on these two per-type toggles (`UserNotificationPreferences+Filter.swift`);
+      Android's model has neither, so `NotificationTypeToggle` treats those types as
+      always-enabled. Follow-up to the per-type gate slice (2026-08-30).
 - [ ] FCM push: permission request, tap-to-navigate, foreground/silent activity signal, badge sync
 - [ ] Rich push: decryption, message-media attachments, sender-avatar style, category quick
       actions (reply / mark-read / accept-friend / call), conversation threading, per-push badge
