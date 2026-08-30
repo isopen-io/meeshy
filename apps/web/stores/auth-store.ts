@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { User } from '@meeshy/shared/types';
 import { AUTH_STORAGE_KEYS } from '@/constants/auth';
 import { authManager } from '@/services/auth-manager.service';
+import { authService } from '@/services/auth.service';
 
 interface AuthState {
   user: User | null;
@@ -118,29 +119,32 @@ export const useAuthStore = create<AuthStore>()(
           },
 
           refreshSession: async (): Promise<boolean> => {
-            const { refreshToken, authToken } = get();
+            const { authToken, sessionToken } = get();
 
-            if (!refreshToken && !authToken) return false;
+            // `token` (le JWT) est REQUIS par le schéma serveur de
+            // /auth/refresh — un sessionToken seul, sans authToken, ne peut
+            // jamais aboutir (voir authService.refreshToken).
+            if (!authToken) return false;
 
             try {
-              const response = await fetch('/api/auth/refresh', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${authToken}`,
-                },
-                body: JSON.stringify({ refreshToken }),
-              });
+              // Une SEULE source de vérité pour l'appel réseau :
+              // authService.refreshToken() est déjà câblé sur
+              // buildApiUrl(API_ENDPOINTS.auth.refresh) et porte le corps que
+              // la route exige (`{ token, sessionToken }`). Le store ne
+              // duplique plus de second `fetch`.
+              const response = await authService.refreshToken(sessionToken);
+              const refreshed = response.success ? response.data : undefined;
 
-              if (response.ok) {
-                const data = await response.json();
-                get().setTokens(data.accessToken, data.refreshToken, data.expiresIn);
-                // Also update AuthManager
-                authManager.updateTokens(data.accessToken, data.refreshToken, undefined, data.expiresIn);
-                return true;
-              }
+              if (!refreshed?.token) return false;
 
-              return false;
+              get().setTokens(
+                refreshed.token,
+                undefined,
+                refreshed.sessionToken,
+                refreshed.expiresIn
+              );
+
+              return true;
             } catch (error) {
               return false;
             }

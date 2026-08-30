@@ -8,7 +8,6 @@
 let mockSetCredentials = jest.fn();
 let mockClearAllSessions = jest.fn();
 let mockGetAuthToken = jest.fn();
-let mockGetRefreshToken = jest.fn();
 let mockUpdateUser = jest.fn();
 let mockUpdateTokens = jest.fn();
 
@@ -18,7 +17,6 @@ jest.mock('@/services/auth-manager.service', () => ({
     setCredentials: (...args: any[]) => mockSetCredentials(...args),
     clearAllSessions: (...args: any[]) => mockClearAllSessions(...args),
     getAuthToken: (...args: any[]) => mockGetAuthToken(...args),
-    getRefreshToken: (...args: any[]) => mockGetRefreshToken(...args),
     updateUser: (...args: any[]) => mockUpdateUser(...args),
     updateTokens: (...args: any[]) => mockUpdateTokens(...args),
   },
@@ -252,51 +250,61 @@ describe('AuthService', () => {
   });
 
   describe('refreshToken', () => {
+    // Le schéma serveur de POST /api/v1/auth/refresh (`AuthSchemas.refreshToken`,
+    // services/gateway/src/routes/auth/magic-link.ts) n'a QUE deux champs :
+    // `token` (le JWT, REQUIS) et `sessionToken` (le jeton de session longue
+    // durée du login, optionnel — active le renouvellement à fenêtre glissante).
+    // Il n'y a AUCUN champ `refreshToken` dans ce schéma, et la route ne lit
+    // jamais l'en-tête `Authorization` (`security: []`, aucun hook d'auth monté
+    // sur cette route — vérifié : aucune référence à `request.headers.authorization`
+    // dans magic-link.ts).
     const mockRefreshResponse = {
       success: true,
       data: {
         token: 'new-jwt-token',
-        refreshToken: 'new-refresh-token',
+        sessionToken: 'new-session-token',
         expiresIn: 3600,
       },
     };
 
-    it('should refresh token successfully', async () => {
+    it('should refresh token successfully, sending the session token the caller holds', async () => {
       mockGetAuthToken.mockReturnValue('old-jwt-token');
-      mockGetRefreshToken.mockReturnValue('old-refresh-token');
       mockFetch.mockResolvedValueOnce({
         json: () => Promise.resolve(mockRefreshResponse),
       });
 
-      const result = await authService.refreshToken();
+      const result = await authService.refreshToken('caller-session-token');
 
       expect(mockFetch).toHaveBeenCalledWith(
         'https://gate.meeshy.me/api/v1/auth/refresh',
         expect.objectContaining({
           method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             token: 'old-jwt-token',
-            refreshToken: 'old-refresh-token',
+            sessionToken: 'caller-session-token',
           }),
         })
       );
       expect(result.success).toBe(true);
-      // `updateTokens(authToken, refreshToken, sessionToken, expiresIn)` —
-      // `expiresIn` must land in its own slot. Passed third it was written to
-      // storage as an anonymous session token.
+      // `updateTokens(authToken, refreshToken, sessionToken, expiresIn)` — le
+      // serveur ne rend JAMAIS de `refreshToken` (absent de son schéma) ; le
+      // `sessionToken` qu'il rend (même valeur, TTL glissé côté serveur) doit
+      // atterrir dans SON propre créneau, le troisième — jamais dans le second
+      // (c'est exactement le bug que le commentaire d'origine documentait :
+      // « passé troisième il était écrit comme session anonyme »).
       expect(mockUpdateTokens).toHaveBeenCalledWith(
         'new-jwt-token',
-        'new-refresh-token',
         undefined,
+        'new-session-token',
         3600
       );
     });
 
-    it('should return error when no tokens available', async () => {
+    it('should return error when no auth token is available — a sessionToken alone is never enough', async () => {
       mockGetAuthToken.mockReturnValue(null);
-      mockGetRefreshToken.mockReturnValue(null);
 
-      const result = await authService.refreshToken();
+      const result = await authService.refreshToken('a-session-token-with-no-jwt');
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Aucun token à rafraîchir");
@@ -305,7 +313,6 @@ describe('AuthService', () => {
 
     it('should handle failed refresh', async () => {
       mockGetAuthToken.mockReturnValue('old-jwt-token');
-      mockGetRefreshToken.mockReturnValue('old-refresh-token');
       mockFetch.mockResolvedValueOnce({
         json: () => Promise.resolve({
           success: false,
@@ -321,7 +328,6 @@ describe('AuthService', () => {
 
     it('should handle network error during refresh', async () => {
       mockGetAuthToken.mockReturnValue('old-jwt-token');
-      mockGetRefreshToken.mockReturnValue('old-refresh-token');
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
       const result = await authService.refreshToken();
@@ -330,9 +336,8 @@ describe('AuthService', () => {
       expect(result.error).toBe('Erreur de connexion au serveur');
     });
 
-    it('should work with only auth token (no refresh token)', async () => {
+    it('should work with only the auth token — no sessionToken key sent when none is passed', async () => {
       mockGetAuthToken.mockReturnValue('jwt-token');
-      mockGetRefreshToken.mockReturnValue(null);
       mockFetch.mockResolvedValueOnce({
         json: () => Promise.resolve(mockRefreshResponse),
       });
@@ -342,10 +347,7 @@ describe('AuthService', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://gate.meeshy.me/api/v1/auth/refresh',
         expect.objectContaining({
-          body: JSON.stringify({
-            token: 'jwt-token',
-            refreshToken: null,
-          }),
+          body: JSON.stringify({ token: 'jwt-token' }),
         })
       );
       expect(result.success).toBe(true);

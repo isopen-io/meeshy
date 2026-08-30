@@ -388,20 +388,20 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 // =============================================================================
 // Inventaire GELÉ — photographie du 2026-08-29 (231 sites, 74 fichiers), migrée
 // par #4281 (2026-08-30) vers 14 sites, 10 fichiers, puis par #4337
-// (2026-08-30) vers 10 sites, 8 fichiers. Voir header, « Ce qu'il est, et
-// comment il décroît » : décroître un compte ci-dessous FAIT PARTIE du
-// correctif qui migre le site vers `API_ENDPOINTS` (#4281, #4337) ou vers une
-// route existante. Les huit entrées restantes se répartissent en deux
-// familles — aucune n'est un défaut de #4281 :
+// (2026-08-30) vers 10 sites, 8 fichiers, puis par #4338 (2026-08-30, volet
+// rafraîchissement de session) vers 9 sites, 7 fichiers. Voir header, « Ce
+// qu'il est, et comment il décroît » : décroître un compte ci-dessous FAIT
+// PARTIE du correctif qui migre le site vers `API_ENDPOINTS` (#4281, #4337,
+// #4338) ou vers une route existante. Les sept entrées restantes se
+// répartissent en deux familles — aucune n'est un défaut de #4281 :
 //
-//   (a) SKIP délibéré, sur instruction de l'issue #4281 elle-même — deux
-//       adresses mortes encore instruites sous leur propre issue (#4338, pour
-//       le rafraîchissement de session et les quatre sites d'image sociale) :
-//       migrer ces sites ici les aurait enterrés dans un lot de migration
-//       plutôt que dans le correctif de bug qui leur est dû. Comptes INCHANGÉS
-//       depuis le 2026-08-29 : 'app/chat/[id]/layout.tsx',
-//       'app/signup/affiliate/[token]/layout.tsx' (og-image-dynamic, #4338),
-//       'stores/auth-store.ts' (#4338).
+//   (a) SKIP délibéré, sur instruction de l'issue #4281 elle-même — une
+//       adresse morte encore instruite sous sa propre issue (#4338, les
+//       quatre sites d'image sociale) : migrer ces sites ici les aurait
+//       enterrés dans un lot de migration plutôt que dans le correctif de bug
+//       qui leur est dû. Comptes INCHANGÉS depuis le 2026-08-29 :
+//       'app/chat/[id]/layout.tsx', 'app/signup/affiliate/[token]/layout.tsx'
+//       (og-image-dynamic, #4338).
 //
 //   (b) DÉCOUVERTES pendant la migration — une adresse fantôme (aucune route
 //       correspondante dans les 419 du catalogue #4280) qu'un chemin littéral
@@ -436,6 +436,21 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 //       ressource). 'hooks/use-push-notifications.ts' (2→0) et
 //       'services/push-token.service.ts' (2→0) ont donc quitté l'objet — voir
 //       header, « Un fichier qui atteint zéro disparaît ENTIÈREMENT ».
+//
+//   #4338 (2026-08-30, volet rafraîchissement de session) — SORTI de
+//       l'inventaire : 'stores/auth-store.ts' (1→0) postait
+//       fetch('/api/auth/refresh', …) À LA MAIN — un chemin RELATIF sans
+//       `/v1`, qui frappait le serveur Next (aucune route `app/api/auth/…`
+//       n'existe) plutôt que le gateway, avec un corps (`{ refreshToken }`)
+//       qui ne correspondait à AUCUN champ du schéma serveur (`AuthSchemas
+//       .refreshToken` n'accepte que `token`, REQUIS, et `sessionToken`,
+//       optionnel). Le store appelle désormais `authService.refreshToken()`
+//       (`services/auth.service.ts`), déjà câblé sur
+//       `buildApiUrl(API_ENDPOINTS.auth.refresh)` — une SEULE source de
+//       vérité pour l'adresse, au lieu d'un second `fetch` dupliqué. Le volet
+//       `og-image-dynamic` de #4338 (les quatre sites ci-dessus, famille (a))
+//       reste ouvert : arbitrage produit en attente, hors périmètre de ce
+//       correctif.
 // =============================================================================
 const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
   // `/api/og-image-dynamic` : AUCUNE route locale `app/api/og-image-dynamic/route.ts`
@@ -449,10 +464,6 @@ const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
   'app/u/[id]/layout.tsx': 1,
   'lib/server-cache.ts': 1,
   'services/message-translation.service.ts': 2,
-  // `/api/auth/refresh` (`fetch` direct, ni `buildApiUrl` ni `apiService`) :
-  // AUCUNE route locale `app/api/auth/refresh/route.ts` — même famille que
-  // `og-image-dynamic` ci-dessus. Suivi : #4338.
-  'stores/auth-store.ts': 1,
 };
 
 describe('Le balayage LIT bien apps/web — sinon les gardes ci-dessous seraient vertes à vide', () => {
