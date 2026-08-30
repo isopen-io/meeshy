@@ -5,6 +5,28 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — a field CONSUMED for one purpose is not WIRED for another (slice `chat-system-notice`)
+Android already carried `Message.isSystemMessage` (`messageSource == "system"`) and had ported the pure
+`BubbleRenderKind`, so the box looked "done at the model layer". But the flag was read in exactly ONE place —
+`MessageGrouping` (a system message never groups) — and `BubbleRenderKind.resolve` had no `isSystem` param at
+all: a join/leave/legacy-summary row fell through to the standard bubble and rendered SIGNED by its author,
+the precise defect iOS's `case .system` (checked FIRST) exists to prevent. **A flag being decoded AND used
+somewhere does not mean it reaches the surface that should branch on it.** The grep that catches this is not
+"does the model have the flag?" but "does the RENDER decision read it?" — the same "grep the consumer, not the
+block" reflex as the ThumbHash cold-load miss (2026-08-29), applied to a boolean instead of a painter. When a
+render-kind SSOT enumerates its arms (Standard/Deleted/Burned/EphemeralExpired), ask which iOS kinds it is
+MISSING before trusting it — `System` was simply absent, and nothing rougissait because the fallthrough
+compiled and rendered *a* bubble.
+
+## 2026-08-30 — port the PRECEDENCE, not just the arm; a witness must fire on a NON-first rank
+iOS resolves `.system` BEFORE `.deleted`/`.burned`/the ephemeral collapse. Adding `Kind.System` is worthless
+if it sits last in the `when` — the interesting behaviour is that a system message that is ALSO deleted /
+view-once-consumed / expired still renders as a notice. So the RED tests assert exactly those collisions
+(system+deleted→System, system+burned→System, system+expired→System), never just "system→System" (which a
+last-place arm would also pass). Same shape as the root CLAUDE.md §261 lesson (a rank witness is written on a
+rank OTHER than the first): here the witness is written on the *conflict*, where a wrong precedence would
+diverge, not on the trivial happy path where every ordering agrees.
+
 ## 2026-08-30 — the local gate catches a missing test-file import that the core-only pre-run misses (slice `notification-center-category-filter`)
 A per-module test run (`:core:model:testDebugUnitTest --tests …`) green-lit the pure model, but the FULL
 `assembleDebug testDebugUnitTest` gate then failed on `:feature:notifications:compileDebugUnitTestKotlin` with

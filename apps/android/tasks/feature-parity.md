@@ -2148,6 +2148,18 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       proprement l'insert sur échec ; cancellation-safe — rethrow `CancellationException`) ; `MeeshyImageViewer`
       gagne un bouton Save (icône FileDownload, TopEnd, opt-in via `onImageSaved`, masqué < Android 10) ;
       `ChatScreen` affiche un Toast succès/échec. Reste : contact card) ; contact pending
+- [~] Message système → notice centrée — **fondation done** (slice `chat-system-notice`, 2026-08-30) :
+      un message `messageSource == "system"` (avis d'arrivée/départ, résumés hérités) se rendait comme
+      le premier message SIGNÉ de l'arrivant, faute d'un arm dédié. Ajoute `BubbleRenderKind.Kind.System`
+      résolu **EN PREMIER** dans `resolve(...)` (parité iOS `ThemedMessageBubble` `case .system`, vérifié
+      avant deleted/burned/ephemeral ; le presenter court-circuite avant toute lecture d'horloge) ;
+      `BubbleContent.isSystem` ← `ApiMessage.isSystemMessage` dans `BubbleContentBuilder` ; `MessageBubble`
+      rend une `BubbleSystemNoticeView` centrée, sans avatar ni nom (port iOS `BubbleSystemNoticeView`,
+      capsule subtile `backgroundTertiary`, texte muté centré ; notice vide → rien). +10 tests, RED-prouvés
+      (retirer l'arm `isSystem` → exactement les 4 cas système échouent — le cas de base + 3 collisions de
+      précédence —, aucun collatéral). Diff `apps/android`
+      only. **Reste** : notices d'appel enrichies (`BubbleCallNoticeView`) et d'arrivée
+      (`BubbleJoinNoticeView` + catalogue localisé + règles de lien) — lots suivants sur cet arm.
 - [~] Message-bubble VoiceOver/TalkBack composed label — **pure composer done** (slice
       `chat-bubble-a11y-label`, 2026-08-21 : port iOS `MessageAccessibilityLabelComposer.compose`
       (`apps/ios/Meeshy/Features/Main/Focal/Preferences/MessageAccessibilityLabelComposer.swift`).
