@@ -61637,6 +61637,53 @@
         }
       }
     },
+    "notification.banner.inConversation": {
+      "comment": "Bannière in-app d'un message de GROUPE : « <expéditeur> dans <nom du groupe> ». Le nom du groupe est celui que l'appareil connaît (renommage local + emoji favori), jamais forcément celui du serveur.",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ في %2$@"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ in %2$@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ in %2$@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ en %2$@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ dans %2$@"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ in %2$@"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ em %2$@"
+          }
+        }
+      }
+    },
     "notification.date.ago": {
       "extractionState": "manual",
       "localizations": {

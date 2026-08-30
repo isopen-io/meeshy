@@ -83,7 +83,7 @@ public final class NotificationToastManager: ObservableObject {
     /// pour les toasts in-app. Le SDK ne peut pas lire le snapshot local des
     /// conversations de l'app, donc la cible app injecte une closure de pull —
     /// même pattern que `hapticPlayer`. Retourne `nil` → on retombe sur
-    /// le titre serveur (`event.toastSubtitle`).
+    /// le titre serveur (`event.conversationGroupName`).
     public var conversationPresentationProvider: (@MainActor (_ conversationId: String) -> ConversationPresentation?)?
 
     /// Pièces de présentation d'une conversation, résolues par l'app et
@@ -109,20 +109,30 @@ public final class NotificationToastManager: ObservableObject {
         }
     }
 
-    /// Sous-titre à afficher sous le titre du toast. Pour un événement de
-    /// conversation (qui a déjà un sous-titre = nom de groupe), préfère la
-    /// présentation LOCALE (nom renommé + favori). Sinon retombe sur
-    /// `event.toastSubtitle`. Les messages directs (sans sous-titre) restent
-    /// inchangés.
+    /// Le nom du groupe tel que l'APPAREIL le connaît — renommage local + emoji
+    /// favori quand l'app en a un, nom canonique du serveur sinon, `nil` pour un
+    /// message direct ou tout ce qui n'est pas un message de conversation.
+    ///
+    /// C'est la seule pièce de la bannière que le serveur ne peut pas composer :
+    /// il ignore les renommages locaux, qui ne sont pas forcément synchronisés.
     @MainActor
-    public func resolvedToastSubtitle(for event: SocketNotificationEvent) -> String? {
-        let base = event.toastSubtitle
+    public func resolvedConversationGroupName(for event: SocketNotificationEvent) -> String? {
+        let base = event.conversationGroupName
         guard base != nil,
               let conversationId = event.conversationId,
               let presentation = conversationPresentationProvider?(conversationId) else {
             return base
         }
         return presentation.composedSubtitle
+    }
+
+    /// La bannière in-app complète — ce qu'elle DIT, avec le nom LOCAL du groupe
+    /// injecté. Site unique : la vue ne recompose rien.
+    @MainActor
+    public func resolvedBannerPresentation(
+        for event: SocketNotificationEvent
+    ) -> NotificationBannerPresentation {
+        event.bannerPresentation(groupName: resolvedConversationGroupName(for: event))
     }
 
     private var cancellables = Set<AnyCancellable>()
