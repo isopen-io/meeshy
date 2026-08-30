@@ -69,7 +69,15 @@ function makePrisma(overrides: Record<string, any> = {}) {
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({}),
+      // La succession commence par écarter le DM jamais utilisé.
+      count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.conversation ?? {}),
+    },
+    notification: {
+      // La trace des promotions (`member_promoted`) qui date l'ancienneté de
+      // rang des administrateurs candidats.
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.notification ?? {}),
     },
     // La clôture et le départ committent ensemble (cycle 69) : le double rend
     // les résultats dans l'ordre, ce dont la route se sert pour lire l'audience
@@ -135,6 +143,8 @@ describe('POST /conversations/:id/leave — creator with other active members', 
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
 
+  const SUCCESSOR_USER_ID = '507f1f77bcf86cd799439066';
+
   beforeAll(async () => {
     (resolveConversationId as jest.MockedFunction<any>).mockResolvedValue(CONV_ID);
     ({ app, prisma } = await buildApp({
@@ -148,6 +158,21 @@ describe('POST /conversations/:id/leave — creator with other active members', 
             isActive: true,
             displayName: 'Alice',
           }),
+          // Les candidats à la succession (`userId: { not }`) d'un côté,
+          // l'effectif restant du fanout de l'autre — mêmes appels, `where`
+          // différents.
+          findMany: jest.fn<any>((args: any) =>
+            Promise.resolve(
+              args?.where?.userId
+                ? [{
+                    id: 'p-successor',
+                    userId: SUCCESSOR_USER_ID,
+                    role: 'member',
+                    joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+                  }]
+                : []
+            )
+          ),
           count: jest.fn<any>().mockResolvedValue(3),
         },
       },
@@ -156,15 +181,20 @@ describe('POST /conversations/:id/leave — creator with other active members', 
 
   afterAll(async () => { await app.close(); });
 
-  it('returns 400 when creator tries to leave with other active members', async () => {
+  // #4058 : le créateur PART, et le fil trouve son successeur. Cette porte
+  // répondait 400 pendant que `delete-for-me.ts` transférait — deux réponses
+  // opposées au même geste.
+  it('returns 200 and transfers ownership instead of refusing the departure', async () => {
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave` });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().success).toBe(false);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().success).toBe(true);
   });
 
-  it('does not update conversation or participant', async () => {
+  it('promotes the successor and does NOT close the conversation', async () => {
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p-successor' }, data: { role: 'creator' } })
+    );
     expect(prisma.conversation.update).not.toHaveBeenCalled();
-    expect(prisma.participant.update).not.toHaveBeenCalled();
   });
 });
 

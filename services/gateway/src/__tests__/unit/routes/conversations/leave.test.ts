@@ -24,6 +24,7 @@ jest.mock('../../../../utils/participant-lookup-cache', () => ({
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
+    PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   },
   ROOMS: {
     conversation: (id: string) => `conversation:${id}`,
@@ -80,6 +81,26 @@ const remainingParticipants = [
   { id: REMAINING_ANON_PARTICIPANT_ID, userId: null },
 ];
 
+/**
+ * `participant.findMany` sert DEUX lectures dans cette route : les candidats à
+ * la succession (`resolveConversationSuccession`, qui exclut le partant par
+ * `userId: { not }`) et l'effectif restant du fanout (qui n'exclut personne).
+ * Les distinguer par ce `where` évite un `mockResolvedValueOnce` dont l'ORDRE
+ * serait la vraie assertion.
+ */
+function splitFindMany(candidates: any[], remaining: any[] = remainingParticipants) {
+  return jest.fn<any>((args: any) =>
+    Promise.resolve(args?.where?.userId ? candidates : remaining)
+  );
+}
+
+const successorCandidate = {
+  id: 'p-successor',
+  userId: REMAINING_USER_ID,
+  role: 'member',
+  joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+};
+
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
@@ -89,7 +110,11 @@ function makePrisma(overrides: Record<string, any> = {}) {
       update: jest.fn<any>().mockResolvedValue({ ...mockParticipant, isActive: false }),
     },
     conversation: {
+      count: jest.fn<any>().mockResolvedValue(0),
       update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+    },
+    notification: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     // La clôture et le départ committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
@@ -182,17 +207,75 @@ describe('POST /conversations/:id/leave — success as member', () => {
 });
 
 describe('POST /conversations/:id/leave — creator with other members', () => {
-  it('returns 400 when creator tries to leave without transferring ownership', async () => {
+  // Le créateur PART, et la conversation trouve son successeur (#4058). Cette
+  // porte répondait 400 (« transférez l'ownership ou supprimez ») pendant que sa
+  // jumelle `delete-for-me.ts` transférait : deux réponses opposées au même
+  // geste, selon le bouton pressé.
+  it('transmet la conversation au successeur au lieu de refuser le départ', async () => {
+    const update = jest.fn<any>().mockResolvedValue({});
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(3), // other active members
+        count: jest.fn<any>().mockResolvedValue(3),
+        findMany: splitFindMany([successorCandidate]),
+        update,
+      },
+    });
+    const app = await buildApp({ prisma });
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p-successor' }, data: { role: 'creator' } })
+    );
+    // La conversation NE ferme PAS : elle a un créateur.
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('annonce le nouveau rang au fil, une fois les deux écritures committées', async () => {
+    const emitted: EmittedEvent[] = [];
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
+        count: jest.fn<any>().mockResolvedValue(3),
+        findMany: splitFindMany([successorCandidate]),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma, withSocket: true, emitted });
+    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    const promoted = emitted.filter(e => e.event === 'participant:role-updated');
+    expect(promoted).toHaveLength(1);
+    expect(promoted[0].payload).toMatchObject({
+      userId: REMAINING_USER_ID,
+      newRole: 'creator',
+      updatedBy: USER_ID,
+    });
+    await app.close();
+  });
+
+  it('ferme le fil quand il ne reste aucun successeur éligible', async () => {
+    // Règle 3 : personne n'hérite ⇒ la conversation se termine, ENREGISTRÉE
+    // (`closedAt`/`closedBy`), sans quoi aucun tombstone ne la sort des caches.
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
+        count: jest.fn<any>().mockResolvedValue(1),
+        findMany: splitFindMany([{ ...successorCandidate, userId: null }]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
-    expect(res.statusCode).toBe(400);
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.conversation.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ isActive: false, closedBy: USER_ID }),
+      })
+    );
     await app.close();
   });
 });
@@ -203,6 +286,7 @@ describe('POST /conversations/:id/leave — creator alone in conversation', () =
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
         count: jest.fn<any>().mockResolvedValue(0), // no other members
+        findMany: splitFindMany([]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -304,28 +388,37 @@ describe('POST /conversations/:id/leave — participant lookup cache invalidatio
  * > panne : ranger une famille entière d'un seul côté rate exactement les sites
  * > où elle est dangereuse.
  */
-describe('POST /conversations/:id/leave — le créateur reste protégé quelle que soit la casse (#4008)', () => {
-  it('refuse le départ d’un créateur dont la ligne est écrite CREATOR', async () => {
+describe('POST /conversations/:id/leave — le rang tient quelle que soit la casse (#4008)', () => {
+  it('transmet le fil d’un créateur dont la ligne est écrite CREATOR', async () => {
+    // Sur cette casse — celle que l'ancien `InitService` posait pour le salon
+    // global — l'égalité stricte ne tirait pas : le créateur partait sans que
+    // personne n'hérite du fil, sans erreur ni log.
+    const update = jest.fn<any>().mockResolvedValue({});
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
         count: jest.fn<any>().mockResolvedValue(3),
-        update: jest.fn<any>().mockResolvedValue({}),
+        findMany: splitFindMany([successorCandidate]),
+        update,
       },
     });
     const app = await buildApp({ prisma });
 
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
 
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 'p-successor' }, data: { role: 'creator' } })
+    );
     await app.close();
   });
 
-  it('laisse partir un créateur écrit CREATOR resté seul — la garde protège les membres, pas le rang', async () => {
+  it('ferme le fil d’un créateur écrit CREATOR resté seul', async () => {
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
         count: jest.fn<any>().mockResolvedValue(0),
+        findMany: splitFindMany([]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -334,6 +427,7 @@ describe('POST /conversations/:id/leave — le créateur reste protégé quelle 
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
 
     expect(res.statusCode).toBe(200);
+    expect(prisma.conversation.update).toHaveBeenCalled();
     await app.close();
   });
 });

@@ -2,13 +2,14 @@ import { FastifyInstance } from 'fastify'
 import { isMemberCreator } from '@meeshy/shared/types/role-types'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
-import { sendSuccess, sendBadRequest, sendNotFound } from '../../utils/response'
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events'
+import { sendSuccess, sendNotFound } from '../../utils/response'
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
+import { resolveConversationSuccession } from './utils/conversation-succession'
 
 export function registerLeaveRoutes(
   fastify: FastifyInstance,
@@ -63,67 +64,97 @@ export function registerLeaveRoutes(
       // suivante).
       let closedAudience: Array<{ id: string; userId: string | null }> = []
 
-      // La casse ne décide pas d'une PROTECTION (#4008). Cette garde ne
-      // sert pas à accorder un pouvoir mais à refuser un départ : sur une
-      // ligne écrite `CREATOR` — la casse que l'ancien `InitService` posait
-      // pour le salon global — l'égalité stricte ne tirait pas, et le
-      // créateur partait en y laissant tous ses membres.
+      // Le transfert d'ownership est ANNONCÉ plus bas, avec la clôture et le
+      // départ, et pour la raison que le jumeau `delete-for-me.ts` énonce déjà :
+      // un successeur proclamé créateur auprès de tout le fil, pendant qu'un 500
+      // affirme que rien n'a eu lieu, est un fait que la réponse HTTP dément.
+      let promotedSuccessor: { userId: string } | null = null
+
+      // La casse ne décide pas d'une CONSÉQUENCE (#4008) : sur une ligne écrite
+      // `CREATOR` — la casse que l'ancien `InitService` posait pour le salon
+      // global — l'égalité stricte ne tirait pas, et le créateur partait sans
+      // que personne n'hérite du fil, sans erreur ni log.
       if (isMemberCreator(participant.role ?? 'member')) {
-        const otherActiveCount = await prisma.participant.count({
-          where: { conversationId: id, isActive: true, userId: { not: userId } },
+        // Le créateur PART, et la conversation trouve son successeur toute
+        // seule — décision porteur du 2026-08-28 (#4058). Cette porte REFUSAIT
+        // le départ (« transférez l'ownership ou supprimez ») pendant que sa
+        // jumelle `delete-for-me.ts` transférait en silence : deux réponses
+        // opposées au même geste, selon le bouton pressé. La loi est désormais
+        // UNE — `resolveConversationSuccession` — et les deux portes la lisent.
+        const succession = await resolveConversationSuccession({
+          prisma,
+          conversationId: id,
+          departingUserId: userId,
         })
-        if (otherActiveCount > 0) {
-          return sendBadRequest(
-            reply,
-            "Le créateur doit transférer l'ownership ou supprimer la conversation avant de quitter"
-          )
+
+        if (succession.kind === 'transfer') {
+          // Les DEUX écritures committent ENSEMBLE, même discipline que la
+          // branche de clôture ci-dessous et pour une raison plus aiguë encore :
+          // séparées, la promotion committée et le départ perdu laisseraient
+          // DEUX créateurs — état qu'un réessai aggrave en en promouvant un
+          // troisième.
+          await prisma.$transaction([
+            prisma.participant.update({
+              where: { id: succession.participantId },
+              data: { role: 'creator' },
+            }),
+            prisma.participant.update({
+              where: { id: participant.id },
+              data: { isActive: false, leftAt: now },
+            }),
+          ])
+          promotedSuccessor = { userId: succession.userId }
+        } else {
+          // Personne à qui transmettre : le fil se termine ici — règle 3 de la
+          // loi de succession.
+          //
+          // `closedAt`/`closedBy` ne sont pas décoratifs, et leur absence ici
+          // était le QUATRIÈME écrivain de clôture hors de la discipline des
+          // trois autres — « constat latent nº 2 du cycle 30 », nommé dans
+          // `services/messaging/conversationWriteAdmission.ts`. Une clôture qui
+          // n'écrit que `isActive: false` n'est portée par AUCUN tombstone :
+          // `loadConversationTombstones` interroge `closedAt > since` et rien
+          // d'autre, si bien que la ligne survivait dans le cache persistant de
+          // tout client qui ne serait pas l'appelant.
+          //
+          // L'appelant, lui, est couvert par son propre `leftAt` (troisième
+          // stream de tombstones) — ce qui rendait le trou INVISIBLE tant que
+          // la conversation était réellement vide. Elle ne l'est qu'à l'instant
+          // où la succession est résolue : un ajout de participant qui commit
+          // entre cette lecture et cette écriture laisse un membre actif dans
+          // une conversation terminale, à qui ni le direct ni le rattrapage
+          // n'apprenaient rien. Étroit, et c'est précisément la sorte de fenêtre
+          // qu'un état écrit referme et qu'un état omis laisse ouverte.
+          //
+          // Les DEUX écritures committent ENSEMBLE ou pas du tout. Séparées, la
+          // clôture — destructrice et DÉFINITIVE — committait avant celle qui la
+          // rend cohérente : un échec du départ laissait la conversation fermée
+          // pour tout le monde alors que la réponse HTTP est un 500 qui NIE
+          // l'opération, et que l'appelant reste un participant ACTIF d'un fil
+          // terminal. Aucune annonce ne part (le bloc socket est plus bas), donc
+          // ni le direct ni la réponse ne disent ce qui vient d'être écrit.
+          //
+          // Ordonner les deux écritures autrement ne ferait que déplacer le
+          // mauvais côté de l'échec — les fusionner SUPPRIME la question, et
+          // c'est l'idiome que le dépôt applique déjà à deux modèles distincts
+          // (`routes/me/delete-account.ts`).
+          //
+          // L'audience reste ramenée PAR l'écriture de clôture, qui s'exécute en
+          // PREMIER dans la transaction : l'appelant y est encore actif, donc
+          // encore dans l'audience — sémantique inchangée.
+          const [closed] = await prisma.$transaction([
+            prisma.conversation.update({
+              where: { id },
+              data: { isActive: false, closedAt: now, closedBy: userId },
+              include: { participants: { select: { id: true, userId: true, isActive: true } } },
+            }),
+            prisma.participant.update({
+              where: { id: participant.id },
+              data: { isActive: false, leftAt: now },
+            }),
+          ])
+          closedAudience = (closed.participants ?? []).filter(p => p.isActive)
         }
-        // `closedAt`/`closedBy` ne sont pas décoratifs, et leur absence ici était
-        // le QUATRIÈME écrivain de clôture hors de la discipline des trois autres
-        // — « constat latent nº 2 du cycle 30 », nommé dans
-        // `services/messaging/conversationWriteAdmission.ts` et non corrigé
-        // depuis. Une clôture qui n'écrit que `isActive: false` n'est portée par
-        // AUCUN tombstone : `loadConversationTombstones` interroge `closedAt >
-        // since` et rien d'autre, si bien que la ligne survivait dans le cache
-        // persistant de tout client qui ne serait pas l'appelant.
-        //
-        // L'appelant, lui, est couvert par son propre `leftAt` (troisième stream
-        // de tombstones) — ce qui rendait le trou INVISIBLE tant que la garde
-        // `otherActiveCount === 0` tenait. Elle ne tient qu'à l'instant où elle
-        // est lue : un ajout de participant qui commit entre ce `count` et cette
-        // écriture laisse un membre actif dans une conversation terminale, à qui
-        // ni le direct ni le rattrapage n'apprenaient rien. Étroit, et c'est
-        // précisément la sorte de fenêtre qu'un état écrit referme et qu'un état
-        // omis laisse ouverte.
-        //
-        // Les DEUX écritures committent ENSEMBLE ou pas du tout. Séparées, la
-        // clôture — destructrice et DÉFINITIVE — committait avant celle qui la
-        // rend cohérente : un échec du départ laissait la conversation fermée
-        // pour tout le monde alors que la réponse HTTP est un 500 qui NIE
-        // l'opération, et que l'appelant reste un participant ACTIF d'un fil
-        // terminal. Aucune annonce ne part (le bloc socket est plus bas), donc
-        // ni le direct ni la réponse ne disent ce qui vient d'être écrit.
-        //
-        // Ordonner les deux écritures autrement ne ferait que déplacer le
-        // mauvais côté de l'échec — les fusionner SUPPRIME la question, et
-        // c'est l'idiome que le dépôt applique déjà à deux modèles distincts
-        // (`routes/me/delete-account.ts`).
-        //
-        // L'audience reste ramenée PAR l'écriture de clôture, qui s'exécute en
-        // PREMIER dans la transaction : l'appelant y est encore actif, donc
-        // encore dans l'audience — sémantique inchangée.
-        const [closed] = await prisma.$transaction([
-          prisma.conversation.update({
-            where: { id },
-            data: { isActive: false, closedAt: now, closedBy: userId },
-            include: { participants: { select: { id: true, userId: true, isActive: true } } },
-          }),
-          prisma.participant.update({
-            where: { id: participant.id },
-            data: { isActive: false, leftAt: now },
-          }),
-        ])
-        closedAudience = (closed.participants ?? []).filter(p => p.isActive)
       } else {
         await prisma.participant.update({
           where: { id: participant.id },
@@ -222,6 +253,21 @@ export function registerLeaveRoutes(
           closedBy: userId,
           closedAt: now,
         })
+
+        // Le transfert d'ownership, annoncé ICI et non à l'écriture — même
+        // discipline que les deux faits ci-dessus. La room de conversation seule
+        // est CONSERVÉE, contrairement à la clôture : un rang ne se rend sur
+        // aucun écran de liste — le cycle 67 l'a vérifié plutôt que déduit sur
+        // ce même événement, et le jumeau `delete-for-me.ts` porte la même
+        // remarque.
+        if (promotedSuccessor) {
+          io.to(ROOMS.conversation(id)).emit(SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED, {
+            conversationId: id,
+            userId: promotedSuccessor.userId,
+            newRole: 'creator',
+            updatedBy: userId,
+          })
+        }
 
         // La fin d'appartenance, en un seul geste : `endConversationMembership`
         // éteint ce que le partant tenait de vivant dans le fil — son partage de

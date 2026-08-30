@@ -177,16 +177,16 @@ describe('DELETE /conversations/:id/delete-for-me — success as regular member'
   });
 });
 
-describe('DELETE /conversations/:id/delete-for-me — creator with successor (moderator)', () => {
-  it('returns 200 and transfers ownership to moderator successor', async () => {
+describe('DELETE /conversations/:id/delete-for-me — creator with a successor', () => {
+  it('returns 200 and transfers ownership to the elected successor', async () => {
     const creatorParticipant = { ...mockParticipant, role: 'creator' };
     const successor = { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' };
     const prisma = makePrisma({
       participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce(creatorParticipant)  // caller's participant
-          .mockResolvedValueOnce(successor)           // moderator successor
-        ,
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { ...successor, joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -248,9 +248,10 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
     const successor = { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' };
     const prisma = makePrisma({
       participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce(creatorParticipant) // caller's participant
-          .mockResolvedValueOnce(successor),          // moderator successor
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { ...successor, joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
       conversation: {
@@ -276,10 +277,8 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
     const creatorParticipant = { ...mockParticipant, role: 'creator' };
     const prisma = makePrisma({
       participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce(creatorParticipant) // caller's participant
-          .mockResolvedValueOnce(null)               // no moderator
-          .mockResolvedValueOnce(null),              // no other member
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        findMany: jest.fn<any>().mockResolvedValue([]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -419,12 +418,9 @@ describe('DELETE /conversations/:id/delete-for-me — clôture faute de successe
     const creatorParticipant = { ...mockParticipant, role: 'creator' };
     const prisma = makePrisma({
       participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce(creatorParticipant) // l'appelant
-          .mockResolvedValueOnce(null)               // aucun modérateur
-          .mockResolvedValueOnce(null),              // aucun autre membre
-        update: jest.fn<any>().mockResolvedValue({}),
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
         findMany: jest.fn<any>().mockResolvedValue([]),
+        update: jest.fn<any>().mockResolvedValue({}),
       },
       conversation: {
         update: jest.fn<any>().mockResolvedValue({
@@ -459,7 +455,6 @@ describe('DELETE /conversations/:id/delete-for-me — ce qui ne ferme rien n\'an
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue(mockParticipant), // role: 'member'
         update: jest.fn<any>().mockResolvedValue({}),
-        findMany: jest.fn<any>().mockResolvedValue([]),
       },
     });
     const app = await buildApp({ prisma, io });
@@ -476,11 +471,11 @@ describe('DELETE /conversations/:id/delete-for-me — ce qui ne ferme rien n\'an
     const creatorParticipant = { ...mockParticipant, role: 'creator' };
     const prisma = makePrisma({
       participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce(creatorParticipant)
-          .mockResolvedValueOnce({ id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' }),
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
-        findMany: jest.fn<any>().mockResolvedValue([]),
       },
     });
     const app = await buildApp({ prisma, io });
@@ -525,9 +520,10 @@ describe('DELETE /conversations/:id/delete-for-me — le créateur écrit CREATO
     const successor = { id: SUCCESSOR_ID, userId: 'other-user', role: 'moderator' };
     const prisma = makePrisma({
       participant: {
-        findFirst: jest.fn<any>()
-          .mockResolvedValueOnce(creatorParticipant)
-          .mockResolvedValueOnce(successor),
+        findFirst: jest.fn<any>().mockResolvedValue(creatorParticipant),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { ...successor, joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });

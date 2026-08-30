@@ -1755,3 +1755,51 @@ De plus, `GET /users/presence` laissait sortir BRUTS les ids de participants ano
 9. **Ce qui part À CÔTÉ du champ gardé est gardé aussi** : `lastActiveAt` suit le prédicat d'`isOnline` (lien public) ; un `include` Prisma sur `participants` avec `additionalProperties: true` servait la LIGNE `Participant` (`isOnline`, `lastActiveAt`, `sessionTokenHash`, `anonymousSession`) — les schémas de communauté sont FERMÉS (`communityConversationSchema`) et `gateRow` masque la ligne comme le profil. `GET /affiliate/stats` ne charge plus `isOnline` (l'affiliation n'est pas une amitié — l'amitié auto-acceptée à la conversion, elle, ouvre légitimement le chemin ami).
 10. **Choix plus stricts que la loi, assumés** : sur `/links/:identifier`, les MEMBRES inscrits sont servis `isOnline: false`, `lastActiveAt: null` pour tout lecteur, ADMIN et soi compris (lien consultable sans authentification) ; sur l'éventail socket, un ADMIN+ BLOQUÉ par le sujet est exclu (`.except`) alors que REST lui rend FULL — divergence documentée, non résolue.
 11. **Clients** : « aucune modification client » était faux d'une forme — le web GARDAIT une présence que le serveur venait de retirer (`useUserStore.mergeParticipants` rejetait une charge sans horodatage). Une charge masquée (`isOnline:false`, `lastActiveAt:null`) est désormais toujours appliquée ; les clients ne fabriquent rien.
+
+## La succession du créateur est UNE loi, et elle est totale (2026-08-30, #4058)
+
+**Décision porteur du 2026-08-28** : « si créateur parti, **le premier à avoir
+été admin devient créateur** ». Les quatre questions restées ouvertes sont
+tranchées ici, et la règle tient en trois lignes :
+
+1. les **administrateurs actifs**, classés par **instant de promotion** ;
+2. à défaut d'administrateur, le **membre actif le plus ancien** ;
+3. à défaut de membre éligible, la **clôture** de la conversation.
+
+Site UNIQUE : `resolveConversationSuccession()`
+(`routes/conversations/utils/conversation-succession.ts`), lu par les deux
+portes qui posaient chacune sa version. Elles ne divergeaient pas d'un détail :
+`delete-for-me.ts` élisait un **modérateur** avant un administrateur — l'ordre
+des rangs y était INVERSÉ — pendant que `leave.ts` **refusait** le départ (400,
+« transférez l'ownership ou supprimez »). Le même geste rendait donc deux
+réponses opposées selon le bouton pressé.
+
+**L'instant de promotion se lit dans `Notification`** (`member_promoted` vers
+`ADMIN` sur cette conversation), la seule trace datée d'un changement de rang :
+`Participant` n'en porte aucune. Cette écriture n'a aucune garde de sourdine —
+contrairement à `member_left` et consorts — donc la trace existe même pour qui a
+mis la conversation en sourdine.
+
+**Le repli est `joinedAt`, et c'est ce qui rend la règle totale.** Une
+participation créée DÉJÀ administrateur (seed, ajout direct) n'écrit aucune
+notification : cet administrateur-là l'EST depuis son arrivée, donc son
+`joinedAt` **est** son instant de promotion. Conséquence recherchée : la
+succession ne dépend plus d'une table effaçable en bloc (`DELETE /notifications`
+fait un `deleteMany({})` global) — perdre la trace DÉGRADE le classement, elle
+ne peut plus le rendre indécidable. C'est la réponse à la quatrième question de
+#4058 : plutôt que de protéger la trace, ne plus en dépendre.
+
+**Hériter demande un compte.** Un participant sans `userId` — un visiteur venu
+par un lien de partage — n'est pas éligible. Gouverner un fil (fermer, bannir,
+promouvoir) depuis une session qui expire, et sans ligne `User` à qui l'imputer,
+n'est pas une succession : c'est une conversation laissée sans gouvernance sous
+couvert d'en avoir une. S'il ne reste que des invités, la règle 3 s'applique.
+
+**Le DM jamais utilisé se ferme au lieu de se transmettre** — règle qui vivait
+dans `delete-for-me.ts` seul et qui appartient à la loi, pas à la porte : rien à
+préserver pour un successeur qui ne l'a pas demandé.
+
+La casse ne décide de rien (#4008) : `metadata.newRole` est écrit en MAJUSCULES
+là où `Participant.role` est en minuscules. Le tri des candidats comme la
+lecture de la trace replient par `isMemberAdmin`, en JavaScript — aucun `where`
+Prisma ne compare un rang.

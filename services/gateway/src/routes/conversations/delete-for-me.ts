@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { isMemberCreator, memberRoleCasings } from '@meeshy/shared/types/role-types'
+import { isMemberCreator } from '@meeshy/shared/types/role-types'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
@@ -8,6 +8,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
+import { resolveConversationSuccession } from './utils/conversation-succession'
 
 export function registerDeleteForMeRoutes(
   fastify: FastifyInstance,
@@ -72,7 +73,7 @@ export function registerDeleteForMeRoutes(
       // clôture et pas pour la promotion, qui partait au milieu du geste — un
       // successeur proclamé créateur auprès de tout le fil, pendant que le 500
       // affirmait que rien n'avait eu lieu.
-      let promotedSuccessor: { userId: string | null } | null = null
+      let promotedSuccessor: { userId: string } | null = null
 
       // Le masquage de l'appelant, DÉCRIT une fois et committé par chaque
       // branche AVEC son écriture jumelle. Les deux moitiés du geste ne peuvent
@@ -90,27 +91,35 @@ export function registerDeleteForMeRoutes(
       // écrite `CREATOR`, l'égalité stricte sautait cette branche et la
       // conversation restait sans créateur — sans erreur ni log.
       if (isMemberCreator(participant.role ?? 'member')) {
-        // Le client Prisma renvoie `null` pour `firstMessageSentAt` aussi bien
-        // quand le champ est present-et-null que quand il est ABSENT (legacy,
-        // jamais backfillé) — impossible de distinguer les deux cas côté JS
-        // via un simple `select` + négation. On requête donc directement le
-        // state present-et-null (seul état correspondant à un DM "genuinely
-        // empty") via `count`, qui ne matche jamais un document où le champ
-        // est absent — `type: 'direct'` est filtré dans la même requête.
-        const isEmptyDirect = (await prisma.conversation.count({
-          where: { id: conversationId, type: 'direct', firstMessageSentAt: null },
-        })) > 0
+        // QUI hérite est une loi, pas une requête locale : cette porte élisait
+        // un MODÉRATEUR avant un administrateur — l'ordre des rangs y était
+        // inversé — pendant que sa jumelle `leave.ts` refusait purement le
+        // départ. `resolveConversationSuccession` (#4058) porte la règle unique,
+        // le DM jamais utilisé compris.
+        const succession = await resolveConversationSuccession({
+          prisma,
+          conversationId,
+          departingUserId: userId,
+        })
 
-        if (isEmptyDirect) {
-          // DM vide jamais utilisé : rien à préserver pour un successeur qui
-          // ne l'a pas demandé (Prisme design doc 2026-08-04) — fermer
-          // plutôt que transférer, même s'il reste un autre participant actif.
-          //
-          // `closedAt`/`closedBy` ne sont pas décoratifs : le stream de
+        if (succession.kind === 'transfer') {
+          await prisma.$transaction([
+            prisma.participant.update({
+              where: { id: succession.participantId },
+              data: { role: 'creator' },
+            }),
+            prisma.participant.update(hideSelf),
+          ])
+          promotedSuccessor = { userId: succession.userId }
+        } else {
+          // Personne n'hérite — DM jamais utilisé, ou plus aucun membre
+          // éligible. Personne à prévenir dans le second cas (c'est la
+          // condition même), mais la clôture doit rester ENREGISTRÉE :
+          // `closedAt`/`closedBy` ne sont pas décoratifs, le stream de
           // rattrapage `loadConversationTombstones` interroge `closedAt >
           // since`. Une clôture qui n'écrit que `isActive: false` n'est portée
-          // par AUCUN delta — le participant restant garderait la ligne dans
-          // son cache persistant jusqu'à une réconciliation complète.
+          // par AUCUN delta — un participant restant garderait la ligne dans son
+          // cache persistant jusqu'à une réconciliation complète.
           const [closed] = await prisma.$transaction([
             prisma.conversation.update({
               where: { id: conversationId },
@@ -120,53 +129,6 @@ export function registerDeleteForMeRoutes(
             prisma.participant.update(hideSelf),
           ])
           closedAudience = (closed.participants ?? []).filter(p => p.isActive)
-        } else {
-          // Try moderator first, then oldest active member
-          let successor = await prisma.participant.findFirst({
-            where: {
-              conversationId,
-              isActive: true,
-              userId: { not: userId },
-              role: { in: memberRoleCasings(['moderator']) },
-            },
-            orderBy: { joinedAt: 'asc' },
-          })
-
-          if (!successor) {
-            successor = await prisma.participant.findFirst({
-              where: {
-                conversationId,
-                isActive: true,
-                userId: { not: userId },
-              },
-              orderBy: { joinedAt: 'asc' },
-            })
-          }
-
-          if (successor) {
-            await prisma.$transaction([
-              prisma.participant.update({
-                where: { id: successor.id },
-                data: { role: 'creator' },
-              }),
-              prisma.participant.update(hideSelf),
-            ])
-            promotedSuccessor = { userId: successor.userId }
-          } else {
-            // No other active members — close conversation. Personne à
-            // prévenir ici (c'est la condition même de cette branche), mais la
-            // clôture doit rester ENREGISTRÉE : même écriture que la branche
-            // jumelle ci-dessus, pour la même raison de rattrapage.
-            const [closed] = await prisma.$transaction([
-              prisma.conversation.update({
-                where: { id: conversationId },
-                data: { isActive: false, closedAt: now, closedBy: userId },
-                include: { participants: { select: { id: true, userId: true, isActive: true } } },
-              }),
-              prisma.participant.update(hideSelf),
-            ])
-            closedAudience = (closed.participants ?? []).filter(p => p.isActive)
-          }
         }
       } else {
         // Aucune écriture jumelle à accorder : le masquage est tout le geste.
