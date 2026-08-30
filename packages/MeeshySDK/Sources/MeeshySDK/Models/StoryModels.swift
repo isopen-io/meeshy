@@ -1130,6 +1130,20 @@ public enum StoryStickerKind: String, Sendable {
 // MARK: - Story Sticker
 
 public struct StorySticker: Codable, Identifiable, Sendable {
+
+    /// **L'échelle à laquelle un sticker se POSE** (directive porteur
+    /// 2026-08-30 : « les stickers doivent être posés en grand sur le canvas »).
+    ///
+    /// Le défaut de `scale` est `1.0` — la taille de RÉFÉRENCE du glyphe, qui
+    /// donne sur une scène 9:16 un sticker qu'il faut agrandir avant de le
+    /// placer. Deux gestes pour un, et le premier n'a aucune valeur : personne
+    /// ne pose un sticker pour le laisser minuscule.
+    ///
+    /// 2,2 plutôt qu'un nombre rond : c'est l'échelle à laquelle un emoji
+    /// occupe environ le quart de la largeur d'une scène — visible d'emblée,
+    /// et laissant la place à ce qu'il commente.
+    public static let posedScale: Double = 2.2
+
     public var id: String
     public var emoji: String
     /// Image INTÉGRÉE à l'entité publiée : même espace d'ids que tout autre

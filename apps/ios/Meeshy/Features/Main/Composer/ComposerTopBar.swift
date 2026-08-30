@@ -36,21 +36,12 @@ struct ComposerTopBar: View {
     var onRemoveMedia: ((ComposerDocumentMedia) -> Void)?
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)?
 
-    /// **L'historique — des PRIMITIVES, jamais le ViewModel** (#4402).
-    ///
-    /// Deux `Bool` et deux closures plutôt qu'un `@ObservedObject` : la barre
-    /// haute est une feuille de l'arbre, et lui donner le composer entier la
-    /// ferait se re-rendre à chaque frappe de texte. C'est la règle « Zero
-    /// Unnecessary Re-render » du dépôt, appliquée là où elle se voit — cette
-    /// barre est redessinée à chaque cycle du composer.
-    ///
-    /// **Défaut `false` sur les deux drapeaux, et c'est ce qui rend le lot
-    /// additif** : les surfaces qui ne servent pas d'historique n'en montrent
-    /// aucun sans avoir à le dire.
-    var canUndo: Bool = false
-    var canRedo: Bool = false
-    var onUndo: (() -> Void)?
-    var onRedo: (() -> Void)?
+    // **L'historique a quitté cette barre le 2026-08-30.** Il y lisait mal :
+    // pendant qu'un outil est ouvert, « Annuler » se comprend comme « fermer
+    // l'outil » et non « défaire le dernier geste » — le mot dit les deux en
+    // français, et le voisinage du chrome d'outil tranchait pour le mauvais.
+    // Il vit désormais au SOCLE, entre l'œil et Publier, parmi ce qui décide de
+    // l'envoi : rien autour de lui ne se ferme.
 
     var body: some View {
         HStack(spacing: 12) {
@@ -71,7 +62,6 @@ struct ComposerTopBar: View {
             if let formatFan { formatFan.fixedSize() }
             slideRail
             Spacer(minLength: 0)
-            historyControls
             if let overflowMenu { overflowMenu.fixedSize() }
         }
         .padding(.horizontal, 16)
@@ -79,54 +69,8 @@ struct ComposerTopBar: View {
     }
 
 
-    /// **Annuler et rétablir — présents seulement s'ils ont quelque chose à
-    /// faire** (#4402, loi 4 : un contrôle sans effet est ABSENT, jamais
-    /// grisé).
-    ///
-    /// Ce n'est pas une préférence esthétique. Un « annuler » grisé occupe la
-    /// place et l'attention d'un contrôle, pour ne rien promettre ; sur une
-    /// barre qui porte déjà la fermeture, le format, le rail des slides et le
-    /// menu, cette place est disputée. Le contrôle paraît quand il agit.
-    ///
-    /// Les glyphes sont ceux du système (`arrow.uturn.backward` /
-    /// `.forward`), donc ceux que l'utilisateur a appris ailleurs, et ils
-    /// s'inversent d'eux-mêmes en RTL — c'est la raison de ne pas dessiner de
-    /// flèche maison.
-    @ViewBuilder
-    private var historyControls: some View {
-        if canUndo || canRedo {
-            HStack(spacing: 8) {
-                if canUndo {
-                    historyButton(systemName: "arrow.uturn.backward",
-                                  label: ComposerHistoryCopy.undo,
-                                  action: onUndo)
-                }
-                if canRedo {
-                    historyButton(systemName: "arrow.uturn.forward",
-                                  label: ComposerHistoryCopy.redo,
-                                  action: onRedo)
-                }
-            }
-            .fixedSize()
-        }
-    }
-
-    private func historyButton(systemName: String,
-                               label: String,
-                               action: (() -> Void)?) -> some View {
-        Button { action?() } label: {
-            Image(systemName: systemName)
-                .font(.system(size: 13, weight: .bold))
-                // Même raison que la croix de fermeture : le plateau est sombre
-                // en PERMANENCE, donc jamais `glassControlForeground()`.
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
-                .frame(width: ComposerControlMetrics.visualDiameter,
-                       height: ComposerControlMetrics.visualDiameter)
-                .adaptiveGlass(in: Circle())
-        }
-        .accessibilityLabel(Text(label))
-    }
-
+ 
+ 
     /// **Le rail des slides (#4047).** Une vignette par slide, celle qu'on
     /// regarde cerclée, chacune retirable. `localMedia` vide ⇒ RIEN — pas une
     /// bande à hauteur nulle, pas un rail de zéro chip : un document sans média

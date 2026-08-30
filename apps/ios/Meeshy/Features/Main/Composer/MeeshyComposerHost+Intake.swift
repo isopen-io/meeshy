@@ -56,7 +56,14 @@ extension MeeshyComposerHost {
         for media in documentContentMedia where media.kind != .audio
             && slideIdByMediaURL[media.sourceURL] == nil {
             let target: String
-            if slideIdByMediaURL.isEmpty,
+            // **Ce que le RAIL a posé reste sur la scène COURANTE.** Une porte
+            // du rail ajoute « en additif » ; créer une page est le geste de
+            // `[+]`, et lui seul (directive porteur 2026-08-30). La rangée du
+            // document, elle, garde la doctrine de la vue `1g` — en Post, une
+            // slide est UN média.
+            if railPosedMediaURLs.contains(media.sourceURL) {
+                target = viewModel.currentSlide.id
+            } else if slideIdByMediaURL.isEmpty,
                (viewModel.currentSlide.effects.mediaObjects ?? []).isEmpty {
                 target = viewModel.currentSlide.id
             } else {
@@ -372,7 +379,7 @@ extension MeeshyComposerHost {
     /// ferait diverger la porte de la rangée qui fait déjà la même chose.
     func handleRailDoor(_ door: ComposerRailDoor) {
         switch door {
-        case .media:   presentMediaSources()
+        case .media:   railPosesNextMedia = true; presentMediaSources()
         case .sound:   presentSoundSources()
         case .mention: handleDocumentTool(.mention)
         case .place:   handleDocumentTool(.place)
@@ -612,7 +619,17 @@ extension MeeshyComposerHost {
     /// EXTENSION avant ce repli terminal), jamais une vidéo sélectionnée
     /// figée `durationMs: nil` (`.durationMs`, sans quoi `ReelComposition`
     /// la classerait `.post` au lieu de `.reel`).
+    /// Marque les médias que l'ingestion va poser comme venant du RAIL, puis
+    /// retombe. Un drapeau qui resterait vrai ferait poser sur la scène
+    /// courante le média suivant, même arrivé par la rangée du document.
+    func consumeRailPosing(_ urls: [URL]) {
+        guard railPosesNextMedia else { return }
+        railPosedMediaURLs.formUnion(urls)
+        railPosesNextMedia = false
+    }
+
     func ingestPhotoLibraryItems(_ items: [PhotosPickerItem]) async {
+        var posees: [URL] = []
         for item in items {
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
             let declaredType = item.supportedContentTypes.first
@@ -627,7 +644,9 @@ extension MeeshyComposerHost {
                 declaredMimeType: mime,
                 durationMs: duration
             ))
+            posees.append(url)
         }
+        consumeRailPosing(posees)
         HapticFeedback.light()
     }
 
@@ -701,6 +720,7 @@ extension MeeshyComposerHost {
                 .appendingPathComponent("composer_camera_\(UUID().uuidString).jpg")
             guard (try? data.write(to: url)) != nil else { return }
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(url: url, declaredMimeType: "image/jpeg"))
+            consumeRailPosing([url])
         case .video(let url):
             let duration = await ComposerMediaProbe.durationMs(forURL: url, mime: "video/quicktime")
             documentLocalMedia.append(ComposerDocumentMediaFactory.media(
@@ -708,6 +728,7 @@ extension MeeshyComposerHost {
                 declaredMimeType: "video/quicktime",
                 durationMs: duration
             ))
+            consumeRailPosing([url])
         }
         HapticFeedback.light()
     }
@@ -736,6 +757,7 @@ extension MeeshyComposerHost {
     /// `Task`, comme les deux autres ingestions.
     func ingestFileImporterResult(_ result: Result<[URL], Error>) async {
         guard case .success(let urls) = result else { return }
+        var posees: [URL] = []
         for sourceURL in urls {
             let scoped = sourceURL.startAccessingSecurityScopedResource()
             defer { if scoped { sourceURL.stopAccessingSecurityScopedResource() } }
@@ -750,7 +772,9 @@ extension MeeshyComposerHost {
                 declaredMimeType: mime,
                 durationMs: duration
             ))
+            posees.append(destination)
         }
+        consumeRailPosing(posees)
         HapticFeedback.light()
     }
 
@@ -785,23 +809,35 @@ extension MeeshyComposerHost {
     /// fermée (« `showsEmojiPicker` insère dans le TEXTE, ce qui n'est pas la
     /// même chose » — la phrase était juste, la conclusion non).
     ///
-    /// **La feuille reste OUVERTE après une pose**, comme sous l'atelier : on
-    /// pose rarement un seul sticker, et refermer à chaque glyphe ferait payer
-    /// une réouverture par objet. Le `swipe-down` natif la ferme.
+    /// **La feuille se REFERME sur la pose** (directive porteur 2026-08-30).
+    ///
+    /// Elle restait ouverte, par emprunt à l'atelier : « on pose rarement un
+    /// seul sticker ». C'était un raisonnement de PLANCHE de stickers, pas de
+    /// scène — sur un plateau, poser un sticker et le PLACER sont un seul
+    /// geste, et une feuille qui recouvre la moitié basse empêche la seconde
+    /// moitié. Refermer rend la scène au doigt immédiatement.
+    ///
+    /// **Et le sticker se pose en GRAND.** Le défaut de la taille par défaut
+    /// donne un glyphe minuscule au centre, que l'auteur doit agrandir avant de
+    /// le placer — deux gestes pour un. `StorySticker.posedScale` le pose à la
+    /// taille où il se voit.
     ///
     /// Les deux rappels vont au VIEWMODEL, jamais au canvas : muter par le
     /// modèle est ce qui garde publication, reader et export d'accord — et le
     /// meuble n'a aucune référence à la vue UIKit.
     var stickerPickerSheet: some View {
         StickerPickerView(onStickerSelected: { emoji in
-            viewModel.addSticker(emoji: emoji)
+            viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)
+            presentedPortal = nil
             HapticFeedback.light()
         }, onLibraryStickerSelected: { item in
             // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
             // `loadedImages` jusqu'à ce que la publication le téléverse et
             // remplisse `postMediaId`.
             viewModel.addSticker(image: item.thumbnail,
-                                 provider: StoryStickerLibraryItem.provider)
+                                 provider: StoryStickerLibraryItem.provider,
+                                 scale: StorySticker.posedScale)
+            presentedPortal = nil
             HapticFeedback.light()
         })
         .presentationDetents([.medium])

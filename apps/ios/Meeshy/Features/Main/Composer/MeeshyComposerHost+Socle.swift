@@ -45,11 +45,84 @@ extension MeeshyComposerHost {
             if paintedSocleZones.contains(.audience) { audienceChip }
             Spacer()
             if paintedSocleZones.contains(.preview) { previewButton }
+            historyPair
             publishButton
         }
         .padding(.horizontal, 14)
         .padding(.top, 8)
         .padding(.bottom, 12)
+    }
+
+
+    /// **Annuler et rétablir, au SOCLE** (directive porteur 2026-08-30).
+    ///
+    /// Ils vécurent en barre haute, à gauche du `⋯`. La vérification simulateur
+    /// a nommé le défaut que ce déplacement corrige :
+    ///
+    /// > « Le bouton « Annuler » en haut à droite pendant un outil actif agit
+    /// > comme UNDO, pas comme fermeture — seul le petit `x` en bas du rail
+    /// > ferme l'outil. »
+    ///
+    /// En français, « Annuler » dit DEUX choses : défaire le dernier geste, et
+    /// renoncer à celui en cours. Voisin du chrome d'un outil ouvert, le mot
+    /// lisait la seconde. Descendu au socle — entre l'œil et Publier, parmi ce
+    /// qui décide de l'ENVOI — il ne peut plus être lu comme une fermeture :
+    /// rien autour de lui ne se ferme.
+    ///
+    /// **Les deux dans UNE capsule**, et pas deux boutons voisins : annuler et
+    /// rétablir sont un seul contrôle à deux sens, comme les chevrons d'un
+    /// navigateur. Deux capsules distinctes les feraient lire comme deux
+    /// actions sans rapport, sur une rangée qui en porte déjà trois.
+    @ViewBuilder
+    var historyPair: some View {
+        if canUndoHistory || canRedoHistory {
+            HStack(spacing: 0) {
+                if canUndoHistory {
+                    historyButton(systemName: "arrow.uturn.backward",
+                                  label: ComposerHistoryCopy.undo) { performHistoryUndo() }
+                }
+                if canUndoHistory && canRedoHistory {
+                    Divider()
+                        .frame(height: 18)
+                        .overlay(MeeshyColors.textSecondary(isDark: true).opacity(0.3))
+                }
+                if canRedoHistory {
+                    historyButton(systemName: "arrow.uturn.forward",
+                                  label: ComposerHistoryCopy.redo) { performHistoryRedo() }
+                }
+            }
+            // `adaptiveGlass` est le verre du dépôt — il retombe sur un
+            // matériau natif là où le liquid glass n'existe pas, ce qui est le
+            // cas de tout le plancher iOS 16 que l'app sert encore.
+            .adaptiveGlass(in: Capsule())
+            .fixedSize()
+        }
+    }
+
+    /// La moitié d'une paire, pas un bouton isolé : pas de verre propre, pas de
+    /// marge extérieure — la capsule les porte pour les deux.
+    private func historyButton(systemName: String,
+                               label: String,
+                               action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .frame(width: 40, height: 34)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(label))
+    }
+
+    /// L'historique ne se sert QUE là où les gestes ne se défont par rien
+    /// d'autre — `ComposerHistoryService` en est le juge unique, et le socle
+    /// pose la même question que le rail posait.
+    private var canUndoHistory: Bool {
+        ComposerHistoryService.servesHistory(on: mountedComposerView) && viewModel.canUndoGlobal
+    }
+
+    private var canRedoHistory: Bool {
+        ComposerHistoryService.servesHistory(on: mountedComposerView) && viewModel.canRedoGlobal
     }
 
     /// **L'œil — voir le post COMME IL SERA LU, avant de le publier.**

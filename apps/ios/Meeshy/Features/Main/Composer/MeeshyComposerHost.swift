@@ -294,6 +294,29 @@ struct MeeshyComposerHost: View {
     /// portail ferme le précédent au lieu de l'empiler.
     @State var presentedPortal: ComposerPortal?
 
+    /// **Ce que le RAIL a posé** (directive porteur 2026-08-30).
+    ///
+    /// > « Les images canoniques de gauche permettent d'ajouter des éléments à
+    /// > l'actuelle scène, en ADDITIF. […] `[+]` est maintenant réservé à créer
+    /// > une slide. »
+    ///
+    /// En Post, `syncPostMediaIntoSlides` donne à chaque média SA slide — c'est
+    /// la doctrine de la vue `1g` (« en Post, une slide est UN média »), et elle
+    /// vaut pour la rangée du document. Elle ne vaut PAS pour le rail : depuis
+    /// que `[+]` existe, créer une page est un geste EXPLICITE, et une porte qui
+    /// en crée une au passage surprend.
+    ///
+    /// Ce jeu d'URL est ce qui distingue les deux origines. Sans lui, il
+    /// faudrait un second chemin d'ingestion — et deux chemins pour un seul
+    /// média divergeraient au premier champ ajouté.
+    /// La prochaine ingestion vient-elle du RAIL ? Posé par la porte, consommé
+    /// par l'ingestion — il vaut pour UNE pose, jamais pour un état durable :
+    /// un drapeau qui resterait vrai ferait poser sur la scène courante le
+    /// média suivant, même arrivé par la rangée du document.
+    @State var railPosesNextMedia = false
+
+    @State var railPosedMediaURLs: Set<URL> = []
+
     @State var showsPhotoPicker = false
     @State var pickedPhotoLibraryItems: [PhotosPickerItem] = []
     @State var showsFileImporter = false
