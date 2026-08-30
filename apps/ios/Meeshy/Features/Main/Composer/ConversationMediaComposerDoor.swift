@@ -83,6 +83,12 @@ enum ConversationMediaSeeding {
             // mouvement — c'est-à-dire la vidéo.
             return StoryComposerSeed.video(copying: localFile)
                 .map { StoryComposerSeed(payload: $0.payload, description: plan.description) }
+        case .audio:
+            // #4461 — le son reste un FICHIER, comme la vidéo, et la copie se
+            // fait à la fabrique. Le décoder n'aurait aucun sens : il n'y a rien
+            // à rendre, seulement à jouer.
+            return StoryComposerSeed.audio(copying: localFile)
+                .map { StoryComposerSeed(payload: $0.payload, description: plan.description) }
         case .image:
             guard let data = try? Data(contentsOf: localFile, options: .mappedIfSafe),
                   let bitmap = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080)

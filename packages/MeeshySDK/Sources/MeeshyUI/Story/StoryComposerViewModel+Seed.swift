@@ -38,6 +38,13 @@ public struct StoryComposerSeed {
         /// (`cleanupTempFiles` n'a aucun appelant de production ; `deinit`
         /// n'annule que `preloadTask`).
         case video(fileURL: URL, objectId: String)
+        /// Un son LOCAL déjà copié sous la convention du composer (#4461).
+        ///
+        /// Il n'y a pas d'`objectId` ici, contrairement à la vidéo : le son
+        /// n'est pas posé comme un objet de canvas mais confié à
+        /// `attachPastedAudio`, qui crée le sien. Lui en imposer un d'avance
+        /// obligerait à réécrire la pose plutôt qu'à l'emprunter.
+        case audio(fileURL: URL)
     }
 
     /// Ce qui se pose sur le CANVAS. **Optionnel depuis #4025** : une graine de
@@ -66,6 +73,22 @@ public struct StoryComposerSeed {
     /// une description vide n'aurait rien semé, et la porte doit pouvoir le
     /// DIRE plutôt que d'ouvrir sur rien. Même contrat que
     /// `video(copying:)` — une fabrique qui refuse est une fabrique qui parle.
+    /// **La fabrique de la graine SONORE** (#4461).
+    ///
+    /// Elle copie, pour la raison exacte de `video(copying:)` : la source vient
+    /// du `DiskCacheStore`, soumis à ÉVICTION par mtime, et une éviction entre
+    /// l'ouverture de l'atelier et l'envoi ferait échouer la publication d'un
+    /// son déjà composé, sans un mot.
+    ///
+    /// `nil` quand la source n'existe pas ou que la copie échoue — l'appelant
+    /// n'ouvre alors RIEN, et le DIT.
+    public static func audio(copying source: URL) -> StoryComposerSeed? {
+        guard let copied = StoryComposerSeedFile.copyForComposer(
+            source: source, objectId: UUID().uuidString,
+            declaredMimeType: "audio/m4a") else { return nil }
+        return StoryComposerSeed(payload: .audio(fileURL: copied))
+    }
+
     public static func text(_ raw: String) -> StoryComposerSeed? {
         let taille = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !taille.isEmpty else { return nil }
@@ -169,6 +192,19 @@ public extension StoryComposerViewModel {
         case .none:
             // Graine de texte seul : la description ci-dessus EST le semis.
             break
+
+        case .audio(let copied)?:
+            // **Le son devient le SON de la scène** (#4461), par le chemin que
+            // le collage emprunte déjà (`attachPastedAudio`) — analyse de la
+            // forme d'onde, lecture de la durée, pose de l'objet, extension de
+            // la slide. Un second chemin de pose divergerait du premier au
+            // premier ajustement de l'un, en silence.
+            //
+            // La vérification d'existence est refaite ici comme pour la vidéo :
+            // le fichier a pu être balayé entre la fabrique et l'ouverture.
+            guard FileManager.default.fileExists(atPath: copied.path) else { return }
+            attachPastedAudio(url: copied)
+            isSeededSession = true
 
         case .image(let bitmap)?:
             // `slideImages`, et pas `loadedImages` : `runStoryUpload` n'envoie
