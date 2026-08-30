@@ -47,7 +47,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
     /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
     /// CRÉATION. L'échec de l'une ne bloque pas les suivantes.
-    @Published private(set) var activeUploads: [StoryUploadState] = []
+    /// **`internal(set)` depuis le découpage du 2026-08-30**, et ce n'est pas un
+    /// relâchement : `private(set)` limite l'écriture au FICHIER de déclaration,
+    /// et les trois sites qui mutent cette file vivent désormais dans
+    /// `StoryViewModel+Publication` et `+PublicationUpload`.
+    ///
+    /// C'est le pendant de la leçon 348 pour un `private(set)` : la visibilité
+    /// au niveau fichier est une visibilité de VOISINAGE, et un découpage par
+    /// extension déplace le voisinage sans déplacer la déclaration. La
+    /// protection qui compte — « personne HORS du module ne l'écrit » — est
+    /// intacte.
+    @Published internal(set) var activeUploads: [StoryUploadState] = []
     /// Vue de compatibilité : l'upload que les surfaces d'avatar mettent en
     /// avant (un échec l'emporte, sinon la tête de file). `activeUploads` étant
     /// `@Published`, toutes les vues qui lisent cette propriété calculée
@@ -58,7 +68,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     var currentUploadId: String?
     /// Incrémenté quand une cover de tray vient d'être rendue côté récepteur —
     /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
-    @Published private(set) var receiverCoverRenderTick = 0
+    /// `internal(set)` pour la même raison : le compteur est incrémenté depuis
+    /// `StoryViewModel+MediaPreload`, sorti au découpage.
+    @Published internal(set) var receiverCoverRenderTick = 0
     var uploadTask: Task<Void, Never>?
     /// Garde local-first du drain d'archive « Mes stories » : un seul drain
     /// réseau ABOUTI par session (cf. `loadMyStoriesArchive`).

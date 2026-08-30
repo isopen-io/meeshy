@@ -20419,7 +20419,7 @@ Même famille que le « double PARTIEL d'un module » du `CLAUDE.md` du gateway,
 là un double perdait ce que le module GAGNAIT, ici il perd ce que son COLLABORATEUR gagne. Dans les
 deux cas, le double est un inventaire, et un inventaire ne prévient jamais qu'il est en retard.
 
-## Leçon 340 — dans un arbre PARTAGÉ, le gate d'une session mesure aussi le WIP des autres
+## Leçon 346 — dans un arbre PARTAGÉ, le gate d'une session mesure aussi le WIP des autres
 
 **Le fait.** Trois passes de gate consécutives échouées sur `ConversationMediaDoorTests.swift`, un fichier que
 je n'ai pas touché, pour un défaut que je n'ai pas introduit : une session voisine venait de rendre
@@ -20454,7 +20454,7 @@ contre celui-ci : des gates qui se gênent. C'est le bon échange — un gate bl
 un hunk perdu au merge ne se voit pas. Mais il faut le savoir, sans quoi on passe la journée à débuguer
 le travail des autres en croyant débuguer le sien.
 
-## Leçon 341 — un découpage de fichier n'est pas terminé quand le fichier passe sous le budget, mais quand les gardes qui le nommaient pointent l'UNITÉ
+## Leçon 347 — un découpage de fichier n'est pas terminé quand le fichier passe sous le budget, mais quand les gardes qui le nommaient pointent l'UNITÉ
 
 **Le fait.** Quatre gardes de source du composer levaient `GuardIsBlind` — « Ancre « var sendButton:
 some View { » introuvable : la garde ne garde plus rien ». Aucune n'avait été touchée. Leur cause
@@ -20487,11 +20487,60 @@ L'étape 3 se cherche par `grep -rn "<NomDuType>.swift" MeeshyTests` : ce sont l
 de perdre leur objet. Elle n'a pas été faite au découpage d'origine — d'où quatre gardes aveugles
 retrouvées des semaines plus tard, par une session tierce qui faisait tourner la suite entière.
 
-Voir la leçon 339 (une garde négative posée sur un FICHIER attrape les jumelles innocentes de sa cible)
+Voir la leçon 344 (une garde négative posée sur un FICHIER attrape les jumelles innocentes de sa cible)
 et la 340 (dans un arbre partagé, le gate d'une session mesure aussi le WIP des autres) : trois façons
 dont la PORTÉE d'une garde décide de ce qu'elle vaut.
 
-## Leçon 346 — Un champ qu'un émetteur SERT depuis toujours, et qu'aucun décodeur client ne DÉCLARE
+## Leçon 348 — `private` au niveau FICHIER ne survit pas au déplacement du type qui s'en sert
+
+**Le fait.** Découper `ComposerDocumentSurface.swift` (1 101 lignes) par TYPE — la porte, la vignette,
+la vue — a compilé partout sauf en un point : `ComposerThumbnailDecoder`, un `private nonisolated enum`
+déclaré au niveau du fichier d'origine, que seule la vignette appelle. La vignette partie, l'appel ne
+voyait plus rien.
+
+> **En Swift, `private` au niveau FICHIER est une visibilité de VOISINAGE**, pas d'appartenance. Elle
+> lie deux déclarations par le hasard de leur cohabitation, et ce lien est invisible au lecteur qui
+> découpe : rien, dans le corps du type qu'on déplace, ne dit qu'il dépend d'un voisin privé.
+
+Le compilateur le signale — mais **au site d'APPEL, dans le fichier neuf**, jamais au site de
+déclaration resté derrière. Le message (« cannot find X in scope ») ressemble à un oubli d'import
+plutôt qu'à ce qu'il est : un compagnon laissé dans l'ancienne maison.
+
+**La règle de découpage qui en tombe.** Avant de déplacer un type, chercher ce qu'il consomme et qui
+est `private`/`fileprivate` dans le fichier d'origine :
+
+```bash
+grep -nE "^(private|fileprivate) " <fichier> # les candidats
+```
+
+Chacun se range dans l'un des trois cas, et le cas décide :
+- **un seul consommateur** → il DÉMÉNAGE avec lui, et perd son `private` (il change de maison, plus de voisinage à protéger) ;
+- **plusieurs consommateurs qui se séparent** → il sort dans un troisième fichier, à son propre nom ;
+- **aucun consommateur déplacé** → il reste, et garde son `private`.
+
+**Et `private(set)` tombe de la même façon, sur un découpage par EXTENSION.** Vérifié le même jour, sur
+le découpage voisin de `StoryViewModel` : `@Published private(set) var activeUploads` limite l'écriture
+au FICHIER de déclaration, et les trois sites qui mutent cette file étaient partis dans
+`+Publication` et `+PublicationUpload`. Le compilateur rend alors « setter is inaccessible » — un
+message qui ne nomme ni le découpage ni le fichier d'origine.
+
+C'est la nuance qui manquait ci-dessus : un découpage par extension ne casse pas `fileprivate` entre
+extensions du même type… mais il casse `private(set)`, parce que le `(set)` est une visibilité de
+FICHIER, pas de type. Le remède est `internal(set)` — et ce n'est pas un relâchement : la protection
+qui compte, « personne hors du module ne l'écrit », reste intacte.
+
+**Pourquoi ce piège est propre au découpage PAR TYPE.** Un découpage par TRANCHE (`Type+Partie.swift`)
+garde tout dans la même unité de compilation logique et ne casse que `private`, jamais `fileprivate`
+— et les extensions du même type continuent de se voir. Un découpage par TYPE change de maison, donc
+de voisinage. C'est le bon découpage, celui que la directive demande (« par responsabilité, pas par
+tranche ») ; il faut simplement savoir qu'il déplace aussi des liens qu'on ne voit pas.
+
+Voir la leçon 347 : le même découpage laisse trois dettes derrière lui — les gardes qui nomment le
+fichier, la dette de taille et la dette de police. Celle-ci est la quatrième, et la seule que le
+compilateur attrape.
+
+
+## Leçon 349 — Un champ qu'un émetteur SERT depuis toujours, et qu'aucun décodeur client ne DÉCLARE
 
 **Le porteur produit signale, 2026-08-30 : la bannière in-app ne dit pas de quel
 type de notification il s'agit — seulement l'auteur et le contenu.** Un

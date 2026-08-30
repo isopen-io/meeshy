@@ -137,7 +137,23 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageOverlayMenu.swift",
         "Features/Main/Components/NearbyDiscoverabilityControl.swift",
         "Features/Main/Components/StatusBubbleOverlay.swift",
-        "Features/Main/Components/UniversalComposerBar.swift",
+        // **Les parties du découpage héritent de la dette de leur type — et les
+        // fichiers-tête en SORTENT.** `UniversalComposerBar.swift` et
+        // `ConversationView+Composer.swift` n'ont plus une seule taille figée :
+        // elles ont MIGRÉ dans les extensions ci-dessous. Le plafond de
+        // population ne bouge donc pas — rien n'a disparu, tout a changé de
+        // fichier. C'est le cas que la règle « les RETIRER + baisser le
+        // plafond » ne distingue pas : elle suppose une disparition.
+        //
+        // `UniversalComposerBar` et `ConversationView` ont été découpées pour
+        // rentrer dans le budget de taille ; les tailles figées qu'elles
+        // portaient ont suivi dans leurs extensions. Sans ces trois noms, le
+        // cliquet lit des fichiers NEUFS qui « introduisent » des tailles
+        // figées — alors que rien n'a été introduit, tout a été DÉPLACÉ.
+        //
+        // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
+        // nomme des FICHIERS se périme au premier découpage.
+        "Features/Main/Components/UniversalComposerBar+Send.swift",
         "Features/Main/Composer/ComposerFormatFan.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
@@ -164,7 +180,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ConversationListView+Overlays.swift",
         "Features/Main/Views/ConversationMediaFilmstrip.swift",
         "Features/Main/Views/ConversationMediaGalleryView.swift",
-        "Features/Main/Views/ConversationView+Composer.swift",
+        "Features/Main/Views/ConversationView+ComposerAttachments.swift",
+        "Features/Main/Views/ConversationView+ComposerBanners.swift",
         "Features/Main/Views/ConversationView+MessageRow.swift",
         "Features/Main/Views/DataExportView.swift",
         "Features/Main/Views/DeleteAccountView.swift",
@@ -221,7 +238,22 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// haute pour la rangée d'outils, et y a pris la forme canonique — donc
     /// `.title3` au lieu d'un `size: 13` figé. Son fichier n'en portait qu'un,
     /// sur une IMAGE : `textCeiling` ne bouge pas.
-    private static let totalCeiling = 244
+    /// **245 depuis le 2026-08-30.** La barre haute du composer a gagné deux
+    /// contrôles — annuler et rétablir (#4402) — qui reprennent, au caractère
+    /// près, la police de la croix de fermeture posée à leur gauche :
+    /// `.system(size: 13, weight: .bold)`.
+    ///
+    /// C'est le cas que la doctrine autorise, et il faut le dire plutôt que le
+    /// taire : **un CADRE FIXE qui déborderait si la taille scalait**. Les trois
+    /// boutons vivent dans des cercles de `ComposerControlMetrics.visualDiameter`
+    /// ; une police relative y ferait grossir le glyphe sans que le cercle
+    /// suive, et le glyphe sortirait de son verre aux tailles accessibles.
+    ///
+    /// Le cliquet a fait exactement son travail : il n'a pas EMPÊCHÉ l'ajout,
+    /// il a exigé qu'on l'assume par écrit. Un +1 silencieux serait passé
+    /// inaperçu — c'est la règle 1 qui ne voit pas les fichiers déjà porteurs,
+    /// et cette règle-ci qui les rattrape.
+    private static let totalCeiling = 245
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 

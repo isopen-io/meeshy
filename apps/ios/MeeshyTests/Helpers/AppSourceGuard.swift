@@ -132,7 +132,19 @@ enum AppSourceGuard {
     static let composerSurfacePath = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
     static let composerSurfaceCompanions = [
         "Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift",
-        "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift"
+        "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift",
+        // **Les deux types extraits le 2026-08-30**, quand le fichier a franchi
+        // le plafond de 1 100 lignes. Ils ne portent PAS le nom du type, donc le
+        // glob `ComposerDocumentSurface+*.swift` ne les voit pas — c'est
+        // exactement ce à quoi `alsoIncluding` sert.
+        //
+        // Sans eux, une dizaine de gardes qui ancrent sur `composerHost`,
+        // `publishMood`, `publishDocument` ou la vignette perdraient leur objet
+        // en silence. Un découpage n'est pas fini quand le fichier passe sous le
+        // budget : il l'est quand les gardes qui le nommaient pointent l'unité
+        // (leçon 347).
+        "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
+        "Meeshy/Features/Main/Composer/ComposerMediaThumbnail.swift"
     ]
 
     static func composerSurfaceURLs() -> [URL] {
