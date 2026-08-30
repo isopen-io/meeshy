@@ -25,6 +25,9 @@ jest.mock('../../../utils/sanitize', () => ({
 
 jest.mock('../../../utils/session-token', () => ({
   hashSessionToken: jest.fn((token: string) => 'hashed-' + token),
+  // #4167 — voir `anonymous.test.ts` : `generateSessionToken` est désormais
+  // partagé (`utils/session-token.ts`), plus un double local de la route.
+  generateSessionToken: jest.fn(() => 'anon_test_session_token'),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -83,6 +86,7 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
       findFirst: jest.fn().mockResolvedValue(mockShareLink),
       findUnique: jest.fn().mockResolvedValue({ ...mockShareLink }),
       update: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
     user: { findFirst: jest.fn().mockResolvedValue(null) },
     participant: {

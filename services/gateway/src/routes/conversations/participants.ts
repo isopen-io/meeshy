@@ -4,6 +4,7 @@ import { UserRoleEnum } from '@meeshy/shared/types';
 import { resolveParticipantAvatar, serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { registerParticipantRemovalRoute } from './participant-removal';
 import { registerParticipantRoleRoute } from './participant-role';
+import { registerLinkAdmissionRoutes } from './link-admission';
 import { participantListUserSelect } from './utils/participant-projection';
 import {
   ACTIVE_MEMBER_LISTING_LIMIT,
@@ -1383,4 +1384,9 @@ export function registerParticipantsRoutes(
   registerParticipantRemovalRoute(fastify, prisma, requiredAuth);
   registerParticipantRoleRoute(fastify, prisma, requiredAuth);
 
+  // `POST /links/:key/members`, `PATCH|DELETE /guest-sessions/me` — porte
+  // d'admission UNIQUE d'un lien de partage (#4167). Même raison de
+  // découpage que les deux lignes ci-dessus : ce module est déjà hors budget
+  // (1386 lignes), on extrait avant d'ajouter.
+  registerLinkAdmissionRoutes(fastify, prisma, optionalAuth, requiredAuth);
 }
