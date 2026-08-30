@@ -23,6 +23,7 @@ import { invalidateParticipantLookup } from '../../utils/participant-lookup-cach
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import {
   resolveParticipantRights,
+  disclosableEntryRights,
   resolveEntryRights,
   PARTICIPANT_RIGHT_NAMES,
   type ParticipantRightName,
@@ -535,7 +536,7 @@ export function registerParticipantsRoutes(
                 entryCapabilities: {
                   type: 'object',
                   nullable: true,
-                  description: 'What this visitor may actually do (rights ?? permissions). Visible to every member; null when the participant has an account.',
+                  description: 'What this visitor may actually do (rights ?? permissions). Visible to every member; null when the participant has an account. `canViewHistory` is the exception: it is a MODERATION fact and the key is ABSENT for a plain member (#4056) — never false, which would itself disclose it.',
                   properties: {
                     canSendMessages: { type: 'boolean' },
                     canSendFiles: { type: 'boolean' },
@@ -544,7 +545,7 @@ export function registerParticipantsRoutes(
                     canSendAudios: { type: 'boolean' },
                     canSendLocations: { type: 'boolean' },
                     canSendLinks: { type: 'boolean' },
-                    canViewHistory: { type: 'boolean' }
+                    canViewHistory: { type: 'boolean', description: 'Conversation admins, moderators and creators only. The key is ABSENT for anyone else — the same moderation fact that `participant:rights-updated` stopped broadcasting to the room (#4009).' }
                   }
                 },
                 entryLink: {
@@ -664,8 +665,22 @@ export function registerParticipantsRoutes(
       // quand rien n'est figé — même arbitrage exactement que `historyFloorFor`,
       // qui décide de la lecture. Les énoncer différemment ferait annoncer à la
       // fiche un droit que la lecture ne respecte pas.
+      //
+      // **`canViewHistory` en SORT quand le lecteur n'héberge pas la
+      // conversation** (#4056). Le porteur a tranché que c'est un fait de
+      // MODÉRATION ; #4009 l'a retiré de l'événement diffusé à la room, mais
+      // cette route continuait de le servir à tout membre — et tant qu'un
+      // chemin sert le fait, le retrait de l'autre ne protège rien.
+      //
+      // La loi est la MÊME que celle du push (`disclosableEntryRights`) : deux
+      // omissions écrites à la main auraient divergé au premier droit ajouté, et
+      // la divergence se serait faite du côté BAVARD — celui qui ne rougit
+      // jamais.
       const entryCapabilities = isAnonymous
-        ? resolveEntryRights(participant, null, shareLink?.allowViewHistory ?? true)
+        ? disclosableEntryRights(
+            resolveEntryRights(participant, null, shareLink?.allowViewHistory ?? true),
+            viewerHostsTheRoom,
+          )
         : null;
 
       // Second cercle. `allowedIpRanges` n'est pas dans le `select` : ce qui
@@ -1001,8 +1016,9 @@ export function registerParticipantsRoutes(
           // nommé que la date, et le booléen voisin, dans le même objet, avait
           // continué son chemin vers la room entière.
           const { historyVisibleFrom: _omitted, rights: fullRights, ...rest } = fullPayload;
-          const { canViewHistory: _alsoOmitted, ...roomRights } = fullRights;
-          const roomPayload = { ...rest, rights: roomRights };
+          // #4056 — la loi est partagée avec la fiche REST. La room n'héberge
+          // pas : `viewerHostsTheRoom: false`.
+          const roomPayload = { ...rest, rights: disclosableEntryRights(fullRights, false) };
 
           io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.PARTICIPANT_RIGHTS_UPDATED, roomPayload);
 
