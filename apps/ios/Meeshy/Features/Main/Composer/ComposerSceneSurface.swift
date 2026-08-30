@@ -130,25 +130,31 @@ struct ComposerSceneSurface: View {
     let descriptionPlaceholder: String
 
 
-    /// Les quatre gestes qui agissent SUR la scène — ✎ ☺ ♫ # — ou les
-    /// contrôleurs de l'outil ouvert, qui agissent sur elle tout autant.
+    /// **Les boutons de CONTRÔLE, à GAUCHE** (directive porteur 2026-08-31).
+    ///
+    /// Trois places, trois niveaux : l'OUTIL agit (gauche), le DOCUMENT et la
+    /// SLIDE se pilotent (droite), les réglages de l'outil OUVERT vivent en bas.
+    /// Le rail avait d'abord été posé à droite d'après la planche `1b` ; la
+    /// directive le ramène à gauche, et sépare surtout ce qu'il PORTE — les
+    /// portes restent ici, les contrôleurs d'outil DESCENDENT.
+    ///
+    /// Il ne montre donc plus jamais `.tool(...)` : un outil ouvert VIDE ce rail
+    /// au lieu de le travestir. C'est ce qui rend la place signifiante — le
+    /// doigt apprend qu'à gauche on OUVRE, en bas on RÈGLE, et une place qui
+    /// change de sens selon l'état n'apprend rien.
     private var floatingRail: AnyView {
-        let mode: ComposerRailMode = {
-            guard case .doors(let servies) = railMode else { return railMode }
-            return .doors(servies.filter(ComposerSceneFloatingRail.doors.contains))
-        }()
-        if case .doors(let d) = mode, d.isEmpty { return AnyView(EmptyView()) }
+        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
+        let portes = servies.filter(ComposerSceneFloatingRail.doors.contains)
+        guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(
-            ComposerLeadingRail(mode: mode,
+            ComposerLeadingRail(mode: .doors(portes),
                                 plateauTint: plateauTint,
                                 onDoor: onRailDoor,
-                                onToolControl: onRailToolControl,
-                                onExitTool: onRailExitTool,
                                 // Il FLOTTE : pas de ressort, sinon son socle
                                 // s'étire sur toute la hauteur de la scène et
                                 // la dernière entrée déborde sous elle.
                                 pushesToThumb: false)
-                .padding(.trailing, ComposerRailGeometry.outerMargin)
+                .padding(.leading, ComposerRailGeometry.outerMargin)
         )
     }
 
@@ -156,6 +162,22 @@ struct ComposerSceneSurface: View {
     /// ouvert : la rangée ferait alors concurrence aux contrôleurs de l'outil,
     /// et l'arbitrage donne la priorité du bas à l'outil en cours.
     private var lowToolRow: AnyView {
+        // **Un outil OUVERT prend le BAS** (directive porteur 2026-08-31) : ses
+        // réglages y ont la largeur, et le rail de gauche redevient ce qu'il
+        // est — des portes. Les deux ne coexistent jamais, ce qui donne au bas
+        // de l'écran un seul sens à la fois.
+        if case .tool = railMode {
+            return AnyView(
+                ComposerLeadingRail(mode: railMode,
+                                    plateauTint: plateauTint,
+                                    onToolControl: onRailToolControl,
+                                    onExitTool: onRailExitTool,
+                                    axis: .horizontal)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal, ComposerRailGeometry.outerMargin)
+                    .padding(.bottom, 4)
+            )
+        }
         guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.lowRow(from: servies)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
@@ -228,7 +250,7 @@ struct ComposerSceneSurface: View {
                 // pose À CÔTÉ de la scène au lieu d'être DESSUS — mesuré à
                 // l'écran, c'est exactement ce qui s'est produit au premier
                 // essai.
-                .overlay(alignment: .trailing) { floatingRail }
+                .overlay(alignment: .leading) { floatingRail }
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
                 // **Le rail FLOTTE sur le bord DROIT, DANS la scène** (#4072,
                 // arbitrage du 2026-08-28 sur #4061).
