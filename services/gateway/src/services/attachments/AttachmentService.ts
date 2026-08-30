@@ -30,6 +30,7 @@ import {
   type EncryptedUploadResult,
 } from './UploadProcessor';
 import { MetadataManager } from './MetadataManager';
+import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
@@ -233,8 +234,13 @@ export class AttachmentService {
   }
 
   async getAttachment(attachmentId: string): Promise<Attachment | null> {
+    // #4166, critère 1 — `findUnique` SANS `select` chargeait la ligne
+    // ENTIÈRE (transcription, translations, encryptionIv…) pour n'en garder
+    // que les 26 champs que `toAttachment` lit. `attachmentServiceRowSelect`
+    // EST ce contrat, rendu explicite à la requête.
     const attachment = await this.prisma.messageAttachment.findUnique({
       where: { id: attachmentId },
+      select: attachmentServiceRowSelect,
     });
 
     if (!attachment) {
@@ -262,8 +268,11 @@ export class AttachmentService {
       return [];
     }
 
+    // Même contrat que `getAttachment` (#4166) : `toAttachment` ne lit que
+    // `attachmentServiceRowSelect`, jamais la ligne entière.
     const rows = await this.prisma.messageAttachment.findMany({
       where: { id: { in: [...new Set(attachmentIds)] } },
+      select: attachmentServiceRowSelect,
     });
 
     const byId = new Map(rows.map((row) => [row.id, this.toAttachment(row)]));

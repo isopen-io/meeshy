@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle2, XCircle, Loader2, Mail, ArrowLeft } from 'lucide-react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 import { useI18n } from '@/hooks/use-i18n';
 import Link from 'next/link';
@@ -44,7 +45,7 @@ export default function VerifyEmailChangePage() {
         return;
       }
 
-      const response = await fetch(buildApiUrl('/users/me/verify-email-change'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.meVerifyEmailChange), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

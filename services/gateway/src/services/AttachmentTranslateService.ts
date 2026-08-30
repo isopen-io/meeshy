@@ -16,6 +16,10 @@ import { ZmqTranslationClient } from './zmq-translation';
 import { MultiLevelJobMappingCache } from './MultiLevelJobMappingCache';
 import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
+import {
+  attachmentTranslateSelect,
+  type AttachmentTranslateRowPayload,
+} from './attachments/attachmentIncludes';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslateService' });
@@ -104,25 +108,28 @@ export class AttachmentTranslateService {
   }
 
   /**
-   * Translate an attachment based on its type
+   * Translate an attachment based on its type.
+   *
+   * #4166, critère 4 — `POST /attachments/:attachmentId/translate` already
+   * reads this row for its own consent gate before calling here. Without
+   * `preloadedAttachment`, this method re-read the SAME row via a bare
+   * `include` (every scalar column) — two round-trips for one row. A caller
+   * that already holds the row (read via `attachmentTranslateSelect`) passes
+   * it and this method skips its own fetch entirely. Omitting the parameter
+   * keeps the old behaviour — every other caller (this service's own tests
+   * included) is unaffected.
    */
   async translate(
     userId: string,
     attachmentId: string,
-    options: TranslateOptions
+    options: TranslateOptions,
+    preloadedAttachment?: AttachmentTranslateRowPayload
   ): Promise<ServiceResult<TranslationResult>> {
     try {
-      // 1. Get attachment from database
-      const attachment = await this.prisma.messageAttachment.findUnique({
+      // 1. Get attachment from database (unless the caller already has it)
+      const attachment = preloadedAttachment ?? await this.prisma.messageAttachment.findUnique({
         where: { id: attachmentId },
-        include: {
-          message: {
-            select: {
-              conversationId: true,
-              senderId: true
-            }
-          }
-        }
+        select: attachmentTranslateSelect
       });
 
       if (!attachment) {

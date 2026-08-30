@@ -7,11 +7,24 @@ import { authorSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { loadSoundStats, EMPTY_SOUND_STATS, type SoundStats } from '../../services/posts/soundStats';
 import { NOT_MUTED_WHERE } from '../../services/posts/soundFormats';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendError } from '../../utils/response';
+import { depreciee } from '../../utils/deprecation';
 
-const OBJECT_ID = /^[a-f0-9]{24}$/;
+/**
+ * Forme d'identifiant `Sound`/`Post` (ObjectId Mongo) — exportée pour
+ * `routes/posts/feed.ts` (#4346, `scope=sound`) : la même garde que
+ * `/sounds/:id/posts` applique à son `:id` de chemin s'applique à
+ * `?soundId=` de l'union, partagée plutôt que recopiée.
+ */
+export const OBJECT_ID = /^[a-f0-9]{24}$/;
 /** Même plafond que le titre de l'upload manuel (`audio.ts`). */
 export const SOUND_TITLE_MAX = 100;
-const MineQuerySchema = z.object({
+/**
+ * Exportée pour `routes/posts/feed.ts` (#4346, `scope=sound`) : les mêmes
+ * bornes de `cursor`/`limit`, ÉTENDUES par
+ * `MineQuerySchema.extend({ scope: z.literal('sound'), soundId: … })`,
+ * jamais recopiées — déjà partagée en interne avec `/sounds/:id/posts`.
+ */
+export const MineQuerySchema = z.object({
   cursor: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -74,6 +87,138 @@ export function toDTO(s: Record<string, unknown>, stats: SoundStats = EMPTY_SOUN
 
 /** Toutes les lectures de `Sound` rendues à un client passent par là. */
 export const soundUploaderInclude = { uploader: { select: authorSelect } } as const;
+
+export type SoundPostsFeedResult = {
+  readonly data: unknown[];
+  readonly pagination: { readonly limit: number; readonly hasMore: boolean; readonly nextCursor: string | null };
+};
+
+/**
+ * Le NOYAU PARTAGÉ entre `GET /sounds/:id/posts` (alias déprécié) et
+ * `GET /social/posts?scope=sound` (#4346, critère 6 de #4149 : « une fusion
+ * qui recopie un handler recrée le doublon qu'elle prétend fermer »).
+ *
+ * GARDE D'AUDIENCE OBLIGATOIRE, inchangée par cette extraction (doc-comment
+ * de la route ci-dessous) : un son est public, les posts qui l'utilisent ne
+ * le sont pas forcément — filtre `PUBLIC` appliqué aux DEUX adresses par
+ * construction, puisqu'il n'y a plus qu'UNE fonction qui le pose.
+ */
+export async function chargerPostsParSon(
+  prisma: PrismaClient,
+  soundId: string,
+  params: { cursor?: string; limit: number },
+): Promise<SoundPostsFeedResult> {
+  const { cursor, limit } = params;
+
+  // `SoundUsage.postId` est une chaîne nue, sans relation Prisma vers `Post` :
+  // la jointure est impossible, d'où ces deux temps.
+  //
+  // `hasMore` et le curseur portent sur la MÊME collection — les USAGES
+  // (#4339). L'ancienne forme les prenait sur deux : `hasMore` venait des
+  // POSTS (`take: limit + 1` après filtre `PUBLIC`) et le curseur du dernier
+  // USAGE du lot lu. Deux défauts en découlaient, et le second était une
+  // perte de données :
+  //
+  //   1. vingt usages dont trois posts publics ⇒ `hasMore: false` : le fil
+  //      s'arrêtait alors que la collection paginée continuait ;
+  //   2. `hasMore: true` ⇒ le curseur sautait au dernier usage du lot de
+  //      `(limit + 1) * 4`, donc PAR-DESSUS tous les usages compris entre le
+  //      dernier post servi et la fin du lot. Ces posts-là n'étaient jamais
+  //      servis, ni sur cette page ni sur la suivante.
+  //
+  // Et l'ordre servi n'était pas celui de la collection paginée : les posts
+  // étaient triés par `Post.createdAt`, les usages par `SoundUsage.createdAt`.
+  // Un post ancien réutilisé hier se rangeait au mauvais bout. L'ordre des
+  // USAGES fait foi désormais — c'est lui que le curseur parcourt.
+  const TAILLE_LOT = Math.max((limit + 1) * 4, 20);
+  const LOTS_MAX = 5;
+  const now = new Date();
+
+  const servis: Array<{ readonly post: unknown; readonly usageCreatedAt: Date }> = [];
+  const postsDejaVus = new Set<string>();
+  let curseurCourant = cursor;
+  let lotsLus = 0;
+  let restentDesUsages = true;
+
+  while (servis.length <= limit && restentDesUsages && lotsLus < LOTS_MAX) {
+    const usages = await prisma.soundUsage.findMany({
+      where: {
+        soundId,
+        ...(curseurCourant ? { createdAt: { lt: new Date(curseurCourant) } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: TAILLE_LOT,
+      select: { postId: true, createdAt: true },
+    });
+    lotsLus += 1;
+    restentDesUsages = usages.length === TAILLE_LOT;
+    if (usages.length === 0) break;
+    curseurCourant = usages[usages.length - 1].createdAt.toISOString();
+
+    const aChercher = [...new Set(usages.map((u) => u.postId))].filter((id) => !postsDejaVus.has(id));
+    // Déjà borné IMPLICITEMENT : `aChercher` dérive de `usages`, dont le
+    // `take: TAILLE_LOT` est posé ci-dessus. `take` explicite quand même
+    // (#4165, même motif qu'`admin/users.ts`) — la borne ne doit pas dépendre
+    // d'un raisonnement à distance sur la taille d'un tableau amont.
+    const posts = aChercher.length === 0 ? [] : await prisma.post.findMany({
+      where: {
+        id: { in: aChercher },
+        visibility: 'PUBLIC',
+        deletedAt: NOT_DELETED,
+        // Une story expirée n'est plus publique : la laisser ici la ferait
+        // survivre à son expiration par cette porte.
+        OR: [{ expiresAt: { isSet: false } }, { expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+      select: {
+        id: true, type: true, content: true, createdAt: true,
+        likeCount: true, viewCount: true,
+        author: { select: authorSelect },
+        media: { select: { id: true, mimeType: true, thumbnailUrl: true, thumbHash: true }, take: 1 },
+      },
+      take: aChercher.length,
+    });
+    const postsById = new Map(posts.map((post) => [post.id, post]));
+
+    for (const usage of usages) {
+      if (postsDejaVus.has(usage.postId)) continue;
+      postsDejaVus.add(usage.postId);
+      const post = postsById.get(usage.postId);
+      if (!post) continue;
+      servis.push({ post, usageCreatedAt: usage.createdAt });
+      if (servis.length > limit) break;
+    }
+  }
+
+  const pageComplete = servis.length > limit;
+  const borneAtteinte = lotsLus >= LOTS_MAX && restentDesUsages;
+  const hasMore = pageComplete || borneAtteinte;
+
+  const page = servis.slice(0, limit);
+  // Le curseur pointe l'usage du DERNIER POST SERVI (exclusif), jamais la fin
+  // du lot lu. Quand la borne de lots arrête le balayage sans remplir la page,
+  // il repart d'où le balayage s'est arrêté — sinon les usages non lus
+  // seraient perdus.
+  const nextCursor = !hasMore
+    ? null
+    : pageComplete && page.length > 0
+      ? page[page.length - 1].usageCreatedAt.toISOString()
+      : curseurCourant ?? null;
+
+  return {
+    data: page.map((s) => s.post),
+    pagination: { limit, hasMore, nextCursor },
+  };
+}
+
+// #4346 — `/sounds/:id/posts` devient un ALIAS déprécié de `scope=sound`. Le
+// `soundId` voyage dans le CHEMIN historique : le successeur est une FONCTION
+// de la requête (comme `author`/`community` dans feed.ts), `encodeURIComponent`
+// en plus — même raison que `hashtag.ts` : un `:id` malformé (jamais validé
+// avant l'annonce de dépréciation, `onRequest` court avant `preValidation`)
+// ne doit jamais faire échouer la COMPOSITION de l'en-tête. `/sounds/mine` et
+// `/sounds/:id` (GET/PATCH) NE SONT PAS concernées : seule la « page du son »
+// (liste de posts) entre dans le périmètre de #4346.
+const SOUND_SCOPE_DEPUIS = '2026-08-30';
 
 export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: any) {
   fastify.get('/sounds/mine', {
@@ -187,6 +332,11 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
    * deviner l'existence et le texte de contenus restreints à partir d'un son.
    */
   fastify.get<{ Params: { id: string } }>('/sounds/:id/posts', {
+    onRequest: depreciee({
+      depuis: SOUND_SCOPE_DEPUIS,
+      successeur: (request) =>
+        `/api/v1/social/posts?scope=sound&soundId=${encodeURIComponent((request.params as { id: string }).id)}`,
+    }),
     preValidation: [requiredAuth],
     config: { rateLimit: createSoundRouteRateLimitConfig('detail') },
   }, async (request, reply) => {
@@ -197,53 +347,7 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     if (!parsed.success) return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
     const { cursor, limit } = parsed.data;
 
-    // `SoundUsage.postId` est une chaîne nue, sans relation Prisma vers `Post` :
-    // la jointure est impossible, d'où ces deux temps.
-    const usages = await prisma.soundUsage.findMany({
-      where: {
-        soundId: request.params.id,
-        ...(cursor ? { createdAt: { lt: new Date(cursor) } } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      // Le même post peut apparaître plusieurs fois (une piste par usage) :
-      // on en prend large avant de dédoublonner.
-      take: (limit + 1) * 4,
-      select: { postId: true, createdAt: true },
-    });
-    if (usages.length === 0) {
-      return sendSuccess(reply, [], { pagination: { limit, hasMore: false, nextCursor: null } });
-    }
-
-    const now = new Date();
-    const posts = await prisma.post.findMany({
-      where: {
-        id: { in: [...new Set(usages.map((u) => u.postId))] },
-        visibility: 'PUBLIC',
-        deletedAt: NOT_DELETED,
-        // Une story expirée n'est plus publique : la laisser ici la ferait
-        // survivre à son expiration par cette porte.
-        OR: [{ expiresAt: { isSet: false } }, { expiresAt: null }, { expiresAt: { gt: now } }],
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit + 1,
-      select: {
-        id: true, type: true, content: true, createdAt: true,
-        likeCount: true, viewCount: true,
-        author: { select: authorSelect },
-        media: { select: { id: true, mimeType: true, thumbnailUrl: true, thumbHash: true }, take: 1 },
-      },
-    });
-
-    const hasMore = posts.length > limit;
-    const page = hasMore ? posts.slice(0, limit) : posts;
-    // Le curseur suit les USAGES, pas les posts : c'est la collection paginée.
-    const lastUsage = usages[usages.length - 1];
-
-    return sendSuccess(reply, page, {
-      pagination: {
-        limit, hasMore,
-        nextCursor: hasMore && lastUsage ? lastUsage.createdAt.toISOString() : null,
-      },
-    });
+    const resultat = await chargerPostsParSon(prisma, request.params.id, { cursor, limit });
+    return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
   });
 }

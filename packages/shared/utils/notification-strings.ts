@@ -20,6 +20,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'friend.story', 'friend.post', 'friend.reel', 'friend.mood', 'friend.subtitleNew',
   'call.missed', 'call.incoming.title', 'call.incoming.body',
   'contact.request', 'contact.accepted',
+  'contact.requestAction', 'contact.acceptedAction',
   'repost',
   'invitation.group', 'invitation.direct',
   'group.added', 'group.newContact',
@@ -82,6 +83,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'Nouvelle demande de contact',
     'contact.accepted': 'Demande de contact acceptée',
+    'contact.requestAction': 'veut se connecter',
+    'contact.acceptedAction': 'a accepté votre demande',
     'repost': 'a partagé {possObj}',
     'invitation.group': 'Invitation au groupe {title}',
     'invitation.direct': 'Nouvelle conversation avec {actor}',
@@ -127,6 +130,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'New contact request',
     'contact.accepted': 'Contact request accepted',
+    'contact.requestAction': 'wants to connect',
+    'contact.acceptedAction': 'accepted your request',
     'repost': 'shared {possObj}',
     'invitation.group': 'Invitation to group {title}',
     'invitation.direct': 'New conversation with {actor}',
@@ -172,6 +177,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'Nueva solicitud de contacto',
     'contact.accepted': 'Solicitud de contacto aceptada',
+    'contact.requestAction': 'quiere conectar contigo',
+    'contact.acceptedAction': 'aceptó tu solicitud',
     'repost': 'compartió {possObj}',
     'invitation.group': 'Invitación al grupo {title}',
     'invitation.direct': 'Nueva conversación con {actor}',
@@ -217,6 +224,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'Novo pedido de contato',
     'contact.accepted': 'Pedido de contato aceito',
+    'contact.requestAction': 'quer se conectar',
+    'contact.acceptedAction': 'aceitou o seu pedido',
     'repost': 'compartilhou {possObj}',
     'invitation.group': 'Convite para o grupo {title}',
     'invitation.direct': 'Nova conversa com {actor}',
@@ -262,6 +271,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'Neue Kontaktanfrage',
     'contact.accepted': 'Kontaktanfrage angenommen',
+    'contact.requestAction': 'möchte sich vernetzen',
+    'contact.acceptedAction': 'hat deine Anfrage angenommen',
     'repost': 'hat {possObj} geteilt',
     'invitation.group': 'Einladung zur Gruppe {title}',
     'invitation.direct': 'Neue Unterhaltung mit {actor}',
@@ -307,6 +318,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'Nuova richiesta di contatto',
     'contact.accepted': 'Richiesta di contatto accettata',
+    'contact.requestAction': 'vuole entrare in contatto',
+    'contact.acceptedAction': 'ha accettato la tua richiesta',
     'repost': 'ha condiviso {possObj}',
     'invitation.group': 'Invito al gruppo {title}',
     'invitation.direct': 'Nuova conversazione con {actor}',
@@ -352,6 +365,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': 'طلب تواصل جديد',
     'contact.accepted': 'تم قبول طلب التواصل',
+    'contact.requestAction': 'يريد التواصل معك',
+    'contact.acceptedAction': 'قبِل طلبك',
     'repost': 'شارك {possObj}',
     'invitation.group': 'دعوة إلى مجموعة {title}',
     'invitation.direct': 'محادثة جديدة مع {actor}',
@@ -397,6 +412,8 @@ const TEMPLATES: Record<NotificationLanguage, Templates> = {
     'call.incoming.body': '{callBody}',
     'contact.request': '新的联系人请求',
     'contact.accepted': '联系人请求已接受',
+    'contact.requestAction': '想与你建立联系',
+    'contact.acceptedAction': '接受了你的请求',
     'repost': '分享了{possObj}',
     'invitation.group': '邀请你加入群组 {title}',
     'invitation.direct': '与 {actor} 的新对话',
@@ -812,6 +829,20 @@ export function buildNotificationDisplay(
     case 'comment_like':
     case 'comment_reaction':
       return framed(ns('reaction.comment'), nounCap);
+
+    // ── Relation : demande reçue / demande acceptée ──
+    //
+    // Sans phrase d'action, ces deux types n'avaient qu'un `content` en GROUPE
+    // NOMINAL (« Nouvelle demande de contact ») : une bannière ne peut pas en
+    // tirer « X veut se connecter » sans réécrire du français en dur, ce que le
+    // Prisme (i18n serveur) interdit. Aucun sous-titre : il n'y a pas de
+    // contenu visé dont on nommerait l'entité.
+    case 'friend_request':
+    case 'contact_request':
+      return framed(notificationString(L, 'contact.requestAction'), null);
+    case 'friend_accepted':
+    case 'contact_accepted':
+      return framed(notificationString(L, 'contact.acceptedAction'), null);
 
     // ── Partage / repost ──
     case 'post_repost':

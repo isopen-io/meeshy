@@ -218,6 +218,15 @@ final class StoryComposerProtocolConformanceTests: XCTestCase {
         XCTAssertEqual(mock._setMediaDurationLastArgs?.id, "m-1")
         XCTAssertEqual(mock._setMediaDurationLastArgs?.duration, 3.5)
         XCTAssertEqual(mock._addAudioObjectCalls, 1)
+        // L'appel sans argument passe par l'EXTENSION du protocole, qui doit
+        // transmettre `nil` — « l'auteur n'a rien dit » — et non un rôle
+        // arbitraire. Sans ce témoin, l'extension pourrait forcer le fond sur
+        // tous les appelants historiques sans que rien ne rougisse.
+        if let roleRecu = mock._addAudioObjectLastRole {
+            XCTAssertNil(roleRecu, "l'extension du protocole doit transmettre `nil`")
+        } else {
+            XCTFail("`addAudioObject()` n'a pas atteint la doublure")
+        }
         XCTAssertEqual(mock._deleteElementCalls, 1)
         XCTAssertEqual(mock._deleteElementLastId, "elem-z")
         XCTAssertEqual(mock._updateElementLanguageCalls, 1)

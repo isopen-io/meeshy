@@ -68,7 +68,7 @@ describe('GET /auth/revoke-all-sessions — invalid token', () => {
   it('returns 400 HTML when jwt.verify throws', async () => {
     mockVerify.mockImplementation(() => { throw new Error('invalid token'); });
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=bad-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=bad-token' });
     expect(res.statusCode).toBe(400);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toContain('expired or invalid');
@@ -80,7 +80,7 @@ describe('GET /auth/revoke-all-sessions — wrong action in payload', () => {
   it('returns 400 HTML when action is not revoke-all', async () => {
     mockVerify.mockReturnValue({ userId: 'user-1', action: 'other-action' });
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('Invalid link');
     await app.close();
@@ -91,7 +91,7 @@ describe('GET /auth/revoke-all-sessions — missing userId in payload', () => {
   it('returns 400 HTML when userId is absent', async () => {
     mockVerify.mockReturnValue({ action: 'revoke-all' });
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(400);
     await app.close();
   });
@@ -102,7 +102,7 @@ describe('GET /auth/revoke-all-sessions — success', () => {
     mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
     mockInvalidateAllSessions.mockResolvedValue(5);
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/html/);
     expect(res.body).toContain('sessions disconnected');
@@ -124,7 +124,7 @@ describe('GET /auth/revoke-all-sessions — live sockets', () => {
     const { rooms, handler } = makeSocketIOHandler([socket, { ...socket }]);
 
     const app = await buildApp(handler);
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
 
     expect(res.statusCode).toBe(200);
     expect(rooms).toEqual(['user:usr-123']);
@@ -138,7 +138,7 @@ describe('GET /auth/revoke-all-sessions — live sockets', () => {
     mockVerify.mockReturnValue({ userId: 'usr-123', action: 'revoke-all' });
     mockInvalidateAllSessions.mockResolvedValue(1);
     const app = await buildApp();
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('sessions disconnected');
     await app.close();
@@ -159,7 +159,7 @@ describe('GET /auth/revoke-all-sessions — live sockets', () => {
       }),
     };
     const app = await buildApp(handler);
-    const res = await app.inject({ method: 'GET', url: '/auth/revoke-all-sessions?token=valid-token' });
+    const res = await app.inject({ method: 'GET', url: '/revoke-all-sessions?token=valid-token' });
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('sessions disconnected');
     await app.close();

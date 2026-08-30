@@ -16,7 +16,16 @@ import {
 
 jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((endpoint: string) => `http://localhost:3000/api/v1${endpoint}`),
-  API_ENDPOINTS: {},
+  // #4281 — le service consomme désormais API_ENDPOINTS.links/.anonymous/.conversations
+  // (catalogue partagé). Relatifs, comme avant la migration : la fabrique
+  // buildApiUrl ci-dessus ajoute déjà /api/v1, un catalogue réel (déjà
+  // préfixé) doublerait le segment sans faire tomber les assertions
+  // `stringContaining`, ce qui masquerait un vrai décalage de préfixe.
+  API_ENDPOINTS: {
+    links: { byIdentifier: (identifier: string) => `/links/${identifier}` },
+    anonymous: { linkByIdentifier: (identifier: string) => `/anonymous/link/${identifier}` },
+    conversations: { joinByLinkId: (linkId: string) => `/conversations/join/${linkId}` },
+  },
 }));
 
 jest.mock('@/utils/link-identifier', () => ({

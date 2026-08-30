@@ -103,7 +103,7 @@ describe('useFontPreference', () => {
       ok: true,
       json: () => Promise.resolve({
         success: true,
-        data: { key: 'font-family', value: 'inter' },
+        data: { application: { fontFamily: 'inter' } },
       }),
     });
 
@@ -151,7 +151,7 @@ describe('useFontPreference', () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          data: { key: 'font-family', value: 'roboto' },
+          data: { application: { fontFamily: 'roboto' } },
         }),
       });
 
@@ -184,7 +184,7 @@ describe('useFontPreference', () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          data: { key: 'font-family', value: 'roboto' },
+          data: { application: { fontFamily: 'roboto' } },
         }),
       });
 
@@ -195,7 +195,7 @@ describe('useFontPreference', () => {
       });
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/user-preferences/font-family',
+        'https://api.example.com/api/v1/me/preferences?categories=application',
         expect.objectContaining({
           headers: expect.objectContaining({
             Authorization: 'Bearer auth-token-123',
@@ -211,7 +211,7 @@ describe('useFontPreference', () => {
         ok: true,
         json: () => Promise.resolve({
           success: true,
-          data: { key: 'font-family', value: 'roboto' },
+          data: { application: { fontFamily: 'roboto' } },
         }),
       });
 
@@ -279,7 +279,13 @@ describe('useFontPreference', () => {
       expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
     });
 
-    it('should save font to backend', async () => {
+    // Ce témoin exigeait un temps un `POST /user-preferences` (404 avalé,
+    // #4189) puis, `#4181` n'ayant pas encore de route d'écriture, RIEN du
+    // tout — le choix de police ne quittait jamais le navigateur, sur aucun
+    // AUTRE appareil du même compte. #4181 fournit enfin cette route : ce
+    // témoin garde qu'elle est désormais APPELÉE, avec la forme exacte que la
+    // route unifiée attend (`fontFamily` sous la catégorie `application`).
+    it('synchronise le changement sur /me/preferences (catégorie application, #4181)', async () => {
       const { result } = renderHook(() => useFontPreference());
 
       await waitFor(() => {
@@ -287,21 +293,40 @@ describe('useFontPreference', () => {
       });
 
       mockFetch.mockClear();
+      mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ success: true }) });
 
       await act(async () => {
         await result.current.changeFontFamily('roboto');
       });
 
+      // Plus JAMAIS l'adresse morte de #4189.
+      const urlsAppelées = mockFetch.mock.calls.map((appel: unknown[]) => String(appel[0]));
+      expect(urlsAppelées.filter((url) => url.includes('user-preferences'))).toEqual([]);
+
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.example.com/user-preferences',
+        'https://api.example.com/api/v1/me/preferences',
         expect.objectContaining({
-          method: 'POST',
-          body: JSON.stringify({
-            key: 'font-family',
-            value: 'roboto',
-          }),
+          method: 'PATCH',
+          headers: expect.objectContaining({ Authorization: 'Bearer auth-token-123' }),
+          body: JSON.stringify({ application: { fontFamily: 'roboto' } }),
         })
       );
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
+    });
+
+    it('reste local — sans jeton, aucune synchronisation serveur ne part', async () => {
+      const { result } = renderHook(() => useFontPreference());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      mockGetAuthToken.mockReturnValue(null as any);
+      mockFetch.mockClear();
+
+      await act(async () => {
+        await result.current.changeFontFamily('roboto');
+      });
+
+      expect(mockFetch).not.toHaveBeenCalled();
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('font-family', 'roboto');
     });
 
     it('should set error for invalid font', async () => {

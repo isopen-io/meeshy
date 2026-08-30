@@ -70,11 +70,20 @@ const SITES: readonly string[] = [
   'packages/shared/types/api-schemas.ts',
   'packages/shared/types/validation/admin-user.ts',
   'services/gateway/src/routes/password-reset.ts',
-  'services/gateway/src/routes/users/profile.ts',
+  // #4284 — `users/profile.ts` (1093 lignes) a été découpé ; il n'est plus
+  // qu'une façade de ré-export, et la règle de longueur vit avec la route qui
+  // l'applique (`PATCH /users/me/password`). Recenser la façade faisait tomber
+  // la contre-épreuve « gouverné, pas muet » — exactement ce qu'elle existe
+  // pour attraper : un site qui devient conforme PAR DISPARITION.
+  'services/gateway/src/routes/users/profile-credentials.ts',
   'apps/web/components/auth/register-form-wizard.tsx',
   'apps/web/components/auth/wizard-steps/SecurityStep.tsx',
   'apps/web/components/auth/PasswordRequirementsChecklist.tsx',
-  'apps/web/components/settings/ProfileSettings.tsx',
+  // `apps/web/components/settings/ProfileSettings.tsx` a été SUPPRIMÉ (#4189) :
+  // huit de ses appels visaient des routes inexistantes, et son seul
+  // importateur était son propre `.example.tsx`, lui-même importé nulle part.
+  // Le formulaire monté par `app/settings/page.tsx` est `user-settings.tsx`,
+  // dont l'homonymie a longtemps fait croire au contraire.
 ];
 
 describe('longueur minimale du mot de passe — une règle, pas onze', () => {

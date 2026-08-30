@@ -101,22 +101,22 @@ case $TEST_TYPE in
         # Backend tests
         log_info "[1/5] Running unit tests..."
         cd "$GATEWAY_DIR"
-        pnpm test -- --testPathPattern="__tests__/unit" ${COVERAGE:+--coverage}
+        pnpm test -- --testPathPatterns="__tests__/unit" ${COVERAGE:+--coverage}
         log_success "Unit tests completed"
         echo ""
 
         log_info "[2/5] Running integration tests..."
-        pnpm test -- --testPathPattern="__tests__/integration" --runInBand
+        pnpm test -- --testPathPatterns="__tests__/integration" --runInBand
         log_success "Integration tests completed"
         echo ""
 
         log_info "[3/5] Running performance tests..."
-        pnpm test -- --testPathPattern="__tests__/performance" --runInBand --maxWorkers=1
+        pnpm test -- --testPathPatterns="__tests__/performance" --runInBand --maxWorkers=1
         log_success "Performance tests completed"
         echo ""
 
         log_info "[4/5] Running resilience tests..."
-        pnpm test -- --testPathPattern="__tests__/resilience" --runInBand
+        pnpm test -- --testPathPatterns="__tests__/resilience" --runInBand
         log_success "Resilience tests completed"
         echo ""
 
@@ -134,10 +134,10 @@ case $TEST_TYPE in
         log_info "Running unit tests..."
         cd "$GATEWAY_DIR"
 
-        CMD="pnpm test -- --testPathPattern=\"__tests__/unit\""
+        CMD="pnpm test -- --testPathPatterns=\"__tests__/unit\""
         [ "$COVERAGE" = true ] && CMD="$CMD --coverage"
         [ "$WATCH" = true ] && CMD="$CMD --watch"
-        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --testPathPattern=\"__tests__/unit\""
+        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --testPathPatterns=\"__tests__/unit\""
 
         eval $CMD
         log_success "Unit tests completed"
@@ -147,9 +147,9 @@ case $TEST_TYPE in
         log_info "Running integration tests..."
         cd "$GATEWAY_DIR"
 
-        CMD="pnpm test -- --testPathPattern=\"__tests__/integration\" --runInBand"
+        CMD="pnpm test -- --testPathPatterns=\"__tests__/integration\" --runInBand"
         [ "$COVERAGE" = true ] && CMD="$CMD --coverage"
-        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --testPathPattern=\"__tests__/integration\" --runInBand"
+        [ "$DEBUG" = true ] && CMD="node --inspect-brk node_modules/.bin/jest --testPathPatterns=\"__tests__/integration\" --runInBand"
 
         eval $CMD
         log_success "Integration tests completed"
@@ -160,7 +160,7 @@ case $TEST_TYPE in
         log_warning "This may take several minutes..."
         cd "$GATEWAY_DIR"
 
-        pnpm test -- --testPathPattern="__tests__/performance" --runInBand --maxWorkers=1
+        pnpm test -- --testPathPatterns="__tests__/performance" --runInBand --maxWorkers=1
         log_success "Performance tests completed"
         ;;
 
@@ -168,7 +168,7 @@ case $TEST_TYPE in
         log_info "Running resilience tests..."
         cd "$GATEWAY_DIR"
 
-        pnpm test -- --testPathPattern="__tests__/resilience" --runInBand
+        pnpm test -- --testPathPatterns="__tests__/resilience" --runInBand
         log_success "Resilience tests completed"
         ;;
 

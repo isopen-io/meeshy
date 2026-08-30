@@ -6,70 +6,50 @@ import {
   PaginatedUsersResponse,
   UserFilters,
   CreateUserDTO,
-  UpdateUserProfileDTO,
-  UpdateEmailDTO,
-  UpdateRoleDTO,
-  UpdateStatusDTO,
   ResetPasswordDTO
 } from '@meeshy/shared/types';
 import {
   createUserValidationSchema,
-  updateUserProfileValidationSchema,
-  updateEmailValidationSchema,
-  updateRoleValidationSchema,
-  updateStatusValidationSchema,
   resetPasswordValidationSchema
 } from '@meeshy/shared/types/validation/admin-user';
-
-// Schémas de validation locaux pour les endpoints admin
-const verifyEmailSchema = z.object({
-  email: z.email().optional(),
-  verified: z.boolean(),
-  reason: z.string().optional()
-});
-
-const verifyPhoneSchema = z.object({
-  phone: z.string().optional(),
-  verified: z.boolean(),
-  reason: z.string().optional()
-});
-
-const toggleVoiceConsentSchema = z.object({
-  voiceConsent: z.boolean().optional(),
-  consentType: z.enum(['voiceProfile', 'voiceData', 'dataProcessing', 'voiceCloning']).optional(),
-  enabled: z.boolean().optional(),
-  reason: z.string().optional()
-});
-
-const verifyAgeSchema = z.object({
-  isAdult: z.boolean().optional(),
-  verified: z.boolean().optional(),
-  reason: z.string().optional()
-});
 import { UserManagementService, type SessionRevoker } from '../../services/admin/user-management.service';
 import { disconnectRevokedSessions } from '../../socketio/disconnectRevokedSessions';
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
 import { permissionsService } from '../../services/admin/permissions.service';
-import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
-import { getCacheStore } from '../../services/CacheStore';
+import { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
 import {
   requireUserViewAccess,
-  requireUserModifyAccess,
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
+import { requirePermission, requireHierarchy } from '../../middleware/authorize';
+// #4157 c.4 / #4333 — le prédicat PARTAGÉ (composant lui-même `maskedAttachment`,
+// la MÊME garde que l'éventail de notifications) : voir media-protection.ts.
+import {
+  attachmentProtectionSelect,
+  messageProtectionSelect,
+  mediaAttachmentIsProtected,
+  type MessageProtectionContext
+} from './media-protection';
+import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
+import { registerUserWriteRoutes } from './users-write';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
-import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
+import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
-const updateUserProfileSchema = updateUserProfileValidationSchema;
-const updateEmailSchema = updateEmailValidationSchema;
-const updateRoleSchema = updateRoleValidationSchema;
-const updateStatusSchema = updateStatusValidationSchema;
 const resetPasswordSchema = resetPasswordValidationSchema;
+
+// #4165 — plafonds de l'énumération, en amont de `GET
+// /admin/users/:userId/reported-messages`, des conversations puis des
+// messages d'un utilisateur (`Report.reportedEntityId` étant polymorphe, voir
+// le commentaire au site d'appel). Larges par rapport à un usage normal :
+// couvrent un compte qui aurait rejoint 2 000 conversations ou envoyé 20 000
+// messages, tout en éliminant le scan réellement illimité que l'audit signale.
+const REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP = 2_000;
+const REPORTED_MESSAGES_MESSAGE_SCAN_CAP = 20_000;
 
 // Directive produit 2026-08-25 (revue adversariale F4) : une SÉLECTION ou un
 // ORDRE qui dépend de lastActiveAt révèle la présence autant que le champ que
@@ -115,6 +95,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     resolveSocketManager: () => fastify.socketIOHandler?.getManager(),
   });
   const userAuditService = new UserAuditService(fastify.prisma);
+
+  // Les ÉCRITURES vivent dans `users-write.ts`, sous la loi de leur CHAMP
+  // (#4154). Ce fichier ne garde que les lectures, la création et la
+  // suppression — trois gestes qui ne posent pas la question « quel champ ».
+  registerUserWriteRoutes(fastify, { userManagementService, userAuditService });
 
   /**
    * GET /admin/users - Liste tous les utilisateurs (avec sanitization)
@@ -187,7 +172,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get<{
     Params: { userId: string };
   }>('/admin/users/:userId', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
+    // `canViewUserDetails` était DÉCLARÉE dans la matrice et lue par AUCUNE
+    // route : la finesse annoncée — « voir la liste » distinct de « voir le
+    // détail » — n'existait pas dans le code. Elle vaut `canViewUsers` pour les
+    // six rôles (mesuré), donc la câbler ne change aucune admission ; elle rend
+    // la matrice vraie, et le jour où les deux divergent, la route suit.
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canViewUserDetails')]
   }, async (request, reply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
@@ -225,7 +215,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.post<{
     Body: CreateUserDTO;
   }>('/admin/users', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
+    // CRÉER n'est pas MODIFIER. La route se gardait sur `canUpdateUsers` alors
+    // que `canCreateUsers` existait, déclarée et jamais lue — même piège armé
+    // que `canResetPasswords` (#4144) : sans effet aujourd'hui, exploitable le
+    // jour où un rôle reçoit l'une sans l'autre.
+    preHandler: [fastify.authenticate, requirePermission('canCreateUsers')]
   }, async (request, reply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
@@ -234,12 +228,20 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Valider les donnees
       const validatedData = createUserSchema.parse(request.body);
 
-      // Verifier si l'admin peut creer un utilisateur avec ce role
-      if (validatedData.role) {
-        if (!permissionsService.canManageUser(adminRole, validatedData.role as UserRoleEnum)) {
-          sendForbidden(reply, 'Insufficient permissions to create user with this role', { message: 'Access denied' });
-          return;
-        }
+      // La garde porte sur le role EFFECTIF, pas sur le role DEMANDE (#4144).
+      //
+      // Elle etait ecrite `if (validatedData.role) { … }` : une garde
+      // conditionnee a la PRESENCE de ce qu'elle garde ne s'applique pas quand
+      // le champ est omis. Rien ne fuyait — `UserManagementService.createUser`
+      // pose `data.role || 'USER'` et un administrateur a le droit de creer un
+      // USER — mais la garde ne le VERIFIAIT pas : elle dependait d'un defaut
+      // ecrit dans une autre unite, qu'aucun test ne relie a elle. Evaluer le
+      // role effectif rend la garde vraie par elle-meme, et la fait suivre si
+      // ce defaut change un jour.
+      const roleEffectif = (validatedData.role ?? 'USER') as UserRoleEnum;
+      if (!permissionsService.canManageUser(adminRole, roleEffectif)) {
+        sendForbidden(reply, 'Insufficient permissions to create user with this role', { message: 'Access denied' });
+        return;
       }
 
       // Creer l'utilisateur
@@ -273,221 +275,6 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   /**
-   * PATCH /admin/users/:userId - Modifier un utilisateur
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.patch<{
-    Params: { userId: string };
-    Body: UpdateUserProfileDTO;
-  }>('/admin/users/:userId', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les donnees
-      const validatedData = updateUserProfileSchema.parse(request.body);
-
-      // Recuperer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Verifier si l'admin peut modifier cet utilisateur
-      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        sendForbidden(reply, 'Insufficient permissions to modify this user', { message: 'Access denied' });
-        return;
-      }
-
-      // Calculer les changements pour l'audit
-      const changes: Record<string, { before: unknown; after: unknown }> = {};
-      Object.keys(validatedData).forEach(key => {
-        const typedKey = key as keyof UpdateUserProfileDTO;
-        if (targetUser[typedKey as keyof typeof targetUser] !== validatedData[typedKey]) {
-          changes[key] = {
-            before: targetUser[typedKey as keyof typeof targetUser],
-            after: validatedData[typedKey]
-          };
-        }
-      });
-
-      // Mise a jour
-      const updatedUser = await userManagementService.updateUser(
-        request.params.userId,
-        validatedData,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.logUpdateUser(
-        authContext.registeredUser!.id,
-        request.params.userId,
-        changes,
-        undefined,
-        request.ip,
-        request.headers['user-agent']
-      );
-
-      // Sanitize la reponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: 'User updated successfully' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error updating user');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to update user' });
-    }
-  });
-
-  /**
-   * PATCH /admin/users/:userId/role - Changer le role d'un utilisateur
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.patch<{
-    Params: { userId: string };
-    Body: UpdateRoleDTO;
-  }>('/admin/users/:userId/role', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les donnees
-      const validatedData = updateRoleSchema.parse(request.body);
-
-      // Recuperer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Verifier si l'admin peut changer le role
-      if (!permissionsService.canChangeRole(
-        adminRole,
-        targetUser.role as UserRoleEnum,
-        validatedData.role as UserRoleEnum
-      )) {
-        sendForbidden(reply, 'Insufficient permissions to change user role', { message: 'Access denied' });
-        return;
-      }
-
-      const oldRole = targetUser.role;
-
-      // Mettre a jour le role
-      const updatedUser = await userManagementService.updateRole(
-        request.params.userId,
-        validatedData as UpdateRoleDTO,
-        authContext.registeredUser!.id
-      );
-
-      try { await getCacheStore().del(authUserCacheKey(request.params.userId)); } catch { /* best-effort */ }
-
-      // Log d'audit
-      await userAuditService.logUpdateRole(
-        authContext.registeredUser!.id,
-        request.params.userId,
-        oldRole,
-        validatedData.role,
-        validatedData.reason,
-        request.ip,
-        request.headers['user-agent']
-      );
-
-      // Sanitize la reponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: `User role updated to ${validatedData.role}` });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error updating user role');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to update user role' });
-    }
-  });
-
-  /**
-   * PATCH /admin/users/:userId/status - Activer/desactiver un utilisateur
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.patch<{
-    Params: { userId: string };
-    Body: UpdateStatusDTO;
-  }>('/admin/users/:userId/status', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les donnees
-      const validatedData = updateStatusSchema.parse(request.body);
-
-      // Recuperer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Verifier si l'admin peut modifier le statut
-      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        sendForbidden(reply, 'Insufficient permissions to modify user status', { message: 'Access denied' });
-        return;
-      }
-
-      const oldStatus = targetUser.isActive;
-
-      // Mettre a jour le statut
-      const updatedUser = await userManagementService.updateStatus(
-        request.params.userId,
-        validatedData as UpdateStatusDTO,
-        authContext.registeredUser!.id
-      );
-
-      try { await getCacheStore().del(authUserCacheKey(request.params.userId)); } catch { /* best-effort */ }
-
-      // Log d'audit
-      await userAuditService.logUpdateStatus(
-        authContext.registeredUser!.id,
-        request.params.userId,
-        oldStatus,
-        validatedData.isActive,
-        validatedData.reason,
-        request.ip,
-        request.headers['user-agent']
-      );
-
-      // Sanitize la reponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: validatedData.isActive ? 'User activated' : 'User deactivated' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error updating user status');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to update user status' });
-    }
-  });
-
-  /**
    * POST /admin/users/:userId/reset-password - Reinitialiser le mot de passe
    * (BIGBOSS & ADMIN uniquement)
    */
@@ -495,7 +282,11 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     Params: { userId: string };
     Body: ResetPasswordDTO;
   }>('/admin/users/:userId/reset-password', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
+    // `requireHierarchy` sur TOUTE écriture visant un compte, sans exception à
+    // énumérer (#4154) : c'est l'absence d'exception qui ferme la classe. Le
+    // handler pose en plus `canResetPasswords` — la permission du GESTE, que
+    // la hiérarchie ne dit pas.
+    preHandler: [fastify.authenticate, requirePermission('canResetPasswords'), requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
@@ -512,7 +303,24 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
-      // Verifier les permissions
+      // Deux questions distinctes, et elles ont chacune leur permission (#4144).
+      //
+      // `canResetPasswords` — « ce ROLE a-t-il le droit de reinitialiser un mot
+      // de passe ? » — etait DECLAREE dans `AdminPermissions` et consultee par
+      // AUCUN site du depot (grep : sept occurrences, toutes dans la matrice
+      // elle-meme). La route gardait sur `canUpdateUsers`, qui vaut la meme
+      // chose pour BIGBOSS et ADMIN aujourd'hui : le defaut n'etait donc pas
+      // exploitable, c'etait un piege arme. Le jour ou un role recoit
+      // `canUpdateUsers` sans `canResetPasswords` — ce que la matrice permet
+      // d'exprimer, sinon elle n'aurait pas deux champs — il aurait pu
+      // reinitialiser des mots de passe. Une permission declaree que rien ne
+      // lit n'est pas une protection.
+      if (!permissionsService.hasPermission(adminRole, 'canResetPasswords')) {
+        sendForbidden(reply, 'Insufficient permissions to reset password', { message: 'Access denied' });
+        return;
+      }
+
+      // `canModifyUser` — « ce role a-t-il le RANG pour agir sur CETTE cible ? »
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
         sendForbidden(reply, 'Insufficient permissions to reset password', { message: 'Access denied' });
         return;
@@ -552,7 +360,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.delete<{
     Params: { userId: string };
   }>('/admin/users/:userId', {
-    preHandler: [fastify.authenticate, requireUserDeleteAccess]
+    preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
@@ -595,397 +403,6 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   });
 
   /**
-   * POST /admin/users/:userId/unlock - Déverrouiller un compte utilisateur
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-  }>('/admin/users/:userId/unlock', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Déverrouiller le compte
-      const updatedUser = await userManagementService.unlockAccount(
-        request.params.userId,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.UNLOCK_ACCOUNT,
-        entityId: request.params.userId,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      sendSuccess(reply, { message: 'Account unlocked successfully' });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error unlocking account');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to unlock account' });
-    }
-  });
-
-  /**
-   * POST /admin/users/:userId/enable-2fa - Activer 2FA pour un utilisateur
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-  }>('/admin/users/:userId/enable-2fa', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Note: L'activation réelle du 2FA nécessiterait la génération d'un secret TOTP
-      // Pour l'instant, on se contente de définir la date
-      const updatedUser = await userManagementService.enable2FA(
-        request.params.userId,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.ENABLE_2FA,
-        entityId: request.params.userId,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      sendSuccess(reply, { message: '2FA enabled successfully' });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error enabling 2FA');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to enable 2FA' });
-    }
-  });
-
-  /**
-   * POST /admin/users/:userId/disable-2fa - Désactiver 2FA pour un utilisateur
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-  }>('/admin/users/:userId/disable-2fa', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Désactiver 2FA
-      const updatedUser = await userManagementService.disable2FA(
-        request.params.userId,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.DISABLE_2FA,
-        entityId: request.params.userId,
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      sendSuccess(reply, { message: '2FA disabled successfully' });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error disabling 2FA');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to disable 2FA' });
-    }
-  });
-
-  /**
-   * POST /admin/users/:userId/verify-email - Vérifier ou dévérifier l'email
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-    Body: { verified: boolean; reason?: string };
-  }>('/admin/users/:userId/verify-email', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les données
-      const validatedData = verifyEmailSchema.parse(request.body);
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Vérifier les permissions
-      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
-        return;
-      }
-
-      // Mettre à jour la vérification email
-      const updatedUser = await userManagementService.verifyEmail(
-        request.params.userId,
-        validatedData.verified,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.VERIFY_EMAIL,
-        entityId: request.params.userId,
-        metadata: { verified: validatedData.verified, reason: validatedData.reason },
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      // Sanitize la réponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Email verified' : 'Email unverified' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error verifying email');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to verify email' });
-    }
-  });
-
-  /**
-   * POST /admin/users/:userId/verify-phone - Vérifier ou dévérifier le téléphone
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-    Body: { verified: boolean; reason?: string };
-  }>('/admin/users/:userId/verify-phone', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les données
-      const validatedData = verifyPhoneSchema.parse(request.body);
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Vérifier les permissions
-      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
-        return;
-      }
-
-      // Mettre à jour la vérification téléphone
-      const updatedUser = await userManagementService.verifyPhone(
-        request.params.userId,
-        validatedData.verified,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.VERIFY_PHONE,
-        entityId: request.params.userId,
-        metadata: { verified: validatedData.verified, reason: validatedData.reason },
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      // Sanitize la réponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Phone verified' : 'Phone unverified' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error verifying phone');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to verify phone' });
-    }
-  });
-
-  /**
-   * POST /admin/users/:userId/voice-consent - Gérer les consentements voice/GDPR
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-    Body: { consentType: 'voiceProfile' | 'voiceData' | 'dataProcessing' | 'voiceCloning'; enabled: boolean; reason?: string };
-  }>('/admin/users/:userId/voice-consent', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les données
-      const validatedData = toggleVoiceConsentSchema.parse(request.body);
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Vérifier les permissions
-      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
-        return;
-      }
-
-      // Mettre à jour le consentement
-      const updatedUser = await userManagementService.toggleVoiceConsent(
-        request.params.userId,
-        validatedData.consentType,
-        validatedData.enabled,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.UPDATE_PROFILE,
-        entityId: request.params.userId,
-        metadata: {
-          consentType: validatedData.consentType,
-          enabled: validatedData.enabled,
-          reason: validatedData.reason
-        },
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      // Sanitize la réponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: `${validatedData.consentType} ${validatedData.enabled ? 'enabled' : 'disabled'}` });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error updating voice consent');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to update voice consent' });
-    }
-  });
-
-  /**
-   * POST /admin/users/:userId/verify-age - Vérifier ou dévérifier l'âge
-   * (BIGBOSS & ADMIN uniquement)
-   */
-  fastify.post<{
-    Params: { userId: string };
-    Body: { verified: boolean; reason?: string };
-  }>('/admin/users/:userId/verify-age', {
-    preHandler: [fastify.authenticate, requireUserModifyAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const adminRole = authContext.registeredUser!.role as UserRoleEnum;
-
-      // Valider les données
-      const validatedData = verifyAgeSchema.parse(request.body);
-
-      // Récupérer l'utilisateur cible
-      const targetUser = await userManagementService.getUserById(request.params.userId);
-
-      if (!targetUser) {
-        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
-        return;
-      }
-
-      // Vérifier les permissions
-      if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
-        return;
-      }
-
-      // Mettre à jour la vérification d'âge
-      const updatedUser = await userManagementService.verifyAge(
-        request.params.userId,
-        validatedData.verified,
-        authContext.registeredUser.id
-      );
-
-      // Log d'audit
-      await userAuditService.createAuditLog({
-        userId: request.params.userId,
-        adminId: authContext.registeredUser.id,
-        action: UserAuditAction.UPDATE_PROFILE,
-        entityId: request.params.userId,
-        metadata: { ageVerified: validatedData.verified, reason: validatedData.reason },
-        ipAddress: request.ip,
-        userAgent: request.headers['user-agent']
-      });
-
-      // Sanitize la réponse
-      const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
-
-      sendSuccess(reply, sanitizedUser, { message: validatedData.verified ? 'Age verified' : 'Age unverified' });
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        sendBadRequest(reply, 'Invalid input data');
-        return;
-      }
-
-      fastify.log.error({ err: error }, 'Error verifying age');
-      sendInternalError(reply, 'Internal server error', { message: 'Failed to verify age' });
-    }
-  });
-
-  /**
    * GET /admin/users/:userId/activity - Detailed links, affiliates, contacts for a user
    */
   fastify.get<{
@@ -1001,7 +418,14 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            linkId: true,
+            // #4157 c.3 — `linkId` EST le secret qui permet de REJOINDRE la
+            // conversation. Le même lot l'a retiré de `GET /admin/share-links`
+            // et lui a dédié un geste souverain tracé (`POST …/reveal`) ; il
+            // continuait de sortir ICI, dans un autre fichier, à des rôles pour
+            // qui `canViewSensitiveData` est `false`. Une protection posée sur
+            // une porte et pas sur sa voisine ne protège rien : `id` suffit à
+            // désigner le lien, et le geste dédié reste la seule façon de le
+            // révéler.
             identifier: true,
             name: true,
             description: true,
@@ -1024,7 +448,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            token: true,
+            // #4157 c.3 — jeton d'accès retiré, même raison que `linkId`
+            // ci-dessus : `shortUrl` suffit à désigner le lien pour une revue.
             name: true,
             campaign: true,
             source: true,
@@ -1046,7 +471,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
           where: { createdBy: userId },
           select: {
             id: true,
-            token: true,
+            // #4157 c.3 — jeton d'affiliation retiré, même raison.
             name: true,
             maxUses: true,
             currentUses: true,
@@ -1237,7 +662,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         id: true, originalName: true, mimeType: true, fileUrl: true, thumbnailUrl: true,
         fileSize: true, width: true, height: true, duration: true, createdAt: true
       } as const;
-
+      // #4157 c.4 / #4333 — la protection d'un média se lit aux DEUX niveaux
+      // qui la déclarent : le MESSAGE et la PIÈCE JOINTE elle-même (voir
+      // `media-protection.ts` pour la raison — une seule des deux lectures ne
+      // suffit pas). `PostMedia` n'a AUCUNE de ces colonnes (vérifié au
+      // schéma) : un post n'est pas éphémère, seul le versant
+      // `messageAttachment` les demande.
       const [postMedia, attachments, postCount, attCount] = await Promise.all([
         fastify.prisma.postMedia.findMany({
           where: postWhere,
@@ -1247,7 +677,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         }),
         fastify.prisma.messageAttachment.findMany({
           where: attWhere,
-          select: { ...mediaSelect, messageId: true },
+          select: {
+            ...mediaSelect,
+            messageId: true,
+            ...attachmentProtectionSelect,
+            message: { select: messageProtectionSelect }
+          },
           orderBy: { createdAt: 'desc' },
           take: window
         }),
@@ -1255,20 +690,36 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.messageAttachment.count({ where: attWhere })
       ]);
 
-      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => ({
-        id: m.id,
-        originalName: m.originalName,
-        mimeType: m.mimeType,
-        fileUrl: m.fileUrl,
-        thumbnailUrl: m.thumbnailUrl,
-        fileSize: m.fileSize,
-        width: m.width,
-        height: m.height,
-        duration: m.duration,
-        createdAt: m.createdAt as string | Date,
-        source,
-        contextId
-      });
+      /**
+       * Un média protégé reste LISTÉ — un administrateur doit pouvoir constater
+       * qu'il existe, sa taille, sa date, le message qui le porte — mais son
+       * CONTENU ne voyage pas : `fileUrl` et `thumbnailUrl` tombent à `null` et
+       * `isProtected` dit pourquoi la ligne est amputée, plutôt que de laisser
+       * croire à un média sans fichier. Masquer la ligne entière priverait la
+       * modération d'un fait qu'elle a le droit de connaître ; servir l'URL la
+       * ferait sortir du produit par une porte que le reste du produit ferme.
+       */
+      const toMedia = (m: Record<string, unknown>, source: 'post' | 'message', contextId: unknown) => {
+        const protege = source === 'message' && mediaAttachmentIsProtected(
+          m as Parameters<typeof mediaAttachmentIsProtected>[0],
+          m.message as MessageProtectionContext | null | undefined
+        );
+        return {
+          id: m.id,
+          originalName: m.originalName,
+          mimeType: m.mimeType,
+          fileUrl: protege ? null : m.fileUrl,
+          thumbnailUrl: protege ? null : m.thumbnailUrl,
+          fileSize: m.fileSize,
+          width: m.width,
+          height: m.height,
+          duration: m.duration,
+          createdAt: m.createdAt as string | Date,
+          source,
+          contextId,
+          isProtected: protege
+        };
+      };
 
       const merged = [
         ...postMedia.map((m) => toMedia(m as Record<string, unknown>, 'post', (m as Record<string, unknown>).postId)),
@@ -1298,7 +749,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     Params: { userId: string };
     Querystring: { offset?: string; limit?: string; status?: string };
   }>('/admin/users/:userId/reports', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
+    // #4157 — DEUX seuils gouvernaient la même table : `GET /admin/reports`
+    // exige `canModerateContent` (MODERATOR, ADMIN, BIGBOSS) quand celle-ci se
+    // contentait de `canViewUsers`, qui admet AUDIT en plus. Deux seuils sur
+    // une même donnée, c'est le plus bas qui décide — et le filtre par
+    // `reporterId` ne change pas la nature de ce qui est lu.
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canModerateContent')]
   }, async (request, reply) => {
     try {
       const { userId } = request.params;
@@ -1371,9 +827,27 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
 
       const emptyPage = () => sendPaginatedSuccess(reply, [], { total: 0, offset: offsetNum, limit: limitNum, hasMore: false });
 
+      // BORNÉ (#4165), et c'est un compromis À DOCUMENTER, pas un simple
+      // `take` ajouté : `Report.reportedEntityId` est POLYMORPHE (message,
+      // user, conversation, community, post, story — `schema.prisma`, aucune
+      // relation Prisma déclarée), donc aucune requête ne peut pousser
+      // "expéditeur du message = userId" DANS `report.findMany` lui-même. Il
+      // faut D'ABORD énumérer les messages de l'utilisateur pour construire le
+      // filtre `reportedEntityId IN […]` — c'est cette énumération qui était
+      // SANS `take` : sur un compte très actif (des dizaines de milliers de
+      // messages), CHAQUE page de signalements repayait la totalité de son
+      // historique. Ordonnées par récence, les deux requêtes plafonnent large
+      // (bien au-delà d'un usage normal) : au-delà, ce sont les conversations/
+      // messages les plus ANCIENS qui sortent du périmètre — les plus probables
+      // d'être déjà résolus, les moins probables d'être encore sous
+      // modération active. Une borne exacte demanderait une relation dédiée
+      // sur `Report` (hors territoire de ce lot, `schema.prisma` étant un
+      // fichier-carrefour).
       const participants = await fastify.prisma.participant.findMany({
         where: { userId, type: 'user' },
-        select: { id: true }
+        select: { id: true },
+        orderBy: { joinedAt: 'desc' },
+        take: REPORTED_MESSAGES_PARTICIPANT_SCAN_CAP
       });
       const participantIds = participants.map((p) => p.id);
       if (participantIds.length === 0) return emptyPage();
@@ -1381,7 +855,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Message ids authored by the user (bounded by the user's own messages).
       const userMessages = await fastify.prisma.message.findMany({
         where: { senderId: { in: participantIds } },
-        select: { id: true }
+        select: { id: true },
+        orderBy: { createdAt: 'desc' },
+        take: REPORTED_MESSAGES_MESSAGE_SCAN_CAP
       });
       const messageIds = userMessages.map((m) => m.id);
       if (messageIds.length === 0) return emptyPage();
@@ -1410,10 +886,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       ]);
 
       const reportedMessageIds = [...new Set(reports.map((r) => r.reportedEntityId))];
+      // Déjà borné IMPLICITEMENT : `reportedMessageIds` dérive de `reports`,
+      // la page ≤ `limitNum` posée ci-dessus par `report.findMany`. `take`
+      // explicite quand même (#4165) — la borne ne doit pas dépendre d'un
+      // raisonnement à distance sur la taille d'un tableau amont.
       const messages = reportedMessageIds.length > 0
         ? await fastify.prisma.message.findMany({
             where: { id: { in: reportedMessageIds } },
-            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true }
+            select: { id: true, content: true, conversationId: true, messageType: true, createdAt: true, deletedAt: true },
+            take: reportedMessageIds.length
           })
         : [];
       const messageMap = new Map(messages.map((m) => [m.id, m]));
@@ -1501,80 +982,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
     }
   });
 
-  /**
-   * GET /admin/conversations/:conversationId/messages - Paginated messages of a
-   * conversation, newest first (for the messages modal in the admin user fiche).
-   * Deleted messages are included (moderation view) and flagged via deletedAt.
-   * Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { conversationId: string };
-    Querystring: { offset?: string; limit?: string };
-  }>('/admin/conversations/:conversationId/messages', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const { conversationId } = request.params;
-      const { offset = '0', limit } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
-
-      const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { id: true }
-      });
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation non trouvée');
-      }
-
-      const where = { conversationId };
-      const [messages, total] = await Promise.all([
-        fastify.prisma.message.findMany({
-          where,
-          select: {
-            id: true,
-            content: true,
-            originalLanguage: true,
-            messageType: true,
-            messageSource: true,
-            isEdited: true,
-            editedAt: true,
-            deletedAt: true,
-            replyToId: true,
-            createdAt: true,
-            sender: {
-              select: {
-                id: true,
-                userId: true,
-                type: true,
-                displayName: true,
-                avatar: true,
-                nickname: true,
-                user: { select: { id: true, username: true, displayName: true, avatar: true } }
-              }
-            },
-            _count: { select: { attachments: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.message.count({ where })
-      ]);
-
-      const data = messages.map(({ _count, ...rest }) => ({
-        ...rest,
-        attachmentCount: _count?.attachments ?? 0
-      }));
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + messages.length < total
-      });
-    } catch (error) {
-      fastify.log.error({ err: error }, 'Error fetching conversation messages');
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation messages' });
-    }
-  });
+  // GET /admin/conversations/:conversationId/messages — régime SOUVERAIN
+  // (#4333 c.3, troisième frère de PUT /admin/agent/llm et DELETE
+  // /admin/agent/reset) : servait auparavant le contenu intégral de
+  // n'importe quelle conversation privée sous la seule garde `canViewUsers`
+  // — `requireSovereign()`, motif écrit et audit vivent désormais dans
+  // `conversation-messages-sovereign.ts`, une unité nommable à part entière
+  // plutôt qu'une tranche de plus dans ce fichier déjà au plafond de taille.
+  registerConversationMessagesSovereignRoute(fastify);
 }

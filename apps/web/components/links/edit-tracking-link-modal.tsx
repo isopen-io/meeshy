@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import type { TrackingLink } from '@meeshy/shared/types/tracking-link';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 import { authManager } from '@/services/auth-manager.service';
@@ -66,7 +67,7 @@ export function EditTrackingLinkModal({
 
       try {
         const token = authManager.getAuthToken();
-        const response = await fetch(buildApiUrl(`/tracking-links/check-token/${newToken}`), {
+        const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.checkTokenByToken(newToken)), {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -138,7 +139,7 @@ export function EditTrackingLinkModal({
         updateData.expiresAt = null;
       }
 
-      const response = await fetch(buildApiUrl(`/tracking-links/${link.token}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.byToken(link.token)), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

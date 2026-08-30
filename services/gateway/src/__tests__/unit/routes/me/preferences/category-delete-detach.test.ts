@@ -26,10 +26,6 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
-jest.mock('../../../../../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: jest.fn(),
-}));
-
 jest.mock('../../../../../utils/logger', () => ({
   logError: jest.fn(),
 }));
@@ -38,12 +34,10 @@ jest.mock('../../../../../utils/socket-broadcast', () => ({
   broadcastToUser: jest.fn(),
 }));
 
-import { createUnifiedAuthMiddleware } from '../../../../../middleware/auth';
 import { broadcastToUser } from '../../../../../utils/socket-broadcast';
 import { categoriesRoutes } from '../../../../../routes/me/preferences/categories';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
-const mockCreateAuth = createUnifiedAuthMiddleware as jest.MockedFunction<any>;
 const mockBroadcast = broadcastToUser as jest.MockedFunction<any>;
 
 const USER_ID = '68a000000000000000000001';
@@ -121,12 +115,16 @@ function makePrisma(attached: string[]) {
 }
 
 async function buildApp(prisma: any): Promise<FastifyInstance> {
-  mockCreateAuth.mockImplementation(() => async (req: FastifyRequest) => {
+  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+  app.decorate('prisma', prisma);
+
+  // Le hook d'auth vit chez le PARENT en production
+  // (routes/me/preferences/index.ts) — categoriesRoutes n'en pose plus le
+  // sien depuis #4182 critère 4. On le reproduit ici, avant le plugin.
+  app.addHook('preHandler', async (req: FastifyRequest) => {
     (req as any).auth = { userId: USER_ID, isAuthenticated: true };
   });
 
-  const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', prisma);
   await app.register(categoriesRoutes);
   await app.ready();
   return app;

@@ -97,7 +97,22 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     // read floor (cursor.lastReadAt ?? participant.joinedAt) — no longer a
     // cached cursor.unreadCount field.
     mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
-    mockPrisma.message.findMany.mockResolvedValue([]);
+    // #4349 — la garde d'appartenance de la COLLECTION lit les messages
+    // RAPPORTÉS (`findMany` sur `id.in`, SANS `senderId`) avant tout marquage :
+    // un id inconnu de la conversation est refusé au lieu d'être silencieusement
+    // écarté. Le GEL interroge le même modèle avec `senderId: { not: … }` — c'est
+    // ce qui distingue les deux appels ici. Sans ce double, un lot d'ids
+    // parfaitement légitime rendrait 404 et le témoin mesurerait la garde au lieu
+    // de la porte.
+    mockPrisma.message.findMany.mockImplementation(async (args: any) => {
+      const ids: string[] = args?.where?.id?.in ?? [];
+      if (args?.where?.senderId) return ids.map((id) => ({ id }));
+      return ids.map((id) => ({
+        id,
+        senderId: 'someone-else-participant',
+        createdAt: new Date('2024-01-01T00:00:00Z')
+      }));
+    });
     mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
     mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 0 });
     mockPrisma.messageStatusEntry.updateMany.mockResolvedValue({ count: 0 });
@@ -121,10 +136,40 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     const body = response.json();
     expect(body.success).toBe(true);
     expect(typeof body.data.markedCount).toBe('number');
-    expect(body.data.markedCount).toBe(UNREAD_COUNT);
     expect(body.data.message).toBeUndefined();
   });
 
+  // #4179 — `markedCount` a une SEULE définition : le nombre d'entrées
+  // RÉELLEMENT figées par ce marquage, jamais le compte de non-lus D'AVANT.
+  // Les deux ensembles diffèrent (un message peut être livré depuis
+  // longtemps et rester non lu) : ce témoin les met délibérément en désaccord
+  // (`UNREAD_COUNT` = 5, deux entrées nouvellement livrées) pour prouver la
+  // SOURCE — un mock `message.count` inchangé n'aurait pas fait tomber la
+  // porte d'avant #4179, qui servait `UNREAD_COUNT` sans jamais regarder ce
+  // qui a été figé.
+  it('mark-as-received: markedCount is the frozen delivery count, decoupled from the pre-mark unread count', async () => {
+    mockPrisma.message.findMany.mockResolvedValue([
+      { id: 'msg-newly-delivered-1' },
+      { id: 'msg-newly-delivered-2' }
+    ]);
+    mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 2 });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-received`
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.markedCount).toBe(2);
+    expect(body.data.markedCount).not.toBe(UNREAD_COUNT);
+  });
+
+  // #4349 critère 4 — `markedCount` a UNE définition : le nombre RÉELLEMENT
+  // FIGÉ. Cette porte servait, en mode FENÊTRE, le compte de NON-LUS d'AVANT
+  // marquage (`UNREAD_COUNT`) sous ce même nom — deux grandeurs derrière un mot.
+  // Le mode fenêtre ne fige rien ici (`createMany` rend `{count: 0}`), donc le
+  // témoin oppose délibérément les deux nombres.
   it('mark-as-read returns a numeric data.markedCount, never a message string', async () => {
     const response = await app.inject({
       method: 'POST',
@@ -135,8 +180,28 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     const body = response.json();
     expect(body.success).toBe(true);
     expect(typeof body.data.markedCount).toBe('number');
-    expect(body.data.markedCount).toBe(UNREAD_COUNT);
+    expect(body.data.markedCount).toBe(0);
+    expect(body.data.markedCount).not.toBe(UNREAD_COUNT);
     expect(body.data.message).toBeUndefined();
+  });
+
+  it('mark-as-read: markedCount suit ce que le gel a écrit, pas le compte de non-lus', async () => {
+    // Deux entrées nouvellement figées, cinq non-lus : deux nombres qui ne
+    // peuvent plus être confondus.
+    mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 2 });
+    mockPrisma.message.findMany.mockImplementation(async (args: any) => {
+      if (args?.where?.senderId) return [{ id: 'a' }, { id: 'b' }];
+      return [];
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONVERSATION_ID}/mark-as-read`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.markedCount).toBe(2);
+    expect(response.json().data.markedCount).not.toBe(UNREAD_COUNT);
   });
 
   // Suivi de lecture exact — la webapp appelle CE point d'entrée, pas
@@ -152,9 +217,14 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     });
 
     expect(response.statusCode).toBe(200);
+    // L'appel du GEL, reconnaissable à son exclusion de l'expéditeur — la garde
+    // d'appartenance de la collection interroge le même modèle sans elle.
     expect(mockPrisma.message.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: { in: [LATEST_MESSAGE_ID] } })
+        where: expect.objectContaining({
+          id: { in: [LATEST_MESSAGE_ID] },
+          senderId: { not: PARTICIPANT_ID }
+        })
       })
     );
   });
@@ -247,6 +317,22 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
     mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+    // #4349 — la garde d'appartenance de la COLLECTION lit les messages
+    // RAPPORTÉS (`findMany` sur `id.in`, SANS `senderId`) avant tout marquage :
+    // un id inconnu de la conversation est refusé au lieu d'être silencieusement
+    // écarté. Le GEL interroge le même modèle avec `senderId: { not: … }` — c'est
+    // ce qui distingue les deux appels ici. Sans ce double, un lot d'ids
+    // parfaitement légitime rendrait 404 et le témoin mesurerait la garde au lieu
+    // de la porte.
+    mockPrisma.message.findMany.mockImplementation(async (args: any) => {
+      const ids: string[] = args?.where?.id?.in ?? [];
+      if (args?.where?.senderId) return ids.map((id) => ({ id }));
+      return ids.map((id) => ({
+        id,
+        senderId: 'someone-else-participant',
+        createdAt: new Date('2024-01-01T00:00:00Z')
+      }));
+    });
   });
 
   it('mark-as-read emits CONVERSATION_UNREAD_UPDATED to reading user room for badge reset', async () => {
@@ -293,7 +379,6 @@ describe('broadcastReadStatus — CONVERSATION_UNREAD_UPDATED badge reset', () =
   // their devices. It must emit the REAL remaining unread, like the opted-in path does.
   it('mark-as-read badge reset reflects the real remaining unread on a partial read, not 0 (showReadReceipts=false)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(false);
-    mockPrisma.message.findMany.mockResolvedValue([]);
     // Post-mark getUnreadCount resolves a nonzero remainder (partial read left messages unread).
     mockPrisma.message.count.mockResolvedValue(3);
 

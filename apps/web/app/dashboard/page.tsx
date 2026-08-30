@@ -94,20 +94,25 @@ function DashboardPageContent() {
     refetch();
   }, [t, refetch]);
 
+  // Ce que la modale crée est une COMMUNAUTÉ (#4222), et `/groups/[identifier]`
+  // EST sa page. Le hook rend donc un IDENTIFIER, l'id ne servant que de repli :
+  // ne pas renommer ce `communityRef` en `groupId` « pour faire propre », le
+  // segment de route porte bien un identifiant. Les deux formes atterrissent
+  // néanmoins, `GET /communities/:id` cherchant par id PUIS par identifier.
   const handleGroupCreated = useCallback(
-    async (groupId: string) => {
+    async (communityRef: string) => {
       toast.success(t('success.groupCreated'));
       setIsCreateGroupModalOpen(false);
-      router.push(`/groups/${groupId}`);
+      router.push(`/groups/${communityRef}`);
       refetch();
     },
     [t, router, refetch]
   );
 
   const handleCreateGroup = useCallback(async () => {
-    const groupId = await groupModal.createGroup();
-    if (groupId) {
-      await handleGroupCreated(groupId);
+    const communityRef = await groupModal.createGroup();
+    if (communityRef) {
+      await handleGroupCreated(communityRef);
     }
   }, [groupModal, handleGroupCreated]);
 

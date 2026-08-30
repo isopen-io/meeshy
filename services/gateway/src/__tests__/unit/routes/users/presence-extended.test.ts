@@ -26,21 +26,44 @@ import { getUsersPresence } from '../../../../routes/users/presence';
 
 const CURRENT_USER_ID = '507f1f77bcf86cd799439099';
 
-function makePrisma() {
+function makePrisma(opts: { users?: Array<{ id: string; lastActiveAt: Date | null }> } = {}) {
   return {
-    user: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    user: {
+      // Le double DISCRIMINE sur le `where` — il ne peut pas rendre la même
+      // chose à toutes les questions. `resolveForTargets` interroge deux fois
+      // `user.findMany` : les lignes cibles, puis celles qui ont BLOQUÉ le
+      // lecteur (`blockedUserIds: { has: … }`). Un double aveugle rendait la
+      // même liste aux deux, donc « tout le monde a bloqué le lecteur », donc
+      // tout masqué — et le témoin mesurait alors un blocage imaginaire au
+      // lieu de la propriété qu'il nomme.
+      findMany: jest.fn<any>(async (args: any) =>
+        args?.where?.blockedUserIds ? [] : (opts.users ?? [])
+      ),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+    },
     participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
+    friendRequest: { findMany: jest.fn<any>().mockResolvedValue([]) },
   } as any;
 }
 
 async function buildApp(opts: {
   presenceChecker?: any;
+  users?: Array<{ id: string; lastActiveAt: Date | null }>;
 } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', makePrisma());
+  app.decorate('prisma', makePrisma({ users: opts.users }));
   app.decorate('presenceChecker', opts.presenceChecker ?? null);
   app.decorate('authenticate', async (req: FastifyRequest) => {
-    (req as any).authContext = { isAuthenticated: true, userId: CURRENT_USER_ID };
+    // La forme RÉELLE d'un contexte authentifié : `type` et `registeredUser`
+    // COMPRIS. `viewerFromAuthContext` exige les trois — sans eux le viewer
+    // est `null`, donc TOUT est masqué, et ce double rendait donc les témoins
+    // aveugles à la loi de présence qu'ils traversent.
+    (req as any).authContext = {
+      isAuthenticated: true,
+      type: 'user',
+      userId: CURRENT_USER_ID,
+      registeredUser: { id: CURRENT_USER_ID, role: 'USER' },
+    };
   });
 
   await getUsersPresence(app);
@@ -76,7 +99,16 @@ describe('GET /users/presence — ids is comma-only (empty after dedup)', () => 
 
 describe('GET /users/presence — sparse presenceMap (line 104 ?? false)', () => {
   it('returns isOnline:false for ids absent from the presenceChecker Map', async () => {
-    const USER_A = '507f1f77bcf86cd799439011';
+    // Le lecteur regarde SA PROPRE présence, et celle d'un id qu'il n'a pas le
+    // droit de voir. Ce témoin porte sur le repli `?? false` du checker, pas
+    // sur la visibilité : il visait auparavant deux inconnus, et ne passait au
+    // vert que par la branche FAIL-OPEN que #4164 vient de fermer — un id
+    // absent de la carte y retombait sur la présence runtime BRUTE.
+    //
+    // Soi est le seul cas où la loi du 2026-08-25 sert la présence sans
+    // dépendre d'une amitié. La propriété mesurée est donc intacte, et le
+    // témoin ne s'appuie plus sur un défaut pour l'atteindre.
+    const USER_A = CURRENT_USER_ID;
     const USER_B = '507f1f77bcf86cd799439022';
 
     // presenceChecker.bulk returns a Map that only includes USER_A (USER_B absent)
@@ -84,7 +116,10 @@ describe('GET /users/presence — sparse presenceMap (line 104 ?? false)', () =>
       bulk: jest.fn<any>().mockReturnValue(new Map([[USER_A, true]])),
     };
 
-    const app = await buildApp({ presenceChecker: sparsePresenceChecker });
+    const app = await buildApp({
+      presenceChecker: sparsePresenceChecker,
+      users: [{ id: USER_A, lastActiveAt: null }],
+    });
     const res = await app.inject({
       method: 'GET',
       url: `/users/presence?ids=${USER_A},${USER_B}`,

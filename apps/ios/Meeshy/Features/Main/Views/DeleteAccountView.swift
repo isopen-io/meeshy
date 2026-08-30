@@ -11,6 +11,9 @@ struct DeleteAccountView: View {
     @ObservedObject private var authManager = AuthManager.shared
 
     @State private var confirmationText = ""
+    /// Le mot de passe COURANT. Sans lui, un jeton volé ouvrait la suppression
+    /// du compte : la route l'exige désormais (#4183).
+    @State private var currentPassword = ""
     @State private var showFinalAlert = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
@@ -201,6 +204,31 @@ struct DeleteAccountView: View {
                     }
                 )
                 .animation(.spring(response: 0.3, dampingFraction: 0.8), value: confirmationText == requiredPhrase)
+
+                // La preuve de PRÉSENCE, distincte de la phrase de confirmation :
+                // celle-ci prouve qu'on a compris, celui-là qu'on est bien là.
+                Text(String(localized: "account.delete.password.prompt", defaultValue: "Saisissez votre mot de passe pour confirmer votre identité", bundle: .main))
+                    .font(MeeshyFont.relative(13))
+                    .foregroundColor(theme.textSecondary)
+                    .padding(.top, 6)
+
+                SecureField(
+                    String(localized: "account.delete.password.placeholder", defaultValue: "Mot de passe actuel", bundle: .main),
+                    text: $currentPassword
+                )
+                .font(MeeshyFont.relative(14))
+                .foregroundColor(theme.textPrimary)
+                .textContentType(.password)
+                .accessibilityLabel(String(localized: "account.delete.password.label", defaultValue: "Mot de passe actuel", bundle: .main))
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(theme.surfaceGradient(tint: "F59E0B"))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(theme.border(tint: "F59E0B"), lineWidth: 1)
+                )
             }
             .padding(14)
             .background(sectionBackground(tint: "F59E0B"))
@@ -231,13 +259,13 @@ struct DeleteAccountView: View {
             .background(
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
-                        confirmationText == requiredPhrase && !isDeleting
+                        confirmationText == requiredPhrase && !currentPassword.isEmpty && !isDeleting
                             ? MeeshyColors.error
                             : MeeshyColors.error.opacity(0.3)
                     )
             )
         }
-        .disabled(confirmationText != requiredPhrase || isDeleting)
+        .disabled(confirmationText != requiredPhrase || currentPassword.isEmpty || isDeleting)
         .accessibilityLabel(String(localized: "account.delete.button", defaultValue: "Supprimer définitivement mon compte", bundle: .main))
         .accessibilityHint(confirmationText == requiredPhrase
             ? String(localized: "account.delete.button.hint.ready", defaultValue: "Appuyez pour confirmer la suppression", bundle: .main)
@@ -251,7 +279,7 @@ struct DeleteAccountView: View {
         errorMessage = nil
         Task {
             do {
-                try await AccountService.shared.deleteAccount(confirmationPhrase: requiredPhrase)
+                _ = try await AccountService.shared.openDeletionRequest(confirmationPhrase: requiredPhrase, currentPassword: currentPassword)
                 HapticFeedback.success()
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                     showEmailConfirmation = true

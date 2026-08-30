@@ -64,7 +64,7 @@ final class ComposerSocleDensityTests: XCTestCase {
     /// explicitement.
     func test_laFlecheDePublication_gardeSonNomAccessible_memeReduite() throws {
         let code = try hostSource()
-        guard let bloc = corps(de: "private var publishButton: some View {", dans: code) else {
+        guard let bloc = corps(de: "var publishButton: some View {", dans: code) else {
             return XCTFail("`publishButton` introuvable — la garde ne mesurerait rien.")
         }
         XCTAssertTrue(
@@ -86,9 +86,9 @@ final class ComposerSocleDensityTests: XCTestCase {
     /// mood a quitté le socle pour l'en-tête de sa propre surface.
     func test_lesDeuxZones_gardentUneCibleDeQuaranteQuatrePoints() throws {
         let code = try hostSource()
-        for ancre in ["private var publishButton: some View {",
-                      "private var moodHeaderPublishButton: some View {",
-                      "private var audienceChip: some View {"] {
+        for ancre in ["var publishButton: some View {",
+                      "var moodHeaderPublishButton: some View {",
+                      "var audienceChip: some View {"] {
             guard let bloc = corps(de: ancre, dans: code) else {
                 return XCTFail("`\(ancre)` introuvable — la garde ne mesurerait rien.")
             }
@@ -121,11 +121,7 @@ final class ComposerSocleDensityTests: XCTestCase {
     // MARK: - Lecture de source
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        let brut = try String(contentsOf: url, encoding: .utf8)
+        let brut = try AppSourceGuard.composerHostSource()
         XCTAssertGreaterThan(brut.count, 1000, "Source vide — la garde serait verte par omission.")
         return AppSourceGuard.stripComments(brut)
     }

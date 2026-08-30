@@ -13,6 +13,7 @@ import {
   PhoneValidationResult
 } from '@/utils/phone-validation-robust';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 export type PhoneValidationStatus = 'idle' | 'checking' | 'valid' | 'invalid' | 'exists';
 
@@ -95,16 +96,20 @@ export function usePhoneValidation({
    */
   const checkServerAvailability = useCallback(async (formattedPhone: string) => {
     try {
+      const checkPhoneEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?phoneNumber=${encodeURIComponent(formattedPhone)}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?phoneNumber=${encodeURIComponent(formattedPhone)}`)
+        buildApiUrl(checkPhoneEndpoint)
       );
 
       if (response.ok) {
         const result = await response.json();
         if (result.success) {
-          if (result.data?.phoneNumberAvailable === false) {
-            setStatus('exists');
-            setErrorMessage('Ce numéro est déjà utilisé');
+          // Forme seulement (#4158) : le serveur ne dit plus si un numéro
+          // appartient à un compte. Le dire sans authentification était une
+          // dé-anonymisation de numéro de téléphone.
+          if (result.data?.phoneNumberValid === false) {
+            setStatus('invalid');
+            setErrorMessage('Ce numéro ne semble pas valide');
           } else {
             setStatus('valid');
             setErrorMessage('');

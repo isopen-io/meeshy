@@ -291,13 +291,18 @@ final class PhonebookViewModel: ObservableObject {
 // `nonisolated` : consommé depuis des contextes async hors acteur (isolation
 // MainActor par défaut du module) — un défaut d'argument isolé fait tomber SILGen.
 nonisolated enum DirectoryPaging {
-    static let pageSize = 200
-    /// Filet contre un serveur qui répondrait toujours `hasMore` : 250 pages de
-    /// 200 = 50 000 contacts. Le plafond précédent (25 pages = 5 000) datait de
-    /// l'ÉCRITURE tronquée à 2 000 fiches ; depuis que la synchronisation part
-    /// en lots sans plafond, un répertoire peut légitimement dépasser 5 000 et
-    /// ce filet le tronquait en LECTURE, en silence.
-    static let maxPages = 250
+    /// Le plafond de page est désormais celui de la ROUTE (#4163) : elle REFUSE
+    /// au-delà de 100, là où le service rabotait à 200 en silence. Demander
+    /// 200 rendrait un 400.
+    static let pageSize = 100
+    /// Filet contre un serveur qui répondrait toujours `hasMore` : 500 pages de
+    /// 100 = 50 000 contacts, la même borne qu'avant à taille de page moitié.
+    ///
+    /// Il ne sert plus au cas nominal : une revalidation passe par le DELTA
+    /// (`updatedSince`) et ne lit que ce qui a bougé. Ce filet ne couvre plus
+    /// que la PREMIÈRE lecture d'un carnet, et l'anomalie d'un serveur qui ne
+    /// clôt jamais sa pagination.
+    static let maxPages = 500
 
     static func hasMore(received: Int, pageSize: Int, serverHasMore: Bool?) -> Bool {
         guard received > 0 else { return false }
@@ -315,24 +320,38 @@ nonisolated enum DirectoryPaging {
 }
 
 extension ContactDirectoryServiceProviding {
-    /// Toutes les pages du répertoire, concaténées dans l'ordre du serveur.
+    /// Le répertoire, par CURSEUR — et par DELTA quand on sait depuis quand.
+    ///
+    /// La lecture paginait par DÉCALAGE, ce qui repayait un dénombrement
+    /// complet à chaque page, et n'avait ni delta ni ETag : chaque
+    /// revalidation retéléchargeait le carnet ENTIER (#4163).
+    ///
+    /// `updatedSince` change la NATURE de l'appel : sans lui c'est une première
+    /// lecture, avec lui c'est un rattrapage borné à ce qui a bougé. Le
+    /// filigrane vient de l'`appliedAt` que rend une synchronisation — ce que
+    /// le serveur vient d'écrire est exactement ce qu'il reste à relire.
     nonisolated func listAll(
         filter: DirectoryFilter,
         query: String?,
+        updatedSince: Date? = nil,
         pageSize: Int = DirectoryPaging.pageSize,
         maxPages: Int = DirectoryPaging.maxPages
     ) async throws -> [DirectoryContact] {
         var all: [DirectoryContact] = []
-        var offset = 0
+        var cursor: String?
         var reachedTheEnd = false
         for _ in 0..<maxPages {
-            let page = try await list(offset: offset, limit: pageSize, filter: filter, query: query)
+            let page = try await self.page(
+                cursor: cursor, limit: pageSize, filter: filter, query: query, updatedSince: updatedSince
+            )
             all += page.data
-            guard DirectoryPaging.hasMore(received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore) else {
+            guard DirectoryPaging.hasMore(
+                received: page.data.count, pageSize: pageSize, serverHasMore: page.pagination?.hasMore
+            ), let suivant = page.pagination?.nextCursor else {
                 reachedTheEnd = true
                 break
             }
-            offset += page.data.count
+            cursor = suivant
         }
         if !reachedTheEnd {
             DirectoryPaging.logCapReached(maxPages: maxPages, read: all.count)

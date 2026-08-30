@@ -41,7 +41,7 @@ describe('markAsRead', () => {
     await messagesService.markAsRead(CONVERSATION, [A, B]);
 
     expect(mockPost).toHaveBeenCalledWith(
-      `/conversations/${CONVERSATION}/mark-as-read`,
+      `/api/v1/conversations/${CONVERSATION}/mark-as-read`,
       { messageIds: [A, B] }
     );
   });
@@ -52,13 +52,13 @@ describe('markAsRead', () => {
     // repli historique, seul comportement sûr pour un appel non informé.
     await messagesService.markAsRead(CONVERSATION);
 
-    expect(mockPost).toHaveBeenCalledWith(`/conversations/${CONVERSATION}/mark-as-read`);
+    expect(mockPost).toHaveBeenCalledWith(`/api/v1/conversations/${CONVERSATION}/mark-as-read`);
   });
 
   it('omits the body on an empty id list rather than sending an empty batch', async () => {
     await messagesService.markAsRead(CONVERSATION, []);
 
-    expect(mockPost).toHaveBeenCalledWith(`/conversations/${CONVERSATION}/mark-as-read`);
+    expect(mockPost).toHaveBeenCalledWith(`/api/v1/conversations/${CONVERSATION}/mark-as-read`);
   });
 
   it('drops optimistic client ids, which the server would reject as malformed', async () => {
@@ -68,7 +68,7 @@ describe('markAsRead', () => {
     await messagesService.markAsRead(CONVERSATION, [A, 'cid_7f3a1b2c-0000-4000-8000-000000000000', B]);
 
     expect(mockPost).toHaveBeenCalledWith(
-      `/conversations/${CONVERSATION}/mark-as-read`,
+      `/api/v1/conversations/${CONVERSATION}/mark-as-read`,
       { messageIds: [A, B] }
     );
   });
@@ -76,7 +76,7 @@ describe('markAsRead', () => {
   it('omits the body when every reported id was optimistic', async () => {
     await messagesService.markAsRead(CONVERSATION, ['cid_7f3a1b2c-0000-4000-8000-000000000000']);
 
-    expect(mockPost).toHaveBeenCalledWith(`/conversations/${CONVERSATION}/mark-as-read`);
+    expect(mockPost).toHaveBeenCalledWith(`/api/v1/conversations/${CONVERSATION}/mark-as-read`);
   });
 
   it('caps the batch at the server limit of 200 ids', async () => {

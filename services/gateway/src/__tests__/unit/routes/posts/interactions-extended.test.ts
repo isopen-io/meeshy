@@ -79,7 +79,24 @@ jest.mock('../../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn().mockImplementation(async ({ op }: any) => op()),
 }));
 
-// ─── Import after mocks ───────────────────────────────────────────────────────
+// #4147 — POST /posts / from-attachment / repost tirent leur plafond de
+// création d'un compteur PARTAGÉ qui lit Redis directement, fail-closed
+// (createSharedWriteRateLimitPreHandler, routes/posts/socialRateLimit.ts) :
+// sans ce double, `getCacheStore().getNativeClient()` rend `null` en test
+// (aucun REDIS_URL) et CHAQUE écriture de ce type serait refusée avant
+// d'atteindre ce que ce fichier vérifie — détail complet dans core.test.ts,
+// premier fichier de la série à le poser. `incr` répond toujours « premier
+// appel » : ce fichier ne teste PAS le plafond (son témoin dédié vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 
@@ -87,8 +104,43 @@ import { registerInteractionRoutes } from '../../../../routes/posts/interactions
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const POST_ID = '507f1f77bcf86cd799439022';
+/**
+ * Un SECOND identifiant de post, bien formé.
+ *
+ * Le lot d'impressions envoyait auparavant `'other-post-id'` — une chaîne
+ * qu'aucun post ne peut porter. Depuis #4044, `filterConsumablePostIds` écarte
+ * ce qui n'est pas un ObjectId au lieu de laisser Mongo faire lever la requête
+ * entière : la fixture fictive faisait donc tomber le compte pour la bonne
+ * raison, sur un cas qui ne se produit jamais en vrai.
+ */
+const OTHER_POST_ID = '507f1f77bcf86cd799439033';
 
 // ─── App factory ──────────────────────────────────────────────────────────────
+
+/**
+ * Tranche ACL d'un post PUBLIC — ce que `loadPostAcl` rend au verdict
+ * d'audience posé sur le favori, l'impression et le partage (issue #4146).
+ */
+const publicAcl = (id: string) => ({
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+});
+
+/**
+ * `post.findMany` répond désormais à DEUX questions : la passe d'audience du
+ * lot d'impressions (`where.id.in`) et la résolution des racines de repost
+ * (`where.repostOfId`). Ce double branche sur la seconde et rend, pour la
+ * première, un post PUBLIC par id demandé — l'audience elle-même est le sujet
+ * de `interactions-consumption-audience.test.ts`, pas de ce fichier.
+ */
+function aclAwareFindMany(repostRows: unknown[] = []) {
+  return jest.fn<any>().mockImplementation(({ where }: any) => {
+    if (where?.repostOfId !== undefined) return Promise.resolve(repostRows);
+    return Promise.resolve(((where?.id?.in ?? []) as string[]).map(publicAcl));
+  });
+}
+
+const aclAwareFindFirst = () =>
+  jest.fn<any>().mockImplementation(({ where }: any) => Promise.resolve(publicAcl(where.id)));
 
 function makeAuth(authenticated: boolean) {
   return async (req: FastifyRequest) => {
@@ -116,7 +168,8 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
       // batch d'impressions (chantier reposts cohérents, tâche 1) — par
       // défaut aucun repost dans le batch. L'unitaire replie sa résolution
       // dans le `select` de `update`, aucun `findUnique` séparé nécessaire.
-      findMany: jest.fn().mockResolvedValue([]),
+      // Le même délégué porte la passe d'audience du lot (#4146).
+      findMany: aclAwareFindMany(),
     },
   } as any;
   app.decorate('prisma', prisma);
@@ -244,7 +297,24 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
   it('returns 200 with count when postIds provided', async () => {
     const res = await app.inject({
       method: 'POST', url: '/posts/impressions/batch',
-      payload: { postIds: [POST_ID, 'other-post-id'] },
+      payload: { postIds: [POST_ID, OTHER_POST_ID] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.recorded).toBe(2);
+  });
+
+  /**
+   * #4044 — un identifiant local ne fait plus perdre le lot ENTIER.
+   *
+   * Le `findMany` d'audience est borné par `{ id: { in: [...] } }` : avant la
+   * garde, un seul `pending_<uuid>` — une story encore en cours de publication
+   * traversant le fil — faisait lever la requête et emportait toutes les autres
+   * impressions du même défilement.
+   */
+  it('records the well-formed ids even when the batch carries a local one', async () => {
+    const res = await app.inject({
+      method: 'POST', url: '/posts/impressions/batch',
+      payload: { postIds: [POST_ID, 'pending_9F3D-4A7B-8C1E', OTHER_POST_ID] },
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(2);
@@ -417,20 +487,6 @@ describe('POST /posts/:postId/share (authenticated)', () => {
       payload: { generateLink: true },
     });
     expect(res.statusCode).toBe(404);
-  });
-});
-
-// ─── GET /posts/:postId/share ─────────────────────────────────────────────────
-
-describe('GET /posts/:postId/share', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with share link data', async () => {
-    mockGetPostShareLink.mockResolvedValueOnce({ token: 'abc123', shortUrl: 'https://app.example.com/l/abc123', totalClicks: 3 });
-    const res = await app.inject({ method: 'GET', url: `/posts/${POST_ID}/share` });
-    expect(res.statusCode).toBe(200);
   });
 });
 

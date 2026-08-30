@@ -434,6 +434,14 @@ class ConversationListViewModel @Inject constructor(
                 }
             }
             launch {
+                // La MONTANTE du couple (#4389) : une conversation restaurée sur
+                // un AUTRE appareil doit revenir dans cette liste sans attendre
+                // un rechargement complet. `requestRefresh()` est le geste que
+                // `messageReceived` et `conversationUpdated` emploient déjà —
+                // une resynchronisation débattue, jamais une purge.
+                messageSocketManager.conversationRestored.collect { requestRefresh() }
+            }
+            launch {
                 messageSocketManager.conversationClosed.collect { event ->
                     ConversationPurge.onConversationClosed(event)?.let(::purge)
                 }

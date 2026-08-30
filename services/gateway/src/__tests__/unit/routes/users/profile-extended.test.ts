@@ -550,62 +550,36 @@ describe('PATCH /users/me — displayName and regionalLanguage (lines 139, 149)'
   });
 });
 
-// ─── Lines 142-146: phoneNumber ternary (empty→null, non-empty→normalize) ─────────
+// ─── #4184 — email/phoneNumber retirés de la route, PAS de leurs branches ─────────
+//
+// Les deux describe ci-dessous ciblaient les lignes 142-146 et 166 de
+// `updateUserProfile` — la ternaire de normalisation de `phoneNumber` et le
+// contrôle d'unicité d'`email` « pas de conflit ». Ces lignes ont été
+// SUPPRIMÉES par #4184 : cette route n'écrit plus ces deux champs sous AUCUNE
+// forme, avec ou sans conflit — la preuve de possession (jeton envoyé à la
+// nouvelle adresse) doit d'abord passer par `contact-change.ts`. Reformuler
+// « pas de conflit ⇒ 200 » en « email/phoneNumber ⇒ toujours 400,
+// indépendamment de tout conflit » aurait dupliqué exactement les témoins
+// mutation-prouvés de `profile.test.ts` (« email/phoneNumber are not writable
+// via this route ») ; ces deux blocs sont donc retirés au lieu d'être
+// maquillés en tests qui ne testeraient plus rien de spécifique à CE fichier.
+//
+// Ce qui reste ICI, et qui est complémentaire (pas redondant) : la preuve, au
+// niveau du SCHÉMA RÉEL isolé (même patron que le bloc « réel » plus bas), que
+// `updateUserRequestSchema` ne déclare plus `email`/`phoneNumber`/`avatar`/
+// `timezone` — la garde qui, seule, peut faire tomber une régression de
+// PARITÉ entre AJV et Zod sans dépendre du comportement du handler.
+describe('updateUserRequestSchema (réel) — email/phoneNumber/avatar/timezone absents (#4184)', () => {
+  const { updateUserRequestSchema: realSchema } = jest.requireActual(
+    '@meeshy/shared/types/api-schemas'
+  ) as { updateUserRequestSchema: { properties: Record<string, unknown> } };
 
-describe('PATCH /users/me — phoneNumber ternary branches (lines 142-146)', () => {
-  it('maps empty phoneNumber to null in updateData', async () => {
-    const prisma = makePrisma();
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me',
-      payload: { phoneNumber: '' },
-    });
-    expect(res.statusCode).toBe(200);
-    expect(prisma.user.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ phoneNumber: null }) })
-    );
-    await app.close();
-  });
-
-  it('normalizes non-empty phoneNumber and continues on no conflict (line 180 false branch)', async () => {
-    const prisma = makePrisma({
-      user: {
-        findFirst:  jest.fn<any>().mockResolvedValue(null),
-        findUnique: jest.fn<any>().mockResolvedValue(mockUser),
-        update:     jest.fn<any>().mockResolvedValue(mockUser),
-        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      },
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me',
-      payload: { phoneNumber: '+33612345678' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
-});
-
-// ─── Line 166 false branch: email provided but no conflict ────────────────────────
-
-describe('PATCH /users/me — email no-conflict (line 166 false branch)', () => {
-  it('returns 200 when email is provided and no conflict exists', async () => {
-    const prisma = makePrisma({
-      user: {
-        findFirst:  jest.fn<any>().mockResolvedValue(null),
-        findUnique: jest.fn<any>().mockResolvedValue(mockUser),
-        update:     jest.fn<any>().mockResolvedValue(mockUser),
-        updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
-      },
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({
-      method: 'PATCH', url: '/users/me',
-      payload: { email: 'newemail@example.com' },
-    });
-    expect(res.statusCode).toBe(200);
-    await app.close();
-  });
+  it.each(['email', 'phoneNumber', 'avatar', 'timezone'])(
+    'ne déclare pas `%s`',
+    (champ) => {
+      expect(realSchema.properties).not.toHaveProperty(champ);
+    }
+  );
 });
 
 // ─── Line 562: || 'Invalid data' in updateUserPassword ZodError catch ─────────────

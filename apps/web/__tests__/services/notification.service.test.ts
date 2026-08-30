@@ -429,7 +429,7 @@ describe('NotificationService - Structure Groupée V2', () => {
 
       await NotificationService.deleteNotification('notif_123');
 
-      expect(apiService.delete).toHaveBeenCalledWith('/notifications/notif_123');
+      expect(apiService.delete).toHaveBeenCalledWith('/api/v1/notifications/notif_123');
     });
   });
 
@@ -611,26 +611,33 @@ describe('NotificationService - Structure Groupée V2', () => {
   });
 
   describe('getPreferences', () => {
-    it('devrait récupérer les préférences de notifications', async () => {
+    it('lit la catégorie notification via la route unifiée, et déballe la réponse (#4181)', async () => {
       const mockPreferences = {
         emailNotifications: true,
         pushNotifications: true,
       };
 
+      // La route unifiée range chaque catégorie sous son NOM — plus jamais
+      // l'alias `/me/preferences/notification`, dont la réponse était le
+      // document nu.
       (apiService.get as jest.Mock).mockResolvedValue({
         success: true,
-        data: mockPreferences,
+        data: { notification: mockPreferences },
       });
 
       const response = await NotificationService.getPreferences();
 
-      expect(apiService.get).toHaveBeenCalledWith('/me/preferences/notification');
+      expect(apiService.get).toHaveBeenCalledWith('/api/v1/me/preferences', {
+        categories: 'notification',
+      });
+      // Le contrat de SORTIE de ce service ne bouge pas : `.data` reste le
+      // document, jamais l'enveloppe multi-catégories qui le porte sur le fil.
       expect(response.data).toEqual(mockPreferences);
     });
   });
 
   describe('updatePreferences', () => {
-    it('devrait mettre à jour les préférences de notifications', async () => {
+    it('écrit la catégorie notification via la route unifiée (`mode=merge`), et déballe la réponse (#4181)', async () => {
       const updatedPreferences = {
         emailNotifications: false,
         pushNotifications: true,
@@ -638,12 +645,14 @@ describe('NotificationService - Structure Groupée V2', () => {
 
       (apiService.patch as jest.Mock).mockResolvedValue({
         success: true,
-        data: updatedPreferences,
+        data: { notification: updatedPreferences },
       });
 
       const response = await NotificationService.updatePreferences(updatedPreferences);
 
-      expect(apiService.patch).toHaveBeenCalledWith('/me/preferences/notification', updatedPreferences);
+      expect(apiService.patch).toHaveBeenCalledWith('/api/v1/me/preferences', {
+        notification: updatedPreferences,
+      });
       expect(response.data).toEqual(updatedPreferences);
     });
   });

@@ -303,6 +303,21 @@ describe('Share Utils Module', () => {
       expect(result).toBe(true);
     });
 
+    // #4170 critère 6 — `GET /links/:linkId/info` n'a jamais été une route
+    // servie (404 en prod, indépendant de la refonte). Ce témoin protège
+    // l'ADRESSE réellement appelée, pas seulement le comportement observable
+    // à travers un `fetch` mocké générique — sans lui, une régression vers
+    // le suffixe fantôme repasserait au vert.
+    it('calls the REAL GET /links/:identifier route, never the phantom /info suffix', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({ ok: true });
+
+      await validateConversationLink('valid-link-id');
+
+      const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/links/valid-link-id');
+      expect(calledUrl).not.toContain('/info');
+    });
+
     it('should return false for invalid link', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({ ok: false });
 
@@ -339,16 +354,23 @@ describe('Share Utils Module', () => {
     });
   });
 
+  // #4170 critère 6 — `getShareStats` appelait `/links/:id/stats`, une route
+  // qui n'a jamais existé (404 en production) et fabriquait `views`/`shares`/
+  // `clicks`, que Meeshy ne mesure nulle part. Elle appelle désormais
+  // `GET /links/:identifier` (la route RÉELLE, `retrieval.ts`) et rend son
+  // bloc `data.stats` — des mesures réelles, jamais un champ d'emprunt.
   describe('getShareStats', () => {
-    it('should return stats for valid link', async () => {
+    it('should return real stats for a valid link', async () => {
       (global.fetch as jest.Mock).mockResolvedValue({
         ok: true,
         json: () =>
           Promise.resolve({
             data: {
-              views: 100,
-              shares: 50,
-              clicks: 75,
+              stats: {
+                totalMessages: 100,
+                totalMembers: 5,
+                totalAnonymousParticipants: 12,
+              },
             },
           }),
       });
@@ -356,10 +378,34 @@ describe('Share Utils Module', () => {
       const result = await getShareStats('valid-link-id');
 
       expect(result).toEqual({
-        views: 100,
-        shares: 50,
-        clicks: 75,
+        totalMessages: 100,
+        totalMembers: 5,
+        totalAnonymousParticipants: 12,
       });
+    });
+
+    it('calls the REAL GET /links/:identifier route, never the phantom /stats suffix', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: { stats: { totalMessages: 1, totalMembers: 1, totalAnonymousParticipants: 0 } } }),
+      });
+
+      await getShareStats('valid-link-id');
+
+      const calledUrl = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(calledUrl).toContain('/links/valid-link-id');
+      expect(calledUrl).not.toContain('/stats');
+    });
+
+    it('should return null when the response carries no stats block', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ data: {} }),
+      });
+
+      const result = await getShareStats('valid-link-id');
+
+      expect(result).toBeNull();
     });
 
     it('should return null for invalid link', async () => {

@@ -29,6 +29,7 @@ import {
   Zap
 } from 'lucide-react';
 import { monitoringService } from '@/services/monitoring.service';
+import type { Disjoncteur, Disponibilite, MetriquesProcessus, Sonde } from '@/services/monitoring.service';
 import { useI18n } from '@/hooks/use-i18n';
 import { toast } from 'sonner';
 import { formatFileSize } from '@meeshy/shared/types/attachment';
@@ -70,6 +71,49 @@ function CardSkeleton() {
   );
 }
 
+/**
+ * L'état d'ERREUR d'une sonde (#4219).
+ *
+ * Ce que son absence coûtait : les trois sondes de santé visaient des adresses
+ * qui n'existaient pas, elles levaient à chaque chargement, et l'écran les
+ * rattrapait par un `allSettled` où l'échec prend la MÊME forme que l'absence
+ * de données. Résultat : un onglet qui a l'air VIDE, pas cassé — et c'est
+ * exactement ce qui a permis à trois routes manquantes de survivre.
+ *
+ * D'où ce panneau, et d'où le type `Sonde<T>` du service : un écran ne peut
+ * plus rendre l'échec d'une sonde par le même dessin que son silence. La
+ * raison technique est affichée telle quelle — qui lit une page
+ * d'administration veut le code HTTP, pas une périphrase traduite.
+ */
+function ProbeErrorPanel({ titre, raison, onRetry, retryLabel }: {
+  titre: string;
+  raison: string;
+  onRetry: () => void;
+  retryLabel: string;
+}) {
+  return (
+    <Card
+      role="alert"
+      data-testid="probe-error"
+      className="border-red-200 bg-red-50/60 dark:border-red-900/50 dark:bg-red-950/20"
+    >
+      <CardContent className="p-6 flex items-start gap-4">
+        <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/40 shrink-0">
+          <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+        </div>
+        <div className="min-w-0 flex-1 space-y-2">
+          <p className="font-medium text-red-800 dark:text-red-300">{titre}</p>
+          <p className="text-xs font-mono break-words text-red-700/80 dark:text-red-400/80">{raison}</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={onRetry} className="shrink-0">
+          <RefreshCw className="h-4 w-4 mr-2" />
+          {retryLabel}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TAB 1: TEMPS REEL
 // ═══════════════════════════════════════════════════════════════════════════
@@ -79,7 +123,10 @@ function RealtimeTab() {
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [realtimeData, setRealtimeData] = useState<Record<string, unknown> | null>(null);
-  const [metricsData, setMetricsData] = useState<Record<string, unknown> | null>(null);
+  // La sonde de métriques ne LÈVE plus : elle rend son échec. C'est ce qui
+  // permet à cet onglet de dire « la sonde a échoué » au lieu d'afficher zéro
+  // connexion — un chiffre faux, indiscernable d'un service désert.
+  const [metrics, setMetrics] = useState<Sonde<MetriquesProcessus> | null>(null);
   const [hourlyData, setHourlyData] = useState<TimeSeriesDataPoint[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -87,16 +134,18 @@ function RealtimeTab() {
     try {
       const [realtimeRes, metricsRes, hourlyRes] = await Promise.allSettled([
         monitoringService.getRealtime(),
-        monitoringService.getMetrics(),
+        monitoringService.getProcessMetrics(),
         monitoringService.getHourlyActivity(),
       ]);
 
       if (realtimeRes.status === 'fulfilled' && realtimeRes.value?.data) {
         setRealtimeData(realtimeRes.value.data as Record<string, unknown>);
       }
-      if (metricsRes.status === 'fulfilled' && metricsRes.value?.data) {
-        setMetricsData(metricsRes.value.data as Record<string, unknown>);
-      }
+      setMetrics(
+        metricsRes.status === 'fulfilled'
+          ? metricsRes.value
+          : { etat: 'echec', raison: String(metricsRes.reason) }
+      );
       if (hourlyRes.status === 'fulfilled' && hourlyRes.value?.data) {
         const raw = hourlyRes.value.data;
         setHourlyData(Array.isArray(raw) ? raw as TimeSeriesDataPoint[] : []);
@@ -129,8 +178,8 @@ function RealtimeTab() {
   const onlineUsers = (realtimeData as Record<string, unknown>)?.onlineUsers as number ?? 0;
   const messagesLastHour = (realtimeData as Record<string, unknown>)?.messagesLastHour as number ?? 0;
   const activeConversations = (realtimeData as Record<string, unknown>)?.activeConversations as number ?? 0;
-  const socketConnections = (metricsData as Record<string, unknown>)?.socketConnections as number ??
-    (metricsData as Record<string, unknown>)?.connections as number ?? 0;
+  const metricsEnEchec = metrics?.etat === 'echec' ? metrics.raison : null;
+  const socketConnections = metrics?.etat === 'ok' ? metrics.valeur.socketConnections : 0;
 
   const stats: StatItem[] = [
     {
@@ -158,14 +207,18 @@ function RealtimeTab() {
       iconColor: 'text-slate-600 dark:text-slate-400',
       iconBgColor: 'bg-slate-100 dark:bg-slate-900/30',
     },
-    {
+    // La vignette des connexions n'est PAS servie par `/admin/analytics/*` : elle
+    // vient de la sonde de processus. Si la sonde a échoué, on ne la dessine
+    // pas — un « 0 » y serait un mensonge, et c'est exactement le mensonge qui
+    // a permis à trois routes absentes de passer inaperçues (#4219).
+    ...(metricsEnEchec ? [] : [{
       title: t('monitoring.realtime.socketConnections'),
       value: socketConnections,
       description: t('monitoring.realtime.socketConnectionsDesc'),
       icon: Wifi,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
-    },
+    } satisfies StatItem]),
   ];
 
   if (loading) {
@@ -210,6 +263,15 @@ function RealtimeTab() {
 
       <StatsGrid stats={stats} columns={4} />
 
+      {metricsEnEchec && (
+        <ProbeErrorPanel
+          titre={t('monitoring.errorMetrics')}
+          raison={metricsEnEchec}
+          onRetry={fetchData}
+          retryLabel={t('monitoring.refresh')}
+        />
+      )}
+
       {hourlyData.length > 0 && (
         <TimeSeriesChart
           title={t('monitoring.hourlyTitle')}
@@ -232,43 +294,43 @@ function RealtimeTab() {
 function HealthTab() {
   const { t, locale } = useI18n('admin');
   const [loading, setLoading] = useState(true);
-  const [healthData, setHealthData] = useState<Record<string, unknown> | null>(null);
-  const [circuitBreakers, setCircuitBreakers] = useState<Array<Record<string, unknown>>>([]);
+  // Trois sondes, trois résultats DISTINCTS : la disponibilité (S0, le verdict
+  // que lit l'orchestrateur), les métriques de processus (S5) et les
+  // disjoncteurs (S5). Aucune ne lève : chacune rend son échec, et l'onglet
+  // le DESSINE. Avant #4219, les trois levaient et cet écran se rendait vide.
+  const [readiness, setReadiness] = useState<Sonde<Disponibilite> | null>(null);
+  const [metrics, setMetrics] = useState<Sonde<MetriquesProcessus> | null>(null);
+  const [breakers, setBreakers] = useState<Sonde<readonly Disjoncteur[]> | null>(null);
 
   const fetchData = useCallback(async () => {
-    try {
-      const [healthRes, cbRes] = await Promise.allSettled([
-        monitoringService.getHealth(),
-        monitoringService.getCircuitBreakers(),
-      ]);
-
-      if (healthRes.status === 'fulfilled' && healthRes.value?.data) {
-        setHealthData(healthRes.value.data as Record<string, unknown>);
-      }
-      if (cbRes.status === 'fulfilled' && cbRes.value?.data) {
-        const raw = cbRes.value.data;
-        setCircuitBreakers(Array.isArray(raw) ? raw as Array<Record<string, unknown>> : []);
-      }
-    } catch {
-      toast.error(t('monitoring.errorHealth'));
-    } finally {
-      setLoading(false);
-    }
+    // `Promise.all` et non `allSettled` : les sondes ne rejettent plus, donc il
+    // n'y a plus rien à « rattraper » — et c'est la disparition de ce
+    // `allSettled` qui rend l'échec impossible à confondre avec le vide.
+    const [readinessRes, metricsRes, breakersRes] = await Promise.all([
+      monitoringService.getReadiness(),
+      monitoringService.getProcessMetrics(),
+      monitoringService.getCircuitBreakers(),
+    ]);
+    setReadiness(readinessRes);
+    setMetrics(metricsRes);
+    setBreakers(breakersRes);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const dbLatency = (healthData as Record<string, unknown>)?.dbLatencyMs as number ??
-    ((healthData as Record<string, unknown>)?.database as Record<string, unknown>)?.latencyMs as number ?? 0;
-  const redisStatus = (healthData as Record<string, unknown>)?.redisStatus as string ??
-    ((healthData as Record<string, unknown>)?.redis as Record<string, unknown>)?.status as string ?? 'UNKNOWN';
-  const memoryUsage = (healthData as Record<string, unknown>)?.memoryUsage as Record<string, unknown> ??
-    (healthData as Record<string, unknown>)?.memory as Record<string, unknown> ?? {};
-  const heapUsed = (memoryUsage as Record<string, unknown>)?.heapUsed as number ?? 0;
-  const heapTotal = (memoryUsage as Record<string, unknown>)?.heapTotal as number ?? 1;
+  const metricsEnEchec = metrics?.etat === 'echec' ? metrics.raison : null;
+  const breakersEnEchec = breakers?.etat === 'echec' ? breakers.raison : null;
+  const readinessEnEchec = readiness?.etat === 'echec' ? readiness.raison : null;
+
+  const dbLatency = metrics?.etat === 'ok' ? metrics.valeur.database.latencyMs ?? 0 : 0;
+  const redisStatus = metrics?.etat === 'ok' ? metrics.valeur.redis.status : 'down';
+  const heapUsed = metrics?.etat === 'ok' ? metrics.valeur.memory.heapUsed : 0;
+  const heapTotal = metrics?.etat === 'ok' ? metrics.valeur.memory.heapTotal : 1;
   const heapPercent = heapTotal > 0 ? Math.round((heapUsed / heapTotal) * 100) : 0;
+  const circuitBreakers: readonly Disjoncteur[] = breakers?.etat === 'ok' ? breakers.valeur : [];
 
   const formatBytes = (bytes: number) => formatFileSize(bytes, { decimals: 1 });
 
@@ -305,15 +367,46 @@ function HealthTab() {
 
   const latencyBadge = getLatencyBadge(dbLatency);
 
+  const pret = readiness?.etat === 'ok' && readiness.valeur.status === 'ready';
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between">
+        {/* La MÊME sonde que celle qui décide de la rotation en production
+            (S0, sans jeton) — pas une seconde vérité reconstituée à partir des
+            métriques. Un échec y a sa propre couleur : l'écran ne peut plus
+            afficher « tout va bien » parce qu'il n'a rien reçu. */}
+        <Badge
+          variant="outline"
+          data-testid="readiness-badge"
+          className={
+            readinessEnEchec
+              ? 'text-red-600 border-red-600'
+              : pret
+                ? 'text-green-600 border-green-600'
+                : 'text-yellow-600 border-yellow-600'
+          }
+        >
+          {readinessEnEchec
+            ? t('monitoring.errorHealth')
+            : pret
+              ? t('monitoring.health.operational')
+              : t('monitoring.health.error')}
+        </Badge>
         <Button variant="outline" size="sm" onClick={fetchData}>
           <RefreshCw className="h-4 w-4 mr-2" />
           {t('monitoring.refresh')}
         </Button>
       </div>
 
+      {metricsEnEchec ? (
+        <ProbeErrorPanel
+          titre={t('monitoring.errorMetrics')}
+          raison={metricsEnEchec}
+          onRetry={fetchData}
+          retryLabel={t('monitoring.refresh')}
+        />
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Database */}
         <Card>
@@ -347,25 +440,28 @@ function HealthTab() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* La sonde sert un tri-état FERMÉ (`up` / `down`) : l'écran n'a
+                plus à deviner quatre orthographes de « connecté » ni à
+                afficher un `UNKNOWN` qui ne venait de personne. */}
             <div className="flex items-center gap-2">
-              {redisStatus === 'OK' || redisStatus === 'connected' ? (
+              {redisStatus === 'up' ? (
                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
               ) : (
                 <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
               )}
               <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {redisStatus}
+                {redisStatus === 'up' ? t('monitoring.health.operational') : t('monitoring.health.error')}
               </span>
             </div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('monitoring.health.pingStatus')}</p>
             <Badge
               className={`mt-2 text-xs ${
-                redisStatus === 'OK' || redisStatus === 'connected'
+                redisStatus === 'up'
                   ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                   : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
               }`}
             >
-              {redisStatus === 'OK' || redisStatus === 'connected' ? t('monitoring.health.operational') : t('monitoring.health.error')}
+              {redisStatus === 'up' ? t('monitoring.health.operational') : t('monitoring.health.error')}
             </Badge>
           </CardContent>
         </Card>
@@ -391,6 +487,7 @@ function HealthTab() {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Circuit Breakers */}
       <Card>
@@ -401,7 +498,19 @@ function HealthTab() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {circuitBreakers.length === 0 ? (
+          {/* « Tous les circuits sont opérationnels » était affiché AUSSI quand
+              la sonde échouait — un cœur vert au-dessus d'une route qui
+              n'existait pas. L'échec passe donc AVANT le cas vide : c'est le
+              seul ordre qui empêche un écran cassé de se lire comme un écran
+              sain (#4219). */}
+          {breakersEnEchec ? (
+            <ProbeErrorPanel
+              titre={t('monitoring.errorHealth')}
+              raison={breakersEnEchec}
+              onRetry={fetchData}
+              retryLabel={t('monitoring.refresh')}
+            />
+          ) : circuitBreakers.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Heart className="h-8 w-8 mx-auto mb-2 text-green-500" />
               <p>{t('monitoring.health.allCircuitsOk')}</p>
@@ -418,14 +527,13 @@ function HealthTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {circuitBreakers.map((cb, idx) => {
-                    const state = (cb.state as string) ?? 'unknown';
-                    const badge = getCbStateBadge(state);
-                    const lastFailure = cb.lastFailure as string | null;
+                  {circuitBreakers.map((cb) => {
+                    const badge = getCbStateBadge(cb.state);
+                    const lastFailure = cb.lastFailure;
                     return (
-                      <tr key={idx} className="border-b border-gray-100 dark:border-gray-800">
+                      <tr key={cb.name} className="border-b border-gray-100 dark:border-gray-800">
                         <td className="py-3 px-4 font-medium text-gray-900 dark:text-gray-100">
-                          {cb.name as string ?? cb.service as string ?? `Service ${idx + 1}`}
+                          {cb.name}
                         </td>
                         <td className="py-3 px-4">
                           <Badge className={`text-xs ${badge.className}`}>
@@ -433,7 +541,7 @@ function HealthTab() {
                           </Badge>
                         </td>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          {cb.failures as number ?? cb.failureCount as number ?? 0}
+                          {cb.failures}
                         </td>
                         <td className="py-3 px-4 text-gray-500 dark:text-gray-400">
                           {lastFailure

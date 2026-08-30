@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from '../config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 import { authManager } from '@/services/auth-manager.service';
 
@@ -198,7 +199,7 @@ export async function createTrackingLink(
       headers['x-session-token'] = sessionToken;
     }
 
-    const response = await fetch(buildApiUrl('/api/tracking-links'), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.root), {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -267,7 +268,7 @@ export async function recordTrackingLinkClick(
     const language = navigator.language.split('-')[0];
 
     const response = await fetch(
-      buildApiUrl(`/api/tracking-links/${token}/click`),
+      buildApiUrl(API_ENDPOINTS.trackingLinks.byTokenClick(token)),
       {
         method: 'POST',
         headers,

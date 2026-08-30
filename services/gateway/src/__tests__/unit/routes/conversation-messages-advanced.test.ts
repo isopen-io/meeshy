@@ -45,10 +45,6 @@ const mockGetOrCompute = jest.fn<any>().mockResolvedValue([]);
 const mockOnMessageEdited = jest.fn<any>().mockResolvedValue(undefined);
 const mockOnMessageDeleted = jest.fn<any>().mockResolvedValue(undefined);
 
-const mockAddReaction = jest.fn().mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-const mockRemoveReaction = jest.fn().mockResolvedValue(true);
-const mockCreateUpdateEvent = jest.fn().mockResolvedValue({ messageId: 'msg-id', emoji: '👍' });
-
 const mockCollectContentTrackingLinks = jest.fn<any>().mockResolvedValue([]);
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
@@ -119,13 +115,14 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('../../../services/ReactionService', () => ({
-  ReactionService: jest.fn().mockImplementation(() => ({
-    addReaction: (...args: any[]) => mockAddReaction(...args),
-    removeReaction: (...args: any[]) => mockRemoveReaction(...args),
-    createUpdateEvent: (...args: any[]) => mockCreateUpdateEvent(...args),
-  })),
-}));
+// #4188/#4190 — le double de `ReactionService` a été RETIRÉ avec les deux
+// portes imbriquées : `messages-advanced.ts` n'importe plus ce service (seule
+// une mention en prose subsiste, au-dessus du GET). Un double PARTIEL d'un
+// module que le sujet n'importe pas n'est pas neutre — c'est un piège armé : le
+// jour où quelqu'un réintroduit l'import, ce triplet de méthodes le servirait à
+// la place du vrai, sans qu'aucun témoin ne rougisse. La couverture des
+// réactions vit dans `reactions-routes.test.ts`, `reactions-flat-door-policy.test.ts`
+// et `unit/services/ReactionService.test.ts`.
 
 jest.mock('@meeshy/shared/utils/errors', () => ({
   createError: jest.fn((code: string, msg?: string) => {
@@ -233,6 +230,10 @@ const makePrisma = (): any => ({
   },
   reaction: {
     findMany: jest.fn().mockResolvedValue([]),
+    // #4165 : `GET /conversations/:id/reactions` compte le VRAI total à part
+    // de la page (`.count()`), en plus du `.findMany` déjà mocké — sans ce
+    // double, un test Prisma réel appellerait une méthode inexistante.
+    count: jest.fn().mockResolvedValue(0),
   },
   user: {
     findUnique: jest.fn().mockResolvedValue(null),
@@ -371,9 +372,6 @@ describe('registerMessagesAdvancedRoutes', () => {
       trackingLinks: [],
     });
     mockCollectContentTrackingLinks.mockResolvedValue([]);
-    mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-    mockRemoveReaction.mockResolvedValue(true);
-    mockCreateUpdateEvent.mockResolvedValue({ messageId: MSG_ID, emoji: '👍' });
 
     registerMessagesAdvancedRoutes(fastify, prisma, translationService, optionalAuth, requiredAuth);
   });
@@ -2509,13 +2507,24 @@ describe('registerMessagesAdvancedRoutes', () => {
 
       await getReactionsHandler(fastify)(req, reply);
 
+      // #4165 — `hasMore` est un champ NEUF (critère 2 : de quoi demander la
+      // suite maintenant que la route rend une PAGE). `total` reste le vrai
+      // compte de la conversation, servi par `.count()` — mocké à 0 ci-dessus
+      // dans le double global (`prisma.reaction.count`), cohérent avec la
+      // page vide.
       expect(mockSendSuccess).toHaveBeenCalledWith(reply, {
         reactions: [],
         total: 0,
+        hasMore: false,
       });
     });
 
     it('groups reactions by messageId and emoji', async () => {
+      // #4165 — `total` est désormais le VRAI compte de la conversation
+      // (`.count()`), plus le `.findMany` borné : les trois lignes ci-dessous
+      // sont une PAGE, le total peut différer de sa longueur. Ici les deux
+      // coïncident (3 lignes, 3 au total) pour garder ce test simple.
+      prisma.reaction.count.mockResolvedValue(3);
       prisma.reaction.findMany.mockResolvedValue([
         {
           messageId: MSG_ID,
@@ -2620,429 +2629,49 @@ describe('registerMessagesAdvancedRoutes', () => {
     });
   });
 
-  // ─── POST /conversations/:id/messages/:messageId/reactions ───────────────
-
-  describe('POST /conversations/:id/messages/:messageId/reactions', () => {
-    const getAddReactionHandler = (f: any) =>
-      getHandler(f, 'POST', '/conversations/:id/messages/:messageId/reactions');
-
-    it('returns 400 when emoji is missing', async () => {
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: {},
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'emoji is required');
-    });
-
-    it('returns 404 when conversation not found', async () => {
-      mockResolveConversationId.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    });
-
-    it('returns 403 when access denied', async () => {
-      mockCanAccessConversation.mockResolvedValue(false);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('returns 404 when message not found', async () => {
-      prisma.message.findFirst.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found in this conversation');
-    });
-
-    it('returns 403 when registered user has no participant record', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: USER_ID,
-          isAnonymous: false,
-          sessionToken: null,
-          participantId: null,
-        },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You are not a participant of this conversation');
-    });
-
-    it('uses participantId for anonymous user', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: null,
-          isAnonymous: true,
-          sessionToken: 'sess-token',
-          participantId: PART_ID,
-        },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockAddReaction).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: PART_ID })
-      );
-    });
-
-    it('returns 500 when reactionService.addReaction returns null', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue(null);
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
-    });
-
-    it('returns 409 with the reaction-limit message when addReaction rejects with ConflictError (cap reached)', async () => {
-      // Plafond des cinq réactions par personne et par message
-      // (`ReactionService.reactionLimit.test.ts`) : un refus légitime, pas
-      // une panne — cette route est un second chemin REST vers le même
-      // service que `routes/reactions.ts` (la primaire pour iOS).
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(
-        new ConflictError(REACTION_LIMIT_REACHED_MESSAGE, 'REACTION_LIMIT_REACHED')
-      );
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '🎉' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendConflict).toHaveBeenCalledWith(
-        reply,
-        REACTION_LIMIT_REACHED_MESSAGE,
-        { code: 'REACTION_LIMIT_REACHED' }
-      );
-    });
-
-    it('returns success and broadcasts reaction on happy path', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-      expect(fastify._mockEmit).toHaveBeenCalledWith('reaction:added', expect.any(Object));
-    });
-
-    it('returns success but skips the broadcast when addReaction reports unchanged (idempotent re-react)', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      // Duplicate add for an emoji the participant already has — a DB no-op.
-      // The route must still report success but must NOT re-broadcast
-      // REACTION_ADDED (nothing changed). Parity with the socket handler.
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' }, unchanged: true });
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-      expect(fastify._mockEmit).not.toHaveBeenCalledWith('reaction:added', expect.any(Object));
-    });
-
-    it('returns 400 on Invalid emoji format error', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Invalid emoji format'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: 'bad' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Invalid emoji format');
-    });
-
-    it('returns 404 on Message not found error from service', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Message not found'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Message not found');
-    });
-
-    it('returns 403 on not a member error from service', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('User is not a member of this conversation'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('returns 400 when reacting to a system message', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Cannot react to a system message'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Cannot react to a system message');
-    });
-
-    it('returns 500 on generic error', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockAddReaction.mockRejectedValue(new Error('Unknown error'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
-    });
-
-    it('continues when socket broadcast throws', async () => {
-      prisma.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockCreateUpdateEvent.mockRejectedValue(new Error('socket error'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getAddReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalled();
-    });
-  });
-
-  // ─── DELETE /conversations/:id/messages/:messageId/reactions ─────────────
-
-  describe('DELETE /conversations/:id/messages/:messageId/reactions', () => {
-    const getRemoveReactionHandler = (f: any) =>
-      getHandler(f, 'DELETE', '/conversations/:id/messages/:messageId/reactions');
-
-    it('returns 400 when emoji is missing', async () => {
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: {},
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'emoji is required');
-    });
-
-    it('returns 404 when conversation not found', async () => {
-      mockResolveConversationId.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Conversation not found');
-    });
-
-    it('returns 403 when access denied', async () => {
-      mockCanAccessConversation.mockResolvedValue(false);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalled();
-    });
-
-    it('returns 403 when user has no participant record', async () => {
-      prisma.participant.findFirst.mockResolvedValue(null);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: USER_ID,
-          isAnonymous: false,
-          sessionToken: null,
-          participantId: null,
-        },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendForbidden).toHaveBeenCalledWith(reply, 'You are not a participant of this conversation');
-    });
-
-    it('uses participantId for anonymous user', async () => {
-      mockRemoveReaction.mockResolvedValue(true);
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-        authContext: {
-          isAuthenticated: true,
-          userId: null,
-          isAnonymous: true,
-          sessionToken: 'sess-token',
-          participantId: PART_ID,
-        },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockRemoveReaction).toHaveBeenCalledWith(
-        expect.objectContaining({ participantId: PART_ID })
-      );
-    });
-
-    it('returns 404 when reaction not found (removeReaction returns false)', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockResolvedValue(false);
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendNotFound).toHaveBeenCalledWith(reply, 'Reaction not found');
-    });
-
-    it('returns success and broadcasts removal on happy path', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockResolvedValue(true);
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { removed: true });
-      expect(fastify._mockEmit).toHaveBeenCalledWith('reaction:removed', expect.any(Object));
-    });
-
-    it('returns 400 on Invalid emoji format error', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockRejectedValue(new Error('Invalid emoji format'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: 'bad' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendBadRequest).toHaveBeenCalledWith(reply, 'Invalid emoji format');
-    });
-
-    it('returns 500 on generic error', async () => {
-      prisma.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      mockRemoveReaction.mockRejectedValue(new Error('Unknown error'));
-
-      const req = makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      });
-      const reply = makeReply();
-
-      await getRemoveReactionHandler(fastify)(req, reply);
-
-      expect(mockSendInternalError).toHaveBeenCalled();
-    });
-  });
+  // ─── Réactions IMBRIQUÉES : REPOINTÉES sur la porte PLATE (#4188/#4190) ──
+  //
+  // `POST` et `DELETE /conversations/:id/messages/:messageId/reactions` ont été
+  // RETIRÉES : aucun client ne les appelait, et elles portaient une politique
+  // strictement PLUS PAUVRE que leur jumelle plate (`POST /reactions`,
+  // `DELETE /reactions/:messageId/:emoji`, dans `routes/reactions.ts`) — garde
+  // montée `allowAnonymous: false`, donc un invité de lien de partage ne pouvait
+  // pas réagir, et un fil CLOS y retombait sur un 500 au lieu d'un 410.
+  //
+  // Les vingt-neuf témoins qui vivaient ici ne sont PAS perdus : la CAPACITÉ
+  // qu'ils gardaient est toujours servie, par la porte plate, et sa couverture
+  // vit désormais en trois endroits —
+  //
+  //   `__tests__/unit/routes/reactions-routes.test.ts`
+  //       les branches de refus et le chemin nominal des deux verbes : emoji
+  //       manquant, participant introuvable (403), `addReaction` qui rend null
+  //       (500), plafond de cinq réactions (409), emoji invalide (400), message
+  //       introuvable (404), non-membre (403), message SYSTÈME (400 — celui-là
+  //       a été repointé DEPUIS ce fichier, il n'existait nulle part ailleurs),
+  //       erreur générique (500), diffusion et son absence quand
+  //       `socketIOHandler` manque, re-réaction idempotente sans diffusion.
+  //
+  //   `__tests__/unit/routes/reactions-flat-door-policy.test.ts`
+  //       les DEUX propriétés que la forme imbriquée n'avait pas — l'invité
+  //       anonyme admis avec son seul `Participant.id`, et le 410 du fil clos.
+  //
+  //   `__tests__/unit/routes/dead-doors-are-not-mounted.test.ts`
+  //       la garde NÉGATIVE : les deux portes imbriquées ne sont plus déclarées,
+  //       et la plate l'est toujours. C'est elle qui empêche une « refusion »
+  //       silencieuse de les réintroduire.
+  //
+  // TROIS témoins n'ont pas été repointés, et c'est délibéré : leur capacité est
+  // structurellement absente de la porte plate, pas seulement non testée.
+  //   - « 404 quand la conversation est introuvable » et « 403 accès refusé » :
+  //     la porte plate n'a PAS de `:id` dans son URL — elle dérive la
+  //     conversation DU MESSAGE, et le refus s'exprime alors par le 403 de
+  //     résolution du participant, déjà couvert.
+  //   - « DELETE 400 quand l'emoji manque » : sur la porte plate l'emoji est un
+  //     paramètre de CHEMIN, donc une requête sans emoji ne matche aucune route.
+  //     Il n'y a plus de branche à garder.
+  //
+  // Ce qui subsiste ici est `GET /conversations/:id/reactions` ci-dessus, la
+  // LECTURE conversation-scopée — elle n'a pas de jumelle plate et reste vivante.
 
   // ─── GET /conversations/:id/status ───────────────────────────────────────
 
@@ -3754,41 +3383,6 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(mockSendSuccess).toHaveBeenCalled();
     });
 
-    it('add reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-      const f = createNullSocketFastify();
-      const p = makePrisma();
-      p.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'POST', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-    });
-
-    it('remove reaction: socketIOHandler null at registration - no broadcast but success', async () => {
-      mockRemoveReaction.mockResolvedValue(true);
-      const f = createNullSocketFastify();
-      const p = makePrisma();
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'DELETE', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { removed: true });
-    });
-
     it('edit: socketIOManager getIO returns null - no broadcast but success', async () => {
       const f = createNullSocketFastify();
       f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
@@ -3802,43 +3396,6 @@ describe('registerMessagesAdvancedRoutes', () => {
       await handler(makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'hello' } }), reply);
 
       expect(mockSendSuccess).toHaveBeenCalled();
-    });
-
-    it('add reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockAddReaction.mockResolvedValue({ reaction: { id: 'reaction-id', emoji: '👍' } });
-      const f = createNullSocketFastify();
-      f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
-      const p = makePrisma();
-      p.message.findFirst.mockResolvedValue({ id: MSG_ID });
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'POST', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { added: true, emoji: '👍' });
-    });
-
-    it('remove reaction: socketIOHandler getIO returns null - no broadcast but success', async () => {
-      mockRemoveReaction.mockResolvedValue(true);
-      const f = createNullSocketFastify();
-      f.socketIOHandler = { getManager: jest.fn().mockReturnValue({ getIO: jest.fn().mockReturnValue(null) }) };
-      const p = makePrisma();
-      p.participant.findFirst.mockResolvedValue({ id: PART_ID });
-      registerMessagesAdvancedRoutes(f, p, makeTranslationService(), jest.fn(), jest.fn());
-
-      const handler = getHandler(f, 'DELETE', ':messageId/reactions');
-      const reply = makeReply();
-      await handler(makeRequest({
-        params: { id: CONV_ID, messageId: MSG_ID },
-        body: { emoji: '👍' },
-      }), reply);
-
-      expect(mockSendSuccess).toHaveBeenCalledWith(reply, { removed: true });
     });
   });
 

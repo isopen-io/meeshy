@@ -10,6 +10,7 @@ import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 
 export function PasswordSettings() {
@@ -78,7 +79,7 @@ export function PasswordSettings() {
 
     setIsLoading(true);
     try {
-      const response = await fetch(buildApiUrl('/users/me/password'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.mePassword), {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',

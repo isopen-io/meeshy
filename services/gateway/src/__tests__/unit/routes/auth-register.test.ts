@@ -51,6 +51,16 @@ jest.mock('../../../utils/normalize', () => ({
   normalizePhoneWithCountry: (...a: any[]) => mockNormalizePhoneWithCountry(...a),
 }));
 
+// #4264 — l'inscription crée désormais une SESSION, comme la connexion : le
+// JWT d'un compte frais ne nommait rien, et depuis #4213 son premier
+// `POST /auth/refresh` rendait 401 « Session révoquée » à quelqu'un qui
+// n'avait rien révoqué (`count({ userId, isValid: true })` valait zéro).
+const mockCreateSession = jest.fn<any>().mockResolvedValue({ id: 'session-inscription' });
+jest.mock('../../../services/SessionService', () => ({
+  createSession: (...args: any[]) => mockCreateSession(...args),
+  generateSessionToken: jest.fn(() => 'session-token-inscription'),
+}));
+
 jest.mock('../../../services/InitService', () => ({
   InitService: jest.fn().mockImplementation(() => ({
     initializeDatabase: jest.fn().mockResolvedValue(undefined),
@@ -342,142 +352,6 @@ describe('POST /register — generic error falls through to 500', () => {
 
 // ─── GET /check-availability ──────────────────────────────────────────────────
 
-describe('GET /check-availability — no query params', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 400 when no params provided', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability' });
-    expect(res.statusCode).toBe(400);
-  });
-});
-
-describe('GET /check-availability — username available', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with usernameAvailable=true', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=newuser' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.usernameAvailable).toBe(true);
-  });
-});
-
-describe('GET /check-availability — username taken with suggestions', () => {
-  let app: FastifyInstance;
-  const mockFindFirst = jest.fn<any>();
-  beforeAll(async () => {
-    mockFindFirst
-      .mockResolvedValueOnce({ id: 'existing-user' }) // username taken
-      .mockResolvedValue(null); // suggestion candidates available
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: mockFindFirst } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with usernameAvailable=false and suggestions', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=taken' });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.usernameAvailable).toBe(false);
-    expect(Array.isArray(data.suggestions)).toBe(true);
-    expect(data.suggestions.length).toBeGreaterThan(0);
-  });
-});
-
-describe('GET /check-availability — email available', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with emailAvailable=true', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?email=new@example.com' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.emailAvailable).toBe(true);
-  });
-});
-
-describe('GET /check-availability — email taken', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'u1' }) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with emailAvailable=false', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?email=taken@example.com' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.emailAvailable).toBe(false);
-  });
-});
-
-describe('GET /check-availability — phone valid and available', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockNormalizePhoneWithCountry.mockReturnValue({ isValid: true, phoneNumber: '+33600000000' });
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue(null) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with phoneNumberAvailable=true and phoneNumberValid=true', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=%2B33600000000' });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.phoneNumberAvailable).toBe(true);
-    expect(data.phoneNumberValid).toBe(true);
-  });
-});
-
-describe('GET /check-availability — phone valid but taken', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockNormalizePhoneWithCountry.mockReturnValue({ isValid: true, phoneNumber: '+33600000001' });
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockResolvedValue({ id: 'u1' }) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with phoneNumberAvailable=false', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=%2B33600000001' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().data.phoneNumberAvailable).toBe(false);
-  });
-});
-
-describe('GET /check-availability — phone invalid format', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockNormalizePhoneWithCountry.mockReturnValue({ isValid: false });
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 200 with phoneNumberValid=false', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?phoneNumber=not-a-phone' });
-    expect(res.statusCode).toBe(200);
-    const data = res.json().data;
-    expect(data.phoneNumberValid).toBe(false);
-    expect(data.phoneNumberAvailable).toBe(false);
-  });
-});
-
-describe('GET /check-availability — DB error', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    app = await buildApp({ prisma: makePrisma({ user: { findFirst: jest.fn<any>().mockRejectedValue(new Error('DB failure')) } }) });
-  });
-  afterAll(async () => { await app.close(); });
-
-  it('returns 500 on DB error', async () => {
-    const res = await app.inject({ method: 'GET', url: '/check-availability?username=test' });
-    expect(res.statusCode).toBe(500);
-  });
-});
-
 // ─── POST /force-init ─────────────────────────────────────────────────────────
 
 describe('POST /force-init — retirée', () => {
@@ -493,3 +367,20 @@ describe('POST /force-init — retirée', () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+
+// ─── `GET /check-availability` — le contrat a CHANGÉ (#4158) ─────────────────
+//
+// Les témoins qui vivaient ici exigeaient `emailAvailable` et
+// `phoneNumberAvailable` : ils asseyaient l'ORACLE. Cette route confirmait sans
+// compte qu'une adresse ou un numéro appartient à un utilisateur Meeshy, alors
+// que `/forgot-password` et `/magic-link/request` répondent délibérément
+// « succès » dans tous les cas pour ne rien révéler.
+//
+// L'adresse et le numéro ne rendent plus qu'un verdict de FORME. Le pseudo,
+// lui, répond toujours sur l'existence — c'est une clé publique, déjà
+// énumérable par `GET /u/:username`.
+//
+// Le contrat de la porte cible est couvert par
+// `directory-availability.test.ts` ; ce qui suit garde l'ALIAS, y compris
+// l'assertion NÉGATIVE qui empêche l'oracle de revenir.

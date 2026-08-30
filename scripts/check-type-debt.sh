@@ -158,7 +158,36 @@ NC='\033[0m'
 # est un `.max(5)` → `.max(6)` sur des schémas Zod, une borne de validation
 # RUNTIME dont `z.string()` infère le même type — delta de types nul, par
 # construction.
-readonly WEB_BASELINE=1184
+# 1185 → 1184 au lot 6 du 2026-08-30. Deux erreurs retirées de
+# `__tests__/security/api-path-literal-guard.test.ts`, la garde livrée par #4285
+# la veille : un `import … from '@jest/globals'` qui ne RÉSOUT PAS (TS2307) et
+# dont ce fichier était le seul porteur sur 686 suites du paquet, et un
+# paramètre de `it.each` implicitement `any` (TS7006). Le second était le +1 qui
+# a fait rougir la CI sur `3da57c01` ; le premier était déjà dans la baseline,
+# retiré au même geste parce qu'un import mort qui ne compile pas n'a pas à être
+# porté par un cliquet.
+#
+# Ancrage : contrairement au cas de 1194 documenté ci-dessus, la mesure LOCALE
+# et celle du RUNNER coïncidaient exactement sur cette révision — CI 1186
+# (run 33286745112, « RÉGRESSION : 1186 erreurs, baseline 1185 ») et local 1186
+# avant correctif. Le delta de −2 est donc lu sur un point où les deux mesures
+# s'accordent, pas transposé de l'une à l'autre.
+# 1184 -> 1183 le 2026-08-30, en integrant le lot 14. La baisse ne vient PAS de
+# ce lot : la dette a ete mesuree a 1184 sur l'arbre portant deja #4405
+# (« la dette n'a pas bouge »), et n'est passee a 1183 qu'apres la fusion des 42
+# commits amont. Elle est donc l'effet d'un train tiers, non attribue a un commit
+# precis ici — le nommer sans l'avoir bissecte serait une affirmation de plus a
+# verifier.
+#
+# Ancrage : le nombre est celui du RUNNER, pas une mesure locale reportee. Le job
+# « Quality (bun) » du run 33311527587 (tete 4e3a19677a) a lui-meme imprime
+# « AMELIORATION NON ENREGISTREE : 1183 erreurs, baseline 1184 (-1) » et dicte la
+# valeur a ecrire ; la mesure locale post-fusion rend le meme 1183. Les deux
+# s'accordent, comme au cas de 1184 ci-dessus et contrairement a celui de 1194.
+#
+# Ce cliquet a donc echoue en annoncant une BONNE nouvelle, et c'est sa raison
+# d'etre : sans lui, le point regagne redeviendrait silencieusement depensable.
+readonly WEB_BASELINE=1183
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #

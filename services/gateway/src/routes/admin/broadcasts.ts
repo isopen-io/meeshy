@@ -9,6 +9,7 @@ import { EmailService } from '../../services/EmailService';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { BroadcastsListQuerySchema, CreateBroadcastBodySchema, UpdateBroadcastBodySchema, BroadcastIdParamSchema } from '../../validation/admin-schemas.js';
+import { requirePermission } from '../../middleware/authorize';
 
 const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 
@@ -16,15 +17,41 @@ const logger = enhancedLogger.child({ module: 'BroadcastRoutes' });
 // Auth middleware - BIGBOSS & ADMIN only
 // ---------------------------------------------------------------------------
 
-const requireBroadcastPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-  const userRole = authContext.registeredUser.role;
-  if (!['BIGBOSS', 'ADMIN'].includes(userRole)) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
+// `requireBroadcastPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireBroadcastPermission = requirePermission('canManageNotifications');
+
+/**
+ * Projection de la LISTE `GET /admin/broadcasts` (#4166, critère 1 —
+ * famille « include sans select à la racine »).
+ *
+ * L'ancien `findMany` ne portait ni `select` ni `include` du tout : la ligne
+ * `AdminBroadcast` ENTIÈRE partait pour chaque élément de page, sans schéma
+ * de réponse pour la retenir (cette route ne déclare aucun `schema:`) — «
+ * chaque ligne de liste transporte `translatedBodies` / `translatedSubjects`,
+ * c'est-à-dire N copies du corps complet de l'e-mail » (texte de l'issue).
+ *
+ * Ces huit champs sont exactement ceux que la LISTE de
+ * `apps/web/app/admin/broadcasts/page.tsx` lit (vérifié : `broadcast.id`,
+ * `.name`, `.subject`, `.status`, `.totalRecipients`, `.sentCount`,
+ * `.failedCount`, `.createdAt` — jamais `.body`, `.targeting`,
+ * `.translatedSubjects`/`.translatedBodies`, ni aucun champ du canal
+ * in-app). Aucun autre client (iOS, Android) n'appelle cette route admin
+ * (vérifié : aucune référence à `admin/broadcasts` hors web). La fiche de
+ * détail (`GET /admin/broadcasts/:id`, hors périmètre de cette famille) sert
+ * elle la ligne ENTIÈRE, sans changement — c'est là que
+ * `translatedSubjects`/`translatedBodies` sont affichés.
+ */
+const adminBroadcastListSelect = {
+  id: true,
+  name: true,
+  subject: true,
+  status: true,
+  totalRecipients: true,
+  sentCount: true,
+  failedCount: true,
+  createdAt: true,
 };
 
 // ---------------------------------------------------------------------------
@@ -60,6 +87,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       const [broadcasts, total] = await Promise.all([
         fastify.prisma.adminBroadcast.findMany({
           where,
+          select: adminBroadcastListSelect,
           orderBy: { createdAt: 'desc' },
           skip: offsetNum,
           take: limitNum,

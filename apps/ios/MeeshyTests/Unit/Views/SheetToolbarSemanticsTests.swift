@@ -41,6 +41,12 @@ final class SheetToolbarSemanticsTests: XCTestCase {
     /// entrée sans la remplacer perd une surface de la mesure, en silence.
     private static let moodComposerFiles = [
         "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift",
+        // Le meuble est découpé (#4102). La liste étant ADDITIVE, ses trois
+        // extensions y entrent : sans elles la mesure perdrait les surfaces
+        // et les feuilles qui ont déménagé.
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift",
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift",
+        "Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
     ]
 
@@ -59,8 +65,13 @@ final class SheetToolbarSemanticsTests: XCTestCase {
     /// garde sur l'ancien chemin l'aurait fait ÉCHOUER à la lecture ; la
     /// supprimer aurait laissé le meuble libre d'y revenir sans un mot.
     func test_moodComposer_paintsItsDismissAndCommitWithoutAnyBarSide() throws {
-        let host = try readSource(Self.moodComposerFiles[0])
-        let surface = try readSource(Self.moodComposerFiles[1])
+        // Le meuble est découpé (#4102) : la flèche vit désormais dans
+        // `+Socle`, et elle n'est plus `private` (Swift ne rend un `private`
+        // visible qu'aux extensions du même fichier). L'adresse devient donc
+        // l'UNITÉ — lire le seul fichier principal ferait échouer la garde sur
+        // un membre simplement déménagé.
+        let host = try AppSourceGuard.composerHostSource()
+        let surface = try readSource("Meeshy/Features/Main/Composer/ComposerMoodSurface.swift")
 
         XCTAssertTrue(
             surface.contains("let onClose: () -> Void"),
@@ -68,7 +79,7 @@ final class SheetToolbarSemanticsTests: XCTestCase {
             "peint la croix, et la feuille n'aurait plus de congé explicite."
         )
         XCTAssertTrue(
-            host.contains("private var publishButton: some View"),
+            host.contains("var publishButton: some View"),
             "Le socle doit porter la flèche de publication : c'est l'autre membre de la paire, et sans " +
             "elle cette garde ne mesurerait plus qu'une moitié."
         )

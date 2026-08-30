@@ -22,6 +22,9 @@ on:
     tags: ['v*.*.*']
     paths:
       - 'apps/web/**'
+      - 'apps/web-v3/**'
+      - 'packages/design-tokens/**'
+      - 'packages/icons/**'
       - 'services/gateway/**'
       - 'services/translator/**'
       - 'services/agent/**'
@@ -39,11 +42,13 @@ on:
         options:
           - all
           - web
+          - web-v3
           - gateway
           - translator
           - agent
           - web,gateway
           - web,translator
+          - web-v3,gateway
           - gateway,translator
       custom_services:
         description: 'Custom services (overrides above if set, e.g., "web,gateway")'
@@ -90,7 +95,11 @@ env:
   DOCKER_REGISTRY: docker.io
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64
-  NODE_VERSION: '22'
+  # '22.19' et non '22' : undici@8 exige >= 22.19.0 (worker_threads.markAsUncloneable,
+  # arrive en 22.12), et le serveur assemble par les generateurs de manifeste le charge.
+  # La ligne MINEURE, pas une version exacte — figer le patch ferait rater les correctifs
+  # de securite des 22.19.x sans rien garantir de plus : c'est le plancher qui compte ici.
+  NODE_VERSION: '22.19'
   BUN_VERSION: '1.3.14'
   PNPM_VERSION: '9'
   PACKAGE_MANAGER: ${{ github.event.inputs.package_manager || 'bun' }}
@@ -126,23 +135,32 @@ jobs:
 
             if [[ "$SERVICES" == "all" ]]; then
               echo "web=true" >> $GITHUB_OUTPUT
+              echo "web_v3=true" >> $GITHUB_OUTPUT
               echo "gateway=true" >> $GITHUB_OUTPUT
               echo "translator=true" >> $GITHUB_OUTPUT
               echo "agent=true" >> $GITHUB_OUTPUT
             else
-              echo "web=$([[ "$SERVICES" == *"web"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-              echo "gateway=$([[ "$SERVICES" == *"gateway"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-              echo "translator=$([[ "$SERVICES" == *"translator"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
-              echo "agent=$([[ "$SERVICES" == *"agent"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              # Sélection par JETON, pas par sous-chaîne. `*"web"*` répondait vrai
+              # pour « web-v3 » : demander la v3 construisait AUSSI le legacy, et
+              # rien dans le texte ne le disait. Les virgules encadrantes rendent
+              # « web » et « web-v3 » disjoints.
+              SELECTED=",${SERVICES// /},"
+              echo "web=$([[ "$SELECTED" == *",web,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              echo "web_v3=$([[ "$SELECTED" == *",web-v3,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              echo "gateway=$([[ "$SELECTED" == *",gateway,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              echo "translator=$([[ "$SELECTED" == *",translator,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+              echo "agent=$([[ "$SELECTED" == *",agent,"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             fi
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
             echo "web=true" >> $GITHUB_OUTPUT
+            echo "web_v3=true" >> $GITHUB_OUTPUT
             echo "gateway=true" >> $GITHUB_OUTPUT
             echo "translator=true" >> $GITHUB_OUTPUT
             echo "agent=true" >> $GITHUB_OUTPUT
           else
             CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null || git diff --name-only HEAD~1 HEAD)
             echo "web=$([[ "$CHANGED" == *"apps/web/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
+            echo "web_v3=$([[ "$CHANGED" == *"apps/web-v3/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] || [[ "$CHANGED" == *"packages/design-tokens/"* ]] || [[ "$CHANGED" == *"packages/icons/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "gateway=$([[ "$CHANGED" == *"services/gateway/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "translator=$([[ "$CHANGED" == *"services/translator/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
             echo "agent=$([[ "$CHANGED" == *"services/agent/"* ]] || [[ "$CHANGED" == *"packages/shared/"* ]] && echo true || echo false)" >> $GITHUB_OUTPUT
@@ -165,6 +183,14 @@ jobs:
             VERSION=$(cat apps/web/VERSION 2>/dev/null || echo "1.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
             SERVICES+='{"service":"web","context":".","dockerfile":"./apps/web/Dockerfile","image":"meeshy-web","version":"'$VERSION'"}'
+            FIRST=false
+          fi
+
+          if [[ "${{ steps.changes.outputs.web_v3 }}" == "true" ]]; then
+            HAS_CHANGES=true
+            VERSION=$(node -p "require('./apps/web-v3/package.json').version" 2>/dev/null || echo "0.0.0")
+            [[ "$FIRST" == "false" ]] && SERVICES+=','
+            SERVICES+='{"service":"web-v3","context":".","dockerfile":"./apps/web-v3/Dockerfile","image":"meeshy-web-v3","version":"'$VERSION'"}'
             FIRST=false
           fi
 

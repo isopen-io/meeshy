@@ -1,16 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import crypto from 'crypto';
 import { logError } from '../utils/logger';
-import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
+import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../utils/response';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
-import { isIpInRange } from '../utils/ip-range';
-import { SecuritySanitizer } from '../utils/sanitize';
-import { generateNickname } from '../utils/anonymous-nickname';
-import { isConversationClosed } from '../services/messaging/conversationWriteAdmission';
-import { postJoinSystemMessage } from '../services/conversations/joinSystemMessage';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
-import { toAnonymousUsername, suffixAnonymousUsername } from '@meeshy/shared/utils/anonymous-username';
 import {
   errorResponseSchema,
   validationErrorResponseSchema,
@@ -19,6 +12,36 @@ import {
   conversationMinimalSchema,
   userMinimalSchema
 } from '@meeshy/shared/types/api-schemas';
+// #4167 — `POST /anonymous/join|refresh|leave` sont désormais des
+// ADAPTATEURS MINCES vers la loi d'admission UNIQUE (`admitLinkEntry`,
+// appelée par `performLinkJoin`) et les cœurs partagés de session invitée,
+// que `POST /links/:key/members` et `PATCH|DELETE /guest-sessions/me`
+// (les portes CIBLES) appellent de la même façon — voir
+// `routes/conversations/link-admission.ts`. Ce fichier ne recopie plus la
+// séquence de contrôles : une loi écrite à deux endroits est une loi dont la
+// version la plus permissive décide, exactement le défaut que #4167 ferme.
+import {
+  performLinkJoin,
+  refreshGuestSession,
+  endGuestSession,
+  participantConversationPayload,
+  resolveClientIp,
+} from './conversations/link-admission';
+// #4167 — les trois portes ci-dessous sont des ALIAS des portes cibles
+// (`POST /links/:key/members`, `PATCH|DELETE /guest-sessions/me`) : elles
+// annoncent leur sursis comme le fait déjà tout alias du dépôt (#4274,
+// `POST /conversations/:id/new-link` dans `sharing.ts` pour le même chantier
+// d'API-simplification) — jamais un `Deprecation`/`Link` écrit à la main ici.
+import { depreciee } from '../utils/deprecation';
+
+// #4165 — plafond de l'échantillon de participants actifs lu par
+// `GET /anonymous/link/:identifier` pour estimer les langues parlées d'un
+// lien AVANT de le rejoindre (voir le `findMany` de ce handler). Aligné sur
+// le plafond de `validatePagination` (`utils/pagination.ts`) : ce n'est pas
+// une pagination cliente (aucun `offset`/`limit` en entrée), donc pas
+// d'appel à l'utilitaire lui-même, mais le MÊME nombre — un aperçu avant de
+// rejoindre n'a pas besoin d'un échantillon plus large qu'une page de liste.
+const LINK_PREVIEW_LANGUAGE_SAMPLE_CAP = 100;
 
 // Schemas de validation
 const joinAnonymousSchema = z.object({
@@ -39,32 +62,6 @@ const refreshSessionSchema = z.object({
   sessionToken: z.string().min(1, 'Session token requis')
 });
 
-// Helper pour generer un sessionToken unique
-function generateSessionToken(deviceFingerprint?: string): string {
-  const timestamp = Date.now().toString();
-  const randomPart = crypto.randomBytes(16).toString('hex');
-  const devicePart = deviceFingerprint ? crypto.createHash('md5').update(deviceFingerprint).digest('hex').slice(0, 8) : '';
-  return `anon_${timestamp}_${randomPart}_${devicePart}`;
-}
-
-// Helper pour verifier l'IP et extraire le pays (simulation)
-function extractCountryFromIP(ipAddress: string): string | null {
-  // En production, utiliser un service de geolocalisation IP comme MaxMind ou IP2Location
-  // Pour le developpement, on simule quelques cas
-  if (ipAddress.startsWith('192.168.') || ipAddress.startsWith('127.') || ipAddress.startsWith('::1')) {
-    return 'FR'; // IP locale = France par defaut
-  }
-
-  // Simulation de quelques plages IP pour les tests
-  const ipNum = parseInt(ipAddress.split('.')[0]) || 0;
-  if (ipNum >= 1 && ipNum <= 50) return 'FR';
-  if (ipNum >= 51 && ipNum <= 100) return 'GB';
-  if (ipNum >= 101 && ipNum <= 150) return 'US';
-  if (ipNum >= 151 && ipNum <= 200) return 'DE';
-
-  return 'FR'; // Defaut France
-}
-
 export async function anonymousRoutes(fastify: FastifyInstance) {
   /**
    * Resout l'ID de ConversationShareLink reel a partir d'un identifiant (peut etre un ObjectID ou un identifier)
@@ -75,47 +72,14 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       return identifier;
     }
 
-    // Sinon, chercher par le champ identifier
+    // Sinon, chercher par le champ identifier — #4166 : seul `id` est lu ;
+    // un `findFirst` sans `select` chargeait la ligne entière pour ça.
     const shareLink = await fastify.prisma.conversationShareLink.findFirst({
-      where: { identifier: identifier }
+      where: { identifier: identifier },
+      select: { id: true }
     });
 
     return shareLink ? shareLink.id : null;
-  }
-
-  /**
-   * Premier pseudo libre de la série `ano_bob`, `ano_bob2`, `ano_bob3`… dans
-   * CETTE conversation — la seule portée où deux pseudos identiques se voient.
-   *
-   * Rend `null` quand la série est épuisée. La borne n'est pas un détail de
-   * confort : les deux boucles qu'elle remplace étaient des `while (true)` que
-   * seule la part aléatoire de `generateNickname` faisait terminer. Un pseudo
-   * demandé explicitement et durablement pris les faisait tourner jusqu'à
-   * l'OOM du process — un déni de service à un POST non authentifié.
-   */
-  const MAX_USERNAME_RANKS = 25;
-
-  async function findFreeAnonymousUsername(
-    desired: string,
-    conversationId: string
-  ): Promise<string | null> {
-    for (let rank = 1; rank <= MAX_USERNAME_RANKS; rank++) {
-      const candidate = rank === 1 ? desired : suffixAnonymousUsername(desired, rank);
-
-      const taken = await fastify.prisma.participant.findFirst({
-        where: {
-          conversationId,
-          displayName: candidate,
-          type: 'anonymous',
-          isActive: true
-        },
-        select: { id: true }
-      });
-
-      if (!taken) return candidate;
-    }
-
-    return null;
   }
 
   // Route pour rejoindre une conversation de maniere anonyme
@@ -222,271 +186,75 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         },
         500: errorResponseSchema
       }
-    }
+    },
+    // ALIAS de `POST /links/:key/members` (#4167) — le successeur porte un
+    // paramètre (`:key`), donc une FONCTION de la requête plutôt qu'un
+    // gabarit non suivable (cf. `utils/deprecation.ts` § « Le successeur
+    // peut dépendre de la requête »). `linkId` est le MÊME identifiant que
+    // `key` sur la porte cible : les deux acceptent linkId/identifier/id.
+    onRequest: [depreciee({
+      depuis: '2026-08-30',
+      successeur: (request) => `/api/v1/links/${(request.params as { linkId: string }).linkId}/members`,
+    })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { linkId } = request.params as { linkId: string };
       const body = joinAnonymousSchema.parse(request.body);
-      const firstName = SecuritySanitizer.sanitizeText(body.firstName);
-      const lastName = SecuritySanitizer.sanitizeText(body.lastName);
-      const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 
-
-      // 1. Verifier que le lien existe et est valide.
-      // Accepter linkId OU identifier (iOS partage l'identifier, web le linkId)
-      // — sinon toute invitation anonyme partagée depuis iOS tombait en 404.
-      const shareLink = await fastify.prisma.conversationShareLink.findFirst({
-        where: { OR: [{ linkId }, { identifier: linkId }] },
-        include: {
-          conversation: {
-            select: { id: true, title: true, type: true, isActive: true, closedAt: true }
-          }
-        }
-      });
-
-      if (!shareLink) {
-        return sendNotFound(reply, 'Lien de conversation introuvable');
-      }
-
-      // 2. Verifications de validite du lien
-      if (!shareLink.isActive) {
-        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
-      }
-
-      // Et de validite de ce vers quoi il POINTE. Les neuf verifications de
-      // cette section portent toutes sur le LIEN ; aucune ne portait sur la
-      // conversation, et une cloture n'eteint aucun lien de partage. Un lien qui
-      // circule restait donc joignable apres la mort du fil, et l'anonyme y
-      // obtenait un 200, une ligne active, puis une conversation absente de sa
-      // liste et un premier message refuse par `conversationWriteAdmission` —
-      // sans recours, ce participant etant sa seule identite.
-      //
-      // La porte enregistree passe par `resolveConversationEntry`, dont le
-      // parametre `conversation` est requis ; celle-ci est keyee sur un
-      // `User.id` que l'anonyme n'a pas, donc elle appelle le predicat
-      // directement. Meme regle, meme deux colonnes.
-      if (isConversationClosed(shareLink.conversation)) {
-        return sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminee' });
-      }
-
-      if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expire' });
-      }
-
-      if (shareLink.maxUses && shareLink.currentUses >= shareLink.maxUses) {
-        return sendError(reply, 410, 'LINK_MAX_USES', { message: 'Ce lien a atteint sa limite d\'utilisation' });
-      }
-
-      if (shareLink.maxConcurrentUsers && shareLink.currentConcurrentUsers >= shareLink.maxConcurrentUsers) {
-        return sendError(reply, 429, 'MAX_CONCURRENT_USERS', { message: 'Nombre maximum d\'utilisateurs concurrent atteint' });
-      }
-
-      // 3. Verifications de securite/restrictions
-      const country = extractCountryFromIP(clientIP);
-
-      // Verifier pays autorises
-      if (shareLink.allowedCountries.length > 0 && country && !shareLink.allowedCountries.includes(country)) {
-        return sendForbidden(reply, 'Acces non autorise depuis votre region');
-      }
-
-      // Verifier langues autorisees. `body.language` est deja canonicalise au
-      // boundary Zod via `normalizeLanguageForDedup` (casse repliee, region
-      // strippee, 3-lettres/legacy reduits). Les `allowedLanguages` viennent de
-      // la BASE, configurees a la main par le createur du lien : elles peuvent
-      // porter un tag de region (`fr-FR`), un code 3-lettres (`fra`) ou une casse
-      // mixte. Un `.toLowerCase()` brut sur ce cote-la les fait diverger de la
-      // forme canonique du joignant et REFUSE un acces qui doit etre accorde —
-      // decision d'acces, severite superieure a un defaut d'affichage. On
-      // canonicalise donc les DEUX cotes via la meme SSOT (suivi #1 de l'iter.
-      // 247).
-      if (
-        shareLink.allowedLanguages.length > 0 &&
-        !shareLink.allowedLanguages.some((l) => normalizeLanguageForDedup(l) === body.language)
-      ) {
-        return sendForbidden(reply, 'Langue non autorisee pour ce lien');
-      }
-
-      // Verifier plages IP autorisees
-      if (shareLink.allowedIpRanges.length > 0) {
-        const isIpAllowed = shareLink.allowedIpRanges.some(range => isIpInRange(clientIP, range));
-        if (!isIpAllowed) {
-          return sendForbidden(reply, 'Acces non autorise depuis votre adresse IP');
-        }
-      }
-
-      // 4. Verifier si un compte est requis (bloque l'acces anonyme)
-      if (shareLink.requireAccount) {
-        return sendForbidden(reply, 'REQUIRES_ACCOUNT', { message: 'Un compte est requis pour rejoindre cette conversation' });
-      }
-
-      // 5. Verifier si l'email est requis
-      if (shareLink.requireEmail && (!body.email || body.email.trim() === '')) {
-        return sendBadRequest(reply, 'L\'email est obligatoire pour rejoindre cette conversation');
-      }
-
-      // 6. Verifier si la date de naissance est requise
-      if (shareLink.requireBirthday && (!body.birthday || body.birthday.trim() === '')) {
-        return sendBadRequest(reply, 'La date de naissance est obligatoire pour rejoindre cette conversation');
-      }
-
-      // 7. Résoudre le pseudo — dans l'ESPACE RÉSERVÉ `ano_`, et sans jamais
-      //    refuser l'entrée pour cause d'homonymie.
-      //
-      //    L'ancienne porte comparait le pseudo demandé aux `User.username` du
-      //    site et rendait 409 sur collision. Deux torts : elle faisait payer à
-      //    un anonyme la présence d'un INSCRIT qu'il ne croisera jamais, et le
-      //    409 est terminal pour lui — ce lien est sa seule identité. Elle
-      //    calculait bien une alternative, dans deux `while (true)`, puis la
-      //    jetait : `sendError` ne la transportait pas jusqu'au client.
-      //
-      //    Les deux `while (true)` ne terminaient d'ailleurs QUE parce que
-      //    `generateNickname` tire au hasard. Sur une collision stable — un
-      //    pseudo explicitement demandé et déjà pris — la boucle interrogeait
-      //    la base sans fin, jusqu'à l'OOM du process.
-      //
-      //    Le pseudo d'un anonyme ne se compare donc plus à ceux des comptes :
-      //    ce qui distingue les deux populations n'est pas le nom mais le
-      //    GLYPHE FANTÔME, apposé au rendu devant le nom et le pseudo de tout
-      //    participant sans compte. `ano_` reste un préfixe lisible, PAS un
-      //    espace réservé — un compte peut s'appeler `ano_bob`, il n'aura
-      //    simplement pas le fantôme. Reste à départager les anonymes d'une
-      //    MÊME conversation, ce que le rang tranche.
-      if (shareLink.requireNickname && (!body.username || body.username.trim() === '')) {
-        return sendBadRequest(reply, 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation');
-      }
-
-      const requestedUsername = body.username && body.username.trim() !== ''
-        ? SecuritySanitizer.sanitizeUsername(body.username.trim())
-        : generateNickname(firstName, lastName);
-
-      const desiredUsername = toAnonymousUsername(requestedUsername);
-      const username = await findFreeAnonymousUsername(desiredUsername, shareLink.conversationId);
-
-      if (!username) {
-        return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', {
-          message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation',
-          details: { suggestedNickname: toAnonymousUsername(generateNickname(firstName, lastName)) }
-        });
-      }
-
-      // 8. Generer le sessionToken unique
-      const sessionToken = generateSessionToken(body.deviceFingerprint);
-
-      // 9. Creer le participant anonyme (unified Participant model)
-      const { hashSessionToken } = await import('../utils/session-token');
-      const sessionTokenHash = hashSessionToken(sessionToken);
-
-      const anonymousParticipant = await fastify.prisma.participant.create({
-        data: {
-          conversationId: shareLink.conversationId,
-          type: 'anonymous',
-          displayName: username,
+      // #4167 — cette porte DÉLÈGUE à `performLinkJoin` (la loi d'admission
+      // UNIQUE, `admitLinkEntry`, appliquée pour les deux identités) plutôt
+      // que de recopier la séquence de contrôles. Elle reste PUREMENT
+      // anonyme comme elle l'a toujours été (aucun
+      // `preValidation` ne lit `Authorization` ici) : `authContext: undefined`
+      // le dit explicitement — l'identité vient de la créance, jamais du
+      // chemin, et cette route ne regarde aucune créance.
+      const result = await performLinkJoin({
+        prisma: fastify.prisma,
+        key: linkId,
+        authContext: undefined,
+        requestIp: resolveClientIp(request),
+        profile: {
+          firstName: body.firstName,
+          lastName: body.lastName,
+          requestedUsername: body.username,
+          email: body.email,
+          birthday: body.birthday,
           language: body.language,
-          sessionTokenHash: sessionTokenHash,
-          shareLinkId: shareLink.id,
-          role: 'member',
-          permissions: {
-            canSendMessages: shareLink.allowAnonymousMessages,
-            canSendFiles: shareLink.allowAnonymousFiles,
-            canSendImages: shareLink.allowAnonymousImages,
-            canSendVideos: false,
-            canSendAudios: false,
-            canSendLocations: false,
-            canSendLinks: false,
-            // Figé comme les sept autres : on entre sous les conditions du
-            // MOMENT. Un hôte qui décoche `allowViewHistory` ensuite ne referme
-            // rien à qui est déjà là — son levier sur les personnes déjà
-            // entrées est la surcharge par participant.
-            canViewHistory: shareLink.allowViewHistory
-          },
-          anonymousSession: {
-            shareLinkId: shareLink.id,
-            session: {
-              sessionTokenHash: sessionTokenHash,
-              ipAddress: clientIP,
-              country: country,
-              deviceFingerprint: body.deviceFingerprint || null,
-              connectedAt: new Date()
-            },
-            profile: {
-              firstName: firstName,
-              lastName: lastName,
-              username: username,
-              email: body.email || null,
-              birthday: body.birthday ? new Date(body.birthday) : null
-            }
-          }
-        }
-      });
-
-      // 10. Mettre a jour les compteurs du lien
-      await fastify.prisma.conversationShareLink.update({
-        where: { id: shareLink.id },
-        data: {
-          currentUses: { increment: 1 },
-          currentConcurrentUsers: { increment: 1 },
-          currentUniqueSessions: { increment: 1 }
-        }
-      });
-
-      // 11. Annoncer l'arrivée dans le fil. Les membres présents voyaient sinon
-      //     un inconnu prendre la parole sans avoir vu entrer personne — et rien
-      //     ne disait que ce visiteur n'a PAS de compte, la distinction la plus
-      //     utile quand la porte est un lien public.
-      //
-      //     `postJoinSystemMessage` ne rejette jamais : l'avis est un accessoire
-      //     de l'entrée, pas sa condition. Un anonyme déjà admis ne doit pas se
-      //     voir refuser pour une panne d'écriture ou de socket.
-      await postJoinSystemMessage(
-        {
-          prisma: fastify.prisma,
-          broadcast: (message, conversationId) =>
-            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
-              ?? Promise.resolve()
+          deviceFingerprint: body.deviceFingerprint
         },
-        {
-          conversationId: shareLink.conversationId,
-          participantId: anonymousParticipant.id,
-          displayName: username,
-          isAnonymous: true,
-          viaShareLink: true,
-          // La carte d'arrivée sépare l'identité stable (pseudo `ano_…`) du
-          // nom humain donné au formulaire, et dit ce que le lien autorise.
-          username,
-          givenName: [firstName, lastName].filter(Boolean).join(' ') || undefined,
-          linkRules: {
-            canSendMessages: shareLink.allowAnonymousMessages,
-            canSendFiles: shareLink.allowAnonymousFiles,
-            canSendImages: shareLink.allowAnonymousImages
-          }
-        }
-      );
+        broadcast: (message, conversationId) =>
+          fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, conversationId)
+            ?? Promise.resolve()
+      });
 
-      return sendSuccess(reply, {
-          sessionToken: sessionToken,
-          participant: {
-            id: anonymousParticipant.id,
-            username: anonymousParticipant.anonymousSession?.profile?.username ?? anonymousParticipant.displayName,
-            displayName: anonymousParticipant.displayName,
-            firstName: anonymousParticipant.anonymousSession?.profile?.firstName ?? '',
-            lastName: anonymousParticipant.anonymousSession?.profile?.lastName ?? '',
-            avatar: anonymousParticipant.avatar ?? null,
-            banner: null,
-            language: anonymousParticipant.language,
-            isMeeshyer: false,
-            canSendMessages: anonymousParticipant.permissions?.canSendMessages ?? false,
-            canSendFiles: anonymousParticipant.permissions?.canSendFiles ?? false,
-            canSendImages: anonymousParticipant.permissions?.canSendImages ?? false
-          },
-          conversation: {
-            id: shareLink.conversation.id,
-            title: shareLink.conversation.title,
-            type: shareLink.conversation.type,
-            allowViewHistory: shareLink.allowViewHistory
-          },
-          linkId: shareLink.linkId,
-          id: shareLink.id // ID pour l'acces authentifie aux endpoints /links
-        }, { statusCode: 201 });
+      switch (result.kind) {
+        case 'not-found':
+          return sendNotFound(reply, 'Lien de conversation introuvable');
+        case 'refused':
+          // `admitLinkEntry` rend le statut ET le code — mêmes six codes que
+          // `POST /links/:key/members` (#4167 critère 2) : plus deux polices
+          // pour le même lien. `LINK_MAX_USES`/`MAX_CONCURRENT_USERS`
+          // (410/429) fusionnent en `LINK_EXHAUSTED` (409), et
+          // `allowedCountries` n'y figure plus — critère 5, décision du
+          // 2026-08-29 (voir `linkAdmission.ts`).
+          return sendError(reply, result.refusal.status, result.refusal.code, { message: result.refusal.message });
+        case 'language-not-allowed':
+          return sendError(reply, 403, 'LANGUAGE_NOT_ALLOWED', { message: 'Langue non autorisee pour ce lien' });
+        case 'validation':
+          return sendBadRequest(reply, result.message);
+        case 'username-taken':
+          return sendError(reply, 409, 'USERNAME_TAKEN_IN_CONVERSATION', {
+            message: 'Ce nom d\'utilisateur est deja utilise dans cette conversation',
+            details: { suggestedNickname: result.suggestion }
+          });
+        case 'joined':
+          return sendSuccess(reply, {
+              sessionToken: result.sessionToken,
+              ...participantConversationPayload(result.participant, result.shareLink),
+              linkId: result.shareLink.linkId,
+              id: result.shareLink.id // ID pour l'acces authentifie aux endpoints /links
+            }, { statusCode: 201 });
+      }
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -566,77 +334,32 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         },
         500: errorResponseSchema
       }
-    }
+    },
+    // ALIAS de `PATCH /guest-sessions/me` (#4167).
+    onRequest: [depreciee({ depuis: '2026-08-30', successeur: '/api/v1/guest-sessions/me' })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = refreshSessionSchema.parse(request.body);
-      const clientIP = request.ip || (request.headers['x-forwarded-for'] as string) || '127.0.0.1';
 
-      // Trouver le participant anonyme par sessionTokenHash
-      const { hashSessionToken } = await import('../utils/session-token');
-      const tokenHash = hashSessionToken(body.sessionToken);
+      // #4167 — cette porte DÉLÈGUE à `refreshGuestSession`, le cœur partagé
+      // avec `PATCH /guest-sessions/me`. Gagne au passage la garde
+      // `isConversationClosed` que cette route n'avait jamais eue (critère 4) :
+      // le jeton continue de voyager dans le CORPS ici — c'est le défaut que la
+      // nouvelle porte corrige, cette porte-ci reste un alias fonctionnel.
+      const result = await refreshGuestSession({ prisma: fastify.prisma, sessionToken: body.sessionToken });
 
-      const participant = await fastify.prisma.participant.findFirst({
-        where: { sessionTokenHash: tokenHash, type: 'anonymous' }
-      });
-
-      if (!participant || !participant.isActive) {
-        return sendUnauthorized(reply, 'Session invalide ou expiree');
+      switch (result.kind) {
+        case 'invalid':
+          return sendUnauthorized(reply, 'Session invalide ou expiree');
+        case 'link-gone':
+          return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
+        case 'link-expired':
+          return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Le lien a expire' });
+        case 'conversation-closed':
+          return sendError(reply, 410, 'CONVERSATION_CLOSED', { message: 'Cette conversation est terminee' });
+        case 'refreshed':
+          return sendSuccess(reply, participantConversationPayload(result.participant, result.shareLink));
       }
-
-      // Lookup shareLink from anonymousSession
-      const shareLinkId = participant.anonymousSession?.shareLinkId;
-      const shareLink = shareLinkId ? await fastify.prisma.conversationShareLink.findUnique({
-        where: { id: shareLinkId },
-        include: {
-          conversation: {
-            select: { id: true, title: true, type: true }
-          }
-        }
-      }) : null;
-
-      if (!shareLink) {
-        return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
-      }
-
-      if (!shareLink.isActive) {
-        return sendError(reply, 410, 'LINK_DEACTIVATED', { message: 'Le lien a ete desactive' });
-      }
-
-      if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-        return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Le lien a expire' });
-      }
-
-      await fastify.prisma.participant.update({
-        where: { id: participant.id },
-        data: {
-          lastActiveAt: new Date(),
-          isOnline: true
-        }
-      });
-
-      return sendSuccess(reply, {
-          participant: {
-            id: participant.id,
-            username: participant.anonymousSession?.profile?.username ?? participant.displayName,
-            displayName: participant.displayName,
-            firstName: participant.anonymousSession?.profile?.firstName ?? '',
-            lastName: participant.anonymousSession?.profile?.lastName ?? '',
-            avatar: participant.avatar ?? null,
-            banner: null,
-            language: participant.language,
-            isMeeshyer: false,
-            canSendMessages: participant.permissions?.canSendMessages ?? false,
-            canSendFiles: participant.permissions?.canSendFiles ?? false,
-            canSendImages: participant.permissions?.canSendImages ?? false
-          },
-          conversation: {
-            id: shareLink.conversation.id,
-            title: shareLink.conversation.title,
-            type: shareLink.conversation.type,
-            allowViewHistory: shareLink.allowViewHistory
-          }
-        });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -683,44 +406,30 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         },
         500: errorResponseSchema
       }
-    }
+    },
+    // ALIAS de `DELETE /guest-sessions/me` (#4167).
+    onRequest: [depreciee({ depuis: '2026-08-30', successeur: '/api/v1/guest-sessions/me' })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const body = refreshSessionSchema.parse(request.body);
 
-      const { hashSessionToken: hashToken } = await import('../utils/session-token');
-      const leaveTokenHash = hashToken(body.sessionToken);
+      // #4167 — cette porte DÉLÈGUE à `endGuestSession`, le cœur partagé avec
+      // `DELETE /guest-sessions/me`. IDEMPOTENT désormais (critère 4) : un
+      // second appel sur la même session ne décrémente plus une seconde fois
+      // `currentConcurrentUsers`, qui ne peut donc plus passer sous zéro.
+      const result = await endGuestSession({ prisma: fastify.prisma, sessionToken: body.sessionToken });
 
-      const participant = await fastify.prisma.participant.findFirst({
-        where: { sessionTokenHash: leaveTokenHash, type: 'anonymous' }
-      });
-
-      if (!participant) {
+      if (result.kind === 'not-found') {
         return sendNotFound(reply, 'Session introuvable');
-      }
-
-      await fastify.prisma.participant.update({
-        where: { id: participant.id },
-        data: {
-          isActive: false,
-          isOnline: false,
-          leftAt: new Date()
-        }
-      });
-
-      const leaveShareLinkId = participant.anonymousSession?.shareLinkId;
-      if (leaveShareLinkId) {
-        await fastify.prisma.conversationShareLink.update({
-          where: { id: leaveShareLinkId },
-          data: {
-            currentConcurrentUsers: { decrement: 1 }
-          }
-        });
       }
 
       return sendSuccess(reply, { message: 'Session fermee avec succes' });
 
     } catch (error) {
+      if (error instanceof z.ZodError) {
+        return sendBadRequest(reply, 'Donnees invalides');
+      }
+
       logError(fastify.log, 'Anonymous leave error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
@@ -818,6 +527,50 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     try {
       const { identifier } = request.params as { identifier: string };
 
+      // #4166, critère 1 — `include` sans `select` à la racine chargeait la
+      // ligne `ConversationShareLink` ENTIÈRE (compteurs de session,
+      // `allowedCountries`/`allowedIpRanges`, `createdAt`/`updatedAt`…) pour
+      // n'en servir qu'un sous-ensemble : les champs ci-dessous sont
+      // exactement ceux que la réponse de cette route sert (voir
+      // `sendSuccess` plus bas), plus `isActive` (garde d'expiration, jamais
+      // renvoyé).
+      const anonymousLinkPreviewSelect = {
+        id: true,
+        linkId: true,
+        name: true,
+        description: true,
+        isActive: true,
+        expiresAt: true,
+        maxUses: true,
+        currentUses: true,
+        maxConcurrentUsers: true,
+        currentConcurrentUsers: true,
+        requireAccount: true,
+        requireNickname: true,
+        requireEmail: true,
+        requireBirthday: true,
+        allowedLanguages: true,
+        conversation: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            createdAt: true
+          }
+        },
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
+          }
+        }
+      };
+
       // Resoudre l'ID de ConversationShareLink reel
       let shareLink;
 
@@ -825,27 +578,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       if (identifier.startsWith('mshy_')) {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { linkId: identifier },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                type: true,
-                createdAt: true
-              }
-            },
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
+          select: anonymousLinkPreviewSelect
         });
       } else {
         // Sinon, resoudre l'ID (peut etre un ObjectID ou un identifier)
@@ -856,27 +589,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { id: shareLinkId },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                type: true,
-                createdAt: true
-              }
-            },
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
+          select: anonymousLinkPreviewSelect
         });
       }
 
@@ -913,11 +626,24 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             isActive: true
           }
         }),
+        // BORNÉ (#4165). Sans `take`, cette requête ramenait TOUT participant
+        // actif de la conversation — sur un lien viral, potentiellement des
+        // dizaines de milliers de lignes — pour n'en tirer qu'un ENSEMBLE de
+        // langues (`spokenLanguages`, quelques éléments au plus). Le coût
+        // était proportionnel au fil ; le résultat exposé, minuscule. Cette
+        // route s'appelle AVANT de rejoindre (aperçu public) : un échantillon
+        // aligné sur le plafond de pagination du dépôt est un compromis
+        // assumé — une langue portée UNIQUEMENT par des participants au-delà
+        // de l'échantillon peut manquer à `spokenLanguages`. `memberCount`/
+        // `anonymousCount` restent EXACTS : ce sont des `.count()` séparés,
+        // non affectés par ce plafond.
         fastify.prisma.participant.findMany({
           where: {
             conversationId: shareLink.conversation.id,
             isActive: true
           },
+          orderBy: { joinedAt: 'asc' },
+          take: LINK_PREVIEW_LANGUAGE_SAMPLE_CAP,
           select: {
             type: true,
             language: true,

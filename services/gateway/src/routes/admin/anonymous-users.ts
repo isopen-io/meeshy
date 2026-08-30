@@ -8,20 +8,12 @@ import { validateQuery } from '../../validation/helpers.js';
 import { AnonymousUsersQuerySchema } from '../../validation/admin-schemas.js';
 import { permissionsService } from '../../services/admin/permissions.service';
 import type { UserRoleEnum } from '@meeshy/shared/types';
+import { requirePermission } from '../../middleware/authorize';
 
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const userRole = authContext.registeredUser.role;
-  const canView = ['BIGBOSS', 'ADMIN', 'MODERATOR', 'AUDIT'].includes(userRole);
-
-  if (!canView) {
-    return sendForbidden(reply, 'Permission insuffisante');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canViewUsers');
 
 export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
   /**
@@ -60,6 +52,22 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
       const [anonymousUsers, totalCount] = await Promise.all([
         fastify.prisma.participant.findMany({
           where,
+          // #4157 — deux secrets voyageaient ici SANS AUCUN gate, servis à
+          // MODERATOR/AUDIT (`canViewUsers`, aucun des deux n'a
+          // `canViewSensitiveData`) et jamais consommés par le web (vérifié :
+          // aucune lecture de `anonymousSession`/`sessionTokenHash` dans
+          // apps/web/app/admin/anonymous-users) :
+          //   - `sessionTokenHash` EST le hash comparé par
+          //     `middleware/auth.ts` (`createAnonymousUserContext`) pour
+          //     authentifier CETTE session anonyme — un champ d'IDENTIFIANT,
+          //     pas une donnée d'affichage ;
+          //   - `anonymousSession` (embarqué, sans `select`) porte une
+          //     SECONDE copie de ce hash (`session.sessionTokenHash`), l'IP,
+          //     l'empreinte d'appareil, ET le profil PII complet
+          //     (`profile.email`, `profile.birthday`) d'un participant
+          //     anonyme — exactement ce que `canViewSensitiveData = false`
+          //     masque partout ailleurs pour ces deux rôles.
+          // Ni l'un ni l'autre n'a d'usage produit : on ne les sert plus.
           select: {
             id: true,
             displayName: true,
@@ -71,8 +79,6 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
             joinedAt: true,
             leftAt: true,
             permissions: true,
-            anonymousSession: true,
-            sessionTokenHash: true,
             conversationId: true,
             conversation: {
               select: {

@@ -10,6 +10,7 @@ import {
 } from '@meeshy/shared/types/attachment';
 import { createAuthHeaders } from '@/utils/token-utils';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { apiService } from '@/services/api.service';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
@@ -258,7 +259,7 @@ export class TusUploadService {
     let hasAttemptedAuthRetry = false;
 
     const upload = new Upload(file, {
-      endpoint: buildApiUrl('/uploads'),
+      endpoint: buildApiUrl(API_ENDPOINTS.uploads.root),
       chunkSize: TUS_CHUNK_SIZE,
       retryDelays: [0, 3000, 5000, 10000, 20000],
       metadata: tusMetadata,
@@ -478,7 +479,7 @@ export class TusUploadService {
       xhr.addEventListener('error', () => rej(new Error('Network error')));
       xhr.addEventListener('timeout', () => rej(new Error('Upload timeout')));
       xhr.timeout = 600000;
-      xhr.open('POST', buildApiUrl('/attachments/upload'));
+      xhr.open('POST', buildApiUrl(API_ENDPOINTS.attachments.upload));
       Object.entries(authHeaders).forEach(([key, value]) => {
         xhr.setRequestHeader(key, value as string);
       });

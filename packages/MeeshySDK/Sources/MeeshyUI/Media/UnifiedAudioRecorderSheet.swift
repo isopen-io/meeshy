@@ -27,6 +27,15 @@ public struct UnifiedAudioRecorderSheet<Recorder: AudioRecordingProviding>: View
     /// pas ces flux. Closures opaques : le composant ignore ce qu'elles ouvrent.
     var onImportAudioFile: (() -> Void)?
     var onOpenSoundLibrary: (() -> Void)?
+    /// **Ce que l'hôte veut poser SOUS le bouton d'enregistrement.** Fente
+    /// opaque : la feuille ignore ce qu'elle rend. Le composer y met le rôle de
+    /// mixage (fond / premier plan) et le rognage — des décisions PRODUIT, qui
+    /// n'ont pas leur place dans un enregistreur générique partagé par les
+    /// stories, les posts et les réels.
+    ///
+    /// Masquée PENDANT l'enregistrement, comme les chips de source : les
+    /// réglages de ce qu'on n'a pas encore capturé n'ont rien à dire là.
+    var accessory: AnyView?
     /// La strip de langue tague la langue PARLÉE de l'enregistrement. Un call
     /// site qui possède déjà son propre sélecteur (ex. locale de transcription
     /// on-device du composer de post audio) la masque — la langue rendue est
@@ -54,12 +63,14 @@ public struct UnifiedAudioRecorderSheet<Recorder: AudioRecordingProviding>: View
                 showsLanguageStrip: Bool = true,
                 onImportAudioFile: (() -> Void)? = nil,
                 onOpenSoundLibrary: (() -> Void)? = nil,
+                accessory: AnyView? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
         self._recorder = StateObject(wrappedValue: recorder())
         self._selectedLanguage = State(initialValue: preferredLanguage)
         self.showsLanguageStrip = showsLanguageStrip
         self.onImportAudioFile = onImportAudioFile
         self.onOpenSoundLibrary = onOpenSoundLibrary
+        self.accessory = accessory
         self.onRecordComplete = onRecordComplete
     }
 
@@ -162,6 +173,11 @@ public struct UnifiedAudioRecorderSheet<Recorder: AudioRecordingProviding>: View
                     }
                 }
                 .padding(.bottom, 4)
+
+                if let accessory, !recorder.isRecording {
+                    accessory
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
             }
             .padding(.vertical, 8)
         }
@@ -373,12 +389,18 @@ extension UnifiedAudioRecorderSheet where Recorder == DefaultSDKAudioRecorder {
                 showsLanguageStrip: Bool = true,
                 onImportAudioFile: (() -> Void)? = nil,
                 onOpenSoundLibrary: (() -> Void)? = nil,
+                accessory: AnyView? = nil,
                 onRecordComplete: @escaping (URL, String) -> Void) {
+        // **Un init de convenance qui laisse tomber un paramètre le rend
+        // inatteignable.** Le seul appelant de cette feuille passe par ici : un
+        // `accessory` absent de CETTE signature n'existe pas, quoi qu'en dise
+        // l'init principal. Défaut déjà commis sur `StoryTextEditToolbar`.
         self.init(recorder: DefaultSDKAudioRecorder(),
                   preferredLanguage: preferredLanguage,
                   showsLanguageStrip: showsLanguageStrip,
                   onImportAudioFile: onImportAudioFile,
                   onOpenSoundLibrary: onOpenSoundLibrary,
+                  accessory: accessory,
                   onRecordComplete: onRecordComplete)
     }
 }

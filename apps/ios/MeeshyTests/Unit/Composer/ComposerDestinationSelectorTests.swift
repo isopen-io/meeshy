@@ -52,7 +52,7 @@ final class ComposerDestinationSelectorTests: XCTestCase {
     // 2 — l'ÉVENTAIL est le seul sélecteur : l'enum et le sélecteur de F1 ont
     // disparu du composer (code mort retiré, pas juste caché).
     func test_leSelecteurDeDestination_aDisparu_duComposer() throws {
-        let host = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let host = compact(try AppSourceGuard.composerHostSource())
         XCTAssertFalse(
             host.contains("documentDestinationSelector"),
             "Le sélecteur de destination contextuel est retiré du meuble (B3)."
@@ -61,7 +61,7 @@ final class ComposerDestinationSelectorTests: XCTestCase {
             host.contains("ComposerDocumentDestination"),
             "L'enum de destination n'est plus référencé — l'éventail (`ComposerFormat`) est la seule source du mode."
         )
-        let surface = compact(try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"))
+        let surface = compact(try AppSourceGuard.composerSurfaceSource())
         XCTAssertFalse(
             surface.contains("enumComposerDocumentDestination"),
             "L'enum `ComposerDocumentDestination` est SUPPRIMÉ, jamais laissé en jumelle divergente."
@@ -71,8 +71,8 @@ final class ComposerDestinationSelectorTests: XCTestCase {
     // 3 — l'éventail RESPIRE avec le média du document : `reelGate` lit
     // `documentComposesReel`, l'offre RÉEL apparaît à temps pour servir à basculer.
     func test_lEventail_respireAvecLeMediaDuDocument() throws {
-        let host = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(host.contains("private var reelGate"), "reelGate introuvable ou source vide")
+        let host = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(host.contains("var reelGate"), "reelGate introuvable ou source vide")
         let src = compact(host)
         XCTAssertTrue(
             src.contains("varreelGate:Bool") && src.contains("documentComposesReel"),
@@ -84,9 +84,9 @@ final class ComposerDestinationSelectorTests: XCTestCase {
     // `mountedSurface`), plus une closure par bouton : quel que soit le contrôle
     // qui bascule, le texte et le média suivent (loi 9, B1).
     func test_leReportDuContenu_aUnSeulSite_surMountedSurface() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
-            src.contains("privatefunccarryContentIntoSceneIfNeeded()"),
+            src.contains("funccarryContentIntoSceneIfNeeded()"),
             "Le report vit dans UNE fonction nommée, testable et unique."
         )
         XCTAssertTrue(
@@ -102,7 +102,7 @@ final class ComposerDestinationSelectorTests: XCTestCase {
     // 5 — la publication du document est TOUJOURS un POST simple : RÉEL/STORY
     // partent par la scène, jamais un réel promu en silence depuis le document.
     func test_laPublicationDuDocument_estToujoursUnPostSimple() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
             src.contains("forcePlainPost:true"),
             "Le document publie un POST simple (carrousel possible), jamais un réel — RÉEL passe par la scène (B3)."

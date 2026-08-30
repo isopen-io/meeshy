@@ -14,6 +14,7 @@ import { useQueryClient, useInfiniteQuery, focusManager } from '@tanstack/react-
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { conversationsService } from '@/services/conversations.service';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { AnonymousChatService } from '@/services/anonymous-chat.service';
 import { useConversationUIStore } from '@/stores/conversation-ui-store';
 import { messagesService } from '@/services/conversations/messages.service';
@@ -661,7 +662,7 @@ export function useConversationMessagesRQ(
     hasLoadedRef.current = resolvedId;
 
     // Mark-as-received triggers a read-status:updated socket event with summary
-    apiService.post(`/conversations/${resolvedId}/mark-as-received`)
+    apiService.post(API_ENDPOINTS.conversations.byConversationIdMarkAsReceived(resolvedId))
       .catch(() => {}); // Non-critical
   }, [conversationId, currentUser, isLoading, messages]); // eslint-disable-line react-hooks/exhaustive-deps
 

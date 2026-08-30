@@ -5,13 +5,14 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
-import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema } from './types';
+import { CreateCommentSchema, UpdateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams, UnlikeSchema, TranslatePostSchema } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendConflict, sendGone } from '../../utils/response';
 import { ConflictError } from '../../errors/custom-errors';
 import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { createSocialTranslateRateLimitConfig } from './socialRateLimit';
 import { withMutationLog, MutationResultGone } from '../../utils/withMutationLog';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { hoistLocationOnto } from '../../services/location/sharedPlace';
@@ -64,7 +65,15 @@ export function registerCommentRoutes(
     try {
       const { postId } = request.params;
       const query = FeedQuerySchema.safeParse(request.query);
-      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+      // Une requête malformée est REFUSÉE, jamais remplacée par des défauts
+      // (#4339, dette nommée par `no-silent-query-fallback-guard`). Le repli
+      // silencieux rendait la première page à qui demandait `?limit=abc` ou
+      // `?cursor=<expiré>` : l'appelant croyait paginer, et recevait
+      // indéfiniment le même début de fil sans qu'aucune erreur ne le dise.
+      if (!query.success) {
+        return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
+      }
+      const { cursor, limit } = query.data;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
@@ -110,7 +119,15 @@ export function registerCommentRoutes(
     try {
       const { commentId } = request.params;
       const query = FeedQuerySchema.safeParse(request.query);
-      const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
+      // Une requête malformée est REFUSÉE, jamais remplacée par des défauts
+      // (#4339, dette nommée par `no-silent-query-fallback-guard`). Le repli
+      // silencieux rendait la première page à qui demandait `?limit=abc` ou
+      // `?cursor=<expiré>` : l'appelant croyait paginer, et recevait
+      // indéfiniment le même début de fil sans qu'aucune erreur ne le dise.
+      if (!query.success) {
+        return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
+      }
+      const { cursor, limit } = query.data;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
       const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
@@ -408,6 +425,34 @@ export function registerCommentRoutes(
   // PATCH /posts/:postId/comments/:commentId — Edit own comment (content
   // and/or visual effects). isEdited passe à true ; un contenu modifié purge
   // les traductions et relance le pipeline (elles décrivaient l'ANCIEN texte).
+  //
+  // DÉCISION D'AUDIENCE (issue #4146), tranchée et écrite plutôt que constatée.
+  // Cette route et son jumeau `DELETE` en bas de fichier sont les deux seules
+  // routes de commentaire SANS garde d'audience du post, et c'est VOULU. Leurs
+  // six voisines en portent une (quatre via `loadCommentPostAcl`, deux via
+  // `resolveConsumptionTarget` / `resolveInteractionTarget`) ; l'écart était
+  // jusqu'ici visible sans être motivé, donc indistinguable d'un oubli — et un
+  // écart qu'on ne sait pas expliquer finit toujours par être « corrigé ».
+  //
+  // La ressource visée ici n'est pas le post : c'est le COMMENTAIRE, adressé
+  // par son seul `commentId` (le `:postId` du chemin n'est lu par personne),
+  // et le contrôle d'auteur du service — `PostCommentService.updateComment` /
+  // `deleteComment` lèvent `FORBIDDEN` hors auteur — est la garde S3 COMPLÈTE
+  // de cette ressource-là.
+  //
+  // Y ajouter l'audience du post rendrait ses propres mots IRRÉVOCABLES par la
+  // décision d'un AUTRE : l'auteur du post rompt l'amitié, bascule en `ONLY`
+  // ou en `PRIVATE`, et le commentaire reste affiché sous le nom de qui l'a
+  // écrit — sans qu'il puisse ni le corriger ni le retirer. Le droit de retirer
+  // ce qu'on a publié ne peut pas dépendre de quelqu'un d'autre.
+  //
+  // Rien ne fuit pour autant, et c'est ce qui rend la décision tenable : ni
+  // `PATCH` ni `DELETE` ne RENDENT le post ; la réponse ne porte que le
+  // commentaire de l'appelant, et le fan-out socket reste borné par l'audience
+  // du post (`broadcastCommentUpdated` / `broadcastCommentDeleted` reçoivent
+  // `authorId`, `visibility`, `visibilityUserIds`). Même règle que
+  // `DELETE /posts/:postId/bookmark` : on peut toujours défaire ce qu'on a
+  // fait. Témoin : `comments-retraction-decision.test.ts`.
   fastify.patch('/posts/:postId/comments/:commentId', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
@@ -505,8 +550,20 @@ export function registerCommentRoutes(
   // demande vers UNE langue (miroir de POST /posts/:postId/translate). Le
   // résultat arrive via comment:translation-updated ; hors des 5 langues
   // pré-générées, c'était le SEUL recours manquant du Prisme côté commentaires.
+  //
+  // #4147 critère 3 — DEUX défauts fermés dans le même geste : (a) aucun
+  // plafond avant ce lot (chaque appel enfile, comme son miroir post, un job
+  // ZMQ vers le translator — budget PROPRE à cette route, `config.rateLimit`
+  // ne pouvant pas le fusionner avec celui du post, cf. socialRateLimit.ts) ;
+  // (b) une validation À LA MAIN qui divergeait silencieusement du contrat du
+  // post — `targetLanguage.length > 5` ici contre `.max(6)` côté
+  // `TranslatePostSchema`, deux comportements pour un même geste : une langue
+  // régionalisée à 6 caractères passait côté post et se refusait ici.
+  // `TranslatePostSchema` (routes/posts/types.ts) est désormais la SEULE
+  // source de validation des deux routes — la garde à la main disparaît.
   fastify.post('/posts/:postId/comments/:commentId/translate', {
     preValidation: [requiredAuth],
+    config: { rateLimit: createSocialTranslateRateLimitConfig() },
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -515,12 +572,11 @@ export function registerCommentRoutes(
       }
 
       const { commentId } = request.params;
-      const body = (request.body ?? {}) as { targetLanguage?: unknown; force?: unknown };
-      const targetLanguage = typeof body.targetLanguage === 'string' ? body.targetLanguage.trim() : '';
-      if (targetLanguage.length < 2 || targetLanguage.length > 5) {
-        return sendBadRequest(reply, 'Invalid targetLanguage', { code: 'VALIDATION_ERROR' });
+      const parsed = TranslatePostSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
-      const force = body.force === true;
+      const { targetLanguage, force } = parsed.data;
 
       // Lecture-scope : même garde que le fil (un lecteur autorisé à VOIR le
       // fil peut en demander la traduction).
@@ -712,6 +768,12 @@ export function registerCommentRoutes(
   });
 
   // DELETE /posts/:postId/comments/:commentId — Delete a comment
+  //
+  // SANS garde d'audience du post, DÉLIBÉRÉMENT : retirer ses propres mots ne
+  // peut pas dépendre de l'accès qu'un autre nous laisse au post qui les
+  // porte. La motivation complète est écrite une fois, au-dessus du `PATCH`
+  // jumeau (issue #4146) ; le contrôle d'auteur de
+  // `PostCommentService.deleteComment` reste la garde de cette ressource.
   fastify.delete('/posts/:postId/comments/:commentId', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: CommentParams }>, reply: FastifyReply) => {

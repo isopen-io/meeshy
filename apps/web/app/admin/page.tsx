@@ -74,7 +74,7 @@ const AdminDashboard: React.FC = () => {
         // ✅ OPTIMISATION: Paralléliser les fetches indépendants avec Promise.all
         // Cela élimine le waterfall et réduit la latence de 200-500ms
         const [userResponse, statsResult] = await Promise.all([
-          fetch(buildApiUrl(API_ENDPOINTS.AUTH.ME), {
+          fetch(buildApiUrl(API_ENDPOINTS.auth.me), {
             headers: { Authorization: `Bearer ${token}` }
           }),
           // Charger les stats admin en parallèle

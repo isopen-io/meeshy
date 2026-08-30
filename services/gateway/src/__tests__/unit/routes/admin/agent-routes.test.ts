@@ -50,6 +50,10 @@ const mockPrisma: any = {
     aggregate: jest.fn<any>(),
     findMany: jest.fn<any>(),
   },
+  // #4157 — `PUT /llm` (S6) écrit sa trace ici.
+  adminAuditLog: {
+    create: jest.fn<any>(),
+  },
 };
 
 const adminUser = {
@@ -57,6 +61,14 @@ const adminUser = {
   role: 'ADMIN',
   username: 'admin',
   email: 'admin@test.com',
+};
+
+// #4157 — `PUT /llm` monte en S6 (souverain) : ADMIN n'y suffit plus.
+const bigbossUser = {
+  id: '507f1f77bcf86cd799439098',
+  role: 'BIGBOSS',
+  username: 'bigboss',
+  email: 'bigboss@test.com',
 };
 
 const regularUser = {
@@ -127,19 +139,25 @@ describe('Agent Admin Routes', () => {
   describe('GET /configs', () => {
     it('returns paginated configs aggregated by conversation', async () => {
       const configs = [{ id: '1', conversationId: 'c1', enabled: true, manualUserIds: [] }];
-      // First findMany call (configConvIds), then second (page configs)
-      mockPrisma.agentConfig.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])
-        .mockResolvedValueOnce(configs);
-      mockPrisma.agentUserRole.findMany
-        .mockResolvedValueOnce([{ conversationId: 'c1' }])
-        .mockResolvedValueOnce([
-          { conversationId: 'c1', userId: 'u1' },
-          { conversationId: 'c1', userId: 'u2' },
-        ]);
-      mockPrisma.agentAnalytic.findMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      // #4165 — `GET /configs` ne fait plus DEUX appels à chacun de ces trois
+      // `findMany` (un pour rassembler l'univers des conversationIds via
+      // `select: {conversationId}`, un pour la page) : le premier est
+      // retiré, remplacé par le `where` relationnel de `conversation.findMany`
+      // ci-dessous (`agentConfig`/`agentAnalytic`/`agentUserRoles` — voir
+      // `admin/agent.ts`). Un seul appel désormais par `findMany` : une seule
+      // valeur mockée, celle de l'ancien SECOND appel (la donnée de détail).
+      // Laisser les deux `mockResolvedValueOnce` chaînés serait pire qu'une
+      // valeur fausse pour CE test : `jest.clearAllMocks()` (le `beforeEach`
+      // ci-dessus) ne VIDE PAS la queue d'un `mockResolvedValueOnce` non
+      // consommé — la valeur en trop fuit alors dans le PROCHAIN test qui
+      // rappelle le même mock (mesuré : c'est exactement ce qui faisait
+      // échouer le test `GET /configs/:conversationId` juste en dessous).
+      mockPrisma.agentConfig.findMany.mockResolvedValueOnce(configs);
+      mockPrisma.agentUserRole.findMany.mockResolvedValueOnce([
+        { conversationId: 'c1', userId: 'u1' },
+        { conversationId: 'c1', userId: 'u2' },
+      ]);
+      mockPrisma.agentAnalytic.findMany.mockResolvedValueOnce([]);
       mockPrisma.conversation = {
         findMany: jest.fn<any>().mockResolvedValueOnce([
           { id: 'c1', title: 'Conv 1', type: 'group' },
@@ -267,21 +285,72 @@ describe('Agent Admin Routes', () => {
   });
 
   describe('PUT /llm', () => {
-    it('updates LLM config', async () => {
+    // #4157 — ANTI-TÉMOIN corrigé. Ce test appelait `/llm` sur l'app partagée
+    // (ADMIN) sans aucun motif, et attestait un `200` : `baseUrl` étant LIBRE,
+    // ADMIN pouvait rediriger tout le trafic LLM — donc le CONTENU des
+    // conversations envoyé en contexte — vers un hôte arbitraire, sans laisser
+    // de trace. La route monte désormais en S6 (souverain, BIGBOSS seul) et
+    // exige un motif écrit, consigné dans AdminAuditLog.
+    it('updates LLM config — BIGBOSS avec motif écrit', async () => {
       const existing = { id: '1', provider: 'openai' };
       const updated = { ...existing, model: 'gpt-4o', apiKeyEncrypted: 'k', fallbackApiKeyEncrypted: null };
       mockPrisma.agentLlmConfig.findFirst.mockResolvedValue(existing);
       mockPrisma.agentLlmConfig.update.mockResolvedValue(updated);
+      mockPrisma.adminAuditLog.create.mockResolvedValue({});
 
-      const res = await app.inject({
+      const bigbossApp = buildApp(bigbossUser);
+      await bigbossApp.ready();
+
+      const res = await bigbossApp.inject({
         method: 'PUT',
         url: '/llm',
-        payload: { model: 'gpt-4o' },
+        payload: { model: 'gpt-4o', reason: 'Migration vers un modèle plus récent' },
       });
       const body = JSON.parse(res.body);
 
       expect(res.statusCode).toBe(200);
       expect(body.success).toBe(true);
+      // `reason` ne doit JAMAIS atteindre Prisma — `AgentLlmConfig` n'a pas
+      // cette colonne, et `withAudit` la porte ailleurs (AdminAuditLog).
+      expect(mockPrisma.agentLlmConfig.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: { model: 'gpt-4o' },
+      });
+      expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledTimes(1);
+      const auditData = mockPrisma.adminAuditLog.create.mock.calls[0][0].data;
+      expect(auditData.action).toBe('AGENT_LLM_CONFIG_UPDATED');
+      expect(JSON.parse(auditData.metadata).reason).toBe('Migration vers un modèle plus récent');
+
+      await bigbossApp.close();
+    });
+
+    it('refuse ADMIN — le rang souverain (BIGBOSS) est requis (#4157)', async () => {
+      const res = await app.inject({
+        method: 'PUT',
+        url: '/llm',
+        payload: { model: 'gpt-4o', reason: 'Migration vers un modèle plus récent' },
+      });
+      expect(res.statusCode).toBe(403);
+      expect(mockPrisma.agentLlmConfig.update).not.toHaveBeenCalled();
+      expect(mockPrisma.agentLlmConfig.create).not.toHaveBeenCalled();
+    });
+
+    it('refuse BIGBOSS sans motif écrit — 400 avant toute écriture (#4157)', async () => {
+      const bigbossApp = buildApp(bigbossUser);
+      await bigbossApp.ready();
+
+      const sansMotif = await bigbossApp.inject({ method: 'PUT', url: '/llm', payload: { model: 'gpt-4o' } });
+      expect(sansMotif.statusCode).toBe(400);
+
+      const motifCourt = await bigbossApp.inject({
+        method: 'PUT',
+        url: '/llm',
+        payload: { model: 'gpt-4o', reason: 'court' }, // 5 caractères < minLength: 10
+      });
+      expect(motifCourt.statusCode).toBe(400);
+
+      expect(mockPrisma.agentLlmConfig.update).not.toHaveBeenCalled();
+      await bigbossApp.close();
     });
   });
 

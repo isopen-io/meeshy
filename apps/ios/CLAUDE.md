@@ -414,6 +414,51 @@ final class SomeViewModelTests: XCTestCase {
 - `@MainActor` on ALL test classes that test `@MainActor` ViewModels
 - Default param trick for `@MainActor` mocks: use `Type? = nil` + coalescing inside function
 
+## Les gestes de glissement sont PROGRESSIFS et ANNULABLES (directive porteur 2026-08-30)
+
+> « Il faut préférer ce type de swipe À CHAQUE FOIS qu'on parle de mettre un
+> swipe : c'est un swipe progressif et annulable jusqu'à 75-90 % de la fin. »
+
+**Un glissement n'est pas un déclencheur.** Tout geste de glissement que l'app
+propose doit :
+
+1. **suivre le doigt image par image** — ce qu'il déplace bouge pendant le geste,
+   pas à la levée du doigt ;
+2. **rester annulable jusqu'à 75-90 %** de sa course — revenir en arrière sans
+   relâcher restaure l'état d'avant, sans effet de bord ;
+3. **emmener AVEC lui ce qui l'accompagne** — clavier, feuille, barre : le geste
+   les pousse ensemble, il ne les fait pas disparaître l'un après l'autre.
+
+### Ce que cela interdit
+
+`DragGesture().onEnded { … }` comme unique porteur d'une décision. Il DÉCIDE à la
+levée du doigt : rien ne bouge pendant, rien n'est annulable, et l'ordre des
+disparitions n'est pas celui du geste. Un seuil (`translation.height > 40`) n'y
+change rien — il déplace le point de bascule, il ne rend pas le geste progressif.
+
+### Ce qu'il faut employer
+
+| besoin | mécanisme |
+|---|---|
+| renvoyer le clavier | `.scrollDismissesKeyboard(.interactively)` — le clavier suit le doigt et remonte si on relâche avant la fin |
+| refermer une feuille | les détentes système (`presentationDetents`), qui portent déjà le suivi et l'annulation |
+| déplacer un élément | `DragGesture().onChanged` qui pilote une valeur rendue, `.onEnded` ne servant qu'à CONCLURE une animation déjà en cours |
+
+**Le mécanisme système est préféré au geste maison** : une imitation écrite à la
+main diverge du reste de l'OS — seuil différent, courbe différente, pas de
+retour arrière — et l'utilisateur le sent avant de savoir le nommer.
+
+### Le témoin
+
+Un glissement écrit à la main se reconnaît à un `onEnded` qui décide sans
+`onChanged` qui montre. Là où un mécanisme système existe pour le même acte,
+c'est lui qu'on emploie ; là où il n'en existe pas, le geste porte sa progression
+dans une valeur rendue, et son annulation est éprouvée — pas supposée.
+
+Précédent : la zone de description du composer (#4361) est passée d'un
+`DragGesture.onEnded` avec seuil à `.scrollDismissesKeyboard(.interactively)`,
+sur cette directive.
+
 ## Cache-First Pattern (Obligatoire)
 
 Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Pattern I1

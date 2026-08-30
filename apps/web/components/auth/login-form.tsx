@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -14,14 +15,32 @@ import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
 import { requestBrowserGeolocation, getGeolocationHeaders } from '@/lib/geolocation';
 import { useAuth } from '@/hooks/use-auth';
+import { SESSION_STORAGE_KEYS } from '@/services/auth-manager.service';
+import { safeInternalPath } from '@/utils/safe-redirect';
 
 interface LoginFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
 }
 
+/**
+ * Where to send an account whose login response carried `requires2FA`
+ * (services/gateway/src/routes/auth/login.ts:121-135 — no `token` is ever
+ * granted on that branch). Kept a pure function of the current query string
+ * so the returnUrl-forwarding + safe-path clamping is unit-testable without
+ * depending on window.location, which jsdom 26+ makes non-observable in this
+ * repo's test environment (see login-form.test.tsx).
+ */
+export function buildVerifyTwoFactorUrl(search: string): string {
+  const returnUrl = new URLSearchParams(search).get('returnUrl');
+  return returnUrl
+    ? `/auth/verify-2fa?returnUrl=${encodeURIComponent(safeInternalPath(returnUrl, '/'))}`
+    : '/auth/verify-2fa';
+}
+
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const { t } = useI18n('auth');
   const { login } = useAuth();
+  const router = useRouter();
   const { identifier, setIdentifier } = useAuthFormStore();
   const [formData, setFormData] = useState({
     username: '',
@@ -85,7 +104,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setIsLoading(true);
 
     try {
-      const apiUrl = buildApiUrl(API_ENDPOINTS.AUTH.LOGIN);
+      const apiUrl = buildApiUrl(API_ENDPOINTS.auth.login);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -122,19 +141,40 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       const result = await response.json();
 
+      // The gateway serves this branch — { success: true, data: { requires2FA:
+      // true, twoFactorToken, user, ... } } — with NO `token`: every branch
+      // below expects one, so a 2FA account used to fall through to the
+      // generic "unknown error" message instead of reaching the second
+      // factor (#4458). Must be tested before the token cascade.
+      if (result.success && result.data?.requires2FA) {
+        const twoFactorData = result.data;
+
+        // Keys aligned with what /auth/verify-2fa reads (sessionStorage) and
+        // with what /auth/magic-link/validate already writes for the same
+        // screen — SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN / _USER_ID /
+        // _USERNAME. Do not invent new keys here.
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_TEMP_TOKEN, twoFactorData.twoFactorToken || '');
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USER_ID, twoFactorData.user?.id || '');
+        sessionStorage.setItem(SESSION_STORAGE_KEYS.TWO_FACTOR_USERNAME, twoFactorData.user?.username || '');
+
+        setIsLoading(false);
+        router.push(buildVerifyTwoFactorUrl(window.location.search));
+        return;
+      }
+
       let userData, token, sessionToken, expiresIn;
 
+      // The only contract the gateway still serves on a full login success
+      // (services/gateway/src/routes/auth/login.ts:188-194) — always wrapped
+      // in `{ success, data }` via sendSuccess(). The former `access_token`
+      // and unwrapped-`token` fallbacks below this point matched a shape the
+      // gateway has zero occurrences of anywhere in its source; measured and
+      // retired together with the #4458 fix (see PR description).
       if (result.success && result.data?.user && result.data?.token) {
         userData = result.data.user;
         token = result.data.token;
         sessionToken = result.data.sessionToken;
         expiresIn = result.data.expiresIn;
-      } else if (result.user && result.access_token) {
-        userData = result.user;
-        token = result.access_token;
-      } else if (result.user && result.token) {
-        userData = result.user;
-        token = result.token;
       } else {
         const errorMsg = t('login.errors.unknownError');
         setError(errorMsg);

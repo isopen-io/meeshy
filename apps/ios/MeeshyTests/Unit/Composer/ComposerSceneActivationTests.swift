@@ -41,7 +41,7 @@ final class ComposerSceneActivationTests: XCTestCase {
         // ferait rougir le test qui la VÉRIFIE). Seul du CODE qui réintroduit
         // le type doit faire rougir cette garde.
         let code = AppSourceGuard.stripComments(
-            try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
+            try AppSourceGuard.composerHostSource()
         )
         XCTAssertFalse(
             code.contains("ComposerSceneActivation"),
@@ -53,8 +53,8 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 2 — le MEUBLE monte la scène UNIQUEMENT par le routage du format
     // (STORY/RÉEL) — jamais par la couleur de fond choisie.
     func test_leMeuble_monteLaScene_parLeRoutageDuFormatSeul() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(raw.contains("private var mountedSurface"),
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var mountedSurface"),
                       "mountedSurface introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
@@ -71,7 +71,7 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 3 — la surface document PEINT un picker de couleur de fond, sur la palette
     // partagée du SDK (aucune palette recopiée).
     func test_laSurface_peintLePickerDeFond_surLaPalettePartagee() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
+        let raw = try AppSourceGuard.composerSurfaceSource()
         XCTAssertTrue(raw.contains("private var backgroundStrip"),
                       "backgroundStrip introuvable ou source vide")
         let src = compact(raw)
@@ -88,7 +88,7 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 4 — le meuble CÂBLE le picker : il pose la couleur dans le SOCLE ET la sème
     // dans l'atelier (le fond que la scène affiche).
     func test_leMeuble_cableLePicker_etSemeLaCouleur() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
             src.contains("onPickBackground:"),
             "Le meuble passe `onPickBackground` à la surface — le geste remonte au socle."
@@ -120,7 +120,7 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 6 — E1 (#3886) : la naissance de la scène SÈME la langue déclarée (la
     // capsule) dans l'atelier, défaut de tout objet posé.
     func test_laNaissanceDeLaScene_semeLaLangueDeclaree() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
             src.contains("viewModel.declaredContentLanguage=documentLanguage"),
             "Quand la scène naît (fond OU STORY), l'atelier reçoit la langue DÉCLARÉE au composer "
@@ -131,7 +131,7 @@ final class ComposerSceneActivationTests: XCTestCase {
     // 7 — B1 (#3924) : quand la scène naît (fond OU STORY), le TEXTE **et** le
     // MÉDIA déjà composés SUIVENT — loi 9, changer de mode ne jette rien.
     func test_laNaissanceDeLaScene_porteLeTexteEtLeMedia() throws {
-        let src = compact(try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+        let src = compact(try AppSourceGuard.composerHostSource())
         XCTAssertTrue(
             src.contains("viewModel.applyContentText(documentText)"),
             "Le texte du document SUIT dans la scène (`applyContentText`) — loi 9."
@@ -158,8 +158,8 @@ final class ComposerSceneActivationTests: XCTestCase {
     /// passe toujours par l'unique classeur MIME du dépôt, et le DOCUMENT reste
     /// hors scène — lui n'a de place ni visuelle ni sonore.
     func test_leMediaPorte_prendImageVideoEtSon_maisJamaisUnDocument() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(raw.contains("private var documentContentMedia"),
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var documentContentMedia"),
                       "documentContentMedia introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
@@ -197,33 +197,53 @@ final class ComposerSceneActivationTests: XCTestCase {
     // — n'est pas affaibli : il asserte désormais qu'elle vit dans une COUCHE,
     // ce qui est une position tout aussi vérifiable et une place mieux choisie.
     func test_laDescription_vitDansUneCouche_etNonSousLeCanvas() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(raw.contains("private var sceneDescriptionLayer"),
-                      "sceneDescriptionLayer introuvable ou source vide")
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var sceneDescriptionEditor"),
+                      "sceneDescriptionEditor introuvable ou source vide")
         let src = compact(raw)
         XCTAssertFalse(
             src.contains("ifmountedSurface==.scene{sceneDescriptionSection}"),
             "La description est revenue occuper le bas en permanence — la place que la scène centrée réclame."
         )
+        // RETOURNÉ au #4361 : la zone s'ancre en BAS et la scène remonte
+        // au-dessus, au lieu d'être recouverte par une couche.
         XCTAssertTrue(
-            src.contains("ifeditsSceneDescription{sceneDescriptionLayer}"),
-            "Elle s'ouvre par l'icône de la rangée haute, en couche par-dessus tout."
+            src.contains("ifeditsSceneDescription{sceneDescriptionEditor}"),
+            "Elle s'ouvre par l'icône de la rangée d'outils, en zone basse."
         )
     }
 
-    // 10 — B2 : écrire la description garde UN seul contenu — elle met à jour
-    // `documentText` (l'état partagé) ET le sème sur la scène (`applyContentText`),
-    // jamais un second champ (loi 9 / B1).
-    func test_laDescription_gardeUnSeulContenu() throws {
-        let raw = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        XCTAssertTrue(raw.contains("private var sceneDescriptionBinding"),
+    // 10 — **RETOURNÉ au 2026-08-30, sur rappel du porteur** : « cette
+    // description est propre à chaque slide ».
+    //
+    // La garde exigeait que la description écrive dans `documentText` — le texte
+    // de la PUBLICATION — *et* sur la scène. Cette double écriture protégeait la
+    // loi 9 / B1 : un seul contenu, aller-retour scène ↔ document. Sa prémisse
+    // était que la description ÉTAIT le texte du post ; le porteur l'a révoquée,
+    // et le poste n'affiche que son `content`, pas les descriptions.
+    //
+    // Ce qui restait faux même avant : l'ÉCRITURE était déjà propre à la slide
+    // (`applyContentText` pose sur `currentSlide`), mais la LECTURE rendait
+    // `documentText`. À la deuxième slide, on y trouvait la description de la
+    // première — puis on écrasait la sienne en tapant.
+    func test_laDescription_appartientALaSlide_desDeuxCotes() throws {
+        let raw = try AppSourceGuard.composerHostSource()
+        XCTAssertTrue(raw.contains("var sceneDescriptionBinding"),
                       "sceneDescriptionBinding introuvable ou source vide")
         let src = compact(raw)
         XCTAssertTrue(
-            src.contains("documentText=newValue")
-                && src.contains("viewModel.applyContentText(newValue)"),
-            "La description écrit dans `documentText` (partagé) ET le sème sur la scène — "
-                + "un seul contenu, jamais deux champs à faire diverger."
+            src.contains("get:{viewModel.currentSlide.content??\"\"}"),
+            "La LECTURE doit venir de la slide COURANTE : lire le texte de la publication "
+                + "montrerait la description d'une autre slide, et la ferait écraser."
+        )
+        XCTAssertTrue(
+            src.contains("set:{viewModel.applyContentText($0)}"),
+            "… et l'écriture y reste."
+        )
+        XCTAssertFalse(
+            src.contains("documentText=newValue"),
+            "Écrire aussi dans `documentText` verserait la description d'une slide dans le "
+                + "contenu du post — que le porteur a explicitement séparé."
         )
     }
 

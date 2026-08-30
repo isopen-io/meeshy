@@ -273,6 +273,29 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 }
             }
 
+            // **#3945 — ce qui vient d'être synchronisé doit avoir touché le
+            // DISQUE avant qu'on rende le budget.**
+            //
+            // `syncNow()` et `ensureMessages(force:)` écrivent par le chemin
+            // standard de `GRDBCacheStore` : L1 tout de suite, SQLite après un
+            // débounce de 2 s. `state.finish()` termine la tâche d'arrière-plan
+            // ET le `completionHandler` — il REND le budget, il ne l'attend pas.
+            // Entre ce retour et le débounce, rien ne retient le processus : iOS
+            // suspend puis tue couramment un réveil d'arrière-plan avant les 2 s,
+            // et le message reçu disparaît. Les ~25 s sont un PLAFOND, jamais une
+            // attente ; c'est exactement le défaut de #3894, sur un chemin
+            // beaucoup plus fréquent — chaque message reçu app fermée.
+            //
+            // La deadline vient du budget RESTANT (`SilentPushDurability`), pas
+            // d'un délai fixe : coupé au milieu, `flushAll(deadline:)` laisse des
+            // stores sales, et un délai fixe se trompe dans les deux sens.
+            await CacheCoordinator.shared.flushAll(
+                deadline: SilentPushDurability.flushDeadline(
+                    now: Date(),
+                    backgroundTimeRemaining: UIApplication.shared.backgroundTimeRemaining
+                )
+            )
+
             let handledMs = Int(Date().timeIntervalSince(notifReceivedAt) * 1000)
             Logger.network.info("perf:ios.notif.silent-push.handled messageId=\(messageId ?? "nil", privacy: .public) conversationId=\(convId ?? "nil", privacy: .public) durationMs=\(handledMs, privacy: .public)")
             state.finish()

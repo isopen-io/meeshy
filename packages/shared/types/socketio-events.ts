@@ -381,9 +381,19 @@ export const SERVER_EVENTS = {
    * removes the conversation from the caller's own device list only — the
    * conversation stays active for every other participant. Broadcast to the
    * caller's **user room** (`ROOMS.user`) only, so their other devices stay
-   * in sync — contrast with `CONVERSATION_CLOSED` above.
+   * in sync — contrast with `CONVERSATION_CLOSED` above. Inverse:
+   * `CONVERSATION_RESTORED` below.
    */
   CONVERSATION_DELETED: 'conversation:deleted',
+  /**
+   * Inverse of `CONVERSATION_DELETED` (`POST
+   * /conversations/:id/restore-for-me`, #4344): the caller undid a per-user
+   * "delete for me" — same shape, opposite direction, same audience. Broadcast
+   * to the caller's **user room** (`ROOMS.user`) only, so their other devices
+   * bring the conversation back too, exactly as `MESSAGE_RESTORED_FOR_ME`
+   * mirrors `MESSAGE_HIDDEN_FOR_ME`.
+   */
+  CONVERSATION_RESTORED: 'conversation:restored',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   LINK_MESSAGE_NEW: 'link:message:new',
@@ -1583,7 +1593,6 @@ export interface ConversationPreferencesPayload {
   readonly reaction: string | null;
   /** `ReadingModePreference` (`types/reading-modes.ts`) : `auto` rend la main à l'orchestrateur. */
   readonly readingMode: string;
-  readonly deletedForUserAt: string | null;
   readonly clearHistoryBefore: string | null;
 }
 
@@ -1763,6 +1772,15 @@ export interface CategoriesReorderedEventData {
  * `ConversationStore.applyConversationDeleted`.
  */
 export interface ConversationDeletedEventData {
+  readonly userId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * Payload of `CONVERSATION_RESTORED`. Same shape, opposite direction — see
+ * `ConversationDeletedEventData` above.
+ */
+export interface ConversationRestoredEventData {
   readonly userId: string;
   readonly conversationId: string;
 }
@@ -2364,6 +2382,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CONVERSATION_UPDATED]: (data: ConversationUpdatedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_CLOSED]: (data: ConversationClosedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_DELETED]: (data: ConversationDeletedEventData) => void;
+  [SERVER_EVENTS.CONVERSATION_RESTORED]: (data: ConversationRestoredEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_JOINED]: (data: ConversationParticipantJoinedEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT]: (data: ConversationParticipantLeftEventData) => void;
   [SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED]: (data: ConversationParticipantBannedEventData) => void;

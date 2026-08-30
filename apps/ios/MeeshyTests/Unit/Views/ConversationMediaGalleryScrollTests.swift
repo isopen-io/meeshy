@@ -141,14 +141,25 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// RACINE. Un pincement ou un glissement les réécrit à la fréquence
     /// d'affichage, donc invalidait la racine — donc le pager — donc chaque
     /// page réalisée, à chaque frame. La transformation appartient à la page.
+    /// **Cette garde-ci lit le FICHIER, pas l'unité — et c'est délibéré.**
+    ///
+    /// Ses sœurs ont été repointées sur `AppSourceGuard.unit` au #4014, parce
+    /// qu'elles cherchent la PRÉSENCE de quelque chose et qu'une découpe ne doit
+    /// pas la leur faire perdre. Celle-ci porte sur le LIEU : « la
+    /// transformation n'est pas à la racine ». L'unité concatène la racine et
+    /// les pages — donc elle EFFACE exactement la distinction que ce témoin
+    /// mesure, et le rend rouge sur un code juste.
+    ///
+    /// La découpe l'a d'ailleurs simplifié : `ConversationMediaGalleryView.swift`
+    /// ne contient plus QUE la racine, si bien que les deux ancres qui bornaient
+    /// la région (`struct … View {` → `enum GalleryRenderWindow {`, cette
+    /// seconde ayant déménagé) n'ont plus lieu d'être. Le fichier EST la région.
     func test_transformState_livesOnThePage_neverOnTheGalleryRoot() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
-        guard let rootStart = code.range(of: "struct ConversationMediaGalleryView: View {"),
-              let rootEnd = code.range(of: "enum GalleryRenderWindow {")
-        else {
-            XCTFail("structure du fichier galerie inattendue"); return
-        }
-        let root = String(code[rootStart.upperBound..<rootEnd.lowerBound])
+        let root = AppSourceGuard.stripComments(try source(Self.gallery))
+        XCTAssertTrue(root.contains("struct ConversationMediaGalleryView: View {"),
+                      "le fichier racine ne porte plus la racine — le témoin doit être repointé")
+        XCTAssertFalse(root.contains("struct GalleryImagePage"),
+                       "les pages sont revenues dans le fichier racine : la région n'est plus la racine seule")
 
         for banned in ["@State private var scale", "@State private var offset"] {
             XCTAssertFalse(
@@ -162,7 +173,7 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// la racine, fenêtre ou pas. `.equatable()` est ce qui transforme la
     /// comparaison en économie réelle.
     func test_bothPageKinds_areEquatable_andMountedAsSuch() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
 
         XCTAssertTrue(code.contains("struct GalleryImagePage: View, Equatable"))
         XCTAssertTrue(code.contains("struct GalleryVideoPage: View, Equatable"))
@@ -176,7 +187,7 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// de disponibilité, ni auto-téléchargement. Sans cette porte, traverser
     /// une conversation de vingt vidéos en lançait vingt.
     func test_videoPage_doesNoWorkOutsideTheRenderWindow() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         guard let taskStart = code.range(of: ".task(id: \"\\(attachment.id)#\\(isWindowed)\")") else {
             XCTFail("la tâche de la page vidéo doit être re-jouée quand la page entre dans la fenêtre")
             return
@@ -191,7 +202,7 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     /// La pellicule est montée SOUS les détails de l'auteur, et seulement quand
     /// il y a plus d'un média à parcourir.
     func test_filmstrip_isMountedBelowTheAuthorRow_whenThereIsMoreThanOneMedium() throws {
-        let code = AppSourceGuard.stripComments(try source(Self.gallery))
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.gallery))
         guard let start = code.range(of: "private var bottomOverlay") else {
             XCTFail("bottomOverlay introuvable"); return
         }

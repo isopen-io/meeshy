@@ -113,49 +113,73 @@ final class UserServiceTests: XCTestCase {
         XCTAssertEqual(result.id, "user123")
     }
 
-    // MARK: - getProfile
+    // MARK: - getProfile — UNE adresse (#4161)
 
-    func testGetProfileByIdOrUsername() async throws {
+    /// Le SDK visait TROIS adresses pour la même ligne : `/users/{id}`,
+    /// `/users/id/{id}` et `/u/{pseudo}`, dont deux servaient des formes de
+    /// réponse différentes. Ces témoins gardent la convergence — ils tombent
+    /// si un appel repart vers un alias.
+    func testGetProfileByHandleHitsTheCanonicalAddress() async throws {
         let user = makeMeeshyUser()
-        let response = APIResponse<MeeshyUser>(success: true, data: user, error: nil)
-        mock.stub("/users/testuser", result: response)
+        let response = APIResponse<PublicProfile>(success: true, data: PublicProfile(user: user), error: nil)
+        mock.stub("/directory/people/testuser", result: response)
+
+        let result = try await service.getProfile(handle: "testuser")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/people/testuser")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(result.user.id, "user123")
+    }
+
+    func testGetProfileByIdOrUsernameGoesThroughTheCanonicalAddress() async throws {
+        let user = makeMeeshyUser()
+        let response = APIResponse<PublicProfile>(success: true, data: PublicProfile(user: user), error: nil)
+        mock.stub("/directory/people/testuser", result: response)
 
         let result = try await service.getProfile(idOrUsername: "testuser")
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/testuser")
-        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/people/testuser")
         XCTAssertEqual(result.id, "user123")
     }
 
-    // MARK: - getPublicProfile
-
-    func testGetPublicProfileCallsPublicEndpoint() async throws {
-        let user = makeMeeshyUser(username: "publicuser")
-        let response = APIResponse<MeeshyUser>(success: true, data: user, error: nil)
-        mock.stub("/u/publicuser", result: response)
-
-        let result = try await service.getPublicProfile(username: "publicuser")
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/u/publicuser")
-        XCTAssertEqual(mock.lastRequest?.method, "GET")
-        XCTAssertEqual(result.username, "publicuser")
-    }
-
-    // MARK: - getProfileById
-
-    func testGetProfileByIdCallsIdEndpoint() async throws {
+    func testGetProfileByIdGoesThroughTheCanonicalAddress() async throws {
         let user = makeMeeshyUser(id: "abc123")
-        let response = APIResponse<MeeshyUser>(success: true, data: user, error: nil)
-        mock.stub("/users/id/abc123", result: response)
+        let response = APIResponse<PublicProfile>(success: true, data: PublicProfile(user: user), error: nil)
+        mock.stub("/directory/people/abc123", result: response)
 
         let result = try await service.getProfileById("abc123")
 
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/id/abc123")
-        XCTAssertEqual(mock.lastRequest?.method, "GET")
+        // `/users/id/{id}` reste servie par la passerelle pour les versions
+        // installées ; le SDK ne l'appelle plus.
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/people/abc123")
         XCTAssertEqual(result.id, "abc123")
+    }
+
+    /// Deux appels demandant les mêmes expansions doivent produire la MÊME
+    /// URL : sans tri, un `Set` rendrait un ordre variable, donc deux entrées
+    /// de cache et deux ETags pour une charge identique.
+    func testExpandIsSortedSoTheURLIsStable() async throws {
+        let user = makeMeeshyUser()
+        let response = APIResponse<PublicProfile>(success: true, data: PublicProfile(user: user), error: nil)
+        mock.stub("/directory/people/testuser", result: response)
+
+        _ = try await service.getProfile(handle: "testuser", expand: [.relation, .stats, .presence])
+
+        let expand = mock.lastRequest?.queryItems?.first { $0.name == "expand" }?.value
+        XCTAssertEqual(expand, "presence,relation,stats")
+    }
+
+    func testExpandIsAbsentWhenNothingIsAsked() async throws {
+        let user = makeMeeshyUser()
+        let response = APIResponse<PublicProfile>(success: true, data: PublicProfile(user: user), error: nil)
+        mock.stub("/directory/people/testuser", result: response)
+
+        _ = try await service.getProfile(handle: "testuser")
+
+        // Aucun paramètre parasite : une URL nue est celle que le cache
+        // partagé anonyme peut servir.
+        XCTAssertNil(mock.lastRequest?.queryItems?.first { $0.name == "expand" })
     }
 
     // MARK: - getProfileByEmail
@@ -230,14 +254,20 @@ final class UserServiceTests: XCTestCase {
             languagesUsed: 3, memberDays: 30,
             languages: ["fr", "en", "es"], achievements: []
         )
-        let response = APIResponse<UserStats>(success: true, data: stats, error: nil)
-        mock.stub("/users/user123/stats", result: response)
+        // Les statistiques se lisent à la MÊME adresse que le profil (#4161) :
+        // `/users/{id}/stats` recopiait le calcul et avait divergé — son
+        // `totalTranslations` valait 0 pour tout le monde, mesuré en
+        // intégration. `?expand=stats` sert le calcul unique du serveur.
+        let profil = PublicProfile(user: makeMeeshyUser(), stats: stats)
+        let response = APIResponse<PublicProfile>(success: true, data: profil, error: nil)
+        mock.stub("/directory/people/user123", result: response)
 
         let result = try await service.getUserStats(userId: "user123")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/user123/stats")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/people/user123")
         XCTAssertEqual(mock.lastRequest?.method, "GET")
+        XCTAssertEqual(mock.lastRequest?.queryItems?.first { $0.name == "expand" }?.value, "stats")
         XCTAssertEqual(result.totalMessages, 150)
         XCTAssertEqual(result.totalConversations, 10)
         XCTAssertEqual(result.languagesUsed, 3)

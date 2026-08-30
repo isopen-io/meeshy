@@ -120,7 +120,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         return;
       }
       
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.GROUP.LIST), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.communities.root), {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -153,7 +153,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
       const token = authManager.getAuthToken();
       if (!token) return;
 
-      const response = await fetch(buildApiUrl(`/communities/${identifier}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.communities.byId(identifier)), {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -211,7 +211,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         return;
       }
 
-      const response = await fetch(buildApiUrl(`/communities/check-identifier/${encodeURIComponent(fullIdentifier)}`), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.communities.checkIdentifierByIdentifier(encodeURIComponent(fullIdentifier))), {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -258,7 +258,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
       // Ajouter le préfixe mshy_ pour l'envoi au serveur
       const fullIdentifier = `mshy_${newGroupIdentifier}`;
 
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.GROUP.CREATE), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.communities.root), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

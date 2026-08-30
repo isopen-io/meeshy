@@ -8,13 +8,13 @@ import { useShallow } from 'zustand/react/shallow';
 import type { User } from '@meeshy/shared/types';
 import { AUTH_STORAGE_KEYS } from '@/constants/auth';
 import { authManager } from '@/services/auth-manager.service';
+import { authService } from '@/services/auth.service';
 
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isAuthChecking: boolean;
   authToken: string | null;
-  refreshToken: string | null;
   sessionToken: string | null;
   sessionExpiry: Date | null;
 }
@@ -22,6 +22,12 @@ interface AuthState {
 interface AuthActions {
   setUser: (user: User | null) => void;
   setAuthChecking: (checking: boolean) => void;
+  // `refreshToken` (2e créneau) n'a plus de contrepartie en état réactif
+  // (#4405, étape 3) : son accesseur sur AuthManager a été retiré — rien ne
+  // produit jamais de valeur pour ce créneau (mesuré, aucune route
+  // d'authentification du gateway ne rend ce champ). Le paramètre reste
+  // ACCEPTÉ, à sa position : `hooks/use-auth.ts:175` (hors territoire de ce
+  // lot) l'appelle encore positionnellement.
   setTokens: (authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number) => void;
   clearAuth: () => void;
   logout: () => void;
@@ -36,7 +42,6 @@ const initialState: AuthState = {
   isAuthenticated: false,
   isAuthChecking: true,
   authToken: null,
-  refreshToken: null,
   sessionToken: null,
   sessionExpiry: null,
 };
@@ -53,7 +58,6 @@ export const useAuthStore = create<AuthStore>()(
               user: null,
               isAuthenticated: false,
               authToken: null,
-              refreshToken: null,
               sessionToken: null,
               sessionExpiry: null,
             });
@@ -82,7 +86,6 @@ export const useAuthStore = create<AuthStore>()(
 
             set({
               authToken,
-              refreshToken: refreshToken || get().refreshToken,
               sessionToken: sessionToken || get().sessionToken,
               sessionExpiry,
             });
@@ -93,7 +96,6 @@ export const useAuthStore = create<AuthStore>()(
               user: null,
               isAuthenticated: false,
               authToken: null,
-              refreshToken: null,
               sessionToken: null,
               sessionExpiry: null,
               isAuthChecking: false,
@@ -118,29 +120,32 @@ export const useAuthStore = create<AuthStore>()(
           },
 
           refreshSession: async (): Promise<boolean> => {
-            const { refreshToken, authToken } = get();
+            const { authToken, sessionToken } = get();
 
-            if (!refreshToken && !authToken) return false;
+            // `token` (le JWT) est REQUIS par le schéma serveur de
+            // /auth/refresh — un sessionToken seul, sans authToken, ne peut
+            // jamais aboutir (voir authService.refreshToken).
+            if (!authToken) return false;
 
             try {
-              const response = await fetch('/api/auth/refresh', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${authToken}`,
-                },
-                body: JSON.stringify({ refreshToken }),
-              });
+              // Une SEULE source de vérité pour l'appel réseau :
+              // authService.refreshToken() est déjà câblé sur
+              // buildApiUrl(API_ENDPOINTS.auth.refresh) et porte le corps que
+              // la route exige (`{ token, sessionToken }`). Le store ne
+              // duplique plus de second `fetch`.
+              const response = await authService.refreshToken(sessionToken);
+              const refreshed = response.success ? response.data : undefined;
 
-              if (response.ok) {
-                const data = await response.json();
-                get().setTokens(data.accessToken, data.refreshToken, data.expiresIn);
-                // Also update AuthManager
-                authManager.updateTokens(data.accessToken, data.refreshToken, undefined, data.expiresIn);
-                return true;
-              }
+              if (!refreshed?.token) return false;
 
-              return false;
+              get().setTokens(
+                refreshed.token,
+                undefined,
+                refreshed.sessionToken,
+                refreshed.expiresIn
+              );
+
+              return true;
             } catch (error) {
               return false;
             }
@@ -159,7 +164,6 @@ export const useAuthStore = create<AuthStore>()(
                   authToken: token,
                   user,
                   isAuthenticated: true,
-                  refreshToken: authManager.getRefreshToken()
                 });
               } else {
                 set({ isAuthenticated: false });
@@ -177,7 +181,6 @@ export const useAuthStore = create<AuthStore>()(
         partialize: (state) => ({
           user: state.user,
           authToken: state.authToken,
-          refreshToken: state.refreshToken,
           sessionToken: state.sessionToken,
           sessionExpiry: state.sessionExpiry,
         }),

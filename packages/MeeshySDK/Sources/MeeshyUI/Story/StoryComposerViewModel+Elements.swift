@@ -112,7 +112,9 @@ extension StoryComposerViewModel {
         }
     }
 
-    var isDrawingActive: Bool { activeTool == .drawing }
+    /// `public` : l'hôte lit ce drapeau pour DEUX décisions distinctes — monter
+    /// ou non la surface de capture, et savoir dans quel sens la porte bascule.
+    public var isDrawingActive: Bool { activeTool == .drawing }
 
     func saveBackgroundTransform() {
         guard let id = slides[safe: currentSlideIndex]?.id else { return }
@@ -207,7 +209,10 @@ extension StoryComposerViewModel {
 
     var canAddText: Bool { textCount < 5 }
 
-    var canAddMedia: Bool { mediaCount < 10 }
+    /// `public` : le bouton « Coller » du rail s'éteint quand la scène est
+    /// pleine — dix médias. Sans ce plafond lu de l'extérieur, il proposerait un
+    /// collage que la pose refuserait ensuite en silence.
+    public var canAddMedia: Bool { mediaCount < 10 }
 
     var canAddImage: Bool {
         canAddMedia &&
@@ -225,7 +230,11 @@ extension StoryComposerViewModel {
     }
 
     @discardableResult
-    func addText() -> StoryTextObject? {
+    /// `public` : la porte TEXTE du composer unifié pose l'objet (#4401). Elle
+    /// crée une coquille VIDE — c'est l'éditeur qui la remplit —, et une
+    /// coquille restée vide est supprimée à la sortie de l'éditeur
+    /// (`exitTextEditingMode`). Un texte annulé ne laisse donc rien.
+    public func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
@@ -413,12 +422,18 @@ extension StoryComposerViewModel {
     /// Décalage en cascade pour que des ajouts successifs ne s'empilent pas
     /// exactement au même point.
     @discardableResult
-    func addSticker(emoji: String, provider: String? = nil) -> StorySticker {
+    /// - Parameter scale: l'échelle de POSE. `nil` garde le défaut du modèle
+    ///   (taille de référence) ; les surfaces qui posent sur une scène passent
+    ///   `StorySticker.posedScale`, à laquelle le sticker se voit d'emblée.
+    public func addSticker(emoji: String,
+                           provider: String? = nil,
+                           scale: Double? = nil) -> StorySticker {
         let count = currentEffects.stickerObjects?.count ?? 0
         let offset = Double(count % 5) * 0.04
-        let sticker = StorySticker(emoji: emoji, provider: provider,
+        var sticker = StorySticker(emoji: emoji, provider: provider,
                                    sourceLanguage: declaredContentLanguage,
                                    x: 0.5 + offset, y: 0.5 + offset)
+        if let scale { sticker.scale = scale }
         var effects = currentEffects
         var stickers = effects.stickerObjects ?? []
         stickers.append(sticker)
@@ -442,8 +457,11 @@ extension StoryComposerViewModel {
     /// par une version antérieure — qui ne sait rien de l'image — doit déjà
     /// montrer un glyphe.
     @discardableResult
-    func addSticker(image: UIImage, provider: String) -> StorySticker {
-        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji, provider: provider)
+    public func addSticker(image: UIImage,
+                           provider: String,
+                           scale: Double? = nil) -> StorySticker {
+        let sticker = addSticker(emoji: StorySticker.imageFallbackEmoji,
+                                 provider: provider, scale: scale)
         registerLoadedImage(image, for: sticker.id)
         return sticker
     }
@@ -603,7 +621,13 @@ extension StoryComposerViewModel {
     /// - `mediaURL` porte l'URL distante, sans quoi ni le lecteur ni l'export ne
     ///   sauraient retrouver le son (l'export ne reçoit qu'un `StorySlide`).
     @discardableResult
-    func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
+    /// **`public` parce que l'étagère des sons s'ouvre aussi depuis le MEUBLE.**
+    /// Le composer unifié n'avait aucun chemin vers elle : sa porte « son »
+    /// n'enregistrait qu'un vocal, alors que la doctrine de la vue `2c` sépare
+    /// justement les deux provenances — un son EMPRUNTÉ devient le fond, une
+    /// note vocale ne l'est jamais. C'est cette fonction, et elle seule, qui
+    /// pose le premier.
+    public func addBorrowedSound(_ sound: APISound) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let hasExistingBackgroundAudio = currentEffects.resolvedBackgroundAudio != nil
         let obj = StoryAudioPlayerObject(
@@ -638,7 +662,9 @@ extension StoryComposerViewModel {
     }
 
     @discardableResult
-    func addAudioObject() -> StoryAudioPlayerObject? {
+    /// `role` nil ⇒ la règle automatique s'applique telle quelle : aucun site
+    /// d'appel existant ne change de comportement (#4483).
+    func addAudioObject(role: ComposerAudioRole?) -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         // Auto-bascule en background si aucun audio n'est déjà en background
@@ -656,6 +682,7 @@ extension StoryComposerViewModel {
             // de vue, et interdit qu'un jour les deux divergent sur « un audio
             // écrase-t-il celui qui est déjà en fond ? ».
             isBackground: ComposerAudioPlacement.isBackground(
+                chosen: role,
                 sceneAlreadyHasBackgroundAudio: currentEffects.resolvedBackgroundAudio != nil
             ),
             sourceLanguage: declaredContentLanguage
@@ -733,6 +760,26 @@ extension StoryComposerViewModel {
         if let st = fx.stickerObjects?.first(where: { $0.id == id }) { return st.sourceLanguage }
         if let l = fx.locationObjects.first(where: { $0.id == id }) { return l.sourceLanguage }
         return nil
+    }
+
+    /// Écrit le CONTENU d'un objet texte déjà posé (#4378).
+    ///
+    /// Elle rejoint la famille des updaters d'élément — celle de
+    /// `updateElementLanguage` juste dessous — plutôt que d'ouvrir un troisième
+    /// site de CRÉATION. Le collage n'a pas à fabriquer un chemin d'insertion :
+    /// il emprunte `addText()`, qui existe et est éprouvé, puis remplit.
+    ///
+    /// Pourquoi ne pas passer par l'éditeur : `addText()` crée un objet vide ET
+    /// ouvre l'éditeur, ce qui est juste pour l'auteur qui écrit. Un collage
+    /// apporte déjà son texte ; le faire transiter par l'éditeur obligerait
+    /// l'auteur à valider ce qu'il vient de coller.
+    public func updateTextContent(id: String, text: String) {
+        var effects = currentEffects
+        var texts = effects.textObjects
+        guard let index = texts.firstIndex(where: { $0.id == id }) else { return }
+        texts[index].text = text
+        effects.textObjects = texts
+        currentEffects = effects
     }
 
     func updateElementLanguage(elementId: String, language: String) {

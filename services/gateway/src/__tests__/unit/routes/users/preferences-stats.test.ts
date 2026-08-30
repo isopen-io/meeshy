@@ -30,7 +30,6 @@ import { getUserStats } from '../../../../routes/users/preferences';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CURRENT_USER_ID = '507f1f77bcf86cd799439011';
 const TARGET_USER_ID  = '507f1f77bcf86cd799439022';
 
 // ─── App factory ──────────────────────────────────────────────────────────────
@@ -42,6 +41,12 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
         id: TARGET_USER_ID,
         createdAt: new Date('2020-01-01'),
       }),
+      // `computeUserStats` relit `createdAt` par `findUnique`, DANS le même
+      // `Promise.all` que les comptages. Sans cette surface, l'accès lève
+      // SYNCHRONEMENT pendant la construction du tableau : les promesses de
+      // comptage déjà créées ne reçoivent alors jamais de gestionnaire, et le
+      // processus tombe en `UnhandledPromiseRejection` au lieu de rendre 500.
+      findUnique: jest.fn<any>().mockResolvedValue({ createdAt: new Date('2020-01-01') }),
     },
     message: {
       count:   jest.fn<any>().mockResolvedValue(0),
@@ -62,11 +67,22 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma);
+  // Le viewer est le PROPRIÉTAIRE de la cible.
+  //
+  // Ces témoins portent sur le CALCUL des compteurs, pas sur leur autorisation :
+  // depuis #4161, les quatre compteurs privés (`totalMessages`,
+  // `totalConversations`, `totalTranslations`, `friendRequestsReceived`) ne
+  // partent qu'à soi et à l'administration. Un viewer TIERS — ce qu'ils
+  // utilisaient — ne les reçoit plus, et ces témoins mesuraient alors une
+  // charge amputée sans le dire.
+  //
+  // La garde d'autorisation a ses propres témoins :
+  // `stats-private-counters.test.ts`, qui exerce précisément le cas tiers.
   app.decorate('authenticate', async (req: FastifyRequest) => {
     (req as any).authContext = {
       isAuthenticated: true,
-      userId: CURRENT_USER_ID,
-      registeredUser: { id: CURRENT_USER_ID },
+      userId: TARGET_USER_ID,
+      registeredUser: { id: TARGET_USER_ID },
     };
   });
 
@@ -135,6 +151,9 @@ describe('GET /users/:userId/stats — achievements unlocked when counts exceed 
           id: TARGET_USER_ID,
           createdAt: oldDate,
         }),
+        // L'ancienneté se calcule sur CETTE lecture — c'est elle que le témoin
+        // pilote, la première ne servant qu'à résoudre id-ou-pseudo.
+        findUnique: jest.fn<any>().mockResolvedValue({ createdAt: oldDate }),
       },
     });
     const res = await app.inject({ method: 'GET', url: `/users/${TARGET_USER_ID}/stats` });
@@ -170,17 +189,29 @@ describe('GET /users/:userId/stats — totalConversations excludes left/banned/r
   });
 });
 
-// ─── $runCommandRaw returns no `n` field → r.n ?? 0 right-side ───────────────
+// ─── Les traductions se comptent sur la BONNE colonne ────────────────────────
 
-describe('GET /users/:userId/stats — $runCommandRaw returns no n field', () => {
-  it('uses 0 as totalTranslations when r.n is undefined', async () => {
+describe('GET /users/:userId/stats — le comptage des traductions', () => {
+  it('interroge `Message.translations`, et jamais un chemin imbriqué inexistant', async () => {
+    // Ce témoin remplace celui du repli `r.n ?? 0` d'une commande brute que la
+    // route n'exécute plus. Il garde ce qui avait RÉELLEMENT cassé : la copie
+    // inline comptait par `$runCommandRaw` sur `{'sender.userId': …}` — or
+    // `sender` est une RELATION Prisma, pas un document imbriqué. Le filtre ne
+    // matchait rien, et `totalTranslations` valait 0 pour tout le monde
+    // (mesuré en intégration : 37 par `/users/me/stats`, 0 ici, même compte).
+    const count = jest.fn<any>().mockResolvedValue(42);
     const app = await buildApp({
-      $runCommandRaw: jest.fn<any>().mockResolvedValue({}),  // no `n` key
+      message: { count, groupBy: jest.fn<any>().mockResolvedValue([]) },
     });
+
     const res = await app.inject({ method: 'GET', url: `/users/${TARGET_USER_ID}/stats` });
     expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.data.totalTranslations).toBe(0);
+    expect(res.json().data.totalTranslations).toBe(42);
+
+    const appels = count.mock.calls.map(([args]: [any]) => args?.where ?? {});
+    const traductions = appels.filter((w: any) => w.translations !== undefined);
+    expect(traductions).toHaveLength(1);
+    expect(traductions[0].sender).toEqual({ userId: TARGET_USER_ID });
     await app.close();
   });
 });

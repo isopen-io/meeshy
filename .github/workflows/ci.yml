@@ -34,7 +34,11 @@ on:
           - gpu-cu121
 
 env:
-  NODE_VERSION: '22'
+  # '22.19' et non '22' : undici@8 exige >= 22.19.0 (worker_threads.markAsUncloneable,
+  # arrive en 22.12), et le serveur assemble par les generateurs de manifeste le charge.
+  # La ligne MINEURE, pas une version exacte — figer le patch ferait rater les correctifs
+  # de securite des 22.19.x sans rien garantir de plus : c'est le plancher qui compte ici.
+  NODE_VERSION: '22.19'
   BUN_VERSION: '1.3.14'
   PNPM_VERSION: '9'
   # Python 3.10 required: pkuseg (chatterbox-tts dependency) fails to compile on 3.11+
@@ -123,6 +127,13 @@ jobs:
         run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint
         continue-on-error: true
 
+      # Même partage que le type-check ci-dessous : l'amnistie de l'étape
+      # précédente est achetée par la dette du legacy. La v3 n'en a aucune, et
+      # une étape amnistiée est le SEUL signal qu'elle aurait — autant dire
+      # aucun. Elle rougit donc pour elle seule, sans toucher au reste.
+      - name: Lint (apps/web-v3 — blocking)
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} lint --filter=@meeshy/web-v3
+
       # Type-check, en DEUX étapes plutôt qu'une amnistie.
       #
       # L'étape unique qui précédait portait `continue-on-error: true`, et ce
@@ -138,8 +149,13 @@ jobs:
       # a dans son `diagnostics.ignoreCodes`. Ni le job de test ni celui-ci ne
       # pouvaient donc rougir sur une charge fausse. Mesuré en retirant un champ
       # requis d'une émission de `preferences-broadcast.ts`.
+      # `@meeshy/web-v3` entre ICI et nulle part ailleurs. Le ratchet ci-dessous
+      # est gagé sur `WEB_BASELINE`, la dette de types d'`apps/web` LEGACY : y
+      # faire entrer la v3 lui offrirait un budget d'erreurs qu'elle n'a pas à
+      # avoir. La v3 naît à zéro erreur, et cette étape est la seule qui puisse
+      # le garantir — elle ne porte pas `continue-on-error`.
       - name: Type-check (contract packages — blocking)
-        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent
+        run: ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} type-check --filter=@meeshy/shared --filter=@meeshy/gateway --filter=@meeshy/agent --filter=@meeshy/web-v3
 
       - name: Type-check (apps/web — debt ratchet)
         run: bash scripts/check-type-debt.sh --self-test && bash scripts/check-type-debt.sh
@@ -147,12 +163,235 @@ jobs:
       - name: Law literals guard
         run: bash scripts/check-law-literals.sh --self-test && bash scripts/check-law-literals.sh
 
+      # L'invariant porte sur le `bun.lock` de la RACINE et sur tous les
+      # manifestes que la racine déclare comme workspaces : sa surface est le
+      # dépôt, donc il est appelé ici, à côté des autres gates de racine, et
+      # non depuis les tests d'une app. Il rougit dans les DEUX sens — un
+      # manifeste que le lock ignore, un workspace loqué qu'aucun arbre de
+      # fichiers ne porte — pour qu'un `bun.lock` ne puisse plus être commité
+      # sans l'arbre qu'il décrit.
+      - name: Lockfile alignment guard
+        run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
+
+      # Même raison de placement que le garde ci-dessus : l'invariant porte sur
+      # le `Makefile` de la RACINE, donc il est appelé ici et non depuis les
+      # tests d'une app. Sa première écriture vivait dans
+      # `apps/web-v3/__tests__/` — elle remontait de trois crans pour atteindre
+      # sa surface et ne tournait dans AUCUN job (la matrice `test:` ne porte
+      # que shared/web/gateway/agent) : un contrôle inerte, qui laissait
+      # rouvrir au commit suivant la régression qu'il prétendait fermer.
+      # Il déroule les cibles avec `make -n` : un `*_DIR` mort se lit dans le
+      # texte, mais un `cd` vers un répertoire absent ne se voit qu'après
+      # expansion des variables.
+      - name: Makefile workspace directories guard
+        run: node scripts/check-makefile-workspaces.mjs --self-test && node scripts/check-makefile-workspaces.mjs
+
+      # Même raison de placement : l'invariant porte sur `ci.yml`, `docker.yml`
+      # et `docker-compose.prod.yml` — trois fichiers de la RACINE. Il DÉROULE
+      # les deux étapes de détection de `docker.yml` avec bash plutôt que de les
+      # relire : « un push qui ne touche que apps/web-v3 construit-il la v3 sans
+      # réveiller le legacy ? » ne se lit pas dans le texte d'un `[[ == *"…"* ]]`.
+      - name: web-v3 pipeline guard
+        run: node scripts/check-v3-pipeline.mjs --self-test && node scripts/check-v3-pipeline.mjs
+
+      # Le rapport unique de la machine de vérification (§ 9 de la conception)
+      # agrège cinq mesures dont quatre ont un prérequis (un build, un serveur,
+      # un navigateur pour le gate axe — dont l'INVOCATION vit dans le job
+      # `a11y-v3` ci-dessous, un agrégateur ne remplaçant pas un porteur).
+      # Ce qui est BLOQUANT en CI est donc son agrégation, pas son verdict : une
+      # mesure non exécutée doit sortir en « rapport incomplet » (rc=2), jamais
+      # en vert. C'est exactement ce que les mutations du --self-test sondent.
+      # Le rapport complet se lance à la main, avec la v3 servie :
+      #   node scripts/v3-rapport.mjs --base http://127.0.0.1:3300
+      - name: web-v3 verification report aggregation
+        run: node scripts/v3-rapport.mjs --self-test
+
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
       # ~15 min et meurt à la première erreur, alors que ce garde les liste
       # toutes avant même que le job iOS ne démarre.
       - name: ViewBuilder statement-chaining guard
         run: bash scripts/check-swift-viewbuilder.sh --self-test && bash scripts/check-swift-viewbuilder.sh
+
+  # ===========================================================================
+  # A11Y: le gate axe du § 8.5 de la conception v3 — SON PORTEUR
+  # ===========================================================================
+  # « 0 erreur axe serious/critical sur toute route (public) ». L'instrument
+  # vivait déjà (`apps/web-v3/e2e/visual/v3-a11y.spec.ts`, son verdict dans
+  # `lib/a11y.ts`, gagé par `__tests__/a11y-gate.test.ts`) — et RIEN ne le
+  # lançait : la chaîne `test:a11y` n'apparaissait que deux fois dans le dépôt,
+  # sa définition et le témoin qui vérifiait sa définition. Un instrument
+  # déclaré n'est pas un instrument lancé, et le gage de la DÉCLARATION rendait
+  # exactement le vert qu'il prétendait interdire.
+  #
+  # Un job À PART plutôt qu'une étape de `quality` : il lui faut un `next build`
+  # et un Chromium, que les onze gardes textuels de `quality` n'ont pas à payer.
+  # Il ne porte PAS `continue-on-error` — la v3 naît sans dette, même règle que
+  # son lint et son type-check.
+  a11y-v3:
+    name: A11y web-v3 (axe serious/critical)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache bun dependencies
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
+
+      # Ce que le balayage prend pour entrée est ce que `next build` a ÉMIS
+      # (`.next/app-build-manifest.json`), jamais ce que le disque porte : sans
+      # cette étape le manifeste est absent et la garde de non-vacuité de
+      # `exigeUnManifesteLu` fait échouer le gate, au lieu de le laisser sortir
+      # vert sur zéro route.
+      - name: Build apps/web-v3 (le manifeste que le balayage lit)
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      # `playwright.config.ts` lève lui-même `next start` (webServer) : la
+      # preuve d'un build se prend sur le serveur de production, jamais sur
+      # `next dev`.
+      - name: Gate axe — 0 violation serious/critical sur les routes (public)
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:a11y
+
+      # PAS de `continue-on-error` ici : `check-v3-pipeline.mjs` interdit qu'une
+      # étape nommant la v3 en porte un, et le job est de toute façon déjà rouge
+      # quand celle-ci tourne.
+      - name: Upload Playwright traces
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: web-v3-a11y-traces
+          path: apps/web-v3/test-results/
+          retention-days: 7
+
+  # ===========================================================================
+  # LIFECYCLE: le gate de cycle de vie du § 8.5 de la conception v3 — SON PORTEUR
+  # ===========================================================================
+  # « 0 requête pendant que l'onglet est hidden ; 1 seule requête de battement
+  # pour N onglets sur 10 min ». Même leçon que le gate axe ci-dessus, payée une
+  # fois : un instrument déclaré n'est pas un instrument lancé. L'instrument vit
+  # dans `apps/web-v3/e2e/visual/v3-lifecycle.spec.ts`, son verdict dans
+  # `lib/lifecycle.ts`, gagé sans navigateur par `__tests__/lifecycle-gate.test.ts`
+  # — et ce job est l'une de ses deux invocations, l'autre étant la sixième mesure
+  # de `scripts/v3-rapport.mjs`.
+  #
+  # Un job À PART de `a11y-v3` : le gate axe balaie ce que `next build` a émis et
+  # rougit sur une page sans budget ; celui-ci mesure un cycle de vie sur un
+  # scénario fabriqué. Deux verdicts distincts, deux lignes de résultat distinctes
+  # dans le récapitulatif — les fondre rendrait « web-v3 rouge » sans dire lequel
+  # des deux gates est tombé.
+  lifecycle-v3:
+    name: Cycle de vie web-v3 (0 requête onglet caché)
+    runs-on: ubuntu-latest
+    needs: quality
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup bun
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6.0.10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache bun dependencies
+        if: env.PACKAGE_MANAGER == 'bun'
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies (bun with retry)
+        if: env.PACKAGE_MANAGER == 'bun'
+        run: |
+          for i in 1 2 3; do
+            bun install && break || {
+              echo "Attempt $i failed, retrying in 10s..."
+              sleep 10
+            }
+          done
+
+      - name: Install dependencies (pnpm)
+        if: env.PACKAGE_MANAGER == 'pnpm'
+        run: pnpm install --no-frozen-lockfile
+
+      # Le scénario fabriqué est servi par l'interception de Playwright, jamais
+      # par le serveur — mais `playwright.config.ts` lève quand même `next start`
+      # (la preuve d'un build se prend sur le serveur de production, leçon 339),
+      # qui exige ce build.
+      - name: Build apps/web-v3 (le serveur que playwright.config.ts lève)
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Gate cycle de vie — 0 requête mutante pendant que l'onglet est caché
+        run: |
+          cd apps/web-v3
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} test:lifecycle
+
+      - name: Upload Playwright traces
+        uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: web-v3-lifecycle-traces
+          path: apps/web-v3/test-results/
+          retention-days: 7
 
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
@@ -179,6 +418,9 @@ jobs:
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
+          - name: web-v3
+            path: apps/web-v3
+            filter: '@meeshy/web-v3'
 
     steps:
       - name: Checkout
@@ -255,7 +497,7 @@ jobs:
         if: env.PACKAGE_MANAGER == 'bun'
         run: |
           # Web tests must use Jest (configured with Next.js)
-          if [ "${{ matrix.package.name }}" = "web" ]; then
+          if [ "${{ matrix.package.name }}" = "web" ] || [ "${{ matrix.package.name }}" = "web-v3" ]; then
             cd ${{ matrix.package.path }}
             echo "Running web tests with Jest via bun..."
             bun run test:coverage
@@ -1189,7 +1431,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [quality, test, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [quality, a11y-v3, lifecycle-v3, test, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -1201,6 +1443,8 @@ jobs:
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| A11y web-v3 (axe) | ${{ needs.a11y-v3.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cycle de vie web-v3 | ${{ needs.lifecycle-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | disabled |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY

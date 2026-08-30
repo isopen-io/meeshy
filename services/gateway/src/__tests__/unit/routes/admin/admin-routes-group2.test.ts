@@ -87,6 +87,7 @@ function makePrismaForAnalytics({
         .mockResolvedValueOnce(groupByConvResult)
         .mockResolvedValueOnce(groupByTypeResult)
         .mockResolvedValueOnce(groupByLangResult),
+      aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
     },
     reaction: {
       count: jest.fn<any>().mockResolvedValue(0),
@@ -103,6 +104,9 @@ function makePrismaForMessages({
   editedMessages = 2,
   groupByTypeResult = [{ messageType: 'text', _count: { id: 10 } }],
   findManyResult = [{ createdAt: new Date(), content: 'hello' }],
+  // #4391 : `GET /stats` tire son histogramme quotidien ET sa longueur moyenne
+  // d'UN `$facet` MongoDB, plus d'un `findMany` sur toute la fenêtre.
+  statsFacet = [{ daily: [], length: [{ _id: null, avg: 5 }] }],
   messagesWithTranslations = 5,
   topSenders = [{ senderId: 'p1', _count: { id: 5 } }],
   participants = [],
@@ -127,6 +131,7 @@ function makePrismaForMessages({
         .mockResolvedValueOnce(topSenders),
       findMany: jest.fn<any>()
         .mockResolvedValue(findManyResult),
+      aggregateRaw: jest.fn<any>().mockResolvedValue(statsFacet),
     },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue(participants),
@@ -143,7 +148,15 @@ function makePrismaForMessages({
 
 function buildReportApp(authContext = makeAuthContext()) {
   const app = Fastify({ logger: false });
-  app.decorate('prisma', {} as any);
+  // La cible d'un signalement est VÉRIFIÉE avant écriture depuis #4155 : un
+  // double `prisma` vide serait plus pauvre que la production — la
+  // vérification y lèverait, et le témoin lirait 500 là où il croit lire 201.
+  app.decorate('prisma', {
+    user: { findUnique: async () => ({ id: '507f1f77bcf86cd799439012' }) },
+    message: { findUnique: async () => ({ conversationId: '507f1f77bcf86cd799439088' }) },
+    conversation: { findUnique: async () => ({ id: '507f1f77bcf86cd799439014' }) },
+    participant: { findFirst: async () => ({ id: 'p1' }) },
+  } as any);
   app.decorate('authenticate', async (request: any) => {
     request.authContext = authContext;
   });
@@ -220,8 +233,10 @@ describe('Admin report routes', () => {
       );
     });
 
-    it('uses reporterId from body when provided (overridden by authContext.registeredUser.id)', async () => {
-      // registeredUser.id takes priority over body.reporterId
+    it('ignore un `reporterId` du corps — le champ a quitté le contrat (#4155)', async () => {
+      // Il était déjà inatteignable (`authContext.registeredUser?.id ||
+      // body.reporterId`), mais PRÉSENT dans le schéma public : un champ mort
+      // dans un contrat est une invitation pour la prochaine main.
       app = buildReportApp();
       await app.ready();
 
@@ -245,7 +260,10 @@ describe('Admin report routes', () => {
       );
     });
 
-    it('uses body.reporterName when provided', async () => {
+    it('IGNORE `reporterName` du corps — un inscrit ne signe pas d’un nom qu’il choisit', async () => {
+      // `reporterId` était forcé à l'identité serveur ; `reporterName` venait du
+      // corps. Un signalement portait donc une identité à moitié vraie, et
+      // c'est la moitié LISIBLE par un modérateur qui était fausse.
       app = buildReportApp();
       await app.ready();
 
@@ -263,7 +281,7 @@ describe('Admin report routes', () => {
       });
 
       expect(mockReportService.createReport).toHaveBeenCalledWith(
-        expect.objectContaining({ reporterName: 'John Doe' })
+        expect.objectContaining({ reporterName: 'admin' })
       );
     });
 
@@ -588,6 +606,19 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
+      // #4157 — la route relit le signalement AVANT de le supprimer, pour refuser
+      // qu'un moderateur efface la preuve d'un signalement qui le VISE. Sans ce
+      // stub, la relecture rend undefined et la route repond 404 : le temoin
+      // tomberait sur une fixture absente, jamais sur le comportement vise.
+      // reportedType 'message' place deliberement le cas HORS de la garde, dont
+      // le temoin dedie vit dans admin-reports.test.ts.
+      mockReportService.getReportById.mockResolvedValueOnce({
+        id: '507f1f77bcf86cd799439020',
+        reportedType: 'message',
+        reportedEntityId: '507f1f77bcf86cd799439099',
+        reportType: 'SPAM',
+        status: 'PENDING',
+      });
       mockReportService.deleteReport.mockResolvedValueOnce(undefined);
 
       const res = await app.inject({ method: 'DELETE', url: '/507f1f77bcf86cd799439020' });
@@ -600,6 +631,16 @@ describe('Admin report routes', () => {
       app = buildReportApp();
       await app.ready();
 
+      // La relecture doit REUSSIR pour que le temoin atteigne le chemin d'erreur
+      // qu'il nomme : sans elle, la route repondrait 404 et le test passerait au
+      // vert pour la mauvaise raison le jour ou l'on attendrait 404.
+      mockReportService.getReportById.mockResolvedValueOnce({
+        id: '507f1f77bcf86cd799439020',
+        reportedType: 'message',
+        reportedEntityId: '507f1f77bcf86cd799439099',
+        reportType: 'SPAM',
+        status: 'PENDING',
+      });
       mockReportService.deleteReport.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await app.inject({ method: 'DELETE', url: '/507f1f77bcf86cd799439020' });
@@ -624,13 +665,16 @@ describe('Admin report routes', () => {
       await app.ready();
 
       const reports = [{ id: 'r1' }, { id: 'r2' }];
-      mockReportService.getReportsForEntity.mockResolvedValueOnce(reports);
+      mockReportService.getReportsForEntity.mockResolvedValueOnce({ reports, total: 2 });
 
       const res = await app.inject({ method: 'GET', url: '/entity/user/507f1f77bcf86cd799439020' });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.data).toHaveLength(2);
-      expect(mockReportService.getReportsForEntity).toHaveBeenCalledWith('user', '507f1f77bcf86cd799439020');
+      // #4165 — la borne voyage jusqu'au service : la route ne peut plus lui
+      // demander la collection entiere, meme si le service l'acceptait encore.
+      expect(mockReportService.getReportsForEntity).toHaveBeenCalledWith('user', '507f1f77bcf86cd799439020', 0, 20);
+      expect(body.pagination).toMatchObject({ total: 2, offset: 0, limit: 20 });
     });
 
     it('returns 500 on service error', async () => {
@@ -877,6 +921,7 @@ describe('Admin analytics routes', () => {
             { messageType: 'text', _count: { id: 50 } },
             { messageType: 'image', _count: { id: 50 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -894,6 +939,7 @@ describe('Admin analytics routes', () => {
           groupBy: jest.fn<any>().mockResolvedValue([
             { messageType: 'text', _count: { id: 100 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -910,6 +956,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1035,6 +1082,7 @@ describe('Admin analytics routes', () => {
             { originalLanguage: 'fr', _count: { id: 100 } },
             { originalLanguage: 'en', _count: { id: 50 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1055,6 +1103,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1086,6 +1135,7 @@ describe('Admin analytics routes', () => {
           groupBy: jest.fn<any>().mockResolvedValue([
             { originalLanguage: null, _count: { id: 30 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1108,6 +1158,7 @@ describe('Admin analytics routes', () => {
             { originalLanguage: 'it', _count: { id: 60 } },
             { originalLanguage: 'pt', _count: { id: 50 } },  // index 5 → colors[5] = undefined → '#6b7280'
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       app = buildAnalyticsApp(prisma);
@@ -1356,6 +1407,7 @@ describe('Admin analytics routes', () => {
           groupBy: jest.fn<any>().mockResolvedValue([
             { messageType: 'text', _count: { id: 10 } },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1392,6 +1444,7 @@ describe('Admin analytics routes', () => {
         message: {
           count: jest.fn<any>().mockResolvedValueOnce(20),
           groupBy: jest.fn<any>().mockResolvedValueOnce([{ conversationId: 'c1' }]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1420,6 +1473,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([{ messageType: 'text', _count: { id: 10 } }]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1454,6 +1508,7 @@ describe('Admin analytics routes', () => {
       const prisma = {
         message: {
           groupBy: jest.fn<any>().mockResolvedValue([{ originalLanguage: 'fr', _count: { id: 50 } }]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
       };
       const localApp = buildAnalyticsApp(prisma);
@@ -1536,6 +1591,7 @@ describe('Admin messages routes', () => {
           findMany: jest.fn<any>().mockResolvedValue([
             { createdAt: new Date(), content: 'hello world' },
           ]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([
@@ -1569,6 +1625,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1590,6 +1647,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1611,6 +1669,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1635,6 +1694,7 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1659,6 +1719,7 @@ describe('Admin messages routes', () => {
             .mockResolvedValueOnce([{ messageType: 'text', _count: { id: 10 } }])
             .mockResolvedValueOnce([{ senderId: 'participant-id-1', _count: { id: 7 } }]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([
@@ -1693,6 +1754,7 @@ describe('Admin messages routes', () => {
             .mockResolvedValueOnce([{ messageType: 'text', _count: { id: 5 } }])
             .mockResolvedValueOnce([{ senderId: 'unknown-participant-id', _count: { id: 5 } }]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: {
           // returns empty — participant not found in map
@@ -1720,10 +1782,12 @@ describe('Admin messages routes', () => {
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([{ messageType: 'text', _count: { id: 3 } }])
             .mockResolvedValueOnce([]),
-          findMany: jest.fn<any>().mockResolvedValue([
-            { createdAt: new Date(), content: null },       // null content → length || 0
-            { createdAt: new Date(), content: 'hello' },    // normal content
-          ]),
+          findMany: jest.fn<any>(),
+          // `$facet.length` VIDE : c'est ce que MongoDB rend quand aucun
+          // message de la fenêtre n'a de contenu non vide — le `$match { len:
+          // { $gt: 0 } }` du pipeline écarte désormais, en base, ce que le
+          // `filter(len > 0)` écartait en JavaScript.
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1733,8 +1797,8 @@ describe('Admin messages routes', () => {
       const res = await app.inject({ method: 'GET', url: '/stats' });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      // averageLength should be computed only from non-zero lengths
-      expect(body.data.averageLength).toBeGreaterThanOrEqual(0);
+      expect(body.data.averageLength).toBe(0);
+      expect(prisma.message.findMany).not.toHaveBeenCalled();
     });
 
     it('skips messages with date outside tracked period (covers dailyMessages false branch)', async () => {
@@ -1750,8 +1814,12 @@ describe('Admin messages routes', () => {
             .mockResolvedValueOnce(0).mockResolvedValueOnce(0),
           groupBy: jest.fn<any>()
             .mockResolvedValueOnce([]).mockResolvedValueOnce([]),
-          findMany: jest.fn<any>().mockResolvedValue([
-            { createdAt: futureDate, content: 'oops' }, // date outside period window
+          findMany: jest.fn<any>(),
+          // Une tranche que Mongo rend HORS de la fenêtre affichée : le
+          // dépouillement ne la reporte nulle part, exactement comme la boucle
+          // JS ignorait une clé absente de `dailyMessages`.
+          aggregateRaw: jest.fn<any>().mockResolvedValue([
+            { daily: [{ _id: futureDate.toISOString().split('T')[0], count: 7 }], length: [] },
           ]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
@@ -1761,6 +1829,8 @@ describe('Admin messages routes', () => {
 
       const res = await app.inject({ method: 'GET', url: '/stats' });
       expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.data.messagesByPeriod.every((e: { count: number }) => e.count === 0)).toBe(true);
     });
 
     it('returns 500 on DB error', async () => {
@@ -1769,6 +1839,7 @@ describe('Admin messages routes', () => {
           count: jest.fn<any>().mockRejectedValue(new Error('DB error')),
           groupBy: jest.fn<any>().mockResolvedValue([]),
           findMany: jest.fn<any>().mockResolvedValue([]),
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ daily: [], length: [] }]),
         },
         participant: { findMany: jest.fn<any>().mockResolvedValue([]) },
       };
@@ -1786,7 +1857,7 @@ describe('Admin messages routes', () => {
   describe('GET /trends', () => {
     it('returns 403 when ANALYST role', async () => {
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockResolvedValue([]) },
+        message: { aggregateRaw: jest.fn<any>().mockResolvedValue([{ hourly: [], weekday: [] }]) },
       };
       app = buildMessagesApp(prisma, makeAuthContext('ANALYST'));
       await app.ready();
@@ -1796,14 +1867,22 @@ describe('Admin messages routes', () => {
     });
 
     it('returns 200 with peak hour and weekday data', async () => {
-      const now = new Date();
-      const messages = [
-        { createdAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18) },
-        { createdAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18) },
-        { createdAt: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10) },
-      ];
+      // #4465 : `/trends` agrege desormais en base (`$facet` sur `$hour` et
+      // `$dayOfWeek`). Le double rend donc le DOCUMENT que le pipeline produit
+      // -- des seaux epars -- et non plus une ligne par message ; c'est la
+      // route qui deplie en 24 heures et 7 jours.
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockResolvedValue(messages) },
+        message: {
+          aggregateRaw: jest.fn<any>().mockResolvedValue([
+            {
+              hourly: [
+                { _id: 18, count: 2 },
+                { _id: 10, count: 1 },
+              ],
+              weekday: [{ _id: 2, count: 3 }],
+            },
+          ]),
+        },
       };
       app = buildMessagesApp(prisma);
       await app.ready();
@@ -1823,7 +1902,9 @@ describe('Admin messages routes', () => {
 
     it('returns 200 with empty messages (zero activity)', async () => {
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockResolvedValue([]) },
+        message: {
+          aggregateRaw: jest.fn<any>().mockResolvedValue([{ hourly: [], weekday: [] }]),
+        },
       };
       app = buildMessagesApp(prisma);
       await app.ready();
@@ -1836,8 +1917,12 @@ describe('Admin messages routes', () => {
     });
 
     it('returns 500 on DB error', async () => {
+      // Ce temoin passait pour la MAUVAISE raison depuis #4465 : la route
+      // n'appelant plus `findMany`, le 500 venait d'une methode ABSENTE sur le
+      // double, jamais d'une requete rejetee. Il rejette maintenant ce que la
+      // route appelle vraiment.
       const prisma: any = {
-        message: { findMany: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
+        message: { aggregateRaw: jest.fn<any>().mockRejectedValue(new Error('DB error')) },
       };
       app = buildMessagesApp(prisma);
       await app.ready();
@@ -1948,7 +2033,10 @@ describe('Admin messages routes', () => {
   describe('401 unauthenticated paths (no authContext)', () => {
     it('GET /stats returns 401 when authContext is missing', async () => {
       const prisma: any = {
-        message: { count: jest.fn<any>(), groupBy: jest.fn<any>(), findMany: jest.fn<any>() },
+        message: {
+          count: jest.fn<any>(), groupBy: jest.fn<any>(), findMany: jest.fn<any>(),
+          aggregateRaw: jest.fn<any>(),
+        },
         participant: { findMany: jest.fn<any>() },
       };
       const unauthApp = Fastify({ logger: false });
@@ -2063,59 +2151,3 @@ describe('Admin types schemas', () => {
   });
 });
 
-// ===========================================================================
-// SECTION 5 — system.ts (empty file)
-// ===========================================================================
-
-describe('system.ts', () => {
-  it('is an empty placeholder file with no exports', () => {
-    // The file exists but is empty — no runtime behavior to test.
-    // Coverage for this file is handled by the TypeScript compiler confirming it compiles.
-    expect(true).toBe(true);
-  });
-});
-
-// ===========================================================================
-// SECTION 6 — index.ts (re-exports smoke test)
-// ===========================================================================
-
-describe('admin index.ts', () => {
-  it('re-exports reportRoutes', async () => {
-    const { reportRoutes: r } = await import('../../../../routes/admin/index');
-    expect(typeof r).toBe('function');
-  });
-
-  it('re-exports analyticsRoutes', async () => {
-    const { analyticsRoutes: a } = await import('../../../../routes/admin/index');
-    expect(typeof a).toBe('function');
-  });
-
-  it('re-exports messagesRoutes', async () => {
-    const { messagesRoutes: m } = await import('../../../../routes/admin/index');
-    expect(typeof m).toBe('function');
-  });
-
-  it('re-exports languagesRoutes, invitationRoutes, registerRoleRoutes, registerContentRoutes', async () => {
-    const mod = await import('../../../../routes/admin/index');
-    expect(typeof mod.languagesRoutes).toBe('function');
-    expect(typeof mod.invitationRoutes).toBe('function');
-    expect(typeof mod.registerRoleRoutes).toBe('function');
-    expect(typeof mod.registerContentRoutes).toBe('function');
-  });
-
-  it('re-exports dashboardRoutes, userAdminRoutes, systemRankingsRoutes, agentAdminRoutes', async () => {
-    const mod = await import('../../../../routes/admin/index');
-    expect(typeof mod.dashboardRoutes).toBe('function');
-    expect(typeof mod.userAdminRoutes).toBe('function');
-    expect(typeof mod.systemRankingsRoutes).toBe('function');
-    expect(typeof mod.agentAdminRoutes).toBe('function');
-  });
-
-  it('adminRoutes is a valid async function (plugin signature)', async () => {
-    const { adminRoutes } = await import('../../../../routes/admin/index');
-    // Verify it is an async function with the expected arity (FastifyInstance → void)
-    expect(typeof adminRoutes).toBe('function');
-    expect(adminRoutes.constructor.name).toBe('AsyncFunction');
-    expect(adminRoutes.length).toBe(1);
-  });
-});

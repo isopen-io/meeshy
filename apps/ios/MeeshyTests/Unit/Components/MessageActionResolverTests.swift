@@ -100,13 +100,14 @@ final class MessageActionResolverTests: XCTestCase {
     /// RÉELLES parce que la règle lit leurs drapeaux de protection : un contexte
     /// de primitives ne pourrait pas la mesurer.
     private func msg(
-        attachments: [MessageAttachment],
+        attachments: [MessageAttachment] = [],
+        content: String = "",
         isViewOnce: Bool = false,
         isBlurred: Bool = false,
         isEncrypted: Bool = false
     ) -> Message {
         var m = MeeshyMessage(
-            conversationId: "conv-1", content: "",
+            conversationId: "conv-1", content: content,
             isEncrypted: isEncrypted, attachments: attachments)
         m.isViewOnce = isViewOnce
         m.isBlurred = isBlurred
@@ -150,10 +151,14 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(compose, save + 1)
     }
 
-    /// **Le cas qui SÉPARE composabilité et publiabilité : l'AUDIO.** Une note
-    /// vocale s'enregistre (`saveableAttachmentCount == 1`) et ne se compose
-    /// pas — la graine ne sait pas la poser sur un canvas.
-    func test_primaryActions_audioOnly_offersSave_butNeverCompose() {
+    /// **Le résolveur ne connaît QUE le fait, jamais le mime.** Ce témoin
+    /// s'appelait « l'audio s'enregistre et ne se compose jamais » ; le #4461 a
+    /// levé ce refus au niveau de la RÈGLE (`ComposableAttachment.form`), pas
+    /// ici. Ce qu'il vérifie survit intact et se nomme désormais pour ce qu'il
+    /// est : `canComposeMedia == false` retire « Composer », quelle que soit la
+    /// raison du refus — c'est précisément parce que le résolveur ne la connaît
+    /// pas qu'il n'a pas eu à changer.
+    func test_primaryActions_whenTheRuleRefuses_composeIsAbsent() {
         let a = MessageActionResolver.primaryActions(
             ctx(hasText: false, hasMedia: true,
                 saveableAttachmentCount: 1, canComposeMedia: false))
@@ -258,16 +263,32 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(ComposableAttachment.form(mimeType: "video/quicktime"), .video)
     }
 
-    /// Chaque refus vaut par sa RAISON, pas par la liste : l'audio parce que
-    /// l'atelier n'a pas de place pour lui, le lieu parce qu'`AttachmentKind` le
-    /// range en `.other` — ce qui tient la garde O13 « jamais `.location` »
-    /// GRATUITEMENT, sans condition qu'on puisse oublier de recopier.
-    func test_composableForm_refusesAudioLocationAndDocuments() {
-        for mime in ["audio/m4a", "audio/mpeg", "application/x-location",
+    /// Chaque refus vaut par sa RAISON, pas par la liste : le lieu parce
+    /// qu'`AttachmentKind` le range en `.other` — ce qui tient la garde O13
+    /// « jamais `.location` » GRATUITEMENT, sans condition qu'on puisse oublier
+    /// de recopier —, les documents parce qu'il n'y a rien à en poser.
+    ///
+    /// **L'AUDIO a quitté cette liste au #4461**, et c'est un retournement, pas
+    /// une suppression : son refus venait de ce que la graine ne savait poser
+    /// que des bitmaps et des pistes vidéo. `StoryComposerSeed.audio` a levé ce
+    /// refus de TRANSPORT en empruntant le chemin du collage
+    /// (`attachPastedAudio`) — le son devient le SON de la scène. Son
+    /// acceptation est désormais vérifiée par le témoin ci-dessous.
+    func test_composableForm_refusesLocationAndDocuments() {
+        for mime in ["application/x-location",
                      "application/pdf", "application/msword", "text/plain",
                      "application/zip", "text/csv", "application/json", ""] {
             XCTAssertNil(ComposableAttachment.form(mimeType: mime), mime)
         }
+    }
+
+    /// #4461 — le son est une forme À PART ENTIÈRE, distincte de l'image et de
+    /// la vidéo : il ne se pose pas sur le canvas, il devient la piste sonore.
+    /// Le distinguer ici est ce qui permet à la porte de le router sans
+    /// interroger le mime une seconde fois.
+    func test_composableForm_acceptsAudioAsItsOwnForm() {
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "audio/m4a"), .audio)
+        XCTAssertEqual(ComposableAttachment.form(mimeType: "audio/mpeg"), .audio)
     }
 
     // MARK: - moreSections : « Sélectionner » (#4005) — toujours offert, en fin de liste
@@ -465,5 +486,81 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertNotNil(info)
         XCTAssertTrue(info?.contains(.reactions) ?? false)
         XCTAssertTrue(info?.contains(.language) ?? false)
+    }
+
+    // MARK: - #4025 — « Composer » est offert sur TOUT message, et le PLAN dit comment
+
+    /// **Le défaut.** « Composer » n'apparaissait que sur un message portant un
+    /// média posable sur un canvas. Un message TEXTE — le cas le plus courant —
+    /// ne l'offrait pas, alors que son texte a une destination évidente dans
+    /// l'atelier : la DESCRIPTION de la slide.
+    ///
+    /// La règle ne rend donc plus « quelle pièce » mais un PLAN : ce qui se pose
+    /// sur le canvas, et ce qui pré-remplit la description. Deux questions que
+    /// `target(in:)` seul ne pouvait pas porter — il rendait un `MessageAttachment?`,
+    /// un type qui n'a aucun endroit où loger du texte.
+    func test_seedPlan_textOnlyMessage_seedsTheDescription() {
+        let plan = ComposableAttachment.seedPlan(in: msg(content: "On se voit à 18h"))
+        XCTAssertEqual(plan?.description, "On se voit à 18h")
+        XCTAssertNil(plan?.media, "un message texte ne pose rien sur le canvas")
+    }
+
+    func test_offers_textOnlyMessage_isNowOffered() {
+        XCTAssertTrue(ComposableAttachment.offers(message: msg(content: "salut")))
+    }
+
+    /// **Un message VIDE n'offre rien** — ni texte, ni média : le contre-témoin
+    /// sans lequel « offert sur tout message » se lirait « offert toujours »,
+    /// et l'atelier s'ouvrirait sur rien.
+    func test_offers_emptyMessage_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(message: msg()))
+    }
+
+    /// Un texte fait d'espaces n'est pas un texte.
+    func test_offers_blankText_isRefused() {
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "   \n\t ")))
+    }
+
+    /// **Le texte porte les MÊMES protections que le média.** Publier au-delà
+    /// de la conversation ce qui est masqué DANS la conversation est une
+    /// divulgation — que la chose masquée soit une image ou une phrase.
+    /// Sans ces trois cas, l'extension au texte ouvrirait une porte que le
+    /// média avait fermée.
+    func test_offers_protectedTextIsRefused_onAllThreeDeclarations() {
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "secret", isViewOnce: true)),
+                       "vue unique : clause O13")
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "secret", isBlurred: true)),
+                       "flouté : le masque n'est qu'un rendu, le texte partirait en clair")
+        XCTAssertFalse(ComposableAttachment.offers(message: msg(content: "secret", isEncrypted: true)),
+                       "chiffré : ce qui ne se lit que dans la conversation n'en sort pas")
+    }
+
+    /// **Un message qui porte les DEUX sème les deux.** Le média va sur le
+    /// canvas, le texte dans la description — c'est exactement la légende que
+    /// l'auteur avait déjà écrite, et la lui redemander serait un geste de plus
+    /// pour rien.
+    func test_seedPlan_mediaWithText_seedsBoth() {
+        let plan = ComposableAttachment.seedPlan(
+            in: msg(attachments: [piece("image/jpeg")], content: "au bord du lac"))
+        XCTAssertNotNil(plan?.media, "le média reste ce qui se pose sur le canvas")
+        XCTAssertEqual(plan?.description, "au bord du lac")
+    }
+
+    /// Un LOT reste refusé — mais son TEXTE, lui, reste semable : le refus
+    /// portait sur « quelle pièce part », pas sur la phrase qui l'accompagne.
+    func test_seedPlan_aBatchKeepsItsTextButPosesNoMedia() {
+        let plan = ComposableAttachment.seedPlan(
+            in: msg(attachments: [piece("image/jpeg"), piece("video/mp4")], content: "nos vacances"))
+        XCTAssertNil(plan?.media, "un lot mentirait sur ce qui part")
+        XCTAssertEqual(plan?.description, "nos vacances")
+    }
+
+    /// `target(in:)` survit comme PROJECTION du plan, pour ses deux lecteurs
+    /// qui n'ont besoin que de la pièce. Deux implémentations de la même
+    /// conjonction seraient deux règles qui ont commencé à diverger.
+    func test_target_isAProjectionOfTheSamePlan() {
+        let message = msg(attachments: [piece("image/jpeg")], content: "x")
+        XCTAssertEqual(ComposableAttachment.target(in: message)?.id,
+                       ComposableAttachment.seedPlan(in: message)?.media?.id)
     }
 }

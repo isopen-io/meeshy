@@ -440,14 +440,19 @@ final class EditParityInventoryTests: XCTestCase {
             "Une REPRISE monte la surface ou la composition reprise vit reellement, et le seul mecanisme "
             + "de reprise du meuble repeuple l'ATELIER."
         )
+        // RETOURNE au #4135 : le chrome revient au MEUBLE sur les trois
+        // surfaces. L'atelier n'assemble plus que le `...`, et la telecommande
+        // porte l'audience du socle jusqu'a lui. La garde protege maintenant
+        // l'inverse — un socle vide laisserait la reprise sans chemin de depart.
         XCTAssertEqual(
-            ComposerChromeOwnership.owner(for: surface), .atelier,
-            "Sous la scene, le chrome appartient a l'atelier : le meuble n'y peint ni audience ni fleche."
+            ComposerChromeOwnership.owner(for: surface), .host,
+            "Sous la scene, le socle peint les trois commandes : rendre `.atelier` ici redonnerait a "
+            + "l'atelier une rangee que le socle peint deja."
         )
         XCTAssertTrue(
-            ComposerChromeOwnership.socleZones(for: surface).isEmpty,
-            "Le socle ne peint AUCUNE zone sous la scene — en peindre une seconde serie donnerait deux "
-            + "audiences et deux fleches, dont une inerte."
+            ComposerChromeOwnership.socleZones(for: surface).contains(.publish),
+            "Le socle DOIT peindre sa fleche sous la scene : sans elle, une reprise s'ouvrirait sans "
+            + "aucun moyen de repartir."
         )
 
         XCTAssertEqual(

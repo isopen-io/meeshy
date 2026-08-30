@@ -819,6 +819,11 @@ describe('UserManagementService.enable2FA', () => {
 });
 
 describe('UserManagementService.disable2FA', () => {
+  // Ce témoin exigeait `twoFactorBackupCodes: null` — il CERTIFIAIT le défaut
+  // de #4206 : le champ est `String[] @default([])`, donc Prisma refusait
+  // l'écriture et la route rendait 500. Écrit depuis l'implémentation plutôt
+  // que depuis le comportement, il est resté vert pendant que le geste
+  // n'aboutissait jamais. La forme d'une liste scalaire vidée est `[]`.
   it('clears twoFactor fields', async () => {
     const update = jest.fn().mockResolvedValue(makeUser());
     const svc = makeService(makePrisma({ update }));
@@ -829,7 +834,8 @@ describe('UserManagementService.disable2FA', () => {
       data: expect.objectContaining({
         twoFactorEnabledAt: null,
         twoFactorSecret: null,
-        twoFactorBackupCodes: null,
+        twoFactorPendingSecret: null,
+        twoFactorBackupCodes: [],
       }),
     }));
   });

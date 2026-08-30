@@ -5,6 +5,7 @@ import { MaintenanceService } from '../../services/MaintenanceService';
 import { CallService, CallAlreadyEndedError } from '../../services/CallService';
 import type { DisconnectParticipation } from '../CallEventsHandler';
 import { hashSessionToken } from '../../utils/session-token';
+import { SOCKET_SESSION_ID } from '../disconnectSession';
 import { extractJWTToken, extractSessionToken, type SocketUser } from '../utils/socket-helpers';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
@@ -251,6 +252,19 @@ export class AuthHandler {
       logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
     }
 
+    // La cartographie SESSION → SOCKET (#4213).
+    //
+    // Un socket inscrit s'authentifie au JWT SEUL. `UserSession.sessionToken`
+    // stocke le hash d'un jeton opaque que rien n'obligeait le client à
+    // transmettre au handshake — il n'existait donc AUCUN moyen de dire quel
+    // socket appartient à quelle session, et révoquer une session laissait
+    // l'appareil recevoir tout le temps réel indéfiniment, un socket n'étant
+    // authentifié qu'une fois, au connect, et jamais revérifié.
+    //
+    // On range l'IDENTIFIANT, jamais le jeton : le clair n'a aucune raison de
+    // survivre à cette ligne.
+    await this._attachSessionId(socket, user.id);
+
     await this._joinUserConversations(socket, user.id, false);
 
     const isFirstSocket = this._registerUser(user.id, socketUser, socket);
@@ -278,6 +292,38 @@ export class AuthHandler {
       this.emitPresenceSnapshot(socket, user.id, false).catch(error => {
         logger.error('failed to emit presence snapshot (JWT auth)', { userId: user.id, error });
       });
+    }
+  }
+
+  /**
+   * Range `UserSession.id` sur le socket, quand le client a transmis son jeton.
+   *
+   * Best-effort et SILENCIEUX en cas d'absence : un client antérieur à ce lot
+   * n'envoie rien, et son socket reste sans identifiant. C'est le repli assumé
+   * de `disconnectSession` — la révocation en base, elle, est déjà effective.
+   *
+   * La lecture est bornée à l'utilisateur AUTHENTIFIÉ : un jeton de session
+   * appartenant à quelqu'un d'autre ne peut pas étiqueter ce socket, faute de
+   * quoi une personne pourrait faire couper le socket d'une autre en présentant
+   * un jeton qu'elle aurait intercepté.
+   */
+  private async _attachSessionId(socket: Socket, userId: string): Promise<void> {
+    try {
+      const sessionToken = extractSessionToken(socket);
+      if (!sessionToken) return;
+
+      const session = await this.prisma.userSession.findFirst({
+        where: { userId, sessionToken: hashSessionToken(sessionToken), isValid: true },
+        select: { id: true },
+      });
+
+      if (session) {
+        (socket.data as Record<string, unknown>)[SOCKET_SESSION_ID] = session.id;
+      }
+    } catch (error) {
+      // Une session non résolue ne doit jamais empêcher une connexion : le
+      // temps réel n'est pas conditionné à la traçabilité de l'appareil.
+      logger.warn('failed to attach sessionId to socket', { userId, error });
     }
   }
 

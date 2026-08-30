@@ -21,36 +21,17 @@
 
 import { cache } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+
+// `getDashboardData`, `getGroups` et `getGroupById` ont été retirés : ils
+// visaient `/dashboard`, `/groups` et `/groups/:id`, trois adresses qui
+// n'existent pas côté gateway — la seule route de tableau de bord servie est
+// `/admin/dashboard`, réservée à l'administration, et aucune route « groups »
+// n'a jamais existé. Aucun composant n'importait ce module, si bien que ces
+// trois helpers documentaient un contrat imaginaire depuis leur écriture
+// (#4189). Les helpers restants visent des routes réelles.
 
 
-/**
- * Fetch dashboard data avec déduplication
- *
- * Si plusieurs Server Components appellent cette fonction dans le même render,
- * une seule requête HTTP sera effectuée.
- *
- * @example
- * ```tsx
- * // app/dashboard/page.tsx (Server Component)
- * import { getDashboardData } from '@/lib/server-cache';
- *
- * export default async function DashboardPage() {
- *   const data = await getDashboardData();
- *   return <div>{data.stats.totalUsers}</div>;
- * }
- * ```
- */
-export const getDashboardData = cache(async () => {
-  const response = await fetch(buildApiUrl('/dashboard'), {
-    next: { revalidate: 60 }, // Revalider toutes les 60 secondes
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch dashboard data');
-  }
-
-  return response.json();
-});
 
 /**
  * Fetch user data par ID avec déduplication
@@ -70,7 +51,12 @@ export const getDashboardData = cache(async () => {
  * ```
  */
 export const getUserById = cache(async (userId: string) => {
-  const response = await fetch(buildApiUrl(`/users/${userId}`), {
+  // `/directory/people/:handle`, l'ADRESSE canonique d'un profil (#4161).
+  // `/users/:id` reste servie en alias pour les clients installés ; le web,
+  // lui, n'appelle plus que l'implémentation. Le paramètre accepte aussi bien
+  // un ObjectId qu'un pseudo, ce que le nom `userId` ne dit pas et que le site
+  // d'appel exploite déjà.
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.directory.peopleByHandle(userId)), {
     next: { revalidate: 300 }, // Cache 5 minutes
   });
 
@@ -99,7 +85,7 @@ export const getUserById = cache(async (userId: string) => {
  * ```
  */
 export const getConversationById = cache(async (conversationId: string) => {
-  const response = await fetch(buildApiUrl(`/conversations/${conversationId}`), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.conversations.byId(conversationId)), {
     next: { revalidate: 30 }, // Cache 30 secondes (data temps réel)
   });
 
@@ -148,57 +134,24 @@ export const getConversationMessages = cache(
   }
 );
 
-/**
- * Fetch groups/communities avec déduplication
- *
- * @returns Groups array
- *
- * @example
- * ```tsx
- * // app/groups/page.tsx (Server Component)
- * import { getGroups } from '@/lib/server-cache';
- *
- * export default async function GroupsPage() {
- *   const groups = await getGroups();
- *   return <GroupList groups={groups} />;
- * }
- * ```
- */
-export const getGroups = cache(async () => {
-  const response = await fetch(buildApiUrl('/groups'), {
-    next: { revalidate: 60 }, // Cache 1 minute
-  });
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch groups');
-  }
-
-  return response.json();
-});
-
-/**
- * Fetch group par ID avec déduplication
- *
- * @param groupId - ID du groupe
- * @returns Group data
- */
-export const getGroupById = cache(async (groupId: string) => {
-  const response = await fetch(buildApiUrl(`/groups/${groupId}`), {
-    next: { revalidate: 60 }, // Cache 1 minute
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch group ${groupId}`);
-  }
-
-  return response.json();
-});
 
 /**
  * Fetch user notifications avec déduplication
  *
  * @param userId - ID de l'utilisateur
  * @returns Notifications array
+ *
+ * ADRESSE FANTÔME, trouvée par #4281 en migrant ce fichier vers le catalogue
+ * partagé : `GET /users/:id/notifications` n'existe dans AUCUNE des 419
+ * routes de `@meeshy/shared/api/endpoints` (#4280, dérivé du manifeste
+ * gateway). Zéro appelant dans ce dépôt (vérifié) — même famille que
+ * `getDashboardData`/`getGroups`/`getGroupById`, retirés de CE MÊME FICHIER
+ * par #4189 pour la même raison. Non retirée ici : #4281 migre des chemins
+ * littéraux vers le catalogue, il ne tranche pas le sort d'un code mort —
+ * enterrer cette découverte dans un lot de migration referait exactement
+ * l'erreur que #4189 nommait. Laissée en littéral EXPRÈS : il n'y a pas
+ * d'entrée de catalogue vers laquelle la migrer. Suivi à ouvrir.
  */
 export const getUserNotifications = cache(async (userId: string) => {
   const response = await fetch(buildApiUrl(`/users/${userId}/notifications`), {
@@ -218,7 +171,7 @@ export const getUserNotifications = cache(async (userId: string) => {
  * Cette data change rarement, on peut la cacher plus longtemps
  */
 export const getAvailableLanguages = cache(async () => {
-  const response = await fetch(buildApiUrl('/languages'), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.languages.root), {
     next: { revalidate: 3600 }, // Cache 1 heure (data statique)
   });
 

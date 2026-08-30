@@ -152,8 +152,8 @@ jest.mock('@/services/auth-manager.service', () => ({
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (path: string) => `http://localhost:3000/api${path}`,
   API_ENDPOINTS: {
-    AUTH: {
-      REGISTER: '/auth/register',
+    auth: {
+      register: '/auth/register',
     },
   },
 }));
@@ -442,7 +442,16 @@ describe('RegisterFormWizard', () => {
       });
     });
 
-    it('shows existing account alert when email exists', async () => {
+    // Le témoin qui vivait ici exigeait « Account already exists » après avoir
+    // FABRIQUÉ un `accountInfo` dans son double — un champ que le gateway
+    // n'émet nulle part. Il testait une fiction, et il est resté vert pendant
+    // que cette branche du produit ne pouvait pas s'afficher.
+    //
+    // Depuis #4158, l'adresse ne répond plus que sur sa FORME : confirmer sans
+    // compte qu'elle appartient à quelqu'un faisait de la route un oracle, à
+    // rebours de la doctrine appliquée par `/forgot-password` et
+    // `/magic-link/request`. C'est désormais la SOUMISSION qui le dit.
+    it('ne prétend plus qu’un compte existe — l’adresse ne répond que sur sa forme', async () => {
       const user = userEvent.setup();
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('/auth/me')) {
@@ -451,16 +460,7 @@ describe('RegisterFormWizard', () => {
         if (url.includes('/auth/check-availability') && url.includes('email=')) {
           return Promise.resolve({
             ok: true,
-            json: () =>
-              Promise.resolve({
-                data: {
-                  emailAvailable: false,
-                  accountInfo: {
-                    maskedDisplayName: 'John Doe',
-                    maskedUsername: 'j***n',
-                  },
-                },
-              }),
+            json: () => Promise.resolve({ success: true, data: { emailValid: true } }),
           });
         }
         return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
@@ -472,11 +472,13 @@ describe('RegisterFormWizard', () => {
         expect(screen.getByPlaceholderText('your@email.com')).toBeInTheDocument();
       });
 
-      const emailInput = screen.getByPlaceholderText('your@email.com');
-      await user.type(emailInput, 'existing@example.com');
+      await user.type(screen.getByPlaceholderText('your@email.com'), 'existing@example.com');
 
+      // L'affirmation est NÉGATIVE, et c'est sa raison d'être : un témoin qui
+      // ne vérifierait que la nouvelle réponse resterait vert si l'ancienne
+      // revenait à côté.
       await waitFor(() => {
-        expect(screen.getByText('Account already exists')).toBeInTheDocument();
+        expect(screen.queryByText('Account already exists')).not.toBeInTheDocument();
       });
     });
 
@@ -1392,42 +1394,14 @@ describe('RegisterFormWizard', () => {
   });
 
   describe('Recovery Modal Integration', () => {
-    it('opens recovery modal when recover account is clicked', async () => {
-      const user = userEvent.setup();
-      mockFetch.mockImplementation((url: string) => {
-        if (url.includes('/auth/me')) {
-          return Promise.resolve({ ok: false, status: 401 });
-        }
-        if (url.includes('/auth/check-availability') && url.includes('email=')) {
-          return Promise.resolve({
-            ok: true,
-            json: () =>
-              Promise.resolve({
-                data: {
-                  emailAvailable: false,
-                },
-              }),
-          });
-        }
-        return Promise.resolve({ ok: true, json: () => Promise.resolve({}) });
-      });
-
-      render(<RegisterFormWizard />);
-
-      await waitFor(() => {
-        expect(screen.getByPlaceholderText('your@email.com')).toBeInTheDocument();
-      });
-
-      await user.type(screen.getByPlaceholderText('your@email.com'), 'existing@example.com');
-
-      await waitFor(() => {
-        expect(screen.getByText('Account already exists')).toBeInTheDocument();
-      });
-
-      const recoverButton = screen.getByRole('button', { name: /Recover Account/i });
-      await user.click(recoverButton);
-
-      expect(screen.getByTestId('recovery-modal')).toBeInTheDocument();
-    });
+    // Le parcours de récupération par ADRESSE partait de l'oracle supprimé en
+    // #4158 : sans « cette adresse a un compte », il n'y a plus de modale à
+    // ouvrir avant la soumission. La récupération par NUMÉRO, elle, reste —
+    // elle passe par `/auth/phone-transfer/check`, qui n'ouvre sa réponse
+    // qu'à un appelant sachant déjà le vrai nom (`recoverySuggested`).
+    //
+    // Le coût est celui que l'issue nomme, et il est nul en pratique : la
+    // branche qui affichait cet aperçu lisait `accountInfo`, un champ que le
+    // gateway n'a jamais émis.
   });
 });

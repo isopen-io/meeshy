@@ -178,13 +178,7 @@ final class ComposerMoodSurfaceTests: XCTestCase {
     }
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     /// Le corps d'un BLOC, et non le fichier : celui-ci porte aussi
@@ -678,8 +672,8 @@ final class ComposerMoodSurfaceTests: XCTestCase {
             "Le meuble doit monter la surface du mood — sinon la branche `.mood` du routage n'aurait nulle part où aller."
         )
 
-        guard let bloc = blockBody(startingAt: "private var moodSurface", in: code) else {
-            throw AncreIntrouvable(quoi: "private var moodSurface")
+        guard let bloc = blockBody(startingAt: "var moodSurface", in: code) else {
+            throw AncreIntrouvable(quoi: "var moodSurface")
         }
         XCTAssertTrue(bloc.contains("ComposerMoodSurface("), "Le bloc lu n'est pas celui de la surface mood.")
         XCTAssertTrue(
@@ -709,8 +703,8 @@ final class ComposerMoodSurfaceTests: XCTestCase {
     /// elle l'est, et que le corps se contente d'aiguiller.
     func test_leMeuble_choisitLeMood_parLaRegleEprouvable_etNonParUnIfDansLeCorps() throws {
         let code = try hostSource()
-        guard let lecture = blockBody(startingAt: "private var mountedSurface", in: code) else {
-            throw AncreIntrouvable(quoi: "private var mountedSurface")
+        guard let lecture = blockBody(startingAt: "var mountedSurface", in: code) else {
+            throw AncreIntrouvable(quoi: "var mountedSurface")
         }
         XCTAssertTrue(
             lecture.contains("ComposerSurfaceRouting.surface("),
@@ -718,15 +712,26 @@ final class ComposerMoodSurfaceTests: XCTestCase {
         )
 
         // **Ancre RENDUE EXACTE au #4120**, et c'est le piège que la garde du
-        // socle documente déjà : `"private var surface"` est un PRÉFIXE. Le
+        // socle documente déjà : `"var surface:"` est un PRÉFIXE. Le
         // meuble déclare désormais `surfaceWithIntakePortals` AVANT
         // l'aiguillage — la garde lisait donc le corps des portails, où il n'y a
         // ni `case .mood` ni `mountedSurface`, et rougissait sur un bloc qui
         // n'était pas le sien. Le type de retour referme l'ancre.
-        guard let corps = blockBody(startingAt: "private var surface: some View", in: code) else {
-            throw AncreIntrouvable(quoi: "private var surface: some View")
+        guard let corps = blockBody(startingAt: "var surface: some View", in: code) else {
+            throw AncreIntrouvable(quoi: "var surface: some View")
         }
-        XCTAssertTrue(corps.contains("mountedSurface"), "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
+        // **La lecture unique a un NOM depuis le 2026-08-30.** Elle était en
+        // ligne dans l'aiguillage (`ComposerMountedView.mounted(surface:…)`) ;
+        // un second site en a eu besoin — l'historique — et a interrogé le KIND
+        // à la place, ce qui compilait sans jamais pouvoir rendre vrai. La
+        // résolution est désormais `mountedComposerView`, calculée à UN endroit.
+        //
+        // Ce que ce témoin dit reste le même : le corps CONSOMME une lecture,
+        // il n'en refait pas une seconde.
+        XCTAssertTrue(corps.contains("mountedComposerView"),
+                      "Le corps consomme la lecture unique, il n'en refait pas une seconde.")
+        XCTAssertFalse(corps.contains("ComposerMountedView.mounted("),
+                       "La résolution vit dans `mountedComposerView`, pas dans le corps de l'aiguillage.")
         XCTAssertTrue(corps.contains("case .mood"), "Et la troisième issue est servie.")
         XCTAssertFalse(
             corps.contains("profile.initialFormat"),

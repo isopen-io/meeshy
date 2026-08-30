@@ -1,0 +1,77 @@
+/* Schéma SOMBRE — le rendu de référence de la v3 (la planche est « nocturne »).
+   Porté par :root SANS classe : un navigateur qui n'exécute aucun JavaScript
+   n'a pas de classe posée et doit tout de même être servi. La coquille racine
+   rend `<html class="dark">` côté SERVEUR (apps/web-v3/app/layout.tsx) et le
+   moteur de thème (apps/web-v3/app/theme-script.tsx) ne fait que CORRIGER
+   cette classe ; aucune requête de média n'apparaît ici — un jeton ne bascule
+   jamais tout seul.
+
+   `color-scheme` est déclaré ICI, avec les jetons qu'il accompagne, et pas
+   dans le script : sans JavaScript, une page peinte en jetons sombres sous un
+   agent utilisateur en `color-scheme: normal` rend des ascenseurs, des
+   contrôles de formulaire et un canevas de surdéfilement BLANCS. Le rôle
+   PREMIER — un lecteur sans compte et sans JS lourd — est exactement ce cas.
+   La conception § 2 dit « color-scheme suit la classe » : il la suit ici, en
+   CSS, et nulle part ailleurs. */
+:root,
+:root.dark {
+  color-scheme: dark;
+
+  --color-bg: #0d0e16;
+  --color-bg-sunken: #08090f;
+  --color-surface: #161826;
+  --color-surface-raised: var(--color-neutral-900);
+  --color-text: #edeef5;
+
+  --color-neutral-400: #b9bcd0;
+  --color-neutral-500: #9397ab;
+  --color-neutral-600: #75798c;
+  --color-neutral-700: #4b4f63;
+  --color-neutral-800: #33364a;
+  --color-neutral-900: #22243a;
+
+  --color-text-muted: var(--color-neutral-500);
+  /* HORS de la rampe, et c'est mesuré : `--color-neutral-600` (#75798c) rend
+     3,53:1 sur `--color-surface-raised`, sous les 4,5:1 que WCAG demande à du
+     texte. La rampe reste la rampe (elle est reconstituée de la planche) ;
+     le RÔLE prend la valeur qui tient sa loi. Témoin : le contrôle de
+     contraste de scripts/check-jetons.mjs. */
+  --color-text-subtle: #8a8ea6;
+  --color-border: var(--color-neutral-800);
+  --color-border-strong: var(--color-neutral-700);
+  /* Le contour VISIBLE d'un champ ou d'une case porte à lui seul l'information
+     « il y a un contrôle ici » : WCAG 1.4.11 lui demande 3:1 contre la surface.
+     Ni `--color-border` (1,28:1 sur raised) ni `--color-border-strong`
+     (1,88:1) ne l'atteignent — ce sont des séparateurs, pas des contours. */
+  --color-border-interactive: var(--color-neutral-600);
+
+  --color-accent-200: #c7cbff;
+  --color-accent-300: #a5aeff;
+  --color-accent-400: #818cf8;
+  --color-primary: var(--color-accent-400);
+  --color-primary-strong: #6366f1;
+  --color-primary-soft: var(--color-accent-300);
+  --color-primary-softer: var(--color-accent-200);
+  --color-on-primary: #0b0c14;
+
+  --color-success: #10b981;
+  --color-success-soft: #34d399;
+  --color-warning: #f59e0b;
+  /* La planche écrit #ef4444 : 4,04:1 sur `--color-surface-raised`, donc
+     illisible en TEXTE d'erreur sur une carte surélevée. Éclairci d'un cran,
+     comme `--color-on-primary` l'a été, au titre de la dimension 5. */
+  --color-danger: #f45b5b;
+  --color-danger-soft: #f87171;
+  --color-on-status: var(--color-bg);
+
+  --color-presence-online: #34d399;
+  --color-presence-away: #fbbf24;
+  --color-presence-idle: #9ca3af;
+  --color-presence-offline: #9ca3af;
+
+  --color-overlay: rgb(8 9 15 / 0.72);
+
+  --shadow-sm: 0 6px 20px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 20px 60px rgb(0 0 0 / 0.6);
+  --shadow-primary: 0 10px 26px rgb(129 140 248 / 0.35);
+}

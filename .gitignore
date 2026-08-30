@@ -26,6 +26,23 @@ backend/node_modules/
 # production
 /build
 **/*/*.d.*
+# ... sauf les déclarations ÉCRITES À LA MAIN, qui sont des sources.
+# `apps/web-v3/scripts/check-app-router-built.d.mts` type le gate de build que
+# `__tests__/app-router-build.test.ts` importe : ignoré, il manque au clone, et
+# le type-check de `@meeshy/web-v3` — l'étape BLOQUANTE de `ci.yml` — tombe en
+# « TS7016: Could not find a declaration file for module ». Mesuré en déplaçant
+# le fichier : `bun run type-check` passe de 0 à 1 erreur.
+!apps/web-v3/scripts/*.d.mts
+!apps/web-v3/scripts/lib/*.d.mts
+# Même cause, même effet pour `apps/web-v3/types/css.d.ts` : il déclare l'import
+# à effet de bord de `app/globals.css`, qui porte la table de jetons. Ignoré, il
+# manque au clone et le type-check BLOQUANT tombe en « TS2882: Cannot find module
+# or type declarations for side-effect import ». Mesuré en déplaçant le fichier.
+!apps/web-v3/types/*.d.ts
+# `scripts/lib/navigateur.d.cts` type `scripts/lib/navigateur.cjs` — le site UNIQUE de
+# « où est Chromium » (conception § 9.2) — pour `apps/web-v3/playwright.config.ts`. Même
+# raison que ci-dessus : ignoré, il manque au clone et le type-check tombe en TS7016.
+!scripts/lib/*.d.cts
 **/*/build/
 **/*/dist/
 **/*/*.*.map

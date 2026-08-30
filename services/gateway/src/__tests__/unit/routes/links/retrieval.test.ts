@@ -25,12 +25,40 @@ jest.mock('../../../../middleware/auth', () => ({
 const mockFindShareLinkByIdentifier = jest.fn<any>();
 const mockGetConversationMessages = jest.fn<any>().mockResolvedValue([]);
 const mockCountConversationMessages = jest.fn<any>().mockResolvedValue(0);
+// #4165 — cinq requêtes CIBLÉES qui remplacent l'ancienne relation
+// `participants` chargée en bloc SANS `take` (voir `prisma-queries.ts`).
+// `findActiveUserParticipant` gouverne `userType`/`hasAccess` (le repli par
+// défaut est `null` = « non membre », le cas le plus restrictif) ; les
+// autres n'affectent que `members`/`anonymousParticipants`/`stats`, non
+// assertés par ce fichier.
+const mockFindActiveUserParticipant = jest.fn<any>().mockResolvedValue(null);
+const mockFindLinkMembers = jest.fn<any>().mockResolvedValue([]);
+const mockFindLinkAnonymousParticipants = jest.fn<any>().mockResolvedValue([]);
+const mockCountLinkParticipantsByType = jest.fn<any>().mockResolvedValue({ totalMembers: 0, totalAnonymousParticipants: 0 });
+const mockCountOnlineAnonymousParticipants = jest.fn<any>().mockResolvedValue(0);
 
 jest.mock('../../../../routes/links/utils/prisma-queries', () => ({
   findShareLinkByIdentifier: (...args: any[]) => mockFindShareLinkByIdentifier(...args),
   getConversationMessages: (...args: any[]) => mockGetConversationMessages(...args),
   countConversationMessages: (...args: any[]) => mockCountConversationMessages(...args),
+  findActiveUserParticipant: (...args: any[]) => mockFindActiveUserParticipant(...args),
+  findLinkMembers: (...args: any[]) => mockFindLinkMembers(...args),
+  findLinkAnonymousParticipants: (...args: any[]) => mockFindLinkAnonymousParticipants(...args),
+  countLinkParticipantsByType: (...args: any[]) => mockCountLinkParticipantsByType(...args),
+  countOnlineAnonymousParticipants: (...args: any[]) => mockCountOnlineAnonymousParticipants(...args),
 }));
+
+// `loadReaderHistoryFloor` fait sa PROPRE lecture Prisma (`participant.findFirst`,
+// indépendante de `prisma-queries.ts`) — `historyReaderFromAuthContext` reste
+// RÉEL (fonction pure, patron `jest.requireActual` du dépôt : ne pas
+// redéclarer ce qui n'a pas besoin de l'être).
+jest.mock('../../../../services/historyFloor', () => {
+  const actual = jest.requireActual('../../../../services/historyFloor') as object;
+  return {
+    ...actual,
+    loadReaderHistoryFloor: jest.fn<any>().mockResolvedValue(null),
+  };
+});
 
 jest.mock('../../../../routes/links/utils/message-formatters', () => ({
   formatMessageWithUnifiedSender: jest.fn((m: any) => m),
@@ -180,6 +208,10 @@ describe('GET /links/:identifier — unauthenticated, no allowViewHistory', () =
 describe('GET /links/:identifier — success as conversation member', () => {
   it('returns 200 with member userType and redirectTo', async () => {
     mockFindShareLinkByIdentifier.mockResolvedValueOnce(makeShareLink());
+    // #4165 — `userType`/`hasAccess` viennent désormais de cette lecture
+    // CIBLÉE, plus du scan de `conversation.participants` (retiré du modèle
+    // chargé par `findShareLinkByIdentifier`).
+    mockFindActiveUserParticipant.mockResolvedValueOnce({ id: 'part-1' });
     const { app } = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/links/${LINK_ID}` });
     expect(res.statusCode).toBe(200);

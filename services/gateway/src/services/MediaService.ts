@@ -8,7 +8,17 @@ import type { MediaStorage, MediaDuplicateResult, MediaDuplicatePlan } from './s
 // module. New code should import from `storage/MediaStorage`.
 export type { MediaDuplicateResult };
 
-const ATTACHMENTS_FILE_PREFIX = '/api/v1/attachments/file/';
+/**
+ * Le segment de service, SANS préfixe versionné (#4324).
+ *
+ * Il valait `/api/v1/attachments/file/` : une version en dur, qui faisait rendre
+ * `null` à `relativePathFromUrl` pour toute autre forme — donc pour les 514
+ * attachements stockés en CLÉ NUE, dont `deleteMedia` ne supprimait alors rien,
+ * en silence. Chercher le segment SEUL accepte les trois adresses que la
+ * passerelle sert (`/api/v1/…`, `/api/…`, et toute version future) sans qu'aucune
+ * ne soit écrite ici.
+ */
+const ATTACHMENTS_FILE_SEGMENT = '/attachments/file/';
 
 /**
  * Local-filesystem implementation of {@link MediaStorage}. Targets the
@@ -53,10 +63,18 @@ export class MediaService implements MediaStorage {
       }
     }
 
-    const idx = pathname.indexOf(ATTACHMENTS_FILE_PREFIX);
-    if (idx === -1) return null;
+    const idx = pathname.indexOf(ATTACHMENTS_FILE_SEGMENT);
+    if (idx === -1) {
+      // Pas de segment de service : c'est peut-être la CLÉ DE STOCKAGE elle-même,
+      // la seule forme que la base doive porter. Une clé n'a ni schéma ni barre
+      // initiale — ce qui la distingue d'un chemin étranger comme `/media/x.jpg`,
+      // dont on ne sait pas s'il désigne un de nos fichiers.
+      const estUneCle =
+        fileUrl.length > 0 && !fileUrl.startsWith('/') && !fileUrl.includes('://');
+      return estUneCle ? fileUrl : null;
+    }
 
-    const encoded = pathname.slice(idx + ATTACHMENTS_FILE_PREFIX.length);
+    const encoded = pathname.slice(idx + ATTACHMENTS_FILE_SEGMENT.length);
     try {
       return decodeURIComponent(encoded);
     } catch {
@@ -108,7 +126,11 @@ export class MediaService implements MediaStorage {
         await fs.copyFile(srcPath, destPath, ficlone | fsConstants.COPYFILE_EXCL);
 
         const stat = await fs.stat(destPath);
-        const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+        // #4324 — ce qui se PERSISTE est la clé de stockage, pas une adresse : ni
+        // hôte, ni préfixe d'API, ni version. Les trois clients posent la route
+        // (`buildAttachmentUrl` web, `MeeshyConfig.resolveMediaURL` iOS,
+        // `me.meeshy.sdk.util.resolveMediaUrl` Android).
+        const newFileUrl = newRelativePath;
         return {
           fileUrl: newFileUrl,
           filePath: newRelativePath,
@@ -174,7 +196,11 @@ export class MediaService implements MediaStorage {
     const newFileName = `snapshot_${uuidv4()}${ext}`;
     const newRelativePath = path.join('snapshots', newFileName);
     const destPath = path.join(this.uploadBasePath, newRelativePath);
-    const newFileUrl = `${ATTACHMENTS_FILE_PREFIX}${encodeURIComponent(newRelativePath)}`;
+    // #4324 — ce qui se PERSISTE est la clé de stockage, pas une adresse : ni
+        // hôte, ni préfixe d'API, ni version. Les trois clients posent la route
+        // (`buildAttachmentUrl` web, `MeeshyConfig.resolveMediaURL` iOS,
+        // `me.meeshy.sdk.util.resolveMediaUrl` Android).
+        const newFileUrl = newRelativePath;
     const guessedMimeType = this.guessMimeType(ext);
 
     const commit = async (): Promise<MediaDuplicateResult> => {

@@ -302,4 +302,109 @@ final class StoryComposerSeedTests: XCTestCase {
                 + "et une carte « Reprendre » qui écrase la graine au premier tap."
         )
     }
+
+    // MARK: - #4025 — une graine peut ne semer QUE du texte
+
+    /// **Le défaut.** La graine ne connaissait que `.image` et `.video` : un
+    /// message TEXTE n'avait aucune porte d'entrée vers l'atelier, alors que son
+    /// texte a une destination évidente — la DESCRIPTION de la slide.
+    ///
+    /// Le texte n'est donc PAS un troisième cas de `Payload` : ce qu'on pose sur
+    /// le canvas et ce qui pré-remplit la description sont deux choses de nature
+    /// différente, et un message porte souvent les deux. Le payload devient
+    /// optionnel, la description l'accompagne.
+    @MainActor
+    func test_seed_textOnly_fillsTheSlideDescription() throws {
+        let graine = try XCTUnwrap(StoryComposerSeed.text("On se voit à 18h"))
+        let sut = StoryComposerViewModel(seeding: graine)
+
+        XCTAssertEqual(sut.currentSlide.content, "On se voit à 18h")
+        XCTAssertTrue(sut.isSeededSession,
+                      "une session semée par du texte est semée au même titre qu'une autre")
+    }
+
+    /// Un texte fait d'espaces ne sème rien : la fabrique le DIT en rendant
+    /// `nil`, plutôt que d'ouvrir un atelier sur une description vide.
+    func test_seed_blankText_yieldsNoSeed() {
+        XCTAssertNil(StoryComposerSeed.text("   \n\t "))
+        XCTAssertNil(StoryComposerSeed.text(""))
+    }
+
+    /// **Média ET texte ensemble** — la légende que l'auteur a déjà écrite ne
+    /// lui est pas redemandée.
+    @MainActor
+    func test_seed_imageWithDescription_posesBoth() {
+        let sut = StoryComposerViewModel(seeding: StoryComposerSeed(
+            payload: .image(makeImage()), description: "au bord du lac"))
+
+        XCTAssertTrue(sut.hasBackgroundImage, "le média se pose toujours sur le canvas")
+        XCTAssertEqual(sut.currentSlide.content, "au bord du lac")
+    }
+
+    // MARK: - #4461 — composer avec un message AUDIO
+
+    /// **Le verdict : l'audio devient le SON de la scène.**
+    ///
+    /// Un son n'est pas un objet de canvas — c'est ce que `ComposableAttachment.Form`
+    /// disait en l'excluant, et c'était juste tant que la graine ne savait poser
+    /// que des bitmaps et des pistes vidéo. Ce qu'un son sait être dans un
+    /// atelier, le dépôt le savait déjà ailleurs : `ComposerAudioPlacement`
+    /// gouverne le collage d'un son depuis #4378, et `attachPastedAudio` le
+    /// pose. La graine emprunte ce chemin plutôt que d'en ouvrir un second.
+    @MainActor
+    func test_seed_audio_devientLeSonDeLaScene() async throws {
+        let source = try makeAudioFile()
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let graine = try XCTUnwrap(StoryComposerSeed.audio(copying: source))
+        let sut = StoryComposerViewModel(seeding: graine)
+
+        // `attachPastedAudio` pose l'objet depuis un `Task` : on laisse la
+        // pose atteindre le modèle, comme le fait le chemin du collage.
+        try? await Task.sleep(nanoseconds: 400_000_000)
+
+        XCTAssertFalse(sut.loadedAudioURLs.isEmpty,
+                       "le son doit être chargé — sans actif, la couche serait invisible aux lecteurs")
+        XCTAssertTrue(sut.isSeededSession)
+    }
+
+    /// La fabrique COPIE, comme celle de la vidéo, et pour la même raison : la
+    /// source vient du cache disque, soumis à éviction par mtime. Une éviction
+    /// entre l'ouverture de l'atelier et l'envoi ferait échouer la publication
+    /// d'un son déjà composé, sans un mot.
+    func test_seed_audio_copieLaSourceEtRefuseUnFichierAbsent() throws {
+        XCTAssertNil(StoryComposerSeed.audio(
+            copying: URL(fileURLWithPath: "/tmp/aucun-fichier-\(UUID().uuidString).m4a")),
+            "une source absente ne sème rien, et la fabrique le DIT")
+
+        let source = try makeAudioFile()
+        defer { try? FileManager.default.removeItem(at: source) }
+        let graine = try XCTUnwrap(StoryComposerSeed.audio(copying: source))
+        guard case .audio(let copie)? = graine.payload else {
+            return XCTFail("la charge doit être un son")
+        }
+        XCTAssertNotEqual(copie, source, "la graine travaille sur SA copie, jamais sur le cache")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: copie.path))
+    }
+
+    /// **La transcription ne devient PAS la description**, et ce refus est la
+    /// moitié décidée de #4461 : une transcription est ce que quelqu'un a DIT,
+    /// pas ce que l'auteur a ÉCRIT. La publier comme légende signerait de la
+    /// main de l'auteur des mots qui ne sont pas les siens.
+    func test_seed_audio_neFabriquePasDeDescription() throws {
+        let source = try makeAudioFile()
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        XCTAssertNil(StoryComposerSeed.audio(copying: source)?.description,
+                     "la description reste à l'auteur — le champ l'attend, vide")
+    }
+
+    /// Un fichier audio minimal mais RÉEL : `copyForComposer` vérifie
+    /// l'existence, donc un chemin fabriqué ne prouverait rien.
+    private func makeAudioFile() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("seed-\(UUID().uuidString).m4a")
+        try Data([0x00, 0x01, 0x02, 0x03]).write(to: url)
+        return url
+    }
 }

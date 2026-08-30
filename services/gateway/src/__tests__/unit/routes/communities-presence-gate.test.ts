@@ -651,6 +651,10 @@ async function fetchCommunityConversations(
         participants,
         _count: { messages: 12, participants: 2 },
       }]),
+      // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
+      // part de la page (`.count()`), en plus du `.findMany` déjà mocké — un
+      // seul élément ici, comme le tableau ci-dessus.
+      count: jest.fn<any>().mockResolvedValue(1),
     },
   } as any);
   await communityRoutes(app);
@@ -836,7 +840,9 @@ async function postConversationToCommunity(
       findFirst: jest.fn<any>().mockResolvedValue({
         id: CONVO_ID,
         communityId: null,
-        participants: [{ userId: VIEWER_ID, role: 'member' }],
+        // L'appelant administre la conversation : la route l'exige depuis
+        // #4191 (« admin/creator of BOTH »), ce que son Swagger promettait déjà.
+        participants: [{ userId: VIEWER_ID, role: 'admin', isActive: true }],
       }),
       update: jest.fn<any>().mockResolvedValue({
         id: CONVO_ID,

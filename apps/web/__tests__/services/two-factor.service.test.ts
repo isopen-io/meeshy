@@ -41,7 +41,7 @@ describe('TwoFactorService.getStatus', () => {
     const result = await twoFactorService.getStatus();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://gate.meeshy.me/auth/2fa/status',
+      'https://gate.meeshy.me/api/v1/auth/2fa/status',
       expect.objectContaining({
         method: 'GET',
         headers: expect.objectContaining({ Authorization: 'Bearer bearer-token' }),
@@ -80,7 +80,7 @@ describe('TwoFactorService.setup', () => {
     const result = await twoFactorService.setup();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://gate.meeshy.me/auth/2fa/setup',
+      'https://gate.meeshy.me/api/v1/auth/2fa/setup',
       expect.objectContaining({ method: 'POST' })
     );
     expect(result.data?.secret).toBe('SECRET');
@@ -120,7 +120,14 @@ describe('TwoFactorService.enable', () => {
 });
 
 describe('TwoFactorService.verify', () => {
-  it('strips spaces and hyphens from code', async () => {
+  // #4419 — cette méthode complète un LOGIN (jeton temporaire
+  // `crypto.randomBytes`, jamais un JWT) via la route PUBLIQUE
+  // `POST /auth/login/2fa` (`security: []`, corps `{ twoFactorToken, code }`).
+  // Elle ne vise plus `POST /auth/2fa/verify`, qui exige un JWT de session
+  // (`fastify.authenticate`) que ce jeton temporaire ne peut structurellement
+  // pas fournir, et dont le schéma de réponse ne porte de toute façon aucune
+  // credential (`{ valid, usedBackupCode }` seulement).
+  it('strips spaces and hyphens from code, and sends twoFactorToken alongside it in the body', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(
       successResponse({ user: {}, token: 'new-tok', expiresIn: 3600 })
     );
@@ -128,21 +135,25 @@ describe('TwoFactorService.verify', () => {
     await twoFactorService.verify('2fa-temp-token', '12 34-56');
 
     const [, opts] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(JSON.parse(opts.body)).toEqual({ code: '123456' });
+    expect(JSON.parse(opts.body)).toEqual({ twoFactorToken: '2fa-temp-token', code: '123456' });
   });
 
-  it('uses the 2FA temp token in Authorization header', async () => {
+  it('targets POST /auth/login/2fa with the temp token in the BODY, never as a bearer header', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(
       successResponse({ user: {}, token: 'new-tok', expiresIn: 3600 })
     );
 
     await twoFactorService.verify('temp-tok-123', '123456');
 
-    const [, opts] = (global.fetch as jest.Mock).mock.calls[0];
-    expect(opts.headers.Authorization).toBe('Bearer temp-tok-123');
+    const [url, opts] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(url).toBe('https://gate.meeshy.me/api/v1/auth/login/2fa');
+    expect(opts.headers).not.toHaveProperty('Authorization');
+    expect(JSON.parse(opts.body).twoFactorToken).toBe('temp-tok-123');
   });
 
   it('calls authManager.setCredentials on successful verification', async () => {
+    // Forme attendue de la réponse de vérification 2FA (`TwoFactorVerifyResponse`) :
+    // `{ user, token, sessionToken?, expiresIn }` — AUCUN `refreshToken`.
     const mockData = {
       user: { id: 'u1', username: 'alice' },
       token: 'full-access-token',
@@ -153,12 +164,38 @@ describe('TwoFactorService.verify', () => {
 
     await twoFactorService.verify('temp', '123456');
 
-    expect(mockSetCredentials).toHaveBeenCalledWith(
-      mockData.user,
-      mockData.token,
-      mockData.sessionToken,
-      mockData.expiresIn
-    );
+    // Objet nommé (#4450) : chaque valeur porte son propre champ, il n'y a
+    // plus de créneau à confondre.
+    expect(mockSetCredentials).toHaveBeenCalledWith({
+      user: mockData.user,
+      authToken: mockData.token,
+      refreshToken: undefined,
+      sessionToken: mockData.sessionToken,
+      expiresIn: mockData.expiresIn,
+    });
+  });
+
+  // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
+  // arrivait un jour du serveur, il doit toujours atterrir dans SON créneau.
+  it('threads a refreshToken through to its own slot when the server does send one', async () => {
+    const mockData = {
+      user: { id: 'u1', username: 'alice' },
+      token: 'full-access-token',
+      refreshToken: 'refresh-token-xyz',
+      sessionToken: 'sess',
+      expiresIn: 3600,
+    };
+    (global.fetch as jest.Mock).mockResolvedValueOnce(successResponse(mockData));
+
+    await twoFactorService.verify('temp', '123456');
+
+    expect(mockSetCredentials).toHaveBeenCalledWith({
+      user: mockData.user,
+      authToken: mockData.token,
+      refreshToken: mockData.refreshToken,
+      sessionToken: mockData.sessionToken,
+      expiresIn: mockData.expiresIn,
+    });
   });
 
   it('does not call setCredentials when verification fails', async () => {

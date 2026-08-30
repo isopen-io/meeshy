@@ -148,6 +148,52 @@ describe('GET /anonymous-users — ADMIN with status=inactive', () => {
   });
 });
 
+// #4157 — `sessionTokenHash` (le hash comparé par
+// `middleware/auth.ts:createAnonymousUserContext` pour authentifier CETTE
+// session anonyme) et `anonymousSession` (embarqué, SANS `select` — porte une
+// SECONDE copie de ce hash, l'IP, l'empreinte d'appareil, et le profil PII
+// complet : email, date de naissance) voyageaient dans cette liste sans
+// AUCUN gate, servis à MODERATOR/AUDIT (`canViewUsers`, aucun des deux n'a
+// `canViewSensitiveData`). Un témoin de PROJECTION assert sur la REQUÊTE
+// envoyée à Prisma, pas sur le rendu — un `select` qui les redéclarerait
+// romprait ce témoin AVANT même qu'une ligne n'atteigne le sérialiseur.
+describe('GET /anonymous-users — secrets retirés du select (#4157)', () => {
+  let app: FastifyInstance;
+  let findManyMock: jest.Mock;
+
+  beforeAll(async () => {
+    const a = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
+    findManyMock = jest.fn<any>().mockResolvedValue([]);
+    a.decorate('authenticate', async (req: any) => {
+      (req as any).authContext = {
+        isAuthenticated: true,
+        userId: USER_ID,
+        registeredUser: { id: USER_ID, role: 'BIGBOSS' },
+      };
+    });
+    a.decorate('prisma', makePrisma({
+      participant: { findMany: findManyMock, count: jest.fn<any>().mockResolvedValue(0) },
+    }) as any);
+    await a.register(anonymousUsersAdminRoutes);
+    await a.ready();
+    app = a;
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('ne demande NI sessionTokenHash NI anonymousSession à Prisma, même pour BIGBOSS', async () => {
+    const res = await app.inject({ method: 'GET', url: '/anonymous-users' });
+    expect(res.statusCode).toBe(200);
+
+    expect(findManyMock).toHaveBeenCalledTimes(1);
+    const { select } = findManyMock.mock.calls[0][0] as { select: Record<string, unknown> };
+    expect(select).not.toHaveProperty('sessionTokenHash');
+    expect(select).not.toHaveProperty('anonymousSession');
+    // Le retrait ne doit pas emporter le reste de la projection.
+    expect(select).toHaveProperty('displayName', true);
+    expect(select).toHaveProperty('conversationId', true);
+  });
+});
+
 // Directive produit 2026-08-25 : « les utilisateurs avec le rôle ADMIN et
 // supérieur peuvent constamment avoir l'état de présence » — MODERATOR/AUDIT
 // passent `requireAdmin` ici mais n'ont plus canViewPresence.

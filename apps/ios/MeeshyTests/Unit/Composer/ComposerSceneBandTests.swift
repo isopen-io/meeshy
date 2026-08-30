@@ -50,6 +50,10 @@ final class ComposerSceneBandTests: XCTestCase {
     /// La liste est celle de la planche, et elle est FERMÉE. Ce témoin rougit
     /// si un quatrième contexte s'y glisse sans que le critère
     /// — un axe horizontal, ou une comparaison latérale — ait été rediscuté.
+    /// **`drawing` en est ressorti** : ses réglages sont le contrôleur FLOTTANT
+    /// de l'atelier (`StoryDrawingToolbar`), pas une bande. La liste reste donc
+    /// celle de la planche, à trois entrées — et une quatrième ferait rougir ce
+    /// témoin, ce qu'on lui demande.
     func test_lesContextes_sontCeuxDeLaPlanche() {
         XCTAssertEqual(Set(ComposerSceneBand.allCases.map(\.rawValue)),
                        ["palette", "timeline", "textStyles"])
@@ -102,6 +106,12 @@ final class ComposerSceneBandTests: XCTestCase {
     // MARK: - Les sources
 
     private func source(_ fichier: String) throws -> String {
+        // **Le meuble est DÉCOUPÉ (#4102) : son adresse est l'UNITÉ.** Lire le
+        // seul fichier principal rendrait vertes, en silence, toutes les gardes
+        // négatives dont l'interdit a suivi une extension.
+        if fichier == "MeeshyComposerHost.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -200,5 +210,122 @@ final class ComposerSceneBandTests: XCTestCase {
             XCTAssertFalse(compacte.contains(compact(interdit)),
                            "`\(interdit)` dans le body de la scène ferait varier la frame du canvas.")
         }
+    }
+}
+
+/// **La bande de fond porte les DEUX rangées du panneau « Fond »** (#4403).
+///
+/// Le panneau de l'atelier fait 236 pt et son commentaire dit ce qu'il
+/// contient : « couleurs + rangée Ouverture ». La bande du plateau ne portait
+/// que les couleurs — l'effet d'ouverture d'une scène y était inatteignable.
+///
+/// **Le manque ne se voyait pas en composant**, et c'est ce qui l'a laissé
+/// passer : un effet d'ouverture ne se joue qu'à la LECTURE. Une absence dont
+/// le symptôme n'apparaît pas sur l'écran qui la contient est la plus difficile
+/// à remarquer — d'où une garde de source plutôt qu'un œil.
+final class ComposerSceneBandOpeningRowGuardTests: XCTestCase {
+
+    private func bandSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func hostSource() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// **Le fusible.**
+    func test_laSourceDeLaBande_estLisible() throws {
+        let s = try bandSource()
+        XCTAssertGreaterThan(s.count, 800)
+        XCTAssertTrue(s.contains("struct ComposerSceneBandView"))
+    }
+
+    /// **La rangée est EMPRUNTÉE au SDK, jamais recopiée.** Un corps, deux
+    /// montages — règle du #4035. Une seconde rangée écrite ici aurait divergé
+    /// du panneau de l'atelier au premier effet ajouté.
+    func test_laRangee_estCelleDuSDK() throws {
+        let source = compact(try bandSource())
+        // **La signature n'est PAS épinglée au mot près.** Elle l'était, et le
+        // correctif de contraste (`onDarkSurface:`) l'a fait rougir — une garde
+        // qui pin une liste d'arguments rougit à chaque paramètre ajouté, y
+        // compris quand l'ajout est le correctif. On garde ce qui compte : la
+        // vue vient du SDK, et elle reçoit la sélection et le rappel de l'hôte.
+        XCTAssertTrue(source.contains("OpeningEffectChips(selection:openingEffect,"))
+        XCTAssertTrue(source.contains("onSelect:onPickOpening)"))
+        XCTAssertFalse(source.contains("StoryTransitionEffect.allCases"),
+                       "Énumérer les effets ICI ferait une seconde liste à faire diverger.")
+    }
+
+    /// **Loi 4 — la rangée n'est montée que si l'hôte la SERT.** Sans le
+    /// rappel, choisir un effet ne mènerait nulle part.
+    func test_laRangee_nExistePasSansSonRappel() throws {
+        let source = compact(try bandSource())
+        XCTAssertTrue(source.contains("ifletonPickOpening{"))
+    }
+
+    /// Le meuble lit ET écrit le réglage — un choix qui n'atteint pas le modèle
+    /// est un contrôle inerte.
+    func test_leMeuble_litEtEcritLeReglage() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("bandOpeningEffect:viewModel.openingEffect"))
+        XCTAssertTrue(source.contains("viewModel.openingEffect=effect"))
+    }
+
+    /// **La bande NE se referme PAS sur un effet d'ouverture**, à la différence
+    /// de la couleur : une couleur se voit sur la scène dès qu'elle est posée,
+    /// un effet ne se joue qu'à la lecture. Refermer laisserait l'auteur sans
+    /// aucun retour sur ce qu'il vient de choisir.
+    func test_choisirUnEffet_neRefermePasLaBande() throws {
+        let source = compact(try hostSource())
+        XCTAssertTrue(source.contains("onPickBandOpening:{effectinviewModel.openingEffect=effect"),
+                      "Le rappel d'ouverture doit poser le réglage…")
+        XCTAssertFalse(source.contains("viewModel.openingEffect=effectrequestedSceneBand=nil"),
+                       "…et NE PAS refermer la bande, contrairement à la couleur.")
+    }
+}
+
+/// **Les puces d'ouverture suivent la SURFACE, pas le thème de l'appareil**
+/// (#4403, correctif du 2026-08-30).
+///
+/// Mesuré au simulateur : les puces non sélectionnées existaient dans l'arbre
+/// d'accessibilité — libellé et cadre corrects — et n'étaient PAS VISIBLES.
+/// `OpeningEffectChips` lisait `colorScheme`, le thème de l'APPAREIL ; sur un
+/// appareil en clair, elle peignait de l'`indigo950` sur le plateau, qui est
+/// sombre en permanence.
+///
+/// **Un contrôle présent à l'accessibilité et absent à l'œil est le pire des
+/// deux mondes** : les tests le trouvent, l'utilisateur non.
+final class ComposerSceneBandOpeningContrastGuardTests: XCTestCase {
+
+    private func bandSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSceneBand.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    func test_laSource_estLisible() throws {
+        XCTAssertTrue(try bandSource().contains("OpeningEffectChips"))
+    }
+
+    /// La bande DÉCLARE que sa surface est sombre. Sans ce drapeau, les puces
+    /// retombent sur le thème de l'appareil — et disparaissent en thème clair.
+    func test_lesPuces_saventQueLePlateauEstSombre() throws {
+        XCTAssertTrue(compact(try bandSource()).contains("onDarkSurface:true"),
+                      "Le plateau est sombre EN PERMANENCE : une couleur adaptative y peint "
+                        + "du sombre sur du sombre dès que l'appareil quitte la nuit.")
     }
 }

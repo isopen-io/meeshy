@@ -82,15 +82,16 @@ function NotificationPreferencesContent() {
    */
   const submittedKeys = useRef(new Set<string>());
 
-  // Charger les préférences depuis l'API unifiée
+  // Charger les préférences depuis la route UNIQUE (#4181)
   useEffect(() => {
     const loadPreferences = async () => {
       try {
         const token = localStorage.getItem('authToken');
         if (!token) return;
 
-        // Utilise le nouvel endpoint unifié /me/preferences/notification
-        const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/notification`, {
+        // `?categories=notification` : une seule catégorie sur les sept, pas
+        // les ~130 clés de l'agrégat entier pour n'en afficher que quinze.
+        const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences?categories=notification`, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -98,12 +99,15 @@ function NotificationPreferencesContent() {
 
         if (response.ok) {
           const data = await response.json();
-          if (data.success && data.data) {
+          // La route range chaque catégorie sous son NOM :
+          // `{ success, data: { notification: {...} } }`.
+          const document = data.success ? data.data?.notification : undefined;
+          if (document) {
             // Les métadonnées de la LIGNE ne sont pas des réglages : les garder
             // dans un état typé `NotificationPreferences` était une dérive que
             // le commentaire précédent annonçait sans l'appliquer — `const
-            // { ...prefs } = data.data` ne retire rien.
-            const { id, userId, createdAt, updatedAt, ...prefs } = data.data;
+            // { ...prefs } = document` ne retire rien.
+            const { id, userId, createdAt, updatedAt, ...prefs } = document;
             setPreferences(prev => ({ ...prev, ...prefs }));
           }
         }
@@ -149,14 +153,16 @@ function NotificationPreferencesContent() {
       // geste suivant, l'écran affichant une valeur que le serveur ignore.
       const inFlight = Object.keys(body);
 
-      // Utilise le nouvel endpoint unifié /me/preferences/notification
-      const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences/notification`, {
+      // Route UNIQUE de #4181 : le corps se range désormais PAR CATÉGORIE —
+      // `mode=merge` (défaut) garde exactement le comportement d'avant, un
+      // rejeu hors ligne compris.
+      const response = await fetch(`${API_CONFIG.getApiUrl()}/me/preferences`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ notification: body }),
       });
 
       if (response.ok) {

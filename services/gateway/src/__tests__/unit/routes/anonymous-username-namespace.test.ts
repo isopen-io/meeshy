@@ -40,6 +40,9 @@ jest.mock('../../../utils/sanitize', () => ({
 
 jest.mock('../../../utils/session-token', () => ({
   hashSessionToken: jest.fn((token) => 'hashed-' + token),
+  // #4167 — voir `anonymous.test.ts` : `generateSessionToken` est désormais
+  // partagé (`utils/session-token.ts`), plus un double local de la route.
+  generateSessionToken: jest.fn(() => 'anon_test_session_token'),
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
@@ -67,7 +70,7 @@ const shareLink = {
 };
 
 type Prisma = {
-  conversationShareLink: { findFirst: jest.Mock; update: jest.Mock };
+  conversationShareLink: { findFirst: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
   user: { findFirst: jest.Mock };
   participant: { findFirst: jest.Mock; create: jest.Mock };
   message: { create: jest.Mock };
@@ -81,7 +84,7 @@ type Prisma = {
 async function buildApp(): Promise<{ app: FastifyInstance; prisma: Prisma }> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   const prisma: Prisma = {
-    conversationShareLink: { findFirst: jest.fn<any>(), update: jest.fn<any>() },
+    conversationShareLink: { findFirst: jest.fn<any>(), update: jest.fn<any>(), updateMany: jest.fn<any>() },
     user: { findFirst: jest.fn<any>() },
     participant: { findFirst: jest.fn<any>(), create: jest.fn<any>() },
     message: { create: jest.fn<any>() },
@@ -96,6 +99,7 @@ async function buildApp(): Promise<{ app: FastifyInstance; prisma: Prisma }> {
 function resetPrisma(prisma: Prisma, link: typeof shareLink): void {
   prisma.conversationShareLink.findFirst.mockReset().mockResolvedValue(link);
   prisma.conversationShareLink.update.mockReset().mockResolvedValue({});
+  prisma.conversationShareLink.updateMany.mockReset().mockResolvedValue({ count: 1 });
   prisma.user.findFirst.mockReset().mockResolvedValue(null);
   prisma.participant.findFirst.mockReset().mockResolvedValue(null);
   prisma.participant.create.mockReset().mockImplementation(async ({ data }: any) => ({

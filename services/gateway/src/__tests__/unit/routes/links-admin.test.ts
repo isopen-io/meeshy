@@ -304,6 +304,18 @@ describe('GET /links/my-links', () => {
     expect(res.statusCode).toBe(500);
     await app.close();
   });
+
+  // #4170 — alias déprécié : `GET /links` (`links/user.ts`) absorbe cette
+  // liste. Le web migre dans ce même lot ; aucune preuve qu'un déploiement
+  // plus ancien ne l'appelle encore, donc la porte annonce plutôt que de se
+  // taire (`utils/deprecation.ts`).
+  it('annonce sa dépréciation vers GET /links', async () => {
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/links/my-links' });
+    expect(res.headers['deprecation']).toBe('@1787961600');
+    expect(res.headers['link']).toContain('</api/v1/links>; rel="successor-version"');
+    await app.close();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -637,6 +649,27 @@ describe('PATCH /links/:linkId/toggle', () => {
     expect(res.statusCode).toBe(500);
     await app.close();
   });
+
+  // #4170 — alias déprécié : `PATCH /links/:linkId` (le générique,
+  // management.ts) absorbe `isActive` depuis l'origine. Android
+  // (`LinkApi.kt: @PATCH "links/{linkId}/toggle"`) en reste le seul
+  // appelant mesuré — le successeur porte le `linkId` RÉSOLU, jamais un
+  // gabarit `:linkId` non suivable.
+  it('annonce sa dépréciation vers PATCH /links/:linkId, avec le linkId résolu', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
+    );
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}/toggle`,
+      payload: { isActive: true },
+    });
+    expect(res.headers['deprecation']).toBe('@1787961600');
+    expect(res.headers['link']).toContain(`</api/v1/links/${LINK_PUBLIC_ID}>; rel="successor-version"`);
+    await app.close();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -926,6 +959,25 @@ describe('PATCH /links/:linkId/extend', () => {
     expect(res.statusCode).toBe(500);
     await app.close();
   });
+
+  // #4170 — même raison que `/toggle` : Android
+  // (`LinkApi.kt: @PATCH "links/{linkId}/extend"`) en reste le seul
+  // appelant mesuré une fois le web migré vers la porte générique.
+  it('annonce sa dépréciation vers PATCH /links/:linkId, avec le linkId résolu', async () => {
+    const prisma = makePrisma();
+    prisma.conversationShareLink.findFirst.mockResolvedValue(
+      makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
+    );
+    const app = await buildApp({ prisma });
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/links/${LINK_PUBLIC_ID}/extend`,
+      payload: { expiresAt: FUTURE_DATE },
+    });
+    expect(res.headers['deprecation']).toBe('@1787961600');
+    expect(res.headers['link']).toContain(`</api/v1/links/${LINK_PUBLIC_ID}>; rel="successor-version"`);
+    await app.close();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -996,12 +1048,16 @@ describe('DELETE /links/:linkId', () => {
     await app.close();
   });
 
-  it('returns 200 and deletes link when user is creator', async () => {
+  // #4170 crit.5 — DELETE devient une fermeture DOUCE : la ligne survit,
+  // `isActive` bascule à `false`. Avant ce lot `.delete()` détruisait la
+  // ligne ; ce témoin garde le nouveau contrat (message + verdict que la
+  // ligne n'est plus jamais physiquement retirée).
+  it('returns 200 and CLOSES (soft-close) the link when user is creator', async () => {
     const prisma = makePrisma();
     prisma.conversationShareLink.findFirst.mockResolvedValue(
       makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
     );
-    prisma.conversationShareLink.delete.mockResolvedValue({ id: LINK_DB_ID });
+    prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID, isActive: false });
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',
@@ -1010,7 +1066,8 @@ describe('DELETE /links/:linkId', () => {
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body);
     expect(body.success).toBe(true);
-    expect(body.data.message).toBe('Lien supprimé avec succès');
+    expect(body.data.message).toBe('Lien fermé avec succès');
+    expect(prisma.conversationShareLink.delete).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -1079,17 +1136,19 @@ describe('DELETE /links/:linkId', () => {
     await app.close();
   });
 
-  it('calls prisma.delete with the link db id', async () => {
+  it('calls prisma.update with isActive:false and the link db id — never prisma.delete', async () => {
     const prisma = makePrisma();
     prisma.conversationShareLink.findFirst.mockResolvedValue(
       makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
     );
-    prisma.conversationShareLink.delete.mockResolvedValue({ id: LINK_DB_ID });
+    prisma.conversationShareLink.update.mockResolvedValue({ id: LINK_DB_ID });
     const app = await buildApp({ prisma });
     await app.inject({ method: 'DELETE', url: `/links/${LINK_PUBLIC_ID}` });
-    expect(prisma.conversationShareLink.delete).toHaveBeenCalledWith({
+    expect(prisma.conversationShareLink.update).toHaveBeenCalledWith({
       where: { id: LINK_DB_ID },
+      data: { isActive: false },
     });
+    expect(prisma.conversationShareLink.delete).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -1105,12 +1164,12 @@ describe('DELETE /links/:linkId', () => {
     await app.close();
   });
 
-  it('returns 500 when delete throws', async () => {
+  it('returns 500 when the closing update throws', async () => {
     const prisma = makePrisma();
     prisma.conversationShareLink.findFirst.mockResolvedValue(
       makeShareLink({ createdBy: USER_ID, conversation: { id: CONV_ID, participants: [] } })
     );
-    prisma.conversationShareLink.delete.mockRejectedValue(new Error('Delete failed'));
+    prisma.conversationShareLink.update.mockRejectedValue(new Error('Update failed'));
     const app = await buildApp({ prisma });
     const res = await app.inject({
       method: 'DELETE',

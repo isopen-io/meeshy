@@ -952,6 +952,85 @@ final class BubbleContentMatrixTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 0)
         )
     }
+
+    // MARK: - #4020 — quelles bulles acceptent le double tap de réaction
+
+    /// **Le double tap est le geste de la barre de réaction rapide.**
+    ///
+    /// La règle est écrite comme une fonction PURE de la nature de la bulle,
+    /// et non par un `if` dans le corps de la vue : c'est ce qui la rend
+    /// mesurable ici, et ce qui empêche la deuxième surface (les cellules
+    /// média) d'en écrire une seconde version.
+    ///
+    /// Une bulle STANDARD l'accepte — c'est le seul cas où il y a quelque
+    /// chose à réagir.
+    func test_doubleTap_estAccepteParUneBulleStandard() {
+        XCTAssertTrue(QuickReactionGesture.acceptsDoubleTap(kind: .standard))
+    }
+
+    /// **Les quatre refus, et chacun a sa raison.** Sans eux, le geste
+    /// s'attacherait à des bulles où il ouvrirait une barre pour réagir à
+    /// RIEN — et le serveur refuserait la réaction, laissant l'utilisateur
+    /// devant un geste qui a l'air de marcher.
+    func test_doubleTap_estRefuseParToutCeQuiNaRienAReagir() {
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .deleted),
+                       "un message supprimé n'a plus de contenu")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .burned),
+                       "une vue unique consommée ne se réagit pas après coup")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .ephemeralExpired),
+                       "un éphémère expiré n'est plus là")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .system),
+                       "un avis système n'est pas une parole de quelqu'un")
+    }
+
+    /// **Le témoin d'EXHAUSTIVITÉ.** Un cinquième `Kind` ajouté demain doit
+    /// forcer une décision explicite plutôt que de tomber dans un défaut
+    /// silencieux — et ce compte est ce qui fait rougir l'oubli.
+    ///
+    /// Condition de levée : si `BubbleContent.Kind` gagne un cas, trancher
+    /// dans `QuickReactionGesture` puis monter ce compte, jamais l'inverse.
+    func test_laRegleCouvreTousLesKinds() {
+        let tous: [BubbleContent.Kind] = [.standard, .deleted, .burned, .ephemeralExpired, .system]
+        XCTAssertEqual(tous.count, 5,
+                       "BubbleContent.Kind a changé — trancher le nouveau cas dans QuickReactionGesture")
+        XCTAssertEqual(tous.filter(QuickReactionGesture.acceptsDoubleTap(kind:)).count, 1,
+                       "une seule nature de bulle accepte le geste : la standard")
+    }
+
+    /// **Les deux gestes de la cellule média ouvrent le MÊME sélecteur, sous la
+    /// MÊME garde** (#4020).
+    ///
+    /// Le double tap rejoint un appui long qui existait déjà. Rien n'oblige
+    /// mécaniquement les deux à rester d'accord : ils sont deux modificateurs
+    /// posés à douze lignes l'un de l'autre, et le jour où l'un des deux gagne
+    /// une condition que l'autre n'a pas, la cellule offrira deux chemins vers
+    /// deux comportements — sans qu'aucun test ne rougisse, chaque moitié
+    /// restant cohérente avec elle-même.
+    ///
+    /// Le témoin est BORNÉ au corps de `standardBody` : le fichier contient
+    /// d'autres `canReactPerImage` (la définition de la garde, la pastille),
+    /// donc un `contains` sur le fichier entier serait vert avant comme après.
+    func test_lesDeuxGestesDeLaCelluleMedia_partagentGardeEtActe() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift")
+        let texte = try String(contentsOf: url, encoding: .utf8)
+
+        guard let debut = texte.range(of: "private var standardBody: some View {"),
+              let fin = texte.range(of: "\n    /// BUG2 A'", range: debut.upperBound..<texte.endIndex) else {
+            return XCTFail("`standardBody` est introuvable — le témoin ne mesure plus rien.")
+        }
+        let corps = String(texte[debut.upperBound..<fin.lowerBound])
+
+        XCTAssertTrue(corps.contains("QuickReactionDoubleTap(isEnabled: canReactPerImage)"),
+                      "le double tap doit porter la MÊME garde que l'appui long")
+        XCTAssertTrue(corps.contains("AttachmentReactionLongPress(enabled: canReactPerImage)"),
+                      "l'appui long est le geste de référence — s'il a bougé, ce témoin doit être repointé")
+        XCTAssertEqual(corps.components(separatedBy: "showReactionPicker = true").count - 1, 2,
+                       "les deux gestes ouvrent le MÊME sélecteur — ni un troisième, ni deux destinations")
+    }
 }
 
 // MARK: - BubbleBodyFooterLayout.bodyHeight (sizeThatFits double-measure removal)

@@ -142,7 +142,21 @@ public final class ReaderAudioMixer {
                     fadeIn: audio.fadeIn ?? 0,
                     fadeOut: audio.fadeOut ?? 0,
                     duration: audio.duration ?? Float(file.length) / Float(file.processingFormat.sampleRate),
-                    loop: audio.loop ?? false
+                    loop: audio.loop ?? false,
+                    // Fenêtre de rognage NON destructive (bornes seules, aucun
+                    // ré-encodage). Résolue une fois ici — jamais recalculée à
+                    // chaque schedule — via `StoryAudioPlayerObject.trimBounds`,
+                    // le résolveur UNIQUE qui tolère les bornes vieillies. Le
+                    // fichier porte sa PROPRE durée source (`file.length` /
+                    // `processingFormat.sampleRate`, jamais `audio.duration` qui,
+                    // une fois rogné, est la durée OCCUPÉE sur la timeline — pas
+                    // celle de la source). Sans intention de rognage déclarée
+                    // (les deux bornes `nil`), on ne résout rien : `nil` fait
+                    // retomber `scheduleEntry` sur `scheduleFile`, le chemin
+                    // d'aujourd'hui, à coût nul pour l'immense majorité des clips.
+                    trimBounds: (audio.sourceStart == nil && audio.sourceEnd == nil)
+                        ? nil
+                        : audio.trimBounds(sourceDuration: Double(file.length) / max(file.processingFormat.sampleRate, 1))
                 )
             } catch {
                 logger.error("ReaderAudioMixer failed to load \(audio.id): \(error.localizedDescription)")
@@ -400,7 +414,8 @@ public final class ReaderAudioMixer {
             }
         } : nil
 
-        entry.node.scheduleFile(entry.file, at: scheduleAt, completionHandler: completion)
+        ReaderAudioMixer.scheduleAudio(node: entry.node, file: entry.file, trimBounds: entry.trimBounds,
+                                       at: scheduleAt, completionHandler: completion)
     }
 
     /// Ré-arme la lecture d'un node loopé depuis le completion handler de la
@@ -411,7 +426,60 @@ public final class ReaderAudioMixer {
     /// avec le ré-armement fire-and-forget requis pour boucler sans gap audible.
     private func rescheduleLoopedEntry(_ audioId: String) {
         guard let entry = entries[audioId], entry.node.isPlaying else { return }
-        entry.node.scheduleFile(entry.file, at: nil, completionHandler: nil)
+        // Même fenêtre qu'au premier `scheduleAudio` : sans elle, un clip rogné
+        // jouerait sa portion coupée en boucle une fois passée la première
+        // itération — le loop-back audio rejouerait le fichier ENTIER après
+        // avoir lu correctement la fenêtre une première fois.
+        ReaderAudioMixer.scheduleAudio(node: entry.node, file: entry.file, trimBounds: entry.trimBounds,
+                                       at: nil, completionHandler: nil)
+    }
+
+    /// Convertit une fenêtre de rognage en position/longueur de FRAMES pour
+    /// `AVAudioPlayerNode.scheduleSegment` — même conversion que
+    /// `AudioMixer.scheduleNodeFromTimelineTime` (secondes × `sampleRate`,
+    /// comparé à `file.length`). `nil` en entrée (aucune fenêtre déclarée) ou
+    /// en sortie (fenêtre aberrante : bornes inversées, hors fichier, fichier
+    /// vide) signale à l'appelant de retomber sur `scheduleFile` — une donnée
+    /// vieillie ou incohérente ne doit JAMAIS produire un silence.
+    ///
+    /// Pure et statique : éprouvable sans `AVAudioEngine` ni fichier réel.
+    static func segment(forBounds bounds: MediaTrimBounds?,
+                        sampleRate: Double,
+                        fileLength: AVAudioFramePosition) -> (startingFrame: AVAudioFramePosition, frameCount: AVAudioFrameCount)? {
+        guard let bounds,
+              sampleRate.isFinite, sampleRate > 0,
+              fileLength > 0,
+              bounds.start.isFinite, bounds.end.isFinite,
+              bounds.start >= 0, bounds.end > bounds.start
+        else { return nil }
+        let startingFrame = AVAudioFramePosition(bounds.start * sampleRate)
+        guard startingFrame >= 0, startingFrame < fileLength else { return nil }
+        let endFrame = min(fileLength, AVAudioFramePosition(bounds.end * sampleRate))
+        guard endFrame > startingFrame else { return nil }
+        return (startingFrame, AVAudioFrameCount(endFrame - startingFrame))
+    }
+
+    /// Site UNIQUE d'appel à `scheduleFile`/`scheduleSegment` — foreground ET
+    /// fond passent tous deux par ici (cf. `scheduleEntry`, `rescheduleLoopedEntry`,
+    /// `scheduleBackgroundFile`), pour qu'une seule règle décide quand la
+    /// fenêtre s'applique. `trimBounds == nil` (pas de rognage déclaré) prend
+    /// le chemin d'aujourd'hui sans même consulter `segment(...)`.
+    private static func scheduleAudio(node: AVAudioPlayerNode,
+                                      file: AVAudioFile,
+                                      trimBounds: MediaTrimBounds?,
+                                      at scheduleAt: AVAudioTime?,
+                                      completionHandler: (@Sendable () -> Void)?) {
+        guard let segment = ReaderAudioMixer.segment(forBounds: trimBounds,
+                                                     sampleRate: file.processingFormat.sampleRate,
+                                                     fileLength: file.length) else {
+            node.scheduleFile(file, at: scheduleAt, completionHandler: completionHandler)
+            return
+        }
+        node.scheduleSegment(file,
+                             startingFrame: segment.startingFrame,
+                             frameCount: segment.frameCount,
+                             at: scheduleAt,
+                             completionHandler: completionHandler)
     }
 
     /// Schedule fade-in and fade-out volume ramps. node.volume is sampled by
@@ -547,6 +615,10 @@ public final class ReaderAudioMixer {
         /// Mute per-piste déclenché par le tap utilisateur sur le chip du
         /// reader. Indépendant du mute global (`ReaderAudioMixer.isMuted`).
         var isUserMuted: Bool = false
+        /// Fenêtre de rognage résolue à `configure(...)`, ou `nil` quand ce
+        /// clip n'a jamais été rogné. `scheduleAudio` (MARK: Scheduling) la
+        /// consulte à chaque `scheduleSegment` — départ ET rebouclage.
+        let trimBounds: MediaTrimBounds?
     }
 
     /// Internal helper for the single background audio slot.
@@ -564,6 +636,8 @@ public final class ReaderAudioMixer {
         let duration: Float
         var fadeTimers: [Timer] = []
         var fadeTasks: [Task<Void, Never>] = []
+        /// Jumelle de `Entry.trimBounds` — même règle, même résolveur.
+        let trimBounds: MediaTrimBounds?
 
         /// `true` when the composer authored an explicit fade — the default
         /// envelope must then defer to the configured values (RC4.7).
@@ -619,6 +693,14 @@ extension ReaderAudioMixer {
         let startOffset = Double(audio.startTime ?? 0)
         let resolvedDuration = audio.duration
             ?? Float(file.length) / Float(file.processingFormat.sampleRate)
+        // Cf. le commentaire jumeau dans `configure(audios:urls:)` : la durée
+        // SOURCE se lit sur le fichier, jamais sur `audio.duration` (qui, une
+        // fois rogné, porte la durée occupée sur la timeline, pas celle du
+        // fichier). Pas d'intention de rognage déclarée ⇒ `nil`, et
+        // `scheduleBackgroundFile` retombe sur `scheduleFile` sans surcoût.
+        let trimBounds: MediaTrimBounds? = (audio.sourceStart == nil && audio.sourceEnd == nil)
+            ? nil
+            : audio.trimBounds(sourceDuration: Double(file.length) / max(file.processingFormat.sampleRate, 1))
         backgroundEntry = BackgroundEntry(
             player: player,
             file: file,
@@ -628,7 +710,8 @@ extension ReaderAudioMixer {
             fadeIn: audio.fadeIn ?? 0,
             fadeOut: audio.fadeOut ?? 0,
             startOffset: startOffset,
-            duration: resolvedDuration
+            duration: resolvedDuration,
+            trimBounds: trimBounds
         )
         backgroundStartOffset = startOffset
         player.volume = isMuted ? 0 : audio.volume
@@ -671,7 +754,11 @@ extension ReaderAudioMixer {
                 self.scheduleBackgroundFile(at: nil)
             }
         } : nil
-        bg.player.scheduleFile(bg.file, at: scheduleAt, completionHandler: completion)
+        // Même site partagé que le foreground (`scheduleAudio`) : le rebouclage
+        // du fond respecte la même fenêtre — sinon la musique de fond rognée
+        // rejouerait le fichier ENTIER à partir de la deuxième itération.
+        ReaderAudioMixer.scheduleAudio(node: bg.player, file: bg.file, trimBounds: bg.trimBounds,
+                                       at: scheduleAt, completionHandler: completion)
     }
 
     /// Honours a composer-authored fade on the background entry. When an

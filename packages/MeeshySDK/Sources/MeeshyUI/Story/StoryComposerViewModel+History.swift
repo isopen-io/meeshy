@@ -10,7 +10,7 @@ extension StoryComposerViewModel {
     /// fait qu'un cycle sans changement réel des slides est un no-op.
     /// HORS périmètre pendant le dessin actif (UX undo dédiée — un snapshot
     /// unique à la sortie capture le résultat, cf. plan C9).
-    func pushHistorySnapshot() {
+    public func pushHistorySnapshot() {
         guard !drawingEditingMode.isActive else { return }
         guard let data = Self.encodeHistorySnapshot(slides) else { return }
         // L'évincé (cap) sera consommé par la purge différée des bitmaps
@@ -24,7 +24,7 @@ extension StoryComposerViewModel {
     /// reprise — revenir « avant » un brouillon restauré n'a pas de sens).
     /// Le staging de purge paresseuse repart aussi de zéro (plus aucun
     /// snapshot ne peut référencer ces ressources).
-    func seedHistory() {
+    public func seedHistory() {
         history = HistoryStore<Data>(cap: 50)
         retiredImages = [:]
         retiredVideoURLs = [:]
@@ -37,13 +37,13 @@ extension StoryComposerViewModel {
     /// l'appelant (View) fait alors suivre les side-effects de présentation
     /// (restoreCanvas, rechargement timeline).
     @discardableResult
-    func undoGlobal() -> Bool {
+    public func undoGlobal() -> Bool {
         guard let data = history.undo() else { refreshHistoryFlags(); return false }
         return applyHistorySnapshot(data)
     }
 
     @discardableResult
-    func redoGlobal() -> Bool {
+    public func redoGlobal() -> Bool {
         guard let data = history.redo() else { refreshHistoryFlags(); return false }
         return applyHistorySnapshot(data)
     }

@@ -8,6 +8,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { debounce } from '@/utils/debounce';
 import type { User, Message } from '@meeshy/shared/types';
 
@@ -131,12 +132,12 @@ export function useConversationMessages(
 
       if (sessionToken && linkId) {
         // Route "/chat/[linkId]" : PRIORITÉ à l'endpoint des liens partagés
-        endpoint = `/api/links/${linkId}/messages`;
+        endpoint = API_ENDPOINTS.links.byIdentifierMessages(linkId);
         requestOptions.headers = { 'x-session-token': sessionToken };
       } else if (conversationId && (authToken || sessionToken)) {
         // Route "/" ou "/conversations" : utiliser l'endpoint conversations
         // Cela inclut conversationId="meeshy" pour la page publique "/"
-        endpoint = `/conversations/${conversationId}/messages`;
+        endpoint = API_ENDPOINTS.conversations.byIdMessages(conversationId);
         if (sessionToken && !authToken) {
           // Utilisateur anonyme sur route "/" (conversationId="meeshy")
           requestOptions.headers = { 'x-session-token': sessionToken };

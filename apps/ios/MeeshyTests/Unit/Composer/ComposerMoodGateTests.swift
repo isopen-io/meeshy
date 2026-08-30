@@ -175,12 +175,6 @@ final class ComposerMoodGateTests: XCTestCase {
     /// Le garde-fou de la garde ci-dessus : sans lui, un chemin devenu faux la
     /// rendrait verte sur une chaîne vide.
     private func porteSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.composerSurfaceSource()
     }
 }

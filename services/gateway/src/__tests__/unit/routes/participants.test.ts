@@ -305,14 +305,16 @@ describe('registerParticipantsRoutes', () => {
   // Deux GET : la LISTE des participants, et la FICHE de l'un d'eux — cette
   // dernière ajoutée pour les visiteurs sans compte, qui n'ont pas de page
   // `/u/{pseudo}` où présenter ce qu'ils ont fourni en entrant.
-  // Six depuis que l'hôte peut piloter les droits d'un visiteur sans compte
-  // (`PATCH …/participants/:participantId/rights`) : c'est le levier rendu en
-  // échange du figeage des conditions d'entrée au join.
-  it('should register all six routes', () => {
+  // Neuf depuis #4167 : `registerLinkAdmissionRoutes` s'enregistre depuis ce
+  // même point d'entrée (`POST /links/:key/members`, `PATCH|DELETE
+  // /guest-sessions/me` — la loi d'admission UNIQUE d'un lien de partage),
+  // exactement comme `participant-removal.ts`/`participant-role.ts` avant
+  // elle : `route-registration.ts` n'a rien à savoir de la découpe.
+  it('should register all nine routes', () => {
     expect(mockFastify.get).toHaveBeenCalledTimes(2);
-    expect(mockFastify.post).toHaveBeenCalledTimes(1);
-    expect(mockFastify.delete).toHaveBeenCalledTimes(1);
-    expect(mockFastify.patch).toHaveBeenCalledTimes(2);
+    expect(mockFastify.post).toHaveBeenCalledTimes(2);
+    expect(mockFastify.delete).toHaveBeenCalledTimes(2);
+    expect(mockFastify.patch).toHaveBeenCalledTimes(3);
   });
 
   it('should use optionalAuth for GET and requiredAuth for POST, DELETE, PATCH', () => {

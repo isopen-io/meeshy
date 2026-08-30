@@ -240,21 +240,39 @@ export class ReportService {
   }
 
   /**
-   * Obtenir tous les signalements pour une entité spécifique
+   * Obtenir une PAGE des signalements d'une entité (#4165).
+   *
+   * Le `findMany` était nu : une entité très signalée — un message viral, un
+   * compte harcelé — rendait TOUS ses signalements d'un coup, à chaque
+   * ouverture de la fiche de modération. La borne est posée DANS la requête,
+   * jamais par un `slice` après coup : trancher en mémoire aurait payé le
+   * coût avant de le cacher.
+   *
+   * `total` reste le VRAI compte (un `count()` séparé), pas la taille de la
+   * page — c'est lui que la fiche de modération affiche.
    */
   async getReportsForEntity(
     entityType: string,
-    entityId: string
-  ): Promise<Report[]> {
-    const reports = await this.prisma.report.findMany({
-      where: {
-        reportedType: entityType,
-        reportedEntityId: entityId
-      },
-      orderBy: { createdAt: 'desc' }
-    });
+    entityId: string,
+    offset: number = 0,
+    limit: number = 100
+  ): Promise<{ reports: Report[]; total: number }> {
+    const where = {
+      reportedType: entityType,
+      reportedEntityId: entityId
+    };
 
-    return reports as Report[];
+    const [reports, total] = await Promise.all([
+      this.prisma.report.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: offset,
+        take: limit
+      }),
+      this.prisma.report.count({ where })
+    ]);
+
+    return { reports: reports as Report[], total };
   }
 
   /**

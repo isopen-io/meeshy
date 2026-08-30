@@ -563,6 +563,35 @@ describe('MessageReadStatusService', () => {
       });
       expect(mockPrisma.conversationReadCursor.create).not.toHaveBeenCalled();
     });
+
+    // #4179 — `markedCount` a désormais UNE définition partout : le nombre
+    // d'entrées `deliveredAt` RÉELLEMENT figées par cet appel. Avant ce
+    // correctif la méthode ne rendait rien (`Promise<void>`) et la porte
+    // `mark-as-received` servait à sa place `getUnreadCount` — calculé AVANT
+    // le marquage, donc un nombre différent de ce qui vient d'être écrit. Ce
+    // témoin fixe le nouveau contrat : `markMessagesAsReceived` rend le
+    // COMPTE RÉEL, indépendamment de tout `unreadCount`.
+    it('returns the number of MessageStatusEntry rows actually frozen, not a derived count', async () => {
+      mockPrisma.message.findMany.mockResolvedValue([{ id: 'msg-a' }, { id: 'msg-b' }]);
+      mockPrisma.messageStatusEntry.createMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+
+      expect(result).toBe(2);
+    });
+
+    it('returns 0 when the received receipt is ignored as stale', async () => {
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        lastDeliveredAt: new Date('2025-01-02')
+      });
+      mockPrisma.conversationReadCursor.updateMany.mockResolvedValue({ count: 0 });
+
+      const result = await service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId);
+
+      expect(result).toBe(0);
+      // Stale : la passe de gel n'a même pas dû être tentée.
+      expect(mockPrisma.messageStatusEntry.createMany).not.toHaveBeenCalled();
+    });
   });
 
   describe('markMessagesAsReceived — atomic cursor guard survives a stale existence read (regression)', () => {
@@ -1136,6 +1165,9 @@ describe('MessageReadStatusService', () => {
       const msgSeen = '507f1f77bcf86cd799439021';
       const msgNewest = '507f1f77bcf86cd799439099';
       mockPrisma.message.findFirst.mockResolvedValue({ id: msgNewest, createdAt: new Date('2025-01-02T00:00:00Z') });
+      // #4179 — anti-spoof : `caughtUpToMessageId` doit désormais résoudre à un
+      // message de LA MÊME conversation avant que le curseur ne saute dessus.
+      mockPrisma.message.findUnique.mockResolvedValue({ conversationId: testConversationId });
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
       mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
       mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
@@ -1153,6 +1185,45 @@ describe('MessageReadStatusService', () => {
       );
     });
 
+    // #4179 — anti-spoof généralisé. `freezeMessageStatus` borne déjà
+    // `messageIds` à `conversationId` directement dans sa clause Prisma ;
+    // `caughtUpToMessageId` en était dispensé et alimentait `_advanceCursor`
+    // SANS AUCUNE vérification d'appartenance — `_advanceCursor` résout le
+    // `createdAt` du message par son seul id, sans filtre `conversationId`.
+    // Un id forgé pointant vers une AUTRE conversation aurait donc fait
+    // sauter le curseur de CETTE conversation sur l'horloge d'un message
+    // qu'elle n'a jamais contenu, ET remis son badge à zéro
+    // (`resetUnreadCount: true`) sur la foi de cette date arbitraire. Ce
+    // témoin prouve le refus : la MUTATION qui retire la vérification (ou qui
+    // compare la mauvaise conversation) le fait tomber, en montrant le
+    // curseur AVANCÉ sur `msgForeign` — jamais un « rien n'a été écrit », ce
+    // qu'un test qui ne regarderait que l'ABSENCE d'écriture ne pourrait pas
+    // distinguer d'un défaut de câblage du témoin lui-même.
+    it("rattrapage : refuse un caughtUpToMessageId d'une AUTRE conversation", async () => {
+      const msgSeen = '507f1f77bcf86cd799439021';
+      const msgForeign = '507f1f77bcf86cd799439098';
+      const otherConversationId = '507f1f77bcf86cd799439055';
+      mockPrisma.message.findFirst.mockResolvedValue({ id: msgSeen, createdAt: new Date('2025-01-02T00:00:00Z') });
+      // Le message visé par `caughtUpToMessageId` appartient à une AUTRE
+      // conversation que celle sur laquelle porte cet appel.
+      mockPrisma.message.findUnique.mockResolvedValue({ conversationId: otherConversationId });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
+      mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      await service.markMessagesAsRead(testParticipantId, testConversationId, msgSeen, {
+        messageIds: [msgSeen],
+        caughtUpToMessageId: msgForeign
+      });
+
+      const cursorWrites = mockPrisma.conversationReadCursor.updateMany.mock.calls
+        .map((c: any[]) => c[0].data)
+        .filter((d: any) => d.lastReadMessageId !== undefined);
+      expect(cursorWrites).not.toContainEqual(
+        expect.objectContaining({ lastReadMessageId: msgForeign })
+      );
+    });
+
     // Le badge et les coches bleues répondent à deux questions différentes.
     // Vider le premier ne doit RIEN ajouter aux secondes, sinon l'expéditeur
     // voit « lu » sur des messages que personne n'a affichés.
@@ -1160,6 +1231,8 @@ describe('MessageReadStatusService', () => {
       const msgSeen = '507f1f77bcf86cd799439021';
       const msgNewest = '507f1f77bcf86cd799439099';
       mockPrisma.message.findFirst.mockResolvedValue({ id: msgNewest, createdAt: new Date('2025-01-02T00:00:00Z') });
+      // #4179 — même garde anti-spoof que le témoin précédent (voir son commentaire).
+      mockPrisma.message.findUnique.mockResolvedValue({ conversationId: testConversationId });
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ lastReadAt: new Date('2024-12-01T00:00:00Z') });
       mockPrisma.message.findMany.mockResolvedValue([{ id: msgSeen }]);
       mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
@@ -4521,6 +4594,40 @@ describe('MessageReadStatusService', () => {
       ).rejects.toThrow('Message not found');
     });
 
+    // #4179 — cette vue NOMINATIVE (qui a reçu/lu, et quand) était la seule
+    // des trois lectures du service à n'avoir AUCUN moyen de respecter le
+    // plancher d'historique du lecteur, alors que `GET /conversations/:id/status`
+    // l'applique pour la même donnée. Un message antérieur au plancher rend le
+    // même verdict qu'un message absent — jamais un verdict distinct, qui
+    // révélerait depuis l'extérieur qu'il existe.
+    it('treats a message older than the reader history floor as not found', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        conversationId: testConversationId,
+      });
+
+      await expect(
+        service.getMessageStatusDetails(testMessageId, {
+          historyFloor: new Date('2024-06-01T00:00:00Z'),
+        })
+      ).rejects.toThrow('Message not found');
+    });
+
+    it('still resolves a message at or after the reader history floor', async () => {
+      mockPrisma.message.findUnique.mockResolvedValue({
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        conversationId: testConversationId,
+      });
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+
+      const result = await service.getMessageStatusDetails(testMessageId, {
+        historyFloor: new Date('2024-01-01T00:00:00Z'),
+      });
+
+      expect(result.statuses).toEqual([]);
+    });
+
     it('returns paginated statuses for a found message', async () => {
       const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
       mockPrisma.message.findUnique.mockResolvedValue({
@@ -5179,9 +5286,12 @@ describe('MessageReadStatusService', () => {
       // The best-effort findUnique (prevDeliveredAt window) throws — must be swallowed.
       mockPrisma.conversationReadCursor.findUnique.mockRejectedValue(new Error('cursor lookup fail'));
 
+      // #4179 — la méthode rend désormais le nombre d'entrées RÉELLEMENT
+      // figées (markedCount) plutôt que `undefined` ; le contrat vérifié ici
+      // reste « ne jette pas » malgré la panne best-effort.
       await expect(
         service.markMessagesAsReceived(testParticipantId, testConversationId, testMessageId)
-      ).resolves.toBeUndefined();
+      ).resolves.toEqual(expect.any(Number));
     });
   });
 

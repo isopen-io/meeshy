@@ -4,6 +4,7 @@
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 
 // Types
@@ -86,7 +87,7 @@ class PhonePasswordResetService {
    */
   async lookupByPhone(request: PhoneLookupRequest): Promise<PhoneLookupResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/forgot-password/phone/lookup'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.forgotPasswordPhoneLookup), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -116,7 +117,7 @@ class PhonePasswordResetService {
    */
   async verifyIdentity(request: IdentityVerificationRequest): Promise<IdentityVerificationResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/forgot-password/phone/verify-identity'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.forgotPasswordPhoneVerifyIdentity), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -147,7 +148,7 @@ class PhonePasswordResetService {
    */
   async verifyCode(request: CodeVerificationRequest): Promise<CodeVerificationResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/forgot-password/phone/verify-code'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.forgotPasswordPhoneVerifyCode), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -177,7 +178,7 @@ class PhonePasswordResetService {
    */
   async resendCode(request: ResendCodeRequest): Promise<ResendCodeResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/forgot-password/phone/resend'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.forgotPasswordPhoneResend), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),

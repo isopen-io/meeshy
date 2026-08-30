@@ -1,6 +1,5 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { generateNumericCode } from '../utils/verification-code';
 import { SocketIOUser, UserRoleEnum } from '@meeshy/shared/types';
@@ -24,11 +23,26 @@ import {
 import { maskEmail, maskUsername, maskDisplayName } from './PhonePasswordResetService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { recipientLanguage } from '../utils/recipient-language';
+import { searchTokensFor } from '../utils/search-tokens';
 import { AUTO_TRANSLATE_PREFERENCE_SELECT, resolveAutoTranslateEnabled } from '../utils/auto-translate-preference';
+import {
+  isAccountLocked,
+  recordFailedLoginAttempt,
+  clearFailedLoginAttempts,
+  lockIsVisibleTo
+} from './LoginAttemptService';
+import { UserLockedError } from '../errors/custom-errors';
 import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
 } from './conversations/ensureGlobalConversationMembership';
+import { servedUserPermissions } from './admin/served-permissions';
+import {
+  signSessionToken,
+  verifySessionToken,
+  TOKEN_TTL,
+  type SessionBoundTokenPayload,
+} from './auth/session-jwt';
 
 // Logger dédié pour AuthService
 const logger = enhancedLogger.child({ module: 'AuthService' });
@@ -53,11 +67,14 @@ export interface RegisterData {
   skipPhoneConflictCheck?: boolean; // Set to true when transfer token is validated
 }
 
-export interface TokenPayload {
-  userId: string;
-  username: string;
-  role: string;
-}
+/**
+ * Charge utile d'un JWT — DÉFINIE dans `./auth/session-jwt`, ré-exportée ici
+ * pour les appelants historiques. Depuis #4264 elle porte `sid`, l'identifiant
+ * de la ligne `UserSession` qui a émis le jeton : sans lui, `POST /refresh` ne
+ * pouvait que COMPTER les sessions valides d'un compte, jamais refuser celle
+ * qu'on venait de révoquer.
+ */
+export type TokenPayload = SessionBoundTokenPayload;
 
 export interface AuthResult {
   user: SocketIOUser;
@@ -191,6 +208,10 @@ export class AuthService {
           pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true,
+          // L'état du verrou voyage avec l'utilisateur : le chemin de connexion
+          // l'a déjà lu, le relire serait une requête pour rien (#4138).
+          failedLoginAttempts: true,
+          lockedUntil: true,
           ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
@@ -204,8 +225,29 @@ export class AuthService {
       // Vérifier le mot de passe
       const passwordValid = await bcrypt.compare(credentials.password, user.password);
       if (!passwordValid) {
-        logger.warn(`[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}`);
+        // L'échec se COMPTE, et le seuil ferme le compte. Sans cette ligne, les
+        // trois colonnes du verrou, l'erreur 423 et le job de déverrouillage
+        // décrivaient une protection que rien n'armait (#4138).
+        const { lockedUntil } = await recordFailedLoginAttempt(this.prisma, user.id);
+        logger.warn(
+          `[AUTH_SERVICE] ❌ Mot de passe invalide pour user.username=${user.username}` +
+          (lockedUntil ? ` — compte verrouillé jusqu'à ${lockedUntil.toISOString()}` : '')
+        );
         return null;
+      }
+
+      // Le verrou se lit APRÈS la vérification du mot de passe, et il ne se DIT
+      // qu'à qui vient de prouver qu'il connaît ce mot de passe. Le refuser plus
+      // tôt fabriquerait un oracle : cinq essais sur un compte inexistant
+      // rendent cinq « identifiants invalides », cinq essais sur un compte réel
+      // en rendraient un sixième DIFFÉRENT — de quoi énumérer les comptes.
+      if (isAccountLocked(user.lockedUntil) && lockIsVisibleTo(passwordValid)) {
+        logger.warn(`[AUTH_SERVICE] 🔒 Connexion refusée, compte verrouillé: ${user.username}`);
+        throw new UserLockedError(user.lockedUntil ?? undefined);
+      }
+
+      if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        await clearFailedLoginAttempts(this.prisma, user.id);
       }
 
       logger.info(`[AUTH_SERVICE] ✅ Mot de passe valide pour user.username=${user.username}`);
@@ -303,6 +345,12 @@ export class AuthService {
       };
 
     } catch (error) {
+      // Un verrou n'est pas une PANNE : c'est une décision. L'avaler ici le
+      // rendrait indiscernable d'un mot de passe faux, et la personne
+      // légitime n'apprendrait jamais pourquoi on la refuse (#4138).
+      if (error instanceof UserLockedError) {
+        throw error;
+      }
       logger.error('[AUTH_SERVICE] ❌ Erreur dans authenticate', error);
       if (error instanceof Error) {
         logger.error(`[AUTH_SERVICE] Détails`, error.message);
@@ -362,6 +410,8 @@ export class AuthService {
           pendingPhoneNumber: true,
           createdAt: true,
           updatedAt: true,
+          failedLoginAttempts: true,
+          lockedUntil: true,
           ...AUTO_TRANSLATE_PREFERENCE_SELECT
         }
       });
@@ -369,6 +419,14 @@ export class AuthService {
       if (!user) {
         logger.warn('[AUTH_SERVICE] ❌ Token 2FA invalide ou expiré');
         return { success: false, error: 'Token 2FA invalide ou expiré. Veuillez vous reconnecter.' };
+      }
+
+      // Ici, le verrou se DIT : détenir un `twoFactorToken` valide prouve déjà
+      // qu'on a passé l'étape du mot de passe, donc l'annonce n'apprend rien
+      // qu'on ne sache — contrairement au chemin `/login` (voir `lockIsVisibleTo`).
+      if (isAccountLocked(user.lockedUntil)) {
+        logger.warn(`[AUTH_SERVICE] 🔒 Second facteur refusé, compte verrouillé: ${user.username}`);
+        return { success: false, error: 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.' };
       }
 
       // Verify 2FA code
@@ -409,8 +467,24 @@ export class AuthService {
       }
 
       if (!isValid) {
-        logger.warn(`[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}`);
-        return { success: false, error: 'Code 2FA invalide' };
+        // Le code TOTP tourne toutes les trente secondes ; les CODES DE SECOURS,
+        // eux, ne tournent pas et n'expirent jamais. Sans ce comptage, ils
+        // étaient attaquables indéfiniment (#4138).
+        const { lockedUntil } = await recordFailedLoginAttempt(this.prisma, user.id);
+        logger.warn(
+          `[AUTH_SERVICE] ❌ Code 2FA invalide pour user.username=${user.username}` +
+          (lockedUntil ? ` — compte verrouillé jusqu'à ${lockedUntil.toISOString()}` : '')
+        );
+        return {
+          success: false,
+          error: lockedUntil
+            ? 'Compte temporairement verrouillé après trop de tentatives. Réessayez plus tard.'
+            : 'Code 2FA invalide'
+        };
+      }
+
+      if (user.failedLoginAttempts > 0 || user.lockedUntil) {
+        await clearFailedLoginAttempts(this.prisma, user.id);
       }
 
       logger.info(`[AUTH_SERVICE] ✅ Code 2FA valide pour user.username=${user.username}`);
@@ -592,6 +666,15 @@ export class AuthService {
           password: hashedPassword,
           firstName: normalizedFirstName,
           lastName: normalizedLastName,
+          // Écrits en MÊME TEMPS que les noms — un compte créé sans jetons
+          // serait introuvable jusqu'à sa prochaine modification de profil
+          // (#4159). Règle unique : `utils/search-tokens.ts`.
+          searchTokens: searchTokensFor({
+            username: normalizedUsername,
+            displayName: normalizedDisplayName,
+            firstName: normalizedFirstName,
+            lastName: normalizedLastName,
+          }),
           email: normalizedEmail,
           phoneNumber: cleanPhoneNumber,
           phoneCountryCode: phoneCountryCode,
@@ -721,38 +804,24 @@ export class AuthService {
   }
 
   /**
-   * Générer un token JWT
+   * Générer un token JWT, RATTACHÉ à la session qui l'émet — le lien que
+   * #4213 n'avait pas : sa garde ne pouvait que COMPTER les sessions valides
+   * du compte, si bien que révoquer UNE session laissait le jeton volé passer
+   * tant que le propriétaire restait connecté ailleurs, le cas nominal.
+   * Émission et butoir de transition : `./auth/session-jwt`.
    */
-  generateToken(user: SocketIOUser): string {
-    const payload: TokenPayload = {
-      userId: user.id,
-      username: user.username,
-      role: user.role
-    };
-
-    return jwt.sign(payload, this.jwtSecret, {
-      expiresIn: '24h'
+  generateToken(user: SocketIOUser, sessionId?: string | null): string {
+    return signSessionToken({
+      user,
+      secret: this.jwtSecret,
+      sessionId,
+      expiresIn: TOKEN_TTL,
     });
   }
 
-  /**
-   * Vérifier un token JWT.
-   * Retourne null si le token est expiré ou invalide.
-   * TokenExpiredError est un cas attendu (refresh flow) — loggé en debug, pas ERROR.
-   */
+  /** Vérifier un token JWT — `null` si expiré ou invalide. Voir `./auth/session-jwt`. */
   verifyToken(token: string): TokenPayload | null {
-    try {
-      const decoded = jwt.verify(token, this.jwtSecret) as TokenPayload;
-      return decoded;
-    } catch (error: any) {
-      if (error?.name === 'TokenExpiredError') {
-        // Expected during /auth/refresh — not an error, the client will refresh.
-        logger.debug('[AuthService] JWT expired (expected at refresh)', { exp: error.expiredAt });
-      } else {
-        logger.error('Error verifying token', error);
-      }
-      return null;
-    }
+    return verifySessionToken(token, this.jwtSecret);
   }
 
   /**
@@ -1121,75 +1190,42 @@ export class AuthService {
   /**
    * Récupérer les permissions d'un utilisateur
    */
+  /**
+   * Les permissions SERVIES à la connexion — une PROJECTION, plus une copie.
+   *
+   * ## Ce que cette méthode était
+   *
+   * Une TROISIÈME définition des permissions, écrite à la main en `switch`, et
+   * c'est celle que le web et iOS lisaient : elle voyage dans la charge de
+   * `/auth/login`, `/auth/register` et `/auth/magic-link`.
+   *
+   * Elle donnait `canAccessAdmin: true` à un ANALYST, quand les deux matrices
+   * disent `false`. Conséquence pour l'utilisateur : un ANALYST se connecte, le
+   * web lui peint la console d'administration, et le serveur lui refuse la
+   * moitié des routes — deux réponses différentes à la même question, servies
+   * par le même serveur, à deux moments du même parcours (#4152).
+   *
+   * ## Ce qu'elle est
+   *
+   * La FORME du fil est conservée — neuf clés, `canManageGroups` compris, que
+   * les clients installés décodent. Chaque valeur vient de la matrice centrale.
+   * `canManageGroups` projette `canManageCommunities` : c'est le même droit
+   * sous le vocabulaire d'avant les communautés.
+   */
+  /**
+   * Les permissions SERVIES à la connexion — une PROJECTION, plus une copie.
+   *
+   * Cette méthode composait une TROISIÈME définition, en `switch`, et c'est
+   * celle que le web et iOS lisaient : elle voyage dans la charge de
+   * `/auth/login`, `/auth/register` et `/auth/magic-link`. Elle donnait
+   * `canAccessAdmin: true` à un ANALYST, quand les deux matrices disent
+   * `false` — le web lui peignait la console d'administration, et le serveur
+   * lui refusait la moitié des routes (#4152).
+   *
+   * La forme du fil est inchangée ; les valeurs viennent de la matrice.
+   */
   getUserPermissions(user: SocketIOUser) {
-    const role = user.role.toUpperCase() as keyof typeof UserRoleEnum;
-    
-    // Permissions basées sur le rôle
-    const basePermissions = {
-      canAccessAdmin: false,
-      canManageUsers: false,
-      canManageGroups: false,
-      canManageConversations: false,
-      canViewAnalytics: false,
-      canModerateContent: false,
-      canViewAuditLogs: false,
-      canManageNotifications: false,
-      canManageTranslations: false,
-    };
-
-    switch (role) {
-      case UserRoleEnum.BIGBOSS:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canViewAuditLogs: true,
-          canManageNotifications: true,
-          canManageTranslations: true,
-        };
-
-      case UserRoleEnum.ADMIN:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canManageUsers: true,
-          canManageGroups: true,
-          canManageConversations: true,
-          canViewAnalytics: true,
-          canModerateContent: true,
-          canManageNotifications: true,
-        };
-
-      case UserRoleEnum.MODERATOR:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canModerateContent: true,
-          canManageConversations: true,
-        };
-
-      case UserRoleEnum.AUDIT:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canViewAuditLogs: true,
-          canViewAnalytics: true,
-        };
-
-      case UserRoleEnum.ANALYST:
-        return {
-          ...basePermissions,
-          canAccessAdmin: true,
-          canViewAnalytics: true,
-        };
-
-      default:
-        return basePermissions;
-    }
+    return servedUserPermissions(user.role);
   }
 
   /**

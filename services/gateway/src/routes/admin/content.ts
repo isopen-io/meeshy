@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
-import { sendPaginatedSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
+import { sendPaginatedSuccess, sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   type UserRole,
@@ -14,6 +14,40 @@ import { attachmentMediaSelect } from '../../services/attachments/attachmentIncl
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
+import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
+// #4333 bonus, #4384 — `attachmentMediaSelect` est délibérément SANS drapeau
+// de sécurité (voir son doc-comment : « No consumption-tracking, no security
+// flags »), et cette route est une liste PLATEFORME-ENTIÈRE, pas un contexte
+// qui gate déjà la protection en amont. Même classe de défaut que #4157 c.4 :
+// les prédicats PARTAGÉS, jamais une copie. MÉDIA et TEXTE vivent côte à côte
+// dans `routes/admin/media-protection.ts` depuis #4388, qui y a déplacé le
+// second — il vivait jusque-là dans un fichier de route
+// (`conversation-messages-sovereign.ts`), son seul autre appelant.
+import {
+  attachmentProtectionSelect,
+  messageProtectionSelect,
+  messageContentProtectionSelect,
+  mediaAttachmentIsProtected,
+  messageContentIsProtected,
+  type MessageProtectionContext
+} from './media-protection';
+
+/**
+ * Plafond de SCAN de `GET /admin/translations` (#4165).
+ *
+ * Le pas de pagination de cette route est la TRADUCTION — une ligne par couple
+ * message × langue cible, aplatie depuis la colonne JSON `Message.translations`
+ * — et non le message. Un `skip`/`take` posé sur `message.findMany` ne peut donc
+ * PAS servir la fenêtre demandée : il décalerait une seconde fois un `offset`
+ * déjà appliqué au tableau aplati, et les pages 2+ sauteraient des lignes.
+ *
+ * Ce qui est borné ici est donc le SCAN, pas la page. Le plafond est volontairement
+ * généreux : en deçà, `total` reste le VRAI compte des traductions filtrées et la
+ * route répond exactement comme avant ; au-delà, la troncature est DÉCLARÉE par
+ * `hasMore` plutôt que passée sous silence. Ce qui disparaît est le pire cas que
+ * l'audit nomme — « TOUS les messages traduits », sans borne d'aucune sorte.
+ */
+const TRANSLATIONS_MESSAGE_SCAN_CAP = 5_000;
 
 /**
  * Lignes des deux listes d'administration de ce fichier.
@@ -35,6 +69,13 @@ const adminMessageRowSchema = {
   properties: {
     id: { type: 'string' },
     content: { type: 'string', nullable: true },
+    // #4384 — le FAIT qu'une ligne soit amputée, jamais le MÉCANISME qui l'a
+    // décidé : les six drapeaux (`isViewOnce`, `isBlurred`, `effectFlags`,
+    // `expiresAt`, `isEncrypted`, `encryptionMode`) sont retirés à la SOURCE,
+    // dans le `map` du handler. Sans cette ligne, fast-json-stringify
+    // éjecterait `isProtected` et la liste rendrait un `content: null` que
+    // rien ne distingue d'un message vide.
+    isProtected: { type: 'boolean' },
     messageType: { type: 'string', nullable: true },
     originalLanguage: { type: 'string', nullable: true },
     isEdited: { type: 'boolean', nullable: true },
@@ -122,17 +163,10 @@ const adminCommunityRowSchema = {
 } as const;
 
 // Middleware d'autorisation admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
-  if (!permissions.canAccessAdmin) {
-    return sendForbidden(reply, 'Acces administrateur requis');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 export async function registerContentRoutes(fastify: FastifyInstance) {
   // Gestion des messages - Liste avec pagination
@@ -231,6 +265,17 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             originalLanguage: true,
             isEdited: true,
             createdAt: true,
+            ...messageProtectionSelect,
+            // #4384, #4388 — le select ASSOCIÉ à `messageContentIsProtected`
+            // (`media-protection.ts`), spreadé À CÔTÉ de celui du prédicat
+            // MÉDIA : cette route juge les DEUX sur la même ligne (le texte du
+            // message, et chacune de ses pièces jointes), donc charge les deux
+            // selects. Chevauchement sans effet sur les quatre colonnes
+            // communes (même clé, même valeur `true`) ; `isEncrypted` /
+            // `encryptionMode` n'existent que dans celui-ci — sans eux
+            // `messageContentIsProtected` répondrait « non protégé » sur un
+            // message CHIFFRÉ.
+            ...messageContentProtectionSelect,
             sender: {
               select: {
                 id: true,
@@ -259,7 +304,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
                 type: true
               }
             },
-            attachments: { select: attachmentMediaSelect },
+            attachments: { select: { ...attachmentMediaSelect, ...attachmentProtectionSelect } },
             _count: {
               select: {
                 replies: true
@@ -273,7 +318,64 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({ where })
       ]);
 
-      return sendPaginatedSuccess(reply, messages, {
+      // #4333 bonus — un média à vue unique / flouté / éphémère-expiré ne
+      // sort plus entier par cette liste platefome-entière : même prédicat,
+      // même forme que #4157 c.4 sur `GET /admin/users/:userId/media`. Les
+      // cinq colonnes de protection du MESSAGE (`...messageProtectionSelect`
+      // ci-dessus) ne servent qu'à ce calcul et ne sont pas déclarées dans
+      // `adminMessageRowSchema` : elles sont retirées ici, à la SOURCE,
+      // plutôt que laissées à une omission de schéma pour les taire.
+      const data = messages.map((message) => {
+        const {
+          isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt,
+          isEncrypted, encryptionMode,
+          attachments, ...rest
+        } = message;
+        const messageContext: MessageProtectionContext = { isViewOnce, isBlurred, effectFlags, expiresAt, deletedAt };
+        // #4384, #4388 — le TEXTE, gardé par le prédicat PARTAGÉ
+        // (`media-protection.ts`), au même régime que la lecture souveraine
+        // qui l'applique à la même colonne. La ligne reste LISTÉE (auteur,
+        // dates, conversation, nombre de pièces jointes) : un modérateur doit
+        // pouvoir CONSTATER qu'un message existe. Seul son contenu tombe.
+        const contenuProtege = messageContentIsProtected(message);
+        return {
+          ...rest,
+          content: contenuProtege ? null : rest.content,
+          isProtected: contenuProtege,
+          attachments: attachments.map((attachment) => {
+            const protege = mediaAttachmentIsProtected(attachment, messageContext);
+            // Comme #4157 c.4 : seul `isProtected` sort, jamais les trois
+            // drapeaux bruts qui l'ont décidé — la ligne annonce l'EFFET,
+            // pas le mécanisme.
+            const { isViewOnce: _iv, isBlurred: _ib, effectFlags: _ef, ...attachmentRest } = attachment;
+            return {
+              ...attachmentRest,
+              fileUrl: protege ? null : attachment.fileUrl,
+              thumbnailUrl: protege ? null : attachment.thumbnailUrl,
+              // #4384 — ce qui partait À CÔTÉ des deux URL que #4333 a coupées.
+              // `attachmentMediaSelect` porte le Prisme Linguistique et les
+              // variantes d'image, et la ligne sort sous
+              // `additionalProperties: true` : tout ce qui est chargé est
+              // SERVI. Sur un vocal à vue unique, `transcription.text` EST le
+              // message, et `translations[lang]` le redit dans toutes les
+              // langues AVEC l'URL de sa piste TTS ; `imageVariants` porte les
+              // URL WebP de la MÊME image en d'autres tailles — un contournement
+              // direct de `fileUrl: null` — et `thumbHash` en rend une version
+              // basse résolution sans réseau, soit la vignette que la ligne
+              // au-dessus vient de retirer. `metadata` est libre par contrat
+              // (EXIF, analyse IA) : on ferme, on ne parie pas.
+              transcription: protege ? null : attachment.transcription,
+              translations: protege ? null : attachment.translations,
+              imageVariants: protege ? null : attachment.imageVariants,
+              thumbHash: protege ? null : attachment.thumbHash,
+              metadata: protege ? null : attachment.metadata,
+              isProtected: protege
+            };
+          })
+        };
+      });
+
+      return sendPaginatedSuccess(reply, data, {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
@@ -513,8 +615,14 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             }
           }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' },
+        take: TRANSLATIONS_MESSAGE_SCAN_CAP
       });
+
+      // Le scan a-t-il été tronqué ? Si oui, `total` ne compte que la fenêtre
+      // lue et `hasMore` doit le dire — il ne peut alors qu'être trop prudent,
+      // jamais trop optimiste.
+      const scanTronque = messages.length === TRANSLATIONS_MESSAGE_SCAN_CAP;
 
       // "Dé-normaliser" le JSON translations vers array plat
       interface FlatTranslation {
@@ -591,7 +699,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         total: totalCount,
         limit: limitNum,
         offset: offsetNum,
-        hasMore: offsetNum + paginatedTranslations.length < totalCount
+        hasMore: scanTronque || offsetNum + paginatedTranslations.length < totalCount
       });
 
     } catch (error) {
@@ -674,9 +782,17 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const [shareLinks, totalCount] = await Promise.all([
         fastify.prisma.conversationShareLink.findMany({
           where,
+          // #4157 — `linkId` EST le secret qui permet de REJOINDRE la
+          // conversation (`middleware`/résolution de lien, cf. `content.ts`
+          // ligne ~ci-dessous pour son homologue de recherche) : le servir en
+          // LISTE à tout rôle `canManageConversations` (MODERATOR compris)
+          // revient à distribuer autant d'invitations que de lignes de cette
+          // page. `id` (l'ObjectId, déjà servi) reste la référence OPAQUE sur
+          // laquelle la liste agit ; le secret lui-même ne se lit plus qu'au
+          // travers du geste dédié `POST /share-links/:id/reveal` (S6, motif
+          // écrit, tracé — voir plus bas).
           select: {
             id: true,
-            linkId: true,
             identifier: true,
             name: true,
             description: true,
@@ -727,6 +843,87 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Get admin share links error:', error);
+      return sendInternalError(reply, 'Erreur interne du serveur');
+    }
+  });
+
+  /**
+   * POST /api/admin/share-links/:id/reveal
+   *
+   * Le GESTE dédié qui révèle le `linkId` retiré de la liste ci-dessus (#4157,
+   * critère 3). Rang SOUVERAIN (BIGBOSS seul — `requireSovereign`, pas
+   * `canManageConversations` : une permission de domaine ne doit pas pouvoir
+   * délivrer, en série, le secret de jointure de CHAQUE conversation de la
+   * plateforme) ; motif écrit obligatoire, imposé par le schéma de requête
+   * (`minLength: 10`, Fastify/AJV rejette AVANT que le handler ne s'exécute —
+   * la garde du corps n'est donc pas redondante à réécrire ici) ; trace
+   * d'audit écrite APRÈS la lecture réussie, jamais avant (`withAudit` est
+   * best-effort et ne doit pas conditionner un geste qui a déjà eu lieu).
+   */
+  fastify.post('/share-links/:id/reveal', {
+    onRequest: [fastify.authenticate, requireSovereign()],
+    schema: {
+      description: 'Révèle le linkId (secret de jointure) d\'un lien de partage. Rang souverain, motif écrit obligatoire, geste tracé — #4157.',
+      tags: ['admin'],
+      summary: 'Reveal a share link secret',
+      security: [{ bearerAuth: [] }],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } }
+      },
+      body: {
+        type: 'object',
+        required: ['reason'],
+        properties: {
+          reason: { type: 'string', minLength: 10, description: 'Motif écrit de la révélation (10 caractères minimum), consigné dans AdminAuditLog' }
+        }
+      },
+      response: {
+        200: {
+          description: 'Secret révélé',
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            data: {
+              type: 'object',
+              properties: { id: { type: 'string' }, linkId: { type: 'string' } }
+            }
+          }
+        },
+        400: errorResponseSchema,
+        401: errorResponseSchema,
+        403: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema
+      }
+    }
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const { id } = request.params as { id: string };
+      const { reason } = request.body as { reason: string };
+
+      const shareLink = await fastify.prisma.conversationShareLink.findUnique({
+        where: { id },
+        select: { id: true, linkId: true }
+      });
+
+      if (!shareLink) {
+        return sendNotFound(reply, 'Lien de partage non trouvé');
+      }
+
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      await withAudit(request, {
+        action: 'ADMIN_SHARE_LINK_REVEALED',
+        entity: 'ConversationShareLink',
+        entityId: shareLink.id,
+        userId: authContext.registeredUser.id,
+        reason,
+      });
+
+      return sendSuccess(reply, { id: shareLink.id, linkId: shareLink.linkId });
+    } catch (error) {
+      logError(fastify.log, 'Reveal admin share link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

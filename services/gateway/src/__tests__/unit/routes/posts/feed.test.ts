@@ -629,69 +629,132 @@ describe('GET /posts/bookmarks — with bookmarked posts and embedded comments',
   });
 });
 
-// ─── Query parse fallback branches (false branch of query.success ternaries) ──
-// Each route has: const { cursor, limit } = query.success ? ... : { cursor: undefined, limit: 20 }
-// Sending an invalid query type triggers the false branch
+// ─── Query invalide ⇒ 400, jamais une première page silencieuse (#4149 c.2/8) ──
+//
+// Ces sept routes avalaient `query.success ? query.data : { cursor: undefined,
+// limit: 20 }` — le `false` de la ternaire servait une première page comme si
+// la query avait été valide. Après le lot #4149 elles rendent 400, exactement
+// comme le reste du domaine (`/posts/hashtag/:tag`, `/posts/nearby`, `/sounds/*`
+// le faisaient déjà). Ce bloc remplace les sept témoins qui, avant ce lot,
+// attestaient le défaut (ils asserteraient `200` sous le motif interdit —
+// preuve rejouée par `no-silent-query-fallback-guard.test.ts`, qui rougit si
+// le motif revient dans ce fichier).
 
-describe('GET /posts/feed — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/feed — invalid limit rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/feed?limit=notanumber' });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().success).toBe(false);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
     await app.close();
   });
 });
 
-describe('GET /posts/feed/reels — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/feed/reels — invalid query rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/feed/reels?limit=notanumber' });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  // L'exemple NOMMÉ du critère 8 : un seed vide n'est pas une absence de seed,
+  // c'est une désignation malformée. Avant ce lot, il faisait échouer le parse
+  // ENTIER de la query (seed compris) et retombait sur `{ seed: undefined }` —
+  // basculant en silence « à partir de ce réel » vers « Pour toi ».
+  it('returns 400 on an empty seed instead of silently falling back to "Pour toi"', async () => {
+    mockGetReels.mockClear();
+    const app = await buildApp();
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/reels?seed=' });
+    expect(res.statusCode).toBe(400);
+    expect(mockGetReels).not.toHaveBeenCalled();
     await app.close();
   });
 });
 
-describe('GET /posts/feed/statuses — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/feed/statuses — invalid limit rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses?limit=notanumber' });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
 
-describe('GET /posts/feed/statuses/discover — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/feed/statuses/discover — invalid limit rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses/discover?limit=notanumber' });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
 
-describe('GET /posts/user/:userId — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/user/:userId — invalid limit rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: `/posts/user/${USER_ID}?limit=notanumber` });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
 
-describe('GET /posts/community/:communityId — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/community/:communityId — invalid limit rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/community/comm-001?limit=notanumber' });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });
 
-describe('GET /posts/bookmarks — invalid limit uses fallback defaults', () => {
-  it('returns 200 using default limit when limit is invalid type', async () => {
+describe('GET /posts/bookmarks — invalid limit rejects instead of silently paging (#4149)', () => {
+  it('returns 400 when limit is not numeric', async () => {
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/posts/bookmarks?limit=notanumber' });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+// ─── Alias dépréciés — l'annonce part MÊME sur un 401 (#4149 c.6) ─────────────
+//
+// `onRequest` court avant `preValidation` : un appelant dont l'authentification
+// échoue doit apprendre par quoi migrer autant qu'un appelant servi. Un seul
+// représentant par forme de successeur (statique vs dérivé de la requête) —
+// la garde générique `alias-deprecation-guard.test.ts` couvre l'exhaustivité
+// des neuf sur tout le dépôt (balayage de `routes/`), ce bloc prouve la
+// SÉMANTIQUE : le bon successeur, sur le chemin REFUSÉ.
+
+describe('Alias dépréciés de #4149 — annoncent leur sursis même refusés', () => {
+  it('GET /posts/feed (successeur statique) annonce Deprecation + Link même sur 401', async () => {
+    const app = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: '/posts/feed' });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers.deprecation).toMatch(/^@\d+$/);
+    expect(res.headers.link).toBe('<{PLACEHOLDER}>; rel="successor-version"'.replace(
+      '{PLACEHOLDER}',
+      '/api/v1/social/posts?scope=home',
+    ));
+    expect(res.headers.sunset).toBeUndefined();
+    await app.close();
+  });
+
+  it('GET /posts/user/:userId (successeur dérivé de la requête) résout authorId depuis :userId', async () => {
+    const app = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: `/posts/user/${USER_ID}` });
+    // optionalAuth : ce chemin sert 200, pas 401 — l'annonce part quand même.
     expect(res.statusCode).toBe(200);
+    expect(res.headers.link).toBe(`</api/v1/social/posts?scope=author&authorId=${USER_ID}>; rel="successor-version"`);
+    await app.close();
+  });
+
+  it('GET /posts/feed/statuses/discover annonce le successeur avec audience=public', async () => {
+    const app = await buildApp({ authenticated: false });
+    const res = await app.inject({ method: 'GET', url: '/posts/feed/statuses/discover' });
+    expect(res.statusCode).toBe(401);
+    expect(res.headers.link).toBe('</api/v1/social/posts?scope=statuses&audience=public>; rel="successor-version"');
     await app.close();
   });
 });

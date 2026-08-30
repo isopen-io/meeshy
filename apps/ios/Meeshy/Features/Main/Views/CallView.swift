@@ -506,7 +506,11 @@ struct CallView: View {
             break
         }
         do {
-            let user = try await UserService.shared.getProfileById(userId)
+            // L'adresse CANONIQUE (#4161) : `/directory/people/{handle}`,
+            // qui accepte un identifiant comme un pseudo. Ce site visait
+            // `/users/id/{id}`, l'un des trois alias que la passerelle ne garde
+            // que pour les versions déjà installées.
+            let user = try await UserService.shared.getProfile(handle: userId).user
             guard callManager.remoteUserId == userId else { return }
             remoteProfile = user
             try? await CacheCoordinator.shared.profiles.save([user], for: userId)

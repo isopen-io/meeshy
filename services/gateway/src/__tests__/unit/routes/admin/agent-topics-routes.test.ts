@@ -46,7 +46,25 @@ function buildApp(user = adminUser): FastifyInstance {
 
   app.decorate('prisma', mockPrisma);
   app.decorate('authenticate', async (request: any) => {
-    request.user = user;
+    // Le contexte d'authentification de la PRODUCTION.
+    //
+    // Ce double posait `request.user = { id, role }` — une forme que le
+    // middleware réel NE PRODUIT PAS : `request.user` y porte `userId`,
+    // `username` et `isAnonymous`, et **jamais `role`**, qui vit dans
+    // `authContext.registeredUser`.
+    //
+    // La garde locale d'`agent-topics` lisait `user.role` : en production, elle
+    // testait `undefined` contre une liste de rôles, donc elle refusait TOUT LE
+    // MONDE — BIGBOSS compris. Les routes d'administration de l'agent étaient
+    // fermées, et ces témoins étaient verts parce que le double, lui, posait ce
+    // que la production ne pose pas (#4153).
+    request.user = { userId: user.id, isAnonymous: false };
+    request.authContext = {
+      isAuthenticated: true,
+      type: 'user',
+      userId: user.id,
+      registeredUser: { id: user.id, role: user.role },
+    };
   });
 
   app.register(agentTopicsRoutes);

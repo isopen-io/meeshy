@@ -18,4 +18,8 @@
     <string name="notifications_category_calls">Chamadas</string>
     <string name="notifications_category_translations">Traduções</string>
     <string name="notifications_category_system">Sistema</string>
+    <string name="notification_banner_in_conversation">%1$s em %2$s</string>
+    <string name="notification_banner_media_photo">📷 Foto</string>
+    <string name="notification_banner_media_video">🎥 Vídeo</string>
+    <string name="notification_banner_media_audio">🎵 Áudio</string>
 </resources>

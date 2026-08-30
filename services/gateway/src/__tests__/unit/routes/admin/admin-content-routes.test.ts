@@ -482,13 +482,20 @@ describe('Admin content routes — GET /translations', () => {
     await modApp.close();
   });
 
-  it('returns 403 when ADMIN lacks canManageTranslations', async () => {
-    // ADMIN: canAccessAdmin=true, canManageTranslations=false
+  it('laisse passer un ADMIN — la matrice UNIQUE lui accorde canManageTranslations', async () => {
+    // Ce témoin exigeait un 403, et il ATTESTAIT une divergence : la matrice
+    // locale de `routes/admin/services` posait
+    // `ADMIN.canManageTranslations: false` quand la matrice CENTRALE — celle
+    // qui fait autorité, et que les gardes de présence et de sanitisation
+    // consultent — dit `true` depuis qu'ADMIN a reçu ce droit (#4152).
+    //
+    // Deux réponses à la même question, selon la route qui la posait. Le
+    // témoin gelait la mauvaise ; il garde désormais la LOI.
     app = buildApp('ADMIN');
     await app.ready();
 
     const response = await app.inject({ method: 'GET', url: '/translations' });
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).not.toBe(403);
   });
 
   it('returns 200 with denormalized translations (BIGBOSS)', async () => {

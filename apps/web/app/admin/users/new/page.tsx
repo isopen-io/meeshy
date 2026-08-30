@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, UserPlus, Save, AlertCircle } from 'lucide-react';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 
@@ -92,7 +93,7 @@ export default function NewUserPage() {
         regionalLanguage: formData.regionalLanguage
       };
 
-      const response = await apiService.post('/admin/users', userData);
+      const response = await apiService.post(API_ENDPOINTS.admin.users, userData);
 
       if ((response.data as unknown)?.success) {
         toast.success(t('users.newUser.toastSuccess'));

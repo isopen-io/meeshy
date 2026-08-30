@@ -242,4 +242,67 @@ final class MeeshyConfigTests: XCTestCase {
     func testVersionConstant() {
         XCTAssertEqual(MeeshySDK.version, "1.0.0")
     }
+
+    // MARK: - Une CLÉ DE STOCKAGE est une route que le SDK doit poser (#4324)
+
+    /// La base ne porte que la clé du média — `2025/10/<id>/photo.png` —, jamais
+    /// l'adresse par laquelle on le sert : ni hôte, ni préfixe d'API, ni version,
+    /// qui sont des décisions de déploiement. C'est au SDK de poser la route.
+    ///
+    /// Sans cela, `serverOrigin + "/" + clé` rendait
+    /// `https://gate.meeshy.me/2025/10/…` — le segment `/attachments/file/`
+    /// manquait, et les 514 attachements déjà stockés sous cette forme étaient
+    /// illisibles sur iOS comme sur Android. Le web, lui, composait déjà.
+    func testResolveMediaURLPosesTheRouteForAStorageKey() {
+        MeeshyConfig.shared.configure(apiURL: "https://gate.meeshy.me/api/v1", bundleId: nil)
+
+        let url = MeeshyConfig.resolveMediaURL("2025/10/68c07400/photo.png")
+
+        XCTAssertEqual(
+            url?.absoluteString,
+            "https://gate.meeshy.me/api/v1/attachments/file/2025/10/68c07400/photo.png"
+        )
+    }
+
+    /// La route posée SUIT le préfixe configuré : la version n'est pas une
+    /// constante du SDK, elle vient de `apiBaseURL`.
+    func testResolveMediaURLFollowsTheConfiguredApiPath() {
+        MeeshyConfig.shared.configure(apiURL: "https://gate.meeshy.me/api/v2", bundleId: nil)
+
+        let url = MeeshyConfig.resolveMediaURL("2025/10/68c07400/photo.png")
+
+        XCTAssertEqual(
+            url?.absoluteString,
+            "https://gate.meeshy.me/api/v2/attachments/file/2025/10/68c07400/photo.png"
+        )
+    }
+
+    /// Les caractères qu'une URL ne peut pas porter tels quels sont encodés —
+    /// mais JAMAIS les barres obliques, qui sont les séparateurs du chemin.
+    func testResolveMediaURLEncodesSegmentsWithoutBreakingThePath() {
+        MeeshyConfig.shared.configure(apiURL: "https://gate.meeshy.me/api/v1", bundleId: nil)
+
+        let url = MeeshyConfig.resolveMediaURL("2025/10/id/Rapport final.pdf")
+
+        XCTAssertEqual(
+            url?.absoluteString,
+            "https://gate.meeshy.me/api/v1/attachments/file/2025/10/id/Rapport%20final.pdf"
+        )
+    }
+
+    /// Un chemin ABSOLU garde son sens : il porte déjà sa route, le SDK n'en
+    /// pose pas une seconde.
+    func testResolveMediaURLLeavesAnAbsolutePathAlone() {
+        MeeshyConfig.shared.configure(apiURL: "https://gate.meeshy.me/api/v1", bundleId: nil)
+
+        XCTAssertEqual(
+            MeeshyConfig.resolveMediaURL("/api/v1/attachments/file/2025/10/id/photo.png")?.absoluteString,
+            "https://gate.meeshy.me/api/v1/attachments/file/2025/10/id/photo.png"
+        )
+        XCTAssertEqual(
+            MeeshyConfig.resolveMediaURL("https://gate.meeshy.me/api/v1/attachments/file/x.png")?.absoluteString,
+            "https://gate.meeshy.me/api/v1/attachments/file/x.png"
+        )
+    }
+
 }

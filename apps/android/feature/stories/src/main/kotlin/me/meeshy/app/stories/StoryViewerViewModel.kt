@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.util.resolveMediaUrl
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -748,7 +749,7 @@ class StoryViewerViewModel @Inject constructor(
         val isVideo = backgroundObject?.mediaType == "video" ||
             (backgroundObject == null && fallbackMedia?.type == FeedMediaType.VIDEO)
         val resolvedUrl = (backgroundObject?.mediaURL ?: fallbackMedia?.url)
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
 
         if (isVideo) {
             // The framing rides only on a modern `isBackground` object whose OWN
@@ -768,7 +769,7 @@ class StoryViewerViewModel @Inject constructor(
             )
         }
         val imageUrl = resolvedUrl
-            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?: media.firstOrNull { it.thumbnailUrl != null }?.thumbnailUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         // The framing rides only on a modern `isBackground` object; a legacy/flat
         // fallback image never carries one, so it stays a plain aspect-fill (IDENTITY).
         val transform = backgroundObject
@@ -781,7 +782,7 @@ class StoryViewerViewModel @Inject constructor(
     private fun StoryMediaObject.toForegroundMediaView(
         clipTransitions: List<StoryClipTransition>,
     ): StoryForegroundMediaView? {
-        val url = mediaURL?.let { resolveMediaUrl(it, config.socketUrl) } ?: return null
+        val url = mediaURL?.let { resolveMediaUrl(it, config.apiBaseUrl) } ?: return null
         return StoryForegroundMediaView(
             id = id,
             url = url,
@@ -813,11 +814,11 @@ class StoryViewerViewModel @Inject constructor(
             .firstOrNull { (it.isBackground == true) == preferBackground }
         val fromObject = match?.postMediaId
             ?.let { mediaId -> media.firstOrNull { it.id == mediaId }?.url }
-            ?.let { resolveMediaUrl(it, config.socketUrl) }
+            ?.let { resolveMediaUrl(it, config.apiBaseUrl) }
         if (fromObject != null) return fromObject
         if (!preferBackground) return null
-        return audioUrl?.let { resolveMediaUrl(it, config.socketUrl) }
-            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.socketUrl) }
+        return audioUrl?.let { resolveMediaUrl(it, config.apiBaseUrl) }
+            ?: backgroundAudio?.fileUrl?.takeIf { it.isNotBlank() }?.let { resolveMediaUrl(it, config.apiBaseUrl) }
     }
 
     private object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {

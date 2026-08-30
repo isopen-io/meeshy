@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from './auth-manager.service';
 
 // Interface pour le statut 2FA
@@ -35,7 +36,11 @@ export interface TwoFactorEnableResponse {
   error?: string;
 }
 
-// Interface pour la vérification 2FA
+// Interface pour la vérification 2FA — forme de POST /auth/login/2fa
+// (services/gateway/src/routes/auth/login.ts), PAS POST /auth/2fa/verify.
+// La confusion entre les deux routes était le défaut #4419 : cette dernière
+// exige un JWT de session déjà valide et ne rend jamais de credentials —
+// voir son doc-comment dans services/gateway/src/routes/two-factor.ts.
 export interface TwoFactorVerifyResponse {
   success: boolean;
   data?: {
@@ -54,6 +59,10 @@ export interface TwoFactorVerifyResponse {
     token: string;
     sessionToken?: string;
     expiresIn: number;
+    // `POST /auth/login/2fa` ne rend jamais ce champ (ni son `AuthResult`
+    // interne, ni son handler ne le portent, mesuré) : gardé optionnel pour
+    // ne pas casser l'appelant qui le lit déjà (`verify-2fa/page.tsx`), mais
+    // toujours `undefined` en pratique tant que le gateway ne le sert pas.
     usedBackupCode?: boolean;
   };
   error?: string;
@@ -106,7 +115,7 @@ class TwoFactorService {
    */
   async getStatus(): Promise<TwoFactorStatusResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/status'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaStatus), {
         method: 'GET',
         headers: this.getAuthHeaders(),
       });
@@ -126,7 +135,7 @@ class TwoFactorService {
    */
   async setup(): Promise<TwoFactorSetupResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/setup'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaSetup), {
         method: 'POST',
         headers: this.getAuthHeaders(),
       });
@@ -146,7 +155,7 @@ class TwoFactorService {
    */
   async enable(code: string): Promise<TwoFactorEnableResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/enable'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaEnable), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({ code: code.replace(/\s/g, '') }),
@@ -163,31 +172,52 @@ class TwoFactorService {
   }
 
   /**
-   * Vérifie le code 2FA lors de la connexion
-   * @param twoFactorToken - Token temporaire reçu lors du login
-   * @param code - Code TOTP ou backup code
+   * Complète une connexion après un second facteur (#4419).
+   *
+   * Seul usage mesuré dans ce dépôt : `apps/web/app/auth/verify-2fa/page.tsx`
+   * est l'unique appelant de cette méthode, avec le jeton temporaire reçu
+   * quand `POST /auth/login` répond `requires2FA: true`. Ce jeton n'est PAS
+   * un JWT (`crypto.randomBytes(32)` côté `AuthService`) : il ne peut donc
+   * pas passer `fastify.authenticate`, et voyage dans le CORPS de
+   * `POST /auth/login/2fa` — la route PUBLIQUE (`security: []`) qui
+   * l'authentifie — jamais en en-tête `Authorization`.
+   *
+   * Ne PAS confondre avec `POST /auth/2fa/verify` (`API_ENDPOINTS.auth.n2FaVerify`) :
+   * cette route-là exige un JWT de SESSION déjà valide et ne rend jamais de
+   * credentials (`{ valid, usedBackupCode }` seulement — voir le doc-comment
+   * de `services/gateway/src/routes/two-factor.ts`). Rien dans ce dépôt ne
+   * l'appelle pour compléter une connexion ; si une confirmation de code à
+   * SESSION DÉJÀ OUVERTE (step-up) devient nécessaire un jour, elle prendra
+   * sa PROPRE méthode plutôt que de réutiliser celle-ci avec un paramètre —
+   * les deux jetons n'ont ni la même nature ni le même schéma de réponse.
+   *
+   * @param twoFactorToken - Jeton temporaire reçu lors du login (pas un JWT)
+   * @param code - Code TOTP ou code de secours
    */
   async verify(twoFactorToken: string, code: string): Promise<TwoFactorVerifyResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/verify'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.loginN2Fa), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${twoFactorToken}`,
         },
-        body: JSON.stringify({ code: code.replace(/[\s-]/g, '') }),
+        body: JSON.stringify({
+          twoFactorToken,
+          code: code.replace(/[\s-]/g, ''),
+        }),
       });
 
       const data = await response.json();
 
       // Si la vérification réussit, configurer les credentials
       if (data.success && data.data?.token) {
-        authManager.setCredentials(
-          data.data.user,
-          data.data.token,
-          data.data.sessionToken,
-          data.data.expiresIn
-        );
+        authManager.setCredentials({
+          user: data.data.user,
+          authToken: data.data.token,
+          refreshToken: data.data.refreshToken,
+          sessionToken: data.data.sessionToken,
+          expiresIn: data.data.expiresIn,
+        });
       }
 
       return data;
@@ -205,7 +235,7 @@ class TwoFactorService {
    */
   async disable(password: string, code?: string): Promise<TwoFactorDisableResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/disable'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaDisable), {
         method: 'POST',
         headers: this.getAuthHeaders(),
         body: JSON.stringify({
@@ -229,7 +259,7 @@ class TwoFactorService {
    */
   async regenerateBackupCodes(): Promise<TwoFactorBackupCodesResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/backup-codes'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaBackupCodes), {
         method: 'POST',
         headers: this.getAuthHeaders(),
       });
@@ -249,7 +279,7 @@ class TwoFactorService {
    */
   async cancelSetup(): Promise<{ success: boolean; error?: string }> {
     try {
-      const response = await fetch(buildApiUrl('/auth/2fa/cancel'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.n2FaCancel), {
         method: 'POST',
         headers: this.getAuthHeaders(),
       });

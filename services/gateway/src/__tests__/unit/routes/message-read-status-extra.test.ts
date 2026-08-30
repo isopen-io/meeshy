@@ -116,6 +116,13 @@ const mockPrisma: any = {
   message: {
     findUnique: jest.fn(),
     findFirst: jest.fn(),
+    // #4349 — la garde d'appartenance de la COLLECTION lit les ids RAPPORTÉS
+    // par `findMany`, là où la porte d'avant lisait `findUnique`. Le double est
+    // installé par `mirrorGuardLookup()` dans les `beforeEach` concernés : il
+    // rejoue la MÊME ligne que `findUnique` décrit, en appliquant le filtre que
+    // la garde pose — chaque cas continue donc de piloter le verdict par
+    // `findUnique`.
+    findMany: jest.fn(),
     count: jest.fn()
   },
   conversationReadCursor: {
@@ -148,6 +155,20 @@ const AUTH_HEADER = 'Bearer test-token';
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Le double de la garde d'appartenance (#4349) : `message.findMany` rejoue la
+ * ligne que `message.findUnique` décrit, filtrée comme Prisma le ferait.
+ */
+function mirrorGuardLookup() {
+  mockPrisma.message.findMany.mockImplementation(async (args: any) => {
+    const ids: string[] = args?.where?.id?.in ?? [];
+    if (ids.length === 0) return [];
+    const row = await mockPrisma.message.findUnique();
+    if (!row || row.deletedAt || row.conversationId !== args?.where?.conversationId) return [];
+    return ids.map((id) => ({ id, senderId: row.senderId, createdAt: row.createdAt ?? new Date(0) }));
+  });
+}
 
 function clearStaticCache() {
   // The real service uses a static Map; since we fully mock the class,
@@ -365,8 +386,20 @@ describe('GET /conversations/:conversationId/read-statuses', () => {
   });
 
   it('returns 200 with read statuses converted from Map on success', async () => {
+    // La forme RÉELLE de `getConversationReadStatuses` — ses cinq clés, pas une
+    // esquisse : la collection projette ce type entier, et un mock plus pauvre
+    // ne prouverait pas la parité clé à clé de l'adaptateur (#4349).
     const statusMap = new Map([
-      [MESSAGE_ID, { readCount: 2, deliveredCount: 3 }]
+      [
+        MESSAGE_ID,
+        {
+          totalMembers: 4,
+          receivedCount: 3,
+          readCount: 2,
+          deliveredToAllAt: null,
+          readByAllAt: null
+        }
+      ]
     ]);
     mockGetConversationReadStatuses.mockResolvedValue(statusMap);
 
@@ -380,10 +413,21 @@ describe('GET /conversations/:conversationId/read-statuses', () => {
     const body = response.json();
     expect(body.success).toBe(true);
     // Map is serialised as a plain object
-    expect(body.data[MESSAGE_ID]).toMatchObject({ readCount: 2, deliveredCount: 3 });
+    expect(body.data[MESSAGE_ID]).toMatchObject({
+      totalMembers: 4,
+      receivedCount: 3,
+      readCount: 2,
+      deliveredToAllAt: null,
+      readByAllAt: null
+    });
+    // #4179 — troisième argument : le plancher d'historique du lecteur.
+    // `null` ici parce que le participant mocké (`{ id: PARTICIPANT_ID }`, sans
+    // `shareLinkId`) ne porte aucune restriction — voir le témoin dédié
+    // (history-floor-read-status-gates.test.ts) pour le cas où il en porte une.
     expect(mockGetConversationReadStatuses).toHaveBeenCalledWith(
       CONVERSATION_ID,
-      [MESSAGE_ID]
+      [MESSAGE_ID],
+      null
     );
   });
 
@@ -439,7 +483,9 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
     mockShouldShowReadReceipts.mockResolvedValue(false);
     mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
     mockGetUnreadCount.mockResolvedValue(3);
-    mockMarkMessagesAsRead.mockResolvedValue(undefined);
+    // #4349 critère 4 — DÉLIBÉRÉMENT différent du compte de non-lus : c'est ce
+    // désaccord qui distingue les deux grandeurs qu'un seul mot nommait.
+    mockMarkMessagesAsRead.mockResolvedValue(7);
   });
 
   it('returns 404 when resolveConversationId returns null', async () => {
@@ -509,7 +555,11 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.success).toBe(true);
-    expect(body.data.markedCount).toBe(3);
+    // #4349 critère 4 — `markedCount` relaie ce que le marquage a FIGÉ
+    // (`markMessagesAsRead`), plus le compte de non-lus d'AVANT
+    // (`mockGetUnreadCount`, resté à 3 ici, délibérément DIFFÉRENT).
+    expect(body.data.markedCount).toBe(7);
+    expect(body.data.markedCount).not.toBe(3);
   });
 
   it('returns 500 when markMessagesAsRead throws (outer catch)', async () => {
@@ -528,6 +578,11 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
 
   it('returns 200 and broadcasts READ_STATUS_UPDATED when shouldShowReadReceipts=true (happy path)', async () => {
     mockShouldShowReadReceipts.mockResolvedValue(true);
+    // #4349 — le raccourci « aucun non-lu → ne rien figer, ne rien diffuser »
+    // que portait `mark-read` vaut désormais pour les DEUX adresses (elles
+    // partagent le gestionnaire). Ce témoin mesure la DIFFUSION : il lui faut
+    // donc un arriéré non nul, sinon il mesurerait le raccourci.
+    mockGetUnreadCount.mockResolvedValue(2);
     // participant.findMany used inside broadcastReadStatus
     mockPrisma.participant.findMany = jest.fn().mockResolvedValue([{ userId: USER_ID }]);
     // cursor needed by broadcastReadStatus for type='read'
@@ -537,7 +592,6 @@ describe('POST /conversations/:conversationId/mark-as-read — edge cases', () =
       update: jest.fn(),
       findMany: jest.fn()
     };
-    mockGetUnreadCount.mockResolvedValue(0);
     mockGetLatestMessageSummary.mockResolvedValue({ totalMembers: 2, deliveredCount: 2, readCount: 1 });
 
     const response = await app.inject({
@@ -586,8 +640,12 @@ describe('POST /conversations/:conversationId/mark-as-received — edge cases', 
     mockResolveConversationId.mockResolvedValue(CONVERSATION_ID);
     mockShouldShowReadReceipts.mockResolvedValue(false);
     mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+    // #4179 — `getUnreadCount` n'alimente plus `markedCount` sur cette route
+    // (elle ne sert plus qu'au badge multi-appareils recalculé par
+    // `broadcastReadStatus`) : c'est désormais le compte RÉELLEMENT figé,
+    // renvoyé par `markMessagesAsReceived`, qui porte `markedCount`.
     mockGetUnreadCount.mockResolvedValue(2);
-    mockMarkMessagesAsReceived.mockResolvedValue(undefined);
+    mockMarkMessagesAsReceived.mockResolvedValue(2);
   });
 
   it('returns 404 when resolveConversationId returns null', async () => {
@@ -718,6 +776,7 @@ describe('POST /conversations/:conversationId/messages/:messageId/delivery-recei
       readCount: 0
     });
     mockPrisma.participant.findMany.mockResolvedValue([{ id: PARTICIPANT_ID, userId: USER_ID }]);
+    mirrorGuardLookup();
   });
 
   it('returns 200 "Aucune action requise" when caller is the message sender (self-delivery no-op)', async () => {

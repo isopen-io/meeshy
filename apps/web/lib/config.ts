@@ -1,6 +1,16 @@
 // Configuration centralisée Meeshy - Variables d'environnement
 // Ce fichier centralise toutes les configurations depuis .env
 
+// #4281 (critère 1) — API_ENDPOINTS est réexporté depuis le catalogue partagé
+// (packages/shared/api/endpoints.ts, #4280) : ce fichier ne le définit plus,
+// il en devient une PROJECTION. Le catalogue est GÉNÉRÉ depuis
+// services/gateway/route-manifest.json et cliqueté contre lui — une route
+// renommée ou retirée côté gateway et régénérée y fait tomber le cliquet de
+// packages/shared avant qu'un seul appel web ne puisse viser une adresse
+// morte. Ne jamais réintroduire d'entrée manuscrite ici : régénérer le
+// catalogue (`cd packages/shared && npm run api-endpoints:generate`).
+export { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+
 interface MeeshyConfig {
   // Ports et URLs
   frontend: {
@@ -184,62 +194,6 @@ export const API_CONFIG = {
 };
 
 export default config;
-
-// URLs d'API fréquemment utilisées
-export const API_ENDPOINTS = {
-  AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    ME: '/auth/me',
-    LOGOUT: '/auth/logout'
-  },
-  CONVERSATION: {
-    LIST: '/conversations',
-    CREATE: '/conversations',
-    JOIN: '/conversations/join',
-    LINK: '/conversations/link',
-    CREATE_LINK: '/api/links',
-    GET_CONVERSATION_LINKS: (conversationId: string) => `/conversations/${conversationId}/links`,
-    GET_LINK_CONVERSATION: (linkId: string) => `/api/links/${linkId}/conversations`,
-    MESSAGES: '/conversations/:id/messages',
-    GET_GROUP_CONVERSATIONS: (groupId: string) => `/conversations/group/${groupId}`,
-    CHECK_IDENTIFIER: (identifier: string) => `/conversations/check-identifier/${identifier}`,
-    CHECK_LINK_IDENTIFIER: (identifier: string) => `/links/check-identifier/${identifier}`
-  },
-  MESSAGE: {
-    LIST: '/messages/conversation',
-    SEND: '/messages'
-  },
-  USER: {
-    SEARCH: '/users/search'
-  },
-  GROUP: {
-    LIST: '/communities',
-    CREATE: '/communities',
-    JOIN: '/communities/:id/join',
-    LEAVE: '/communities/:id/leave',
-    SEARCH: '/communities/search',
-    DETAILS: (id: string) => `/communities/${id}`,
-    MEMBERS: (id: string) => `/communities/${id}/members`,
-    UPDATE: (id: string) => `/communities/${id}`,
-    ADD_MEMBER: (groupId: string) => `/communities/${groupId}/members`,
-    REMOVE_MEMBER: (groupId: string, memberId: string) => `/communities/${groupId}/members/${memberId}`,
-    UPDATE_MEMBER_ROLE: (groupId: string, memberId: string) => `/communities/${groupId}/members/${memberId}/role`,
-    CHECK_IDENTIFIER: (identifier: string) => `/communities/check-identifier/${identifier}`
-  },
-  TRACKING_LINK: {
-    CREATE: '/api/tracking-links',
-    CLICK: (token: string) => `/api/tracking-links/${token}/click`,
-    GET: (token: string) => `/api/tracking-links/${token}`,
-    STATS: (token: string) => `/api/tracking-links/${token}/stats`,
-    USER_LINKS: '/api/tracking-links/user/me',
-    CONVERSATION_LINKS: (conversationId: string) => `/api/tracking-links/conversation/${conversationId}`,
-    DEACTIVATE: (token: string) => `/api/tracking-links/${token}/deactivate`,
-    DELETE: (token: string) => `/api/tracking-links/${token}`,
-    REDIRECT: (token: string) => `/l/${token}`,
-    CHECK_TOKEN: (token: string) => `/api/tracking-links/check-token/${token}`
-  }
-};
 
 // === FONCTIONS UNIFIÉES POUR LES URLs ===
 

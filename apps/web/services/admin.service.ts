@@ -3,6 +3,34 @@ import { apiService } from './api.service';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type { AdminUser } from '@meeshy/shared/types';
 
+/**
+ * Les permissions du compte courant, LUES À LA SOURCE (#4152).
+ *
+ * Elles voyageaient dans la charge de connexion, et QUATRE définitions
+ * concurrentes les composaient côté serveur — dont deux qui divergeaient de la
+ * matrice. Le web recevait `canAccessAdmin: true` pour un ANALYST et lui
+ * peignait la console d'administration, que le serveur refusait ensuite.
+ *
+ * La charge de connexion les porte toujours, désormais projetées de la matrice
+ * unique. Cette route sert à les RELIRE : un rôle change — une promotion, une
+ * rétrogradation — et le client garde sinon indéfiniment ce qu'il a reçu au
+ * premier jour.
+ */
+export interface MyPermissions {
+  readonly role: string;
+  readonly permissions: {
+    readonly canAccessAdmin: boolean;
+    readonly canManageUsers: boolean;
+    readonly canManageGroups: boolean;
+    readonly canManageConversations: boolean;
+    readonly canViewAnalytics: boolean;
+    readonly canModerateContent: boolean;
+    readonly canViewAuditLogs: boolean;
+    readonly canManageNotifications: boolean;
+    readonly canManageTranslations: boolean;
+  };
+}
+
 export interface AdminStats {
   // 1. Utilisateurs
   totalUsers: number;
@@ -109,6 +137,26 @@ export interface AdminAnonymousUsersResponse {
  */
 export const adminService = {
   /**
+   * Mes permissions, relues à la SOURCE — `GET /admin/me/permissions` (#4152).
+   *
+   * En S2, pas S5 : lire ses propres permissions n'est pas un geste
+   * d'administration, et un USER a le droit d'apprendre qu'il n'en a aucune.
+   *
+   * La charge de connexion les porte toujours ; cette route sert à les
+   * RAFRAÎCHIR sans redemander une session. C'est ce que trois sites du
+   * serveur faisaient à la main après chaque écriture de profil, chacun
+   * différemment — dont un qui retirait la console à un MODERATOR.
+   */
+  async getMyPermissions(): Promise<ApiResponse<MyPermissions>> {
+    try {
+      return await apiService.get<MyPermissions>('/admin/me/permissions');
+    } catch (error) {
+      logger.error('[Admin]', 'Erreur lors de la lecture des permissions', { error });
+      throw error;
+    }
+  },
+
+  /**
    * Récupère les statistiques du tableau de bord administrateur
    */
   async getDashboardStats(): Promise<ApiResponse<AdminDashboardData>> {
@@ -147,11 +195,16 @@ export const adminService = {
   },
 
   /**
-   * Met à jour le rôle d'un utilisateur
+   * Met à jour le rôle d'un utilisateur.
+   *
+   * Adresse UNIQUE des écritures d'un compte depuis #4154 : le rôle n'a plus
+   * sa route, il a sa LOI (`canUpdateUserRoles` + hiérarchie + rang visé). Les
+   * anciennes adresses `/role` et `/status` restent servies comme alias, mais
+   * un client neuf n'a aucune raison de les appeler.
    */
   async updateUserRole(userId: string, role: string): Promise<ApiResponse<User>> {
     try {
-      const response = await apiService.patch<User>(`/admin/users/${userId}/role`, { role });
+      const response = await apiService.patch<User>(`/admin/users/${userId}`, { role });
       return response;
     } catch (error) {
       logger.error('[Admin]', 'Erreur lors de la mise à jour du rôle', { error });
@@ -160,11 +213,11 @@ export const adminService = {
   },
 
   /**
-   * Active/désactive un utilisateur
+   * Active/désactive un utilisateur — même adresse, autre champ, autre loi.
    */
   async toggleUserStatus(userId: string, isActive: boolean): Promise<ApiResponse<User>> {
     try {
-      const response = await apiService.patch<User>(`/admin/users/${userId}/status`, { isActive });
+      const response = await apiService.patch<User>(`/admin/users/${userId}`, { isActive });
       return response;
     } catch (error) {
       logger.error('[Admin]', 'Erreur lors de la mise à jour du statut', { error });

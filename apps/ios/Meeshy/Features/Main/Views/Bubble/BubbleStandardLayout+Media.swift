@@ -353,6 +353,23 @@ fileprivate struct BubbleGridCell: View {
         }
         .clipped()
         .contentShape(Rectangle())
+        // #4020 — le double tap ouvre le sélecteur de réaction de CETTE pièce,
+        // exactement ce que l'appui long ouvre douze lignes plus bas. Même
+        // garde (`canReactPerImage`), même acte : un second chemin qui
+        // ouvrirait autre chose serait deux gestes pour une seule intention.
+        //
+        // **Déclaré AVANT le simple tap**, ce qui est la seule façon pour
+        // SwiftUI d'arbitrer les deux. Le coût est mesuré et assumé : le
+        // simple tap (plein écran) attend désormais la fenêtre de
+        // désambiguïsation d'iOS — ~250 ms — avant de partir. C'est le prix de
+        // la coexistence que l'issue demande explicitement, et le même que
+        // paie Messages sur ses propres photos. Si le porteur juge ce délai
+        // trop cher devant l'ouverture d'un média, c'est CE modificateur qu'on
+        // retire — le geste de la bulle, lui, ne coûte rien.
+        .modifier(QuickReactionDoubleTap(isEnabled: canReactPerImage) {
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
+        })
         .onTapGesture(perform: handleTap)
         .overlay { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }

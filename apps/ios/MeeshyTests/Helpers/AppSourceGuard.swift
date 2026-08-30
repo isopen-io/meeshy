@@ -63,4 +63,115 @@ enum AppSourceGuard {
     static func strippedLines(_ source: String) -> [String] {
         stripComments(source).components(separatedBy: "\n")
     }
+
+    // MARK: - L'UNITÉ de source d'un type découpé (#4102)
+
+    /// La racine `apps/ios`, lue depuis CE fichier — jamais depuis l'appelant :
+    /// une garde qui déménage d'un répertoire ne doit pas déplacer la racine
+    /// avec elle.
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Helpers
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+    }
+
+    /// **Un type découpé garde UNE adresse.**
+    ///
+    /// `Type.swift` scindé en `Type+Rôle.swift` reste une seule source aux yeux
+    /// des gardes. Sans cela, chaque découpage éteint en SILENCE toutes les
+    /// gardes négatives du type : elles passent au vert en lisant la moitié qui
+    /// ne contient pas l'interdit. C'est le mode de panne exact contre lequel
+    /// chaque suite pose déjà un `test_…ReadANonEmptySource` — celui-là attrape
+    /// un chemin FAUX, aucun n'attrapait un chemin devenu PARTIEL.
+    ///
+    /// Le balayage est un GLOB, jamais une liste : une liste de parties se
+    /// périme au premier fichier ajouté, et se périme en silence puisque le
+    /// résultat reste non vide. `alsoIncluding` ne sert qu'aux compagnons qui ne
+    /// portent PAS le nom du type — les règles pures sorties du fichier, qui
+    /// n'ont aucune raison de s'appeler `Type+…`.
+    static func unitURLs(_ relativeToAppRoot: String,
+                         alsoIncluding compagnons: [String] = []) -> [URL] {
+        let principal = appRoot.appendingPathComponent(relativeToAppRoot)
+        let dossier = principal.deletingLastPathComponent()
+        let base = principal.deletingPathExtension().lastPathComponent
+        let voisins = (try? FileManager.default.contentsOfDirectory(
+            at: dossier, includingPropertiesForKeys: nil)) ?? []
+        let parties = voisins
+            .filter { $0.pathExtension == "swift"
+                && $0.deletingPathExtension().lastPathComponent.hasPrefix(base + "+") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        return [principal] + parties + compagnons.map(appRoot.appendingPathComponent)
+    }
+
+    static func unit(_ relativeToAppRoot: String,
+                     alsoIncluding compagnons: [String] = []) throws -> String {
+        try unitURLs(relativeToAppRoot, alsoIncluding: compagnons)
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
+    /// L'unité du meuble du composer : le type, ses trois extensions, et les
+    /// règles pures qui en sont sorties au #4102.
+    static let composerHostPath = "Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"
+    static let composerHostCompanions = ["Meeshy/Features/Main/Composer/ComposerHostRules.swift"]
+
+    static func composerHostURLs() -> [URL] {
+        unitURLs(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    static func composerHostSource() throws -> String {
+        try unit(composerHostPath, alsoIncluding: composerHostCompanions)
+    }
+
+    /// L'unité de la surface DOCUMENT : la vue, plus les deux fichiers de règles
+    /// pures qui en sont sortis au #4103 (`ComposerSurfaceRules`,
+    /// `ComposerDocumentRules`). Même raison que pour le meuble : sans l'unité,
+    /// toute garde négative dont l'interdit a suivi les règles passerait au vert
+    /// en lisant la moitié qui ne le contient plus.
+    static let composerSurfacePath = "Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift"
+    static let composerSurfaceCompanions = [
+        "Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift",
+        "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift",
+        // **Les deux types extraits le 2026-08-30**, quand le fichier a franchi
+        // le plafond de 1 100 lignes. Ils ne portent PAS le nom du type, donc le
+        // glob `ComposerDocumentSurface+*.swift` ne les voit pas — c'est
+        // exactement ce à quoi `alsoIncluding` sert.
+        //
+        // Sans eux, une dizaine de gardes qui ancrent sur `composerHost`,
+        // `publishMood`, `publishDocument` ou la vignette perdraient leur objet
+        // en silence. Un découpage n'est pas fini quand le fichier passe sous le
+        // budget : il l'est quand les gardes qui le nommaient pointent l'unité
+        // (leçon 347).
+        "Meeshy/Features/Main/Composer/DocumentComposerDoor.swift",
+        "Meeshy/Features/Main/Composer/ComposerMediaThumbnail.swift"
+    ]
+
+    static func composerSurfaceURLs() -> [URL] {
+        unitURLs(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
+
+    static func composerSurfaceSource() throws -> String {
+        try unit(composerSurfacePath, alsoIncluding: composerSurfaceCompanions)
+    }
+
+    /// L'unité de `StoryViewModel` (#4425) : le fichier historique, ses
+    /// extensions `StoryViewModel+*.swift` (attrapées par le glob de
+    /// `unitURLs`), et `StoryViewModelRules`, le compagnon de règles pures
+    /// sorti du même découpage. Ce dernier doit être nommé explicitement en
+    /// `alsoIncluding` — même raison que `ComposerHostRules` et les deux
+    /// compagnons de `composerSurfaceCompanions` avant lui : il ne porte PAS
+    /// le préfixe `StoryViewModel+…`, donc le glob ne l'attrape pas, et sans
+    /// lui toute garde négative dont l'interdit a suivi les règles pures
+    /// passerait au vert en lisant la moitié qui ne les contient plus.
+    static let storyViewModelPath = "Meeshy/Features/Main/ViewModels/StoryViewModel.swift"
+    static let storyViewModelCompanions = ["Meeshy/Features/Main/ViewModels/StoryViewModelRules.swift"]
+
+    static func storyViewModelURLs() -> [URL] {
+        unitURLs(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
+
+    static func storyViewModelSource() throws -> String {
+        try unit(storyViewModelPath, alsoIncluding: storyViewModelCompanions)
+    }
 }

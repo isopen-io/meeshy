@@ -350,13 +350,31 @@ describe('ReportService.getReportStats', () => {
 describe('ReportService.getReportsForEntity', () => {
   it('queries by entityType and entityId', async () => {
     const findMany = jest.fn().mockResolvedValue([makeReport()]);
-    const svc = makeService(makePrisma({ findMany }));
+    const count = jest.fn().mockResolvedValue(1);
+    const svc = makeService(makePrisma({ findMany, count }));
 
     await svc.getReportsForEntity('message', 'entity-id');
 
     expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { reportedType: 'message', reportedEntityId: 'entity-id' },
     }));
+  });
+
+  // #4165 — la borne doit vivre DANS la requete Prisma. Un temoin qui n'assert
+  // que la forme du retour resterait vert si le service chargeait TOUT puis
+  // tranchait en memoire : c'est exactement le cout qu'on cherche a supprimer.
+  it('borne la lecture dans la requete, jamais apres coup', async () => {
+    const findMany = jest.fn().mockResolvedValue([makeReport()]);
+    const count = jest.fn().mockResolvedValue(4_200);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    const result = await svc.getReportsForEntity('message', 'entity-id', 40, 20);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 40, take: 20 }));
+    // `total` est le VRAI compte, pas la taille de la page : c'est lui que la
+    // fiche de moderation affiche.
+    expect(result.total).toBe(4_200);
+    expect(result.reports).toHaveLength(1);
   });
 });
 

@@ -31,6 +31,12 @@ const mockIsJWTExpired = jest.fn().mockReturnValue(false);
 const mockAuthManager = {
   getAuthToken: jest.fn().mockReturnValue('test-token'),
   getAnonymousSession: jest.fn().mockReturnValue(null),
+  // Depuis #4213, un compte INSCRIT annonce aussi son jeton de session : sans
+  // lui, le serveur ne peut pas dire quel socket appartient à quelle session,
+  // et révoquer une session laisse l'appareil recevoir tout le temps réel
+  // indéfiniment. Le double rend `null` par défaut — la plupart des témoins ne
+  // parlent pas de session, et une valeur les ferait tous changer de forme.
+  getSessionToken: jest.fn().mockReturnValue(null),
 };
 
 const mockGetConversationApiId = jest.fn().mockReturnValue('conv-api-id');
@@ -85,6 +91,7 @@ jest.mock('@/services/auth-manager.service', () => ({
   authManager: {
     getAuthToken: (...args: unknown[]) => mockAuthManager.getAuthToken(...args),
     getAnonymousSession: (...args: unknown[]) => mockAuthManager.getAnonymousSession(...args),
+    getSessionToken: (...args: unknown[]) => mockAuthManager.getSessionToken(...args),
   },
 }));
 
@@ -183,6 +190,11 @@ describe('ConnectionService', () => {
     mockIo.mockReturnValue(mockSocket);
     mockAuthManager.getAuthToken.mockReturnValue('test-token');
     mockAuthManager.getAnonymousSession.mockReturnValue(null);
+    // Remis à `null` comme ses deux voisins : `clearAllMocks` efface les
+    // APPELS, jamais les implémentations posées par un témoin précédent — un
+    // jeton de session laissé là ferait échouer tous les témoins qui
+    // comparent la charge du handshake par égalité stricte.
+    mockAuthManager.getSessionToken.mockReturnValue(null);
     mockIsJWTExpired.mockReturnValue(false);
   });
 
@@ -689,6 +701,24 @@ describe('ConnectionService', () => {
 
       expect(resolveHandshakeAuth()).toEqual({ sessionToken: 'anon_1755_abc' });
       expect(result).toBe(mockSocket);
+    });
+
+    // Le jeton de SESSION voyage AVEC le JWT pour un compte inscrit (#4213).
+    //
+    // Un socket inscrit s'authentifiait au JWT seul : `UserSession.sessionToken`
+    // stocke le hash d'un jeton que rien n'obligeait à transmettre ici, si bien
+    // qu'il n'existait AUCUN moyen de dire quel socket appartient à quelle
+    // session. Révoquer une session passait la ligne à `isValid: false` et
+    // l'appareil continuait de tout recevoir — un socket n'étant authentifié
+    // qu'une fois, au connect, et jamais revérifié.
+    it('carries the registered session token alongside the JWT', () => {
+      mockAuthManager.getAuthToken.mockReturnValue('valid-token');
+      mockAuthManager.getSessionToken.mockReturnValue('sess-abc');
+
+      const svc = new ConnectionService();
+      svc.initializeConnection();
+
+      expect(resolveHandshakeAuth()).toEqual({ token: 'valid-token', sessionToken: 'sess-abc' });
     });
 
     it('re-reads the credentials at every handshake, never the ones captured at creation', () => {

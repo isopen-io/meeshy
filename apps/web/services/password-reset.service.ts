@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { PASSWORD_MIN_LENGTH } from '@meeshy/shared/utils/validation';
 
 /**
@@ -68,7 +69,7 @@ class PasswordResetService {
         requestBody.captchaToken = request.captchaToken;
       }
 
-      const response = await fetch(buildApiUrl('/auth/forgot-password'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.forgotPassword), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +99,7 @@ class PasswordResetService {
    */
   async resetPassword(request: ResetPasswordRequest): Promise<ResetPasswordResponse> {
     try {
-      const response = await fetch(buildApiUrl('/auth/reset-password'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.resetPassword), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -141,7 +142,7 @@ class PasswordResetService {
   async verifyToken(request: VerifyTokenRequest): Promise<VerifyTokenResponse> {
     try {
       // Use GET with query parameter as expected by backend
-      const url = new URL(buildApiUrl('/auth/reset-password/verify-token'));
+      const url = new URL(buildApiUrl(API_ENDPOINTS.auth.resetPasswordVerifyToken));
       url.searchParams.set('token', request.token);
 
       const response = await fetch(url.toString(), {

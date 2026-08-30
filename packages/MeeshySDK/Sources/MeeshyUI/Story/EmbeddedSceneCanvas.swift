@@ -71,6 +71,30 @@ public struct EmbeddedSceneCanvas: View {
     /// sans le cookie laisserait le canvas sur sa version périmée.
     public var loadedImagesVersion: UInt64
 
+    /// **Le canvas doit RETIRER son calque de dessin persisté pendant qu'une
+    /// surface de dessin est active** (#4092).
+    ///
+    /// Sans ce drapeau, le trait s'affiche DEUX fois : une par le calque du
+    /// canvas — projeté dans l'espace design —, une par la surface live, en
+    /// coordonnées de bounds. Les deux ne tombent pas au même endroit : le
+    /// symptôme est un dessin « écrit en double », décalé (défaut 2026-05-27,
+    /// déjà payé par l'atelier).
+    ///
+    /// Il est REÇU, jamais déduit : la scène incrustée ne sait pas si son hôte
+    /// a monté une surface de dessin par-dessus elle.
+    public var isDrawingOverlayActive: Bool = false
+
+    /// **L'édition de texte EN LIGNE, sur la scène incrustée** (#4401).
+    ///
+    /// `StoryCanvasUIView` sait éditer un texte à sa vraie place depuis
+    /// toujours — c'est ce que l'atelier utilise. La scène incrustée ne
+    /// transmettait aucune des trois entrées, si bien qu'un objet texte posé
+    /// ici n'aurait eu aucun moyen d'être rempli : une coquille vide, donc
+    /// invisible, donc un contrôle sans effet.
+    public var editingTextId: String?
+    public var onInlineTextChanged: ((String, String) -> Void)?
+    public var onInlineTextEditEnded: ((String) -> Void)?
+
     public init(
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
@@ -79,6 +103,10 @@ public struct EmbeddedSceneCanvas: View {
         onBackgroundTapped: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
         loadedImagesVersion: UInt64 = 0,
+        isDrawingOverlayActive: Bool = false,
+        editingTextId: String? = nil,
+        onInlineTextChanged: ((String, String) -> Void)? = nil,
+        onInlineTextEditEnded: ((String) -> Void)? = nil,
         referenceViewport: CGSize = CGSize(width: 402, height: 874)
     ) {
         self._slide = slide
@@ -88,6 +116,10 @@ public struct EmbeddedSceneCanvas: View {
         self.onBackgroundTapped = onBackgroundTapped
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
+        self.isDrawingOverlayActive = isDrawingOverlayActive
+        self.editingTextId = editingTextId
+        self.onInlineTextChanged = onInlineTextChanged
+        self.onInlineTextEditEnded = onInlineTextEditEnded
         self.referenceViewport = referenceViewport
     }
 
@@ -116,7 +148,11 @@ public struct EmbeddedSceneCanvas: View {
             StoryComposerCanvasView(
                 slide: $slide,
                 onItemTapped: onItemTapped,
+                editingTextId: editingTextId,
+                onInlineTextChanged: onInlineTextChanged,
+                onInlineTextEditEnded: onInlineTextEditEnded,
                 onBackgroundTapped: onBackgroundTapped,
+                isDrawingOverlayActive: isDrawingOverlayActive,
                 loadedImages: loadedImages,
                 loadedImagesVersion: loadedImagesVersion,
                 // Rayon compensé par l'échelle : la carte est rendue à sa taille

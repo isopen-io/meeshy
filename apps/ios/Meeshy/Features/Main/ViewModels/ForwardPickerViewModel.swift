@@ -266,19 +266,15 @@ final class ForwardPickerViewModel: ObservableObject {
             // Le filtre étant CLIENT, une seule page rendrait inatteignable
             // tout ami au-delà d'elle (Volet C : « paginé jusqu'à épuisement »).
             var collected: [FriendRequest] = []
-            var offset = 0
+            var cursor: String?
             while collected.count < Self.friendsFetchCap {
-                let page = try await friendService.allFriendRequests(
-                    status: "accepted",
-                    offset: offset,
-                    limit: Self.friendsPageSize
+                let page = try await friendService.friendRequests(
+                    direction: .any, status: "accepted", q: nil, cursor: cursor, limit: Self.friendsPageSize
                 )
                 collected.append(contentsOf: page.data)
-                // `hasMore` peut manquer sur un gateway antérieur à la Task 1 :
-                // le repli sur la taille de page garde le comportement correct.
                 let more = page.pagination?.hasMore ?? (page.data.count == Self.friendsPageSize)
-                if !more || page.data.isEmpty { break }
-                offset += Self.friendsPageSize
+                cursor = page.pagination?.nextCursor
+                if !more || page.data.isEmpty || cursor == nil { break }
             }
             let lowered = query.lowercased()
             return collected.compactMap { request -> ForwardTarget? in
@@ -297,16 +293,20 @@ final class ForwardPickerViewModel: ObservableObject {
         }
     }
 
-    /// Répertoire (`ContactDirectoryService.list`) filtré `query` côté
+    /// Répertoire (`ContactDirectoryService.page`) filtré `query` côté
     /// serveur, restreint aux contacts qui ont un compte Meeshy (`.meeshy`) —
     /// un contact hors plateforme n'a pas de `userId` vers qui transférer.
+    ///
+    /// Une seule page, sans curseur : ce site cherche, il ne parcourt pas. La
+    /// borne est celle de la recherche, pas celle du carnet.
     private func fetchDirectoryContactTargets(query: String) async -> [ForwardTarget] {
         do {
-            let page = try await contactDirectoryService.list(
-                offset: 0,
+            let page = try await contactDirectoryService.page(
+                cursor: nil,
                 limit: Self.contactSearchLimit,
                 filter: .meeshy,
-                query: query
+                query: query,
+                updatedSince: nil
             )
             return page.data.compactMap(Self.makeContactTarget(from:))
         } catch {

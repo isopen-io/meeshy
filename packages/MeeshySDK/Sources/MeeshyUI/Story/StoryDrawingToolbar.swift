@@ -9,11 +9,28 @@ import MeeshySDK
 /// au-dessus de la bande pour qu'elles ne soient pas masquées.
 ///
 /// Vide tant que `viewModel.drawingEditingMode` est `.inactive`.
-struct StoryDrawingToolbar: View {
+/// **`public` depuis le #4092** : le composer unifié monte CE contrôleur, pas
+/// une bande simplifiée.
+///
+/// J'en avais écrit une — cinq pastilles, une glissière, une gomme — au motif
+/// qu'elle « suffisait » à la vue `3b`. C'était une RÉÉCRITURE, exactement ce
+/// que la leçon 336 interdit : elle perdait le pinceau (stylo / marqueur /
+/// gomme), le lissage, l'annulation par TRAIT, et l'édition par-trait — quatre
+/// capacités que l'atelier a et que le plateau n'aurait jamais eues.
+///
+/// Le porteur l'a vu au premier coup d'œil : « l'agent a testé l'outil Dessin,
+/// mais n'a pas réutilisé l'outil dessin qui existe avec les pinceaux, gomme,
+/// etc. » Un corps, deux montages — ici littéralement le même.
+public struct StoryDrawingToolbar: View {
     @ObservedObject var viewModel: StoryComposerViewModel
     var bottomInset: CGFloat = 0
 
-    var body: some View {
+    public init(viewModel: StoryComposerViewModel, bottomInset: CGFloat = 0) {
+        self.viewModel = viewModel
+        self.bottomInset = bottomInset
+    }
+
+    public var body: some View {
         if case .active(let selectedStrokeId, let expandedTool) = viewModel.drawingEditingMode {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)

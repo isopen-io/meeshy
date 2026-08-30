@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Shield, Lock, Key, CheckCircle, XCircle, Unlock } from 'lucide-react';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 import { useI18n } from '@/hooks/use-i18n';
 
@@ -40,9 +41,13 @@ export function UserSecuritySection({
     }
   };
 
+  // Une adresse pour la SÉCURITÉ d'un compte, deux champs (#4154). Les trois
+  // `POST` d'époque (`/unlock`, `/enable-2fa`, `/disable-2fa`) restent servis
+  // comme alias, mais chacun était une route avec sa propre garde — et trois
+  // d'entre elles avaient omis la hiérarchie.
   const handleUnlockAccount = async () => {
     try {
-      await apiService.post(`/admin/users/${userId}/unlock`);
+      await apiService.patch(API_ENDPOINTS.admin.usersByUserIdSecurity(userId), { unlock: true });
       toast.success(t('security.accountUnlocked'));
       onUpdate();
     } catch (error: unknown) {
@@ -53,7 +58,7 @@ export function UserSecuritySection({
   const handleToggle2FA = async () => {
     try {
       const has2FA = !!user.twoFactorEnabledAt;
-      await apiService.post(`/admin/users/${userId}/${has2FA ? 'disable' : 'enable'}-2fa`);
+      await apiService.patch(API_ENDPOINTS.admin.usersByUserIdSecurity(userId), { twoFactorEnabled: !has2FA });
       toast.success(t(has2FA ? 'security.twoFactorDisabled' : 'security.twoFactorEnabled'));
       onUpdate();
     } catch (error: unknown) {

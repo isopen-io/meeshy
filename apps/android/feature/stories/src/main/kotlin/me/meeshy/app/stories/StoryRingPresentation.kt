@@ -1,5 +1,6 @@
 package me.meeshy.app.stories
 
+import me.meeshy.sdk.util.resolveMediaUrl
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.StoryGroup
 import me.meeshy.sdk.story.hasUnviewed
@@ -60,8 +61,3 @@ object StoryTrayBuilder {
         )
 }
 
-internal fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-    url.startsWith("http") -> url
-    mediaBaseUrl == null -> url
-    else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
-}

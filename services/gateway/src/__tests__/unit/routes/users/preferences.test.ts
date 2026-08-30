@@ -71,6 +71,10 @@ function makePrisma(overrides: Record<string, any> = {}) {
   return {
     user: {
       findFirst: jest.fn<any>().mockResolvedValue(null),
+      // `computeUserStats` relit `createdAt` par `findUnique`, DANS le même
+      // `Promise.all` que les comptages : sans cette surface, l'accès lève
+      // pendant la construction du tableau et la route rend 500.
+      findUnique: jest.fn<any>().mockResolvedValue({ createdAt: new Date('2020-01-01') }),
       findMany:  jest.fn<any>().mockResolvedValue([]),
       count:     jest.fn<any>().mockResolvedValue(0),
     },
@@ -87,7 +91,8 @@ function makePrisma(overrides: Record<string, any> = {}) {
     post: {
       count: jest.fn<any>().mockResolvedValue(0),
     },
-    $runCommandRaw: jest.fn<any>().mockResolvedValue({ n: 0 }),
+    // `$runCommandRaw` n'est plus appelé : le comptage des traductions passe
+    // par l'API typée depuis que la route délègue à `computeUserStats`.
     ...overrides,
   } as any;
 }
@@ -340,9 +345,14 @@ describe("GET /users/search — l'ORDRE obéit à la loi de la présence", () =>
   it('la projection `select` reste celle du schéma de réponse — le tri change, pas la charge', async () => {
     const { select } = await search({ role: 'USER' }, byName());
 
+    // `email` a été retiré de la projection ET du schéma de réponse en #4145 :
+    // la route acceptait de chercher `contains: "gmail.com"` et servait les
+    // adresses trouvées, cent par page, à tout compte authentifié. On peut
+    // encore chercher PAR une adresse (en correspondance exacte), jamais s'en
+    // faire servir une. Le témoin dédié : `search-email-privacy.test.ts`.
     expect(select).toEqual({
       id: true, username: true, firstName: true, lastName: true, displayName: true,
-      email: true, isOnline: true, lastActiveAt: true, systemLanguage: true,
+      isOnline: true, lastActiveAt: true, systemLanguage: true,
     });
   });
 });

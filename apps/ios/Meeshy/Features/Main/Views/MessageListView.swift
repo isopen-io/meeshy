@@ -618,6 +618,10 @@ struct MessageListView: UIViewControllerRepresentable {
         // de `readingMode`/`hasReachedOldest`, qui doivent donc déjà être à
         // jour au moment de son premier appel.
         vc.readingMode = readingMode
+        // #3947 — cf. `updateUIViewController` : la liste ne se dessine
+        // pas sous un pane opaque. Posé dès le montage, sinon une ouverture
+        // DIRECTE en Rivière rendrait le fil une fois pour rien.
+        vc.view.isHidden = !MessageListViewController.rendersThread(readingMode)
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory
@@ -694,6 +698,27 @@ struct MessageListView: UIViewControllerRepresentable {
         // réellement (garde `oldValue != newValue`) : une réaffectation
         // identique à chaque tick SwiftUI est un no-op.
         vc.readingMode = readingMode
+        // #3947 — **la liste ne se dessine pas sous ce qui la recouvre.**
+        //
+        // La Rivière (`RiverConversationHost`) et le Résumé
+        // (`LivingSummaryHost`) sont posés PAR-DESSUS le fil dans le même
+        // ZStack, avec un fond OPAQUE. Le représentable, lui, reste monté —
+        // et c'est VOULU : le démonter perdrait la position de lecture, qui
+        // est la promesse du milestone. Mais tant qu'il est visible aux yeux
+        // d'UIKit, la `UICollectionView` compose, mesure ses cellules
+        // self-sizing et réalise leurs `UIHostingConfiguration` pour des
+        // pixels que personne ne voit.
+        //
+        // `isHidden` retire le RENDU sans toucher aux DONNÉES : le contrôleur
+        // reste vivant, ses abonnements aussi, son `contentOffset` intact —
+        // donc le retour au fil est instantané et à la bonne place, sans
+        // rechargement. Suspendre les abonnements ferait payer au RETOUR ce
+        // qu'on économise pendant, et le retour est la promesse du milestone.
+        //
+        // La condition n'est pas réécrite : `rendersThread` est déjà la loi
+        // qui distingue ces deux modes (elle gouverne le suivi de lecture
+        // depuis le 2026-08-25). Une seconde formulation aurait divergé.
+        vc.view.isHidden = !MessageListViewController.rendersThread(readingMode)
         vc.onMessagesSeen = onMessagesSeen
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onViewSenderStory = onViewSenderStory

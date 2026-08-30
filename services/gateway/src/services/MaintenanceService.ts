@@ -3,6 +3,7 @@
  * Gestion des tâches de maintenance automatiques
  */
 
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { AttachmentService } from './attachments';
@@ -807,8 +808,8 @@ export class MaintenanceService {
               }
             });
 
-            const deleteNowLink = `${baseUrl}/api/v1/me/delete-account/delete-now?token=${newConfirmToken}`;
-            const cancelLink = `${baseUrl}/api/v1/me/delete-account/cancel?token=${newCancelToken}`;
+            const deleteNowLink = `${baseUrl}${apiPath('/me/delete-account/delete-now')}?token=${newConfirmToken}`;
+            const cancelLink = `${baseUrl}${apiPath('/me/delete-account/cancel')}?token=${newCancelToken}`;
             // La date se lit DANS l'e-mail, donc dans la langue de l'e-mail :
             // un `'fr-FR'` en dur datait « à la française » un courrier
             // allemand ou espagnol.

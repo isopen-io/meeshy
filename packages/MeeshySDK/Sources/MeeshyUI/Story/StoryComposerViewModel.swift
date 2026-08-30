@@ -127,8 +127,8 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// changement réel (sinon la boucle flags → objectWillChange → trigger →
     /// push ne se poserait jamais ; la dédup du store ferme le cycle).
     /// Setter interne (pas `private(set)`) : muté par l'extension `+History`.
-    @Published var canUndoGlobal = false
-    @Published var canRedoGlobal = false
+    @Published public internal(set) var canUndoGlobal = false
+    @Published public internal(set) var canRedoGlobal = false
 
     /// Intervalle du debounce de capture. `var` pour les tests uniquement
     /// (à poser AVANT le premier accès à `historyTrigger`, lazy figé).
@@ -141,7 +141,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// TOTALE par construction (toute mutation passe par objectWillChange) ;
     /// la dédup du HistoryStore absorbe les émissions sans changement de
     /// `slides` (sélections, états d'UI…).
-    private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
+    public private(set) lazy var historyTrigger: AnyPublisher<Void, Never> = objectWillChange
         .debounce(for: .seconds(historyDebounceInterval), scheduler: DispatchQueue.main)
         .map { _ in () }
         .eraseToAnyPublisher()
@@ -162,7 +162,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
     /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
     /// centré, le modèle reste la source de vérité pour le rendu et l'export.
-    @Published var textEditingMode: TextEditingMode = .inactive
+    /// `public` en LECTURE (#4401) : le meuble monte le contrôleur de texte et
+    /// relaie l'édition en ligne quand un texte est actif. L'ÉCRITURE reste au
+    /// module — elle passe par `enterTextEditingMode` / `exitTextEditingMode`,
+    /// qui gardent le verrou du badge de republication et suppriment les
+    /// coquilles vides. Un site d'appel qui poserait le mode à la main
+    /// contournerait les deux.
+    @Published public internal(set) var textEditingMode: TextEditingMode = .inactive
 
     // MARK: - Active Tool
 
@@ -198,7 +204,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
     /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
     /// `StoryComposerViewModel+DrawingEditing.swift`).
-    @Published var drawingEditingMode: DrawingEditingMode = .inactive
+    /// `public` en LECTURE : le rail *leading* montre les contrôleurs de
+    /// l'outil ouvert et TEINTE celui dont le panneau est déplié (directive
+    /// porteur 2026-08-30). L'écriture reste au module — elle passe par
+    /// `beginDrawing` / `endDrawing` / `setExpandedDrawingTool`, qui posent les
+    /// drapeaux par paires.
+    @Published public internal(set) var drawingEditingMode: DrawingEditingMode = .inactive
 
     /// Plein écran de TRACÉ (user 2026-07-11 v2) : l'outil dessin s'ouvre en
     /// mode LISTE (band avec les traits, rien d'activé) ; la sélection d'un
@@ -287,7 +298,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // `reset()` — l'ancien @State View survivait à `viewModel.reset()` et la
     // chaîne de sync ré-injectait l'effet dans le slide vierge (la classe de
     // bug que `resetLocalState()` documente).
-    @Published var openingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE ET EN ÉCRITURE (#4403) : la bande de fond du
+    /// plateau choisit l'effet comme le fait le panneau de l'atelier, et la
+    /// persistance passe par la même chaîne `granularCanvasSync` — aucun
+    /// callback de synchro à câbler par surface.
+    @Published public var openingEffect: StoryTransitionEffect?
     @Published var closingEffect: StoryTransitionEffect?
 
     // Per-slide background image transforms (persisted across slide changes)

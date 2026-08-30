@@ -15,7 +15,7 @@ jest.mock('@/hooks/useI18n', () => ({
 jest.mock('sonner');
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (path: string) => `https://api.example.com${path}`,
-  API_ENDPOINTS: { AUTH: { REGISTER: '/auth/register' }, JOIN_LINK: '/join' },
+  API_ENDPOINTS: { auth: { register: '/auth/register' }, JOIN_LINK: '/join' },
 }));
 jest.mock('@/lib/geolocation', () => ({
   requestBrowserGeolocation: jest.fn(),
@@ -48,11 +48,12 @@ describe('useRegisterForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     // Reset auth store
+    // `refreshToken` retiré de `AuthState` (#4405, étape 3) — rien ne
+    // produisait jamais de valeur pour ce champ (mesuré).
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
       authToken: null,
-      refreshToken: null,
       sessionToken: null,
       sessionExpiry: null,
       isAuthChecking: false,

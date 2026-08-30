@@ -21,20 +21,17 @@ import XCTest
 final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
 
     private func surfaceSource() throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: surfaceURL(), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerSurfaceSource())
     }
 
     private func hostSource() throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: hostURL(), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     private func surfaceURL() -> URL {
         composerRoot().appendingPathComponent("ComposerDocumentSurface.swift")
     }
 
-    private func hostURL() -> URL {
-        composerRoot().appendingPathComponent("MeeshyComposerHost.swift")
-    }
 
     private func composerRoot() -> URL {
         URL(fileURLWithPath: #filePath)
@@ -116,7 +113,7 @@ final class ComposerToolRowLeadingAccessoryGuardTests: XCTestCase {
 
     func test_host_documentSurface_noLongerOverlaysTheLocationTileOnTheWholeSurface() throws {
         let source = try hostSource()
-        guard let block = body(of: "private var documentSurface: some View {", in: source) else {
+        guard let block = body(of: "var documentSurface: some View {", in: source) else {
             return XCTFail("`documentSurface` introuvable dans le meuble — la garde ne mesurerait rien.")
         }
         XCTAssertFalse(

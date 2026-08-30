@@ -121,7 +121,13 @@ function leftoverRow(state: Exclude<LeftoverState, 'none'>, userId: string) {
   // L'appelant des portes d'AJOUT doit porter un rang qui l'autorise ; sinon le
   // 403 de rang masquerait le 403 de bannissement qu'on mesure.
   const role = userId === ACTOR_ID ? 'admin' : 'member';
-  const base = { id: userId === ACTOR_ID ? ACTOR_ROW_ID : EXISTING_ROW_ID, userId, conversationId: CONV_ID, role, joinedAt: new Date('2026-01-01') };
+  const base = {
+    id: userId === ACTOR_ID ? ACTOR_ROW_ID : EXISTING_ROW_ID, userId, conversationId: CONV_ID, role, joinedAt: new Date('2026-01-01'),
+    // #4353 — la branche `already-member` de `joinAsRegistered` relit ce
+    // champ (`resolveEntryRights`) pour figer `canViewHistory` : absent, il
+    // lève sur un `undefined.canViewHistory`.
+    permissions: { canSendMessages: true, canSendFiles: true, canSendImages: true, canViewHistory: true },
+  };
   if (state === 'active') return { ...base, isActive: true, bannedAt: null };
   if (state === 'departed') return { ...base, isActive: false, bannedAt: null, leftAt: new Date('2026-02-01') };
   return { ...base, isActive: false, bannedAt: new Date('2026-02-01'), leftAt: new Date('2026-02-01') };
@@ -166,6 +172,10 @@ function buildPrisma(rows: any[]) {
     },
     participant: {
       findFirst: jest.fn<any>(async (args: any) => rowsMatching(rows, args?.where)[0] ?? null),
+      // #4353 — la branche `already-member` de `joinAsRegistered` (le cœur
+      // partagé de #4167) relit la ligne PAR ID avant de répondre : sans ce
+      // double, elle lève sur une méthode absente du fake.
+      findUnique: jest.fn<any>(async (args: any) => rows.find((row) => row.id === args?.where?.id) ?? null),
       findMany: jest.fn<any>(async (args: any) => rowsMatching(rows, args?.where)),
       create: jest.fn<any>(async (args: any) => ({ id: 'created-row', ...args?.data })),
       update: jest.fn<any>(async (args: any) => ({ id: args?.where?.id, ...args?.data })),
@@ -182,9 +192,20 @@ function buildPrisma(rows: any[]) {
       findFirst: jest.fn<any>().mockResolvedValue({
         id: LINK_ID, linkId: 'lnk', identifier: 'mshy_x', conversationId: CONV_ID,
         isActive: true, expiresAt: null, currentUses: 0,
+        // #4353 — `POST /conversations/join/:linkId` traverse désormais
+        // `admitLinkEntry` (#4167), qui LIT ces sept champs sur CHAQUE appel
+        // (`allowedIpRanges.length` lève sur `undefined`) : les fournir tous,
+        // au repos, pour que ce double reste un lien PASSANT par défaut.
+        maxUses: null, maxConcurrentUsers: null, currentConcurrentUsers: 0,
+        maxUniqueSessions: null, currentUniqueSessions: 0,
+        allowedIpRanges: [], requireAccount: false, allowedLanguages: [],
         conversation: { id: CONV_ID, title: 'Test', type: 'group' },
       }),
       update: jest.fn<any>().mockResolvedValue({}),
+      // La réclamation d'usage du lien (critère 3 de #4167) passe par un
+      // `updateMany` gardé par le `WHERE`, plus par un simple `update` — sans
+      // ce double, `claimLinkUse` lève sur une méthode absente du fake.
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>(),
     },
@@ -251,8 +272,14 @@ function setup(state: LeftoverState, targetUserId: string) {
   return { fastify, prisma, reply: createMockReply() };
 }
 
+// #4353 — `type: 'user'` est la forme RÉELLE que pose `createUnifiedAuthMiddleware`
+// pour un inscrit (cf. `conversation-sharing.test.ts:makeRequest`) : la porte
+// du lien la lit désormais pour dériver l'identité d'admission
+// (`deriveLinkAdmissionIdentity`) — son absence faisait passer l'appelant pour
+// un INVITÉ (`{kind:'guest'}`), qui crée un participant `anonymous` neuf au
+// lieu de rejoindre sur la ligne de l'acteur.
 const actorContext = {
-  userId: ACTOR_ID, isAuthenticated: true, isAnonymous: false,
+  type: 'user', userId: ACTOR_ID, isAuthenticated: true, isAnonymous: false,
   registeredUser: { id: ACTOR_ID, role: 'USER' },
 };
 
@@ -267,7 +294,10 @@ describe('POST /conversations/join/:linkId', () => {
   async function join(state: LeftoverState) {
     const ctx = setup(state, ACTOR_ID);
     const route = routeFor(ctx.fastify, 'POST', 'join/:linkId');
-    await route.handler({ params: { linkId: 'lnk' }, body: {}, authContext: actorContext }, ctx.reply);
+    // #4353 — cette porte lit désormais `request.headers`/`request.ip`
+    // (`resolveClientIp`, pour `allowedIpRanges`) : un vrai `FastifyRequest`
+    // les porte toujours, ce double factice doit donc les fournir aussi.
+    await route.handler({ params: { linkId: 'lnk' }, body: {}, headers: {}, ip: '127.0.0.1', authContext: actorContext }, ctx.reply);
     return ctx;
   }
 
@@ -294,9 +324,16 @@ describe('POST /conversations/join/:linkId', () => {
   });
 
   it('refuse un banni au lieu de lui répondre « vous êtes déjà membre »', async () => {
-    const { prisma } = await join('banned');
+    // #4353 — cette porte délègue désormais à `admitLinkEntry`, qui rend son
+    // verdict par `{status, code, message}` plutôt que par un helper nommé :
+    // l'adaptateur mappe TOUT refus par `sendError(status, code, {message})`
+    // (même convention que `POST /anonymous/join/:linkId` et `POST
+    // /links/:key/members`), jamais par `sendForbidden` — un 403 spécifique
+    // à un helper aurait exigé de réécrire le mapping code-par-code, soit la
+    // recopie de police que #4167 ferme.
+    const { prisma, reply } = await join('banned');
 
-    expect(mockSendForbidden).toHaveBeenCalled();
+    expect(mockSendError).toHaveBeenCalledWith(reply, 403, 'BANNED', expect.objectContaining({ message: expect.any(String) }));
     expect(prisma.participant.update).not.toHaveBeenCalled();
     expect(prisma.participant.create).not.toHaveBeenCalled();
   });
@@ -319,7 +356,9 @@ describe('POST /conversations/join/:linkId', () => {
   it('ne compte pas une réintégration comme un nouvel usage du lien deux fois', async () => {
     const { prisma } = await join('departed');
 
-    expect(prisma.conversationShareLink.update).toHaveBeenCalledTimes(1);
+    // #4353 — l'incrément passe désormais par le `updateMany` ATOMIQUE de
+    // #4167 (`claimLinkUse`), plus par un `update` simple.
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -435,8 +474,10 @@ describe('Avis d’arrivée — les trois portes des inscrits', () => {
     const ctx = setup(state, isLinkDoor ? ACTOR_ID : TARGET_ID);
     const route = routeFor(ctx.fastify, 'POST', pathFragment);
     const params = isLinkDoor ? { linkId: 'lnk' } : { id: CONV_ID };
+    // #4353 — la porte du lien lit `request.headers`/`request.ip` ; les deux
+    // autres l'ignorent, donc les fournir ici ne leur coûte rien.
     await route.handler(
-      { params, body: { userId: TARGET_ID }, authContext: actorContext },
+      { params, body: { userId: TARGET_ID }, headers: {}, ip: '127.0.0.1', authContext: actorContext },
       ctx.reply
     );
     return ctx;

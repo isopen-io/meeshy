@@ -3,7 +3,7 @@ package me.meeshy.sdk.model.report
 import kotlinx.serialization.Serializable
 
 /**
- * The wire body for `POST /admin/reports` (any authenticated user may file a report; the gateway
+ * The wire body for `POST /reports` (S2 — any authenticated user may file a report; the gateway
  * fills `reporterId`/`reporterName` from the auth context, so the client omits them).
  *
  * Matches the gateway `createReportSchema`: `reportedType` ∈ {message,user,conversation,community},
@@ -21,7 +21,7 @@ public data class CreateReportRequest(
 )
 
 /**
- * Ack payload of `POST /admin/reports`. The gateway returns the created report object; the client
+ * Ack payload of `POST /reports`. The gateway returns the created report object; the client
  * only needs to know the call succeeded, so every field is optional and unknown keys are ignored.
  */
 @Serializable
@@ -56,7 +56,7 @@ public object ReportRequestBuilder {
         build("message", messageId, reason, details)
 
     /**
-     * Builds a post-report body — le schema gateway (`admin/reports.ts`) accepte
+     * Builds a post-report body — le schema gateway (`routes/reports/index.ts`) accepte
      * `'post'` au meme titre que `'user'`/`'message'`. Memes gardes que [forUser].
      */
     public fun forPost(postId: String, reason: ReportReason, details: String?): CreateReportRequest? =

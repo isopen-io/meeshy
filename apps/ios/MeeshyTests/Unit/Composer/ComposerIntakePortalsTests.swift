@@ -19,11 +19,7 @@ import XCTest
 final class ComposerIntakePortalsTests: XCTestCase {
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
     }
 
     private func compact(_ t: String) -> String {
@@ -52,8 +48,14 @@ final class ComposerIntakePortalsTests: XCTestCase {
         var found: Set<String> = []
         for ligne in code.components(separatedBy: .newlines) {
             let t = ligne.trimmingCharacters(in: .whitespaces)
-            guard t.hasPrefix("@State private var shows") else { continue }
-            let sansPrefixe = t.dropFirst("@State private var ".count)
+            // #4102 — le découpage du meuble a retiré `private` de ses membres
+            // (Swift ne le rend visible qu'aux extensions du même fichier). Les
+            // DEUX formes sont lues : l'inventaire doit rester vrai quel que
+            // soit le niveau d'accès, sinon il compte zéro et passe au vert.
+            let prefixe = ["@State private var shows", "@State var shows"]
+                .first(where: t.hasPrefix)
+            guard let prefixe else { continue }
+            let sansPrefixe = t.dropFirst(prefixe.count - "shows".count)
             let nom = sansPrefixe.prefix { $0.isLetter || $0.isNumber }
             found.insert(String(nom))
         }
@@ -65,10 +67,26 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// serait sur DEUX ensembles vides, ce qui passe.
     func test_lesEtatsDePresentation_sontLisiblesEtNombreux() throws {
         let etats = declaredPresentationStates(in: try hostSource())
-        XCTAssertGreaterThanOrEqual(etats.count, 8,
-            "Le meuble déclare au moins huit sélecteurs — en lire moins veut dire que la lecture a cassé.")
+        // **Trois depuis #4483**, et la baisse est ENCORE le correctif. Le
+        // compte est passé de huit à quatre au #4467 (les feuilles devenues un
+        // `ComposerPortal?`), puis de quatre à trois ici : la porte du son
+        // n'offre plus un dialogue « emprunter / enregistrer » avant d'ouvrir
+        // quoi que ce soit — elle ouvre le micro, et les deux autres
+        // provenances vivent SOUS lui, dans la même feuille. Un sélecteur qui
+        // ne sélectionne plus rien n'a pas d'état à déclarer.
+        //
+        // Ce qui reste sont les présentations qui ne sont PAS des feuilles — la
+        // photothèque, l'importateur de fichiers — et l'unique dialogue de
+        // choix encore justifié, celui du média (caméra / photothèque /
+        // fichier ne posent pas le même objet).
+        //
+        // Le plancher reste un plancher : il garde contre la lecture qui casse
+        // (zéro état lu passerait sinon au vert), jamais contre une baisse
+        // voulue et motivée.
+        XCTAssertGreaterThanOrEqual(etats.count, 3,
+            "Le meuble déclare au moins trois sélecteurs — en lire moins veut dire que la lecture a cassé.")
         XCTAssertTrue(etats.contains("showsPhotoPicker"))
-        XCTAssertTrue(etats.contains("showsLocationPicker"))
+        XCTAssertTrue(etats.contains("showsFileImporter"))
     }
 
     /// **LA garde de #4120 — l'inventaire.** Chaque état de présentation a son
@@ -78,7 +96,7 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// surface) ET sur sa récidive (un neuvième sélecteur ajouté sans lecteur).
     func test_chaqueSelecteurDuMeuble_estMonteAuDessusDeLAiguillage() throws {
         let code = try hostSource()
-        guard let portails = declarationBody(startingAt: "private var surfaceWithIntakePortals: some View",
+        guard let portails = declarationBody(startingAt: "var surfaceWithIntakePortals: some View",
                                             in: code) else {
             return XCTFail("Les portails doivent vivre dans `surfaceWithIntakePortals` — la vue qui "
                            + "enveloppe l'AIGUILLAGE, pas une surface. C'est là que le défaut se ferme.")
@@ -102,7 +120,7 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// la règle « un portail appartient au meuble » est fausse quelque part.
     func test_laSurfaceDocument_neMonteAucunPortail() throws {
         let code = try hostSource()
-        guard let document = declarationBody(startingAt: "private var documentSurface: some View",
+        guard let document = declarationBody(startingAt: "var documentSurface: some View",
                                              in: code) else {
             return XCTFail("`documentSurface` est introuvable — la garde doit être re-pointée")
         }
@@ -120,7 +138,7 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// document.
     func test_leControleDeDecouvrabilite_estMonteAuDessusDeLAiguillage() throws {
         let code = try hostSource()
-        guard let portails = declarationBody(startingAt: "private var surfaceWithIntakePortals: some View",
+        guard let portails = declarationBody(startingAt: "var surfaceWithIntakePortals: some View",
                                             in: code) else {
             return XCTFail("`surfaceWithIntakePortals` est introuvable")
         }
@@ -140,4 +158,67 @@ final class ComposerIntakePortalsTests: XCTestCase {
         XCTAssertTrue(compacte.contains("surfaceWithIntakePortals"),
                       "Le body doit monter la vue qui porte les portails.")
     }
+
+    // MARK: - #4467 — une SEULE feuille, et le nombre est la garde
+
+    /// **Une règle de PLACEMENT ne dit rien du NOMBRE**, et c'est ce que
+    /// l'inventaire ci-dessus ne pouvait pas dire.
+    ///
+    /// Il garantissait que chaque booléen de présentation est LU au-dessus de
+    /// l'aiguillage — vrai, utile, et insuffisant : huit `.sheet(isPresented:)`
+    /// y ont coexisté, chacun parfaitement placé. SwiftUI n'en supporte qu'une
+    /// par vue ; deux booléens vrais dans la même transaction ont **terminé le
+    /// process** trois fois au simulateur.
+    ///
+    /// Ce témoin est celui qui aurait attrapé le défaut : il ne regarde pas où
+    /// sont les feuilles, il les COMPTE.
+    ///
+    /// **La portée est UNE VUE, pas l'unité de fichiers** — et ce cadrage a été
+    /// appris en une passe rouge. Compté sur l'unité entière, ce témoin
+    /// trouvait DEUX feuilles : celle du meuble et celle du bouton d'audience du
+    /// socle. La seconde est légitime — elle est portée par une SOUS-VUE, et
+    /// deux feuilles sur deux vues distinctes ne se disputent rien. C'est
+    /// l'empilement sur UNE vue que SwiftUI refuse.
+    ///
+    /// Une garde de nombre doit donc compter dans la portée exacte de la règle
+    /// qu'elle applique, jamais dans le fichier qui la contient (leçon 344, dans
+    /// sa version « nombre » : une garde posée sur un FICHIER attrape les
+    /// jumelles innocentes de sa cible).
+    func test_leMeuble_neMonteQuUneSeuleFeuille() throws {
+        let code = try hostSource()
+        guard let portails = declarationBody(startingAt: "var surfaceWithIntakePortals: some View",
+                                             in: code) else {
+            return XCTFail("`surfaceWithIntakePortals` est introuvable — la garde ne mesurerait rien.")
+        }
+        let feuilles = portails.components(separatedBy: ".sheet(").count - 1
+        XCTAssertLessThanOrEqual(
+            feuilles, 1,
+            "SwiftUI ne présente qu'UNE feuille par vue. \(feuilles) modificateurs `.sheet` sur "
+                + "l'aiguillage : dès que deux s'activent dans la même transaction, la "
+                + "configuration devient invalide et le process est TERMINÉ (#4467)."
+        )
+        XCTAssertEqual(feuilles, 1, "…et il en faut UNE : sans elle, aucun portail ne s'ouvre.")
+    }
+
+    /// Et cette feuille est pilotée par un ITEM, jamais par un booléen : c'est
+    /// ce qui rend l'état invalide irreprésentable plutôt que seulement rare.
+    func test_laFeuilleUnique_estPiloteeParUnItem() throws {
+        let code = compact(try hostSource())
+        XCTAssertTrue(code.contains(".sheet(item:$presentedPortal)"))
+        XCTAssertFalse(code.contains(".sheet(isPresented:"),
+                       "Un booléen par feuille laisse deux feuilles s'ouvrir ensemble ; "
+                        + "un item ne porte qu'une valeur.")
+    }
+
+    /// **Le `switch` du portail est EXHAUSTIF** — un neuvième cas ne compile pas
+    /// tant qu'il n'a pas dit ce qu'il montre. Même discipline que les portes du
+    /// rail, appliquée à la présentation.
+    func test_chaquePortail_aSaFeuille() throws {
+        let code = compact(try hostSource())
+        for portail in ComposerPortal.allCases {
+            XCTAssertTrue(code.contains("case.\(portail.rawValue):"),
+                          "Le portail `\(portail.rawValue)` n'a aucune feuille montée.")
+        }
+    }
+
 }

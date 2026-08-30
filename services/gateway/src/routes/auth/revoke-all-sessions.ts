@@ -14,7 +14,14 @@ export function registerRevokeAllSessionsRoute(context: AuthRouteContext) {
   const { fastify } = context;
 
   fastify.get<{ Querystring: { token: string } }>(
-    '/auth/revoke-all-sessions',
+    // PAS de `/auth` ici : `route-registration.ts` monte déjà ce plugin sous
+    // `${API_PREFIX}/auth`. Le déclarer produisait le chemin réel
+    // `/api/v1/auth/auth/revoke-all-sessions`, quand l'e-mail « nouvelle
+    // connexion détectée » envoie `/api/v1/auth/revoke-all-sessions`
+    // (`NotificationService.ts:4931`) : le lien « ce n'était pas moi » était en
+    // 404 — et c'est le SEUL site du dépôt qui coupe réellement les sockets
+    // d'un intrus (#4141).
+    '/revoke-all-sessions',
     {
       schema: {
         description: 'Revoke all sessions for a user via signed email link',

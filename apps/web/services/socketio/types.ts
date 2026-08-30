@@ -64,6 +64,7 @@ export type FriendRequestAcceptedListener = (data: FriendRequestAcceptedEventDat
 export type FriendRequestRejectedListener = (data: FriendRequestRejectedEventData) => void;
 export type UserUpdatedListener = (data: UserUpdatedEventData) => void;
 export type ConversationDeletedListener = (data: { userId: string; conversationId: string }) => void;
+export type ConversationRestoredListener = (data: { userId: string; conversationId: string }) => void;
 export type ConversationUpdatedListener = (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void;
 
 /**

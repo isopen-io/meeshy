@@ -28,9 +28,30 @@ permissions:
   pages: write
   id-token: write
 
+# `cancel-in-progress: FALSE` — et c'est l'inverse de l'intuition.
+#
+# Ce workflow se déclenche sur `issues` et `milestone` : fermer trois issues à
+# la suite lance trois runs en quelques secondes. Avec `cancel-in-progress:
+# true`, les deux premiers étaient TUÉS — y compris pendant leur job
+# `deploy`. Or une publication GitHub Pages interrompue en vol laisse
+# l'environnement `github-pages` verrouillé, et le run suivant échoue à s'y
+# déployer sans qu'aucune étape ne rougisse : le job `deploy` sort en échec
+# avec ZÉRO étape enregistrée. Mesuré le 2026-08-30 sur vingt runs : 14
+# annulés, 4 en échec, aucun succès de déploiement pendant une salve de
+# fermetures d'issues.
+#
+# C'est la recommandation de GitHub pour tout workflow de déploiement, et la
+# raison qu'elle donne est exactement celle-ci : on veut bien n'avoir qu'UN
+# déploiement à la fois, on ne veut pas TUER celui qui est en cours. Les runs
+# de la salve font la queue et le dernier écrase les précédents — ce qui est
+# le comportement voulu, la page étant entièrement régénérée à chaque fois.
+#
+# Le coût assumé : une salve de N fermetures produit N publications au lieu
+# d'une. C'est le prix d'un déploiement qui aboutit, et il est faible — le job
+# de build dure moins d'une minute.
 concurrency:
   group: pilotage-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:

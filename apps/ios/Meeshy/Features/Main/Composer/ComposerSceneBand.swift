@@ -70,17 +70,49 @@ struct ComposerSceneBandView: View {
     let colors: [String]
     var onPickColor: ((String) -> Void)?
 
+    /// **L'effet d'OUVERTURE de la scène** (#4403). Le panneau « Fond » de
+    /// l'atelier porte deux choses — les couleurs et cette rangée — et la
+    /// bande n'en portait qu'une : l'effet était inatteignable depuis le
+    /// plateau.
+    ///
+    /// Le manque ne se voyait pas en composant, et c'est ce qui l'a laissé
+    /// passer : un effet d'ouverture ne se joue qu'à la LECTURE. Une absence
+    /// dont le symptôme n'apparaît pas sur l'écran qui la contient est la plus
+    /// difficile à remarquer.
+    var openingEffect: StoryTransitionEffect?
+    var onPickOpening: ((StoryTransitionEffect?) -> Void)?
+
+    /// **Le contenu de la bande `timeline`, composé par l'HÔTE** (#4082).
+    ///
+    /// Même motif que `toolOptions` et `railSystemEntry` du meuble : ce qui
+    /// exige de connaître l'objet sélectionné, ses URL chargées et le ViewModel
+    /// est composé là où ces trois choses vivent, et voyage jusqu'ici en vue
+    /// opaque. La bande reste ignorante de ce qu'elle porte — c'est ce qui lui
+    /// permet de rester une règle de PLACE.
+    ///
+    /// `nil` ⇒ la bande n'a rien à montrer, et `ComposerSceneCapabilities.bands(canTrimSelection:)`
+    /// ne l'aura alors jamais servie : les deux disent la même chose depuis les
+    /// deux bouts, et c'est voulu — la seconde est ce qui l'empêche d'être
+    /// demandée, la première ce qui l'empêche de paraître vide si elle l'était.
+    var timelineContent: AnyView?
+
     var body: some View {
         switch band {
         case .palette:
             palette
-        case .timeline, .textStyles:
-            // Aucun contenu : ces deux contextes appartiennent au critère mais
-            // n'ont pas d'hôte ici (la timeline vit dans l'atelier ; les 18
-            // styles exigent un objet `text` sélectionné, qu'aucune porte de
-            // cette surface ne pose encore). `ComposerSceneBand.opened` ne les
-            // sert donc jamais, et sa garde le prouve — c'est là que l'absence
-            // est tenue, pas ici.
+        case .timeline:
+            // La bande de ROGNAGE depuis #4082. Elle n'a de contenu que quand
+            // l'hôte lui en compose un — pour un objet sans source à rogner,
+            // `bands(canTrimSelection:)` ne la sert pas et on n'arrive jamais
+            // ici. Le `EmptyView` de repli n'est donc pas une bande vide
+            // tolérée : c'est la trace de la loi 4, tenue des deux côtés.
+            if let timelineContent { timelineContent } else { EmptyView() }
+        case .textStyles:
+            // Aucun contenu : ce contexte appartient au critère mais n'a pas
+            // d'hôte ici — les 18 styles exigent un objet `text` sélectionné,
+            // qu'aucune porte de cette surface ne pose encore (#4083).
+            // `ComposerSceneBand.opened` ne le sert donc jamais, et sa garde le
+            // prouve : c'est là que l'absence est tenue, pas ici.
             EmptyView()
         }
     }
@@ -101,8 +133,28 @@ struct ComposerSceneBandView: View {
     /// répété sur chaque bouton. Un commentaire ne fait pas d'une copie une
     /// source unique (leçon 248i). `BackgroundColorPalette` l'est.
     private var palette: some View {
-        BackgroundColorPalette(colors: colors) { hex in
-            onPickColor?(hex)
+        VStack(alignment: .leading, spacing: 8) {
+            BackgroundColorPalette(colors: colors) { hex in
+                onPickColor?(hex)
+            }
+            // **La rangée d'ouverture n'est montée que si l'hôte la sert**
+            // (loi 4). Sans le rappel, choisir un effet ne mènerait nulle
+            // part : mieux vaut ne pas la peindre que peindre un choix inerte.
+            //
+            // Elle est SOUS les couleurs, comme dans le panneau de l'atelier —
+            // le fond d'abord, ce qu'il fait en apparaissant ensuite. L'ordre
+            // suit la décision, pas la mise en page.
+            if let onPickOpening {
+                // `onDarkSurface: true` — le plateau est sombre EN PERMANENCE,
+                // quel que soit le thème de l'appareil. Sans ce drapeau, les
+                // puces non sélectionnées peignaient de l'indigo950 sur du
+                // sombre : présentes à l'accessibilité, invisibles à l'œil
+                // (mesuré au simulateur, 2026-08-30).
+                OpeningEffectChips(selection: openingEffect,
+                                   onDarkSurface: true,
+                                   onSelect: onPickOpening)
+                    .padding(.horizontal, 2)
+            }
         }
     }
 }

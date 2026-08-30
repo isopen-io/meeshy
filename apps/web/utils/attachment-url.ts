@@ -3,6 +3,7 @@
  * Transforme les chemins relatifs en URLs complètes selon l'environnement
  */
 import { getBackendUrl } from '@/lib/config';
+import { apiPath } from '@meeshy/shared/api/prefix';
 
 /**
  * Construit l'URL complète d'un attachement à partir d'un chemin relatif ou absolu
@@ -49,8 +50,10 @@ export function buildAttachmentUrl(relativePath: string | null | undefined): str
 
       if (isDatePath && !hasCorrectPrefix) {
         // URL mal formée, reconstruire avec le bon préfixe et le bon domaine
-        const correctedPath = `/api/attachments/file${pathname}`;
-        return `${backendUrl}${correctedPath}`;
+        // #4324 — recomposer, c'est POSER une route : elle est versionnée.
+        // (Un chemin qui portait DÉJÀ `/api/attachments/file/` passe plus bas
+        // sans être touché : une adresse héritée qui fonctionne le reste.)
+        return `${backendUrl}${apiPath(`/attachments/file${pathname}`)}`;
       }
 
       // Si l'URL a le bon préfixe mais pointe vers le mauvais domaine (meeshy.me au lieu de gate.meeshy.me)
@@ -76,16 +79,27 @@ export function buildAttachmentUrl(relativePath: string | null | undefined): str
     // Vérifier si c'est un chemin de date (YYYY/MM/)
     const isDatePath = /^\/\d{4}\/\d{2}\//.test(relativePath);
     if (isDatePath) {
-      return `${backendUrl}/api/attachments/file${relativePath}`;
+      // #4324 — la route est VERSIONNÉE : la passerelle réclame la version, et
+      // `apiPath` la tient d'une seule source configurée.
+      return `${backendUrl}${apiPath(`/attachments/file${relativePath}`)}`;
     }
     return `${backendUrl}${relativePath}`;
   }
 
-  // Si c'est un chemin relatif sans slash (ex: "2024/11/userId/photo.jpg")
-  // Pattern: YYYY/MM/userId/filename
-  const isDatePath = /^\d{4}\/\d{2}\//.test(relativePath);
-  if (isDatePath) {
-    return `${backendUrl}/api/attachments/file/${relativePath}`;
+  // Ce qui reste sans barre initiale est une CLÉ DE STOCKAGE — la seule forme
+  // que la base porte depuis #4324 (migration 013). Le test précédent ne
+  // reconnaissait qu'un chemin de DATE (`^\d{4}/\d{2}/`) : un avatar migré
+  // (`avatars/user/<id>.jpg`) tombait dans le cas « format inattendu » et était
+  // rendu tel quel, donc illisible. Une clé n'a pas de forme imposée ; ce qui la
+  // distingue est de n'être ni une URL ni un chemin absolu, ce que les branches
+  // précédentes ont déjà écarté.
+  //
+  // Une clé vit toujours DANS un répertoire — `2025/12/<id>/f.pdf`,
+  // `avatars/user/<id>.jpg`, `snapshots/<f>.jpg` : elle porte au moins une barre
+  // oblique. Ce qui n'en a aucune n'est pas une clé, et composer une route
+  // par-dessus fabriquerait une adresse qui n'existe pas.
+  if (relativePath.includes('/')) {
+    return `${backendUrl}${apiPath(`/attachments/file/${relativePath}`)}`;
   }
 
   // Cas improbable - retourner tel quel avec un warning

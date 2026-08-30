@@ -1815,3 +1815,185 @@ portes existantes honorent déjà sans changer d'une ligne.
 
 Détail : `tasks/realtime-sync-audit-2026-08-28-cycle131-bis.md`,
 `tasks/lessons.md` § Leçon 309, issue #4194.
+## La succession du créateur est UNE loi, et elle est totale (2026-08-30, #4058)
+
+**Décision porteur du 2026-08-28** : « si créateur parti, **le premier à avoir
+été admin devient créateur** ». Les quatre questions restées ouvertes sont
+tranchées ici, et la règle tient en trois lignes :
+
+1. les **administrateurs actifs**, classés par **instant de promotion** ;
+2. à défaut d'administrateur, le **membre actif le plus ancien** ;
+3. à défaut de membre éligible, la **clôture** de la conversation.
+
+Site UNIQUE : `services/conversations/creatorSuccession.ts` — `elireSuccesseur`
+(la loi, PURE, tombante sans base de données) et `resoudreSuccessionDuCreateur`
+(la lecture, puis la loi) —, lu par les deux portes qui posaient chacune sa
+version. Elles ne divergeaient pas d'un détail : `delete-for-me.ts` élisait un
+**modérateur** avant un administrateur — l'ordre des rangs y était INVERSÉ —
+pendant que `leave.ts` **refusait** le départ (400, « transférez l'ownership ou
+supprimez »). Le même geste rendait donc deux réponses opposées selon le bouton
+pressé.
+
+**L'instant de promotion se lit dans `Notification`**, la seule trace datée d'un
+changement de rang : `Participant` n'en porte aucune. Cette écriture n'a aucune
+garde de sourdine — contrairement à `member_left` et consorts — donc la trace
+existe même pour qui a mis la conversation en sourdine.
+
+**Ce qui décide est `metadata.newRole`, PAS le `type` de la ligne.** Le type est
+dérivé d'une table `roleHierarchy` en MAJUSCULES comparée à un `previousRole`
+que l'appelant passe tel qu'il est en base — en minuscules : une rétrogradation
+`admin → MODERATOR` s'étiquette donc `member_promoted`. C'est la leçon #4008
+appliquée un cran plus haut — la casse y décide de l'ÉTIQUETTE, et l'étiquette
+aurait décidé de l'héritage. Les trois types sont acceptés, `newRole` tranche.
+
+**Le repli est `joinedAt`, et c'est ce qui rend la règle totale.** Une
+participation créée DÉJÀ administrateur (seed, ajout direct) n'écrit aucune
+notification : cet administrateur-là l'EST depuis son arrivée, donc son
+`joinedAt` **est** son instant de promotion. Conséquence recherchée : la
+succession ne dépend plus d'une table effaçable en bloc (`DELETE /notifications`
+fait un `deleteMany({})` global) — une table vidée DÉGRADE la succession vers
+l'ancienneté d'appartenance, elle ne la casse pas. C'est la réponse à la
+quatrième question de #4058 : une règle qui ne peut pas échouer n'a pas de
+source de vérité à protéger.
+
+**Hériter demande un compte.** Un participant sans `userId` — un visiteur venu
+par un lien de partage — n'est pas éligible. Gouverner un fil (fermer, bannir,
+promouvoir) depuis une session qui expire, et sans ligne `User` à qui l'imputer,
+n'est pas une succession : c'est une conversation laissée sans gouvernance sous
+couvert d'en avoir une. Le filtre vit dans la loi PURE, pas seulement dans le
+`where` : une porte qui remettrait ses propres candidats ne doit pas pouvoir le
+contourner.
+
+**Le DM jamais utilisé se ferme au lieu de se transmettre** — règle qui vivait
+dans `delete-for-me.ts` seul, donc `leave.ts` transmettait ce que sa jumelle
+fermait. Elle appartient à la loi, pas à la porte.
+
+**Ce n'est PAS une question d'autorité.** `utils/conversation-authority.ts`
+(#3892) dit qu'un ADMIN ou BIGBOSS de la plateforme, une fois membre, agit avec
+les droits du créateur. C'est le voisin d'apparence interchangeable :
+`effectiveConversationRole` répond « ce geste est-il permis ? », jamais « qui
+hérite ? ». Un administrateur de plateforme simple membre n'a pas été
+administrateur DE CE FIL, seul rang que la décision porteur classe.
+
+**Les deux lectures sont BORNÉES** (#4165) et la trace est cadrée sur la
+conversation par la BASE : sans ce filtre, la requête ramenait tout l'historique
+de rang des comptes candidats sur TOUS leurs fils pour n'en garder qu'une
+poignée.
+
+## Suppression de compte — ce qui part, ce qui reste anonymisé, ce qui survit (#4225)
+
+**Décision du 2026-08-30.** #4225 exigeait ces quatre arbitrages **avant toute
+ligne de code** ; les voici, avec leur raison. Ils gouvernent le job de purge à
+écrire, et rien d'autre ne le gouverne.
+
+### 0. Le périmètre réel n'est pas celui que l'issue énumérait
+
+L'issue nommait seize entités. Mesuré sur `packages/shared/prisma/schema.prisma` :
+**quarante-quatre modèles portent une référence à un compte** (`userId`,
+`authorId`, `senderId`, `creatorId`, `ownerId`, `closedBy`, `deletedBy`). C'est
+la leçon 261 du dépôt appliquée à une liste de tables — *une énumération porte
+deux affirmations, « ces sites appliquent la règle » et « ce sont les sites où
+elle s'applique », et la seconde n'est presque jamais vérifiée.* Toute purge
+écrite contre la liste de seize aurait laissé vingt-huit tables intactes, dont
+`PushToken`, `MagicLinkToken` et `DMASession`.
+
+**Corollaire de méthode** : la purge se dérive du SCHÉMA, pas d'une liste
+recopiée. Un modèle ajouté demain avec un `userId` doit faire rougir un cliquet
+tant que son verdict n'est pas déclaré — sans quoi la première table oubliée
+sera silencieuse, exactement comme les vingt-huit d'aujourd'hui.
+
+### 1. La durée de rétention : **30 jours**, en configuration
+
+`ACCOUNT_DELETION_RETENTION_DAYS`, défaut `30`, lue par le job de purge et
+**citée par le texte servi** — la page de `/delete-now` cesse de parler d'une
+« durée de rétention légale » que rien ne définit et annonce le nombre réel.
+
+Trente jours, et pas sept ni quatre-vingt-dix : c'est la fenêtre pendant
+laquelle une suppression accidentelle ou sous le coup de la colère se rétracte
+encore, et c'est la durée que la population compare (WhatsApp, Signal). Plus
+court trahit ceux qui reviennent ; plus long trahit la promesse faite à ceux qui
+partent.
+
+### 2. Trois verdicts, et un principe qui les décide
+
+> **Ce qui identifie la personne part. Ce qu'elle a contribué à l'espace
+> d'autrui reste, sans son nom. Ce qui prouve qu'on a bien effacé survit.**
+
+| verdict | ce qu'il recouvre |
+|---|---|
+| **EFFACER** | les données dont la personne est le seul sujet et le seul bénéficiaire |
+| **ANONYMISER** | ses contributions à un fil, une communauté ou un espace partagé — le contenu demeure, l'auteur devient une pierre tombale |
+| **CONSERVER** | ce dont l'effacement détruirait la preuve de l'effacement lui-même, ou une obligation d'audit |
+
+**EFFACER** (31 tables) — `UserContact`, `NotificationPreference`,
+`Notification`, `UserStats`, `UserPreferences`, `UserPreference`,
+`ConversationPreference`, `UserConversationPreferences`,
+`UserConversationCategory`, `UserCommunityPreferences`, `PasswordResetToken`,
+`PhonePasswordResetToken`, `MagicLinkToken`, `PasswordHistory`, `UserSession`,
+`SignalPreKeyBundle`, `ConversationPublicKey`, `ServerEncryptionKey`,
+`DMASession`, `UserVoiceModel`, `UserMessageDeletion`, `PushToken`, `PostView`,
+`PostImpression`, `PostEngagement`, `PostBookmark`, `PostMediaDownload`,
+`AgentGlobalProfile`, `AgentUserRole`, `UserEventSeq`, `MutationLog`,
+`FriendRequest`, et les **publications propres** : `Post` avec ses réactions et
+commentaires en cascade.
+
+Une préférence, une session, une clé, un jeton, une statistique, une vue de
+post : personne d'autre ne les lit, personne d'autre ne les perd.
+
+**ANONYMISER** (6 tables) — `Message` (le `senderId` pointe la pierre tombale,
+le contenu demeure), `Participant`, `CommentReaction`, `PostReaction`,
+`PostComment` **sur le post d'autrui**, `CommunityMember`. Plus `User`
+lui-même, qui devient une **pierre tombale** : la ligne survit avec son `id` et
+rien d'autre — pseudonyme neutralisé, e-mail, téléphone, noms, avatar, bio,
+langues, biométrie vocale effacés. Sans cette ligne, quarante-quatre clés
+étrangères pointeraient dans le vide.
+
+**CONSERVER** (3 tables) — `AdminAuditLog` (une action d'administration se
+prouve, et sa preuve ne s'efface pas sur demande de son sujet), `SecurityEvent`
+(même raison, avec sa propre durée), et `AccountDeletionRequest`, qui **est** le
+journal de la purge : le critère 6 de l'issue l'exige, et il a raison — sans
+lui, on ne peut plus démontrer qu'on a effacé.
+
+### 3. La question centrale : le contenu dans les conversations d'autrui
+
+**Il reste, anonymisé. Jamais effacé.**
+
+C'était la question que l'issue désignait comme centrale, en avertissant qu'y
+répondre par « on verra » revient à choisir « conserver ». Voici la réponse, et
+sa raison : **une conversation appartient à ses participants, au pluriel.**
+Effacer les messages d'un partant crible le fil de trous chez des tiers qui
+n'ont rien demandé — un échange devenu incompréhensible est une donnée détruite
+chez quelqu'un d'autre. Retirer l'identité, en revanche, retire exactement ce
+que la personne a le droit de faire retirer.
+
+La limite est assumée et doit être écrite : **un contenu peut être identifiant
+par lui-même** (« je m'appelle X, mon numéro est Y »). L'anonymisation de
+l'auteur ne l'atteint pas. C'est le prix de ne pas détruire le fil d'autrui, et
+la voie de recours reste la suppression message par message, que le produit
+offre déjà de son vivant.
+
+### 4. Les médias hors base
+
+**Le média suit le sort de son porteur**, et cette règle se dérive plutôt que
+s'énumérer :
+
+- média d'une entité EFFACÉE (avatar, bannière, échantillon vocal, média d'un
+  `Post`) → **effacé du stockage objet**, avec ses vignettes, ses variantes
+  d'image et ses pistes TTS ;
+- média d'un message ANONYMISÉ → **conservé**, parce que l'effacer trouerait le
+  fil d'autrui exactement comme effacerait le texte. Ses métadonnées
+  identifiantes (nom de fichier d'origine) sont neutralisées.
+
+**Une purge qui ne touche que MongoDB laisse les octets** — l'issue le dit, et
+c'est le point où une purge se croit finie sans l'être. Le job énumère donc les
+clés d'objet à partir des lignes qu'il efface, **avant** de les effacer : après,
+l'adresse du fichier n'est plus dérivable de rien.
+
+### Ce que ces décisions n'autorisent pas encore
+
+Elles ouvrent l'implémentation, elles ne la remplacent pas. Le job reste tenu
+par les critères 2 à 6 de l'issue : **idempotent et rejouable** (un échec
+partiel se relance sans dommage), **aucune résurrection** après purge,
+`dataPurged` qui ne passe à `true` qu'une fois la purge effective — le champ
+existe précisément pour ne pas mentir pendant l'intervalle —, et un témoin par
+entité vérifiant le verdict ci-dessus.

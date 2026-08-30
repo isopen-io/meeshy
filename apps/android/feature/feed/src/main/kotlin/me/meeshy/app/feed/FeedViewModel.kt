@@ -177,7 +177,7 @@ class FeedViewModel @Inject constructor(
                             cachePosts = visibleCache,
                             realtimePosts = visibleRealtime,
                             user = user,
-                            mediaBaseUrl = config.socketUrl,
+                            mediaBaseUrl = config.apiBaseUrl,
                             overrides = overrides,
                             newPostsCount = reconciled.newPostsCount,
                         ).copy(hasMore = hasMore)

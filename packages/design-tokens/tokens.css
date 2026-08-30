@@ -1,0 +1,56 @@
+/* LA table de jetons de la v3 web — un seul import chez le consommateur.
+   Les deux schémas d'abord (@import doit précéder toute autre règle), puis ce
+   qui ne dépend d'aucun schéma : typographie, rayons, palette catégorielle.
+
+   Ce qui vit ICI ne dépend d'AUCUN schéma. Une couleur qui se pose sur un fond
+   dont la luminance change entre clair et sombre en dépend forcément : elle va
+   dans dark.css ET light.css. C'est ce qui a fait sortir la famille
+   `--color-presence-*` de ce fichier — voir le doc-comment de light.css.
+
+   Rien ici ne lit le schéma de couleurs de l'OS : `color-scheme` suit la CLASSE,
+   déclaré dans chacun des deux schémas, et apps/web-v3/app/theme-script.tsx ne
+   fait que corriger la classe rendue par le serveur.
+   Gate : apps/web-v3/scripts/check-jetons.mjs. */
+@import './dark.css';
+@import './light.css';
+
+:root {
+  --font-body: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --text-2xs: 11px;
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-base: 15px;
+  --text-md: 17px;
+  --text-lg: 19px;
+  --text-xl: 22px;
+  --text-2xl: 26px;
+  --text-3xl: 30px;
+  --text-4xl: 34px;
+
+  --leading-tight: 1.2;
+  --leading-normal: 1.45;
+  --leading-relaxed: 1.6;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 26px;
+  --radius-pill: 9999px;
+
+  /* La planche écrit #6366f1 : l'encre `--color-on-avatar` n'y rend que
+     4,37:1, sous les 4,5:1 dus à des initiales — qui sont du TEXTE. Éclairci
+     d'un cran (5,84:1), au même titre que `--color-on-primary`. */
+  --color-avatar-1: #7d80f6;
+  --color-avatar-2: #10b981;
+  --color-avatar-3: #ec4899;
+  --color-avatar-4: #f59e0b;
+  --color-on-avatar: #0b0c14;
+}

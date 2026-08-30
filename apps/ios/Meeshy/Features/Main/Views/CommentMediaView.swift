@@ -142,6 +142,11 @@ struct CommentMediaView: View {
     /// `conversationId` de la `QueuedAudio` routée vers le coordinator
     /// (carte Now Playing) pour un média audio.
     let commentId: String
+    /// Texte du commentaire porteur — légende de repli du média en plein écran
+    /// quand `FeedMedia.caption` est vide (même priorité que
+    /// `ConversationViewModel.mediaCaptionMap` côté conversation). Résolu par le
+    /// Prisme en amont (`FeedComment.displayContent`).
+    var carrierText: String? = nil
     /// Infos auteur pour le label expéditeur du viewer plein écran (parité
     /// conversation : avatar + nom + date au-dessus du média).
     let authorName: String
@@ -151,6 +156,11 @@ struct CommentMediaView: View {
 
     @State private var showFullscreen = false
     @State private var audioFullscreen: AudioFullscreenSource?
+    /// Les médias des AUTRES commentaires du même objet, pour que le plein écran
+    /// se feuillette au lieu de montrer une page unique. Boîte de référence :
+    /// lue au TAP, jamais pendant le rendu de la ligne (cf.
+    /// `CommentMediaGalleryContext`).
+    @Environment(\.commentMediaGallery) private var gallery
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -287,20 +297,42 @@ struct CommentMediaView: View {
 
     // MARK: - Fullscreen
 
+    /// Galerie de CE média seul — repli quand l'hôte n'a pas déclaré la liste des
+    /// commentaires (`.commentMediaGallery(_:)`), ou quand ce média n'y figure
+    /// pas encore (commentaire tout juste envoyé, média arrivé par
+    /// `comment:media-updated` après le dernier rafraîchissement).
+    private var soloSnapshot: CommentMediaGallerySnapshot {
+        let attachment = media.toMessageAttachment()
+        let caption = CommentMediaGallery.caption(of: media, carrierText: carrierText)
+        return CommentMediaGallerySnapshot(
+            attachments: [attachment],
+            captions: caption.map { [attachment.id: $0] } ?? [:],
+            senders: [attachment.id: ConversationViewModel.MediaSenderInfo(
+                senderName: authorName,
+                senderAvatarURL: authorAvatarURL,
+                senderColor: authorColor,
+                sentAt: sentAt
+            )]
+        )
+    }
+
+    /// La galerie de l'objet quand elle porte CE média, le repli solo sinon.
+    private var fullscreenSnapshot: CommentMediaGallerySnapshot {
+        guard let shared = gallery?.snapshot(), shared.contains(media.id) else {
+            return soloSnapshot
+        }
+        return shared
+    }
+
     @ViewBuilder
     private var fullscreenViewer: some View {
-        let attachment = media.toMessageAttachment()
-        let senderInfo = ConversationViewModel.MediaSenderInfo(
-            senderName: authorName,
-            senderAvatarURL: authorAvatarURL,
-            senderColor: authorColor,
-            sentAt: sentAt
-        )
+        let snapshot = fullscreenSnapshot
         ConversationMediaGalleryView(
-            allAttachments: [attachment],
-            startAttachmentId: attachment.id,
+            allAttachments: snapshot.attachments,
+            startAttachmentId: media.id,
             accentColor: accentColor,
-            senderInfoMap: [attachment.id: senderInfo]
+            captionMap: snapshot.captions,
+            senderInfoMap: snapshot.senders
         )
     }
 }

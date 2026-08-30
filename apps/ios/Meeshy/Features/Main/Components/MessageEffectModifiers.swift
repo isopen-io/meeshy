@@ -313,6 +313,35 @@ struct WaooOverlay: View {
 
 // MARK: - Persistent Effects (continuous looping)
 
+/// **Un effet persistant s'anime tant que son message est À L'ÉCRAN.**
+///
+/// Les quatre effets ci-dessous démarraient leur boucle dans un `onAppear` et
+/// n'avaient AUCUN `onDisappear` : une bulle `glow` défilée hors de la fenêtre
+/// continuait de re-rastériser son ombre à chaque frame, et le `TimelineView`
+/// de `sparkle` redessinait son `Canvas` à 10 Hz indéfiniment — pour des pixels
+/// que personne ne voit. Un seul message à effet suffisait ; en Focal et en
+/// Script, `MessageListLayout` réalise plus de cellules qu'en Bulles, donc plus
+/// d'instances actives simultanément.
+///
+/// Deux formes d'arrêt, et elles ne sont PAS interchangeables :
+/// - une boucle pilotée par un `@State` animé (`glow`, `pulse`, `rainbow`)
+///   s'arrête en réassignant l'état SANS animation — `withTransaction(.init(animation: nil))`.
+///   Réassigner dans une transaction animée relancerait la boucle en sens
+///   inverse au lieu de la couper ;
+/// - une horloge (`TimelineView`, la couche `Animatable` de la comète) ne
+///   s'arrête pas par l'état : il faut la METTRE EN PAUSE (`paused:`) ou la
+///   DÉMONTER. Un `@State` remis à zéro sous une horloge qui tourne encore ne
+///   fait qu'ajouter une passe de `body` par frame.
+///
+/// Le motif est celui déjà appliqué à `MeeshyUI.PulseEffect`
+/// (`packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift`) et à
+/// `ThemedActionButton` (`RootViewComponents.swift`, audit chauffe 2026-08-26) ;
+/// il n'avait jamais été porté ici.
+///
+/// `reduceMotion` reste honoré en amont : `plan.animatesPersistent` est déjà
+/// faux, l'effet est POSÉ et non animé, et il n'y a alors aucune boucle à
+/// couper (règle 6 du § Effets de message).
+
 /// `animated: false` (Réduire les animations) rend l'effet FIXE au lieu de le
 /// supprimer : le message garde son halo, il perd sa respiration.
 struct GlowEffect: ViewModifier {
@@ -337,6 +366,9 @@ struct GlowEffect: ViewModifier {
                     glowing = true
                 }
             }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) { glowing = false }
+            }
     }
 }
 
@@ -352,6 +384,9 @@ struct PulseEffect: ViewModifier {
                 withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
                     pulsing = true
                 }
+            }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) { pulsing = false }
             }
     }
 }
@@ -401,6 +436,10 @@ struct RainbowEffect: ViewModifier {
     var cornerRadius: CGFloat = 18
 
     @State private var cometPhase: CGFloat = 0
+    /// La comète est `Animatable` : SwiftUI rappelle son `body` à la fréquence
+    /// d'affichage tant qu'elle est montée. Remettre `cometPhase` à 0 ne
+    /// l'arrêterait pas — seul le démontage la coupe.
+    @State private var isOnScreen = false
 
     /// Le spectre de la maison — sept arrêts de clarté homogène, refermés sur
     /// leur première couleur. Trois d'entre eux sont déjà des tokens nommés
@@ -438,7 +477,7 @@ struct RainbowEffect: ViewModifier {
                     ZStack {
                         shape.stroke(gradient, lineWidth: 5).blur(radius: 6).opacity(0.35)
                         shape.stroke(gradient, lineWidth: 1).opacity(0.75)
-                        if animated {
+                        if animated, isOnScreen {
                             RainbowCometLayer(phase: cometPhase,
                                               cornerRadius: cornerRadius,
                                               spectrum: spectrumColors)
@@ -451,6 +490,7 @@ struct RainbowEffect: ViewModifier {
             .onAppear {
                 guard active, animated else { return }
                 cometPhase = 0
+                isOnScreen = true
                 // Même délai d'une frame que les effets d'apparition, et pour
                 // la même raison : une cellule conservée en mémoire retrouve
                 // `cometPhase` à sa valeur cible, et la remettre à 0 puis
@@ -462,6 +502,12 @@ struct RainbowEffect: ViewModifier {
                     withAnimation(.linear(duration: RainbowSweep.cycle).repeatForever(autoreverses: false)) {
                         cometPhase = 1
                     }
+                }
+            }
+            .onDisappear {
+                withTransaction(Transaction(animation: nil)) {
+                    isOnScreen = false
+                    cometPhase = 0
                 }
             }
     }
@@ -521,12 +567,13 @@ private struct RainbowCometLayer: View, Animatable {
 
 struct SparkleEffect: ViewModifier {
     let active: Bool
+    @State private var isOnScreen = false
 
     func body(content: Content) -> some View {
         content
             .overlay {
                 if active {
-                    TimelineView(.animation(minimumInterval: 0.1)) { timeline in
+                    TimelineView(.animation(minimumInterval: 0.1, paused: !isOnScreen)) { timeline in
                         Canvas { context, size in
                             let time = timeline.date.timeIntervalSinceReferenceDate
                             for i in 0..<8 {
@@ -546,6 +593,8 @@ struct SparkleEffect: ViewModifier {
                     .accessibilityHidden(true)
                 }
             }
+            .onAppear { isOnScreen = true }
+            .onDisappear { isOnScreen = false }
     }
 }
 

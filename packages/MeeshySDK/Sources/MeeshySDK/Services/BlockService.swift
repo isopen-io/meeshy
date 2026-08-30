@@ -51,10 +51,19 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
 
     // MARK: - Block
 
+    /// Bloquer — `PUT`, parce que c'est une APPARTENANCE À UN ENSEMBLE (#4164).
+    ///
+    /// `POST /users/{id}/block` modélisait une ACTION et rendait `409` au
+    /// second appel. Or l'état visé est atteint dans les deux cas, et ce 409
+    /// obligeait l'appelant à traiter comme une erreur ce qui est un succès —
+    /// à commencer par la file hors ligne, qui rejoue des mutations
+    /// enregistrées avant une mise à jour.
     public func blockUser(userId: String) async throws {
-        let _: APIResponse<BlockActionResponse> = try await api.post(
-            endpoint: "/users/\(userId)/block",
-            body: [String: String]()
+        let _: APIResponse<BlockActionResponse> = try await api.request(
+            endpoint: "/directory/blocks/\(userId)",
+            method: "PUT",
+            body: try JSONEncoder().encode([String: String]()),
+            queryItems: nil
         )
         await MainActor.run { _ = blockedUserIds.insert(userId) }
     }
@@ -62,17 +71,27 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     // MARK: - Unblock
 
     public func unblockUser(userId: String) async throws {
-        let _ = try await api.delete(
-            endpoint: "/users/\(userId)/block"
+        let _: APIResponse<BlockActionResponse> = try await api.request(
+            endpoint: "/directory/blocks/\(userId)",
+            method: "DELETE",
+            body: nil,
+            queryItems: nil
         )
         await MainActor.run { _ = blockedUserIds.remove(userId) }
     }
 
     // MARK: - List
 
+    /// La liste, désormais BORNÉE côté serveur (100 par page).
+    ///
+    /// Elle ne l'était par rien : ni page, ni curseur, ni plafond. Ce site sert
+    /// à hydrater la blocklist locale, dont la taille est celle d'un usage
+    /// humain ; il lit donc la première page et s'en tient là. Le jour où un
+    /// compte dépasse le plafond, c'est le curseur de la route qui répondra —
+    /// pas une liste sans fin.
     public func listBlockedUsers() async throws -> [BlockedUser] {
         let response: APIResponse<[BlockedUser]> = try await api.request(
-            endpoint: "/users/me/blocked-users"
+            endpoint: "/directory/blocks"
         )
         let users = response.data
         await MainActor.run { blockedUserIds = Set(users.map(\.id)) }

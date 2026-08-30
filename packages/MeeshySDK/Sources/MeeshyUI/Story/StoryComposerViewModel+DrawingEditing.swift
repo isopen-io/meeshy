@@ -11,7 +11,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
     case thickness  // épaisseur
     case smoothing  // lissage : raw / curve / line
 
-    var sfSymbol: String {
+    public var sfSymbol: String {
         switch self {
         case .tool:      return "pencil.tip"
         case .color:     return "paintpalette.fill"
@@ -20,7 +20,7 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
         }
     }
 
-    var accessibilityLabel: String {
+    public var accessibilityLabel: String {
         switch self {
         case .tool:      return String(localized: "story.drawEdit.tool.tool", defaultValue: "Pinceau", bundle: .module)
         case .color:     return String(localized: "story.drawEdit.tool.color", defaultValue: "Couleur du trait", bundle: .module)
@@ -81,9 +81,49 @@ extension StoryComposerViewModel {
     /// band montre `DrawingStrokeList`. Le plein écran de tracé s'active à
     /// la sélection d'un pinceau (`enterImmersiveDrawing`). Idempotent si
     /// déjà actif (préserve la sélection/le panneau).
-    func enterDrawingEditingMode() {
+    /// `public` : la porte « Dessiner » du composer unifié entre et sort du
+    /// mode (#4092). C'est un MODE, pas une ingestion — d'où la bascule, et
+    /// d'où le besoin des deux sens depuis l'app.
+    public func enterDrawingEditingMode() {
         if drawingEditingMode.isActive { return }
         drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
+    }
+
+    /// **TRACER, tout de suite** — l'intention du plateau, en un seul geste
+    /// (#4092).
+    ///
+    /// L'atelier entre au dessin en DEUX temps : `enterDrawingEditingMode()`
+    /// ouvre le mode LISTE (« par défaut rien n'est activé, c'est la liste des
+    /// éléments de traits »), puis choisir un pinceau bascule en plein écran de
+    /// tracé. C'est juste pour une surface qui a la place d'afficher une liste.
+    ///
+    /// La vue `3b` ne décrit pas ce parcours : taper DESSIN doit donner un
+    /// doigt qui trace, avec ses couleurs et sa gomme sous la scène. Rien de
+    /// plus.
+    ///
+    /// **Ce que la vérification simulateur a trouvé (2026-08-30)** : la porte
+    /// du plateau appelait `enterDrawingEditingMode()` seul. La bande de
+    /// réglages paraissait, et le doigt traçait dans le VIDE — parce que la
+    /// couche de capture est montée sur `isDrawingActive`, c'est-à-dire
+    /// `activeTool == .drawing`, et que rien sur ce chemin ne posait l'outil.
+    /// Deux drapeaux pour un seul état apparent : la bande disait « je
+    /// dessine », le canvas disait « non ».
+    ///
+    /// Cette méthode pose les DEUX, et c'est pourquoi elle existe plutôt que de
+    /// publier `selectTool` : un site d'appel qui doit poser deux drapeaux dans
+    /// le bon ordre pour obtenir un état finit par n'en poser qu'un.
+    public func beginDrawing() {
+        activeTool = .drawing
+        enterImmersiveDrawing()
+    }
+
+    /// Sortie symétrique — elle retire les deux drapeaux que `beginDrawing` a
+    /// posés. Sans le second, la porte ne pourrait plus BASCULER : elle
+    /// retrouverait `isDrawingActive == true` et rentrerait dans le mode qu'on
+    /// vient de lui demander de quitter.
+    public func endDrawing() {
+        exitDrawingEditingMode()
+        if activeTool == .drawing { activeTool = nil }
     }
 
     /// Sélection d'un pinceau → plein écran de tracé : canvas full-bleed
@@ -101,7 +141,7 @@ extension StoryComposerViewModel {
     /// 1 : « lorsqu'on quitte on revient au système initial » (user
     /// 2026-07-11). Guardé sur `isActive` pour qu'un exit no-op (appelé à
     /// chaque changement d'outil) n'écrase pas un zoom posé HORS dessin.
-    func exitDrawingEditingMode() {
+    public func exitDrawingEditingMode() {
         guard drawingEditingMode.isActive else { return }
         drawingEditingMode = .inactive
         isDrawingImmersive = false
@@ -109,7 +149,7 @@ extension StoryComposerViewModel {
     }
 
     /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.
-    func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
+    public func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
         guard case .active(let strokeId, _) = drawingEditingMode else { return }
         drawingEditingMode = .active(strokeId: strokeId, expandedTool: tool)
     }
@@ -151,7 +191,7 @@ extension StoryComposerViewModel {
 
     /// Sélectionne un trait pour l'édition par-trait. `nil` désélectionne. Un id
     /// inexistant est ignoré (no-op). No-op si pas en mode édition.
-    func selectStroke(_ id: String?) {
+    public func selectStroke(_ id: String?) {
         guard case .active(_, let expandedTool) = drawingEditingMode else { return }
         if let id, !drawingStrokes.contains(where: { $0.id == id }) { return }
         drawingEditingMode = .active(strokeId: id, expandedTool: expandedTool)
@@ -189,4 +229,37 @@ extension StoryComposerViewModel {
         transform(&strokes[index])
         drawingStrokes = strokes
     }
+    /// **Effacer par le geste — une mutation de MODÈLE, pas de vue.**
+    ///
+    /// Elle vivait sur `StoryComposerView` (`+Canvas.swift`), où elle filtrait
+    /// `viewModel.drawingStrokes` depuis l'extérieur. Rien ne l'y obligeait :
+    /// elle ne lit aucune géométrie de vue, seulement des points DESIGN déjà
+    /// projetés par la couche de capture. Sa place sur la vue était le seul
+    /// obstacle à monter la gomme ailleurs (#4092).
+    ///
+    /// Le rayon est en pixels DESIGN — le même repère que les traits — donc il
+    /// vaut identiquement quelle que soit la taille rendue de la scène. C'est
+    /// ce qui fait qu'effacer sur la scène incrustée du plateau et sur
+    /// l'atelier plein écran demande le même geste.
+    ///
+    /// **Le retour haptique n'est donné que si quelque chose a DISPARU** : une
+    /// gomme passée dans le vide qui vibre ferait croire à un effacement.
+    func eraseStrokes(near erasePoints: [CGPoint]) {
+        guard !erasePoints.isEmpty else { return }
+        let eraseRadius: CGFloat = 28  // design px
+        let survivors = drawingStrokes.filter { stroke in
+            let reach = CGFloat(stroke.width) / 2 + eraseRadius
+            for sp in StrokePathBuilder.renderPoints(for: stroke) {
+                for ep in erasePoints where hypot(sp.x - ep.x, sp.y - ep.y) <= reach {
+                    return false
+                }
+            }
+            return true
+        }
+        if survivors.count != drawingStrokes.count {
+            drawingStrokes = survivors
+            HapticFeedback.light()
+        }
+    }
+
 }

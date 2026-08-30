@@ -14,12 +14,28 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { writeConversationPreferences } from '../services/conversationPreferencesSync';
+import { depreciee, dateDeRetrait } from '../utils/deprecation';
+import { apiPath } from '@meeshy/shared/api/prefix';
 import { retractNotificationsForClearedHistory } from '../services/messaging/retractHiddenMessageNotifications';
 import {
   hideMessagesForUser,
   restoreMessageForUser,
 } from '../services/personalMessageVisibilitySync';
 import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
+import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
+import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
+import { broadcastToUser } from '../utils/socket-broadcast';
+// #4332 — la corbeille de conversations (delete-for-me / restore-for-me /
+// deleted-conversations) est réalignée sur le geste que la route CANONIQUE
+// (`/api/v1/conversations/:id/delete-for-me`, ci-dessous importée) écrit
+// réellement. `performConversationDeleteForMe` est le corps du geste
+// (extrait de ce fichier canonique pour ce lot) ; l'erreur typée laisse
+// chaque adresse traduire le cas « pas membre » dans SON PROPRE vocabulaire
+// HTTP plutôt que de coller celui de l'autre.
+import {
+  performConversationDeleteForMe,
+  ConversationDeleteForMeNotAParticipantError,
+} from './conversations/delete-for-me';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -35,25 +51,168 @@ interface ClearHistoryBody {
   beforeDate: string; // ISO date string
 }
 
-export default async function userDeletionsRoutes(fastify: FastifyInstance) {
+/**
+ * Options du plugin. `basePath` — jamais `prefix` — pour la même raison que
+ * `routes/uploads/tus-handler.ts` (#4277) : ce module construit lui-même des
+ * URLs ABSOLUES (`${basePath}/conversations/…`) ; les combiner avec le
+ * mécanisme de préfixage NATIF de Fastify (déclenché par la clé réservée
+ * `prefix` sur `server.register()`) additionnerait les deux — vérifié :
+ * `server.register(userDeletionsRoutes, { prefix: '/api/v1' })` avec des
+ * routes internes déjà absolues sert `/api/v1/api/v1/user/deleted-conversations`,
+ * jamais `/api/v1/user/deleted-conversations`.
+ */
+/**
+ * Le jour où la décision de #4317 est prise — pas celui où l'alias est né.
+ * `Deprecation` est une date STRUCTURÉE (RFC 9745) : elle dit depuis quand
+ * l'adresse est en sursis, et cette date est le verdict, pas le montage.
+ */
+const DEPUIS_ALIAS_SUPPRESSION_CONVERSATION = '2026-08-30';
+
+/**
+ * L'annonce servie par `DELETE /api/conversations/:conversationId/delete-for-me`.
+ *
+ * Le successeur est CALCULÉ par requête, pour deux raisons qui tiennent
+ * ensemble. D'abord il porte l'id RÉEL de la conversation appelée, jamais le
+ * motif `:conversationId` : un `Link` qu'on ne peut pas suivre sans le
+ * réécrire n'a rendu qu'une moitié de service — c'est la forme retenue pour
+ * l'alias des pièces jointes, vérifiée sur staging. Ensuite il passe par
+ * `apiPath()`, source unique du préfixe : le jour où la version d'API bouge,
+ * l'annonce bouge avec elle au lieu de désigner une adresse morte.
+ *
+ * `retraitLe` s'en dérive par la fenêtre du dépôt (`identity.md` § 5,
+ * 180 jours). Elle INFORME d'une échéance stable ; le retrait réel reste
+ * gouverné par le compteur d'accès nul (#4275). Ici le compteur devrait
+ * tomber vite : aucun des trois clients n'appelle cette adresse.
+ */
+const ALIAS_SUPPRESSION_CONVERSATION = {
+  depuis: DEPUIS_ALIAS_SUPPRESSION_CONVERSATION,
+  successeur: (request: FastifyRequest) =>
+    apiPath(`/conversations/${(request.params as ConversationIdParams).conversationId}/delete-for-me`),
+  retraitLe: dateDeRetrait(DEPUIS_ALIAS_SUPPRESSION_CONVERSATION),
+} as const;
+
+export type UserDeletionsRoutesOptions = {
+  readonly basePath?: string;
+};
+
+/**
+ * Base absolue des sept routes ci-dessous (#4277, critère 3). AVANT ce lot,
+ * le module était monté via `server.register(userDeletionsRoutes, { prefix: '' })`
+ * ET portait le chemin COMPLET codé en dur dans chaque route
+ * (`/api/conversations/…`) — une troisième convention d'adressage dans le
+ * même fichier de `route-registration.ts`, aux côtés de `${API_PREFIX}` seul
+ * et de `${API_PREFIX}/sous-chemin`. `opts.basePath` est désormais la SEULE
+ * source ; le repli `/api` ne sert que si l'appelant n'en fournit AUCUNE —
+ * l'appel actuel de `route-registration.ts` (`prefix: ''`, sans `basePath`)
+ * ou les harnais de test existants (`app.register(userDeletionsRoutes)`,
+ * sans options), ce qui préserve EXACTEMENT l'adresse d'aujourd'hui tant que
+ * l'édit d'enregistrement de #4277 n'est pas appliqué.
+ *
+ * PAS `/api/v1` : `DELETE …/conversations/:conversationId/delete-for-me`
+ * PARTAGE son adresse finale sous `/api/v1` avec un DOUBLON déjà vivant —
+ * `routes/conversations/delete-for-me.ts` (`registerDeleteForMeRoutes`,
+ * monté dans `conversationRoutes` sous `${API_PREFIX}`), une implémentation
+ * plus récente et plus complète (transfert de propriété, clôture,
+ * diffusion Socket.IO) que celle-ci n'a jamais reçue. Faire remonter CETTE
+ * route à `/api/v1` ferait lever Fastify au démarrage
+ * (`FST_ERR_DUPLICATED_ROUTE`) — mesuré sur le manifeste (#4276) :
+ * `DELETE /api/v1/conversations/:id/delete-for-me` y figure déjà.
+ *
+ * ## La décision de #4317 est PRISE, et elle se mesure
+ *
+ * #4317 demandait « laquelle des deux implémentations survit ? » en la
+ * classant décision produit. Ce n'en était pas une : les deux moitiés
+ * n'écrivent pas dans la même colonne, et une seule des deux écritures est
+ * LUE par la liste.
+ *
+ * - La moitié riche écrit `Participant.deletedForMe` — la colonne sur
+ *   laquelle `routes/conversations/core.ts` construit son `whereClause` de
+ *   liste, celle que `utils/delta-tombstones.ts` et `routes/sync/conversations.ts`
+ *   interrogent pour les deltas.
+ * - CETTE moitié écrit `UserConversationPreferences.deletedForUserAt` —
+ *   qu'AUCUNE requête de liste ne consulte ; `core.ts` la sélectionne pour
+ *   la projeter en `isDeletedForUser`, et rien d'autre.
+ *
+ * Et les trois clients tranchent dans le même sens : iOS
+ * (`ConversationService.deleteForMe`, endpoint relatif sur `apiBaseURL`,
+ * donc `/api/v1`) et Android (`ConversationApi.deleteForMe`, même base)
+ * appellent la moitié RICHE ; le web n'appelle ni l'une ni l'autre. Cette
+ * route-ci n'a, mesuré, AUCUN appelant.
+ *
+ * Verdict : `routes/conversations/delete-for-me.ts` survit. Cette adresse
+ * devient un ALIAS EN SURSIS et le DIT (`depreciee`, #4274) plutôt que de
+ * disparaître d'un coup — la queue des versions installées est longue, et le
+ * retrait reste gouverné par le compteur d'accès nul (#4275), jamais par une
+ * revue de code client.
+ *
+ * ## Ce qui RESTE, et qui est un bogue, pas un rangement
+ *
+ * Les six AUTRES routes de ce fichier n'ont aucun doublon ET aucun appelant
+ * (mesuré sur les trois clients). Deux d'entre elles — `restore-for-me` et
+ * `GET /user/deleted-conversations` — LISENT `deletedForUserAt`, dont le seul
+ * écrivain serveur est la route ci-dessus, celle que personne n'appelle : la
+ * corbeille de conversations ne peut donc rien contenir. Suivi en bogue à
+ * part, référencé depuis #4317 — pas ici, parce qu'y toucher n'est plus une
+ * question d'adresse.
+ */
+export default async function userDeletionsRoutes(
+  fastify: FastifyInstance,
+  opts: UserDeletionsRoutesOptions = {}
+) {
   const prisma = fastify.prisma;
   const authMiddleware = createUnifiedAuthMiddleware(prisma, {
     requireAuth: true,
     allowAnonymous: false,
   });
+  const basePath = opts.basePath || '/api';
 
   /**
    * DELETE /api/conversations/:conversationId/delete-for-me
-   * Soft-delete a conversation from the user's view only
+   *
+   * ALIAS DÉPRÉCIÉ (#4332) de la route CANONIQUE
+   * `DELETE /api/v1/conversations/:id/delete-for-me`
+   * (`routes/conversations/delete-for-me.ts`). Avant ce lot, cette route
+   * portait sa PROPRE logique — un simple upsert sur
+   * `UserConversationPreferences.deletedForUserAt` — sans transfert de
+   * propriété ni clôture, et écrivant une colonne que RIEN d'autre ne relit
+   * pour ce geste : la corbeille (`restore-for-me`,
+   * `GET .../deleted-conversations`, plus bas dans ce fichier) lit
+   * `Participant.deletedForMe` — la colonne que la route canonique écrit.
+   * Deux implémentations, deux vérités, et seule la canonique avait un
+   * appelant réel (iOS `ConversationService.swift`, Android
+   * `ConversationApi.kt`) — #4317 a tranché en sa faveur. Cette route
+   * délègue désormais intégralement à `performConversationDeleteForMe`, si
+   * bien que les DEUX adresses écrivent la MÊME colonne et que la corbeille
+   * peut enfin contenir ce que l'utilisateur supprime réellement — c'était
+   * le défaut nommé par #4332 : « la corbeille lit une colonne que plus
+   * rien n'écrit ».
+   *
+   * `onRequest` plutôt qu'un appel dans le handler : une adresse dépréciée
+   * s'annonce quel que soit le verdict (401 compris), et `onRequest` court
+   * avant toute garde — voir le doc-comment de `utils/deprecation.ts`.
+   *
+   * L'annonce elle-même vit dans `ALIAS_SUPPRESSION_CONVERSATION` (en tête de
+   * fichier), et NON dans un objet littéral posé ici : deux lots ont convergé
+   * sur cette route le 2026-08-30, et c'est la forme nommée qui l'emporte,
+   * pour une raison qui vaut d'être écrite. Elle calcule son successeur via
+   * `apiPath()`, source unique du préfixe — un littéral `/api/v1/...` écrit à
+   * la main ici aurait cessé d'être vrai le jour où la version d'API bouge, et
+   * c'est précisément ce qu'une garde du dépôt interdit désormais côté client
+   * (#4285). Elle porte de plus un `Sunset`, justifié par une MESURE et non
+   * par une habitude : aucun des trois clients n'appelle cette adresse.
    */
   fastify.delete<{ Params: ConversationIdParams }>(
-    '/api/conversations/:conversationId/delete-for-me',
+    `${basePath}/conversations/:conversationId/delete-for-me`,
     {
+      // Seule route de ce fichier à porter l'annonce : c'est la seule dont le
+      // successeur EXISTE (cf. le bloc de tête). `onRequest` et non le
+      // handler — un appelant refusé doit apprendre qu'il migre, lui d'abord.
+      onRequest: depreciee(ALIAS_SUPPRESSION_CONVERSATION),
       preValidation: [authMiddleware],
       schema: {
-        description: 'Soft-delete a conversation from the authenticated user\'s view. Other participants will still see the conversation. The conversation can be restored later.',
+        description: 'Deprecated alias of DELETE /api/v1/conversations/:id/delete-for-me. Soft-deletes a conversation from the authenticated user\'s view — transferring ownership or closing the conversation when the caller was its sole/creating member. The conversation can be restored later via restore-for-me, unless it was closed.',
         tags: ['users', 'conversations'],
-        summary: 'Delete conversation for current user',
+        summary: 'Delete conversation for current user (deprecated alias)',
         params: {
           type: 'object',
           required: ['conversationId'],
@@ -69,47 +228,35 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
               data: {
                 type: 'object',
                 properties: {
-                  message: { type: 'string', example: 'Conversation deleted from your view' }
+                  conversationId: { type: 'string' },
+                  deletedAt: { type: 'string', format: 'date-time' }
                 }
               }
             }
           },
-          403: errorResponseSchema,
+          404: errorResponseSchema,
           500: errorResponseSchema
         }
       }
     },
     async (request, reply) => {
       try {
-        const { conversationId } = request.params;
+        const { conversationId: rawConversationId } = request.params;
         const authRequest = request as UnifiedAuthRequest;
         const userId = authRequest.authContext.userId;
 
-        // Verify user is a member of this conversation
-        const membership = await prisma.participant.findFirst({
-          where: {
-            conversationId,
-            userId,
-            isActive: true,
-          },
-        });
-
-        if (!membership) {
-          return sendForbidden(reply, 'Not a member of this conversation');
-        }
-
-        // Per-user state: the user's other devices must drop the conversation
-        // too, so this goes through the versioned+broadcast writer.
-        await writeConversationPreferences(fastify, {
+        const result = await performConversationDeleteForMe(fastify, prisma, {
           userId,
-          conversationId,
-          data: { deletedForUserAt: new Date() },
+          rawConversationId,
         });
 
-        logger.info('Conversation deleted', { conversationId });
+        logger.info('Conversation deleted', { conversationId: result.conversationId });
 
-        return sendSuccess(reply, { message: 'Conversation deleted from your view' });
+        return sendSuccess(reply, result);
       } catch (error) {
+        if (error instanceof ConversationDeleteForMeNotAParticipantError) {
+          return sendNotFound(reply, 'Vous ne participez pas a cette conversation');
+        }
         logger.error('Error deleting conversation for user', error as Error);
         return sendInternalError(reply, 'Internal server error');
       }
@@ -118,14 +265,26 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
   /**
    * POST /api/conversations/:conversationId/restore-for-me
-   * Restore a previously deleted conversation for the user
+   * Restore a previously deleted conversation for the user.
+   *
+   * #4332 — lisait AUPARAVANT `UserConversationPreferences.deletedForUserAt`,
+   * une colonne qu'AUCUN appelant réel n'écrivait (le seul écrivain était le
+   * DELETE ci-dessus, avant qu'il ne délègue lui aussi à
+   * `performConversationDeleteForMe`) : cette route répondait donc TOUJOURS
+   * 400 « Conversation is not deleted », y compris pour une conversation que
+   * l'utilisateur venait réellement de supprimer via la route canonique, qui
+   * écrit `Participant.deletedForMe`. Elle lit désormais CETTE colonne — la
+   * même que le DELETE ci-dessus écrit, canonique comme alias.
+   *
+   * Pas de filtre `isActive` sur le `findFirst` : c'est justement l'inverse
+   * qu'on cherche — un participant que « supprimer pour moi » a désactivé.
    */
   fastify.post<{ Params: ConversationIdParams }>(
-    '/api/conversations/:conversationId/restore-for-me',
+    `${basePath}/conversations/:conversationId/restore-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
-        description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user.',
+        description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user AND the conversation itself was not closed for everyone in the process.',
         tags: ['users', 'conversations'],
         summary: 'Restore deleted conversation',
         params: {
@@ -159,24 +318,61 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const authRequest = request as UnifiedAuthRequest;
         const userId = authRequest.authContext.userId;
 
-        // Update preferences to restore conversation
-        const prefs = await prisma.userConversationPreferences.findUnique({
-          where: {
-            userId_conversationId: { userId, conversationId },
+        const participant = await prisma.participant.findFirst({
+          where: { conversationId, userId },
+          select: {
+            id: true,
+            deletedForMe: true,
+            conversation: { select: { isActive: true } },
           },
         });
 
-        if (!prefs || !prefs.deletedForUserAt) {
+        if (!participant || !participant.deletedForMe) {
           return sendBadRequest(reply, 'Conversation is not deleted');
         }
 
-        // Inverse of delete-for-me, and it owes the same broadcast: without it
-        // the other devices keep hiding a conversation the user just restored.
-        await writeConversationPreferences(fastify, {
-          userId,
-          conversationId,
-          data: { deletedForUserAt: null },
+        // Restaurer un participant dont la conversation a été CLOSE (dernier
+        // membre parti, ou DM vide clos — les deux branches de
+        // `performConversationDeleteForMe`) rouvrirait pour tout le monde un
+        // fil que la route canonique a fermé délibérément : un geste
+        // personnel ne doit jamais avoir un effet collectif. La conversation
+        // reste irrécupérable par ce chemin — seule une action
+        // d'administration distincte peut rouvrir une conversation fermée.
+        if (!participant.conversation.isActive) {
+          return sendBadRequest(reply, 'Conversation is closed and cannot be restored');
+        }
+
+        await prisma.participant.update({
+          where: { id: participant.id },
+          data: { deletedForMe: null, isActive: true },
         });
+        // Miroir exact du DELETE ci-dessus : sans cette invalidation, le
+        // cache de lookup continuerait de répondre "inactif" pour CE
+        // participant jusqu'à l'expiration de son TTL, alors que la ligne
+        // vient d'être réactivée.
+        invalidateParticipantLookup(participant.id, conversationId);
+
+        // #4344 — jumeau de l'émission `CONVERSATION_DELETED` que
+        // `performConversationDeleteForMe` diffuse après SA persistance
+        // (`conversations/delete-for-me.ts`) : sans elle, restaurer une
+        // conversation sur UN appareil ne l'annonçait à AUCUN autre — la ligne
+        // `Participant` venait d'être réactivée en base, mais rien ne le
+        // disait aux autres sessions du même utilisateur. Diffusée sur SA
+        // SEULE room personnelle (`ROOMS.user`, via `broadcastToUser`),
+        // jamais celle de la conversation : c'est un fait PERSONNEL (ce que
+        // CE participant voit), symétrique à `CONVERSATION_DELETED`, pas un
+        // fait partagé par le fil — aucun autre membre n'a besoin de le
+        // savoir, la conversation ne les a jamais quittés. Émise APRÈS la
+        // persistance et son invalidation de cache ci-dessus, jamais avant :
+        // une annonce ne précède pas la durabilité du fait qu'elle annonce
+        // (même discipline que `delete-for-me.ts`). `broadcastToUser` est la
+        // porte typée (`socketio/serverEmit.ts`) qu'emprunte déjà sa jumelle
+        // `restoreMessageForUser` (`services/personalMessageVisibilitySync.ts`)
+        // pour le même verbe côté message — jamais un `Server` nu de
+        // socket.io, et jamais un échec de diffusion ne fait échouer cette
+        // route (best-effort, comme documenté sur `broadcastToUser`).
+        const restoredPayload: ConversationRestoredEventData = { userId, conversationId };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.CONVERSATION_RESTORED, restoredPayload);
 
         logger.info('Conversation restored', { conversationId });
 
@@ -193,7 +389,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Clear all messages before a certain date (delete for user only)
    */
   fastify.post<{ Params: ConversationIdParams; Body: ClearHistoryBody }>(
-    '/api/conversations/:conversationId/clear-history',
+    `${basePath}/conversations/:conversationId/clear-history`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -308,7 +504,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Soft-delete a message from the user's view only
    */
   fastify.delete<{ Params: MessageIdParams }>(
-    '/api/messages/:messageId/delete-for-me',
+    `${basePath}/messages/:messageId/delete-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -393,7 +589,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Restore a previously deleted message for the user
    */
   fastify.post<{ Params: MessageIdParams }>(
-    '/api/messages/:messageId/restore-for-me',
+    `${basePath}/messages/:messageId/restore-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -466,7 +662,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Bulk delete multiple messages from the user's view
    */
   fastify.delete<{ Body: { messageIds: string[] } }>(
-    '/api/messages/bulk/delete-for-me',
+    `${basePath}/messages/bulk/delete-for-me`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -570,7 +766,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
    * Get list of conversations the user has deleted (for potential restoration)
    */
   fastify.get(
-    '/api/user/deleted-conversations',
+    `${basePath}/user/deleted-conversations`,
     {
       preValidation: [authMiddleware],
       schema: {
@@ -614,12 +810,23 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const authContext = (request as UnifiedAuthRequest).authContext;
         const userId = authContext.userId;
 
-        const deletedPrefs = await prisma.userConversationPreferences.findMany({
+        // #4332 — lisait AUPARAVANT `UserConversationPreferences`, une table
+        // qu'aucun appelant réel n'écrit pour ce geste (voir le DELETE en
+        // tête de fichier) : cette liste était donc TOUJOURS vide, par
+        // construction. `Participant.deletedForMe` est la colonne que la
+        // route canonique de suppression écrit — c'est elle qui porte la
+        // vérité. Le `select` reste IDENTIQUEMENT celui d'avant sur
+        // `conversation` (mêmes six champs, rien de plus) : élargir la
+        // charge de cette liste est un choix à part, pas un effet de bord
+        // de ce correctif.
+        const deletedParticipants = await prisma.participant.findMany({
           where: {
             userId,
-            deletedForUserAt: { not: null },
+            deletedForMe: { not: null },
           },
-          include: {
+          select: {
+            conversationId: true,
+            deletedForMe: true,
             conversation: {
               select: {
                 id: true,
@@ -631,13 +838,13 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
               },
             },
           },
-          orderBy: { deletedForUserAt: 'desc' },
+          orderBy: { deletedForMe: 'desc' },
         });
 
-        return sendSuccess(reply, deletedPrefs.map((p) => ({
+        return sendSuccess(reply, deletedParticipants.map((p) => ({
           conversationId: p.conversationId,
           conversation: p.conversation,
-          deletedAt: p.deletedForUserAt,
+          deletedAt: p.deletedForMe,
         })));
       } catch (error) {
         logger.error('Error fetching deleted conversations', error as Error);

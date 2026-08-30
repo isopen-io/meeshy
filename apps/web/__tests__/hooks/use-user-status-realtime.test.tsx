@@ -259,7 +259,7 @@ describe('useUserStatusRealtime', () => {
   });
 
   describe('Resync on focus', () => {
-    it('should fetch /users/presence when window gains focus', async () => {
+    it('should fetch /directory/presence when window gains focus', async () => {
       mockUsersMap.set('u1', { id: 'u1' });
       mockUsersMap.set('u2', { id: 'u2' });
 
@@ -287,7 +287,10 @@ describe('useUserStatusRealtime', () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
-      expect(calledUrl).toContain('/users/presence?ids=');
+      // `/directory/presence` (#4164) : la même charge, sous une garde
+      // FAIL-CLOSED — un id absent de la carte de visibilité y est masqué au
+      // lieu d'être servi depuis la présence runtime brute.
+      expect(calledUrl).toContain('/directory/presence?ids=');
       expect(calledUrl).toContain('u1');
       expect(calledUrl).toContain('u2');
       expect((calledInit.headers as Record<string, string>).Authorization).toBe('Bearer test-token');

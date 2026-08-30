@@ -3,6 +3,9 @@
   "version": "1.32.1",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "main": "dist/src/server.js",
   "scripts": {
     "build": "tsc",
@@ -10,12 +13,13 @@
     "dev": "tsx watch -r dotenv/config src/server.ts",
     "generate": "prisma generate --schema=../../packages/shared/prisma/schema.prisma",
     "migrate": "prisma migrate dev --schema=../../packages/shared/prisma/schema.prisma",
+    "route-manifest:generate": "tsx scripts/generate-route-manifest.ts",
     "test": "jest --config=jest.config.json",
     "test:unit": "jest --config=jest.config.json",
-    "test:integration": "jest --config=jest.config.temp.json --testPathPattern='integration' --testTimeout=30000",
-    "test:e2ee": "jest --config=jest.config.temp.json --testPathPattern='e2ee' --testTimeout=30000",
-    "test:performance": "jest --config=jest.config.temp.json --testPathPattern='performance' --testTimeout=60000",
-    "test:resilience": "jest --config=jest.config.temp.json --testPathPattern='resilience' --testTimeout=30000",
+    "test:integration": "jest --config=jest.config.temp.json --testPathPatterns='integration' --testTimeout=30000",
+    "test:e2ee": "jest --config=jest.config.temp.json --testPathPatterns='e2ee' --testTimeout=30000",
+    "test:performance": "jest --config=jest.config.temp.json --testPathPatterns='performance' --testTimeout=60000",
+    "test:resilience": "jest --config=jest.config.temp.json --testPathPatterns='resilience' --testTimeout=30000",
     "test:all": "jest --config=jest.config.temp.json --testTimeout=30000",
     "test:watch": "jest --config=jest.config.json --watch",
     "test:coverage": "jest --config=jest.config.json --coverage",

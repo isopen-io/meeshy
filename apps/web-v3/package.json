@@ -1,0 +1,52 @@
+{
+  "name": "@meeshy/web-v3",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3300",
+    "dev:https": "node scripts/dev-https.mjs -p 3300",
+    "build": "next build && node scripts/check-app-router-built.mjs && node scripts/check-bundle-budget.mjs",
+    "start": "next start -p 3300 -H 0.0.0.0",
+    "lint": "eslint . && node scripts/check-jetons.mjs",
+    "type-check": "tsc --noEmit",
+    "test": "jest --maxWorkers=50%",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage --maxWorkers=50%",
+    "clean": "rm -rf .next node_modules",
+    "baseline": "node scripts/baseline.mjs",
+    "test:a11y": "playwright test e2e/visual/v3-a11y.spec.ts",
+    "test:lifecycle": "playwright test e2e/visual/v3-lifecycle.spec.ts"
+  },
+  "dependencies": {
+    "@meeshy/design-tokens": "workspace:*",
+    "@meeshy/icons": "workspace:*",
+    "next": "15.5.23",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@eslint/eslintrc": "^3.3.6",
+    "@playwright/test": "^1.62.1",
+    "@next/eslint-plugin-next": "15.5.23",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.19.43",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@typescript-eslint/eslint-plugin": "^8.48.2",
+    "@typescript-eslint/parser": "^8.48.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.5.23",
+    "eslint-import-resolver-node": "^0.3.9",
+    "eslint-import-resolver-typescript": "^3.10.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "typescript": "^6.0.3"
+  }
+}

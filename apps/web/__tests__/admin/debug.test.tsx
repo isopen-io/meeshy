@@ -23,7 +23,7 @@ jest.mock('@/utils/user-adapter', () => ({
 
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (endpoint: string) => `http://localhost${endpoint}`,
-  API_ENDPOINTS: { AUTH: { ME: '/auth/me' } },
+  API_ENDPOINTS: { auth: { me: '/auth/me' } },
 }));
 
 jest.mock('@/hooks/use-i18n', () => ({

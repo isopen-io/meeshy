@@ -1,5 +1,6 @@
 package me.meeshy.ui.component.bubble
 
+import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.model.ApiAttachmentTranscription
 import me.meeshy.sdk.model.ApiMessage
@@ -417,9 +418,4 @@ public object BubbleContentBuilder {
     private val ApiMessageAttachment.isAudio: Boolean
         get() = mimeType?.startsWith("audio/") == true
 
-    private fun resolveMediaUrl(url: String, mediaBaseUrl: String?): String = when {
-        url.startsWith("http") -> url
-        mediaBaseUrl == null -> url
-        else -> mediaBaseUrl.trimEnd('/') + (if (url.startsWith("/")) url else "/$url")
-    }
 }

@@ -605,6 +605,7 @@ struct FeedPostCard: View {
             // Comments preview (compact)
             if !post.comments.isEmpty {
                 commentsPreview
+                    .commentMediaGallery(topLevel: post.comments)
             }
         }
         .background(
@@ -691,6 +692,9 @@ struct FeedPostCard: View {
                 allAttachments: attachments,
                 startAttachmentId: fullscreenMediaId ?? attachments.first?.id ?? "",
                 accentColor: accentColor,
+                captionMap: SocialMediaCaption.map(
+                    for: post.media, carrierText: post.displayContent
+                ),
                 senderInfoMap: senderMap
             )
         }
@@ -1247,6 +1251,8 @@ struct FeedPostCard: View {
     }
 
     // MARK: - Comments Preview (Top 3 Comments)
+    /// L'aperçu ne montre que trois commentaires — le plein écran, lui, feuillette
+    /// les médias de TOUS ceux que la carte connaît.
     private var commentsPreview: some View {
         Button {
             showCommentsSheet = true
@@ -1381,6 +1387,7 @@ struct FeedPostCard: View {
                             media: media,
                             accentColor: accentColor,
                             commentId: comment.id,
+                            carrierText: comment.displayContent,
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,

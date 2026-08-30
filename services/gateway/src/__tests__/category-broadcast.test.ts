@@ -10,19 +10,6 @@ import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 const TEST_USER_ID = '507f1f77bcf86cd799439011';
 const TEST_CATEGORY_ID = '507f1f77bcf86cd799439aaa';
 
-// The categories route registers `createUnifiedAuthMiddleware(prisma, ...)`
-// inside the plugin. We replace it with a no-op that injects `request.auth`.
-jest.mock('../middleware/auth', () => ({
-  createUnifiedAuthMiddleware: () => async (request: any) => {
-    request.auth = { userId: TEST_USER_ID };
-    request.authContext = {
-      isAuthenticated: true,
-      registeredUser: { id: TEST_USER_ID, role: 'USER' },
-      userId: TEST_USER_ID,
-    };
-  },
-}));
-
 type EmitCall = { event: string; payload: unknown };
 
 const buildPrismaMock = () => ({
@@ -64,7 +51,18 @@ const buildApp = async (prisma: ReturnType<typeof buildPrismaMock>) => {
   app.decorate('prisma', prisma as any);
   app.decorate('socketIOHandler', { getManager: () => ({ io: fakeIO }) } as any);
 
-  // Late require so the jest.mock above is active.
+  // Le hook d'auth vit chez le PARENT en production
+  // (routes/me/preferences/index.ts) — categoriesRoutes n'en pose plus le
+  // sien depuis #4182 critère 4. On le reproduit ici, avant le plugin.
+  app.addHook('preHandler', async (request: any) => {
+    request.auth = { userId: TEST_USER_ID };
+    request.authContext = {
+      isAuthenticated: true,
+      registeredUser: { id: TEST_USER_ID, role: 'USER' },
+      userId: TEST_USER_ID,
+    };
+  });
+
   const { categoriesRoutes } = await import('../routes/me/preferences/categories');
   await app.register(categoriesRoutes);
   await app.ready();

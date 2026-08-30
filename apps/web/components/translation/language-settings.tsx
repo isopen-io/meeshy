@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Globe, Languages, Target } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 
 interface LanguageSettingsProps {
@@ -55,7 +56,7 @@ export function LanguageSettings({ user, onUserUpdate }: LanguageSettingsProps) 
     setIsLoading(true);
     try {
       // Appel API pour sauvegarder les modifications des paramètres de langue
-      const response = await fetch(buildApiUrl('/users/me'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.me), {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',

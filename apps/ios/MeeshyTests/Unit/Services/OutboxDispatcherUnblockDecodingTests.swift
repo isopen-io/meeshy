@@ -9,7 +9,7 @@ import XCTest
 /// Rien ne manquait à la chaîne : l'écran existe (`BlockedTab`), le bouton et
 /// sa confirmation aussi, le view-model enfile bien `.unblockUser` dans
 /// l'outbox durable, le dispatcher vise la bonne route (`DELETE
-/// /users/:id/block`) et le gateway la sert. **Le défaut était dans le TYPE de
+/// /directory/blocks/:id`, ex-`/users/:id/block`) et le gateway la sert. **Le défaut était dans le TYPE de
 /// la réponse attendue** :
 ///
 /// ```
@@ -34,7 +34,7 @@ import XCTest
 /// de cette suite interdit de revenir.
 final class OutboxDispatcherUnblockDecodingTests: XCTestCase {
 
-    /// La charge EXACTE que `routes/users/blocking.ts` renvoie — son schéma
+    /// La charge EXACTE que `routes/directory/blocks.ts` renvoie — son schéma
     /// déclare `data: { message: string }`.
     private let served = #"{"success":true,"data":{"message":"User unblocked"}}"#
 

@@ -486,8 +486,35 @@ extension StoryComposerView {
                                        defaultValue: "Écrire un texte", bundle: .module))
     }
 
+    /// **« Coller » vit sur sa PROPRE rangée, sous les deux autres** (#4378,
+    /// directive porteur 2026-08-30) :
+    ///
+    /// > « Le bouton coller doit être centré plus bas pour que les autres
+    /// > boutons restent au centre ! »
+    ///
+    /// Les trois capsules partageaient un `HStack`. Mesuré à l'écran : la
+    /// troisième débordait du bord droit, et surtout les deux premières s'en
+    /// trouvaient poussées HORS du centre — la rangée entière se décalait pour
+    /// loger celle qui dépassait.
+    ///
+    /// Une seconde rangée règle les deux d'un coup : « Caméra » et « Galerie »
+    /// retrouvent le centre, et « Coller » y est aussi, sous elles. Le
+    /// `VStack` ne se peint pas quand la seconde rangée est vide — la capsule se
+    /// retire d'elle-même quand le presse-papier ne porte rien d'acceptable, et
+    /// un interstice réservé à une vue absente serait un trou.
     @ViewBuilder
     private var blankCanvasStarterRow: some View {
+        VStack(spacing: 10) {
+            blankCanvasCaptureRow
+            BlankCanvasPasteStarter(
+                canAddMedia: viewModel.canAddMedia,
+                onItems: { posePastedItems($0) }
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var blankCanvasCaptureRow: some View {
         HStack(spacing: 10) {
             if offersCameraStarter {
                 blankCanvasStarterCapsule(
@@ -502,13 +529,6 @@ extension StoryComposerView {
             if viewModel.canAddMedia {
                 blankCanvasGalleryStarter
             }
-            // C5b — le presse-papier entre dans le composer. La capsule lit
-            // `\.storyPaste` elle-même : `StoryComposerView` n'a pas à porter une
-            // quatrième `@Environment` pour une amorce.
-            BlankCanvasPasteStarter(
-                canAddMedia: viewModel.canAddMedia,
-                onItems: { posePastedItems($0) }
-            )
         }
     }
 
@@ -551,8 +571,26 @@ extension StoryComposerView {
     /// passé. `.item` ferme la liste, comme sur la cible de dépôt de la barre de
     /// conversation : ce que le composer ne sait pas peindre est ANNONCÉ
     /// app-side, jamais avalé.
+    /// **RESTREINTE au #4378** (directive porteur 2026-08-30) :
+    ///
+    /// > « que coller n'apparaisse que si on a une image, un texte ou vidéo dans
+    /// > le presse-papier »
+    ///
+    /// `.item` acceptait TOUT : `PasteButton` se croyait donc toujours servi, et
+    /// « Coller » s'affichait quel que soit le contenu du presse-papier —
+    /// l'affordance sans effet que la loi 4 interdit.
+    ///
+    /// **Ce n'est pas une annulation de la directive du 2026-08-23**, qui
+    /// voulait qu'un document collé soit ANNONCÉ plutôt qu'avalé. Elle est
+    /// RESTREINTE : ce qui n'est ni image, ni vidéo, ni son, ni texte n'est plus
+    /// proposé du tout — il n'y a donc plus rien à annoncer sur ce chemin. La
+    /// succession se consigne ; elle ne s'efface pas.
+    ///
+    /// Le TEXTE y entre en même temps que `StoryPastedItem.text` : l'accepter
+    /// sans savoir le poser aurait rendu la capsule active devant un
+    /// presse-papier qu'elle ne sait pas servir — pire que de ne pas l'accepter.
     nonisolated static let pasteStarterContentTypes: [UTType] = [
-        .image, .movie, .audio, .pdf, .item
+        .image, .movie, .audio, .plainText, .utf8PlainText
     ]
 
     /// Durée au-delà de laquelle l'appui devient un appui LONG.
@@ -606,8 +644,39 @@ extension StoryComposerView {
                 addCapturedMedia(.video(url))
             case .audio(let url):
                 addRecordingToBackground(url: url)
+            case .text(let contenu):
+                // **La destination du texte est une RÈGLE, pas un `if` ici**
+                // (#4378) : « pourquoi mon texte est-il parti en description ? »
+                // se répond en lisant `StoryPastePolicy`, pas en instrumentant
+                // un écran.
+                //
+                // Le média, lui, n'a rien à décider à ce niveau : sa règle vit
+                // déjà dans les chemins d'insertion (`shouldBeBackground`,
+                // `ComposerAudioPlacement`), et la redoubler ici aurait donné
+                // deux règles pour une question.
+                switch StoryPastePolicy.placement(forText: contenu) {
+                case .description(let texte):
+                    viewModel.applyContentText(texte)
+                case .textObject(let texte):
+                    poseTextObject(texte)
+                case nil:
+                    break   // coller le vide n'est pas une erreur, c'est un geste sans matière
+                }
             }
         }
+    }
+
+    /// Pose un objet texte PORTANT déjà son contenu.
+    ///
+    /// `addText()` crée un objet VIDE et ouvre l'éditeur — c'est le geste de
+    /// l'auteur qui écrit. Un collage, lui, apporte son texte : le faire passer
+    /// par l'éditeur obligerait l'auteur à valider ce qu'il vient de coller.
+    /// L'objet est donc créé puis rempli par le même chemin que l'éditeur
+    /// emprunte à la validation — jamais un second site de création.
+    private func poseTextObject(_ contenu: String) {
+        guard let objet = viewModel.addText() else { return }
+        viewModel.updateTextContent(id: objet.id, text: contenu)
+        viewModel.exitTextEditingMode()
     }
 
     /// Règle PURE de l'amorce « pellicule ». `hasRecentAsset` ne vaut vrai que
@@ -999,7 +1068,8 @@ extension StoryComposerView {
             measuredBottomBandHeight: measuredBottomBandHeight,
             composerBandHeight: composerBandHeight,
             presentedSystemSheetFraction: presentedSystemSheetFraction,
-            composerScreenHeight: composerScreenHeight
+            composerScreenHeight: composerScreenHeight,
+            hostBottomReservation: hostCanvasBottomReservation
         )
     }
 
@@ -1020,9 +1090,22 @@ extension StoryComposerView {
         measuredBottomBandHeight: CGFloat,
         composerBandHeight: CGFloat,
         presentedSystemSheetFraction: CGFloat?,
-        composerScreenHeight: CGFloat
+        composerScreenHeight: CGFloat,
+        /// **Ce que l'HÔTE occupe en bas** (#4361) — sa zone de saisie de
+        /// description. Défaut `0` : un appelant qui l'ignore obtient le
+        /// comportement d'avant, exactement.
+        ///
+        /// Elle entre par un `max`, comme les deux autres termes, et pour la
+        /// même raison : ces réserves ne s'ADDITIONNENT pas. Band et saisie
+        /// occupent le même bas d'écran ; les sommer ferait remonter le canvas
+        /// deux fois trop haut le jour où les deux coexistent.
+        hostBottomReservation: CGFloat = 0
     ) -> CGFloat {
-        guard canvasIsCarded else { return 0 }
+        // La réserve de l'hôte vaut MÊME hors cardage : elle ne décrit pas un
+        // panneau de l'atelier mais une zone que le meuble a réellement peinte
+        // par-dessus. La retenir derrière `canvasIsCarded` laisserait la saisie
+        // recouvrir un canvas plein écran — le défaut qu'on corrige.
+        guard canvasIsCarded else { return min(composerScreenHeight * 0.85, max(0, hostBottomReservation)) }
         var height: CGFloat = 0
         if !effectiveBandIsHidden {
             // Réserve = distance du HAUT RÉEL de la band (coord globales,
@@ -1044,6 +1127,7 @@ extension StoryComposerView {
         if let fraction = presentedSystemSheetFraction {
             height = max(height, composerScreenHeight * fraction)
         }
+        height = max(height, max(0, hostBottomReservation))
         // Plafond de SÉCURITÉ (0.85 H) : jamais atteint par une band réaliste
         // (max ~60 % avec `composerBandMaxHeight`), il ne fait qu'empêcher un
         // `measuredBandTopY` transitoire aberrant (0 au montage) d'écraser le
@@ -1320,70 +1404,39 @@ extension StoryComposerView {
                 // rendu live des traits éditables (avec halo sélection). Le canvas
                 // sous-jacent suppress son propre drawingLayer pendant ce temps
                 // (`suppressDrawingOverlay`), donc pas de double rendu.
-                ZStack {
-                    MeeshyStrokeCanvas(
-                        strokes: viewModel.drawingStrokes,
-                        selectedId: viewModel.drawingEditingMode.selectedStrokeId
-                    )
-                    .equatable()
-                    // Aperçu WYSIWYG du trait en cours (C4) : rendu PAR-DESSUS les
-                    // traits commités, par notre moteur largeur-variable, donc identique
-                    // au trait finalement commité au lift-up.
-                    if let preview = viewModel.activeStrokePreview {
-                        MeeshyStrokeCanvas(strokes: [preview], selectedId: nil)
-                    }
-                    StrokeCaptureLayer(
-                        activeTool: viewModel.activeBrushTool,
-                        activeColorHex: DrawingEditToolOptions.hex(of: viewModel.drawingColor),
-                        activeWidth: Double(viewModel.drawingWidth),
-                        activeSmoothing: viewModel.activeBrushSmoothing,
-                        onStrokeInProgress: { viewModel.activeStrokePreview = $0 },
-                        onStrokeCommitted: { stroke in
-                            // `commitStroke` ajoute le trait ET vide la pile de redo
-                            // (un nouveau trait rend le « rétablir » caduc).
-                            viewModel.commitStroke(stroke)
-                            viewModel.activeStrokePreview = nil
-                        },
-                        onEraseGesture: { points in
-                            eraseStrokes(near: points)
-                            viewModel.activeStrokePreview = nil
-                        },
-                        onViewportPinch: { scale, translation, state in
-                            // Zoom/pan d'inspection PENDANT le dessin (pinch
-                            // 2 doigts sur la couche de capture) — même
-                            // pipeline que le pinch 3 doigts hors dessin
-                            // (`onCanvasZoomScaleChanged` ci-dessus). Le zoom
-                            // est ramené à 1 en sortant du mode
-                            // (`exitDrawingEditingMode`).
-                            switch state {
-                            case .began, .changed:
-                                viewportPinchDelta = scale
-                                drawingViewportPanDelta = translation
-                            case .ended:
-                                let newScale = CanvasViewportZoomPolicy.settledScale(
-                                    current: viewModel.canvasScale,
-                                    gestureScale: scale
-                                )
-                                withAnimation(.spring(response: 0.2)) {
-                                    viewModel.canvasScale = newScale
-                                    if newScale <= 1.0 {
-                                        viewModel.canvasOffset = .zero
-                                    } else {
-                                        viewModel.canvasOffset = CGSize(
-                                            width: viewModel.canvasOffset.width + translation.width,
-                                            height: viewModel.canvasOffset.height + translation.height
-                                        )
-                                    }
-                                }
-                                viewportPinchDelta = 1.0
-                                drawingViewportPanDelta = .zero
-                            default:
-                                viewportPinchDelta = 1.0
-                                drawingViewportPanDelta = .zero
-                            }
+                // **La surface de dessin est EXTRAITE** (#4092) : ce bloc fut
+                // cinq vues et sept lectures de ViewModel, écrites ici. Le
+                // composer unifié en avait besoin à l'identique ; les recopier
+                // aurait produit deux surfaces de dessin à faire diverger au
+                // premier réglage ajouté. Un corps, deux montages — règle
+                // d'emprunt du #4035, qui exige que l'ancien site consomme la
+                // vue extraite LUI AUSSI.
+                //
+                // Le pincement d'inspection reste servi par l'atelier, seul à
+                // posséder un viewport à déplacer : la surface le RELAIE sans
+                // le décider. Une extraction qui perd une capacité de son site
+                // d'origine n'est pas une extraction, c'est une réécriture.
+                MeeshyDrawingSurface(
+                    viewModel: viewModel,
+                    onViewportPinch: { scale, translation, state in
+                        switch state {
+                        case .began, .changed:
+                            viewportPinchDelta = scale
+                            drawingViewportPanDelta = translation
+                        case .ended:
+                            let newScale = CanvasViewportZoomPolicy.settledScale(
+                                current: viewModel.canvasScale,
+                                gestureScale: scale
+                            )
+                            viewModel.canvasScale = newScale
+                            viewportPinchDelta = 1
+                            drawingViewportPanDelta = .zero
+                        default:
+                            viewportPinchDelta = 1
+                            drawingViewportPanDelta = .zero
                         }
-                    )
-                }
+                    }
+                )
             }
         }
         .overlay { audioForegroundOverlay }
@@ -1690,28 +1743,6 @@ extension StoryComposerView {
         )
     }
 
-    /// Gomme par hit-test : supprime tout trait dont un point de rendu (espace
-    /// design) tombe dans le rayon du geste de gomme. Pas d'effacement pixel-par-pixel
-    /// (le modèle est vectoriel) — on supprime le trait entier croisé, UX acceptable
-    /// (cf. Risque #2 du plan).
-    func eraseStrokes(near erasePoints: [CGPoint]) {
-        guard !erasePoints.isEmpty else { return }
-        let eraseRadius: CGFloat = 28  // design px
-        let survivors = viewModel.drawingStrokes.filter { stroke in
-            let reach = CGFloat(stroke.width) / 2 + eraseRadius
-            let points = StrokePathBuilder.renderPoints(for: stroke)
-            for sp in points {
-                for ep in erasePoints where hypot(sp.x - ep.x, sp.y - ep.y) <= reach {
-                    return false
-                }
-            }
-            return true
-        }
-        if survivors.count != viewModel.drawingStrokes.count {
-            viewModel.drawingStrokes = survivors
-            HapticFeedback.light()
-        }
-    }
 }
 
 // MARK: - Amorces de page blanche : surface d'accueil et libellé partagé
@@ -1796,13 +1827,25 @@ struct BlankCanvasStarterLabel: View {
 /// se désactive de lui-même quand le presse-papier ne porte rien d'acceptable —
 /// donc jamais d'affordance qui ne ferait rien. Son libellé vient du système :
 /// il est déjà traduit dans les sept langues de l'app, sans clé de catalogue.
-struct BlankCanvasPasteStarter: View {
+/// **`public` depuis le #4092** : le rail du composer unifié monte CE bouton.
+///
+/// Il ne pouvait pas devenir une porte ordinaire du rail — celles-ci sont des
+/// `Button` qui rappellent l'hôte, et le privilège décrit ci-dessus se perd dès
+/// qu'on le reconstruit à la main. C'est pourquoi le rail a gagné un slot où
+/// l'hôte rend la vue ENTIÈRE : la forme du contrôle a dicté la forme du rail,
+/// et non l'inverse.
+public struct BlankCanvasPasteStarter: View {
     let canAddMedia: Bool
     let onItems: ([StoryPastedItem]) -> Void
 
+    public init(canAddMedia: Bool, onItems: @escaping ([StoryPastedItem]) -> Void) {
+        self.canAddMedia = canAddMedia
+        self.onItems = onItems
+    }
+
     @Environment(\.storyPaste) private var provider
 
-    var body: some View {
+    public var body: some View {
         if StoryComposerView.offersPasteStarter(hasResolver: provider != nil,
                                                 canAddMedia: canAddMedia),
            let resolver = provider {

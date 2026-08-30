@@ -21,7 +21,9 @@ import {
   notificationMatchesReadBulkScope,
 } from '@meeshy/shared/utils/notification-read-bulk';
 import { toast } from 'sonner';
-import { buildNotificationTitle, buildNotificationContent, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
+import { getNotificationIcon, getNotificationLink, getNotificationBorderColor } from '@/utils/notification-helpers';
+import { buildNotificationBanner } from '@/utils/notification-banner';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { closeDeliveredNotifications, revocationOfDeletedNotification } from '@/utils/notification-revocation';
 import { useI18n } from '@/hooks/useI18n';
 import { useRouter } from 'next/navigation';
@@ -111,24 +113,63 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     recentToasts.add(toastKey);
     setTimeout(() => recentToasts.delete(toastKey), 5000);
 
-    const title = buildNotificationTitle(notification, t);
-    const content = buildNotificationContent(notification, t);
+    // Une bannière doit dire CE QUI vient d'arriver : la phrase d'action
+    // localisée par le SERVEUR, le groupe pour un message de groupe, et la
+    // vignette du contenu visé devant la charge. @see utils/notification-banner
+    const banner = buildNotificationBanner(notification, t);
     const link = getNotificationLink(notification);
     const borderColor = getNotificationBorderColor(notification);
     const duration = isMobileRef.current ? 2000 : 4000;
+    const actor = notification.actor;
+    const initial = (actor?.displayName || actor?.username || 'U').charAt(0).toUpperCase();
 
     toast.custom(
       (toastId) => (
         <div
+          role="button"
+          tabIndex={0}
+          aria-label={[banner.headline, banner.reactionBadge, banner.body].filter(Boolean).join(', ')}
           className={`flex items-start gap-3 p-4 bg-background border rounded-lg shadow-lg cursor-pointer ${borderColor}`}
           onClick={() => {
             toast.dismiss(toastId);
             if (link) router.push(link);
           }}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' && event.key !== ' ') return;
+            event.preventDefault();
+            toast.dismiss(toastId);
+            if (link) router.push(link);
+          }}
         >
-          <div className="flex-1">
-            <p className="font-medium text-sm">{title}</p>
-            {content && <p className="text-muted-foreground text-xs mt-1">{content}</p>}
+          <Avatar className="h-9 w-9 flex-shrink-0 ring-1 ring-border">
+            <AvatarImage src={actor?.avatar || undefined} alt="" />
+            <AvatarFallback className="bg-muted text-muted-foreground text-xs font-semibold">
+              {initial}
+            </AvatarFallback>
+          </Avatar>
+
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{banner.headline}</p>
+            {(banner.body || banner.thumbnailUrl || banner.reactionBadge) && (
+              <div className="mt-1 flex items-center gap-2">
+                <span className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center overflow-hidden rounded bg-muted text-xs">
+                  {banner.thumbnailUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={banner.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    getNotificationIcon(notification).emoji
+                  )}
+                  {banner.reactionBadge && (
+                    <span className="absolute -bottom-0.5 -right-0.5 text-[10px] leading-none">
+                      {banner.reactionBadge}
+                    </span>
+                  )}
+                </span>
+                {banner.body && (
+                  <p className="truncate text-xs text-muted-foreground">{banner.body}</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       ),

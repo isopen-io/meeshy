@@ -121,28 +121,121 @@ public final class ComposerPublishTrigger: ObservableObject {
 
     public init() {}
 
+    /// Au démontage de l'atelier : une télécommande qui lui survit publierait
+    /// l'état d'un composer disparu.
+    public func disarm() {
+        handler = nil
+        previewHandler = nil
+        isArmed = false
+        offersPreview = false
+        canPublish = false
+        requestedTargetType = nil
+        requestedVisibility = nil
+        requestedVisibilityUserIds = nil
+    }
+
+    /// L'audience que la DERNIÈRE pression a apportée (#4135), même patron et
+    /// même raison que `requestedTargetType` : lue au moment du GESTE, jamais au
+    /// montage.
+    ///
+    /// `nil` = le presseur n'a pas de sélecteur à lui ; l'atelier publie alors
+    /// sous sa propre `visibility`. C'est le défaut SÛR : un presseur muet rend
+    /// la main au seul autre porteur du fait, il ne pose pas « public ».
+    public private(set) var requestedVisibility: String?
+
+    /// Les personnes nommées, quand l'audience en exige. `nil` suit la même
+    /// règle que ci-dessus. Elles voyagent AVEC leur audience et jamais seules :
+    /// une liste sans son mode, ou un mode sans sa liste, publierait vers un
+    /// ensemble que personne n'a choisi.
+    public private(set) var requestedVisibilityUserIds: [String]?
+
+    /// **Y a-t-il de la MATIÈRE à publier ?** Poussé par l'atelier, lu par le
+    /// meuble.
+    ///
+    /// Il ne DOUBLE pas le gate, il le RELAIE. `StoryComposerView.canPublish`
+    /// reste l'unique juge : le recalculer côté meuble donnerait deux règles à
+    /// faire diverger, et le meuble ne voit ni `selectedAudioId` ni les traits de
+    /// dessin — il conclurait « rien à publier » sur une story « fond + musique »
+    /// parfaitement publiable.
+    ///
+    /// `false` au départ, et c'est le sens SÛR : tant que l'atelier n'a rien dit,
+    /// le meuble ne peint pas de flèche armée au-dessus d'une composition vide.
+    @Published public private(set) var canPublish = false
+
+    /// L'ŒIL, armé par l'atelier (#4135). Séparé de `handler` parce qu'il répond
+    /// à une autre question : `handler` ENVOIE, celui-ci MONTRE — et le meuble
+    /// doit pouvoir peindre l'un sans l'autre.
+    private var previewHandler: (() -> Void)?
+
+    /// Loi 4 : le meuble ne peint un œil que s'il y a quelqu'un pour l'ouvrir.
+    @Published public private(set) var offersPreview = false
+
     /// Armée par l'atelier, avec `publishAllSlides` et rien d'autre.
     public func arm(_ handler: @escaping () -> Void) {
         self.handler = handler
         isArmed = true
     }
 
-    /// Au démontage de l'atelier : une télécommande qui lui survit publierait
-    /// l'état d'un composer disparu.
-    public func disarm() {
-        handler = nil
-        isArmed = false
-        requestedTargetType = nil
+    /// L'aperçu, armé séparément : l'atelier le rend AVEC ses médias préchargés
+    /// et ses effets de canvas rabattus. Un œil peint au meuble et exécuté par
+    /// lui rendrait un aperçu amputé — c'est l'un des deux blocages qui ont fait
+    /// revenir ce lot en arrière au #4124.
+    public func armPreview(_ handler: @escaping () -> Void) {
+        previewHandler = handler
+        offersPreview = true
     }
 
-    /// Pressée par le meuble, qui apporte le format choisi AU MOMENT DU GESTE.
+    /// Poussé par l'atelier à chaque changement de sa matière.
+    public func report(canPublish: Bool) {
+        guard self.canPublish != canPublish else { return }
+        self.canPublish = canPublish
+    }
+
+    /// Pressée par le meuble, qui apporte le format ET l'audience choisis AU
+    /// MOMENT DU GESTE.
     ///
-    /// `nil` (défaut) = le presseur n'a pas d'éventail à lui : l'atelier publie
-    /// alors sous son propre `publishTargetType`. Passer `nil` n'efface donc
-    /// rien d'utile — il rend la main au seul autre porteur du fait.
-    public func requestPublish(as targetType: PostType? = nil) {
+    /// `nil` (défaut) = le presseur n'a pas d'éventail / de sélecteur à lui :
+    /// l'atelier publie alors sous les siens. Passer `nil` n'efface donc rien
+    /// d'utile — il rend la main au seul autre porteur du fait.
+    public func requestPublish(as targetType: PostType? = nil,
+                               visibility: String? = nil,
+                               visibilityUserIds: [String]? = nil) {
         requestedTargetType = targetType
+        requestedVisibility = visibility
+        requestedVisibilityUserIds = visibilityUserIds
         handler?()
+    }
+
+    public func requestPreview() {
+        previewHandler?()
+    }
+
+    /// **L'audience SERVIE** — celle sous laquelle la publication part.
+    ///
+    /// Règle pure, du même patron que `publishedType(requested:atelier:)`, et
+    /// pour la même raison : c'est la seule moitié de ce lot qui, si elle se
+    /// trompe, produit une erreur IRRÉVERSIBLE — un contenu « Amis » parti en
+    /// « Public » ne se rattrape pas. Elle doit donc s'éprouver sans monter la
+    /// moindre vue.
+    public nonisolated static func publishedVisibility(requested: String?, atelier: String) -> String {
+        requested ?? atelier
+    }
+
+    /// Les personnes nommées voyagent AVEC leur audience, jamais séparément.
+    ///
+    /// Deux règles en une, et les deux comptent :
+    /// - la liste suit l'audience SERVIE, pas celle du presseur — sans quoi une
+    ///   audience « Amis » pourrait emporter la liste d'un « Seulement… » choisi
+    ///   puis abandonné ;
+    /// - une audience qui n'exige personne sert une liste VIDE, quoi qu'on lui
+    ///   passe. C'est la règle que `publishAllSlides` appliquait déjà en ligne ;
+    ///   la remonter ici la rend éprouvable, et empêche qu'un second appelant
+    ///   l'oublie.
+    public nonisolated static func publishedVisibilityUserIds(
+        requested: [String]?, atelier: [String], served: String
+    ) -> [String] {
+        guard let mode = PostVisibility(rawValue: served), mode.requiresUserSelection else { return [] }
+        return requested ?? atelier
     }
 }
 
@@ -232,12 +325,23 @@ extension StoryComposerView {
             defaultValue: "Publication de la story lancée",
             bundle: .module
         ))
-        let mode = PostVisibility(rawValue: visibility) ?? .public
-        let ids = mode.requiresUserSelection ? visibilityUserIds : []
+        // **L'audience SERVIE vient du presseur quand il en a une** (#4135).
+        // Deux règles PURES, et pas un `if` ici : c'est la seule moitié de ce
+        // lot dont l'erreur est IRRÉVERSIBLE — un contenu « Amis » parti en
+        // « Public » ne se rattrape pas —, donc elle doit s'éprouver sans
+        // monter la moindre vue.
+        let servedVisibility = ComposerPublishTrigger.publishedVisibility(
+            requested: publishTrigger?.requestedVisibility, atelier: visibility
+        )
+        let ids = ComposerPublishTrigger.publishedVisibilityUserIds(
+            requested: publishTrigger?.requestedVisibilityUserIds,
+            atelier: visibilityUserIds,
+            served: servedVisibility
+        )
         let accepted = onPublishAllInBackground(
             slides, viewModel.slideImages, viewModel.loadedImages,
             viewModel.loadedVideoURLs, viewModel.loadedAudioURLs,
-            storyLanguage, visibility, ids, viewModel.draftId, viewModel.references,
+            storyLanguage, servedVisibility, ids, viewModel.draftId, viewModel.references,
             Self.accessibilityHandoff(from: accessibilityStore),
             Self.publishedType(requested: publishTrigger?.requestedTargetType,
                                atelier: publishTargetType)

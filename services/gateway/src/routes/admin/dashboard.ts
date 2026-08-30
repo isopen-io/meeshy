@@ -3,24 +3,49 @@ import { logError } from '../../utils/logger';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendInternalError } from '../../utils/response.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
+import { requirePermission } from '../../middleware/authorize';
+import { permissionsService } from '../../services/admin/permissions.service';
+import { UserRoleEnum } from '@meeshy/shared/types';
 
 const DASHBOARD_CACHE_KEY = 'admin:dashboard:stats';
 const DASHBOARD_CACHE_TTL = 600; // 10 minutes
 
 // Middleware pour vérifier les permissions dashboard
-const requireDashboardPermission = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
+// `requireDashboardPermission` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+//
+// #4157 — `canViewAnalytics` admettait ANALYST (qui n'a PAS `canAccessAdmin`
+// dans la matrice centrale) et EXCLUAIT MODERATOR (qui l'a) : une contradiction
+// dans les DEUX sens sur la même route. Le tableau de bord est la PORTE
+// D'ENTRÉE de l'administration, pas une vue analytique parmi d'autres — sa
+// garde est donc `canAccessAdmin`, le laissez-passer que la matrice donne
+// exactement à BIGBOSS/ADMIN/MODERATOR/AUDIT, ni plus ni moins.
+const requireDashboardPermission = requirePermission('canAccessAdmin');
 
-  const userRole = authContext.registeredUser.role;
-  const canViewDashboard = ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(userRole);
-
-  if (!canViewDashboard) {
-    return sendForbidden(reply, 'Permission insuffisante pour voir le tableau de bord');
-  }
-};
+/**
+ * Les quatre drapeaux que le tableau de bord affiche — DÉRIVÉS de la matrice.
+ *
+ * C'étaient une CINQUIÈME et une SIXIÈME copie des permissions, composées à
+ * partir de listes de rôles en dur, à deux endroits de ce fichier, et servies
+ * au client à côté des statistiques (#4153).
+ *
+ * Elles échappaient à la garde de #4152 parce qu'elles ne nomment pas
+ * `canAccessAdmin` : elles inventent leur propre vocabulaire
+ * (`canManageContent`, `canManageReports`) pour des droits que la matrice
+ * porte déjà sous d'autres noms. C'est la forme la plus discrète du défaut —
+ * une copie qui ne ressemble pas à l'original.
+ */
+function dashboardPermissions(role: string) {
+  const central = permissionsService.getPermissions(role as UserRoleEnum);
+  return {
+    role,
+    canManageUsers: central.canUpdateUsers,
+    canManageContent: central.canModerateContent,
+    canViewAnalytics: central.canViewAnalytics,
+    canManageReports: central.canModerateContent,
+  };
+}
 
 export async function dashboardRoutes(fastify: FastifyInstance) {
   /**
@@ -38,13 +63,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       const cached = await cacheStore.get(DASHBOARD_CACHE_KEY);
       if (cached) {
         const authContext = (request as UnifiedAuthRequest).authContext;
-        const userPermissions = {
-          role: authContext.registeredUser.role,
-          canManageUsers: ['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role),
-          canManageContent: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role),
-          canViewAnalytics: ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(authContext.registeredUser.role),
-          canManageReports: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role)
-        };
+        const userPermissions = dashboardPermissions(authContext.registeredUser.role);
         reply.header('Cache-Control', 'private, max-age=600');
         return sendSuccess(reply, { ...JSON.parse(cached), userPermissions, timestamp: now.toISOString() });
       }
@@ -124,13 +143,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       await cacheStore.set(DASHBOARD_CACHE_KEY, JSON.stringify({ statistics, recentActivity }), DASHBOARD_CACHE_TTL);
 
       const authContext = (request as UnifiedAuthRequest).authContext;
-      const userPermissions = {
-        role: authContext.registeredUser.role,
-        canManageUsers: ['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role),
-        canManageContent: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role),
-        canViewAnalytics: ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(authContext.registeredUser.role),
-        canManageReports: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role)
-      };
+      const userPermissions = dashboardPermissions(authContext.registeredUser.role);
 
       reply.header('Cache-Control', 'private, max-age=600');
       return sendSuccess(reply, { statistics, recentActivity, userPermissions, timestamp: now.toISOString() });
@@ -147,10 +160,13 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
   fastify.post('/dashboard/invalidate-cache', {
     onRequest: [fastify.authenticate, requireDashboardPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
-    const authContext = (request as UnifiedAuthRequest).authContext;
-    if (!['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role)) {
-      return sendForbidden(reply, 'BIGBOSS ou ADMIN requis');
-    }
+    // Vider le cache est une ÉCRITURE : elle demande plus que la lecture du
+    // tableau de bord, et elle le demande par le NOM de la permission plutôt
+    // que par une liste de rôles réécrite ici (#4153).
+    const refus = await requirePermission('canManageNotifications')(request, reply);
+    void refus;
+    if (reply.sent) return reply;
+
     try {
       await getCacheStore().del(DASHBOARD_CACHE_KEY);
       return sendSuccess(reply, undefined, { message: 'Cache dashboard invalidé' });

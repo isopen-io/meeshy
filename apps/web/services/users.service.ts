@@ -38,15 +38,7 @@ export const usersService = {
   /**
    * Récupère la liste de tous les utilisateurs
    */
-  async getAllUsers(): Promise<ApiResponse<User[]>> {
-    try {
-      const response = await apiService.get<User[]>('/users');
-      return response;
-    } catch (error) {
-      logger.error('[Service]', 'Erreur lors de la récupération des utilisateurs', { error });
-      throw error;
-    }
-  },
+
 
   /**
    * Recherche des utilisateurs

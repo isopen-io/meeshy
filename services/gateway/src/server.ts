@@ -34,17 +34,20 @@ import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { registerRouteUsageHook } from './plugins/route-usage.plugin';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { createDeviceCountryMiddleware } from './middleware/deviceCountry';
 import { requestIdPlugin } from './middleware/request-id';
 import { CORS_METHODS } from './config/cors-methods';
 import { conditionalGetOnSend } from './utils/etag';
+import { resolveTrustProxy } from './config/trust-proxy';
 import { MutationLogService } from './services/MutationLogService';
 // L'enregistrement des routes REST (~50 fichiers) vit dans `./route-registration`,
 // un module SANS effet de bord au chargement (voir le commentaire en tête de
 // ce fichier) — nécessaire pour que le test de garde des routes puisse
 // l'importer sans déclencher `meeshyServer.start()`.
 import { registerAllRoutes } from './route-registration';
+import { canonicaliserCheminsOpenApi } from './utils/openapi-canonical-paths';
 import { InitService } from './services/InitService';
 import { MeeshySocketIOHandler } from './socketio/MeeshySocketIOHandler';
 import { CallCleanupService } from './services/CallCleanupService';
@@ -52,6 +55,8 @@ import { shutdownEncryptionService } from './services/EncryptionService';
 import { MultiLevelJobMappingCache } from './services/MultiLevelJobMappingCache';
 import { getCacheStore } from './services/CacheStore';
 import { BackgroundJobsManager } from './jobs';
+import { backfillSearchTokens } from './jobs/backfill-search-tokens';
+import { demarrerSondeDeTypage, type SondeDeTypage } from './services/schema-drift.service';
 import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { TusCleanupService } from './services/TusCleanupService';
@@ -60,7 +65,7 @@ import { ExpiredStoriesCleanupService } from './services/ExpiredStoriesCleanupSe
 import { OrphanMediaCleanupService } from './services/storage/OrphanMediaCleanupService';
 import { MediaService } from './services/MediaService';
 import { ZmqAgentClient } from './services/zmq-agent/ZmqAgentClient';
-import { AuthenticationError, ValidationError, TranslationError } from './errors/custom-errors';
+import { typedErrorResponse } from './errors/custom-errors';
 
 // ============================================================================
 // CONFIGURATION & ENVIRONMENT
@@ -175,6 +180,9 @@ class MeeshyServer {
   private deliveryQueue: RedisDeliveryQueue;
   private agentClient: ZmqAgentClient | null = null;
 
+  /** Sonde de dérive de typage (#4243) — démarrée avec les crons, arrêtée avec eux. */
+  private sondeDeTypage: SondeDeTypage | null = null;
+
   constructor() {
     // Check if HTTPS mode is enabled
     const useHttps = process.env.USE_HTTPS === 'true';
@@ -197,6 +205,11 @@ class MeeshyServer {
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
+        // Sans cette option, `request.ip` est l'adresse du conteneur Traefik —
+        // la MÊME pour tous les appelants — et toute limitation « par IP » se
+        // réduit à un seau unique pour la plateforme (#4137). Cf.
+        // `config/trust-proxy.ts` pour la raison du nombre plutôt que `true`.
+        trustProxy: resolveTrustProxy(),
         https: {
           key: fs.readFileSync(keyPath),
           cert: fs.readFileSync(certFilePath),
@@ -216,6 +229,9 @@ class MeeshyServer {
         logger: false, // We use Winston instead
         disableRequestLogging: !config.isDev,
         bodyLimit: 50 * 1024 * 1024, // 50MB pour les fichiers audio volumineux
+        // Mode NOMINAL en production : le gateway est derrière Traefik. Voir
+        // le commentaire de la branche HTTPS ci-dessus et #4137.
+        trustProxy: resolveTrustProxy(),
         ajv: {
           customOptions: {
             strict: 'log' as const, // Allow unknown keywords like 'example' (for OpenAPI documentation)
@@ -276,6 +292,22 @@ class MeeshyServer {
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
     this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService, this.deliveryQueue);
+
+    // Rattrapage des jetons de recherche (#4159), en arrière-plan : une route
+    // de recherche adossée à un index vide ne trouve personne, et le
+    // rattrapage doit donc précéder l'usage. Il n'est PAS derrière une garde de
+    // premier boot — le dépôt a déjà payé ce piège avec `ensurePostGeoIndex`,
+    // restée sous `shouldInitialize()` et jamais exécutée en production.
+    void backfillSearchTokens(this.prisma).catch((error: unknown) =>
+      // Message EXPLICITE, avec sa conséquence : un `error` opaque a laissé ce
+      // rattrapage échouer en silence au premier déploiement — la colonne est
+      // restée vide sur les 222 comptes, et la recherche ne trouvait personne.
+      // Un journal qui ne dit pas ce qui est cassé ne signale rien.
+      logger.error(
+        '[BackfillSearchTokens] rattrapage INTERROMPU — la recherche de personnes ne trouvera personne tant que la colonne `searchTokens` est vide',
+        { error: error instanceof Error ? { name: error.name, message: error.message } : error }
+      )
+    );
 
     // Initialiser le service de nettoyage des uploads tus incomplets
     this.tusCleanup = new TusCleanupService();
@@ -492,7 +524,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       },
       staticCSP: true,
       transformStaticCSP: (header) => header,
-      transformSpecification: (swaggerObject) => swaggerObject,
+      // #4372 — l'OpenAPI publié écrit ses chemins comme les deux AUTRES
+      // descriptions de la même API : sans barre finale. `@fastify/swagger`
+      // émet la forme DÉCLARÉE, si bien qu'un module monté au préfixe
+      // `/api/v1/me` déclarant sa route en `'/'` publiait `/api/v1/me/` —
+      // quinze chemins dans ce cas, quand le manifeste (430) et le catalogue
+      // client (416) n'en portent aucun. Le serveur sert les deux formes, donc
+      // rien ne cassait ; mais toute comparaison entre l'OpenAPI et l'une des
+      // deux autres sources rendait quinze faux négatifs.
+      //
+      // Ici, et pas dans les huit modules concernés : déclarer `''` au lieu de
+      // `'/'` chez chacun marcherait, et laisserait le neuvième arriver. C'est
+      // le seul point par lequel la spec atteint un consommateur — vérifié,
+      // `fastify.swagger()` n'est appelée nulle part ailleurs.
+      transformSpecification: (swaggerObject) => {
+        const { spec, collisions } = canonicaliserCheminsOpenApi(swaggerObject as never);
+        if (collisions.length > 0) {
+          // Une collision n'est pas résolue en silence : la forme canonique
+          // l'emporte, mais on DIT ce qui n'a pas pu être fusionné.
+          logger.warn('OpenAPI : verbes en collision après canonisation des chemins', { collisions });
+        }
+        return spec as never;
+      },
       transformSpecificationClone: true
     });
 
@@ -587,6 +640,24 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     });
     logger.info('✅ Request timing hook registered');
 
+    // Compteur d'acces par route et par version cliente (#4275). Quatre issues
+    // — #4178, #4181, #4182, #4184 — font d'un compteur a ZERO le critere de
+    // retrait d'une adresse depreciee et INTERDISENT de le prouver par revue de
+    // code client : sans cette ligne, elles restent inatteignables par
+    // construction.
+    //
+    // Deux contraintes de POSE, et non une seule. Appel DIRECT sur la racine,
+    // jamais `register` : un hook pose dans un contexte encapsule ne verrait
+    // aucune des routes de production, et le compteur rendrait un tapis de
+    // zeros credible. Et arme sur `onResponse`, ou le routage est DEJA resolu :
+    // c'est ce qui fait rendre a `routeOptions.url` le GABARIT, jamais l'URL
+    // concrete — sans quoi un identifiant d'utilisateur entrerait dans la cle
+    // d'agregat au premier appel d'une route parametree.
+    //
+    // Cout mesure : 0,32 a 0,65 us par requete, aucune E/S, aucune promesse.
+    registerRouteUsageHook(this.server);
+    logger.info('✅ Route usage counter hook registered');
+
     // Socket.IO will be configured after server initialization
     // No need to register a plugin as Socket.IO attaches directly to the HTTP server
 
@@ -607,21 +678,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // Cast to `any` once to safely access error properties below.
       const err: any = error as any;
 
-      if (err instanceof AuthenticationError) {
-        return reply.code(401).send({
-          error: 'Authentication Failed',
-          message: err.message,
-          statusCode: 401,
-          timestamp: new Date().toISOString()
-        });
-      }
-
       // Refus de SCHÉMA (Ajv, avant le handler) : Fastify le marque par
       // `err.validation`. Sans cette branche il tombait dans le repli
       // générique et ressortait en « Internal Server Error / An unexpected
       // error occurred » sous un code 400 — le client apprenait qu'il avait
       // tort, jamais sur quoi. C'est ce qui rendait illisible le refus de
       // `POST /auth/register` le 2026-08-18.
+      //
+      // Elle passe AVANT la branche typée : un refus d'Ajv n'est pas une
+      // `BaseAppError`, mais il porte `statusCode: 400` et serait donc happé
+      // par tout repli qui lit ce champ.
       const schemaRefusal = schemaValidationErrorResponse(error);
       if (schemaRefusal) {
         return reply.code(schemaRefusal.statusCode).send({
@@ -630,20 +696,28 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         });
       }
 
-      if (error instanceof ValidationError) {
-        return reply.code(400).send({
-          error: 'Validation Error',
-          message: err.message,
-          statusCode: 400,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      if (error instanceof TranslationError) {
-        return reply.code(500).send({
-          error: 'Translation Error',
-          message: err.message,
-          statusCode: 500,
+      // TOUTE la hiérarchie typée, en UNE branche (#4212).
+      //
+      // Trois sous-classes sur dix-neuf avaient la leur ; les seize autres
+      // tombaient dans le repli générique. Celui-ci lit bien `err.statusCode`
+      // — le CODE était donc juste — mais il REMPLACE le message par « An
+      // unexpected error occurred » et jette tout champ propre à la classe.
+      //
+      // Un compte verrouillé recevait ainsi `423` avec « Internal Server
+      // Error » et SANS `lockedUntil` : la personne apprenait qu'on la
+      // refusait, jamais quand elle pourrait revenir (#4138).
+      //
+      // > Un handler qui rend le bon CODE et le mauvais CORPS est plus
+      // > trompeur qu'un handler qui échoue franchement : le code juste fait
+      // > croire que la couche a compris l'erreur.
+      //
+      // La DÉCISION vit dans `typedErrorResponse`, une fonction pure : ce
+      // handler-ci ne peut s'exercer qu'en montant un serveur, et le critère
+      // demande un témoin par sous-classe.
+      const typed = typedErrorResponse(error);
+      if (typed) {
+        return reply.code(typed.statusCode).send({
+          ...typed,
           timestamp: new Date().toISOString()
         });
       }
@@ -832,6 +906,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       // qui ne s'ouvre que sur une base vide. Derrière elle, une base déjà
       // peuplée ne recevait jamais l'index géospatial (500 sur /posts/nearby).
       await initService.ensurePostGeoIndex();
+      await initService.ensureFriendRequestIndexes();
+      await initService.ensureContactDeltaIndex();
 
       // Check if initialization is needed
       const shouldInit = await initService.shouldInitialize();
@@ -1109,6 +1185,23 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       this.expiredStoriesCleanup.start();
       logger.info('✓ Expired stories cleanup service started');
 
+      // Sonde de DÉRIVE DE TYPAGE (#4243) : une passe au démarrage, puis toutes
+      // les 12 h. MongoDB n'impose aucun type et le schéma Prisma ne décrit
+      // qu'une INTENTION — une écriture passée hors Prisma a posé un NOMBRE dans
+      // `User.phoneNumber`, et comme Prisma relit la ligne après CHAQUE écriture,
+      // ce compte ne pouvait plus rien écrire sur lui-même : ni présence, ni
+      // `lastLoginIp`, ni compteur d'échecs d'authentification, ni profil. Rien
+      // ne le signalait — le défaut n'est sorti qu'en cassant le rattrapage de
+      // #4159, des mois après l'écriture fautive.
+      //
+      // PAS derrière une garde de premier boot : le dépôt a déjà payé ce piège
+      // avec `ensurePostGeoIndex`, restée sous `shouldInitialize()` donc jamais
+      // exécutée en production jusqu'à ce que `/posts/nearby` rende 500. Un
+      // contrôle RÉTROACTIF sur une base qui contient déjà des données est par
+      // définition incompatible avec une porte « base vide ».
+      this.sondeDeTypage = demarrerSondeDeTypage(this.prisma);
+      logger.info('✓ Schema drift probe started');
+
       // Start expired-messages sweep (per-minute): erase content + ciphertext
       // of self-destructing messages whose expiresAt has lapsed.
       this.expiredMessagesCleanup.start();
@@ -1171,6 +1264,12 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       if (this.expiredStoriesCleanup) {
         this.expiredStoriesCleanup.stop();
         logger.info('✓ Expired stories cleanup service stopped');
+      }
+
+      // Stop schema drift probe (#4243)
+      if (this.sondeDeTypage) {
+        this.sondeDeTypage.arreter();
+        logger.info('✓ Schema drift probe stopped');
       }
 
       // Stop expired-messages sweep

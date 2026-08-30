@@ -188,6 +188,17 @@ public struct CursorPagination: Decodable, Sendable {
     public let nextCursor: String?
     public let hasMore: Bool?
     public let limit: Int?
+
+    /// Init PUBLIC : les doubles de l'app (`apps/ios/MeeshyTests`) importent le
+    /// SDK sans `@testable` et ne voient donc pas l'init mémoire synthétisée,
+    /// interne. Sans lui, un double ne peut pas fabriquer une page à curseur —
+    /// il doit rendre `pagination: nil`, et le témoin cesse alors de pouvoir
+    /// mesurer la propagation du curseur, qui est justement ce qu'il garde.
+    public init(nextCursor: String?, hasMore: Bool?, limit: Int?) {
+        self.nextCursor = nextCursor
+        self.hasMore = hasMore
+        self.limit = limit
+    }
 }
 
 public struct OffsetPagination: Decodable, Sendable {
@@ -450,6 +461,24 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
     public var anonymousSessionToken: String? {
         get { tokenLock.withLock { $0.anon } }
         set { tokenLock.withLock { $0.anon = newValue } }
+    }
+
+    /// Le jeton de session d'un compte INSCRIT — distinct de l'anonyme (#4213).
+    ///
+    /// Il ne sert pas à s'authentifier : c'est le JWT qui le fait. Il sert à
+    /// DIRE QUELLE SESSION une connexion représente, ce dont le handshake
+    /// Socket.IO a besoin pour qu'une révocation puisse couper le bon socket —
+    /// et lui seul.
+    ///
+    /// Il vit ici, sous le même verrou que les deux autres, parce que le
+    /// transport le lit depuis un contexte NON isolé : `AuthManager`, isolé
+    /// `@MainActor`, ne peut pas être interrogé au milieu d'une construction
+    /// synchrone de `SocketManager`.
+    private let registeredSessionLock = OSAllocatedUnfairLock<String?>(initialState: nil)
+
+    public var registeredSessionToken: String? {
+        get { registeredSessionLock.withLock { $0 } }
+        set { registeredSessionLock.withLock { $0 = newValue } }
     }
 
     /// L'identifiant à présenter au gateway, et SOUS QUEL EN-TÊTE.

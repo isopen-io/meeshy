@@ -34,13 +34,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     // MARK: - Lecture de la source du meuble (gardes de source 4, 5)
 
     private func hostSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.composerHostSource()
     }
 
     private func hostCode() throws -> String {
@@ -51,13 +45,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// pour `ComposerDocumentSurface.swift` : c'est là que vit
     /// `DocumentComposerDoor.publish`, la porte d'envoi, jamais dans le meuble.
     private func surfaceSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // .../Unit/Composer
-            .deletingLastPathComponent()   // .../Unit
-            .deletingLastPathComponent()   // .../MeeshyTests
-            .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerDocumentSurface.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.composerSurfaceSource()
     }
 
     private func surfaceCode() throws -> String {
@@ -253,7 +241,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// six outils fait rougir ce test.
     func test_leMeuble_sertReellementLaRangeeDuDocument_dansLeSource() throws {
         let code = try hostCode()
-        guard declarationBody(startingAt: "private var servedDocumentTools", in: code) != nil else {
+        guard declarationBody(startingAt: "var servedDocumentTools", in: code) != nil else {
             return XCTFail("`servedDocumentTools` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         XCTAssertTrue(
@@ -281,7 +269,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// `location: documentLocation`) fait rougir ce test — le lieu choisi
     /// serait JETÉ avant même d'atteindre `PublishIntent.document(location:)`.
     func test_leBrouillonDuDocument_porteLeLieuChoisi_pasUnLitteralNil() throws {
-        guard let corps = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let compacte = compact(corps)
@@ -354,7 +342,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// valeur en dur. Sans elle, le test ci-dessus pourrait être juste et
     /// correct sans que la production ne l'appelle jamais.
     func test_leBrouillonDuDocument_porteLeSecondOptInDepuisLeChoix_jamaisUnLitteral() throws {
-        guard let corps = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let compacte = compact(corps)
@@ -374,7 +362,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// deux — c'est exactement le défaut que cette fonction existe pour
     /// fermer, et que le composer inline du fil a déjà fermé une fois.
     func test_leSecondOptIn_estGateParFeedNearbyDiscoverabilityOffers_appelee_pasRecopiee() throws {
-        guard let corps = declarationBody(startingAt: "private var documentOffersNearbyDiscoverability", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentOffersNearbyDiscoverability", in: try hostCode()) else {
             return XCTFail("`documentOffersNearbyDiscoverability` est introuvable dans le meuble — la garde "
                 + "ne mesurerait RIEN.")
         }
@@ -559,7 +547,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// ce test — la transcription faite sur l'appareil serait JETÉE avant
     /// même d'atteindre `PublishIntent.document(transcription:)`.
     func test_leBrouillonDuDocument_porteLaTranscriptionEcrite_pasUnLitteralNil() throws {
-        guard let corps = declarationBody(startingAt: "private var documentDraft", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "var documentDraft", in: try hostCode()) else {
             return XCTFail("`documentDraft` est introuvable dans le meuble — la garde ne mesurerait RIEN.")
         }
         let compacte = compact(corps)
@@ -587,7 +575,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// test vérifie donc : les cas nommés SONT dans le corps, et `default`
     /// N'Y EST PAS — pour qu'un `default:` réintroduit le fasse tomber.
     func test_handleDocumentTool_resteExhaustif_sansDefault() throws {
-        guard let corps = declarationBody(startingAt: "private func handleDocumentTool", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "func handleDocumentTool", in: try hostCode()) else {
             return XCTFail("`handleDocumentTool` est introuvable dans le meuble — la garde ne mesurerait RIEN")
         }
         let compacte = compact(corps)
@@ -724,7 +712,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
                 + "caméra n'en a pas besoin, son mime est CONNU (JPEG/QuickTime, choisi en écrivant le "
                 + "fichier)."
         )
-        for ancre in ["private func ingestPhotoLibraryItems", "private func ingestFileImporterResult"] {
+        for ancre in ["func ingestPhotoLibraryItems", "func ingestFileImporterResult"] {
             guard let corps = declarationBody(startingAt: ancre, in: code) else {
                 XCTFail("« \(ancre) » est introuvable — la garde ne mesurerait RIEN")
                 continue
@@ -780,9 +768,9 @@ final class ComposerDocumentToolChainTests: XCTestCase {
                 + "la classerait `.post` au lieu de `.reel`."
         )
         for ancre in [
-            "private func ingestPhotoLibraryItems",
-            "private func ingestCameraCapture",
-            "private func ingestFileImporterResult"
+            "func ingestPhotoLibraryItems",
+            "func ingestCameraCapture",
+            "func ingestFileImporterResult"
         ] {
             guard let corps = declarationBody(startingAt: ancre, in: code) else {
                 XCTFail("« \(ancre) » est introuvable — la garde ne mesurerait RIEN")
@@ -807,7 +795,7 @@ final class ComposerDocumentToolChainTests: XCTestCase {
     /// fournisseurs) — ce n'est PAS un échec, et un `guard ... else {
     /// continue }` sauterait ce fichier pourtant lisible.
     func test_ingestFileImporterResult_neSautePasUnFichierDejaAccessible() throws {
-        guard let corps = declarationBody(startingAt: "private func ingestFileImporterResult", in: try hostCode()) else {
+        guard let corps = declarationBody(startingAt: "func ingestFileImporterResult", in: try hostCode()) else {
             return XCTFail("`ingestFileImporterResult` est introuvable — la garde ne mesurerait RIEN")
         }
         let compacte = compact(corps)

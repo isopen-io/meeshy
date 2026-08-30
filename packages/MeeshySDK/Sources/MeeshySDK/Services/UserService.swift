@@ -9,8 +9,9 @@ public protocol UserServiceProviding: Sendable {
     func updateAvatar(url: String) async throws -> MeeshyUser
     func updateBanner(url: String) async throws -> MeeshyUser
     func uploadImage(_ imageData: Data, filename: String) async throws -> String
+    /// LA lecture d'un profil public — `handle` est un identifiant ou un pseudo.
+    func getProfile(handle: String, expand: Set<ProfileExpansion>) async throws -> PublicProfile
     func getProfile(idOrUsername: String) async throws -> MeeshyUser
-    func getPublicProfile(username: String) async throws -> MeeshyUser
     func getProfileByEmail(_ email: String) async throws -> MeeshyUser
     func getProfileById(_ id: String) async throws -> MeeshyUser
     func getProfileByPhone(_ phone: String) async throws -> MeeshyUser
@@ -119,20 +120,38 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
         return fileURLObject
     }
 
-    public func getProfile(idOrUsername: String) async throws -> MeeshyUser {
-        let encoded = idOrUsername.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? idOrUsername
-        let response: APIResponse<MeeshyUser> = try await api.request(
-            endpoint: "/users/\(encoded)"
+    /// LA lecture d'un profil public, à l'adresse canonique (#4161).
+    ///
+    /// Le SDK visait TROIS adresses pour la même ligne — `/users/{id}`,
+    /// `/users/id/{id}` et `/u/{pseudo}` — dont deux servaient des formes de
+    /// réponse différentes. Elles restent servies en alias côté passerelle,
+    /// pour les versions déjà installées ; le SDK, lui, n'en appelle plus
+    /// qu'une.
+    ///
+    /// `expand` décide ce qui accompagne le profil. Demander `.stats` ici fond
+    /// deux allers-retours en un — c'est la raison d'être du paramètre, pas une
+    /// commodité : un écran de profil coûtait systématiquement deux appels.
+    public func getProfile(
+        handle: String,
+        expand: Set<ProfileExpansion> = []
+    ) async throws -> PublicProfile {
+        let encoded = handle.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? handle
+        // Trié : deux appels demandant les mêmes expansions produisent la même
+        // URL, donc la même entrée de cache HTTP et le même ETag.
+        let items = expand.isEmpty
+            ? nil
+            : [URLQueryItem(name: "expand", value: expand.map(\.rawValue).sorted().joined(separator: ","))]
+        let response: APIResponse<PublicProfile> = try await api.request(
+            endpoint: "/directory/people/\(encoded)",
+            method: "GET",
+            body: nil,
+            queryItems: items
         )
         return response.data
     }
 
-    public func getPublicProfile(username: String) async throws -> MeeshyUser {
-        let encoded = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
-        let response: APIResponse<MeeshyUser> = try await api.request(
-            endpoint: "/u/\(encoded)"
-        )
-        return response.data
+    public func getProfile(idOrUsername: String) async throws -> MeeshyUser {
+        try await getProfile(handle: idOrUsername).user
     }
 
     public func getProfileByEmail(_ email: String) async throws -> MeeshyUser {
@@ -143,11 +162,11 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
         return response.data
     }
 
+    /// Conservée pour les sites d'appel existants — elle ne vise plus
+    /// `/users/id/{id}` mais l'adresse canonique, comme sa jumelle
+    /// `getProfile(idOrUsername:)`. Un identifiant EST un `handle`.
     public func getProfileById(_ id: String) async throws -> MeeshyUser {
-        let response: APIResponse<MeeshyUser> = try await api.request(
-            endpoint: "/users/id/\(id)"
-        )
-        return response.data
+        try await getProfile(handle: id).user
     }
 
     public func getProfileByPhone(_ phone: String) async throws -> MeeshyUser {
@@ -199,10 +218,16 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
 
     // MARK: - Stats
 
+    /// Les statistiques d'un profil, à la MÊME adresse que le profil.
+    ///
+    /// `GET /users/{id}/stats` reste servie, mais elle recopiait le calcul et
+    /// avait divergé — son `totalTranslations` valait 0 pour tout le monde.
+    /// Passer par `?expand=stats` donne le calcul unique du serveur, et permet
+    /// aux hôtes qui ont AUSSI besoin du profil de ne faire qu'un appel.
     public func getUserStats(userId: String) async throws -> UserStats {
-        let response: APIResponse<UserStats> = try await api.request(
-            endpoint: "/users/\(userId)/stats"
-        )
-        return response.data
+        guard let stats = try await getProfile(handle: userId, expand: [.stats]).stats else {
+            throw MeeshyError.server(statusCode: 0, message: "Le profil n'a pas rendu de statistiques")
+        }
+        return stats
     }
 }

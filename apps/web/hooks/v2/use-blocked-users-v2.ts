@@ -3,6 +3,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import type { BlockedUser } from '@/types/contacts';
 
@@ -36,7 +37,10 @@ export function useBlockedUsersV2(
       const response = await apiService.get<{
         success: boolean;
         data: BlockedUser[];
-      }>('/users/me/blocked-users');
+        // `/directory/blocks` (#4164) — la liste est désormais BORNÉE côté
+        // serveur (100 par page, curseur sur l'id). L'ancienne adresse n'avait
+        // ni page, ni curseur, ni plafond.
+      }>('/directory/blocks');
       if (!response || typeof response !== 'object') return [];
       const outer = (response as unknown as Record<string, unknown>).data;
       if (!outer || typeof outer !== 'object') return [];
@@ -54,14 +58,16 @@ export function useBlockedUsersV2(
 
   const blockMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiService.post(`/users/${userId}/block`);
+      // `PUT`, jamais `POST` : bloquer est une APPARTENANCE à un ensemble,
+      // donc idempotente. L'ancienne route rendait 409 au second appel (#4164).
+      await apiService.put(API_ENDPOINTS.directory.blocksByUserId(userId));
     },
     onSettled: () => invalidate(),
   });
 
   const unblockMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiService.delete(`/users/${userId}/block`);
+      await apiService.delete(API_ENDPOINTS.directory.blocksByUserId(userId));
     },
     onMutate: async (userId: string) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.blockedUsers.list() });

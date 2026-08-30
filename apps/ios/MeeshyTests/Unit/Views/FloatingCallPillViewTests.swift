@@ -367,8 +367,13 @@ final class FloatingCallPillViewTests: XCTestCase {
             "own `callManager` rather than letting the child default to `.shared`."
         )
         XCTAssertFalse(
-            source.contains("UserService.shared.getProfileById"),
-            "The pill must NOT hit the network for the profile directly."
+            source.contains("UserService.shared.getProfile"),
+            "The pill must NOT hit the network for the profile directly. " +
+            "Le PRÉFIXE, et non `getProfileById` : ce site a changé de nom en " +
+            "migrant vers l'adresse canonique (#4161), et une garde négative " +
+            "qui épingle un nom devenu obsolète passe au vert en cessant de " +
+            "protéger. `getProfile` couvre les trois variantes — `handle:`, " +
+            "`idOrUsername:` et `ById` — donc aussi la prochaine."
         )
     }
 
@@ -670,9 +675,12 @@ final class CallParticipantVisualTests: XCTestCase {
             "(Instant App) instead of always showing the initial fallback."
         )
         XCTAssertFalse(
-            src.contains("UserService.shared.getProfileById"),
+            src.contains("UserService.shared.getProfile"),
             "CallParticipantVisual must NOT hit the network for the profile — CallView " +
-            "already refreshes and re-feeds the cache; this component serves cached data only."
+            "already refreshes and re-feeds the cache; this component serves cached data only. " +
+            "Le PRÉFIXE, et non `getProfileById` : voir la garde jumelle de " +
+            "`FloatingCallPillView` — épingler un nom qu'un renommage périme " +
+            "fait passer la garde au vert en lui retirant sa protection."
         )
     }
 

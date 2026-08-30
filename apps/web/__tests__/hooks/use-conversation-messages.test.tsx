@@ -181,7 +181,7 @@ describe('useConversationMessages', () => {
 
       await waitFor(() => {
         expect(mockApiGet).toHaveBeenCalledWith(
-          `/conversations/${mockConversationId}/messages`,
+          `/api/v1/conversations/${mockConversationId}/messages`,
           expect.objectContaining({ limit: expect.any(String), offset: expect.any(String) }),
           undefined // No custom headers for authenticated user
         );
@@ -220,7 +220,7 @@ describe('useConversationMessages', () => {
 
       await waitFor(() => {
         expect(mockApiGet).toHaveBeenCalledWith(
-          `/api/links/link-123/messages`,
+          `/api/v1/links/link-123/messages`,
           expect.any(Object),
           expect.objectContaining({
             headers: { 'x-session-token': 'anon-session-token' },

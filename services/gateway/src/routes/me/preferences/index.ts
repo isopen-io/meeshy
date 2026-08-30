@@ -1,42 +1,58 @@
 /**
- * User Preferences Routes
- * Routes centralisées pour toutes les préférences utilisateur
+ * Préférences utilisateur — montage.
+ *
+ * Ce fichier ne DÉCIDE plus rien sur les préférences : il monte. Ce qu'une
+ * catégorie sait d'elle-même (son schéma, ses défauts, son rangement) vit dans
+ * `preference-registry.ts` ; ce que les routes en font vit dans
+ * `unified-routes.ts` et dans la factory.
+ *
+ * C'est le point du critère 2 de #4181, et il se lit ici à l'œil nu : **aucun
+ * `*_PREFERENCE_DEFAULTS` n'est importé par ce fichier.** Il en importait sept,
+ * et les recomposait avec sa PROPRE fonction de complétion — un second chemin
+ * pour la règle « les défauts comblent les clés muettes ». Deux chemins, deux
+ * vérités possibles : un défaut ajouté à une catégorie apparaissait au `GET` de
+ * cette catégorie et manquait à l'agrégat. Un défaut ajouté aujourd'hui
+ * traverse les deux sans qu'une ligne d'ici ne bouge.
+ *
+ * ## Les alias restent montés
+ *
+ * Les vingt-huit routes par catégorie sont en DOUBLE MONTAGE derrière les trois
+ * routes unifiées, avec un en-tête `Deprecation` (critère 6). Elles ne partent
+ * que lorsque le compteur d'accès par route sera tombé à zéro sur deux versions
+ * publiées de CHAQUE client — iOS (`PreferenceService`, et le chemin outbox qui
+ * porte des mutations écrites hors ligne), web (une dizaine de sites) et
+ * Android (`PreferencesApi.kt`, que l'audit n'avait pas inventorié). Retirer
+ * avant ce compte perdrait les préférences enregistrées hors ligne d'un client
+ * non mis à jour, sans le moindre message d'erreur.
  */
 
 import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../../utils/response.js';
 import { createPreferenceRouter } from './preference-router-factory';
-import { invalidatePrivacyPreferences } from '../../../services/preferences/privacy-cache';
-import {
-  resolveStoredPrivacyPreferences,
-  retireLegacyPrivacyRows,
-} from '../../../services/preferences/privacy-storage';
-import {
-  PREFERENCE_CATEGORIES,
-  emitPreferenceCategoryUpdated
-} from '../../../services/preferences/preferences-broadcast';
+import { unifiedPreferenceRoutes } from './unified-routes';
+import { PREFERENCE_CATEGORIES, PREFERENCE_REGISTRY } from './preference-registry';
 import { categoriesRoutes } from './categories';
 import {
   PrivacyPreferenceSchema,
-  AudioPreferenceSchema,
-  MessagePreferenceSchema,
-  NotificationPreferenceSchema,
-  VideoPreferenceSchema,
-  DocumentPreferenceSchema,
-  ApplicationPreferenceSchema,
   PRIVACY_PREFERENCE_DEFAULTS,
-  AUDIO_PREFERENCE_DEFAULTS,
-  MESSAGE_PREFERENCE_DEFAULTS,
-  NOTIFICATION_PREFERENCE_DEFAULTS,
-  VIDEO_PREFERENCE_DEFAULTS,
-  DOCUMENT_PREFERENCE_DEFAULTS,
-  APPLICATION_PREFERENCE_DEFAULTS
 } from '@meeshy/shared/types/preferences';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { depreciee } from '../../../utils/deprecation';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
+
+// #4178 -- GET /me/preferences/encryption sert EXACTEMENT la forme que rend
+// desormais GET /me?expand=security, qui la calcule depuis la meme source unique
+// (le bundle SignalPreKeyBundle actif). Deux adresses pour une meme lecture, c'est
+// deux contrats qui divergeront au prochain changement : celle-ci passe en sursis.
+// Aucun Sunset -- le retrait est gouverne par le compteur d'adoption de #4275,
+// jamais par une date posee a la main.
+const ANNONCE_ENCRYPTION = {
+  depuis: '2026-08-29',
+  successeur: '/api/v1/me?expand=security',
+} as const;
 
 export async function userPreferencesRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma;
@@ -55,160 +71,10 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
   fastify.addHook('preHandler', authMiddleware);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // GET /me/preferences - Récupérer TOUTES les préférences
+  // Les trois routes unifiées : GET / PATCH / DELETE sur `/me/preferences`
   // ═══════════════════════════════════════════════════════════════════════════
 
-  fastify.get(
-    '/',
-    {
-      schema: {
-        description: 'Récupérer toutes les préférences utilisateur',
-        tags: ['preferences'],
-        summary: 'Get all preferences',
-        response: {
-          200: {
-            description: 'Toutes les préférences',
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              // `additionalProperties: true` sur CHAQUE catégorie : un
-              // `type: 'object'` sans `properties` ni cette clause fait
-              // sérialiser `{}` par fast-json-stringify. Cette route rendait
-              // donc sept objets vides — chaque réglage effacé à la sortie,
-              // silencieusement. Le `GET` d'une seule catégorie, lui, l'a
-              // toujours déclaré.
-              data: {
-                type: 'object',
-                properties: {
-                  privacy: { type: 'object', additionalProperties: true },
-                  audio: { type: 'object', additionalProperties: true },
-                  message: { type: 'object', additionalProperties: true },
-                  notification: { type: 'object', additionalProperties: true },
-                  video: { type: 'object', additionalProperties: true },
-                  document: { type: 'object', additionalProperties: true },
-                  application: { type: 'object', additionalProperties: true }
-                }
-              }
-            }
-          },
-          401: errorResponseSchema,
-          500: errorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const userId = request.auth?.userId;
-
-      if (!userId) {
-        return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
-      }
-
-      try {
-        // `privacy` a un SECOND rangement que les portes de diffusion obéissent
-        // encore (cf. `services/preferences/privacy-storage`) : le lire par le
-        // résolveur est la seule façon que cet écran montre ce que le serveur
-        // fait. Les six autres catégories n'ont que leur document.
-        const [prefs, privacy] = await Promise.all([
-          prisma.userPreferences.findUnique({ where: { userId } }),
-          resolveStoredPrivacyPreferences(prisma, userId)
-        ]);
-
-        // Les défauts comblent les clés muettes, comme au `GET` d'une seule
-        // catégorie : un document partiel se lisait autrement selon la porte.
-        const complete = <T extends object>(defaults: T, stored: unknown): T => ({
-          ...defaults,
-          ...(stored && typeof stored === 'object' && !Array.isArray(stored) ? stored : {})
-        });
-
-        return sendSuccess(reply, {
-          privacy: complete(PRIVACY_PREFERENCE_DEFAULTS, privacy),
-          audio: complete(AUDIO_PREFERENCE_DEFAULTS, prefs?.audio),
-          message: complete(MESSAGE_PREFERENCE_DEFAULTS, prefs?.message),
-          notification: complete(NOTIFICATION_PREFERENCE_DEFAULTS, prefs?.notification),
-          video: complete(VIDEO_PREFERENCE_DEFAULTS, prefs?.video),
-          document: complete(DOCUMENT_PREFERENCE_DEFAULTS, prefs?.document),
-          application: complete(APPLICATION_PREFERENCE_DEFAULTS, prefs?.application)
-        });
-      } catch (error: any) {
-        fastify.log.error({ error }, 'Error fetching all preferences');
-        return sendInternalError(reply, 'FETCH_ERROR', { message: error.message || 'Failed to fetch preferences' });
-      }
-    }
-  );
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DELETE /me/preferences - Réinitialiser TOUTES les préférences
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  fastify.delete(
-    '/',
-    {
-      schema: {
-        description: 'Réinitialiser toutes les préférences aux valeurs par défaut',
-        tags: ['preferences'],
-        summary: 'Reset all preferences',
-        response: {
-          200: {
-            description: 'Préférences réinitialisées',
-            type: 'object',
-            properties: {
-              success: { type: 'boolean', example: true },
-              message: { type: 'string' }
-            }
-          },
-          401: errorResponseSchema,
-          500: errorResponseSchema
-        }
-      }
-    },
-    async (request, reply) => {
-      const userId = request.auth?.userId;
-
-      if (!userId) {
-        return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
-      }
-
-      try {
-        // `updateMany` et non `update` — même raison qu'au verbe DELETE d'une
-        // catégorie : la ligne `UserPreferences` n'existe pas tant que rien
-        // n'a été écrit, et `update` levait alors `P2025`, rendu en 500.
-        await prisma.userPreferences.updateMany({
-          where: { userId },
-          data: {
-            privacy: null,
-            audio: null,
-            message: null,
-            notification: null,
-            video: null,
-            document: null,
-            application: null
-          }
-        });
-
-        // Le document mis à `null` ne suffit pas : la lecture redescendrait
-        // alors sur les lignes de janvier, et « tout réinitialiser » laisserait
-        // un réglage que le serveur obéit et qu'aucun écran ne montre plus.
-        await retireLegacyPrivacyRows(prisma, userId);
-
-        // La remise à zéro globale efface AUSSI `privacy` : le cache partagé
-        // des portes de diffusion doit l'apprendre, comme sur une écriture
-        // ciblée (cf. `services/preferences/privacy-cache`).
-        invalidatePrivacyPreferences(userId);
-
-        // Et les autres appareils aussi. Le contrat client est par catégorie
-        // (`queryKeys.preferences.category`), donc une émission par catégorie
-        // effacée — cf. `services/preferences/preferences-broadcast`.
-        for (const category of PREFERENCE_CATEGORIES) {
-          emitPreferenceCategoryUpdated(fastify, userId, category);
-        }
-
-        return sendSuccess(reply, undefined, { message: 'All preferences reset to defaults' });
-      } catch (error: any) {
-        fastify.log.error({ error }, 'Error resetting all preferences');
-        return sendInternalError(reply, 'RESET_ERROR', { message: error.message || 'Failed to reset preferences' });
-      }
-    }
-  );
+  fastify.register(unifiedPreferenceRoutes);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // GET /me/preferences/encryption - Préférence de chiffrement + état des clés
@@ -268,7 +134,8 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
           401: errorResponseSchema,
           500: errorResponseSchema
         }
-      }
+      },
+      onRequest: depreciee(ANNONCE_ENCRYPTION),
     },
     async (request, reply) => {
       const userId = request.auth?.userId;
@@ -312,68 +179,22 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // SOUS-ROUTES PAR CATÉGORIE (factory pattern)
+  // ALIAS PAR CATÉGORIE — `/me/preferences/{catégorie}` (obsolètes, #4181)
+  //
+  // Sept montages, une boucle : la liste des catégories est une DONNÉE
+  // (`PREFERENCE_CATEGORIES`), plus une énumération recopiée. C'est ce qui rend
+  // `?categories=` réalisable — tant que la liste était sept appels alignés,
+  // toute question posée sur un sous-ensemble devait la réécrire, et l'agrégat
+  // l'avait effectivement réécrite.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // /me/preferences/privacy
-  //
-  // La SEULE catégorie dont l'état ne tient pas dans son document : un endpoint
-  // présent du 12 au 18 janvier 2026 a écrit des lignes clé/valeur, puis a été
-  // retiré sans reprise de données. Les six portes de diffusion les obéissent
-  // toujours ; sans ce rangement injecté, l'écran affichait le défaut « tout
-  // visible » pendant que le serveur taisait, et le `PATCH` d'un réglage voisin
-  // effaçait l'opt-out. `afterWrite` clôt la fenêtre au premier réglage écrit.
-  fastify.register(
-    createPreferenceRouter('privacy', PrivacyPreferenceSchema, PRIVACY_PREFERENCE_DEFAULTS, {
-      readStored: resolveStoredPrivacyPreferences,
-      afterWrite: retireLegacyPrivacyRows
-    }),
-    { prefix: '/privacy' }
-  );
-
-  // /me/preferences/audio
-  fastify.register(
-    createPreferenceRouter('audio', AudioPreferenceSchema, AUDIO_PREFERENCE_DEFAULTS),
-    { prefix: '/audio' }
-  );
-
-  // /me/preferences/message
-  fastify.register(
-    createPreferenceRouter('message', MessagePreferenceSchema, MESSAGE_PREFERENCE_DEFAULTS),
-    { prefix: '/message' }
-  );
-
-  // /me/preferences/notification
-  fastify.register(
-    createPreferenceRouter(
-      'notification',
-      NotificationPreferenceSchema,
-      NOTIFICATION_PREFERENCE_DEFAULTS
-    ),
-    { prefix: '/notification' }
-  );
-
-  // /me/preferences/video
-  fastify.register(
-    createPreferenceRouter('video', VideoPreferenceSchema, VIDEO_PREFERENCE_DEFAULTS),
-    { prefix: '/video' }
-  );
-
-  // /me/preferences/document
-  fastify.register(
-    createPreferenceRouter('document', DocumentPreferenceSchema, DOCUMENT_PREFERENCE_DEFAULTS),
-    { prefix: '/document' }
-  );
-
-  // /me/preferences/application
-  fastify.register(
-    createPreferenceRouter(
-      'application',
-      ApplicationPreferenceSchema,
-      APPLICATION_PREFERENCE_DEFAULTS
-    ),
-    { prefix: '/application' }
-  );
+  for (const category of PREFERENCE_CATEGORIES) {
+    const entry = PREFERENCE_REGISTRY[category];
+    fastify.register(
+      createPreferenceRouter(category, entry.schema, entry.defaults, entry.storage),
+      { prefix: `/${category}` }
+    );
+  }
 
   // /me/preferences/categories
   // Note: Les catégories utilisent une table séparée (conversationCategory) et non un champ JSON,

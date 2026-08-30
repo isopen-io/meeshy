@@ -59,14 +59,27 @@ struct ComposerSceneSurface: View {
 
     // MARK: - Les deux rails
 
-    /// Les portes SERVIES — déjà filtrées par `ComposerRailDoor.offered`. Cette
-    /// vue ne re-filtre rien : une seconde loi 4 divergerait de la première.
-    var railDoors: [ComposerRailDoor] = []
+    /// **Ce que le rail *leading* montre** — déjà résolu par
+    /// `ComposerRailMode.resolve`. Cette vue ne re-filtre rien : une seconde
+    /// loi 4 divergerait de la première.
+    var railMode: ComposerRailMode = .doors([])
     var onRailDoor: ((ComposerRailDoor) -> Void)?
+    var onRailToolControl: ((ComposerToolControl) -> Void)?
+    var onRailExitTool: (() -> Void)?
+
+    /// Le bouton SYSTÈME du rail — le collage (#4092). Une vue entière, parce
+    /// qu'un `PasteButton` doit ÊTRE le bouton pour garder son privilège : accès
+    /// au presse-papier sans bannière, et extinction automatique quand il n'y a
+    /// rien à coller.
+    var railSystemEntry: AnyView?
+    var railSystemEntryAfter: ComposerRailDoor?
 
     /// Les contrôleurs SERVIS — déjà filtrés par `ComposerTrailingRailPolicy`.
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
+
+    /// La frame `[+]` du rail *trailing* — créer une slide.
+    var onAddSlide: (() -> Void)?
 
     // MARK: - La bande contextuelle
 
@@ -75,8 +88,41 @@ struct ComposerSceneSurface: View {
     /// seconde loi 4 divergerait de la première, exactement comme pour les
     /// deux rails.
     var band: ComposerSceneBand?
+    /// Ce que la bande `timeline` montre — composé par le meuble (#4082).
+    var bandTimelineContent: AnyView?
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
+
+    /// L'effet d'ouverture, servi par la même bande que les couleurs — c'est
+    /// le contenu du panneau « Fond » de l'atelier, en entier (#4403).
+    var bandOpeningEffect: StoryTransitionEffect?
+    var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
+
+    /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
+    /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
+    /// besoin de largeur — palette, glissière, dix-huit styles — vit ici.
+    var toolOptions: AnyView?
+
+    /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
+    /// place, dans sa vraie police, sur le vrai fond.
+    var editingTextId: String?
+    var onInlineTextChanged: ((String, String) -> Void)?
+    var onInlineTextEditEnded: ((String) -> Void)?
+
+    /// **La bande de mention du texte de SCÈNE** (#4475), montée sous le canvas
+    /// pendant l'édition. `nil` ⇒ aucune requête `@` en cours, ou aucune
+    /// personne à proposer — dans les deux cas, rien de peint (loi 4).
+    ///
+    /// Elle vit ICI et pas dans le canvas : `StoryCanvasUIView` est du UIKit et
+    /// n'a aucune raison de connaître les amis de l'auteur. Ce qu'il donne — le
+    /// texte, à chaque frappe — suffit, et c'est le meuble qui en tire une
+    /// requête.
+    var mentionStrip: AnyView?
+
+    /// **La surface de dessin, posée SUR la scène.** `nil` ⇒ aucun dessin en
+    /// cours, et le canvas garde son calque persisté ; non-`nil` ⇒ le canvas
+    /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
+    var drawingSurface: AnyView?
 
     // MARK: - La description
 
@@ -105,9 +151,24 @@ struct ComposerSceneSurface: View {
                     onItemTapped: onItemTapped,
                     onBackgroundTapped: onBackgroundTapped,
                     loadedImages: sceneImages,
-                    loadedImagesVersion: sceneImagesVersion
+                    loadedImagesVersion: sceneImagesVersion,
+                    // Le canvas retire son calque de dessin persisté pendant
+                    // qu'une surface live est posée dessus — sinon le trait
+                    // s'affiche deux fois, à deux endroits (défaut 2026-05-27).
+                    isDrawingOverlayActive: drawingSurface != nil,
+                    editingTextId: editingTextId,
+                    onInlineTextChanged: onInlineTextChanged,
+                    onInlineTextEditEnded: onInlineTextEditEnded
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // **Le canvas cesse de recevoir les touches pendant le
+                // dessin.** Sans cela, le doigt qui trace déplacerait aussi
+                // l'objet sous lui : deux gestes pour un seul mouvement.
+                .allowsHitTesting(drawingSurface == nil)
+                .overlay { drawingSurface }
+                // Les contrôleurs PAR-DESSUS la couche de capture : ils doivent
+                // recevoir leurs taps, elle doit recevoir le reste.
+
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas
                 // un goût de marge mais une conséquence — cible tactile 44 pt,
@@ -120,22 +181,23 @@ struct ComposerSceneSurface: View {
                 // l'aperçu sur le rendu final.
                 .padding(.horizontal, ComposerRailGeometry.sceneInset(railsShown: true))
                 .overlay(alignment: .bottomLeading) {
-                    if !railDoors.isEmpty {
-                        ComposerLeadingRail(doors: railDoors,
-                                            plateauTint: plateauTint,
-                                            onDoor: onRailDoor)
-                            .padding(.leading, ComposerRailGeometry.outerMargin)
-                            .padding(.bottom, ComposerRailGeometry.gutter)
-                    }
+                    ComposerLeadingRail(mode: railMode,
+                                        plateauTint: plateauTint,
+                                        onDoor: onRailDoor,
+                                        onToolControl: onRailToolControl,
+                                        onExitTool: onRailExitTool,
+                                        systemEntry: railSystemEntry,
+                                        systemEntryAfter: railSystemEntryAfter)
+                        .padding(.leading, ComposerRailGeometry.outerMargin)
+                        .padding(.bottom, ComposerRailGeometry.gutter)
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    if !trailingActions.isEmpty {
-                        ComposerTrailingRail(actions: trailingActions,
-                                             plateauTint: plateauTint,
-                                             onAction: onTrailingAction)
-                            .padding(.trailing, ComposerRailGeometry.outerMargin)
-                            .padding(.bottom, ComposerRailGeometry.gutter)
-                    }
+                    ComposerTrailingRail(actions: trailingActions,
+                                         plateauTint: plateauTint,
+                                         onAction: onTrailingAction,
+                                         onAddSlide: onAddSlide)
+                        .padding(.trailing, ComposerRailGeometry.outerMargin)
+                        .padding(.bottom, ComposerRailGeometry.gutter)
                 }
                 .padding(.top, 8)
 
@@ -148,29 +210,41 @@ struct ComposerSceneSurface: View {
                 // Montée sans transition ni animation : la bande est un frère
                 // du canvas, et animer son insertion ferait varier la frame de
                 // `StoryCanvasUIView` sur chaque image du ressort.
-                if let band {
+                // **La bande de mention passe avant tout le reste du bas** : une
+                // liste de personnes qui apparaît pendant qu'on écrit doit
+                // toucher le texte, pas se ranger sous des réglages.
+                if let mentionStrip { mentionStrip }
+                // Le panneau d'options passe AVANT la bande de fond : c'est
+                // l'outil ouvert qui a la priorité sur le bas de l'écran, et
+                // les deux ne coexistent jamais (ouvrir un outil ferme la
+                // bande, et réciproquement).
+                if let toolOptions { toolOptions }
+                else if let band {
                     ComposerSceneBandView(band: band,
                                           colors: bandColors,
-                                          onPickColor: onPickBandColor)
+                                          onPickColor: onPickBandColor,
+                                          openingEffect: bandOpeningEffect,
+                                          onPickOpening: onPickBandOpening,
+                                          timelineContent: bandTimelineContent)
                 }
 
-                descriptionField
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-    /// La description de la `MeeshySlide`, rendue **comme le lecteur la verra**
-    /// (#4065). Le calque est PARTAGÉ avec l'atelier : deux rendus « en mode
-    /// lecture » auraient divergé au premier ajustement, et l'un des deux se
-    /// serait mis à mentir sur le rendu final — ce qu'interdit la loi 6.
-    ///
-    /// **En profil P, ce n'est pas le texte du post** : c'est la LÉGENDE de ce
-    /// média-là, et la publication garde son `content` (#4045, chaîne serveur
-    /// #4055). Ce que ce calque rend est donc encore le `content` du meuble ;
-    /// changer sa SOURCE est le lot de #4045, pas celui-ci.
-    private var descriptionField: some View {
-        ComposerDescriptionLayer(text: $description,
-                                 placeholder: descriptionPlaceholder)
-    }
+    // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :
+    //
+    // > « La zone de description en bas ne doit pas être affichée si on ne
+    // > touche pas l'icône description, même si une description existe ! »
+    //
+    // Il vivait ici en calque de lecture (#4065) et occupait le bas dès qu'un
+    // texte existait — la place que la scène centrée réclame, pour un texte que
+    // l'auteur ne regarde pas la plupart du temps. La description s'ouvre
+    // désormais par sa PORTE, comme les autres niveaux du modèle, et le meuble
+    // monte l'éditeur en zone basse (`sceneDescriptionEditor`).
+    //
+    // `description` et `descriptionPlaceholder` restent au contrat : la porte
+    // est servie par le meuble, qui possède le texte. Les retirer obligerait
+    // chaque site de montage à re-prouver qu'il n'en a pas besoin.
 }

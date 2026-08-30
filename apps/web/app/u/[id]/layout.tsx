@@ -1,8 +1,10 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, interpolate, pageString } from '@/lib/i18n/metadata';
+import { ogImageUrl } from '@/lib/og-image-params';
 
 interface UserProfileLayoutProps {
   children: ReactNode;
@@ -30,7 +32,22 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
 
-    const response = await fetch(buildApiUrl(`/users/profile/${id}`), {
+    // `/directory/people/:handle`, l'ADRESSE canonique d'un profil (#4161).
+    //
+    // Ce site visait `/users/profile/:id`, une adresse qui n'a JAMAIS existé
+    // côté gateway : la génération de métadonnées de toute page de profil
+    // publique retombait silencieusement sur le libellé générique, le
+    // `if (response.ok)` ci-dessous avalant le 404 (#4189). Elle est passée par
+    // `/users/:id` — l'un des trois alias — puis par celle-ci, qui est
+    // l'implémentation.
+    //
+    // Elle accepte indifféremment un ObjectId ou un pseudo, ce qui couvre les
+    // deux formes que `[id]` peut prendre, et sert un appelant NON authentifié
+    // — ce dont le rendu serveur a besoin, n'ayant pas de jeton. Elle déclare
+    // en prime `Cache-Control: public, max-age=60, stale-while-revalidate=600`
+    // pour l'anonyme, ce que le `revalidate: 300` de Next complète au lieu de
+    // le contredire.
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.directory.peopleByHandle(id)), {
       next: { revalidate: 300 }, // Cache 5 minutes
       signal: controller.signal,
       headers: {
@@ -63,7 +80,7 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
           userName: displayName,
         });
 
-        const dynamicImageUrl = `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`;
+        const dynamicImageUrl = ogImageUrl(frontendUrl, imageParams);
 
         return composeMetadata({
           locale,

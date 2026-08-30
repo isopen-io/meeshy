@@ -108,6 +108,12 @@ model User {
   bio                       String   @default("")
   email                     String   @unique
   phoneNumber               String?
+
+  /// Mots repliés (minuscules, sans diacritiques) de `username`, `displayName`,
+  /// `firstName` et `lastName`, plus les initiales. Recalculés à CHAQUE écriture
+  /// de l'un de ces champs — la règle vit dans `utils/search-tokens.ts`, et une
+  /// garde de source interdit d'écrire un nom sans les recalculer (#4159).
+  searchTokens              String[] @default([])
   /// ISO 3166-1 alpha-2 country code for phone (e.g., "FR", "US", "GB")
   phoneCountryCode          String?
   password                  String
@@ -333,6 +339,27 @@ model User {
   @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
   @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
   @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
+  // `phoneNumber` était la SEULE colonne d'identifiant de contact sans index —
+  // `username` et `email` sont `@unique`, donc indexées de fait. La recherche
+  // « qui est derrière ce numéro » balayait donc la collection entière, et le
+  // faisait pour un appelant ANONYME jusqu'à ce que #4160 ferme la porte. Un
+  // index manquant sur une route publique est aussi une surface de déni de
+  // service, pas seulement une lenteur.
+  @@index([phoneNumber])
+  // Recherche de personne par PRÉFIXE de mot (#4159).
+  //
+  // `firstName`, `lastName` et `displayName` n'étaient indexés par rien, et la
+  // recherche y faisait un `contains` NON ancré, insensible à la casse, sur
+  // cinq colonnes : chaque frappe balayait la collection entière. C'est le
+  // défaut le plus coûteux du module, et le moins visible — rien ne le signale
+  // à part la latence.
+  //
+  // `searchTokens` est un tableau de mots repliés (minuscules, sans
+  // diacritiques), indexé en MULTIKEY : la recherche devient une regex ANCRÉE
+  // servie par parcours d'index. Le compromis est assumé — on perd la
+  // sous-chaîne au milieu d'un mot, on garde le préfixe de chaque mot. Règle
+  // unique : `services/gateway/src/utils/search-tokens.ts`.
+  @@index([isActive, searchTokens])
 }
 
 /// Entrée du répertoire d'un utilisateur — un contact de son carnet d'adresses
@@ -378,6 +405,11 @@ model UserContact {
   @@index([ownerId, matchedUserId])
   @@index([ownerId, displayName])
   @@index([matchedUserId])
+  /// La lecture par DELTA (#4163) : `updatedSince` ne rend que ce qui a bougé.
+  /// Sans cet index, le filtre chronologique balaie tout le carnet du
+  /// propriétaire — c'est-à-dire exactement ce que le delta évite de
+  /// retélécharger.
+  @@index([ownerId, updatedAt])
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -1432,6 +1464,18 @@ model FriendRequest {
 
   receiver User @relation("FriendRequestReceiver", fields: [receiverId], references: [id])
   sender   User @relation("FriendRequestSender", fields: [senderId], references: [id])
+
+  /// Les DEUX directions du listing fusionné (#4162).
+  ///
+  /// Cette collection ne portait AUCUN index — ni `senderId`, ni `receiverId`,
+  /// ni `status`. Les trois listings, appelés à chaque ouverture de l'écran
+  /// contacts sur iOS comme sur le web, étaient des balayages complets.
+  ///
+  /// Composés, et dans cet ordre : le préfixe sert `direction=`, `status`
+  /// filtre, et `createdAt` porte à la fois le tri et le curseur — un index
+  /// sur la seule colonne d'identité laisserait le tri en mémoire.
+  @@index([receiverId, status, createdAt])
+  @@index([senderId, status, createdAt])
 }
 
 /// DEPRECATED: Use UserPreferences.notification JSON instead
@@ -2160,9 +2204,6 @@ model UserConversationPreferences {
 
   /// Archive conversation (hide from main list)
   isArchived Boolean @default(false)
-
-  /// When the user deleted this conversation from their view (soft delete, null = not deleted)
-  deletedForUserAt DateTime?
 
   /// Hide all messages before this timestamp (clear history feature)
   clearHistoryBefore DateTime?
@@ -3622,12 +3663,28 @@ enum DeletionRequestStatus {
 
 /// Demande de suppression de compte avec flow email + période de grâce
 model AccountDeletionRequest {
-  id                String                @id @default(auto()) @map("_id") @db.ObjectId
-  userId            String                @db.ObjectId
-  user              User                  @relation(fields: [userId], references: [id])
-  status            DeletionRequestStatus @default(PENDING_EMAIL_CONFIRMATION)
-  confirmTokenHash  String                @unique
-  cancelTokenHash   String                @unique
+  id     String                @id @default(auto()) @map("_id") @db.ObjectId
+  userId String                @db.ObjectId
+  user   User                  @relation(fields: [userId], references: [id])
+  status DeletionRequestStatus @default(PENDING_EMAIL_CONFIRMATION)
+
+  /// Hash du jeton de confirmation. `@unique` est un PIÈGE tant que le code y
+  /// écrit une constante (`'used'`, `'revoked'`) : deux demandes résolues
+  /// entreraient en collision sur l'index. Un jeton consommé se marque
+  /// désormais par `resolvedAt`, et le hash est remplacé par une valeur
+  /// UNIQUE dérivée de l'identifiant de la ligne (#4183).
+  confirmTokenHash String @unique
+  cancelTokenHash  String @unique
+
+  /// Un lien de courriel MEURT. Sans cette date, le jeton reçu il y a six mois
+  /// ouvrait encore la suppression du compte (#4183). Vérifiée dans les DEUX
+  /// recherches — celle de confirmation et celle d'annulation.
+  tokenExpiresAt DateTime?
+
+  /// Nombre d'essais de résolution ratés. Au-delà du plafond, la demande est
+  /// invalidée plutôt que laissée ouverte à la devinette.
+  resolveAttempts Int @default(0)
+
   confirmedAt       DateTime?
   cancelledAt       DateTime?
   gracePeriodEndsAt DateTime?

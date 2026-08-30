@@ -51,7 +51,11 @@ permissions:
 env:
   DOCKER_NAMESPACE: isopen
   PLATFORMS: linux/amd64,linux/arm64
-  NODE_VERSION: '22'
+  # '22.19' et non '22' : undici@8 exige >= 22.19.0 (worker_threads.markAsUncloneable,
+  # arrive en 22.12), et le serveur assemble par les generateurs de manifeste le charge.
+  # La ligne MINEURE, pas une version exacte — figer le patch ferait rater les correctifs
+  # de securite des 22.19.x sans rien garantir de plus : c'est le plancher qui compte ici.
+  NODE_VERSION: '22.19'
   # bun is the canonical package manager across the pipelines (CI parity with
   # ci.yml / docker.yml, which default to bun). Keep this in lockstep with them.
   BUN_VERSION: '1.3.14'

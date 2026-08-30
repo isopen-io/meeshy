@@ -47,7 +47,8 @@ import {
   InternalServerError,
   ServiceUnavailableError,
   handlePrismaError,
-  errorHandler,
+  typedErrorResponse,
+  humanizeErrorName,
 } from '../../../errors/custom-errors';
 
 // ─── BaseAppError ─────────────────────────────────────────────────────────────
@@ -420,103 +421,110 @@ describe('handlePrismaError', () => {
   });
 });
 
-// ─── errorHandler ─────────────────────────────────────────────────────────────
+// ─── typedErrorResponse ───────────────────────────────────────────────────────
 
-function makeReply() {
-  let statusCode = 0;
-  let body: unknown;
-  const reply = {
-    status: jest.fn((code: number) => { statusCode = code; return reply; }),
-    send: jest.fn((b: unknown) => { body = b; return reply; }),
-    get statusCode() { return statusCode; },
-    get body() { return body; },
-  };
-  return reply as any;
-}
-
-const mockRequest = {} as any;
-
-describe('errorHandler', () => {
-  it('handles BaseAppError: sends correct status and code', () => {
-    const reply = makeReply();
-    const err = new AuthenticationError('Bad token');
-    errorHandler(err, mockRequest, reply);
-    expect(reply.statusCode).toBe(401);
-    expect((reply.body as any).error.code).toBe('AUTH_FAILED');
-    expect((reply.body as any).error.message).toBe('Bad token');
-    expect((reply.body as any).success).toBe(false);
+/**
+ * Ces témoins portaient sur `errorHandler`, un handler qui rendait
+ * correctement toute la hiérarchie — et **qui n'était enregistré nulle part**.
+ * Ils étaient VERTS pendant que seize sous-classes sur dix-neuf tombaient dans
+ * le repli générique du seul handler vivant (#4212).
+ *
+ * > Un témoin sur du code MORT n'atteste rien, et il fait pire : il donne
+ * > l'illusion que la question est traitée. C'est exactement ce qui a laissé le
+ * > défaut vivre.
+ *
+ * Ils portent désormais sur `typedErrorResponse`, la fonction PURE que le
+ * handler enregistré appelle — un témoin par sous-classe, comme le demande le
+ * critère, sans avoir à monter un serveur.
+ */
+describe('typedErrorResponse — le corps servi porte le sens de la classe', () => {
+  it("rend `null` pour ce qui n'est PAS une erreur typée — c'est ce qui laisse le repli faire son travail", () => {
+    expect(typedErrorResponse(new Error('quelconque'))).toBeNull();
+    expect(typedErrorResponse('une chaîne')).toBeNull();
+    expect(typedErrorResponse(null)).toBeNull();
   });
 
-  it('includes errors map for ValidationError', () => {
-    const reply = makeReply();
-    const err = new ValidationError('Bad input', { email: 'Required' });
-    errorHandler(err, mockRequest, reply);
-    expect(reply.statusCode).toBe(400);
-    expect((reply.body as any).error.errors).toEqual({ email: 'Required' });
-  });
+  it('porte le code, le message ET le statut de la classe', () => {
+    const corps = typedErrorResponse(new AuthenticationError('Bad token'));
 
-  it('includes retryAfter for RateLimitError', () => {
-    const reply = makeReply();
-    const err = new RateLimitError(30);
-    errorHandler(err, mockRequest, reply);
-    expect(reply.statusCode).toBe(429);
-    expect((reply.body as any).error.retryAfter).toBe(30);
-  });
-
-  it('includes lockedUntil for UserLockedError with date', () => {
-    const reply = makeReply();
-    const until = new Date('2030-06-01T00:00:00Z');
-    const err = new UserLockedError(until);
-    errorHandler(err, mockRequest, reply);
-    expect(reply.statusCode).toBe(423);
-    expect((reply.body as any).error.lockedUntil).toBe(until.toISOString());
-  });
-
-  it('omits lockedUntil for UserLockedError without date', () => {
-    const reply = makeReply();
-    const err = new UserLockedError();
-    errorHandler(err, mockRequest, reply);
-    expect((reply.body as any).error.lockedUntil).toBeUndefined();
-  });
-
-  it('handles PrismaClientKnownRequestError by converting to custom error', () => {
-    const reply = makeReply();
-    const prismaErr = Object.assign(new Error('prisma'), {
-      name: 'PrismaClientKnownRequestError',
-      code: 'P2025',
+    expect(corps).toMatchObject({
+      success: false,
+      code: 'AUTH_FAILED',
+      message: 'Bad token',
+      statusCode: 401,
     });
-    errorHandler(prismaErr, mockRequest, reply);
-    expect(reply.statusCode).toBe(404);
   });
 
-  it('handles ZodError by returning 400 with validation details', () => {
-    const reply = makeReply();
-    const zodErr = Object.assign(new Error('zod'), {
-      name: 'ZodError',
-      errors: [{ path: ['email'], message: 'Invalid email', code: 'invalid_string' }],
-    });
-    errorHandler(zodErr, mockRequest, reply);
-    expect(reply.statusCode).toBe(400);
-    expect((reply.body as any).error.code).toBe('VALIDATION_ERROR');
+  it('donne un LIBELLÉ lisible à toute classe, y compris celles qui n’avaient pas de branche', () => {
+    // Trois classes avaient un libellé écrit à la main ; les seize autres
+    // n'en avaient aucun. Dérivé du nom, il ne peut plus manquer.
+    expect(typedErrorResponse(new UserInactiveError())?.error).toBe('User Inactive');
+    expect(typedErrorResponse(new EmailNotVerifiedError())?.error).toBe('Email Not Verified');
+    expect(typedErrorResponse(new UserDeletedError())?.error).toBe('User Deleted');
   });
 
-  it('handles unknown Error: returns 500 with message in non-production', () => {
-    const reply = makeReply();
-    const original = process.env['NODE_ENV'];
-    process.env['NODE_ENV'] = 'development';
-    errorHandler(new Error('something broke'), mockRequest, reply);
-    process.env['NODE_ENV'] = original;
-    expect(reply.statusCode).toBe(500);
-    expect((reply.body as any).error.message).toBe('something broke');
-  });
-
-  it('handles unknown Error: hides message in production', () => {
-    const reply = makeReply();
+  it('sert le message de la classe EN PRODUCTION — le repli le remplaçait', () => {
+    // C'est le cœur du correctif : hors développement, le repli rendait « An
+    // unexpected error occurred » sur un code pourtant juste.
     const original = process.env['NODE_ENV'];
     process.env['NODE_ENV'] = 'production';
-    errorHandler(new Error('internal detail'), mockRequest, reply);
+    const corps = typedErrorResponse(new UserInactiveError());
     process.env['NODE_ENV'] = original;
-    expect(reply.statusCode).toBe(500);
-    expect((reply.body as any).error.message).not.toBe('internal detail');
+
+    expect(corps?.message).toBe('Compte inactif ou désactivé');
+  });
+
+  it('porte `errors` pour une ValidationError', () => {
+    expect(typedErrorResponse(new ValidationError('Bad input', { email: 'Required' })))
+      .toMatchObject({ statusCode: 400, errors: { email: 'Required' } });
+  });
+
+  it('porte `retryAfter` pour une RateLimitError', () => {
+    expect(typedErrorResponse(new RateLimitError(30)))
+      .toMatchObject({ statusCode: 429, retryAfter: 30 });
+  });
+
+  it('porte `lockedUntil` pour un compte verrouillé — sans lui, on ignore quand revenir', () => {
+    const jusqua = new Date('2030-06-01T00:00:00Z');
+
+    expect(typedErrorResponse(new UserLockedError(jusqua)))
+      .toMatchObject({ statusCode: 423, code: 'USER_LOCKED', lockedUntil: jusqua.toISOString() });
+  });
+
+  it("omet `lockedUntil` quand il n'y en a pas — jamais une clé nulle", () => {
+    const corps = typedErrorResponse(new UserLockedError());
+
+    expect(corps?.statusCode).toBe(423);
+    expect('lockedUntil' in (corps ?? {})).toBe(false);
+  });
+
+  it('couvre les sous-classes DÉRIVÉES, qui n’ont jamais eu de branche à elles', () => {
+    expect(typedErrorResponse(new TooManyLoginAttemptsError(60)))
+      .toMatchObject({ statusCode: 429, code: 'TOO_MANY_LOGIN_ATTEMPTS', retryAfter: 60 });
+    expect(typedErrorResponse(new InvalidInputError('email', 'Requis')))
+      .toMatchObject({ statusCode: 400, code: 'INVALID_INPUT', errors: { email: 'Requis' } });
+    expect(typedErrorResponse(new UserNotFoundError('u1'))?.statusCode).toBe(404);
+    expect(typedErrorResponse(new DuplicateEmailError('a@b.c'))?.statusCode).toBe(409);
+  });
+
+  it("aucun message de la hiérarchie ne divulgue d'interne", () => {
+    // La seule raison légitime de préférer le repli serait qu'un message cite
+    // un chemin, une requête, une trace ou un identifiant technique. Relu
+    // classe par classe : aucun ne le fait. Cette garde le maintient.
+    const toutes = [
+      new AuthenticationError(), new InvalidCredentialsError(), new TokenExpiredError(),
+      new TokenInvalidError(), new PermissionDeniedError(), new InsufficientPermissionsError(),
+      new UserNotFoundError(), new ConflictError('conflit'), new DuplicateUsernameError('bob'),
+      new ValidationError('Données invalides'), new UserLockedError(), new UserInactiveError(),
+      new UserDeletedError(), new EmailNotVerifiedError(), new RateLimitError(10),
+      new TooManyLoginAttemptsError(10), new TranslationError(), new InternalServerError(),
+      new ServiceUnavailableError('translator'),
+    ];
+
+    const suspects = toutes
+      .map((e) => typedErrorResponse(e)!.message)
+      .filter((m) => /\/(api|src|home|usr)\b|SELECT |prisma\.|at .+:\d+|node_modules/i.test(m));
+
+    expect(suspects).toEqual([]);
   });
 });

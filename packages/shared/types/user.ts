@@ -395,7 +395,18 @@ export enum UserAuditAction {
 
   // Actions de verification
   VERIFY_EMAIL = 'VERIFY_EMAIL',
-  VERIFY_PHONE = 'VERIFY_PHONE'
+  VERIFY_PHONE = 'VERIFY_PHONE',
+  VERIFY_AGE = 'VERIFY_AGE',
+
+  /**
+   * Poser ou retirer, au nom d'un tiers, la preuve d'un consentement (#4154).
+   *
+   * L'age et les consentements etaient journalises en `UPDATE_PROFILE` : la
+   * ligne d'audit ne disait donc pas QUEL geste avait eu lieu, et le geste le
+   * plus lourd du fichier — fabriquer une piece legale — se lisait comme une
+   * modification de profil ordinaire.
+   */
+  UPDATE_CONSENT = 'UPDATE_CONSENT'
 }
 
 /**

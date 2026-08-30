@@ -56,6 +56,8 @@ jest.mock('../../../services/SessionService', () => ({
 jest.mock('../../../utils/rate-limiter.js', () => ({
   createLoginRateLimiter: () => ({ middleware: () => async () => {} }),
   createAuthGlobalRateLimiter: () => ({ middleware: () => async () => {} }),
+  // `/login/2fa` n'avait AUCUN preHandler ; elle en porte désormais un (#4138).
+  createTwoFactorLoginRateLimiter: () => ({ middleware: () => async () => {} }),
 }));
 
 jest.mock('jsonwebtoken', () => ({

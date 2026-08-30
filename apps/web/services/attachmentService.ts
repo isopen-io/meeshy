@@ -15,6 +15,7 @@ import {
 } from '@meeshy/shared/types/attachment';
 import { createAuthHeaders } from '@/utils/token-utils';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { apiService } from '@/services/api.service';
 
@@ -199,7 +200,7 @@ export class AttachmentService {
       });
 
       // Open connection and set headers
-      xhr.open('POST', buildApiUrl('/attachments/upload'));
+      xhr.open('POST', buildApiUrl(API_ENDPOINTS.attachments.upload));
 
       // Set auth headers
       Object.entries(authHeaders).forEach(([key, value]) => {
@@ -224,7 +225,7 @@ export class AttachmentService {
       ...authHeaders
     };
 
-    const response = await fetch(buildApiUrl('/attachments/upload-text'), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.attachments.uploadText), {
       method: 'POST',
       headers,
       credentials: 'include',
@@ -258,8 +259,9 @@ export class AttachmentService {
 
     const authHeaders = createAuthHeaders(token);
 
+    const attachmentsEndpoint = `${API_ENDPOINTS.conversations.byConversationIdAttachments(conversationId)}?${params}`;
     const response = await fetch(
-      buildApiUrl(`/conversations/${conversationId}/attachments?${params}`),
+      buildApiUrl(attachmentsEndpoint),
       {
         headers: authHeaders,
         credentials: 'include',
@@ -281,7 +283,7 @@ export class AttachmentService {
   static async deleteAttachment(attachmentId: string, token?: string): Promise<void> {
     const authHeaders = createAuthHeaders(token);
 
-    const response = await fetch(buildApiUrl(`/attachments/${attachmentId}`), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.attachments.byAttachmentId(attachmentId)), {
       method: 'DELETE',
       headers: authHeaders,
       credentials: 'include',
@@ -296,14 +298,14 @@ export class AttachmentService {
    * Génère l'URL d'un attachment
    */
   static getAttachmentUrl(attachmentId: string): string {
-    return buildApiUrl(`/attachments/${attachmentId}`);
+    return buildApiUrl(API_ENDPOINTS.attachments.byAttachmentId(attachmentId));
   }
 
   /**
    * Génère l'URL d'une miniature
    */
   static getThumbnailUrl(attachmentId: string): string {
-    return buildApiUrl(`/attachments/${attachmentId}/thumbnail`);
+    return buildApiUrl(API_ENDPOINTS.attachments.byAttachmentIdThumbnail(attachmentId));
   }
 
   /**

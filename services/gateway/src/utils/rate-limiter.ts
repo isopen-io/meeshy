@@ -22,8 +22,19 @@ import { enhancedLogger } from './logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'RateLimiter' });
 
 /**
- * Check if an IP address is local (loopback or private network).
- * Local IPs are exempt from rate limiting in dev environments.
+ * Vrai si l'adresse appartient au loopback ou à une plage privée.
+ *
+ * ATTENTION — cette fonction est juste ; c'est son USAGE comme exemption de
+ * limitation qui ne l'était pas. Le gateway tourne derrière Traefik sur un
+ * réseau Docker bridge : `request.ip` vaut une adresse `172.16.0.0/12` pour
+ * TOUS les appelants, un attaquant compris. Exempter « les adresses locales »
+ * y désactive donc la limitation pour tout le monde — c'est exactement ce qui
+ * s'était produit (cf. `middleware()` ci-dessous et #4137).
+ *
+ * Ne JAMAIS s'en servir pour accorder une faveur de sécurité. Une exemption
+ * de développement se déclare explicitement (`RATE_LIMIT_DISABLED`), jamais
+ * par la forme d'une adresse — sinon la production hérite en silence d'une
+ * commodité de poste de travail.
  */
 export function isLocalIp(ip: string): boolean {
   if (!ip) return false;
@@ -36,6 +47,27 @@ export function isLocalIp(ip: string): boolean {
     normalized.startsWith('10.') ||
     /^172\.(1[6-9]|2\d|3[01])\./.test(normalized)
   );
+}
+
+/**
+ * Unique échappatoire à la limitation de débit : une DÉCLARATION explicite,
+ * lue à chaque appel (et non figée au chargement du module, pour rester
+ * pilotable en test sans réimporter).
+ *
+ * Elle est volontairement pénible à activer par accident : il faut poser
+ * `RATE_LIMIT_DISABLED=true`, et jamais en production — le témoin ci-dessous
+ * refuse la combinaison. Aucune adresse IP, aucun en-tête, aucune forme de
+ * requête ne doit plus ouvrir cette porte.
+ */
+function rateLimitDisabled(): boolean {
+  if (process.env.RATE_LIMIT_DISABLED !== 'true') return false;
+  if (process.env.NODE_ENV === 'production') {
+    logger.error(
+      'RATE_LIMIT_DISABLED est posé en production — ignoré. La limitation reste active.'
+    );
+    return false;
+  }
+  return true;
 }
 
 export interface RateLimiterConfig {
@@ -220,7 +252,7 @@ export class RateLimiter {
   middleware() {
     return async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        if (isLocalIp(request.ip)) return;
+        if (rateLimitDisabled()) return;
 
         const shouldSkip = await this.config.skip(request);
         if (shouldSkip) {
@@ -507,6 +539,55 @@ export function createPhoneResetIdentityRateLimiter(redis?: Redis): RateLimiter 
         const body = request.body as any;
         const tokenId = body?.tokenId || '';
         return `token:${tokenId}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Le second facteur à la connexion — clé par COMPTE CIBLE, pas par IP.
+ *
+ * `twoFactorToken` est le jeton temporaire émis à ce compte-là par l'étape
+ * précédente : le prendre pour clé fait converger toutes les tentatives d'une
+ * attaque DISTRIBUÉE dans un seul seau. Une clé par IP les répartirait au
+ * contraire dans autant de seaux qu'il y a de machines, ce qui ne protège
+ * personne (#4138).
+ *
+ * Ce limiteur ne remplace PAS le compteur en base : rejouer `/login` rend un
+ * jeton neuf, donc une clé neuve. C'est `LoginAttemptService` qui borne
+ * réellement, en comptant sur le compte lui-même.
+ */
+export function createTwoFactorLoginRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 5,
+      windowMs: 10 * 60 * 1000,
+      keyPrefix: 'auth:2fa-login',
+      message: 'Trop de tentatives de code à deux facteurs. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const body = request.body as { twoFactorToken?: string } | undefined;
+        return `token:${body?.twoFactorToken ?? ''}`;
+      }
+    },
+    redis
+  );
+}
+
+/**
+ * Le second facteur sur une route AUTHENTIFIÉE (`/2fa/verify`,
+ * `/2fa/backup-codes`) — clé par compte connecté.
+ */
+export function createTwoFactorAccountRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 10,
+      windowMs: 10 * 60 * 1000,
+      keyPrefix: 'auth:2fa-account',
+      message: 'Trop de tentatives de code à deux facteurs. Veuillez réessayer dans 10 minutes.',
+      keyGenerator: (request) => {
+        const user = (request as { user?: { userId?: string } }).user;
+        return `user:${user?.userId ?? request.ip}`;
       }
     },
     redis

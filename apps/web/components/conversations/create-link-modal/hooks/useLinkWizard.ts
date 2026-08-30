@@ -153,7 +153,7 @@ export function useLinkWizard({
         requestBody.conversationId = selectedConversationId;
       }
 
-      const response = await fetch(buildApiUrl(API_ENDPOINTS.CONVERSATION.CREATE_LINK), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.links.root), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -20,6 +20,8 @@ import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendFor
 import { validatePagination } from '../../utils/pagination';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { isHttpUrl } from '@meeshy/shared/utils/validation';
+import { permissionsService } from '../../services/admin/permissions.service';
+import { UserRoleEnum } from '@meeshy/shared/types';
 
 /**
  * Routes de création et gestion des liens de tracking
@@ -150,8 +152,13 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const body = createTrackingLinkSchema.parse(request.body);
 
       let createdBy: string | undefined;
+      // La MATRICE, jamais une liste (#4153). Un compte privilégié échappe à
+      // la longueur minimale d'un jeton personnalisé — c'est une dispense, et
+      // une dispense est une loi d'admission comme une autre.
       const isPrivileged = isRegisteredUser(request.authContext) &&
-        ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(request.authContext.registeredUser!.role);
+        permissionsService.hasPermission(
+          request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
+        );
       if (isRegisteredUser(request.authContext)) {
         createdBy = request.authContext.registeredUser!.id;
       }
@@ -816,8 +823,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret');
       }
 
-      const isPrivileged = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(
-        request.authContext.registeredUser!.role
+      const isPrivileged = permissionsService.hasPermission(
+        request.authContext.registeredUser!.role as UserRoleEnum, 'canModerateContent'
       );
       if (body.newToken && body.newToken.length < 5 && !isPrivileged) {
         return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');

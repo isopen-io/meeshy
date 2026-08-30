@@ -302,6 +302,11 @@ struct ParticipantProfileSheet: View {
                     )
                     .labelsHidden()
                     .disabled(historyGrantWriteInFlight)
+                    // `.labelsHidden()` retire l'étiquette de l'ÉCRAN et de
+                    // VoiceOver : sans ce nom, le contrôle s'annonce « date » et
+                    // rien d'autre. Un `accessibilityIdentifier` est un
+                    // identifiant de TEST, il ne nomme personne (#4393).
+                    .accessibilityLabel(seesHistorySinceLabel)
                     .accessibilityIdentifier("participant-profile-history-grant-input")
 
                     if profile.historyVisibleFrom != nil {
@@ -310,6 +315,13 @@ struct ParticipantProfileSheet: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(theme.textMuted)
+                                // La cible d'un bouton est celle de son
+                                // ÉTIQUETTE : le glyphe seul fait une vingtaine
+                                // de points, et une cible de cette taille se
+                                // rate. 44 pt, la zone sensible étendue à tout
+                                // le cadre (#4393).
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
                         .disabled(historyGrantWriteInFlight)
                         .accessibilityLabel(historyGrantClearLabel)
@@ -511,11 +523,17 @@ struct ParticipantProfileSheet: View {
             )
             profile?.historyVisibleFrom = updated
         } catch {
-            historyGrantErrorMessage = String(
+            let message = String(
                 localized: "participantProfile.historyGrant.error",
                 defaultValue: "Échec de la mise à jour",
                 bundle: .main
             )
+            historyGrantErrorMessage = message
+            // L'échec doit être ANNONCÉ, pas seulement dessiné : SwiftUI n'a
+            // pas de région vivante, et un texte qui APPARAÎT ne réveille pas
+            // VoiceOver. L'annonce se pose donc là où l'état s'écrit — l'idiome
+            // du dépôt (`CreateTrackingLinkView`, `StoryViewerView`) (#4393).
+            UIAccessibility.post(notification: .announcement, argument: message)
         }
     }
 

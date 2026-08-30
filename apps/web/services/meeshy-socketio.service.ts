@@ -407,6 +407,21 @@ class MeeshySocketIOService {
     return this.orchestrator.onConversationDeleted(listener);
   }
 
+  /**
+   * #4389 — jumeau EXACT de `onConversationDeleted` ci-dessus, sens inverse.
+   *
+   * Il existe parce qu'un `socket.on(...)` posé directement depuis un hook ne
+   * s'attache qu'au socket PRESENT a cet instant : si `getSocket()` rend
+   * `null` au montage, l'ecouteur n'est jamais pose, et l'effet qui le porte
+   * ne se rejoue pas pour reessayer. Les listeners passent donc par un Set
+   * detenu par le service, que `setupEventListeners(socket)` rebranche a
+   * chaque socket -- c'est ce qui rend l'abonnement independant du cycle de
+   * vie de la connexion.
+   */
+  public onConversationRestored(listener: (data: { userId: string; conversationId: string }) => void): () => void {
+    return this.orchestrator.onConversationRestored(listener);
+  }
+
   public onConversationUpdated(listener: (data: { conversationId: string; updatedBy: { id: string }; updatedAt: string; [key: string]: unknown }) => void): () => void {
     return this.orchestrator.onConversationUpdated(listener);
   }

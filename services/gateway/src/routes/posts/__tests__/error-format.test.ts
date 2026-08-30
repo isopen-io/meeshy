@@ -8,7 +8,6 @@
  * One endpoint is exercised per modified file:
  *   core.ts        → POST /api/v1/posts (401, 400, 500)
  *   feed.ts        → GET  /api/v1/posts/feed (401)
- *   audio.ts       → POST /api/v1/stories/audio (401, 400)
  *   interactions.ts → POST /api/v1/posts/:id/like (401, 404)
  *   comments.ts    → POST /api/v1/posts/:id/comments (401, 400, 404)
  *
@@ -73,6 +72,26 @@ jest.mock('../../../services/MentionService', () => ({
 
 jest.mock('../../../middleware/rate-limiter', () => ({
   createPostRouteRateLimitConfig: jest.fn<() => Record<string, unknown>>().mockReturnValue({}),
+}));
+
+// #4147 — POST /posts tire son plafond de création d'un compteur PARTAGÉ qui
+// lit Redis directement, fail-closed (createSharedWriteRateLimitPreHandler,
+// routes/posts/socialRateLimit.ts) : sans ce double,
+// `getCacheStore().getNativeClient()` rend `null` en test (aucun REDIS_URL)
+// et la création serait refusée 429 avant d'atteindre les gardes 401/400/500
+// que ce fichier vérifie — détail complet dans
+// __tests__/unit/routes/posts/core.test.ts, premier fichier de la série à
+// le poser. `incr` répond toujours « premier appel » : ce fichier ne teste
+// PAS le plafond (son témoin dédié vit dans social-write-rate-limit.test.ts)
+// — juste un Redis DISPONIBLE.
+jest.mock('../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({

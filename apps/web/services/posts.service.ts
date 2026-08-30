@@ -1,5 +1,6 @@
 import { apiService } from './api.service';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getCurrentInterfaceLocale } from '@/stores/language-store';
 import type {
   Post,
@@ -382,12 +383,12 @@ export const postsService = {
   // ── Interactions ────────────────────────────────────────────────────────
 
   async likePost(postId: string, emoji = '❤️'): Promise<unknown> {
-    const response = await apiService.post(`/posts/${postId}/like`, { emoji });
+    const response = await apiService.post(API_ENDPOINTS.posts.byPostIdLike(postId), { emoji });
     return unwrap(response);
   },
 
   async unlikePost(postId: string): Promise<unknown> {
-    const response = await apiService.delete(`/posts/${postId}/like`);
+    const response = await apiService.delete(API_ENDPOINTS.posts.byPostIdLike(postId));
     return unwrap(response);
   },
 
@@ -458,12 +459,12 @@ export const postsService = {
     if (postIds.length === 0) return;
     for (let i = 0; i < postIds.length; i += IMPRESSION_BATCH_LIMIT) {
       const chunk = postIds.slice(i, i + IMPRESSION_BATCH_LIMIT);
-      await apiService.post('/posts/impressions/batch', { postIds: chunk, source });
+      await apiService.post(API_ENDPOINTS.posts.impressionsBatch, { postIds: chunk, source });
     }
   },
 
   async recordImpression(postId: string, source: ImpressionSource = 'detail'): Promise<void> {
-    await apiService.post(`/posts/${postId}/impression`, { source });
+    await apiService.post(API_ENDPOINTS.posts.byPostIdImpression(postId), { source });
   },
 
   // ── Downloads ────────────────────────────────────────────────────────────
@@ -478,7 +479,7 @@ export const postsService = {
   ): Promise<void> {
     if (mediaIds.length === 0) return;
     try {
-      await apiService.post(`/posts/${postId}/downloads`, { mediaIds, surface });
+      await apiService.post(API_ENDPOINTS.posts.byPostIdDownloads(postId), { mediaIds, surface });
     } catch {
       // fire-and-forget : ne jamais bloquer le téléchargement
     }
@@ -520,12 +521,12 @@ export const postsService = {
   },
 
   async likeComment(postId: string, commentId: string, emoji = '❤️'): Promise<unknown> {
-    const response = await apiService.post(`/posts/${postId}/comments/${commentId}/like`, { emoji });
+    const response = await apiService.post(API_ENDPOINTS.posts.byPostIdCommentsByCommentIdLike(postId, commentId), { emoji });
     return unwrap(response);
   },
 
   async unlikeComment(postId: string, commentId: string): Promise<unknown> {
-    const response = await apiService.delete(`/posts/${postId}/comments/${commentId}/like`);
+    const response = await apiService.delete(API_ENDPOINTS.posts.byPostIdCommentsByCommentIdLike(postId, commentId));
     return unwrap(response);
   },
 
@@ -538,7 +539,7 @@ export const postsService = {
  */
 export async function recordAnonymousView(postId: string, sessionKey: string): Promise<void> {
   try {
-    await fetch(buildApiUrl(`/posts/${postId}/anonymous-view`), {
+    await fetch(buildApiUrl(API_ENDPOINTS.posts.byPostIdAnonymousView(postId)), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-session-token': sessionKey },
     });

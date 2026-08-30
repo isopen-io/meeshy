@@ -100,7 +100,7 @@ export function DashboardLayout({
       const token = authManager.getAuthToken();
       if (token) {
         try {
-          await fetch(buildApiUrl(API_ENDPOINTS.AUTH.LOGOUT), {
+          await fetch(buildApiUrl(API_ENDPOINTS.auth.logout), {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}` }
           });

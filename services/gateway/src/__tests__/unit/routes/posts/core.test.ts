@@ -83,6 +83,25 @@ jest.mock('../../../../utils/sanitize.js', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn((t: string) => t) },
 }));
 
+// #4147 — POST /posts et POST /posts/from-attachment tirent désormais leur
+// plafond de création d'un compteur PARTAGÉ (createSharedWriteRateLimitPreHandler,
+// routes/posts/socialRateLimit.ts) qui lit Redis DIRECTEMENT, fail-closed
+// (consignes #4147) : sans ce double, `getCacheStore().getNativeClient()`
+// rend `null` en test (aucun REDIS_URL, cf. jest.setup.js) et CHAQUE création
+// serait refusée avant d'atteindre ce que ce fichier vérifie. `incr` répond
+// toujours « premier appel » : ce fichier ne teste PAS le plafond lui-même
+// (son témoin dédié, deux comptes + épuisement du budget, vit dans
+// social-write-rate-limit.test.ts) — juste un Redis DISPONIBLE.
+jest.mock('../../../../services/CacheStore', () => ({
+  getCacheStore: () => ({
+    getNativeClient: () => ({
+      incr: async () => 1,
+      pexpire: async () => 1,
+      pttl: async () => -1,
+    }),
+  }),
+}));
+
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerCoreRoutes } from '../../../../routes/posts/core';

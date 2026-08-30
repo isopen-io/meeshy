@@ -55,7 +55,7 @@ describe('messageService.editMessage', () => {
     await messageService.editMessage('conv-1', 'msg-1', { content: 'new text', originalLanguage: 'fr' });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/conversations/conv-1/messages/msg-1',
+      'http://localhost:3000/api/v1/conversations/conv-1/messages/msg-1',
       expect.objectContaining({
         method: 'PUT',
         headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),
@@ -122,7 +122,7 @@ describe('messageService.deleteMessage', () => {
     await messageService.deleteMessage('conv-1', 'msg-1');
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/conversations/conv-1/messages/msg-1',
+      'http://localhost:3000/api/v1/conversations/conv-1/messages/msg-1',
       expect.objectContaining({
         method: 'DELETE',
         headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),

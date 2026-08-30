@@ -1,0 +1,997 @@
+{
+ "cycles_detectes": [],
+ "lots": [
+  {
+   "id": "L-0.5",
+   "titre": "La v3 est joignable et sa conformité se mesure",
+   "resultat_attendu": "apps/web-v3 existe, se construit, se déploie derrière PathPrefix('/__v3/_next') avec assetPrefix:'/__v3' (aucun basePath ; la règle ne réclame que la zone d'assets tant qu'aucune page d'App Router n'est émise, et aucun actif de la v3 n'est servi à la racine de l'URL), tourne en dev sur le port 3300, entre dans docker.yml et ci.yml (type-check BLOQUANT, jamais le ratchet), et la machine de vérification rend un rapport chiffré : gate d'ordre (rc=0/1/2), diff par région, axe, poids réseau CDP, budget de bundle et baseline.json mesurée sur la prod actuelle. Le Makefile est nettoyé de son précédent mort apps/web_v2 (port 3200 déjà pris) et le lockfile s'aligne sur les manifestes.",
+   "echeance_relative": "J+3",
+   "depend_de": []
+  },
+  {
+   "id": "L0",
+   "titre": "Le socle ne peut plus diverger",
+   "resultat_attendu": "UNE table de jetons (packages/design-tokens), UN sprite de 72 glyphes (packages/icons, ≤ 12 Ko gzip, mesuré 8,8 Ko), UN moteur de thème avec ThemeScript inline ≤ 400 o et zéro @media prefers-color-scheme dans les tokens, UN site de cycle de vie (lib/realtime/lifecycle.ts), UN détenteur du jeton invité rangé par lien, et les lints de zone qui rendent une seconde jumelle impossible à commiter.",
+   "echeance_relative": "J+7",
+   "depend_de": [
+    "L-0.5"
+   ]
+  },
+  {
+   "id": "L1",
+   "titre": "Un lien partagé s'ouvre en un aller-retour",
+   "resultat_attendu": "/l/:token répond 302 en un hop depuis un Route Handler serveur, sans un octet de JavaScript hors ThemeScript, avec des OG réels sur le repli et le beacon de télémétrie envoyé APRÈS la redirection ; le lien fermé ou expiré rend son état serveur. Le PathPrefix /l est actif en production, son retrait rejoué une fois en staging.",
+   "echeance_relative": "J+10",
+   "depend_de": [
+    "L0"
+   ]
+  },
+  {
+   "id": "L2",
+   "titre": "On entre dans une conversation sans compte",
+   "resultat_attendu": "Un visiteur sans compte rejoint le lien, lit, écrit, revient d'arrière-plan après dix minutes sans re-jonction ni modale, envoie hors ligne et voit sa file repartir dans l'ordre. Le socket n'est chargé qu'au tap « Rejoindre ». Les six cas de recette C→H tombent, dont l'anti-régression « visibilitychange:hidden ⇒ zéro requête mutante ». Bloqué par le bail invité côté passerelle.",
+   "echeance_relative": "J+17",
+   "depend_de": [
+    "L1"
+   ]
+  },
+  {
+   "id": "L3",
+   "titre": "Un contenu partagé se lit intégralement sans compte",
+   "resultat_attendu": "Story, post et commentaires s'ouvrent en rendu serveur pour un visiteur sans compte, dans la langue de son prisme, avec les aperçus OG servis dans la langue d'origine et un 404 indistinguable pour tout contenu expiré ou restreint. Bloqué par l'ouverture conjointe de GET /posts/:id ET GET /posts/:id/comments — les deux ensemble ou aucune.",
+   "echeance_relative": "J+24",
+   "depend_de": [
+    "L1"
+   ]
+  },
+  {
+   "id": "L4",
+   "titre": "On garde son identité sans perdre son lien",
+   "resultat_attendu": "Se connecter ou créer un compte depuis un lien reçu ramène exactement au contenu qu'on ouvrait, le bandeau « lien gardé de côté » n'apparaissant que lorsqu'un lien est réellement en attente.",
+   "echeance_relative": "J+28",
+   "depend_de": [
+    "L2"
+   ]
+  },
+  {
+   "id": "L5",
+   "titre": "Je gère mes conversations et mes contenus",
+   "resultat_attendu": "Accueil, liste des conversations, fil, réels, composer, nouvelle story, liens, contacts et recherche sont servis depuis le cache d'abord, rattrapés en delta, et chaque contrôle rendu a un effet mesurable.",
+   "echeance_relative": "J+38",
+   "depend_de": [
+    "L4",
+    "L3"
+   ]
+  },
+  {
+   "id": "L6",
+   "titre": "Je règle mon compte",
+   "resultat_attendu": "Notifications, préférences, hub de réglages, les sept fiches, l'édition du profil et le changement de mot de passe mutent réellement le compte ; le sélecteur clair / sombre / système est livré. Le PathPrefix '/' bascule en dernier, vidant le routeur legacy.",
+   "echeance_relative": "J+46",
+   "depend_de": [
+    "L5"
+   ]
+  },
+  {
+   "id": "L7",
+   "titre": "Confort",
+   "resultat_attendu": "Historique d'appels, appel audio, appel vidéo et communautés, la pile d'appel n'étant chargée qu'à la sonnerie et jamais montée dans le layout connecté. Hors condition de livraison.",
+   "echeance_relative": "J+53",
+   "depend_de": [
+    "L6"
+   ]
+  },
+  {
+   "id": "L8",
+   "titre": "apps/web ne sert plus rien",
+   "resultat_attendu": "Le routeur legacy ne sert plus aucune route : les suppressions dans apps/web et le retrait du service frontend sont exécutés. Postérieur à la livraison.",
+   "echeance_relative": "J+60",
+   "depend_de": [
+    "L6"
+   ]
+  }
+ ],
+ "ecrans": [
+  {
+   "ordre": 1,
+   "vue_id": "linkRedirect",
+   "titre_issue": "Un lien partagé ouvre son contenu en un seul aller-retour, sans une ligne de JavaScript",
+   "lot": "L1",
+   "priorite": "P0-role-premier",
+   "route": "/l/:token",
+   "audience": "les-deux",
+   "depend_de": [],
+   "critere_de_fin": "bunx playwright test e2e/visual/v3-network-vitals.spec.ts --grep linkRedirect : une seule requête avant la 302, zéro <script> hors ThemeScript (≤ 400 o), HTML de repli ≤ 4 Ko gzip hors sprite, OG réels lus par un crawler simulé, et le POST de clic observé APRÈS la redirection dans le journal réseau CDP. node scripts/check-bundle-budget.mjs rend 0 Ko JS sur cette route.",
+   "dimensions_visees": [
+    "Performance",
+    "Sécurité",
+    "Compatibilité",
+    "Simplicité d'usage",
+    "Complétude"
+   ],
+   "corps_issue": "**Contexte** — `apps/web/app/l/[token]/page.tsx` fait 550 lignes `'use client'` et enchaîne POST-clic puis GET-resolve avant toute redirection ; son `layout.tsx` pose `title:''`, `description:''`, `images:[]`. Un lien reçu dans WhatsApp paie donc le plancher framework, deux allers-retours et une preview vide. C'est le rôle PREMIER de la v3.\n\n**Preuve attendue** — Route Handler serveur (`app/(public)/l/[token]/route.ts`) appelant `resolve` et le clic en parallèle serveur-à-serveur, réponse 302, HTML de repli porteur des OG réels dans la langue d'ORIGINE du contenu (aucun prisme utilisateur n'existe pour un crawler, et les plateformes mettent l'aperçu en cache PAR URL), fingerprint en `sendBeacon` après. `lib/api/links.ts` isole les deux appels — seul endroit à changer le jour où `GET /l/{token}` unifié est monté.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 2 (ligne `/l/:token`), § 5.1, § 5.4, § 8.3, § 10.1 ; `docs/product/MeeshyWebV3Design/cible/linkRedirect.png` ; `vues.json#linkRedirect`.\n\n**Bloqué par (hors web)** — `gw:resolveTarget-linkKey` : `TrackingLinkService.resolveTarget` (`services/gateway/src/services/TrackingLinkService.ts:198`) rend `conversationId` → `/conversations/<id>`, route fermée aux anonymes. Mapping client `CONVERSATION → /chats/<linkKey>` en attendant."
+  },
+  {
+   "ordre": 2,
+   "vue_id": "join",
+   "titre_issue": "Un visiteur sans compte rejoint la conversation depuis son téléphone, même sans JavaScript",
+   "lot": "L2",
+   "priorite": "P0-role-premier",
+   "route": "/chats/:lien",
+   "audience": "anonyme",
+   "depend_de": [
+    "linkRedirect"
+   ],
+   "critere_de_fin": "Playwright avec javaScriptEnabled:false : le formulaire se soumet et la place est créée (201 observé) ; la langue est pré-remplie depuis Accept-Language (et non 'fr' en dur) ; l'accordéon des droits est un <details>/<summary> natif atteignable au clavier ; les sept refus (403 REQUIRES_ACCOUNT, 403 pays/IP/langue, 410 LINK_INACTIVE / CONVERSATION_CLOSED / LINK_EXPIRED / LINK_MAX_USES, 429 MAX_CONCURRENT_USERS, 400 champ requis, 409 USERNAME_TAKEN_IN_CONVERSATION avec suggestedNickname pré-rempli) sont peints, chacun couvert par un test. 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Facilité d'accès",
+    "Facilité d'usage",
+    "Complétude",
+    "Compatibilité",
+    "Sécurité",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Rejoindre en anonyme est le geste central du rôle premier et doit fonctionner avant toute hydratation, sur un téléphone en 3G. `apps/web/hooks/use-join-flow.ts:24,55` fige la langue à `'fr'`. La police complète du lien (`maxUses`, `maxConcurrentUsers`, `allowedCountries`, `requireAccount`) n'est appliquée que par `POST /anonymous/join/:linkId` — jamais par `POST /conversations/join/:linkId`, qui l'ignore.\n\n**Preuve attendue** — `<form action={serverAction}>` natif + Zod partagé exécuté serveur ; au tap, dans cet ordre : écriture du jeton dans `meeshy.guest.<linkKey>` (une entrée PAR LIEN, jamais une clé globale), `await import('socket.io-client')`, connexion, battement si cet onglet est le porteur élu par `BroadcastChannel('meeshy-guest')`.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1, § 6.3.A, § 6.2, § 10.1 ; `cible/join.png` ; `vues.json#join`."
+  },
+  {
+   "ordre": 3,
+   "vue_id": "rights",
+   "titre_issue": "Après avoir rejoint, on voit exactement ce qu'on a le droit de faire dans la conversation",
+   "lot": "L2",
+   "priorite": "P0-role-premier",
+   "route": "/chats/:lien",
+   "audience": "anonyme",
+   "depend_de": [
+    "join"
+   ],
+   "critere_de_fin": "Test unitaire prouvant que les quatre droits rendus proviennent de la MÊME source que l'accordéon de join (un seul module, importé deux fois — aucune liste dupliquée) ; recette Playwright : l'écran est atteint depuis join, depuis login et depuis signup, avec le pseudo saisi restitué. Diff par région contre cible/rights.png ≤ 8 % de disposition, IoU ≥ 0,92, 100 % des icônes attendues rendues, dans les quatre colonnes de thème.",
+   "dimensions_visees": [
+    "Complétude",
+    "Maintenabilité",
+    "Cohérence de positionnement",
+    "Expérience utilisateur",
+    "Simplicité d'usage"
+   ],
+   "corps_issue": "**Contexte** — Écran de CONFIRMATION. Le bloc `isRights` de `MeeshyWebV3.dc.html:239-250` rend le littéral `rights` (`:1103-1108`), qui est la MÊME liste que l'accordéon de `join` (`:223`, `:246`), plus le pseudo saisi dans `join` (`:232`).\n\n**Preuve attendue** — Une seule source de vérité pour les quatre droits (`canSendMessages`, `canSendFiles`, `canSendImages`, `allowViewHistory`), relue de la réponse de jonction : l'hôte a pu les changer.\n\n**Critère de fin** — voir champ dédié.\n\n**Dépendance, et ce qui n'en est PAS une** — `rights` ne dépend que de `join`, seul producteur de l'état qu'il confirme. Les trois entrées vers `rights` dans la planche (`join :765`, `login :773`, `signup :774`) sont des lignes de RECETTE, pas des dépendances : `login`/`signup` MÈNENT à `rights` sans en produire le contenu, et les inscrire ferait attendre une confirmation anonyme P0 derrière deux écrans d'authentification P1 — c'est exactement l'arête inverse qui fabrique un cycle.\n\n**Source** — spec § 10.1 (test d'admission d'une cellule) ; `cible/rights.png` ; `vues.json#rights`."
+  },
+  {
+   "ordre": 4,
+   "vue_id": "linkExpired",
+   "titre_issue": "Un lien fermé ou expiré dit pourquoi, et propose une suite au lieu d'une page blanche",
+   "lot": "L1",
+   "priorite": "P0-role-premier",
+   "route": "/l/:token",
+   "audience": "les-deux",
+   "depend_de": [
+    "linkRedirect"
+   ],
+   "critere_de_fin": "Playwright : deux requêtes avant le premier pixel utile (HTML + CSS), aucun composant client monté (assertion sur l'absence de chunk de route dans app-build-manifest.json), les deux CTA câblés et atteignables au clavier, LINK_EXPIRED / LINK_INACTIVE / LINK_MAX_USES / CONVERSATION_CLOSED rendant chacun sa raison propre. 0 violation axe serious/critical, quatre colonnes de thème sous seuil.",
+   "dimensions_visees": [
+    "Complétude",
+    "Expérience utilisateur",
+    "Performance",
+    "Facilité d'accès",
+    "Sécurité"
+   ],
+   "corps_issue": "**Contexte** — Un lien mort est le premier contact d'un visiteur avec Meeshy aussi souvent qu'un lien vif. L'état doit être rendu par le SERVEUR, pas découvert par un client après hydratation.\n\n**Preuve attendue** — RSC pur + ThemeScript, quatre raisons distinctes (jamais un message générique), et aucune information révélant l'existence ou non de la conversation derrière le lien.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 8.3, § 10.1 ; `cible/linkExpired.png` ; `vues.json#linkExpired`."
+  },
+  {
+   "ordre": 5,
+   "vue_id": "thread",
+   "titre_issue": "On lit et on écrit dans une conversation partagée sans compte, y compris hors ligne et au retour d'arrière-plan",
+   "lot": "L2",
+   "priorite": "P0-role-premier",
+   "route": "/chats/:identifiant",
+   "audience": "les-deux",
+   "depend_de": [
+    "join"
+   ],
+   "critere_de_fin": "bunx playwright test e2e/visual/v3-lifecycle.spec.ts : les six cas C→H tombent — retour après 10 min sans modale ni re-jonction et le message manqué apparaît ; deux messages hors ligne repartent DANS L'ORDRE, hasGap peint son séparateur, jeton inchangé ; deux onglets, une seule requête de battement sur 10 min ; isActive:false forcé en base ⇒ bandeau à BOUTON, lecture conservée, AUCUN POST /anonymous/join sans clic ; lien désactivé ⇒ composeur fermé avec sa raison, file annulée et visible ; onglet fermé ⇒ ZÉRO POST /anonymous/leave. Plus l'anti-régression : visibilitychange:hidden seul ⇒ zéro requête mutante. socket.io-client absent du chunk avant le tap (assertion sur app-build-manifest.json). lang= présent sur chaque bulle traduite.",
+   "dimensions_visees": [
+    "Performance",
+    "Fluidité",
+    "Complétude",
+    "Sécurité",
+    "Optimisation mémoire",
+    "Compatibilité",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — C'est l'écran où le rôle premier se joue entièrement. Sept faits mesurés le gouvernent (spec § 6.1) : le jeton invité n'a AUCUN TTL (seule condition : `Participant.isActive === true`, sur les trois portes `middleware/auth.ts:399-402`, `AuthHandler.ts:325-330`, `routes/links/messages.ts:269-276`) ; `leave` est une porte à sens unique et n'est pas idempotent ; le seul retour est un re-join qui perd la paternité des messages, suffixe le pseudo et incrémente trois compteurs.\n\n**Preuve attendue** — Le navigateur n'appelle JAMAIS `leave`. La place est un BAIL SERVEUR dont `/anonymous/refresh` est la preuve de présence. `visibilitychange:hidden` SUSPEND, ne mute rien. Reprise sur `visible` / `pageshow{persisted}` / `online`. Un 401 invité passe par une `refresh` de CONTRÔLE en UN seul site (`lib/api/guest-session.ts`) et n'autorise jamais un re-join automatique — il affiche un BOUTON. Un `TypeError: Failed to fetch` n'efface jamais un jeton.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:bail-anonyme` : balayage compare-and-set (`updateMany({where:{id,isActive:true}})`, décrément seulement si le compte rendu vaut 1, plancher à 0), qui rend `leave` idempotent par construction et fait passer la purge des 24 h (`MaintenanceService.ts:660-666`) par la même transition, en cessant de hard-deleter une ligne qui est le `senderId` de messages. N = 10 min par défaut, à confirmer (issue `décision-produit`).\n\n**Source** — spec § 6 entier, § 7, § 8.3, § 10.1 ; `cible/thread.png` ; `vues.json#thread`."
+  },
+  {
+   "ordre": 6,
+   "vue_id": "rich",
+   "titre_issue": "Chaque type de message — image, vidéo, audio, transfert, réponse, story — se lit dans sa forme propre",
+   "lot": "L2",
+   "priorite": "P0-role-premier",
+   "route": "/chats/:id",
+   "audience": "les-deux",
+   "depend_de": [
+    "thread"
+   ],
+   "critere_de_fin": "Test unitaire : les six variantes sont rendues par UN composant dérivant du TYPE du message (aucune branche dupliquée, aucun second résolveur) ; la transcription vocale passe par resolvePrismTranslation() et porte lang= quand la langue servie diffère de <html lang> ; diff par région contre cible/rich.png ≤ 8 %, IoU ≥ 0,92, 100 % des icônes attendues rendues, quatre colonnes de thème.",
+   "dimensions_visees": [
+    "Complétude",
+    "Maintenabilité",
+    "Cohérence de positionnement",
+    "Facilité d'accès",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Six formes de bulle, une seule règle. La tentation est d'écrire six composants qui divergent au premier correctif.\n\n**Preuve attendue** — UN composant, la forme dérivée du TYPE. La transcription audio descend le prisme ORDONNÉ (`systemLanguage` → `regionalLanguage` → `customDestinationLanguage` → `deviceLocale` → `fr`), jamais le rang 1 seul, via `resolvePrismTranslation()` (`packages/shared/utils/conversation-helpers.ts`) — aucune boucle réécrite. Et la piste audio jouée est élue par la langue du TEXTE SERVI, jamais par une descente indépendante.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.3, § 5.4, § 10.1 ; CLAUDE.md § Prisme (familles de résolveurs, cycles 119/128) ; `cible/rich.png` ; `vues.json#rich`."
+  },
+  {
+   "ordre": 7,
+   "vue_id": "media",
+   "titre_issue": "Les médias d'une conversation se parcourent, s'ouvrent, et leur poids est annoncé avant tout téléchargement",
+   "lot": "L2",
+   "priorite": "P0-role-premier",
+   "route": "/chats/:id/medias",
+   "audience": "les-deux",
+   "depend_de": [
+    "thread"
+   ],
+   "critere_de_fin": "Playwright : chaque tuile est cliquable et ouvre le média (loi « un contrôle existe s'il a un effet » — les tuiles sont inertes aujourd'hui) ; le poids est affiché AVANT le téléchargement et aucun octet de média n'est transféré à l'ouverture de la grille (assertion CDP encodedDataLength) ; l'audio rend sa transcription au Prisme avec lang=. 0 violation axe serious/critical ; grille atteignable au clavier ; quatre colonnes de thème sous seuil.",
+   "dimensions_visees": [
+    "Performance",
+    "Facilité d'usage",
+    "Expérience utilisateur",
+    "Facilité d'accès",
+    "Complétude",
+    "Optimisation mémoire"
+   ],
+   "corps_issue": "**Contexte** — « Très faible consommation de données » se décide ici : une grille de 48 médias qui précharge est le contraire de la mission. Les tuiles de la planche sont inertes.\n\n**Preuve attendue** — Vignettes dimensionnées (`width`/`height` obligatoires, CLS ≤ 0,05), téléchargement à la demande avec poids annoncé, `fileUrl` servi tel quel — jamais reconstruit côté client (une signature `?exp=&sig=` viendra dans la même valeur).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (médias distants), § 8.5, § 10.1 ; `cible/media.png` ; `vues.json#media`."
+  },
+  {
+   "ordre": 8,
+   "vue_id": "story",
+   "titre_issue": "Une story partagée se lit intégralement sans compte, dans la langue du lecteur",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/stories/:id",
+   "audience": "anonyme",
+   "depend_de": [],
+   "critere_de_fin": "Playwright sans session : la story s'ouvre en rendu serveur, ≤ 3 requêtes avant le premier pixel utile, LCP ≤ 2,0 s en 3G Fast simulé, ZÉRO connexion serveur tenue après le premier pixel (assertion CDP : aucune requête pending), et socket.io-client / framer-motion / lucide-react / TanStack Query absents du chunk de la route (gate ESLint + gate de bundle). TranslationToggle monté avec onDisplayedChange CÂBLÉ : cliquer une langue CHANGE le texte lu. robots noindex conservé. Tap gauche/droit et appui long testés. 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Performance",
+    "Sécurité",
+    "Facilité d'accès",
+    "Fluidité",
+    "Complétude",
+    "Utilité"
+   ],
+   "corps_issue": "**Contexte** — Aujourd'hui la story deep-linkée est derrière `AuthGuard requireAuth` monté dans `apps/web/components/feed/FeedProviders.tsx:22` : le rôle premier n'est pas dégradé, il est FERMÉ. Et au cycle 123, sur le chemin legacy de `StoryViewer`, le corps rendait `story.content` — l'ORIGINAL — pendant que la puce annonçait la langue résolue : le Prisme était ANNONCÉ sans être APPLIQUÉ.\n\n**Preuve attendue** — RSC ; un hôte qui monte `TranslationToggle` en `showContent={false}` DOIT brancher `onDisplayedChange` et rendre lui-même ce que le résolveur annonce (gate ESLint). `preferredLanguages` étant un tableau, l'effet du résolveur dépend des TROIS primitives servies, jamais de l'objet qui les porte — sinon la boucle est infinie. `generateMetadata` et l'image OG servent la langue d'ORIGINE (cache plateforme PAR URL), sauf `?lang=xx` explicite. Un contenu expiré ou restreint ne produit ni metadata, ni OG, ni repli : un 404 INDISTINGUABLE — sans quoi la réparation du rôle premier fuit exactement ce que `apps/web/app/story/layout.tsx:14-18` protégeait.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:optionalAuth-post` : `GET /posts/:postId` est `preValidation:[requiredAuth]` (`services/gateway/src/routes/posts/core.ts:672-673`). Bascule vers `optionalAuth` + filtre `visibility=PUBLIC`, patron déjà utilisé par `registerFeedRoutes` dans le même fichier.\n\n**Source** — spec § 2, § 5.1, § 5.4, § 8.3, § 10.1 ; `cible/story.png` ; `vues.json#story`."
+  },
+  {
+   "ordre": 9,
+   "vue_id": "comments",
+   "titre_issue": "Un post partagé se lit avec ses commentaires, sans compte et dans la langue du lecteur",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/post/:id",
+   "audience": "anonyme",
+   "depend_de": [
+    "story"
+   ],
+   "critere_de_fin": "Playwright sans session : le post et ses commentaires s'affichent, les trois sources (post, réel, story) rendues par le MÊME lecteur ; test de RANG prouvant qu'un commentaire dont le rang 1 manque mais dont un rang inférieur existe est servi TRADUIT (un témoin écrit sur un rang autre que le premier — au rang 1 le court-circuit interdit et la règle juste rendent le même verdict) ; lang= sur chaque nœud résolu ; ≤ 3 requêtes avant le premier pixel utile ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Sécurité",
+    "Performance",
+    "Facilité d'accès",
+    "Maintenabilité",
+    "Utilité"
+   ],
+   "corps_issue": "**Contexte** — Sœur de `story`, et bloquée par la même famille de garde. Au cycle 120, le web ne descendait PAS le prisme sur les commentaires : il ne résolvait que le rang 1, ratant toute traduction d'un rang inférieur — cas nominal dès que la locale appareil (rang 4) diffère de la langue applicative.\n\n**Preuve attendue** — Prisme ORDONNÉ via `resolvePrismTranslation()`, jamais le rang 1 seul ; UN lecteur pour les trois sources ; commentaires paginés sans requête tenue.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:optionalAuth-post` ET `gw:optionalAuth-comments` : `GET /posts/:postId/comments` est `preValidation:[requiredAuth]` (`services/gateway/src/routes/posts/comments.ts:61-62`, monté en `index.ts:39`). **Les deux basculent ENSEMBLE ou aucune** — sans la seconde, cet écran reste mort. Note : `allowAnonymous:false` est aussi la CIBLE documentée (`docs/product/api-simplification/social.md:32,253`) : l'ouverture doit être CONFIRMÉE par le porteur, pas supposée.\n\n**Source** — spec § 5.1, § 11 question 1, § 10.1 ; CLAUDE.md § Prisme (leçon 261) ; `cible/comments.png` ; `vues.json#comments`."
+  },
+  {
+   "ordre": 10,
+   "vue_id": "storyFail",
+   "titre_issue": "Une story indisponible rend un écran servi par le serveur, indistinguable d'un contenu inexistant",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/stories/:id",
+   "audience": "anonyme",
+   "depend_de": [
+    "story"
+   ],
+   "critere_de_fin": "Test d'oracle : une story ABSENTE, une story SUPPRIMÉE, une story EXPIRÉE et une story RESTREINTE rendent une réponse IDENTIQUE — même code, mêmes en-têtes, même corps, même absence d'OG et d'image OG. JAMAIS de 403. Assertion étendue à app/api/og/*, qui vit hors du filtre de route. Écran serveur (aucun chunk client de route dans app-build-manifest.json).",
+   "dimensions_visees": [
+    "Sécurité",
+    "Complétude",
+    "Expérience utilisateur",
+    "Performance"
+   ],
+   "corps_issue": "**Contexte** — Un 403 confirmerait l'existence du contenu : c'est un oracle d'énumération. Le patron existe déjà côté serveur : `resolveConsumptionTarget` rend `null` sans distinguer absent / supprimé / invisible (`services/gateway/src/socketio/handlers/PostReactionHandler.ts:511-516`).\n\n**Preuve attendue** — RÉUTILISER ce patron, ne pas le réécrire. Et appliquer le MÊME filtre de visibilité à l'aperçu OG qu'à la route : c'est ce qui « part À CÔTÉ » de la page, et une garde posée sur la route seule laisserait l'image OG révéler ce que la route refuse.\n\n**Critère de fin** — voir champ dédié.\n\n**Bloqué par (hors web)** — `gw:404-indistinguable`.\n\n**Source** — spec § 5.1, § 5.4 (quatrième question, cycle 124), § 10.1 ; `cible/storyFail.png` ; `vues.json#storyFail`."
+  },
+  {
+   "ordre": 11,
+   "vue_id": "login",
+   "titre_issue": "On se connecte sans perdre le lien qu'on était en train d'ouvrir",
+   "lot": "L4",
+   "priorite": "P1-role-secondaire",
+   "route": "/login?next=/l/:token",
+   "audience": "anonyme",
+   "depend_de": [],
+   "critere_de_fin": "Playwright : arriver depuis /l/:token, se connecter, atterrir exactement sur le contenu visé ; le bandeau « lien gardé de côté » n'apparaît QUE lorsqu'un lien est réellement en attente (aujourd'hui pending:true en dur) et disparaît sinon — deux tests symétriques ; tout lien sortant du périmètre v3 est un <a href> réel, prouvé par le lint de zone ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Complétude",
+    "Sécurité",
+    "Facilité d'accès",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Entre les étapes 2 et 4 de la bascule, `/l` est en v3 et `/chats` encore en legacy : l'utilisateur franchit une frontière de zone. Même origine ⇒ le cookie `meeshy_session` (`apps/web/middleware.ts:8`, sans `Domain=`) et `localStorage` suivent ; mais la navigation client-side de Next NE TRAVERSE PAS une zone.\n\n**Preuve attendue** — `?next=` conservé et restauré ; bandeau conditionnel ; `<a href>` réel pour toute sortie de périmètre (corollaire 4 du § 3.2, garanti par un lint).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 4.1, § 4.9, § 10.1 ; `cible/login.png` ; `vues.json#login`."
+  },
+  {
+   "ordre": 12,
+   "vue_id": "signup",
+   "titre_issue": "On crée son compte en une passe, la disponibilité des identifiants vérifiée d'un seul appel",
+   "lot": "L4",
+   "priorite": "P1-role-secondaire",
+   "route": "/signup?next=/l/:token",
+   "audience": "anonyme",
+   "depend_de": [
+    "login"
+   ],
+   "critere_de_fin": "Assertion CDP : pseudo, e-mail et téléphone sont vérifiés en UN SEUL appel groupé (aucune requête par champ, aucun débounce triple) ; ?next= restauré après succès ; validation Zod partagée exécutée côté serveur et rejouée côté client sans seconde définition de schéma ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "dimensions_visees": [
+    "Performance",
+    "Facilité d'usage",
+    "Maintenabilité",
+    "Facilité d'accès",
+    "Complétude"
+   ],
+   "corps_issue": "**Contexte** — Trois vérifications de disponibilité = trois requêtes par frappe si on suit la pente naturelle, contre l'exigence « très faible consommation de données ».\n\n**Preuve attendue** — `GET /auth/check-availability` appelé UNE fois pour les trois critères, isolé dans `lib/api/identity.ts` (seul endroit à changer le jour où `/identity/availability` est monté).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (disponibilité pseudo), § 10.1 ; `cible/signup.png` ; `vues.json#signup`."
+  },
+  {
+   "ordre": 13,
+   "vue_id": "home",
+   "titre_issue": "L'accueil connecté s'affiche depuis le cache, sans un seul spinner",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/",
+   "audience": "connecte",
+   "depend_de": [
+    "login"
+   ],
+   "critere_de_fin": "Playwright avec cache IndexedDB pré-rempli : ZÉRO spinner et zéro squelette rendus (assertion DOM), contenu peint avant toute réponse réseau ; check-bundle-budget.mjs rend le socle (connected) et le code d'écran en DEUX lignes séparées, chacune sous son plafond ; CallManager absent du layout connecté (assertion sur app-build-manifest.json). Bascule du PathPrefix '/' faite EN DERNIER.",
+   "dimensions_visees": [
+    "Performance",
+    "Fluidité",
+    "Expérience utilisateur",
+    "Optimisation mémoire",
+    "Cohérence de positionnement"
+   ],
+   "corps_issue": "**Contexte** — Cache-First est non négociable : jamais de spinner sur un cache non vide, même périmé. Une lenteur est un BUG, pas une dette.\n\n**Preuve attendue** — `CacheResult<T>` traité cas par cas (`.fresh` / `.stale` / `.expired` / `.empty`), `.stale` servi immédiatement + rafraîchissement silencieux. `CallManager` (1350 lignes, pile WebRTC) N'EST PAS dans le layout : un composant P2 ne gouverne pas un gate P1 — il se monte à la réception d'un `call:incoming`, en `next/dynamic`.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 8.3, § 10.1 ; CLAUDE.md § Instant App Principles ; `cible/home.png` ; `vues.json#home`."
+  },
+  {
+   "ordre": 14,
+   "vue_id": "chats",
+   "titre_issue": "La liste des conversations se rattrape en delta au retour, jamais par un rechargement complet",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/chats",
+   "audience": "connecte",
+   "depend_de": [
+    "thread",
+    "login"
+   ],
+   "critere_de_fin": "Assertion CDP : au retour de focus, un 304 quasi-vide est observé sur GET /sync depuis le curseur retenu — aucun refetch complet de la liste ; hasGap peint son séparateur ; l'aperçu de dernier message descend le prisme ORDONNÉ via resolveLastMessagePreview() (témoin écrit sur un rang autre que le premier) ; scroll à 60 fps mesuré ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Performance",
+    "Fluidité",
+    "Complétude",
+    "Maintenabilité",
+    "Optimisation mémoire"
+   ],
+   "corps_issue": "**Contexte** — `GET /sync` existe (`services/gateway/src/routes/sync.ts` : ETag/304, cursor keyset, `hasGap`, plafond 512 Ko/page, `allowAnonymous:true` lignes 452-473) et n'a AUCUN appelant dans `apps/web` (grep vérifié), pendant que le web réimplémente deux moteurs plus pauvres.\n\n**Preuve attendue** — `lib/realtime/sync/delta-client.ts`, site unique. Interdit de refaire le patron de `apps/web/hooks/conversations/use-participants.ts` (188 lignes `useState`/`useEffect`, rappelé sans garde par `components/conversations/ConversationLayout.tsx:493`) : toute donnée serveur passe par `useQuery`.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 2 (delta), § 5.1, § 7, § 10.1 ; CLAUDE.md § Prisme (aperçu de liste) ; `cible/chats.png` ; `vues.json#chats`."
+  },
+  {
+   "ordre": 15,
+   "vue_id": "feed",
+   "titre_issue": "Le fil se parcourt au doigt et au clavier, et chaque action y a un effet",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/feed",
+   "audience": "connecte",
+   "depend_de": [
+    "comments"
+   ],
+   "critere_de_fin": "Playwright : le rail de stories est scrollable AU CLAVIER (aujourd'hui sans onClick ni gestion focus) ; like et repost sont câblés et modifient l'état optimistement puis se confirment ; cliquer une traduction CHANGE le texte lu, y compris dans la variante block (le contrôle était INERTE dans PostCard) ; scroll à 60 fps mesuré ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "dimensions_visees": [
+    "Fluidité",
+    "Facilité d'accès",
+    "Complétude",
+    "Utilité",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Défaut mesuré au cycle 123 sur `PostCard` : la variante `block` rend une zone « traductions disponibles » CLIQUABLE, et cliquer n'y changeait RIEN. Suivre une donnée jusqu'à son consommateur s'arrête un cran trop tôt : la suivre jusqu'au PIXEL.\n\n**Preuve attendue** — Le témoin n'interroge ni le rang ni le prisme mais l'EFFET : « cliquer une traduction change-t-il le texte lu ? ». Loi « un contrôle existe s'il a un effet ».\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; CLAUDE.md § Prisme (cycle 123, PostCard) ; `cible/feed.png` ; `vues.json#feed`."
+  },
+  {
+   "ordre": 16,
+   "vue_id": "search",
+   "titre_issue": "Une recherche unique rend conversations, messages, personnes et contenus, groupés par type",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/search",
+   "audience": "connecte",
+   "depend_de": [
+    "chats",
+    "feed"
+   ],
+   "critere_de_fin": "Playwright : résultats groupés par type, navigation entre groupes au clavier, requête débouncée (assertion CDP : au plus une requête en vol par saisie) ; aucun résultat ne révèle la présence d'un utilisateur hors amitié acceptée — ni par un champ, ni par un ORDRE, ni par une SÉLECTION ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Performance",
+    "Sécurité",
+    "Facilité d'accès",
+    "Complétude"
+   ],
+   "corps_issue": "**Contexte** — Une recherche qui classe des personnes est un site de fuite de présence : « une SÉLECTION ou un ORDRE qui dépend de la présence révèle autant que le champ » (directive 2026-08-25).\n\n**Preuve attendue** — Restriction d'abord aux ids autorisés, re-filtre ensuite sur la valeur SERVIE ; aucun tri sur `isOnline` ou `lastActiveAt` brut. Aucun résolveur de visibilité réécrit côté web — le serveur a raison, et le client ne GARDE pas ce que le serveur retire.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; CLAUDE.md § User Presence (visibilité, leçon 288) ; `cible/search.png` ; `vues.json#search`."
+  },
+  {
+   "ordre": 17,
+   "vue_id": "reels",
+   "titre_issue": "Les réels connectés jouent dans le même lecteur que les réels partagés",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/feed/reels",
+   "audience": "connecte",
+   "depend_de": [
+    "feed"
+   ],
+   "critere_de_fin": "Test unitaire prouvant qu'un SEUL composant lecteur sert la route publique et la route connectée (aucune jumelle) ; lecture à 60 fps mesurée pendant le défilement vertical ; une seule vidéo décodée à la fois (assertion sur le nombre d'éléments <video> actifs — pas de rétention mémoire au changement d'écran) ; TranslationToggle monté avec onDisplayedChange câblé ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Fluidité",
+    "Optimisation mémoire",
+    "Maintenabilité",
+    "Performance",
+    "Cohérence de positionnement"
+   ],
+   "corps_issue": "**Contexte** — `apps/web/components/feed/ReelPlayer.tsx:54-85` fait un lookup rang-1 (`post.translations[userLanguage]`) sans normalisation : un second résolveur de Prisme, à supprimer et non à porter.\n\n**Preuve attendue** — Un seul lecteur, `preferredLanguages` + `resolvePrismTranslation()`, chevron de sortie présent, et aucune vidéo retenue une fois l'écran quitté.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 3.2 corollaire 3, § 10.1 ; `cible/reels.png` ; `vues.json#reels`."
+  },
+  {
+   "ordre": 18,
+   "vue_id": "composer",
+   "titre_issue": "On publie un post, un réel, une story ou une humeur, brouillon conservé et publication optimiste",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/composer",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Playwright : brouillon persisté et restitué après rechargement ET après retour de bfcache ; publication rendue optimistement puis confirmée, et poussée dans la file hors-ligne quand le réseau est coupé (rejouée FIFO au retour) ; le compteur d'humeur affiche une valeur RÉELLE (pas un littéral) ; choisir « Story » mène à /stories/new ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Complétude",
+    "Expérience utilisateur",
+    "Fluidité",
+    "Utilité"
+   ],
+   "corps_issue": "**Contexte** — Publier depuis un téléphone en réseau instable est le cas nominal, pas le cas dégradé.\n\n**Preuve attendue** — Optimistic update : capture d'un instantané → application locale → envoi → rollback VISIBLE en cas d'échec, jamais une perte silencieuse. `pagehide{persisted:true}` ne détruit rien.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 7, § 10.1 ; CLAUDE.md § Instant App Principles ; `cible/composer.png` ; `vues.json#composer`."
+  },
+  {
+   "ordre": 19,
+   "vue_id": "storyCreate",
+   "titre_issue": "Une nouvelle story part avec son audience et son expiration réellement choisies",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/stories/new",
+   "audience": "connecte",
+   "depend_de": [
+    "composer"
+   ],
+   "critere_de_fin": "Test : les contrôles Audience et Expiration mutent la charge envoyée (aujourd'hui statiques dans la planche) — trois valeurs d'audience et deux d'expiration vérifiées sur le corps de la requête ; l'état « publication en cours » est rendu et se résout en succès ou en échec nommé ; capture de langue et de texte conservée au retour de bfcache ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Sécurité",
+    "Facilité d'usage",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Audience et Expiration sont des contrôles de CONFIDENTIALITÉ. Rendus sans effet, ils annoncent une protection qui n'est pas appliquée — la forme exacte du défaut du cycle 124 : « un champ qui DÉCLARE une restriction ne la fait pas respecter ».\n\n**Preuve attendue** — L'assertion porte sur la charge ENVOYÉE, pas sur l'état visuel du contrôle.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; CLAUDE.md § Prisme (cycle 124) ; `cible/storyCreate.png` ; `vues.json#storyCreate`."
+  },
+  {
+   "ordre": 20,
+   "vue_id": "notifs",
+   "titre_issue": "Les notifications se lisent, se marquent lues, et le compteur suit sans rechargement",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/notifications",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Playwright : « Tout lire » est câblé, le compteur passe à 0 optimistement puis se confirme ; notification:read / notification:read-bulk / notification:counts reçus sur le socket mettent la liste à jour SANS refetch (assertion CDP) ; le corps de chaque notification est celui SERVI par le serveur, jamais recomposé côté client ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Performance",
+    "Fluidité",
+    "Maintenabilité",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — L'action « Tout lire » de la planche n'a pas d'effet. Et le Prisme des bannières est descendu CÔTÉ SERVEUR (`NotificationService.prismTranslation`) : le client n'a rien à re-résoudre — le seul texte que les trois plateformes rendent est le corps servi.\n\n**Preuve attendue** — Aucun second résolveur côté web ; mise à jour par événement, pas par sondage.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.3, § 10.1 ; CLAUDE.md § Prisme (cycles 121-126) ; `cible/notifs.png` ; `vues.json#notifs`."
+  },
+  {
+   "ordre": 21,
+   "vue_id": "contacts",
+   "titre_issue": "Ses contacts et ses demandes se gèrent d'un écran, la présence n'étant montrée que là où elle est permise",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/contacts",
+   "audience": "connecte",
+   "depend_de": [
+    "chats"
+   ],
+   "critere_de_fin": "Test de garde : hors amitié acceptée, aucune pastille de présence n'est rendue — et le client ne FABRIQUE pas une présence absente de la charge ni ne GARDE une valeur que le serveur a retirée (charge masquée appliquée) ; offline ⇒ AUCUNE pastille (jamais de point gris sur un avatar) ; accepter/refuser une demande est optimiste et réversible ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Sécurité",
+    "Complétude",
+    "Cohérence de positionnement",
+    "Facilité d'usage",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Directive 2026-08-25 : la visibilité de la présence, c'est amis acceptés, soi, ADMIN/BIGBOSS — rien d'autre. Ni le partage d'une conversation, ni la co-appartenance à une communauté, ni MODERATOR/AUDIT/ANALYST.\n\n**Preuve attendue** — Aucune boucle amitié/rôle réécrite côté web : la loi unique est `resolvePresenceVisibility()` (`packages/shared/utils/presence-visibility.ts`), résolue par le gateway. Le client applique la charge, y compris masquée. Palette : online vert `#34D399`, away orange `#FBBF24`, idle gris `#9CA3AF`, offline = AUCUN point sur un avatar.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; CLAUDE.md § User Presence ; `cible/contacts.png` ; `vues.json#contacts`."
+  },
+  {
+   "ordre": 22,
+   "vue_id": "links",
+   "titre_issue": "Ses liens de partage et de tracking se créent, se suivent et se révoquent",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "/links",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Playwright : création EXIGE un compte côté UI (aucun chemin de création exposé sans session, malgré authOptional côté serveur) ; expiration, nombre d'usages et « anonymes autorisés » mutent la charge envoyée ; révoquer un lien le rend immédiatement 410 sur /l/:token (test de bout en bout) ; le QR encode l'URL apex servie par le serveur, jamais une URL reconstruite ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Sécurité",
+    "Complétude",
+    "Utilité",
+    "Facilité d'usage",
+    "Maintenabilité"
+   ],
+   "corps_issue": "**Contexte** — Faille mesurée : `POST /api/v1/tracking-links` est monté en `authOptional` et cinq routes de gestion ÉCHOUENT OUVERTES quand `trackingLink.createdBy` est nul (`docs/product/api-simplification/platform.md:305` : « un changement de produit, pas seulement de sécurité »).\n\n**Preuve attendue** — La v3 ferme l'UI ; le durcissement serveur est une issue compagnon, non bloquante pour ce lot. Ne jamais reconstruire une URL de lien côté client : `TrackingLinkService.buildTrackingUrl` (`:76`) est le seul frappeur, et une signature viendra dans la même valeur.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.1 (dernière ligne), § 11 question 9, § 10.1 ; `cible/links.png` ; `vues.json#links`."
+  },
+  {
+   "ordre": 23,
+   "vue_id": "settings",
+   "titre_issue": "Les réglages s'ouvrent sur sept destinations claires, atteignables au clavier",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Playwright : les sept rangées mènent aux sept fiches (sept navigations vérifiées), l'ordre de tabulation les atteint TOUTES, chaque rangée porte un libellé accessible distinct ; diff par région contre cible/settings.png ≤ 8 %, IoU ≥ 0,92, 100 % des icônes attendues rendues, quatre colonnes de thème ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Facilité d'accès",
+    "Cohérence de positionnement",
+    "Complétude",
+    "Simplicité d'usage"
+   ],
+   "corps_issue": "**Contexte** — Hub de navigation. La planche n'a AUCUNE barre d'onglets persistante ; son rôle est repris par deux FAB et la feuille « Espace membre » — décision assumée pour la v3 mobile.\n\n**Preuve attendue** — Sept destinations, aucune orpheline, aucune en double.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 11 question 6 ; `cible/settings.png` ; `vues.json#settings`."
+  },
+  {
+   "ordre": 24,
+   "vue_id": "notifPrefs",
+   "titre_issue": "Chaque préférence de notification bascule réellement le réglage du compte",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/notifications/preferences",
+   "audience": "connecte",
+   "depend_de": [
+    "notifs"
+   ],
+   "critere_de_fin": "Test : les onze bascules envoient chacune sa mutation et sont relues du serveur après rechargement (onze allers-retours vérifiés — elles sont purement visuelles aujourd'hui) ; échec réseau ⇒ rollback VISIBLE, jamais un état affiché divergent du serveur ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil.",
+   "dimensions_visees": [
+    "Complétude",
+    "Utilité",
+    "Expérience utilisateur",
+    "Maintenabilité"
+   ],
+   "corps_issue": "**Contexte** — Onze bascules rendues sans effet : la loi « un contrôle existe s'il a un effet » est enfreinte onze fois sur un seul écran.\n\n**Preuve attendue** — Une mutation par bascule, un rollback visible, une relecture serveur qui prouve la persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1, § 10.5 question 3 ; `cible/notifPrefs.png` ; `vues.json#notifPrefs`."
+  },
+  {
+   "ordre": 25,
+   "vue_id": "detail-profile",
+   "titre_issue": "Son profil et les trois rangs de sa langue préférée s'éditent depuis les réglages",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/profile",
+   "audience": "connecte",
+   "depend_de": [
+    "settings"
+   ],
+   "critere_de_fin": "Test de bout en bout : modifier systemLanguage, regionalLanguage ou customDestinationLanguage CHANGE le texte servi dans le fil et dans l'aperçu de liste (témoin écrit sur un rang AUTRE que le premier — au rang 1 le court-circuit interdit et la règle juste rendent le même verdict) ; les trois rangs sont éditables, pas en lecture seule ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Utilité",
+    "Simplicité d'usage",
+    "Cohérence de positionnement",
+    "Maintenabilité"
+   ],
+   "corps_issue": "**Contexte** — Les trois rangs du Prisme sont en lecture seule dans la planche. Ce sont pourtant les rangs 1 à 3 de `resolveUserLanguage()` — la locale appareil n'intervenant qu'en 4e position, jamais en remplacement.\n\n**Preuve attendue** — Le test ne s'arrête pas à la mutation : il suit jusqu'au PIXEL d'un autre écran. Un réglage dont la valeur n'atteint aucun lecteur n'a rien réglé (cycle 122).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; CLAUDE.md § Prisme (résolution de langue, leçon 261) ; `cible/detail-profile.png` ; `vues.json#detail-profile`."
+  },
+  {
+   "ordre": 26,
+   "vue_id": "profileEdit",
+   "titre_issue": "Bannière, avatar, bio et téléphone se modifient avec un retour immédiat",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/profile/edit",
+   "audience": "connecte",
+   "depend_de": [
+    "detail-profile"
+   ],
+   "critere_de_fin": "Playwright : l'envoi d'une bannière et d'un avatar aboutit réellement (URL servie relue après rechargement), l'aperçu est optimiste et rollbacké visiblement en cas d'échec ; le compteur de bio est exact au caractère et bloque au maximum annoncé ; images dimensionnées (CLS ≤ 0,05) ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Fluidité",
+    "Expérience utilisateur",
+    "Facilité d'usage",
+    "Performance"
+   ],
+   "corps_issue": "**Contexte** — Deux téléversements d'image sur un écran mobile : c'est le pire cas de CLS et de consommation de données de tout le rôle secondaire.\n\n**Preuve attendue** — Compression/redimensionnement avant envoi, poids annoncé, `width`/`height` sur chaque aperçu.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 8.5, § 10.1 ; `cible/profileEdit.png` ; `vues.json#profileEdit`."
+  },
+  {
+   "ordre": 27,
+   "vue_id": "detail-privacy",
+   "titre_issue": "Les réglages de confidentialité prennent effet, y compris sur qui voit sa présence",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/privacy",
+   "audience": "connecte",
+   "depend_de": [
+    "settings"
+   ],
+   "critere_de_fin": "Test de bout en bout : chaque bascule mute et est relue du serveur ; un test de garde prouve qu'aucun réglage de cet écran ne peut ÉLARGIR la visibilité de présence au-delà de la loi serveur (amis acceptés, soi, ADMIN/BIGBOSS) — le client ne peut que restreindre ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Sécurité",
+    "Complétude",
+    "Utilité",
+    "Maintenabilité"
+   ],
+   "corps_issue": "**Contexte** — Un écran de confidentialité qui affiche des bascules sans effet est pire qu'un écran absent : il annonce une protection inexistante (cycle 124).\n\n**Preuve attendue** — Le serveur reste l'autorité : `resolvePresenceVisibility()` est fail-closed, et aucun réglage client ne l'assouplit. La garde se teste sur ce qui est SERVI, pas sur ce qui est affiché.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; CLAUDE.md § User Presence (directive 2026-08-25) ; `cible/detail-privacy.png` ; `vues.json#detail-privacy`."
+  },
+  {
+   "ordre": 28,
+   "vue_id": "detail-security",
+   "titre_issue": "Le niveau de chiffrement et les sessions actives se choisissent depuis un vrai groupe de sélection",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/security",
+   "audience": "connecte",
+   "depend_de": [
+    "settings"
+   ],
+   "critere_de_fin": "Test : les quatre niveaux de chiffrement forment un groupe de sélection unique (radiogroup, un seul actif, navigation aux flèches), la valeur est mutée et relue du serveur ; révoquer une session la fait disparaître et invalide réellement son jeton (test de bout en bout) ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Sécurité",
+    "Facilité d'accès",
+    "Complétude",
+    "Cohérence de positionnement"
+   ],
+   "corps_issue": "**Contexte** — Quatre niveaux rendus comme quatre bascules indépendantes laisseraient un état incohérent atteignable. C'est un choix EXCLUSIF.\n\n**Preuve attendue** — `radiogroup` natif, navigation aux flèches, un seul actif par construction.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.1 ; `cible/detail-security.png` ; `vues.json#detail-security`."
+  },
+  {
+   "ordre": 29,
+   "vue_id": "password",
+   "titre_issue": "Le mot de passe se change avec des règles qui réagissent à la saisie",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/security/password",
+   "audience": "connecte",
+   "depend_de": [
+    "detail-security"
+   ],
+   "critere_de_fin": "Test : chaque règle passe de non satisfaite à satisfaite à la frappe (elles sont pré-cochées en dur aujourd'hui) et le bouton reste inactif tant qu'une règle manque ; le MÊME schéma Zod partagé valide côté client et côté serveur (aucune seconde définition) ; l'état des règles est annoncé aux lecteurs d'écran (aria-live) ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Sécurité",
+    "Facilité d'accès",
+    "Complétude",
+    "Maintenabilité",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — Des règles pré-cochées en dur affirment une validation qui n'a pas eu lieu : la forme du cycle 124 appliquée à un formulaire.\n\n**Preuve attendue** — Une seule source de vérité de la règle (Zod partagé), rejouée des deux côtés, annoncée aux lecteurs d'écran.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 2 (formulaires), § 10.1 ; `cible/password.png` ; `vues.json#password`."
+  },
+  {
+   "ordre": 30,
+   "vue_id": "detail-media",
+   "titre_issue": "Les réglages de médias disent ce qui se télécharge automatiquement, et sur quel réseau",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/media",
+   "audience": "connecte",
+   "depend_de": [
+    "settings"
+   ],
+   "critere_de_fin": "Test : les réglages arbitrés mutent et sont relus du serveur, et modifier « téléchargement automatique » CHANGE le comportement observé sur /chats/:id/medias (assertion CDP : aucun octet de média transféré quand le réglage est à « jamais ») ; tout ce qui n'est pas arbitré rend un état vide DESSINÉ, jamais un écran blanc ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Performance",
+    "Utilité",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — `detail-media` est un STUB dans la planche : son contenu est une question ouverte du porteur (§ 11 question 10).\n\n**Preuve attendue** — L'issue `décision-produit` compagnon porte l'arbitrage ; l'écran rend un état vide dessiné en attendant, et le réglage effectivement livré est prouvé jusqu'à son EFFET sur l'écran des médias — pas seulement jusqu'à sa persistance.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 11 question 10, § 10.1 ; `cible/detail-media.png` ; `vues.json#detail-media`."
+  },
+  {
+   "ordre": 31,
+   "vue_id": "detail-message",
+   "titre_issue": "Les réglages de messages exposent ce qui est arbitré, et un état vide dessiné pour le reste",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/message",
+   "audience": "connecte",
+   "depend_de": [
+    "settings"
+   ],
+   "critere_de_fin": "Test : aucun contrôle inerte n'est rendu (régime 3 : une capacité absente n'est PAS exposée) ; l'état vide est dessiné, jamais un écran blanc ; aucun contrôle de fil de réponses n'est exposé tant que view=thread n'existe pas côté serveur ; l'issue décision-produit compagnon est ouverte et liée ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Expérience utilisateur",
+    "Maintenabilité",
+    "Utilité"
+   ],
+   "corps_issue": "**Contexte** — La planche porte littéralement « À DÉFINIR » sur cet écran, et la capacité `view=thread` n'existe pas côté serveur (`?replyToId=` ignoré).\n\n**Preuve attendue** — Régime 3 de dégradation : la fonctionnalité n'est PAS exposée dans l'UI. Pas de contrôle inerte — la loi « un contrôle existe s'il a un effet » interdit d'anticiper visuellement une capacité absente. Deux issues `décision-produit` (contenu de l'écran ; ouverture de `view=thread`).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.2 régime 3, § 11 questions 10 et 11, § 10.1 ; `cible/detail-message.png` ; `vues.json#detail-message`."
+  },
+  {
+   "ordre": 32,
+   "vue_id": "detail-notification",
+   "titre_issue": "Les six groupes de notification et la plage « Ne pas déranger » se règlent et sont respectés",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/notification",
+   "audience": "connecte",
+   "depend_de": [
+    "notifPrefs"
+   ],
+   "critere_de_fin": "Test de bout en bout : les six groupes mutent et sont relus du serveur ; la plage 22:00-08:00 est éditable, persistée, et une notification émise DANS la plage n'est pas poussée (assertion serveur) ; les fuseaux horaires sont traités par Intl natif, sans bibliothèque de dates ajoutée ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Complétude",
+    "Utilité",
+    "Compatibilité",
+    "Maintenabilité",
+    "Simplicité d'usage"
+   ],
+   "corps_issue": "**Contexte** — Une plage « Ne pas déranger » qui s'enregistre sans être respectée est une protection ANNONCÉE et non APPLIQUÉE — le défaut du cycle 124.\n\n**Preuve attendue** — L'assertion porte sur ce qui PART (la notification poussée), pas sur ce qui est enregistré. Aucune bibliothèque de dates : `Intl.*` natif.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 2 (i18n), § 10.1 ; CLAUDE.md § Prisme (cycle 124) ; `cible/detail-notification.png` ; `vues.json#detail-notification`."
+  },
+  {
+   "ordre": 33,
+   "vue_id": "detail-application",
+   "titre_issue": "Le thème clair / sombre / système et la langue d'interface se choisissent, sans clignotement au chargement",
+   "lot": "L6",
+   "priorite": "P1-role-secondaire",
+   "route": "/settings/application",
+   "audience": "connecte",
+   "depend_de": [
+    "settings"
+   ],
+   "critere_de_fin": "Gate C, QUATRE colonnes de thème : system-light, system-dark, explicit-light-on-dark et explicit-dark-on-light — cette dernière paire étant la seule qui attrape une jumelle media/classe. Assertion : ZÉRO @media (prefers-color-scheme) dans tokens.css (grep dans la CI), ThemeScript inline ≤ 400 o, aucun FOUC mesuré (aucune peinture avec la mauvaise classe). Changer la langue d'interface change le texte ET l'attribut lang de <html>, dir=rtl posé pour une locale RTL. Assertion bfcache : après page.goBack() puis pageshow{persisted}, le thème est toujours correct.",
+   "dimensions_visees": [
+    "Cohérence de positionnement",
+    "Complétude",
+    "Compatibilité",
+    "Facilité d'accès",
+    "Maintenabilité",
+    "Performance"
+   ],
+   "corps_issue": "**Contexte** — Le sélecteur clair / sombre / système est ABSENT de la planche alors que les trois modes sont une exigence du porteur. Et `apps/web` porte aujourd'hui DEUX moteurs de thème simultanés (`app/layout.tsx:100` + `app/(connected)/layout.tsx:24-25`, clés `meeshy-app` vs `gp-theme-mode`) plus trois tables de couleurs.\n\n**Preuve attendue** — UNE source : `darkMode: [\"class\"]`. `prefers-color-scheme` ne gouverne QUE la valeur par défaut de la classe, jamais un token — l'hybride « media pour les tokens + classe pour Tailwind » est une jumelle divergente : préférence explicite CLAIRE sur OS SOMBRE ⇒ tokens sombres et utilitaires `dark:` clairs. `next-themes` n'est pas installé dans la v3.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 2 (thème), § 9.6 (quatre colonnes), § 10.1, § 11 question 7 ; `cible/detail-application.png` ; `vues.json#detail-application`."
+  },
+  {
+   "ordre": 34,
+   "vue_id": "calls",
+   "titre_issue": "L'historique des appels se consulte sans jamais charger la pile d'appel",
+   "lot": "L7",
+   "priorite": "P2-confort",
+   "route": "/calls",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Assertion sur app-build-manifest.json : le chunk de /calls ne contient NI CallManager NI la pile WebRTC ; liste servie depuis le cache (aucun spinner sur cache non vide) ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil. Hors condition de livraison de la v3.",
+   "dimensions_visees": [
+    "Performance",
+    "Optimisation mémoire",
+    "Complétude",
+    "Expérience utilisateur"
+   ],
+   "corps_issue": "**Contexte** — P2 confirmé : les appels sont absents de l'énoncé de mission mais présents dans la planche, et pèsent 25 événements `call:*` plus les 1350 lignes de `CallManager`.\n\n**Preuve attendue** — Un historique est une LISTE : rien de la pile temps réel ne doit entrer dans son chunk.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 5.3, § 8.3, § 10.3 (L7), § 11 question 8 ; `cible/calls.png` ; `vues.json#calls`."
+  },
+  {
+   "ordre": 35,
+   "vue_id": "callAudio",
+   "titre_issue": "Un appel audio se prend et se rend, la pile n'étant chargée qu'à la sonnerie",
+   "lot": "L7",
+   "priorite": "P2-confort",
+   "route": "/calls/:id",
+   "audience": "connecte",
+   "depend_de": [
+    "calls"
+   ],
+   "critere_de_fin": "Assertion : CallManager est chargé par next/dynamic EXCLUSIVEMENT, monté à la réception d'un call:incoming et JAMAIS dans (connected)/layout.tsx (grep dans la CI + app-build-manifest.json) ; après raccrochage, aucun flux média ni écouteur ne reste retenu (profil mémoire, dimension 3) ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Optimisation mémoire",
+    "Performance",
+    "Complétude",
+    "Compatibilité"
+   ],
+   "corps_issue": "**Contexte** — Monter `CallManager` dans le layout connecté mettrait un composant P2, hors énoncé de mission, sur le chemin critique de `/chats` : un composant P2 gouvernant un gate P1.\n\n**Preuve attendue** — Chargement à la sonnerie, libération complète au raccrochage (aucun cycle de rétention, aucun listener orphelin, aucun MediaStream vivant).\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 8.3 (encadré CallManager), § 10.1 ; `cible/callAudio.png` ; `vues.json#callAudio`."
+  },
+  {
+   "ordre": 36,
+   "vue_id": "callVideo",
+   "titre_issue": "Un appel vidéo réutilise la même pile que l'appel audio, sans seconde implémentation",
+   "lot": "L7",
+   "priorite": "P2-confort",
+   "route": "/calls/:id?video",
+   "audience": "connecte",
+   "depend_de": [
+    "callAudio"
+   ],
+   "critere_de_fin": "Test unitaire prouvant qu'UN seul module de pile sert l'audio et la vidéo (aucune jumelle, et aucun dossier à une lettre près du type video-call/ vs video-calls/ constaté dans apps/web) ; bascule audio↔vidéo sans renégociation complète ; libération mémoire vérifiée au raccrochage ; 0 violation axe serious/critical.",
+   "dimensions_visees": [
+    "Maintenabilité",
+    "Optimisation mémoire",
+    "Complétude",
+    "Fluidité"
+   ],
+   "corps_issue": "**Contexte** — `apps/web` porte déjà `video-call/` ET `video-calls/` : une divergence à une lettre, fait constaté et non hypothèse. La v3 ne la reproduit pas.\n\n**Preuve attendue** — Un module, deux modes. La bascule audio↔vidéo est un changement de piste, pas une seconde pile.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 3.2 corollaire 5, § 10.1 ; `cible/callVideo.png` ; `vues.json#callVideo`."
+  },
+  {
+   "ordre": 37,
+   "vue_id": "communities",
+   "titre_issue": "Ses communautés se retrouvent et s'ouvrent depuis l'espace membre",
+   "lot": "L7",
+   "priorite": "P2-confort",
+   "route": "/communities",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Playwright : liste servie depuis le cache (aucun spinner sur cache non vide), ouverture d'une communauté en ≤ 2 gestes depuis l'accueil ; test de garde : la co-appartenance à une communauté ne révèle AUCUNE présence (isOnline / lastActiveAt absents de la charge hors amitié acceptée) ; 0 violation axe serious/critical ; quatre colonnes de thème sous seuil. Hors condition de livraison de la v3.",
+   "dimensions_visees": [
+    "Sécurité",
+    "Performance",
+    "Facilité d'usage",
+    "Complétude"
+   ],
+   "corps_issue": "**Contexte** — P2, hors énoncé de mission. Et point de fuite connu : la directive 2026-08-25 nomme explicitement la co-appartenance à une communauté comme un chemin qui ne donne AUCUN droit sur la présence d'autrui.\n\n**Preuve attendue** — Le test de garde porte sur la charge SERVIE, pas sur l'affichage : le client ne fabrique rien et ne garde pas ce que le serveur retire.\n\n**Critère de fin** — voir champ dédié.\n\n**Source** — spec § 10.3 (L7), § 11 question 8 ; CLAUDE.md § User Presence ; `cible/communities.png` ; `vues.json#communities`."
+  },
+  {
+   "vue_id": "sheet:lang",
+   "titre_issue": "Changer la langue d'un contenu change le texte lu, depuis n'importe quel écran",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "(surimpression)",
+   "audience": "les-deux",
+   "depend_de": [],
+   "critere_de_fin": "<dialog> natif, ouvrable au clavier et fermable par Échap ; choisir une langue MUTE le texte rendu (loi « un contrôle existe s'il a un effet ») ; la langue élue passe par resolvePrismTranslation(), jamais par un lookup rang-1.",
+   "dimensions_visees": [
+    "Facilité d'accès",
+    "Simplicité d'usage",
+    "Cohérence de positionnement"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "reelShared",
+   "titre_issue": "Un réel partagé se lit intégralement sans compte, dans la langue du lecteur",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/reels/:id",
+   "audience": "anonyme",
+   "depend_de": [
+    "story"
+   ],
+   "critere_de_fin": "Réécrit la résolution rang-1 de apps/web/components/feed/ReelPlayer.tsx:54-85 : preferredLanguages + resolvePrismTranslation() + TranslationToggle monté avec onDisplayedChange câblé. Sortie (chevron) présente. Mêmes gates de poids et de connexions que story.",
+   "dimensions_visees": [
+    "Performance",
+    "Complétude",
+    "Utilité"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "moods",
+   "titre_issue": "Une humeur partagée se lit sans compte, par le même lecteur que les posts",
+   "lot": "L3",
+   "priorite": "P0-role-premier",
+   "route": "/moods/:id",
+   "audience": "anonyme",
+   "depend_de": [
+    "story"
+   ],
+   "critere_de_fin": "Post.type=STATUS rendu par le MÊME composant lecteur que post/story/reel (aucune jumelle) ; OG dédié vérifié par le crawler simulé.",
+   "dimensions_visees": [
+    "Maintenabilité",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:link",
+   "titre_issue": "Créer un lien de partage : chaque champ de la feuille a un effet",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "links"
+   ],
+   "critere_de_fin": "QR, expiration et « autoriser les anonymes » MUTENT le lien créé ; aucun champ décoratif. <dialog> natif.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:conv",
+   "titre_issue": "Démarrer une conversation depuis la liste, en deux gestes",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "chats"
+   ],
+   "critere_de_fin": "Chemin nominal ≤ 2 gestes ; création optimiste avec repli.",
+   "dimensions_visees": [
+    "Facilité d'usage",
+    "Fluidité"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:attach",
+   "titre_issue": "Joindre un fichier annonce sa limite avant de la faire subir",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "les-deux",
+   "depend_de": [
+    "thread"
+   ],
+   "critere_de_fin": "Limite de 10 Mo APPLIQUÉE et ANNONCÉE avant sélection ; poids affiché après compression.",
+   "dimensions_visees": [
+    "Expérience utilisateur",
+    "Complétude"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  },
+  {
+   "vue_id": "sheet:member",
+   "titre_issue": "L'espace membre s'ouvre depuis n'importe quel écran connecté",
+   "lot": "L5",
+   "priorite": "P1-role-secondaire",
+   "route": "(surimpression)",
+   "audience": "connecte",
+   "depend_de": [
+    "home"
+   ],
+   "critere_de_fin": "Remplace la barre d'onglets absente de la planche (§11) ; atteignable au clavier ; 6 destinations câblées.",
+   "dimensions_visees": [
+    "Cohérence de positionnement",
+    "Facilité d'accès"
+   ],
+   "hors_planche": true,
+   "ordre": 0,
+   "corps_issue": "Surface exigée par la mission mais non dessinée par la planche — voir § 10.1 de docs/product/MeeshyWebV3Design/conception-web-v3.md."
+  }
+ ]
+}

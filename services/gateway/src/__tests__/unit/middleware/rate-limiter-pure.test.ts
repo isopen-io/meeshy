@@ -28,6 +28,7 @@ import {
   validateMentionCount,
   messageValidationHook,
   createPostRouteRateLimitConfig,
+  createContactChangeRateLimitConfig,
   createSignalProtocolRateLimitConfig,
   registerMessageRateLimiter,
   registerGlobalRateLimiter,
@@ -332,6 +333,9 @@ describe('registerGlobalRateLimiter', () => {
       expect(opts.allowList({ url: '/health', ip: '8.8.8.8' })).toBe(true);
       expect(opts.allowList({ url: '/healthz', ip: '8.8.8.8' })).toBe(true);
       expect(opts.allowList({ url: '/ready', ip: '8.8.8.8' })).toBe(true);
+      // La sonde de disponibilité de #4219 : un 429 la ferait conclure
+      // « instance morte » et redémarrer le conteneur.
+      expect(opts.allowList({ url: '/api/v1/health/ready', ip: '8.8.8.8' })).toBe(true);
     });
 
     /**
@@ -365,5 +369,47 @@ describe('registerGlobalRateLimiter', () => {
       expect(body.statusCode).toBe(429);
       expect(body.retryAfter).toBe(15);
     });
+  });
+});
+
+// ─── createContactChangeRateLimitConfig (#4184) ───────────────────────────────
+
+describe('createContactChangeRateLimitConfig', () => {
+  const cas: Array<[Parameters<typeof createContactChangeRateLimitConfig>[0], number]> = [
+    ['initiate', 3],
+    ['verify', 10],
+    ['resend', 5],
+  ];
+
+  it.each(cas)('%s plafonne a %i par heure', (type, max) => {
+    const cfg = createContactChangeRateLimitConfig(type) as any;
+    expect(cfg.max).toBe(max);
+    expect(cfg.timeWindow).toBe('1 hour');
+  });
+
+  /**
+   * Le temoin qui compte vraiment. Sans `keyGenerator`, `mergeParams` du
+   * plugin (un `Object.assign`) fait heriter la cle GLOBALE
+   * `global:${request.ip}` — l'ADRESSE de l'appelant, `trustProxy` etant pose
+   * depuis #4137. Un plafond « 3/h par compte » compterait alors par adresse,
+   * ce qui se trompe dans les DEUX sens : plusieurs comptes derriere une meme
+   * sortie (operateur mobile, bureau, NAT) se partagent un credit prevu pour
+   * un seul, et un meme compte disposant de plusieurs adresses en obtient
+   * autant de credits.
+   */
+  it('la cle est celle du COMPTE, jamais l\'adresse de l\'appelant', () => {
+    const cfg = createContactChangeRateLimitConfig('initiate') as any;
+    const req = { authContext: { userId: 'u-42' }, ip: '10.0.0.7' };
+    expect(cfg.keyGenerator(req)).toBe('contact-change:initiate:u-42');
+  });
+
+  it('retombe sur l\'IP seulement en l\'absence de compte', () => {
+    const cfg = createContactChangeRateLimitConfig('verify') as any;
+    expect(cfg.keyGenerator({ ip: '10.0.0.7' })).toBe('contact-change:verify:ip:10.0.0.7');
+  });
+
+  it('rend un 429 structure', () => {
+    const cfg = createContactChangeRateLimitConfig('resend') as any;
+    expect(cfg.errorResponseBuilder()).toMatchObject({ success: false, statusCode: 429 });
   });
 });

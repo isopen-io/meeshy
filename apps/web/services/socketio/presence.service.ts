@@ -29,6 +29,7 @@ import type {
   FriendRequestAcceptedListener,
   FriendRequestRejectedListener,
   ConversationDeletedListener,
+  ConversationRestoredListener,
   ConversationUpdatedListener,
   UserUpdatedListener,
   UnsubscribeFn
@@ -56,6 +57,7 @@ export class PresenceService {
   private friendRequestRejectedListeners: Set<FriendRequestRejectedListener> = new Set();
   private userUpdatedListeners: Set<UserUpdatedListener> = new Set();
   private conversationDeletedListeners: Set<ConversationDeletedListener> = new Set();
+  private conversationRestoredListeners: Set<ConversationRestoredListener> = new Set();
   private conversationUpdatedListeners: Set<ConversationUpdatedListener> = new Set();
   private conversationParticipantJoinedListeners: Set<(data: { conversationId: string; userId: string; displayName: string; joinedAt: string }) => void> = new Set();
   private conversationParticipantLeftListeners: Set<(data: { conversationId: string; userId: string; displayName: string; leftAt: string }) => void> = new Set();
@@ -171,6 +173,10 @@ export class PresenceService {
 
     socket.on(SERVER_EVENTS.CONVERSATION_DELETED as any, (data: any) => {
       this.conversationDeletedListeners.forEach(listener => listener(data));
+    });
+
+    socket.on(SERVER_EVENTS.CONVERSATION_RESTORED as any, (data: any) => {
+      this.conversationRestoredListeners.forEach(listener => listener(data));
     });
 
     socket.on(SERVER_EVENTS.CONVERSATION_UPDATED as any, (data: any) => {
@@ -314,6 +320,11 @@ export class PresenceService {
     return () => this.conversationDeletedListeners.delete(listener);
   }
 
+  onConversationRestored(listener: ConversationRestoredListener): UnsubscribeFn {
+    this.conversationRestoredListeners.add(listener);
+    return () => this.conversationRestoredListeners.delete(listener);
+  }
+
   onConversationUpdated(listener: ConversationUpdatedListener): UnsubscribeFn {
     this.conversationUpdatedListeners.add(listener);
     return () => this.conversationUpdatedListeners.delete(listener);
@@ -370,6 +381,7 @@ export class PresenceService {
     this.friendRequestRejectedListeners.clear();
     this.userUpdatedListeners.clear();
     this.conversationDeletedListeners.clear();
+    this.conversationRestoredListeners.clear();
     this.conversationUpdatedListeners.clear();
     this.conversationParticipantJoinedListeners.clear();
     this.conversationParticipantLeftListeners.clear();

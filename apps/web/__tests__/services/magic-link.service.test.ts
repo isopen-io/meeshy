@@ -53,7 +53,7 @@ describe('magicLinkService.requestMagicLink', () => {
     await magicLinkService.requestMagicLink('  ALICE@example.com  ');
 
     const [url, opts] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://localhost:3000/auth/magic-link/request');
+    expect(url).toBe('http://localhost:3000/api/v1/auth/magic-link/request');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body as string);
     expect(body.email).toBe('alice@example.com');
@@ -105,7 +105,7 @@ describe('magicLinkService.validateMagicLink', () => {
     await magicLinkService.validateMagicLink('tok-abc');
 
     const [url, opts] = (global.fetch as jest.Mock).mock.calls[0] as [string, RequestInit];
-    expect(url).toBe('http://localhost:3000/auth/magic-link/validate');
+    expect(url).toBe('http://localhost:3000/api/v1/auth/magic-link/validate');
     expect(opts.method).toBe('POST');
     const body = JSON.parse(opts.body as string);
     expect(body.token).toBe('tok-abc');
@@ -113,6 +113,9 @@ describe('magicLinkService.validateMagicLink', () => {
 
   it('calls authManager.setCredentials on success when no 2FA required', async () => {
     const user = { id: 'u1', username: 'alice' };
+    // Forme RÉELLE de POST /auth/magic-link/validate (`services/gateway/src/routes/magic-link.ts`) :
+    // `{ user, token, sessionToken, session, expiresIn }` — AUCUN `refreshToken`
+    // (mesuré, #4405).
     const data = {
       success: true,
       data: {
@@ -127,9 +130,36 @@ describe('magicLinkService.validateMagicLink', () => {
 
     await magicLinkService.validateMagicLink('tok-abc');
 
-    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith(
-      user, 'jwt-token', 'sess-token', 3600
-    );
+    // Objet nommé (#4450) : `refreshToken` est `undefined` (jamais rendu par
+    // cette route) — chaque valeur porte son propre champ, il n'y a plus de
+    // créneau à confondre.
+    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith({
+      user, authToken: 'jwt-token', refreshToken: undefined, sessionToken: 'sess-token', expiresIn: 3600
+    });
+  });
+
+  // Le concept `refreshToken` n'est pas retiré par #4404 (c'est #4405) : s'il
+  // arrivait un jour du serveur, il doit toujours atterrir dans SON créneau.
+  it('threads a refreshToken through to its own slot when the server does send one', async () => {
+    const user = { id: 'u1', username: 'alice' };
+    const data = {
+      success: true,
+      data: {
+        user,
+        token: 'jwt-token',
+        refreshToken: 'refresh-token-xyz',
+        sessionToken: 'sess-token',
+        expiresIn: 3600,
+        requires2FA: false,
+      },
+    };
+    (global.fetch as jest.Mock).mockResolvedValue(makeResponse(data));
+
+    await magicLinkService.validateMagicLink('tok-abc');
+
+    expect(mockAuthManager.setCredentials).toHaveBeenCalledWith({
+      user, authToken: 'jwt-token', refreshToken: 'refresh-token-xyz', sessionToken: 'sess-token', expiresIn: 3600
+    });
   });
 
   it('does NOT call setCredentials when requires2FA is true', async () => {

@@ -36,11 +36,25 @@ enum ConversationMediaSeeding {
     /// ouverture, parce que `materialise()` est gardé par `guard case .pending`.
     /// La loger dans `init(seeding:)` la faisait rejouer à chaque construction
     /// du ViewModel, c'est-à-dire à chaque passe de rendu de la porte.
+    /// **La graine d'un PLAN** — média, description, ou les deux (#4025).
+    ///
+    /// Prend le plan et non la pièce, parce qu'un message texte n'en a pas : la
+    /// signature précédente rendait le cas INEXPRIMABLE, et c'est ce qui tenait
+    /// « Composer » hors des messages texte bien plus sûrement qu'un `if`.
+    ///
+    /// La description est portée telle quelle — aucun actif à matérialiser,
+    /// donc aucun aller-retour réseau pour un geste qui n'en a pas besoin.
     @MainActor
     static func seed(
-        for attachment: MessageAttachment,
+        for plan: ComposableAttachment.SeedPlan,
         resolver: MediaSaveSourceResolving
     ) async -> StoryComposerSeed? {
+        guard let attachment = plan.media else {
+            // Texte seul : la description EST le semis. La fabrique du SDK
+            // refuse un texte vide, et ce `nil` remonte tel quel — la porte
+            // n'ouvre alors rien, et le dit.
+            return plan.description.flatMap(StoryComposerSeed.text)
+        }
         guard let forme = ComposableAttachment.form(mimeType: attachment.mimeType) else { return nil }
 
         // **Aucun repli sur la VIGNETTE.** Les sites « Enregistrer » l'écrivent,
@@ -68,11 +82,18 @@ enum ConversationMediaSeeding {
             // rendu de cette porte. La décoder en bitmap perdrait le son et le
             // mouvement — c'est-à-dire la vidéo.
             return StoryComposerSeed.video(copying: localFile)
+                .map { StoryComposerSeed(payload: $0.payload, description: plan.description) }
+        case .audio:
+            // #4461 — le son reste un FICHIER, comme la vidéo, et la copie se
+            // fait à la fabrique. Le décoder n'aurait aucun sens : il n'y a rien
+            // à rendre, seulement à jouer.
+            return StoryComposerSeed.audio(copying: localFile)
+                .map { StoryComposerSeed(payload: $0.payload, description: plan.description) }
         case .image:
             guard let data = try? Data(contentsOf: localFile, options: .mappedIfSafe),
                   let bitmap = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080)
             else { return nil }
-            return StoryComposerSeed(payload: .image(bitmap))
+            return StoryComposerSeed(payload: .image(bitmap), description: plan.description)
         }
     }
 }
@@ -90,16 +111,30 @@ enum ConversationMediaSeeding {
 /// C'est le TROISIÈME verrou de la protection, et il vaut par ce qu'il survit :
 /// un quatrième déclencheur qui oublierait le gate d'offre ne pourrait toujours
 /// pas construire de cible sur un média à vue unique, flouté ou chiffré.
-struct ComposableMediaTarget: Identifiable {
+/// Renommé de `ComposableMessageTarget` au #4025 : la cible n'est plus
+/// nécessairement un MÉDIA. Un message texte en construit une, dont le semis
+/// est sa seule description — et garder l'ancien nom aurait fait dire au type
+/// l'inverse de ce qu'il porte.
+struct ComposableMessageTarget: Identifiable {
     let messageId: String
-    let attachment: MessageAttachment
+    /// Ce que ce message sème : le canvas ET la description, ensemble.
+    let plan: ComposableAttachment.SeedPlan
 
-    var id: String { "\(messageId)/\(attachment.id)" }
+    /// La pièce à poser, pour les lecteurs qui n'ont besoin que d'elle.
+    /// `nil` pour un message texte.
+    var attachment: MessageAttachment? { plan.media }
+
+    /// L'identité pour `.fullScreenCover(item:)`. Un message texte n'a pas
+    /// d'id de pièce : le sien tient au message seul, et le suffixe le DIT
+    /// plutôt que de laisser deux cibles distinctes partager un id.
+    var id: String {
+        plan.media.map { "\(messageId)/\($0.id)" } ?? "\(messageId)/description"
+    }
 
     init?(message: Message) {
-        guard let seule = ComposableAttachment.target(in: message) else { return nil }
+        guard let plan = ComposableAttachment.seedPlan(in: message) else { return nil }
         self.messageId = message.id
-        self.attachment = seule
+        self.plan = plan
     }
 }
 
@@ -145,7 +180,7 @@ struct ConversationMediaComposerDoor: View {
 
     /// Le message et sa pièce jointe UNIQUE. Un lot hétérogène mentirait sur ce
     /// qui partirait, et l'`init?` de la cible a déjà refusé ce cas.
-    let target: ComposableMediaTarget
+    let target: ComposableMessageTarget
 
     /// **L'INTENTION naît ICI, et nulle part ailleurs.** Une porte est le site
     /// qui construit son intention : la laisser à son hôte en ferait un second
@@ -155,10 +190,8 @@ struct ConversationMediaComposerDoor: View {
     /// pas.
     private var intent: ComposerIntent {
         ComposerIntent(origin: .conversationMedia(
-            messageId: target.messageId, attachmentId: target.attachment.id))
+            messageId: target.messageId, attachmentId: target.attachment?.id))
     }
-
-    private var attachment: MessageAttachment { target.attachment }
 
     /// Le modèle des stories, **sans `@ObservedObject`** : la porte n'affiche
     /// rien qui en dépende, elle l'utilise pour publier. L'observer ferait
@@ -332,7 +365,7 @@ struct ConversationMediaComposerDoor: View {
 
     private func materialise() async {
         guard case .pending = materialisation else { return }
-        guard let graine = await ConversationMediaSeeding.seed(for: attachment, resolver: resolver) else {
+        guard let graine = await ConversationMediaSeeding.seed(for: target.plan, resolver: resolver) else {
             materialisation = .failed
             // `showError` porte DÉJÀ sa vibration d'erreur (`FeedbackToastManager`
             // la pose à chaque point d'entrée, parce qu'elle diffère par type de

@@ -2,7 +2,6 @@ import type { FastifyInstance } from 'fastify';
 
 // Profile routes
 import {
-  getUserTest,
   updateUserProfile,
   updateUserAvatar,
   updateUserBanner,
@@ -15,7 +14,8 @@ import {
   getUserByPhone
 } from './profile';
 
-// Contact change routes (email/phone with verification)
+// Contact change routes (email/phone with verification) — anciennes adresses,
+// dépréciées et montées en alias (#4341).
 import {
   initiateEmailChange,
   verifyEmailChange,
@@ -23,6 +23,16 @@ import {
   initiatePhoneChange,
   verifyPhoneChange
 } from './contact-change';
+
+// Contact change routes — surface unifiée `/me/contact-changes` (#4341,
+// suivi de #4184). Remplace les cinq imports ci-dessus, qui restent montés
+// en alias le temps que le compteur d'adoption de #4275 constate l'abandon.
+import {
+  initiateContactChange,
+  verifyContactChange,
+  resendContactChangeVerification,
+  getContactChangeStatus
+} from './contact-changes';
 
 // Preferences routes
 import {
@@ -34,12 +44,7 @@ import {
 // Devices & social routes
 import {
   getFriendRequests,
-  sendFriendRequest,
-  respondToFriendRequest,
   getAffiliateToken,
-  getAllUsers,
-  updateUserById,
-  deleteUserById
 } from './devices';
 
 // Blocking routes
@@ -71,7 +76,6 @@ export async function userRoutes(fastify: FastifyInstance) {
   // which supports username, email, and phone number checks in a unified API
 
   // Profile routes
-  await getUserTest(fastify);
   await updateUserProfile(fastify);
   await updateUserAvatar(fastify);
   await updateUserBanner(fastify);
@@ -83,7 +87,16 @@ export async function userRoutes(fastify: FastifyInstance) {
   await getUserByIdDedicated(fastify);
   await getUserByPhone(fastify);
 
-  // Contact change routes (email/phone with verification)
+  // Contact change routes — surface unifiée d'abord (#4341), anciennes
+  // adresses ensuite : les deux se lisent dans l'ordre où un lecteur du
+  // fichier les découvre, du canonique vers l'alias.
+  await initiateContactChange(fastify);
+  await verifyContactChange(fastify);
+  await resendContactChangeVerification(fastify);
+  await getContactChangeStatus(fastify);
+
+  // Anciennes adresses (email/phone avec vérification) — dépréciées, montées
+  // en alias (#4341).
   await initiateEmailChange(fastify);
   await verifyEmailChange(fastify);
   await resendEmailChangeVerification(fastify);
@@ -97,8 +110,6 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Friend requests & affiliate routes
   await getFriendRequests(fastify);
-  await sendFriendRequest(fastify);
-  await respondToFriendRequest(fastify);
   await getAffiliateToken(fastify);
 
   // Blocking routes
@@ -116,9 +127,4 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   // Presence routes
   await getUsersPresence(fastify);
-
-  // Stub routes
-  await getAllUsers(fastify);
-  await updateUserById(fastify);
-  await deleteUserById(fastify);
 }

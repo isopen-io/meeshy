@@ -7,14 +7,17 @@ import XCTest
 @MainActor
 final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
 
+    /// **L'UNITÉ, jamais le fichier seul** — `ConversationMediaGalleryView` a été
+    /// DÉCOUPÉ au #4014 (1259 lignes ⇒ vue / `+Rules` / `+Pages`), et une garde
+    /// qui adresse un fichier survit mal à une découpe : elle cesse de trouver
+    /// ce qu'elle garde, sans que rien ne dise que c'est un déménagement et non
+    /// une suppression.
+    ///
+    /// `AppSourceGuard.unit` résout l'unité par GLOB (`Type+*.swift`), jamais
+    /// par liste : un `+Overlays.swift` ajouté demain y entre sans que personne
+    /// ait à s'en souvenir.
     private func gallerySource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift")
     }
 
     func test_galleryVideoPage_postersButton_gatedOnPlayerAttached_notPlaying() throws {

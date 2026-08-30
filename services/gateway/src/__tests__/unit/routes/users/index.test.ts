@@ -10,7 +10,6 @@ import { describe, it, expect, jest } from '@jest/globals';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 const mockProfileFns = {
-  getUserTest: jest.fn<any>().mockResolvedValue(undefined),
   updateUserProfile: jest.fn<any>().mockResolvedValue(undefined),
   updateUserAvatar: jest.fn<any>().mockResolvedValue(undefined),
   updateUserBanner: jest.fn<any>().mockResolvedValue(undefined),
@@ -35,6 +34,17 @@ const mockContactFns = {
 
 jest.mock('../../../../routes/users/contact-change', () => mockContactFns);
 
+// Surface unifiée `/me/contact-changes` (#4341) — module SÉPARÉ de
+// `contact-change.ts` (budget de taille, voir son doc-comment de tête).
+const mockContactChangesFns = {
+  initiateContactChange: jest.fn<any>().mockResolvedValue(undefined),
+  verifyContactChange: jest.fn<any>().mockResolvedValue(undefined),
+  resendContactChangeVerification: jest.fn<any>().mockResolvedValue(undefined),
+  getContactChangeStatus: jest.fn<any>().mockResolvedValue(undefined),
+};
+
+jest.mock('../../../../routes/users/contact-changes', () => mockContactChangesFns);
+
 const mockPreferencesFns = {
   getDashboardStats: jest.fn<any>().mockResolvedValue(undefined),
   getUserStats: jest.fn<any>().mockResolvedValue(undefined),
@@ -45,12 +55,7 @@ jest.mock('../../../../routes/users/preferences', () => mockPreferencesFns);
 
 const mockDevicesFns = {
   getFriendRequests: jest.fn<any>().mockResolvedValue(undefined),
-  sendFriendRequest: jest.fn<any>().mockResolvedValue(undefined),
-  respondToFriendRequest: jest.fn<any>().mockResolvedValue(undefined),
   getAffiliateToken: jest.fn<any>().mockResolvedValue(undefined),
-  getAllUsers: jest.fn<any>().mockResolvedValue(undefined),
-  updateUserById: jest.fn<any>().mockResolvedValue(undefined),
-  deleteUserById: jest.fn<any>().mockResolvedValue(undefined),
 };
 
 jest.mock('../../../../routes/users/devices', () => mockDevicesFns);
@@ -96,7 +101,6 @@ describe('userRoutes — registers all route handler groups', () => {
     await userRoutes(mockFastify);
 
     // Profile routes
-    expect(mockProfileFns.getUserTest).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUserProfile).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUserAvatar).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.updateUserBanner).toHaveBeenCalledWith(mockFastify);
@@ -108,7 +112,13 @@ describe('userRoutes — registers all route handler groups', () => {
     expect(mockProfileFns.getUserByIdDedicated).toHaveBeenCalledWith(mockFastify);
     expect(mockProfileFns.getUserByPhone).toHaveBeenCalledWith(mockFastify);
 
-    // Contact change routes
+    // Contact change routes — surface unifiée (#4341) d'abord
+    expect(mockContactChangesFns.initiateContactChange).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactChangesFns.verifyContactChange).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactChangesFns.resendContactChangeVerification).toHaveBeenCalledWith(mockFastify);
+    expect(mockContactChangesFns.getContactChangeStatus).toHaveBeenCalledWith(mockFastify);
+
+    // Anciennes adresses (#4184) — dépréciées, montées en alias
     expect(mockContactFns.initiateEmailChange).toHaveBeenCalledWith(mockFastify);
     expect(mockContactFns.verifyEmailChange).toHaveBeenCalledWith(mockFastify);
     expect(mockContactFns.resendEmailChangeVerification).toHaveBeenCalledWith(mockFastify);
@@ -122,12 +132,11 @@ describe('userRoutes — registers all route handler groups', () => {
 
     // Devices/friends routes
     expect(mockDevicesFns.getFriendRequests).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.sendFriendRequest).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.respondToFriendRequest).toHaveBeenCalledWith(mockFastify);
+    // `sendFriendRequest` et `respondToFriendRequest` ont été SUPPRIMÉES
+    // (#4162) : c'étaient les jumelles orphelines d'une famille complète, que
+    // personne n'appelait, et dont la seule garde propre a été récupérée dans
+    // `directory/friend-requests-core.ts` avant leur retrait.
     expect(mockDevicesFns.getAffiliateToken).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.getAllUsers).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.updateUserById).toHaveBeenCalledWith(mockFastify);
-    expect(mockDevicesFns.deleteUserById).toHaveBeenCalledWith(mockFastify);
 
     // Blocking routes
     expect(mockBlockingFns.blockUser).toHaveBeenCalledWith(mockFastify);

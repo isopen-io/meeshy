@@ -36,6 +36,13 @@ struct ComposerTopBar: View {
     var onRemoveMedia: ((ComposerDocumentMedia) -> Void)?
     var onSelectMedia: ((ComposerDocumentMedia) -> Void)?
 
+    // **L'historique a quitté cette barre le 2026-08-30.** Il y lisait mal :
+    // pendant qu'un outil est ouvert, « Annuler » se comprend comme « fermer
+    // l'outil » et non « défaire le dernier geste » — le mot dit les deux en
+    // français, et le voisinage du chrome d'outil tranchait pour le mauvais.
+    // Il vit désormais au SOCLE, entre l'œil et Publier, parmi ce qui décide de
+    // l'envoi : rien autour de lui ne se ferme.
+
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onClose) {
@@ -61,6 +68,9 @@ struct ComposerTopBar: View {
         .padding(.top, 12)
     }
 
+
+ 
+ 
     /// **Le rail des slides (#4047).** Une vignette par slide, celle qu'on
     /// regarde cerclée, chacune retirable. `localMedia` vide ⇒ RIEN — pas une
     /// bande à hauteur nulle, pas un rail de zéro chip : un document sans média

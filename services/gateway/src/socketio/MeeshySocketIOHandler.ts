@@ -3,13 +3,13 @@
  * Point d'entrée pour configurer Socket.IO sur le serveur Fastify
  */
 
-import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { FastifyInstance } from 'fastify';
 import { Server as HTTPServer } from 'http';
 import { MeeshySocketIOManager } from './MeeshySocketIOManager';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
-import { requireAdmin } from '../middleware/auth';
+import { socketIOAdminRoutes } from './socketio-admin-routes';
 
 export class MeeshySocketIOHandler {
   private socketIOManager: MeeshySocketIOManager | null = null;
@@ -33,74 +33,20 @@ export class MeeshySocketIOHandler {
     this.socketIOManager = new MeeshySocketIOManager(httpServer, this.prisma, this.translationService);
     await this.socketIOManager.initialize();
 
-    // Ajouter une route pour les statistiques Socket.IO (admin seulement)
-    fastify.get('/api/socketio/stats', {
-      preHandler: [
-        (req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep),
-        requireAdmin
-      ]
-    }, async (request, reply) => {
-      try {
-        const stats = this.socketIOManager.getStats();
-        reply.send({
-          success: true,
-          data: {
-            ...stats,
-            timestamp: new Date().toISOString()
-          }
-        });
-      } catch (error) {
-        logger.error('Erreur récupération stats Socket.IO:', error);
-        reply.status(500).send({
-          success: false,
-          error: 'Erreur serveur lors de la récupération des statistiques'
-        });
-      }
-    });
-
-    // Route pour forcer la déconnexion d'un utilisateur (admin seulement)
-    fastify.post('/api/socketio/disconnect-user', {
-      preHandler: [
-        (req: FastifyRequest, rep: FastifyReply) => fastify.authenticate(req, rep),
-        requireAdmin
-      ]
-    }, async (request, reply) => {
-      try {
-        const { userId } = request.body as { userId: string };
-
-        if (!userId) {
-          return reply.status(400).send({
-            success: false,
-            error: 'userId requis'
-          });
-        }
-
-        if (this.socketIOManager) {
-          const disconnected = this.socketIOManager.disconnectUser(userId);
-          if (disconnected) {
-            reply.send({
-              success: true,
-              message: `Utilisateur ${userId} déconnecté`
-            });
-          } else {
-            reply.status(404).send({
-              success: false,
-              error: `Utilisateur ${userId} non trouvé ou non connecté`
-            });
-          }
-        } else {
-          reply.status(500).send({
-            success: false,
-            error: 'Socket.IO non initialisé'
-          });
-        }
-      } catch (error) {
-        logger.error('Erreur déconnexion utilisateur:', error);
-        reply.status(500).send({
-          success: false,
-          error: 'Erreur serveur lors de la déconnexion'
-        });
-      }
+    // Les deux gestes d'administration vivent dans `socketio-admin-routes.ts`
+    // et se MONTENT ici, plutôt que d'être déclarés en ligne. La raison n'est
+    // pas cosmétique : cette méthode est appelée par `MeeshyServer.start()`
+    // AVANT `setupRoutes()`, donc hors de `registerAllRoutes` — le seul graphe
+    // que `route-manifest/collect.ts` monte. Déclarées ici, ces quatre routes
+    // étaient SERVIES et invisibles au manifeste, au catalogue client qui en
+    // dérive et à tout audit qui s'y appuie (#4376). Extraites en plugin, le
+    // collecteur monte EXACTEMENT le même objet que la production.
+    //
+    // `getManager` plutôt que le manager lui-même : il vient d'être construit
+    // ci-dessus, mais le collecteur n'en a aucun — un accesseur sert les deux
+    // sans qu'aucun ait à fabriquer l'autre.
+    await fastify.register(socketIOAdminRoutes, {
+      getManager: () => this.socketIOManager,
     });
 
     logger.info('✅ Socket.IO configuré et routes ajoutées');

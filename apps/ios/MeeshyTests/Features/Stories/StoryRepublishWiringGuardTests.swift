@@ -27,7 +27,17 @@ import XCTest
 @MainActor
 final class StoryRepublishWiringGuardTests: XCTestCase {
 
+    /// `StoryViewModel` s'est scindé en plusieurs fichiers (#4425) : ce chemin
+    /// précis passe par l'UNITÉ (`AppSourceGuard.storyViewModelSource`), sinon
+    /// l'invariant 3 ci-dessous (`repostOfId` jamais figé à `nil`) cesserait de
+    /// mesurer quoi que ce soit le jour où `createStory` migre vers un fichier
+    /// frère. Les deux autres chemins lus par ce helper
+    /// (`StoryViewerView+Sidebar.swift`, `StoryViewerView.swift`) continuent
+    /// de lire leur fichier tel quel.
     private func source(_ relativePath: String) throws -> String {
+        if relativePath == AppSourceGuard.storyViewModelPath {
+            return try AppSourceGuard.storyViewModelSource()
+        }
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // .../Features/Stories
             .deletingLastPathComponent()   // .../Features

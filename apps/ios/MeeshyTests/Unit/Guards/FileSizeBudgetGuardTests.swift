@@ -39,17 +39,14 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "BubbleStandardLayout.swift",
         "CallManager.swift",
         "CallView.swift",
-        "ComposerDocumentSurface.swift",
         "ComposerMoodSurface.swift",
         "ConversationDashboardView.swift",
         "ConversationInfoSheet.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
         "ConversationListViewModel.swift",
-        "ConversationMediaGalleryView.swift",
         "ConversationMediaViews.swift",
         "ConversationSocketHandler.swift",
-        "ConversationView+Composer.swift",
         "ConversationView.swift",
         "ConversationViewModel.swift",
         "FeedCommentsSheet.swift",
@@ -58,7 +55,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "FeedView.swift",
         "FeedViewModel.swift",
         "MeeshyApp.swift",
-        "MeeshyComposerHost.swift",
         "MessageListViewController.swift",
         "MessageOverlayMenu.swift",
         "MyStoriesView.swift",
@@ -70,12 +66,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
         "ProfileUserPostsList.swift",
         "ReelsPlayerView.swift",
         "RootView.swift",
-        "StoryViewModel.swift",
         "StoryViewerView+Canvas.swift",
         "StoryViewerView+Content.swift",
         "StoryViewerView+Sidebar.swift",
         "StoryViewerView.swift",
-        "UniversalComposerBar.swift",
         "WebRTCTypes.swift",
     ]
 
@@ -91,7 +85,55 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// PAYÉE dans le même lot : `AnimatedWaveformBar` et `AudioLevelBar` sont sorties
     /// de `ConversationMediaViews.swift` vers `RecordingWaveformBars.swift`
     /// (−93 lignes, relocalisation pure), ce qui ramène le cumul à 88 245.
-    private static let legacyLineCeiling = 88_268
+    /// **85 271 depuis #4102.** `MeeshyComposerHost.swift` a QUITTÉ la dette : ses
+    /// 3 018 lignes sont découpées par responsabilité — le type, `+Surfaces`,
+    /// `+Intake`, `+Socle`, plus les règles pures sorties en
+    /// `ComposerHostRules.swift` — toutes sous le budget. Le plafond baisse de
+    /// tout ce que le fichier pesait, et non de sa seule part au-dessus de 1100 :
+    /// un nom qui sort de la liste en sort ENTIER, sinon le cliquet garderait du
+    /// mou au nom d'un fichier qu'il ne mesure plus.
+    /// **82 770 depuis #4103.** `ComposerDocumentSurface.swift` a quitté la dette
+    /// à son tour : ses 2 534 lignes se répartissent en `ComposerSurfaceRules`
+    /// (512, les règles de surface : routage, propriété du chrome, `⋯`, mémoire
+    /// d'audience), `ComposerDocumentRules` (1 004, les règles du document :
+    /// ingestion, envoi, refus, gate, libellés) et la VUE (1 043). Le plafond
+    /// baisse de tout ce que le fichier pesait — un nom qui sort de la liste en
+    /// sort ENTIER.
+    /// **82 767 depuis #4363.** Le gate plein écran du splash a quitté
+    /// `MeeshyApp.swift` pour `FullScreenGate.swift` — la seule façon d'y écrire
+    /// la raison du correctif sans faire grossir un fichier déjà hors budget.
+    /// Le cliquet a fait exactement son travail : il a refusé l'ajout, et
+    /// l'extraction qui s'en est suivie nomme le concept au lieu de le cacher
+    /// dans un `body`.
+    /// **76 402 après la fusion du 2026-08-30**, soit la somme MESURÉE des 37
+    /// fichiers qui restent en dette.
+    ///
+    /// Deux sessions ont allégé cette dette le même jour, chacune de son côté,
+    /// et le conflit qui en est né est instructif : chacune avait soustrait
+    /// CORRECTEMENT ce que SON découpage retirait — 80 004 d'un côté, 80 183 de
+    /// l'autre — et garder l'une ou l'autre aurait laissé la moitié du travail
+    /// non comptée.
+    ///
+    /// > **Un plafond cumulatif ne se résout pas en choisissant un côté du
+    /// > conflit : il se REMESURE.** C'est la seule valeur qui reste vraie quel
+    /// > que soit l'ordre dans lequel les deux découpages sont arrivés.
+    ///
+    /// Ce que les deux côtés retiraient, réuni :
+    /// - `StoryViewModel.swift` (3 584) → `+Publication` (960),
+    ///   `+PublicationUpload` (811), `+MediaPreload` (431), `+Viewing` (302),
+    ///   `StoryViewModelRules` (157) et le type lui-même (1 000) ;
+    /// - `ConversationView+Composer.swift` (399) et `UniversalComposerBar.swift`
+    ///   (379), redescendus sous le budget à leur propre découpage ;
+    /// - `ComposerDocumentSurface.swift` n'y a jamais figuré : il a franchi le
+    ///   plafond ce jour-là et a été découpé aussitôt — c'est le cliquet qui
+    ///   l'a exigé, et c'est ce qu'on lui demande.
+    ///
+    /// Le plafond se MESURE, il ne se calcule pas de tête : posé une première
+    /// fois à 80 233 en soustrayant un chiffre lu dans le commentaire d'un
+    /// AUTRE découpage, il aurait laissé 229 lignes de mou — de quoi accueillir
+    /// en silence l'ajout que ce cliquet existe pour refuser. Un cliquet dont
+    /// le cran est trop haut ne rougit pas : il attend.
+    private static let legacyLineCeiling = 75_070
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

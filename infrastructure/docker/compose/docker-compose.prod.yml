@@ -405,6 +405,72 @@ services:
       - "traefik.http.services.frontend.loadbalancer.server.port=3100"
       - "traefik.http.routers.frontend.priority=1"
 
+  # Frontend v3 sur ${DOMAIN}, DEVANT le routeur ci-dessus
+  #
+  # Le routeur `frontend` porte priority=1 — le plancher. Celui-ci porte 100 :
+  # tout chemin listé dans sa règle lui revient, tout chemin absent reste au
+  # legacy, qui n'est pas touché. Migrer une route = ajouter un PathPrefix à
+  # cette ligne ; revenir en arrière = l'enlever, et c'est un `up -d`, sans
+  # rebuild ni DNS.
+  #
+  # `/__v3/_next` y figure EN PERMANENCE et ne bascule aucune route : c'est
+  # l'adresse des bundles de la zone (`assetPrefix: '/__v3'` dans
+  # next.config.ts). Sans elle, une page v3 demanderait `/_next/static/...`,
+  # qui retomberait sur le routeur attrape-tout — chunk 404, page blanche.
+  #
+  # OÙ S'ARRÊTE CETTE PROTECTION — mesuré, pas déduit
+  #
+  # `assetPrefix` préfixe les URL que Next FABRIQUE pour ses propres bundles,
+  # et RIEN d'autre. Sur le serveur standalone que cette image lance :
+  #   /_next/static/chunks/main-<hash>.js  → 200   /__v3/_next/…/main.js → 200
+  #   /probe.txt        (public/probe.txt) → 200   /__v3/probe.txt       → 404
+  #   /robots.txt   (app/robots.txt)       → 200   /__v3/robots.txt      → 404
+  #   /icon.svg     (app/icon.svg)         → 200   /__v3/icon.svg        → 404
+  # Un fichier de `public/` et un fichier de métadonnées de l'App Router sont
+  # donc servis à la RACINE de l'URL : derrière ce routeur ils tombent sur
+  # `frontend` (le LEGACY). C'est le corollaire du § 4.4 de la conception —
+  # « tout chemin absent de cette règle est servi par apps/web » — appliqué aux
+  # ACTIFS, et plus seulement aux routes. Le jour où la v3 sert un tel chemin,
+  # il s'ajoute ICI nommément, et il est VOLÉ au legacy ; sinon l'actif passe
+  # par le pipeline webpack et atterrit sous `/__v3/_next/static/media/…`.
+  #
+  # ET LA RÈGLE NE S'ÉLARGIT PAS À `/__v3` NU
+  #
+  # `next build` n'émet aujourd'hui aucune PAGE d'App Router (seul `/healthz`,
+  # un route handler, l'est) : la limite `/_not-found` n'existe pas et
+  # `/__v3/quoi-que-ce-soit` répondrait le 404 ANGLAIS du routeur Pages — sans
+  # `<html lang>`, sans le script anti-flash de thème, hors design system. Un
+  # chemin PUBLIC prioritaire sur le legacy ne se publie pas avant que la zone
+  # ait de quoi y répondre.
+  #
+  # `scripts/check-v3-pipeline.mjs` garde les deux sens : un actif servi hors
+  # de cette règle, et un chemin de cette règle que la zone ne sert pas.
+  frontend-v3:
+    image: ${FRONTEND_V3_IMAGE:-isopen/meeshy-web-v3:latest}
+    container_name: meeshy-frontend-v3
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - meeshy-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://0.0.0.0:3300/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend-v3.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && (PathPrefix(`/__v3/_next`))"
+      - "traefik.http.routers.frontend-v3.entrypoints=websecure"
+      - "traefik.http.routers.frontend-v3.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-v3.middlewares=compress@file"
+      - "traefik.http.services.frontend-v3.loadbalancer.server.port=3300"
+      - "traefik.http.routers.frontend-v3.priority=100"
+
   # ===========================================================================
   agent:
     image: ${AGENT_IMAGE:-isopen/meeshy-agent:latest}

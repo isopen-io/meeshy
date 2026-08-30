@@ -9,6 +9,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { authorSelect, mediaSelect, NOT_DELETED } from '../../services/posts/postIncludes';
 import { applyPostRemovalEffects } from '../../services/posts/postRemovalEffects';
 import { broadcastPostRemoval } from '../../socketio/broadcastPostRemoval';
+import { requirePermission } from '../../middleware/authorize';
 
 /**
  * Ligne de la liste d'administration des posts.
@@ -75,17 +76,10 @@ const adminPostRowSchema = {
 } as const;
 
 // Middleware d'autorisation admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
-
-  const permissions = permissionsService.getUserPermissions(authContext.registeredUser.role as UserRole);
-  if (!permissions.canAccessAdmin) {
-    return sendForbidden(reply, 'Acces administrateur requis');
-  }
-};
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canAccessAdmin');
 
 // Query type for listing posts
 interface PostListQuery {
@@ -104,6 +98,124 @@ interface PostListQuery {
 // Adding `language`, `variantOf`, `transcription`, `translations` here (via the
 // shared select) closes the Prisme Linguistique drift that previously affected
 // the admin views.
+
+/**
+ * Projection RACINE de `GET /admin/posts/:postId` (#4166, critère 1 —
+ * famille « include sans select à la racine »).
+ *
+ * L'ancien `include: {...}` sans `select` de tête laissait « toute colonne
+ * ajoutée au modèle `Post` part[ir] automatiquement » (texte de l'issue) —
+ * et le schéma de réponse de cette route est `additionalProperties: true`
+ * (une vue d'inspection admin, pas un contrat client fermé, cf.
+ * `mediaSelect` ci-dessus), donc RIEN ne filtrait ce qui sort. Les 42 champs
+ * scalaires ci-dessous sont la totalité de ceux que `schema.prisma` déclare
+ * aujourd'hui sur `Post` : ce n'est PAS une réduction (le champ le plus
+ * lourd, `Post.metadata`, reste servi — décision de détail, pas de liste) —
+ * c'est le même contenu, rendu EXPLICITE. Un champ futur du modèle
+ * n'apparaîtra plus ici tout seul ; il faudra l'y ajouter, comme pour tout
+ * `select` nommé du dépôt.
+ */
+const adminPostDetailSelect = {
+  id: true,
+  authorId: true,
+  type: true,
+  visibility: true,
+  visibilityUserIds: true,
+  content: true,
+  originalLanguage: true,
+  translations: true,
+  metadata: true,
+  geoPoint: true,
+  geoPrecision: true,
+  communityId: true,
+  repostOfId: true,
+  originalRepostOfId: true,
+  isQuote: true,
+  storyEffects: true,
+  allowSoundExtraction: true,
+  moodEmoji: true,
+  audioUrl: true,
+  audioDuration: true,
+  expiresAt: true,
+  reactionSummary: true,
+  reactionCount: true,
+  reactions: true,
+  storyViews: true,
+  likeCount: true,
+  commentCount: true,
+  repostCount: true,
+  viewCount: true,
+  impressionCount: true,
+  bookmarkCount: true,
+  shareCount: true,
+  postOpenCount: true,
+  qualifiedViewCount: true,
+  playCount: true,
+  downloadCount: true,
+  isPinned: true,
+  isEdited: true,
+  contentEditedAt: true,
+  deletedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  author: { select: authorSelect },
+  media: {
+    select: mediaSelect,
+    orderBy: { order: 'asc' as const }
+  },
+  comments: {
+    where: { deletedAt: NOT_DELETED },
+    select: {
+      id: true,
+      content: true,
+      originalLanguage: true,
+      likeCount: true,
+      replyCount: true,
+      isEdited: true,
+      deletedAt: true,
+      createdAt: true,
+      author: { select: authorSelect },
+    },
+    orderBy: { createdAt: 'desc' as const },
+    take: 50
+  },
+  views: {
+    select: {
+      id: true,
+      userId: true,
+      viewedAt: true,
+      duration: true,
+      user: { select: authorSelect },
+    },
+    orderBy: { viewedAt: 'desc' as const },
+    take: 50
+  },
+  repostOf: {
+    select: {
+      id: true,
+      content: true,
+      type: true,
+      createdAt: true,
+      author: { select: authorSelect },
+    }
+  },
+  community: {
+    select: {
+      id: true,
+      identifier: true,
+      name: true,
+      avatar: true,
+    }
+  },
+  _count: {
+    select: {
+      comments: true,
+      views: true,
+      bookmarks: true,
+      reposts: true,
+    }
+  }
+};
 
 function buildPeriodFilter(period: string): Date {
   const startDate = new Date();
@@ -472,65 +584,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       const post = await fastify.prisma.post.findUnique({
         where: { id: postId },
-        include: {
-          author: { select: authorSelect },
-          media: {
-            select: mediaSelect,
-            orderBy: { order: 'asc' }
-          },
-          comments: {
-            where: { deletedAt: NOT_DELETED },
-            select: {
-              id: true,
-              content: true,
-              originalLanguage: true,
-              likeCount: true,
-              replyCount: true,
-              isEdited: true,
-              deletedAt: true,
-              createdAt: true,
-              author: { select: authorSelect },
-            },
-            orderBy: { createdAt: 'desc' },
-            take: 50
-          },
-          views: {
-            select: {
-              id: true,
-              userId: true,
-              viewedAt: true,
-              duration: true,
-              user: { select: authorSelect },
-            },
-            orderBy: { viewedAt: 'desc' },
-            take: 50
-          },
-          repostOf: {
-            select: {
-              id: true,
-              content: true,
-              type: true,
-              createdAt: true,
-              author: { select: authorSelect },
-            }
-          },
-          community: {
-            select: {
-              id: true,
-              identifier: true,
-              name: true,
-              avatar: true,
-            }
-          },
-          _count: {
-            select: {
-              comments: true,
-              views: true,
-              bookmarks: true,
-              reposts: true,
-            }
-          }
-        }
+        select: adminPostDetailSelect
       });
 
       if (!post) {

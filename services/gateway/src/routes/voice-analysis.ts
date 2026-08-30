@@ -23,6 +23,9 @@ import { voiceQualityAnalysisSchema } from './voice/types';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
+import { dateDeRetrait, depreciee } from '../utils/deprecation';
+
+const DEPUIS_VOICE_LEGACY = '2026-08-29';
 
 const logger = enhancedLogger.child({ module: 'VoiceAnalysis' });
 
@@ -510,4 +513,51 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
       return sendInternalError(reply, error.message || 'Failed to retrieve profile analysis');
     }
   });
+}
+
+/**
+ * Alias RACINE déprécié des cinq routes ci-dessus (#4277, critère 1).
+ *
+ * Avant ce lot, `voiceAnalysisRoutes` était monté SANS préfixe
+ * (`server.register(voiceAnalysisRoutes)`) : ses cinq routes vivaient à la
+ * racine (`/attachments/:id/analysis`, `/attachments/batch/analysis`,
+ * `/voice/analysis`), hors `/api/v1` — un défaut d'adressage, pas une
+ * décision. La cible du critère 1 est `/api/v1` ; mais retirer purement et
+ * simplement l'ancienne adresse romprait tout appelant qui la connaît déjà,
+ * et un `grep` sur les clients ne voit pas une version déjà installée (voir
+ * l'issue). Mesuré au 2026-08-29 (`apps/web`, `apps/ios`, `packages/MeeshySDK`,
+ * `apps/android`) : `apps/web/hooks/use-voice-analysis.ts` appelle
+ * `/api/voice/analysis` et `/api/attachments/:id/analysis` via `apiService`
+ * — dont `buildApiUrl()` (`apps/web/lib/config.ts`) résout DÉJÀ ces deux
+ * chemins vers `/api/v1/...` (elle réécrit tout `/api/xxx` non versionné en
+ * `/api/v1/xxx`). Cette page de réglages vocaux (`voice-profile-settings.tsx`,
+ * montée en production) appelait donc, avant ce lot, une adresse que le
+ * serveur ne servait PAS DU TOUT (bare `/voice/analysis`, sans AUCUN préfixe
+ * `/api`) : ce n'est pas seulement une adresse à préserver par précaution,
+ * c'est un défaut ACTIF que la migration vers `/api/v1` corrige. Aucun appel
+ * mesuré vers la forme bare-root exacte (`/voice/analysis` sans `/api`) —
+ * elle reçoit quand même son alias, par symétrie avec les quatre autres.
+ *
+ * MÊME implémentation que sous `/api/v1` — ce plugin ne réécrit RIEN, il pose
+ * les trois en-têtes de dépréciation (`depreciee`, #4274) puis
+ * délègue à `voiceAnalysisRoutes`. Le succeseur annoncé est calculé depuis
+ * `request.url` (déjà résolu, params compris) plutôt qu'un gabarit `:param` —
+ * l'ancienne adresse n'a AUCUN segment `/api` : `/api/v1` + le chemin brut
+ * suffit, sans retrait à faire (contrairement à l'alias de `user-deletions.ts`,
+ * dont l'ancienne adresse porte déjà un `/api`).
+ *
+ * @deprecated Chemin de compatibilité, fenêtre de retrait par défaut
+ * (`FENETRE_DE_RETRAIT_JOURS`, #4274), ancrée sur `depuis`. Le retrait RÉEL
+ * reste gouverné par le compteur d'accès nul (#4275).
+ */
+export async function voiceAnalysisLegacyAliasRoutes(fastify: FastifyInstance): Promise<void> {
+  fastify.addHook(
+    'onRequest',
+    depreciee({
+      depuis: DEPUIS_VOICE_LEGACY,
+      successeur: (request) => `/api/v1${request.url}`,
+      retraitLe: dateDeRetrait(DEPUIS_VOICE_LEGACY),
+    })
+  );
+  await voiceAnalysisRoutes(fastify);
 }

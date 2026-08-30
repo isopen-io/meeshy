@@ -478,7 +478,16 @@ export const createLinkBodySchema = {
     allowAnonymousMessages: { type: 'boolean', default: true },
     allowAnonymousFiles: { type: 'boolean', default: false },
     allowAnonymousImages: { type: 'boolean', default: true },
-    allowViewHistory: { type: 'boolean', default: true },
+    // #4169 — PAS de default ici. Fastify active useDefaults d'AJV et server.ts
+    // ne le desactive pas : un default dans un schema de REQUETE est une
+    // ECRITURE, materialisee sur request.body AVANT que le gestionnaire ne
+    // s'execute. Le repli input.allowViewHistory ?? false de
+    // mintConversationShareLink devenait donc structurellement inatteignable,
+    // et tout lien cree sans ce champ naissait avec l'historique OUVERT --
+    // plus permissif que ce que recoit un membre INSCRIT invite par un admin.
+    // Le repli appartient au gestionnaire, jamais au schema : l'y remettre,
+    // meme a false, redefairait en silence le prochain changement du repli.
+    allowViewHistory: { type: 'boolean' },
     requireAccount: { type: 'boolean', default: false },
     requireNickname: { type: 'boolean', default: true },
     requireEmail: { type: 'boolean', default: false },

@@ -73,10 +73,12 @@ describe('createRateLimitConfig', () => {
   });
 
   // Piege documente du projet : un rate limit par-route SANS keyGenerator
-  // explicite herite du keyGenerator GLOBAL (seau IP plateforme derriere
-  // Traefik sans trustProxy -> IDENTIQUE pour tout le monde). Ces tests
-  // prouvent que la config fournit une cle PAR UTILISATEUR, jamais le seau
-  // plateforme brut `global:${request.ip}`.
+  // explicite herite du keyGenerator GLOBAL, soit `global:${request.ip}` —
+  // l'ADRESSE de l'appelant, `trustProxy` etant pose depuis #4137. Une limite
+  // qui se veut par compte et compte par adresse se trompe dans les deux sens
+  // (plusieurs comptes derriere une sortie partagent un credit ; un compte a
+  // plusieurs adresses en cumule autant). Ces tests prouvent que la config
+  // fournit une cle PAR UTILISATEUR, jamais la cle globale brute.
   it('keyGenerator uses a per-user key when authContext is present', () => {
     const cfg = createRateLimitConfig(5, '1 minute', 'initiate');
     const req = { authContext: { userId: 'user-42' }, ip: '10.0.0.5' } as any;
@@ -203,16 +205,21 @@ describe('registerRateLimiting', () => {
       return (fastify.register as jest.Mock).mock.calls[0][1] as Record<string, any>;
     }
 
-    it('allowList returns true for local IPs', async () => {
+    // Témoin NÉGATIF (#4137). Le plugin portait `allowList: (req) => isLocalIp(req.ip)`,
+    // ce qui, derrière Traefik sur un réseau Docker — `request.ip` en 172.16.0.0/12
+    // pour TOUS les appelants —, exemptait la planète entière. La bonne forme est
+    // l'ABSENCE d'allowList : aucune faveur ne se déduit de la forme d'une adresse.
+    //
+    // Cette garde est négative, donc elle meurt en silence si l'option disparaît du
+    // plugin pour une autre raison. `getOptions()` la protège : elle échoue si le
+    // plugin n'est plus enregistré du tout, ce qui distingue « pas d'allowList » de
+    // « pas de plugin ».
+    it("n'exempte aucune adresse : le plugin ne déclare PAS d'allowList", async () => {
       const opts = await getOptions();
-      (isLocalIp as jest.Mock).mockReturnValueOnce(true);
-      expect(opts.allowList({ ip: '127.0.0.1' })).toBe(true);
-    });
 
-    it('allowList returns false for non-local IPs', async () => {
-      const opts = await getOptions();
-      (isLocalIp as jest.Mock).mockReturnValueOnce(false);
-      expect(opts.allowList({ ip: '8.8.8.8' })).toBe(false);
+      expect(opts).toBeDefined();
+      expect(opts.keyGenerator).toBeInstanceOf(Function);
+      expect(opts.allowList).toBeUndefined();
     });
 
     it('keyGenerator uses userId when auth context present', async () => {

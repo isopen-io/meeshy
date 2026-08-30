@@ -57,11 +57,6 @@ jest.mock('@/lib/clipboard', () => ({
 
 jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((endpoint: string) => `http://localhost:3000${endpoint}`),
-  API_ENDPOINTS: {
-    CONVERSATION: {
-      GET_CONVERSATION_LINKS: (id: string) => `/api/conversations/${id}/links`,
-    },
-  },
 }));
 
 // Mock sonner toast
@@ -177,9 +172,6 @@ const mockLinks = [
       displayName: 'Test User',
       avatar: 'https://example.com/avatar.jpg',
     },
-    _count: {
-      anonymousParticipants: 5,
-    },
   },
   {
     id: 'link-2',
@@ -206,15 +198,16 @@ const mockLinks = [
     allowedLanguages: [],
     allowedIpRanges: [],
     createdAt: new Date().toISOString(),
+    // Le créateur n'a pas d'avatar : la gateway sert TOUJOURS les six clés
+    // (`?expand=creator`), `avatar` explicite `null` plutôt qu'absente — la
+    // forme réelle, pas une commodité de fixture.
     creator: {
       id: 'user-2',
       username: 'admin',
       firstName: 'Admin',
       lastName: '',
       displayName: 'Admin',
-    },
-    _count: {
-      anonymousParticipants: 10,
+      avatar: null,
     },
   },
   {
@@ -248,9 +241,7 @@ const mockLinks = [
       firstName: 'Test',
       lastName: 'User',
       displayName: 'Test User',
-    },
-    _count: {
-      anonymousParticipants: 0,
+      avatar: null,
     },
   },
 ];
@@ -290,12 +281,18 @@ describe('ConversationLinksSection', () => {
       expect(screen.getByText('Chargement des liens...')).toBeInTheDocument();
     });
 
-    it('should load links on mount', async () => {
+    // #4170 critère 8 — cette assertion est le témoin qui protège l'ADRESSE
+    // migrée : `GET /conversations/:conversationId/links` filtrait sur
+    // `creatorId` (colonne inexistante) et rendait 500 pour tout membre non
+    // modérateur. `GET /links?conversationId=` (`links/user.ts`) filtre sur
+    // `createdBy`, la colonne réelle — `expand=creator,policy` restaure les
+    // deux cartes que le composant affiche dans sa popover de détails.
+    it('should load links on mount from the unified GET /links endpoint', async () => {
       render(<ConversationLinksSection {...defaultProps} />);
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          'http://localhost:3000/api/conversations/conv-1/links',
+          'http://localhost:3000/api/v1/links?conversationId=conv-1&expand=creator,policy',
           expect.objectContaining({
             headers: { Authorization: 'Bearer mock-token' },
           })
@@ -580,12 +577,33 @@ describe('ConversationLinksSection', () => {
     });
   });
 
-  describe('Anonymous Participants Count', () => {
-    it('should display anonymous participants count', async () => {
+  // #4170 — `link._count.anonymousParticipants` n'a jamais existé sur AUCUNE
+  // réponse serveur (ni l'ancienne route, ni la nouvelle) : le handler ne
+  // sélectionne aucun `_count` Prisma. La fixture de ce fichier le fournissait
+  // pourtant explicitement, ce qui maintenait ce témoin au vert alors que le
+  // composant plantait en production sur CE MÊME accès dès qu'une vraie
+  // réponse serveur (sans `_count`) l'atteignait — l'exact anti-motif « un
+  // témoin qui ne peut pas tomber n'est pas un témoin ». Ce badge est retiré
+  // (aucune mesure de ce type n'est servie ailleurs, mieux vaut l'absence
+  // qu'un champ fabriqué) ; `currentUses`, affiché juste à côté, reste le
+  // seul compteur d'usage réel de la carte.
+
+  describe('Missing creator fields do not crash the popover', () => {
+    it('renders when firstName/lastName/displayName/avatar are all null (fail-open shape from the server)', async () => {
+      const bareLinks = [{
+        ...mockLinks[0],
+        creator: { id: 'user-9', username: 'bare', firstName: null, lastName: null, displayName: null, avatar: null },
+      }];
+      (global.fetch as jest.Mock).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, data: bareLinks }),
+      });
+
       render(<ConversationLinksSection {...defaultProps} />);
 
       await waitFor(() => {
-        expect(screen.getByText('5')).toBeInTheDocument();
+        // Repli sur le username quand firstName/displayName sont absents.
+        expect(screen.getAllByText('bare').length).toBeGreaterThan(0);
       });
     });
   });

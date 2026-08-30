@@ -36,12 +36,39 @@ struct ComposerTrailingRail: View {
 
     var onAction: ((StoryCanvasContextAction) -> Void)?
 
-    @State private var lastTapped: StoryCanvasContextAction?
+    /// **Créer une SLIDE** (directive porteur 2026-08-30) : « on garde à droite
+    /// les outils permettant de contrôler la scène, dont tout en haut de la
+    /// liste une frame `[+]` permettant de créer un slide ».
+    ///
+    /// `nil` ⇒ l'hôte ne sait pas en créer, donc aucune frame (loi 4).
+    var onAddSlide: (() -> Void)?
+
+    @State private var lastTapped: String?
+
+    /// **Le rail EXISTE dès qu'il a le `[+]`**, même sans objet sélectionné.
+    /// C'est ce qui distingue les deux côtés depuis la directive : le gauche
+    /// suit ce que l'auteur FAIT, le droit ce que la SCÈNE offre — et créer une
+    /// slide s'offre en permanence.
+    private var isEmpty: Bool { actions.isEmpty && onAddSlide == nil }
 
     var body: some View {
-        if !actions.isEmpty {
+        if !isEmpty {
             VStack(spacing: 10) {
                 Spacer(minLength: 0)
+                // **`[+]` TOUT EN HAUT**, jamais mêlée aux contrôleurs de
+                // l'objet : elle n'agit pas sur le même niveau du modèle. Les
+                // contrôleurs modifient UN objet ; celle-ci ajoute une PAGE à
+                // la publication. Les voisiner sans les distinguer ferait
+                // ranger « dupliquer » et « nouvelle slide » dans le même
+                // geste mental.
+                if let onAddSlide {
+                    addSlideButton(onAddSlide)
+                    if !actions.isEmpty {
+                        Divider()
+                            .frame(width: 22)
+                            .overlay(MeeshyColors.textSecondary(isDark: true).opacity(0.25))
+                    }
+                }
                 ForEach(actions, id: \.self) { action in
                     actionButton(action)
                 }
@@ -57,9 +84,29 @@ struct ComposerTrailingRail: View {
         }
     }
 
+    /// La frame `[+]`. Un CADRE, pas un cercle : ce qu'on ajoute est une
+    /// surface, et le glyphe le dit.
+    private func addSlideButton(_ action: @escaping () -> Void) -> some View {
+        Button {
+            lastTapped = "slide.add"
+            action()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: "plus.rectangle.on.rectangle")
+                .font(.title3)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .composerToolBounce(active: lastTapped == "slide.add")
+                .frame(width: ComposerRailGeometry.railWidth,
+                       height: ComposerRailGeometry.railWidth)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(ComposerTrailingRailCopy.addSlide))
+    }
+
     private func actionButton(_ action: StoryCanvasContextAction) -> some View {
         Button {
-            lastTapped = action
+            lastTapped = String(describing: action)
             onAction?(action)
             HapticFeedback.light()
         } label: {
@@ -71,7 +118,7 @@ struct ComposerTrailingRail: View {
                 .foregroundColor(action == .delete
                                  ? MeeshyColors.error
                                  : MeeshyColors.textSecondary(isDark: true))
-                .composerToolBounce(active: lastTapped == action)
+                .composerToolBounce(active: lastTapped == String(describing: action))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 .contentShape(Rectangle())
@@ -88,6 +135,11 @@ nonisolated enum ComposerTrailingRailCopy {
     static var railLabel: String {
         String(localized: "composer.rail.trailing.label",
                defaultValue: "Modifier l'objet sélectionné", bundle: .main)
+    }
+
+    static var addSlide: String {
+        String(localized: "composer.rail.slide.add",
+               defaultValue: "Nouvelle slide", bundle: .main)
     }
 }
 
@@ -131,7 +183,12 @@ nonisolated enum ComposerTrailingRailPolicy {
             sharesPlaneWithAnother: StorySceneObjectPredicates.sharesPlaneWithAnother(
                 slide: slide, besides: selectedId),
             hasEditor: hasEditor,
-            canLeaveScene: canLeaveScene
+            canLeaveScene: canLeaveScene,
+            // Une image et un texte n'ont pas de source a rogner : le predicat
+            // interroge le MODELE, comme ses trois voisins ci-dessus. Ce que
+            // l'HOTE sait faire reste dans `served`, une ligne plus bas.
+            hasTrimmableSource: StorySceneObjectPredicates.hasTrimmableSource(
+                slide: slide, id: selectedId)
         )
         .filter(served.contains)
     }

@@ -85,7 +85,7 @@ PROJECT_PROD := meeshy-prod
 
 # Paths
 WEB_DIR := apps/web
-WEB_V2_DIR := apps/web_v2
+WEB_V3_DIR := apps/web-v3
 IOS_DIR := apps/ios
 GATEWAY_DIR := services/gateway
 TRANSLATOR_DIR := services/translator
@@ -99,7 +99,7 @@ TRANSLATOR_PID := $(PID_DIR)/translator.pid
 GATEWAY_PID := $(PID_DIR)/gateway.pid
 AGENT_PID := $(PID_DIR)/agent.pid
 WEB_PID := $(PID_DIR)/web.pid
-WEB_V2_PID := $(PID_DIR)/web_v2.pid
+WEB_V3_PID := $(PID_DIR)/web-v3.pid
 
 # =============================================================================
 # AIDE
@@ -330,8 +330,8 @@ _generate-backend-env: ## Generate backend .env (gateway + translator + agent)
 	@echo "JWT_SECRET=dev-secret-key-change-in-production" >> $(GATEWAY_DIR)/.env
 	@echo "" >> $(GATEWAY_DIR)/.env
 	@echo "# ===== CORS =====" >> $(GATEWAY_DIR)/.env
-	@echo "CORS_ORIGINS=http://localhost:3100,http://localhost:3200,http://localhost:3000,http://127.0.0.1:3100,http://127.0.0.1:3200" >> $(GATEWAY_DIR)/.env
-	@echo "ALLOWED_ORIGINS=http://localhost:3100,http://localhost:3200,http://localhost:3000" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=http://localhost:3100,http://localhost:3300,http://localhost:3000,http://127.0.0.1:3100,http://127.0.0.1:3300" >> $(GATEWAY_DIR)/.env
+	@echo "ALLOWED_ORIGINS=http://localhost:3100,http://localhost:3300,http://localhost:3000" >> $(GATEWAY_DIR)/.env
 	@echo "" >> $(GATEWAY_DIR)/.env
 	@echo "# ===== RATE LIMITING =====" >> $(GATEWAY_DIR)/.env
 	@echo "ENABLE_RATE_LIMITING=true" >> $(GATEWAY_DIR)/.env
@@ -1131,7 +1131,7 @@ _generate-env-local: ## Générer les fichiers .env pour le domaine local
 	@echo "HOST=0.0.0.0" >> $(GATEWAY_DIR)/.env
 	@echo "PUBLIC_URL=https://gate.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
 	@echo "FRONTEND_URL=https://$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
-	@echo "CORS_ORIGINS=https://$(LOCAL_DOMAIN),https://$(LOCAL_DOMAIN):3200,https://app.$(LOCAL_DOMAIN),https://gate.$(LOCAL_DOMAIN),https://api.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=https://$(LOCAL_DOMAIN),https://$(LOCAL_DOMAIN):3300,https://app.$(LOCAL_DOMAIN),https://gate.$(LOCAL_DOMAIN),https://api.$(LOCAL_DOMAIN)" >> $(GATEWAY_DIR)/.env
 	@# Email config
 	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
 	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
@@ -1210,8 +1210,8 @@ _dev-tmux-domain: ## Lancer les services en mode tmux avec HTTPS
 	@tmux new-window -t meeshy -n web \
 		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web HTTPS ($(LOCAL_DOMAIN) -> :3100)'; $(JS_RUNTIME) run dev:https; read"
 	@sleep 2
-	@tmux new-window -t meeshy -n web_v2 \
-		"cd $(CURDIR)/$(WEB_V2_DIR) && echo '🎨 Web V2 HTTPS ($(LOCAL_DOMAIN) -> :3200)'; $(JS_RUNTIME) run dev:https; read"
+	@tmux new-window -t meeshy -n web_v3 \
+		"cd $(CURDIR)/$(WEB_V3_DIR) && echo '✨ Web v3 HTTPS ($(LOCAL_DOMAIN) -> :3300)'; $(JS_RUNTIME) run dev:https; read"
 	@echo ""
 	@$(MAKE) _show-domain-urls
 	@echo ""
@@ -1236,6 +1236,10 @@ _dev-bg-domain: ## Lancer les services en background avec HTTPS
 	@# Web HTTPS
 	@echo "  $(CYAN)🎨 Web HTTPS ($(LOCAL_DOMAIN))...$(NC)"
 	@cd $(WEB_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_PID)
+	@sleep 2
+	@# Web v3 HTTPS
+	@echo "  $(CYAN)✨ Web v3 HTTPS ($(LOCAL_DOMAIN):3300)...$(NC)"
+	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
 	@sleep 3
 	@echo ""
 	@$(MAKE) _show-domain-urls
@@ -1247,7 +1251,7 @@ _show-domain-urls:
 	@echo ""
 	@echo "$(BOLD)📱 URLs d'accès (HTTPS):$(NC)"
 	@echo "   Web:          $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
-	@echo "   Web V2:       $(GREEN)https://$(LOCAL_DOMAIN):3200$(NC)"
+	@echo "   Web v3:       $(GREEN)https://$(LOCAL_DOMAIN):3300$(NC)"
 	@echo "   Gateway API:  $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:   $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
 	@echo ""
@@ -1270,10 +1274,12 @@ stop: ## Arrêter tous les services
 	@if [ -f "$(GATEWAY_PID)" ]; then kill $$(cat $(GATEWAY_PID)) 2>/dev/null || true; rm -f $(GATEWAY_PID); fi
 	@if [ -f "$(AGENT_PID)" ]; then kill $$(cat $(AGENT_PID)) 2>/dev/null || true; rm -f $(AGENT_PID); fi
 	@if [ -f "$(WEB_PID)" ]; then kill $$(cat $(WEB_PID)) 2>/dev/null || true; rm -f $(WEB_PID); fi
+	@if [ -f "$(WEB_V3_PID)" ]; then kill $$(cat $(WEB_V3_PID)) 2>/dev/null || true; rm -f $(WEB_V3_PID); fi
 	@# Tuer par port en fallback
 	@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:3100 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:3200 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:3300 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 	@rm -rf $(PID_DIR)
 	@echo "$(GREEN)✅ Services arrêtés$(NC)"
@@ -1452,7 +1458,7 @@ _generate-env-network:
 	@echo "HOST=0.0.0.0" >> $(GATEWAY_DIR)/.env
 	@echo "PUBLIC_URL=https://$(HOST):3000" >> $(GATEWAY_DIR)/.env
 	@echo "FRONTEND_URL=https://$(HOST):3100" >> $(GATEWAY_DIR)/.env
-	@echo "CORS_ORIGINS=https://localhost:3100,https://localhost:3200,https://$(HOST_IP):3100,https://$(HOST_IP):3200,https://$(HOST):3100,https://$(HOST):3200,https://$(LOCAL_DOMAIN):3100,https://$(LOCAL_DOMAIN):3200" >> $(GATEWAY_DIR)/.env
+	@echo "CORS_ORIGINS=https://localhost:3100,https://localhost:3300,https://$(HOST_IP):3100,https://$(HOST_IP):3300,https://$(HOST):3100,https://$(HOST):3300,https://$(LOCAL_DOMAIN):3100,https://$(LOCAL_DOMAIN):3300" >> $(GATEWAY_DIR)/.env
 	@# Email config
 	@echo "EMAIL_FROM=noreply@meeshy.me" >> $(GATEWAY_DIR)/.env
 	@echo "EMAIL_FROM_NAME=Meeshy Sama" >> $(GATEWAY_DIR)/.env
@@ -1531,8 +1537,8 @@ dev-tmux-network: ## 🖥️  Lancer les services en mode tmux (réseau)
 	@tmux new-window -t meeshy -n web \
 		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web HTTPS ($(HOST):3100)'; $(JS_RUNTIME) run dev:https; read"
 	@sleep 2
-	@tmux new-window -t meeshy -n web_v2 \
-		"cd $(CURDIR)/$(WEB_V2_DIR) && echo '🎨 Web V2 HTTPS ($(HOST):3200)'; $(JS_RUNTIME) run dev:https; read"
+	@tmux new-window -t meeshy -n web_v3 \
+		"cd $(CURDIR)/$(WEB_V3_DIR) && echo '✨ Web v3 HTTPS ($(HOST):3300)'; $(JS_RUNTIME) run dev:https; read"
 	@echo ""
 	@$(MAKE) _show-network-urls
 	@echo ""
@@ -1557,6 +1563,10 @@ dev-bg-network: ## 🔄 Lancer les services en background (réseau)
 	@# Web HTTPS
 	@echo "  $(CYAN)🎨 Web HTTPS ($(HOST):3100)...$(NC)"
 	@cd $(WEB_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_PID)
+	@sleep 2
+	@# Web v3 HTTPS
+	@echo "  $(CYAN)✨ Web v3 HTTPS ($(HOST):3300)...$(NC)"
+	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev:https > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
 	@sleep 3
 	@echo ""
 	@$(MAKE) _show-network-urls
@@ -1568,13 +1578,13 @@ _show-network-urls:
 	@echo ""
 	@echo "$(BOLD)📱 URLs d'accès (depuis n'importe quel appareil):$(NC)"
 	@echo "   Web:           $(GREEN)https://$(HOST):3100$(NC)"
-	@echo "   Web V2:        $(GREEN)https://$(HOST):3200$(NC)"
+	@echo "   Web v3:        $(GREEN)https://$(HOST):3300$(NC)"
 	@echo "   Gateway API:   $(GREEN)https://$(HOST):3000$(NC)"
 	@echo "   Translator:    $(GREEN)http://$(HOST):8000$(NC)"
 	@echo ""
 	@echo "$(BOLD)🔧 Via domaine local:$(NC)"
 	@echo "   Web:           $(GREEN)https://$(LOCAL_DOMAIN):3100$(NC)"
-	@echo "   Web V2:        $(GREEN)https://$(LOCAL_DOMAIN):3200$(NC)"
+	@echo "   Web v3:        $(GREEN)https://$(LOCAL_DOMAIN):3300$(NC)"
 	@echo ""
 	@echo "$(BOLD)📡 Serveur DNS local:$(NC)"
 	@echo "   $(CYAN)$(HOST_IP):53$(NC) (configurez vos appareils pour l'utiliser)"
@@ -1747,7 +1757,7 @@ dev-translator: ## Lancer le translator en mode dev (port 8000)
 		. .venv/bin/activate 2>/dev/null || true && \
 		python3 src/main.py
 
-dev-tmux: ## Lancer tous les services dans tmux (3 fenêtres)
+dev-tmux: ## Lancer tous les services dans tmux (4 fenêtres)
 	@if [ "$(HAS_TMUX)" != "yes" ]; then \
 		echo "$(RED)❌ tmux non disponible. Utilisez: make dev-bg$(NC)"; \
 		exit 1; \
@@ -1762,6 +1772,9 @@ dev-tmux: ## Lancer tous les services dans tmux (3 fenêtres)
 	@sleep 2
 	@tmux new-window -t meeshy -n web \
 		"cd $(CURDIR)/$(WEB_DIR) && echo '🎨 Web starting...'; $(JS_RUNTIME) run dev; echo 'Press Enter to exit'; read"
+	@sleep 2
+	@tmux new-window -t meeshy -n web_v3 \
+		"cd $(CURDIR)/$(WEB_V3_DIR) && echo '✨ Web v3 starting (http://localhost:3300)...'; $(JS_RUNTIME) run dev; echo 'Press Enter to exit'; read"
 	@echo ""
 	@echo "$(GREEN)✅ Services lancés dans tmux$(NC)"
 	@echo ""
@@ -1791,6 +1804,10 @@ dev-bg: ## Lancer tous les services en background (sans tmux)
 	@# Web
 	@echo "  $(CYAN)🎨 Web (port 3100)...$(NC)"
 	@cd $(WEB_DIR) && $(JS_RUNTIME) run dev > $(CURDIR)/logs/web.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_PID)
+	@sleep 2
+	@# Web v3
+	@echo "  $(CYAN)✨ Web v3 (port 3300)...$(NC)"
+	@cd $(WEB_V3_DIR) && $(JS_RUNTIME) run dev > $(CURDIR)/logs/web-v3.log 2>&1 & echo $$! > $(CURDIR)/$(WEB_V3_PID)
 	@sleep 3
 	@echo ""
 	@echo "$(GREEN)✅ Services démarrés en background$(NC)"
@@ -1802,6 +1819,7 @@ dev-bg: ## Lancer tous les services en background (sans tmux)
 	@echo "  $(CYAN)tail -f logs/translator.log$(NC) - Translator"
 	@echo "  $(CYAN)tail -f logs/gateway.log$(NC)    - Gateway"
 	@echo "  $(CYAN)tail -f logs/web.log$(NC)        - Web"
+	@echo "  $(CYAN)tail -f logs/web-v3.log$(NC)     - Web v3"
 	@echo ""
 	@echo "$(BOLD)Arrêt:$(NC) $(YELLOW)make stop$(NC)"
 
@@ -1826,7 +1844,7 @@ _dev-web:
 # LOGS
 # =============================================================================
 
-logs: ## Afficher les logs (tous ou SERVICE=translator|gateway|web)
+logs: ## Afficher les logs (tous ou SERVICE=translator|gateway|web|web-v3)
 	@if [ -n "$(SERVICE)" ]; then \
 		tail -f logs/$(SERVICE).log 2>/dev/null || echo "$(RED)Log non trouvé: logs/$(SERVICE).log$(NC)"; \
 	else \
@@ -2376,6 +2394,7 @@ docker-images: _ensure-docker-running ## Lister les images Meeshy locales
 urls: ## Afficher les URLs d'accès
 	@echo "$(BLUE)📍 URLs d'accès (HTTPS via $(LOCAL_DOMAIN)):$(NC)"
 	@echo "   Frontend:        $(GREEN)https://$(LOCAL_DOMAIN)$(NC)"
+	@echo "   Frontend v3:     $(GREEN)https://$(LOCAL_DOMAIN):3300$(NC)"
 	@echo "   Gateway API:     $(GREEN)https://gate.$(LOCAL_DOMAIN)$(NC)  ou  $(GREEN)https://api.$(LOCAL_DOMAIN)$(NC)"
 	@echo "   Translator:      $(GREEN)https://ml.$(LOCAL_DOMAIN)$(NC)"
 	@echo ""
@@ -2395,6 +2414,7 @@ status: ## Afficher le statut des services
 	@printf "  %-20s" "Gateway (3000):" && (lsof -ti:3000 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
 	@printf "  %-20s" "Agent (3200):" && (lsof -ti:3200 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
 	@printf "  %-20s" "Web (3100):" && (lsof -ti:3100 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
+	@printf "  %-20s" "Web v3 (3300):" && (lsof -ti:3300 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
 	@printf "  %-20s" "Translator (8000):" && (lsof -ti:8000 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
 	@printf "  %-20s" "MongoDB (27017):" && (lsof -ti:27017 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
 	@printf "  %-20s" "Redis (6379):" && (lsof -ti:6379 >/dev/null 2>&1 && echo "$(GREEN)● Running$(NC)" || echo "$(RED)○ Stopped$(NC)")
@@ -2435,6 +2455,7 @@ kill: ## Tuer tous les processus sur les ports de dev
 	@lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:3100 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:3200 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:3300 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 	@tmux kill-session -t meeshy 2>/dev/null || true
 	@rm -rf $(PID_DIR)

@@ -22,6 +22,12 @@ import {
   detectOS,
   detectDevice
 } from './types';
+import {
+  trackingLinkStatsResponseSchema,
+  trackingLinkUserClicksResponseSchema,
+  trackingLinkAdminAllResponseSchema,
+  trackingLinkAdminClicksResponseSchema
+} from './response-schemas';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
 
@@ -430,74 +436,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
-        200: {
-          description: 'Statistics retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              additionalProperties: true,
-              properties: {
-                trackingLink: { type: 'object', additionalProperties: true },
-                totalClicks: { type: 'number', description: 'Total number of clicks' },
-                uniqueClicks: { type: 'number', description: 'Number of unique visitors' },
-                clicksByCountry: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by country name'
-                },
-                clicksByDevice: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by device type'
-                },
-                clicksByBrowser: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by browser name'
-                },
-                clicksByOS: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by OS name'
-                },
-                clicksByLanguage: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by language code'
-                },
-                clicksByHour: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by hour (00-23)'
-                },
-                clicksBySocialSource: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by social source (WhatsApp, Telegram, etc.)'
-                },
-                clicksByDate: {
-                  type: 'object',
-                  additionalProperties: { type: 'number' },
-                  description: 'Click counts keyed by ISO date string'
-                },
-                topReferrers: {
-                  type: 'array',
-                  items: {
-                    type: 'object',
-                    properties: {
-                      referrer: { type: 'string' },
-                      count: { type: 'number' }
-                    }
-                  },
-                  description: 'Top referrer sources sorted by count'
-                },
-                confirmedClicks: { type: 'number', description: 'Number of clicks with confirmed redirect' }
-              }
-            }
-          }
-        },
+        200: trackingLinkStatsResponseSchema,
         400: {
           description: 'Invalid query parameters',
           ...validationErrorResponseSchema
@@ -652,29 +591,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
-        200: {
-          description: 'Click details retrieved successfully',
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                link: { type: 'object', additionalProperties: true },
-                clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-                total: { type: 'number' }
-              }
-            },
-            pagination: {
-              type: 'object',
-              properties: {
-                total: { type: 'number' },
-                limit: { type: 'number' },
-                offset: { type: 'number' }
-              }
-            }
-          }
-        },
+        200: trackingLinkUserClicksResponseSchema,
         403: {
           description: 'Access denied — only the creator can view clicks',
           ...errorResponseSchema
@@ -736,14 +653,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            trackingLinks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            total: { type: 'number' }
-          }
-        },
+        200: trackingLinkAdminAllResponseSchema,
         403: { ...errorResponseSchema },
         500: { ...errorResponseSchema }
       }
@@ -788,14 +698,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         }
       },
       response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            clicks: { type: 'array', items: { type: 'object', additionalProperties: true } },
-            total: { type: 'number' }
-          }
-        },
+        200: trackingLinkAdminClicksResponseSchema,
         404: { ...errorResponseSchema },
         403: { ...errorResponseSchema },
         500: { ...errorResponseSchema }

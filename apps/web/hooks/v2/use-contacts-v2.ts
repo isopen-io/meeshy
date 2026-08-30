@@ -3,6 +3,8 @@
 import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usersService } from '@/services/users.service';
+import { useFriendRequestsV2 } from './use-friend-requests-v2';
+import { useUser } from '@/stores';
 import { useWebSocket } from '@/hooks/use-websocket';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
@@ -107,19 +109,38 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
     };
   }, []);
 
+  // Les contacts sont les AMITIÉS ACCEPTÉES, jamais « tous les comptes de la
+  // plateforme ».
+  //
+  // Cette liste venait de `GET /users`, une route qui rendait
+  // `{ message: 'Get all users - to be implemented' }` — un stub, servi en 200
+  // et SANS authentification (mesuré en intégration). La liste de contacts n'a
+  // donc jamais affiché personne, et `response.data || []` rendait l'objet du
+  // message plutôt qu'un tableau (#4185).
+  //
+  // Elle n'est pas recâblée sur un équivalent réel de « tous les utilisateurs » :
+  // servir l'annuaire entier de la plateforme comme carnet d'adresses serait un
+  // défaut de confidentialité, pas une fonctionnalité.
+  // `useFriendRequestsV2` pagine `/directory/friend-requests?direction=any&status=accepted`
+  // jusqu'à épuisement, par CURSEUR, dans les DEUX sens — on le CONSOMME plutôt
+  // que de réécrire cette pagination, qui porte ses propres bornes et son
+  // propre plafond.
+  const currentUser = useUser();
   const {
-    data: users,
+    connected,
     isLoading,
-    error,
-    refetch,
-  } = useQuery({
-    queryKey: [...queryKeys.users.all, 'contacts'],
-    queryFn: async () => {
-      const response = await usersService.getAllUsers();
-      return response.data || [];
-    },
-    enabled,
-  });
+    error: friendsError,
+    refresh: refreshFriends,
+  } = useFriendRequestsV2({ enabled, currentUserId: currentUser?.id });
+
+  const users = useMemo<User[]>(() => {
+    if (!currentUser?.id) return [];
+    return connected
+      .map((relation) =>
+        relation.senderId === currentUser.id ? relation.receiver : relation.sender
+      )
+      .filter((autre): autre is User => Boolean(autre));
+  }, [connected, currentUser?.id]);
 
   const {
     data: searchData,
@@ -186,8 +207,8 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
   }, [contacts, debouncedSearch]);
 
   const refreshContacts = useCallback(async () => {
-    await refetch();
-  }, [refetch]);
+    await refreshFriends();
+  }, [refreshFriends]);
 
   return {
     contacts: debouncedSearch.length >= 2 ? filteredContacts : contacts,
@@ -202,6 +223,6 @@ export function useContactsV2(options: UseContactsV2Options = {}): ContactsV2Ret
     sortBy,
     setSortBy,
     refreshContacts,
-    error: error?.message ?? null,
+    error: friendsError,
   };
 }

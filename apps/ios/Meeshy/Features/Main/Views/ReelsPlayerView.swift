@@ -1525,6 +1525,25 @@ private struct ReelVideoView: View {
         .onReceive(manager.$player) { player = $0 }
     }
 
+    /// Ratio du média, 9:16 par défaut quand les dimensions manquent — le même
+    /// repli que `ReelImageView.mediaAspect`, pour que poster et image ne
+    /// puissent pas diverger sur un média sans dimensions.
+    private var mediaAspect: CGFloat {
+        guard let w = media.width, let h = media.height, w > 0, h > 0 else { return 9.0 / 16.0 }
+        return CGFloat(w) / CGFloat(h)
+    }
+
+    /// La plus grande boîte au ratio du média qui tient dans `container`.
+    /// Garde un conteneur nul (première passe de layout) en le rendant tel quel.
+    private func posterFit(in container: CGSize) -> CGSize {
+        guard container.width > 0, container.height > 0 else { return container }
+        let containerAspect = container.width / container.height
+        if mediaAspect > containerAspect {
+            return CGSize(width: container.width, height: container.width / mediaAspect)
+        }
+        return CGSize(width: container.height * mediaAspect, height: container.height)
+    }
+
     @ViewBuilder
     private func content(ready: Bool) -> some View {
         // GeometryReader reports the REAL finite allocated size; an explicit
@@ -1540,7 +1559,24 @@ private struct ReelVideoView: View {
                 // bars — mirrors the `.fit` image carousel (`ReelImageBackdrop`).
                 ReelImageBackdrop(media: media).equatable()
 
-                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit).equatable()
+                // Le poster est CADRÉ à la boîte du réel, jamais laissé
+                // s'étendre (directive porteur 2026-08-30 : « le réel en plein
+                // écran a en fond une image SANS FLOU »).
+                //
+                // `contentMode: .fit` ne suffisait pas : `ReelPoster` pose
+                // ensuite `.frame(maxWidth: .infinity, maxHeight: .infinity)`,
+                // et `ProgressiveCachedImage` n'a aucun ratio intrinsèque avant
+                // le chargement — le poster prenait donc TOUTE la surface et
+                // recouvrait le fond flou du thumbHash par le thumbnail NET.
+                // Le fond ThumbHash était bien monté ; on ne le voyait pas.
+                //
+                // Même remède que le chemin IMAGE (`fittedSize(in:)` de
+                // `ReelImageView`) : une frame explicite calculée depuis les
+                // dimensions du média, qui laisse le fond flou visible autour.
+                ReelPoster(thumbHash: media.thumbHash, url: media.thumbnailUrl ?? media.url, color: media.thumbnailColor, contentMode: .fit)
+                    .equatable()
+                    .frame(width: posterFit(in: geo.size).width, height: posterFit(in: geo.size).height)
+                    .clipped()
 
                 // Tap-to-pause is handled by the page-level tap zone (ReelPageView),
                 // so this surface stays gesture-free to avoid swallowing scrub/rail

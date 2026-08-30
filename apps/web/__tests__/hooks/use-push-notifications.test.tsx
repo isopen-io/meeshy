@@ -12,6 +12,21 @@
 
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { usePushNotifications, useCanReceivePushNotifications } from '@/hooks/use-push-notifications';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+
+// #4337 — le hook doit appeler l'adresse RÉELLEMENT SERVIE
+// (`POST`/`DELETE /api/v1/users/register-device-token`, la seule route de
+// jetons push du manifeste — voir `services/gateway/route-manifest.json`),
+// jamais un littéral `/api/push/subscribe` inventé. `buildApiUrl` est mocké
+// pour rendre l'URL absolue déterministe ; `API_ENDPOINTS` reste le VRAI
+// catalogue (`jest.mock('@meeshy/shared/...')` est inerte sous ce
+// `moduleNameMapper` — cf. apps/web/CLAUDE.md) pour que l'assertion prouve
+// l'alignement avec le catalogue, pas une chaîne recopiée à la main.
+jest.mock('@/lib/config', () => ({
+  buildApiUrl: (path: string) => `http://localhost:3000${path}`,
+}));
+
+const SERVED_PUSH_TOKEN_URL = `http://localhost:3000${API_ENDPOINTS.users.registerDeviceToken}`;
 
 // Mock push notifications utils
 const mockSubscribeToPushNotifications = jest.fn();
@@ -192,7 +207,7 @@ describe('usePushNotifications', () => {
       expect(result.current.isSubscribed).toBe(true);
     });
 
-    it('should send subscription to backend', async () => {
+    it('sends the subscription to the served push-token registration route (#4337)', async () => {
       (global as any).Notification = { permission: 'granted' };
 
       const { result } = renderHook(() => usePushNotifications());
@@ -205,7 +220,9 @@ describe('usePushNotifications', () => {
         await result.current.subscribe();
       });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/push/subscribe', {
+      // Adresse RÉELLEMENT servie (POST /api/v1/users/register-device-token) —
+      // avant #4337 ceci visait le littéral mort '/api/push/subscribe'.
+      expect(mockFetch).toHaveBeenCalledWith(SERVED_PUSH_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mockSubscription.toJSON()),
@@ -302,7 +319,7 @@ describe('usePushNotifications', () => {
       expect(result.current.isSubscribed).toBe(false);
     });
 
-    it('should notify backend on unsubscribe', async () => {
+    it('notifies the served push-token registration route with DELETE on unsubscribe (#4337)', async () => {
       mockGetCurrentSubscription.mockResolvedValue(mockSubscription);
 
       const { result } = renderHook(() => usePushNotifications());
@@ -315,8 +332,12 @@ describe('usePushNotifications', () => {
         await result.current.unsubscribe();
       });
 
-      expect(mockFetch).toHaveBeenCalledWith('/api/push/unsubscribe', {
-        method: 'POST',
+      // Adresse RÉELLEMENT servie (DELETE /api/v1/users/register-device-token) —
+      // avant #4337 ceci visait le littéral mort '/api/push/unsubscribe' en POST ;
+      // le manifeste ne sert cette ressource qu'en POST (enregistrer) et DELETE
+      // (désenregistrer) — jamais en POST pour désabonner.
+      expect(mockFetch).toHaveBeenCalledWith(SERVED_PUSH_TOKEN_URL, {
+        method: 'DELETE',
         credentials: 'include',
       });
     });

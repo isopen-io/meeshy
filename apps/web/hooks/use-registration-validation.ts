@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { WizardFormData } from './use-registration-wizard';
 
@@ -60,8 +61,9 @@ export function useRegistrationValidation({
     setUsernameSuggestions([]);
 
     try {
+      const checkUsernameEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?username=${encodeURIComponent(username.trim())}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?username=${encodeURIComponent(username.trim())}`)
+        buildApiUrl(checkUsernameEndpoint)
       );
       if (response.ok) {
         const data = await response.json();
@@ -83,29 +85,24 @@ export function useRegistrationValidation({
   const checkEmailAvailability = useCallback(async (email: string) => {
     if (!email || !isValidEmail(email)) return;
 
+    // L'adresse ne répond plus QUE SUR SA FORME (#4158). Le serveur ne dit
+    // plus si un compte existe : le confirmer sans authentification faisait de
+    // cette route un oracle, pendant que `/forgot-password` et
+    // `/magic-link/request` répondent délibérément « succès » dans tous les cas
+    // pour ne rien révéler. C'est désormais la SOUMISSION qui le dit.
+    //
+    // La branche `data.data.accountInfo` qui vivait ici est supprimée : le
+    // gateway n'a JAMAIS émis ce champ — l'aperçu de compte masqué était une
+    // branche morte depuis son écriture, ce qui rend le coût de la bascule nul.
     try {
+      const checkEmailEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?email=${encodeURIComponent(email)}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?email=${encodeURIComponent(email)}`)
+        buildApiUrl(checkEmailEndpoint)
       );
       if (response.ok) {
         const data = await response.json();
-        if (data.data.emailAvailable === false) {
-          setEmailValidationStatus('exists');
-          if (data.data.accountInfo) {
-            setExistingAccount({
-              type: 'email',
-              maskedDisplayName: data.data.accountInfo.maskedDisplayName,
-              maskedUsername: data.data.accountInfo.maskedUsername,
-              maskedPhone: data.data.accountInfo.maskedPhone,
-              avatar: data.data.accountInfo.avatar,
-            });
-          } else {
-            setExistingAccount({ type: 'email' });
-          }
-        } else {
-          setEmailValidationStatus('valid');
-          setExistingAccount(prev => prev?.type === 'email' ? null : prev);
-        }
+        setEmailValidationStatus(data.data.emailValid === false ? 'invalid' : 'valid');
+        setExistingAccount(prev => prev?.type === 'email' ? null : prev);
       }
     } catch {
       // Silent fail
@@ -117,28 +114,15 @@ export function useRegistrationValidation({
     if (!phone || phone.length < 8) return;
 
     try {
+      const checkPhoneEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?phoneNumber=${encodeURIComponent(phone)}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?phoneNumber=${encodeURIComponent(phone)}`)
+        buildApiUrl(checkPhoneEndpoint)
       );
       if (response.ok) {
         const data = await response.json();
-        if (data.data.phoneNumberAvailable === false) {
-          setPhoneValidationStatus('exists');
-          if (data.data.accountInfo) {
-            setExistingAccount({
-              type: 'phone',
-              maskedDisplayName: data.data.accountInfo.maskedDisplayName,
-              maskedUsername: data.data.accountInfo.maskedUsername,
-              maskedEmail: data.data.accountInfo.maskedEmail,
-              avatar: data.data.accountInfo.avatar,
-            });
-          } else {
-            setExistingAccount({ type: 'phone' });
-          }
-        } else {
-          setPhoneValidationStatus('valid');
-          setExistingAccount(prev => prev?.type === 'phone' ? null : prev);
-        }
+        // Forme seulement — voir la note de la validation d'adresse ci-dessus.
+        setPhoneValidationStatus(data.data.phoneNumberValid === false ? 'invalid' : 'valid');
+        setExistingAccount(prev => prev?.type === 'phone' ? null : prev);
       }
     } catch {
       // Silent fail

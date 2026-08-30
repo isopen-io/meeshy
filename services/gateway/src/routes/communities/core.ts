@@ -22,8 +22,15 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { communityConversationSchema, flattenCommunityCounts } from './serialization';
+import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
+
+// #4165 — plafond de la relation `participants` chargée PAR conversation sur
+// `GET /communities/:id/conversations`. Aligné sur le plafond de
+// `validatePagination` (≤ 100) : au-delà, `GET /conversations/:id/participants`
+// (déjà paginée) reste le chemin pour la liste exhaustive d'UNE conversation.
+const COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP = 100;
 
 export async function registerCoreRoutes(fastify: FastifyInstance) {
   // Route pour verifier la disponibilite d'un identifiant de communaute
@@ -490,9 +497,9 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
   fastify.get('/communities/:id/conversations', {
     onRequest: [fastify.authenticate],
     schema: {
-      description: 'Retrieve all conversations within a community. Only returns conversations where the authenticated user is a member. Results are sorted by most recently updated.',
+      description: 'Retrieve conversations within a community, one page at a time. Only returns conversations where the authenticated user is a member. Results are sorted by most recently updated.',
       tags: ['communities'],
-      summary: 'Get community conversations',
+      summary: 'Get community conversations (paginated)',
       params: {
         type: 'object',
         required: ['id'],
@@ -500,6 +507,23 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
           id: {
             type: 'string',
             description: 'Community unique ID'
+          }
+        }
+      },
+      querystring: {
+        type: 'object',
+        properties: {
+          offset: {
+            type: 'string',
+            description: 'Number of conversations to skip for pagination',
+            default: '0',
+            pattern: '^[0-9]+$'
+          },
+          limit: {
+            type: 'string',
+            description: 'Maximum number of conversations to return (max 100)',
+            default: '20',
+            pattern: '^[0-9]+$'
           }
         }
       },
@@ -512,6 +536,15 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
             data: {
               type: 'array',
               items: communityConversationSchema
+            },
+            pagination: {
+              type: 'object',
+              properties: {
+                total: { type: 'number', description: 'Total number of conversations matching the query' },
+                limit: { type: 'number', description: 'Number of items per page' },
+                offset: { type: 'number', description: 'Number of items skipped' },
+                hasMore: { type: 'boolean', description: 'Whether there are more items to fetch' }
+              }
             }
           }
         },
@@ -544,6 +577,8 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       }
 
       const userId = authContext.userId;
+      const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
+      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Verifier l'acces a la communaute
       const community = await fastify.prisma.community.findFirst({
@@ -566,39 +601,60 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         return sendForbidden(reply, 'Access denied to this community');
       }
 
-      // Recuperer les conversations de la communaute
-      const conversations = await fastify.prisma.conversation.findMany({
-        where: {
-          communityId: id,
-          participants: {
-            some: { userId: userId }
-          }
-        },
-        include: {
-          participants: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true
+      // BORNÉ (#4165). Ni pagination ni `take` : TOUTES les conversations de
+      // la communauté sortaient d'un coup, chacune avec la LISTE COMPLÈTE de
+      // ses participants et leur profil — sur une communauté à des centaines
+      // de salons et de membres, une charge proportionnelle à l'un ET
+      // l'autre à CHAQUE ouverture de l'onglet. Deux bornes distinctes,
+      // posées dans la requête elle-même :
+      // - `skip`/`take` sur la liste des CONVERSATIONS (comme le fait déjà
+      //   `GET /communities` juste au-dessus, même convention) ;
+      // - `take` sur la relation `participants` DE CHAQUE conversation —
+      //   Prisma l'accepte comme option de relation, au même titre que
+      //   `where`/`include` ; au-delà du plafond, un client qui a besoin de
+      //   la liste exhaustive des membres d'UNE conversation appelle déjà
+      //   `GET /conversations/:id/participants` (paginée séparément).
+      const whereClause = {
+        communityId: id,
+        participants: {
+          some: { userId: userId }
+        }
+      };
+
+      const [conversations, totalCount] = await Promise.all([
+        fastify.prisma.conversation.findMany({
+          where: whereClause,
+          include: {
+            participants: {
+              take: COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP,
+              orderBy: { joinedAt: 'asc' },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    username: true,
+                    displayName: true,
+                    avatar: true,
+                    isOnline: true
+                  }
                 }
+              }
+            },
+            _count: {
+              select: {
+                messages: true,
+                participants: true
               }
             }
           },
-          _count: {
-            select: {
-              messages: true,
-              participants: true
-            }
-          }
-        },
-        orderBy: {
-          updatedAt: 'desc'
-        }
-      });
+          orderBy: {
+            updatedAt: 'desc'
+          },
+          skip: offsetNum,
+          take: limitNum
+        }),
+        fastify.prisma.conversation.count({ where: whereClause })
+      ]);
 
       // Présence des co-participants — critère STRICT avec le viewer réel.
       // Être co-participant de la même conversation (ni même co-membre de la
@@ -611,10 +667,14 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       // Gate posé dans le MÊME lot que la déclaration du schéma : `user`
       // portait `isOnline` brut, et seul le `{ type: 'object' }` nu l'empêchait
       // de sortir. Déclarer sans gater aurait publié la fuite.
-      return sendSuccess(
-        reply,
-        await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations),
-      );
+      const gated = await gateConversationParticipantsPresence(fastify.prisma, viewerFromRequest(request), conversations);
+
+      return sendPaginatedSuccess(reply, gated, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + conversations.length < totalCount
+      });
     } catch (error) {
       logger.error('Error fetching community conversations', error as Error);
       return sendInternalError(reply, 'Failed to fetch community conversations');
@@ -696,12 +756,64 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         select: {
           id: true,
           communityId: true,
-          participants: { select: { userId: true, role: true } }
+          participants: { select: { userId: true, role: true, isActive: true } }
         }
       });
 
       if (!conversation) {
         return sendNotFound(reply, 'Conversation not found');
+      }
+
+      // Le Swagger de cette route promet « admin/creator of BOTH the community
+      // and the conversation ». La moitié « conversation » n'était appliquée
+      // nulle part : `participants` était chargé et jamais lu, `communityId`
+      // sélectionné et jamais vérifié — ce qui donnait à la lecture l'apparence
+      // d'un contrôle. N'importe quel administrateur de communauté pouvait donc
+      // rattacher à la sienne n'importe quelle conversation du système dont il
+      // connaissait l'identifiant, et en recevoir la liste des participants
+      // dans la réponse (#4191).
+      const participantAppelant = conversation.participants.find(
+        (p: { userId: string | null; isActive?: boolean }) => p.userId === userId && p.isActive !== false
+      );
+      const administreLaConversation = Boolean(
+        participantAppelant &&
+        hasMinimumMemberRole(participantAppelant.role ?? MemberRole.MEMBER, MemberRole.ADMIN)
+      );
+
+      if (!administreLaConversation) {
+        // 404 et non 403 : distinguer « elle existe mais tu n'y as pas droit »
+        // de « elle n'existe pas » ferait de cette route un oracle d'existence
+        // sur tout identifiant de conversation.
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
+      // Administrer la conversation ne donne pas le droit de la SOUSTRAIRE à
+      // une communauté tierce : celle-ci la perdrait sans que personne y
+      // consente. Le déplacement exige donc aussi un droit à la SOURCE.
+      if (conversation.communityId && conversation.communityId !== id) {
+        const source = await fastify.prisma.community.findFirst({
+          where: { id: conversation.communityId },
+          select: {
+            createdBy: true,
+            members: { select: { userId: true, role: true } }
+          }
+        });
+
+        const peutDetacher = Boolean(
+          source && (
+            source.createdBy === userId ||
+            source.members.some(
+              (m: { userId: string; role: string }) => m.userId === userId && m.role === CommunityRole.ADMIN
+            )
+          )
+        );
+
+        if (!peutDetacher) {
+          // 403 ici, et non 404 : l'appelant administre la conversation, donc
+          // il en connaît déjà l'existence — lui dire pourquoi on refuse ne
+          // divulgue rien qu'il ne sache.
+          return sendForbidden(reply, 'You must administer the community this conversation currently belongs to');
+        }
       }
 
       // Update conversation to belong to this community (allows moving between communities)

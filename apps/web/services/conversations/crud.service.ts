@@ -4,6 +4,7 @@
  */
 
 import { apiService } from '../api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { logger } from '@/utils/logger';
 import { transformersService } from './transformers.service';
 import type {
@@ -57,7 +58,7 @@ export class ConversationsCrudService {
         deletedConversationIds?: string[];
         deletedConversationIdsTruncated?: boolean;
       };
-    }>('/conversations', queryParams);
+    }>(API_ENDPOINTS.conversations.root, queryParams);
 
     if (!response.data?.success || !Array.isArray(response.data?.data)) {
       throw new Error('Format de réponse invalide pour les conversations');
@@ -98,7 +99,7 @@ export class ConversationsCrudService {
    */
   async getConversation(id: string): Promise<Conversation> {
     const response = await apiService.get<{ success: boolean; data: unknown }>(
-      `/conversations/${id}`
+      API_ENDPOINTS.conversations.byId(id)
     );
 
     if (!response.data?.success || !response.data?.data) {
@@ -113,7 +114,7 @@ export class ConversationsCrudService {
    */
   async createConversation(data: CreateConversationRequest): Promise<Conversation> {
     const response = await apiService.post<{ success: boolean; data: unknown }>(
-      '/conversations',
+      API_ENDPOINTS.conversations.root,
       data
     );
 
@@ -143,7 +144,7 @@ export class ConversationsCrudService {
    */
   async updateConversation(id: string, data: Partial<Conversation>): Promise<Conversation> {
     const response = await apiService.put<{ success: boolean; data: Conversation }>(
-      `/conversations/${id}`,
+      API_ENDPOINTS.conversations.byId(id),
       data
     );
 
@@ -158,12 +159,12 @@ export class ConversationsCrudService {
    * Supprimer une conversation
    */
   async deleteConversation(id: string): Promise<void> {
-    await apiService.delete(`/conversations/${id}`);
+    await apiService.delete(API_ENDPOINTS.conversations.byId(id));
   }
 
   async getEncryptionStatus(id: string): Promise<EncryptionStatus> {
     const response = await apiService.get<EncryptionStatus>(
-      `/conversations/${id}/encryption-status`
+      API_ENDPOINTS.conversations.byConversationIdEncryptionStatus(id)
     );
     if (!response.data) {
       throw new Error('Erreur lors de la lecture du statut de chiffrement');
@@ -173,7 +174,7 @@ export class ConversationsCrudService {
 
   async enableEncryption(id: string, mode: EncryptionMode): Promise<EnableEncryptionResult> {
     const response = await apiService.post<EnableEncryptionResult>(
-      `/conversations/${id}/encryption`,
+      API_ENDPOINTS.conversations.byConversationIdEncryption(id),
       { mode }
     );
     if (!response.data) {
@@ -188,7 +189,7 @@ export class ConversationsCrudService {
   async searchConversations(query: string): Promise<Conversation[]> {
     try {
       const response = await apiService.get<{ success: boolean; data: Conversation[] }>(
-        '/conversations/search',
+        API_ENDPOINTS.conversations.search,
         { q: query }
       );
 

@@ -16,6 +16,19 @@ interface AnonymousSession {
   expiresAt: number;
 }
 
+/**
+ * Options nommées de `AuthManager.setCredentials` (#4450). Remplace cinq
+ * paramètres positionnels — voir le doc-comment de la méthode pour le
+ * défaut que la forme précédente permettait.
+ */
+export type SetCredentialsOptions = {
+  readonly user: User;
+  readonly authToken: string;
+  readonly refreshToken?: string;
+  readonly sessionToken?: string;
+  readonly expiresIn?: number;
+};
+
 class AuthManager {
   private static instance: AuthManager;
   private onClearCallbacks: Array<() => void> = [];
@@ -73,13 +86,31 @@ class AuthManager {
 
   // ==================== CREDENTIALS (RW) ====================
 
-  setCredentials(
-    user: User,
-    authToken: string,
-    refreshToken?: string,
-    sessionToken?: string,
-    expiresIn?: number
-  ): void {
+  /**
+   * Persiste les credentials d'un compte inscrit — seul point d'écriture pour
+   * `AUTH_TOKEN` / `SESSION_TOKEN` / `USER_DATA` ensemble.
+   *
+   * Objet nommé (#4450). La forme précédente avait cinq paramètres
+   * positionnels, dont trois `string | undefined` indiscernables au typage :
+   * le compilateur ne pouvait pas voir un `refreshToken` glissé dans le
+   * créneau `sessionToken`, ni un `expiresIn` (nombre) glissé dans un
+   * créneau `string | undefined`. Trois des quatre appelants historiques
+   * s'y sont trompés, deux d'entre eux à deux crans (#4404) — les valeurs
+   * ont été corrigées et gardées par des témoins qui assertent la
+   * persistance PAR CLÉ, mais rien n'empêchait un cinquième appelant de
+   * retomber dans la même classe. Un objet nommé la rend inexprimable :
+   * chaque valeur porte son propre nom au site d'appel, aucun ordre à tenir,
+   * et un appel positionnel ne compile plus.
+   *
+   * `refreshToken` n'a plus de créneau de stockage (#4405, étape 3) : aucune
+   * route d'authentification du gateway ne rend jamais ce champ (mesuré), et
+   * la clé de stockage qui lui était dédiée a été retirée — il n'y avait
+   * rien de réel à y conserver. Le champ reste néanmoins ACCEPTÉ et n'est
+   * plus lu : `auth.service.test.ts` verrouille explicitement qu'il doit
+   * continuer d'exister si le serveur envoie un jour cette valeur
+   * (« threads a refreshToken through to its own slot »).
+   */
+  setCredentials({ user, authToken, sessionToken }: SetCredentialsOptions): void {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return;
 
@@ -87,7 +118,6 @@ class AuthManager {
 
     // Store tokens in localStorage for persistence and easy access outside React
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);
-    if (refreshToken) localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
     if (sessionToken) localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, sessionToken);
     localStorage.setItem(AUTH_STORAGE_KEYS.USER_DATA, JSON.stringify(user));
 
@@ -101,11 +131,12 @@ class AuthManager {
     this.setSessionCookie(user);
   }
 
+  // `refreshToken` (2e créneau) n'a plus de créneau de stockage (#4405, étape
+  // 3 — même raison que `setCredentials` ci-dessus) : accepté, plus lu.
   updateTokens(authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number): void {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return;
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);
-    if (refreshToken) localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
     if (sessionToken) localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, sessionToken);
 
     this.notifyTokensUpdated();
@@ -117,12 +148,6 @@ class AuthManager {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
-  }
-
-  getRefreshToken(): string | null {
-    /* istanbul ignore next */
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
   }
 
   getCurrentUser(): User | null {
@@ -213,7 +238,6 @@ class AuthManager {
 
       // 1. Cleanup storage
       localStorage.removeItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
-      localStorage.removeItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
       localStorage.removeItem(AUTH_STORAGE_KEYS.SESSION_TOKEN);
       localStorage.removeItem(AUTH_STORAGE_KEYS.USER_DATA);
 

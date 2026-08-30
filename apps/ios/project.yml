@@ -84,7 +84,7 @@ settings:
   # la série locale : une valeur restée à 1271 ici ne bloquerait pas les lanes
   # fastlane — elles prennent max(dépôt, dernier TestFlight) + 1 — mais rendrait
   # le prochain numéro imprévisible, ce que le bloc ci-dessus proscrit.
-  CURRENT_PROJECT_VERSION: "1802"
+  CURRENT_PROJECT_VERSION: "1805"
   # Alignée sur la version App Store Connect. Passée à 1.0.1 le 2026-07-31 :
   # la 1.0.0 avait été rejetée (déclaration Age Rating `ageAssurance` à true
   # sans mécanisme de vérification d'âge dans l'app), et l'enregistrement ASC a
@@ -283,6 +283,34 @@ targets:
   # the `TEST_HOST` setting that xctest needs at runtime. XcodeGen wires
   # the host-app build setting automatically when the dependency target
   # is of type `application`.
+  # ── #3950 — la mesure du FLING, sur appareil PHYSIQUE ────────────────────
+  #
+  # Le seul moyen supporté par Apple de produire un `swipe` sur un iPhone
+  # connecté est un bundle XCUITest : `devicectl` n'a aucune sous-commande
+  # d'entrée tactile, `idb` ne voit que les simulateurs, et un lien profond
+  # ouvre sans défiler. Sans cette cible, la partie GESTE de l'audit de
+  # fluidité (#3917) restait non mesurable — seule la partie idle l'était.
+  #
+  # Elle n'est PAS dans le scheme `Meeshy` : le gate reste `MeeshyTests` seul.
+  # Une mesure de fluidité au simulateur ne veut rien dire (`apps/ios/CLAUDE.md`
+  # § Pilotage), donc la faire tourner là serait pire qu'inutile — elle
+  # produirait un chiffre auquel on pourrait croire. Son scheme dédié
+  # (`MeeshyDeviceMetrics`, plus bas) s'invoque à la demande sur un appareil.
+  MeeshyUIDeviceTests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyUIDeviceTests
+        excludes:
+          - "**/*.md"
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.uitests
+      TEST_TARGET_NAME: Meeshy
+      CODE_SIGN_STYLE: Automatic
+    dependencies:
+      - target: Meeshy
+
   MeeshyTests:
     type: bundle.unit-test
     platform: iOS
@@ -390,6 +418,22 @@ targets:
 #
 # CI invoque ce scheme via `xcodebuild -scheme Meeshy -only-testing:MeeshyTests`.
 schemes:
+  # Scheme de MESURE, jamais de gate — cf. la cible `MeeshyUIDeviceTests`.
+  # `xcodebuild test -scheme MeeshyDeviceMetrics -destination "platform=iOS,id=<udid>"`
+  MeeshyDeviceMetrics:
+    build:
+      parallelizeBuild: true
+      buildImplicitDependencies: true
+      targets:
+        Meeshy: all
+        MeeshyUIDeviceTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MeeshyUIDeviceTests
+
   Meeshy:
     build:
       parallelizeBuild: true

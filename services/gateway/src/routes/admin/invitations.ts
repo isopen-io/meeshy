@@ -1,25 +1,53 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
 import { logError } from '../../utils/logger';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
 import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { requirePermission } from '../../middleware/authorize';
 
 // Middleware pour vérifier les permissions admin
-const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-    return sendUnauthorized(reply, 'Authentification requise');
-  }
+// `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
+// (#4153). Elle nomme désormais la permission qu'elle exige, et la matrice
+// décide — un seul endroit où lire la loi, un seul où la changer.
+const requireAdmin = requirePermission('canCreateUsers');
 
-  const userRole = authContext.registeredUser.role;
-  const canManage = ['BIGBOSS', 'ADMIN'].includes(userRole);
-
-  if (!canManage) {
-    return sendForbidden(reply, 'Permission admin requise');
-  }
+/**
+ * Timeline quotidienne des invitations, agrégée côté MongoDB (#4465).
+ *
+ * `GET /admin/invitations/timeline/daily` faisait un `findMany` sur les 7
+ * derniers jours (`select: { createdAt, status }`, sans `take`) pour replier
+ * chaque ligne en JS dans un compte par jour × statut. Un seul `$group` par
+ * {jour, statut} fait le même repliement en base — patron de
+ * `dailyLanguageCountsPipeline` (`admin/languages.ts`) : une SEULE
+ * agrégation, donc pas de `$facet` (qui combine plusieurs agrégations sur le
+ * même `$match`, patron de `admin/messages.ts`).
+ *
+ * Borné à 7 jours × (nombre de statuts distincts, ~4 en pratique —
+ * pending/accepted/rejected/blocked) lignes rendues, jamais une par
+ * invitation.
+ */
+type TimelineJourStatutRow = {
+  readonly _id: { readonly date: string; readonly status: string };
+  readonly count: number;
 };
+
+function invitationsTimelinePipeline(since: Date): Prisma.InputJsonValue[] {
+  return [
+    { $match: { createdAt: { $gte: { $date: since.toISOString() } } } },
+    {
+      $group: {
+        _id: {
+          date: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' } },
+          status: '$status',
+        },
+        count: { $sum: 1 },
+      },
+    },
+  ] as unknown as Prisma.InputJsonValue[];
+}
 
 export async function invitationRoutes(fastify: FastifyInstance) {
   /**
@@ -289,16 +317,11 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       sevenDaysAgo.setHours(0, 0, 0, 0);
 
-      // Récupérer toutes les invitations des 7 derniers jours
-      const invitations = await fastify.prisma.friendRequest.findMany({
-        where: {
-          createdAt: { gte: sevenDaysAgo }
-        },
-        select: {
-          createdAt: true,
-          status: true
-        }
-      });
+      // Comptage par jour × statut — agrégé côté MongoDB (#4465, patron de
+      // `dailyLanguageCountsPipeline` dans `admin/languages.ts`).
+      const rows = await fastify.prisma.friendRequest.aggregateRaw({
+        pipeline: invitationsTimelinePipeline(sevenDaysAgo)
+      }) as unknown as ReadonlyArray<TimelineJourStatutRow>;
 
       // Grouper par jour
       const dailyData: Record<string, { sent: number; accepted: number; rejected: number }> = {};
@@ -310,13 +333,12 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         dailyData[dateKey] = { sent: 0, accepted: 0, rejected: 0 };
       }
 
-      invitations.forEach(inv => {
-        const dateKey = inv.createdAt.toISOString().split('T')[0];
-        if (dailyData[dateKey]) {
-          dailyData[dateKey].sent++;
-          if (inv.status === 'accepted') dailyData[dateKey].accepted++;
-          if (inv.status === 'rejected') dailyData[dateKey].rejected++;
-        }
+      rows.forEach(row => {
+        const bucket = dailyData[row._id.date];
+        if (!bucket) return;
+        bucket.sent += row.count;
+        if (row._id.status === 'accepted') bucket.accepted += row.count;
+        if (row._id.status === 'rejected') bucket.rejected += row.count;
       });
 
       const timeline = Object.entries(dailyData).map(([date, data]) => ({

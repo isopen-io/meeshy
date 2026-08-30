@@ -1,16 +1,25 @@
 /**
  * `UserConversationPreferences` is a per-USER row whose whole point is to be
- * the same on every device that user is signed in on. Three of its writers
- * live outside `conversation-preferences.ts` — delete-for-me, restore-for-me
- * and clear-history — and they write the two fields
- * (`deletedForUserAt`, `clearHistoryBefore`) that the broadcast payload type
- * `ConversationPreferencesPayload` already declares and that the iOS
- * `ConversationStoreSocketBridge` already maps onto `userState`.
+ * the same on every device that user is signed in on. `clear-history` writes
+ * `clearHistoryBefore` there and owes this file's contract in full — bump
+ * `version` (every client drops `incoming.version <= local`) AND broadcast
+ * the snapshot (a bump nobody receives changes nothing).
  *
- * These tests pin the contract those three writers must honour, which has two
- * halves that only work together:
- *   - bump `version`, because every client drops `incoming.version <= local`;
- *   - broadcast the snapshot, because a bump nobody receives changes nothing.
+ * `delete-for-me` and `restore-for-me` used to be the other two writers of
+ * this table (`deletedForUserAt`) — until #4332 found that the column they
+ * wrote was read by NOTHING a real client ever triggers: the corbeille
+ * (`restore-for-me`, `GET .../deleted-conversations`) reads
+ * `Participant.deletedForMe`, and the only route that ever wrote
+ * `deletedForUserAt` had no caller on any of the three clients. Both routes
+ * now read/write `Participant.deletedForMe` instead — the column the
+ * CANONICAL delete route (`routes/conversations/delete-for-me.ts`) already
+ * writes — and this file's remaining delete-for-me/restore-for-me tests pin
+ * THAT contract: delete-for-me still tells the user's other devices via
+ * `CONVERSATION_DELETED` (a plain event, not a versioned preferences
+ * snapshot); restore-for-me does not yet broadcast anything — a documented
+ * gap (closing it needs a new event name in
+ * `packages/shared/types/socketio-events.ts`, a carrefour file outside this
+ * lot's territory), not a silent regression.
  *
  * The live store below applies its writes, so the version a route emits is the
  * one the PREVIOUS request actually left behind — monotonicity is a property
@@ -83,10 +92,28 @@ const buildLivePrisma = () => {
     clearHistoryBefore: null,
   };
 
+  // #4332 — Participant VIVANT, comme les préférences ci-dessous : delete-for-me
+  // écrit `deletedForMe`/`isActive` sur cette ligne, restore-for-me la relit
+  // PUIS la réécrit. Une réponse figée masquerait la panne exacte que ce lot
+  // corrige — la corbeille ne reflétant jamais ce que le delete vient d'écrire.
+  let participantRow = {
+    id: 'part-1',
+    userId: USER_ID,
+    conversationId: CONV_ID,
+    isActive: true,
+    role: 'member',
+    deletedForMe: null as Date | null,
+    conversation: { isActive: true },
+  };
+
   return {
     rows,
     participant: {
-      findFirst: jest.fn(async () => ({ id: 'part-1', userId: USER_ID, conversationId: CONV_ID, isActive: true })),
+      findFirst: jest.fn(async () => ({ ...participantRow })),
+      update: jest.fn(async ({ data }: any) => {
+        participantRow = { ...participantRow, ...data };
+        return { ...participantRow };
+      }),
     },
     userConversationPreferences: {
       findUnique: jest.fn(async ({ where }: any) => rows.get(key(where)) ?? null),
@@ -120,16 +147,46 @@ const buildLivePrisma = () => {
 const buildApp = async (prisma: ReturnType<typeof buildLivePrisma>) => {
   const emits: EmitCall[] = [];
   const rooms: string[] = [];
-  const fakeIO = {
+  // #4332 — `performConversationDeleteForMe` (désormais appelée par
+  // delete-for-me) appelle `endConversationMembership` (`io.in(room).fetchSockets()`)
+  // en plus de son propre `io.to(room).emit(...)` : `to`/`in` doivent donc être
+  // CHAÎNABLES (`return fakeIO`), comme le double éprouvé de
+  // `conversations/delete-for-me.test.ts` (`makeMockIO`). `broadcastToUser`
+  // (utilisé par `writeConversationPreferences` pour clear-history), lui,
+  // tolère aussi `getManager().io` / `.io` — voir `utils/socket-broadcast.ts` —
+  // mais `getIO` doit ici être une MÉTHODE, pas une propriété, sans quoi la
+  // branche socket du delete est sautée silencieusement (`if (io)` ne rentre
+  // jamais) et personne n'apprend la clôture.
+  const fakeIO: {
+    to: (room: string) => typeof fakeIO;
+    in: (room: string) => typeof fakeIO;
+    emit: (event: string, payload: unknown) => void;
+    fetchSockets: () => Promise<Array<{ leave: () => void }>>;
+  } = {
     to: (room: string) => {
       rooms.push(room);
-      return { emit: (event: string, payload: unknown) => { emits.push({ event, payload }); } };
+      return fakeIO;
     },
+    in: (room: string) => {
+      rooms.push(room);
+      return fakeIO;
+    },
+    emit: (event: string, payload: unknown) => {
+      emits.push({ event, payload });
+    },
+    fetchSockets: async () => [],
   };
 
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('prisma', prisma as unknown);
-  app.decorate('socketIOHandler', { getManager: () => ({ io: fakeIO }) } as any);
+  app.decorate('socketIOHandler', {
+    getManager: () => ({
+      getIO: () => fakeIO,
+      invalidateParticipantCache: () => {},
+      endLiveLocationForDepartedMember: () => {},
+      endCallParticipationForDepartedMember: async () => {},
+    }),
+  } as any);
   app.decorate('authenticate', async (request: any) => {
     request.authContext = {
       isAuthenticated: true,
@@ -171,28 +228,53 @@ describe('user-deletions routes — multi-device preference broadcast', () => {
     await env.app.close();
   });
 
-  it('delete-for-me tells the user other devices the conversation is gone', async () => {
+  it('delete-for-me tells the user other devices the conversation is gone (#4332 — via CONVERSATION_DELETED, not a preferences snapshot)', async () => {
     const res = await deleteForMe();
     expect(res.statusCode).toBe(200);
 
     expect(env.rooms).toContain(ROOMS.user(USER_ID));
-    const [emission] = prefEmissions();
-    expect(emission).toBeDefined();
-    expect(emission.reset).toBe(false);
-    expect(emission.preferences?.deletedForUserAt).toEqual(expect.any(String));
+    // #4332 — delete-for-me n'écrit plus `UserConversationPreferences` : la
+    // colonne que la corbeille lit (`Participant.deletedForMe`) est portée
+    // par ce même événement, celui qu'iOS `ConversationStore.applyConversationDeleted`
+    // consomme réellement — pas par `USER_PREFERENCES_UPDATED`, qu'aucun
+    // appelant réel n'a jamais déclenché pour ce geste.
+    const deletedEmission = env.emits.find((e) => e.event === SERVER_EVENTS.CONVERSATION_DELETED);
+    expect(deletedEmission).toBeDefined();
+    expect(deletedEmission?.payload).toEqual({ userId: USER_ID, conversationId: CONV_ID });
+    expect(prefEmissions()).toHaveLength(0);
   });
 
-  it('restore-for-me carries a version above the delete it undoes', async () => {
-    await deleteForMe();
+  it('restore-for-me tells the user other devices the conversation is back (#4344 — via CONVERSATION_RESTORED, the exact mirror of CONVERSATION_DELETED)', async () => {
+    const deleteRes = await deleteForMe();
+    expect(deleteRes.statusCode).toBe(200);
+
     const res = await restoreForMe();
     expect(res.statusCode).toBe(200);
 
-    const [deleted, restored] = prefEmissions();
-    expect(restored).toBeDefined();
-    expect(restored.preferences?.deletedForUserAt).toBeNull();
-    // Every device applies `incoming.version <= local -> drop`: a restore that
-    // does not exceed its own delete is a conversation that never comes back.
-    expect(restored.version).toBeGreaterThan(deleted.version);
+    // #4332 avait corrigé la LECTURE/ÉCRITURE (`Participant.deletedForMe`) et
+    // LAISSÉ la diffusion, faute d'un événement nommé dans le fichier-carrefour
+    // `packages/shared/types/socketio-events.ts`. Ce témoin FIGEAIT cette
+    // absence — `expect(env.emits.length).toBe(emitsAfterDelete)` — en disant
+    // sur place pourquoi : « pour qu'elle reste un suivi VISIBLE, jamais une
+    // régression supposée résolue en silence ».
+    //
+    // #4344 déclare `CONVERSATION_RESTORED` et le diffuse. Le piège a donc
+    // fonctionné comme prévu : il est tombé le jour où le trou s'est refermé,
+    // et il a obligé ce lot à le constater plutôt qu'à croire à une
+    // régression. Il bascule ici du NÉGATIF au POSITIF, et devient le miroir
+    // exact du témoin `delete-for-me` ci-dessus — même room, même forme de
+    // charge, sens inverse.
+    expect(env.rooms).toContain(ROOMS.user(USER_ID));
+
+    const restoredEmission = env.emits.find((e) => e.event === SERVER_EVENTS.CONVERSATION_RESTORED);
+    expect(restoredEmission).toBeDefined();
+    expect(restoredEmission?.payload).toEqual({ userId: USER_ID, conversationId: CONV_ID });
+
+    // La restauration ne passe PAS par un instantané de préférences, pour la
+    // raison exacte qui vaut à la suppression (cf. témoin précédent) : la
+    // colonne que la corbeille lit est `Participant.deletedForMe`, et c'est
+    // l'événement nommé qui la porte — jamais `USER_PREFERENCES_UPDATED`.
+    expect(prefEmissions()).toHaveLength(0);
   });
 
   it('clear-history broadcasts the cutoff the other devices must hide behind', async () => {
@@ -205,37 +287,46 @@ describe('user-deletions routes — multi-device preference broadcast', () => {
     expect(emission.preferences?.clearHistoryBefore).toBe(beforeDate);
   });
 
-  it('keeps versions strictly increasing when deletion writers interleave with preference writers', async () => {
+  it('keeps versions strictly increasing across preference writers even when deletion routes run in between (#4332)', async () => {
     await put({ isPinned: true });
     await deleteForMe();
     await restoreForMe();
     await clearHistory('2026-08-01T10:00:00.000Z');
     await put({ isMuted: true });
 
+    // #4332 — delete-for-me/restore-for-me ne touchent plus
+    // `UserConversationPreferences` : seuls les DEUX `put` et le
+    // `clear-history` émettent sur ce canal désormais (3, pas 5). Ce que ce
+    // témoin garde : leur passage NE PERTURBE PAS la séquence de version des
+    // écrivains qui restent sur cette table.
     const versions = prefEmissions().map((e) => e.version);
-    expect(versions).toHaveLength(5);
+    expect(versions).toHaveLength(3);
     versions.forEach((version, index) => {
       if (index > 0) expect(version).toBeGreaterThan(versions[index - 1]);
     });
   });
 
-  it('leaves the deletion visible to a device that only ever sees broadcasts', async () => {
+  it('a plain preference write after delete-for-me never touches deletedForUserAt — the two tables are unrelated now (#4332)', async () => {
     await deleteForMe();
     await put({ isPinned: true });
 
-    // The pin's snapshot must still carry the deletion: a device that applies
-    // only the latest broadcast must not resurrect a conversation the user
-    // deleted on another device.
-    const [, pinned] = prefEmissions();
+    // #4332 retire delete-for-me/restore-for-me de ce mécanisme : la ligne
+    // `UserConversationPreferences` de ce couple (user, conversation) n'a
+    // donc jamais existé avant ce `put`, et `deletedForUserAt` y reste à son
+    // défaut `null` — la corbeille vit désormais entièrement sur
+    // `Participant.deletedForMe`, une table différente.
+    const [pinned] = prefEmissions();
     expect(pinned.preferences?.isPinned).toBe(true);
-    expect(pinned.preferences?.deletedForUserAt).toEqual(expect.any(String));
+    expect(pinned.preferences?.deletedForUserAt).toBeNull();
   });
 
   it('emits nothing when the caller is not a member', async () => {
     prisma.participant.findFirst.mockResolvedValueOnce(null as never);
     const res = await deleteForMe();
 
-    expect(res.statusCode).toBe(403);
+    // #4332 — l'alias délègue à `performConversationDeleteForMe`, qui répond
+    // 404 (comme la route canonique) plutôt que le 403 qu'il posait seul.
+    expect(res.statusCode).toBe(404);
     expect(prefEmissions()).toHaveLength(0);
   });
 

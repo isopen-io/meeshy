@@ -454,26 +454,45 @@ final class DirectoryContactDisplayTests: XCTestCase {
 
 // MARK: - Pagination complète du répertoire (2026-08-21 : au-delà de 200)
 
-/// Service paginé par `offset` : `total` contacts, servis par tranches de
-/// `limit`, avec ou sans `hasMore` côté serveur (le mock historique renvoie
-/// `pagination: nil`, comme le fait le gateway sur certaines routes).
+/// Service paginé par CURSEUR : `total` contacts, servis par tranches de
+/// `limit`, avec ou sans `hasMore` côté serveur (le double rend
+/// `pagination: nil` sur ce point, comme le fait la passerelle sur certaines
+/// routes — c'est ce qui exerce le repli « page pleine ⇒ page suivante »).
+///
+/// Le curseur est l'IDENTIFIANT de la dernière ligne servie, exactement comme
+/// en production : un double qui rendrait un décalage déguisé ne prouverait
+/// rien du chemin réel.
 private final class PagedDirectoryStub: ContactDirectoryServiceProviding, @unchecked Sendable {
     let total: Int
-    var listOffsets: [Int] = []
+    /// Les curseurs REÇUS, dans l'ordre — `nil` pour la première page.
+    var cursorsVus: [String?] = []
+    /// Le delta demandé, s'il l'a été : c'est ce qui distingue une première
+    /// lecture d'un rattrapage.
+    var updatedSinceVu: Date?
     init(total: Int) { self.total = total }
 
     func sync(_ request: DirectorySyncRequest) async throws -> DirectorySyncResult {
         DirectorySyncResult(totalContacts: 0, processedContacts: 0, syncedCount: 0, matchedCount: 0, removedCount: 0)
     }
 
-    func list(offset: Int, limit: Int, filter: DirectoryFilter, query: String?) async throws
-        -> OffsetPaginatedAPIResponse<[DirectoryContact]> {
-        listOffsets.append(offset)
-        let ids = Array(offset..<min(offset + limit, total))
-        let page = ids.map {
+    func page(
+        cursor: String?, limit: Int, filter: DirectoryFilter, query: String?, updatedSince: Date?
+    ) async throws -> PaginatedAPIResponse<[DirectoryContact]> {
+        cursorsVus.append(cursor)
+        updatedSinceVu = updatedSince ?? updatedSinceVu
+
+        // Le curseur `cN` désigne la ligne N : la page suivante commence en N+1.
+        let debut = cursor.flatMap { Int($0.dropFirst()) }.map { $0 + 1 } ?? 0
+        let ids = Array(debut..<min(debut + limit, total))
+        let contacts = ids.map {
             DirectoryContact(id: "c\($0)", contactKey: "k\($0)", displayName: "Contact \($0)", isOnMeeshy: false)
         }
-        return OffsetPaginatedAPIResponse(success: true, data: page, pagination: nil, error: nil)
+        return PaginatedAPIResponse(
+            success: true,
+            data: contacts,
+            pagination: CursorPagination(nextCursor: contacts.last?.id, hasMore: nil, limit: limit),
+            error: nil
+        )
     }
 
     func clear() async throws -> DirectoryClearResult { DirectoryClearResult(removedCount: 0) }
@@ -492,36 +511,58 @@ final class DirectoryPagingTests: XCTestCase {
         XCTAssertFalse(DirectoryPaging.hasMore(received: 0, pageSize: 200, serverHasMore: true), "une page vide clôt toujours")
     }
 
-    func test_listAll_readsEveryPage_pastTheOld200Cap() async throws {
-        let stub = PagedDirectoryStub(total: 450)
+    func test_listAll_readsEveryPage_byCursor() async throws {
+        let stub = PagedDirectoryStub(total: 250)
         let all = try await stub.listAll(filter: .all, query: nil)
-        XCTAssertEqual(all.count, 450, "450 contacts ⇒ 450 lignes, plus de plafond à 200")
-        XCTAssertEqual(stub.listOffsets, [0, 200, 400])
+        XCTAssertEqual(all.count, 250)
+        // La SECONDE page est demandée avec le curseur de la première — un
+        // témoin qui ne regarderait que la première ne verrait pas la
+        // différence entre un curseur et un décalage (#4163).
+        XCTAssertEqual(stub.cursorsVus, [nil, "c99", "c199"])
         XCTAssertEqual(all.first?.id, "c0")
-        XCTAssertEqual(all.last?.id, "c449")
+        XCTAssertEqual(all.last?.id, "c249")
     }
 
     func test_listAll_exactMultipleOfThePage_stopsOnTheEmptyPage_neverLoopsForever() async throws {
-        let stub = PagedDirectoryStub(total: 400)
+        let stub = PagedDirectoryStub(total: 200)
         let all = try await stub.listAll(filter: .all, query: nil)
-        XCTAssertEqual(all.count, 400)
-        XCTAssertEqual(stub.listOffsets.count, 3, "2 pages pleines + la page vide qui clôt")
+        XCTAssertEqual(all.count, 200)
+        XCTAssertEqual(stub.cursorsVus.count, 3, "2 pages pleines + la page vide qui clôt")
     }
 
     func test_listAll_isCappedByMaxPages() async throws {
         let stub = PagedDirectoryStub(total: 10_000)
-        let all = try await stub.listAll(filter: .all, query: nil, pageSize: 200, maxPages: 3)
-        XCTAssertEqual(all.count, 600)
-        XCTAssertEqual(stub.listOffsets.count, 3)
+        let all = try await stub.listAll(filter: .all, query: nil, pageSize: 100, maxPages: 3)
+        XCTAssertEqual(all.count, 300)
+        XCTAssertEqual(stub.cursorsVus.count, 3)
+    }
+
+    func test_listAll_forwardsTheDelta_soARevalidationDoesNotRepayTheWholeBook() async throws {
+        // C'est le cœur du lot : sans delta, chaque revalidation
+        // retéléchargeait le carnet ENTIER (#4163).
+        let stub = PagedDirectoryStub(total: 10)
+        let borne = Date(timeIntervalSince1970: 1_800_000_000)
+
+        _ = try await stub.listAll(filter: .all, query: nil, updatedSince: borne)
+
+        XCTAssertEqual(stub.updatedSinceVu, borne)
     }
 
     /// Le filet de lecture était calibré sur l'ÉCRITURE tronquée à 2 000 fiches
     /// (25 × 200 = 5 000). Depuis que la synchronisation part en lots sans
     /// plafond, un répertoire peut légitimement dépasser 5 000 — le filet doit
     /// rester un filet, jamais une troncature de fait.
+    ///
+    /// La taille de page est passée de 200 à 100 (#4163) : c'est la ROUTE qui
+    /// borne désormais, et elle REFUSE au-delà de 100 là où le service rabotait
+    /// à 200 en silence. Le nombre de pages double pour que la COUVERTURE reste
+    /// la même — c'est elle que ce témoin garde, pas les deux nombres.
     func test_maxPages_coversADirectoryFarBeyondTheOldFiveThousandCap() {
-        XCTAssertEqual(DirectoryPaging.maxPages, 250)
         XCTAssertEqual(DirectoryPaging.maxPages * DirectoryPaging.pageSize, 50_000)
+        XCTAssertLessThanOrEqual(
+            DirectoryPaging.pageSize, 100,
+            "au-delà de 100 la route rend 400 : une page trop large ne tronquerait pas, elle échouerait"
+        )
     }
 
     func test_listAll_defaultCap_readsWellPastFiveThousandContacts() async throws {

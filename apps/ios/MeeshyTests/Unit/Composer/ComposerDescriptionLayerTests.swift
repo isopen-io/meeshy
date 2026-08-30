@@ -42,7 +42,13 @@ final class ComposerDescriptionLayerTests: XCTestCase {
     }
 
     private func composer(_ fichier: String) throws -> String {
-        try source("Meeshy/Features/Main/Composer/\(fichier)")
+        // **Le meuble est DÉCOUPÉ (#4102) : son adresse est l'UNITÉ.** Lire le
+        // seul fichier principal rendrait vertes, en silence, toutes les gardes
+        // négatives dont l'interdit a suivi une extension.
+        if fichier == "MeeshyComposerHost.swift" {
+            return AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+        }
+        return try source("Meeshy/Features/Main/Composer/\(fichier)")
     }
 
     private func compact(_ t: String) -> String {
@@ -108,10 +114,39 @@ final class ComposerDescriptionLayerTests: XCTestCase {
     /// sur le rendu final — le profil P et le profil S verraient alors deux
     /// aperçus différents du même geste.
     func test_lesDeuxSurfaces_montentLeMemeCalque() throws {
-        for fichier in ["ComposerSceneSurface.swift", "MeeshyComposerHost.swift"] {
-            XCTAssertTrue(compact(try composer(fichier)).contains("ComposerDescriptionLayer("),
-                          "\(fichier) doit CONSOMMER le calque, jamais le redessiner.")
-        }
+        // #4361 — côté meuble, l'hôte du calque est désormais le TYPE NOMMÉ
+        // `ComposerSceneDescriptionEditor` : le monter en fermeture d'`.overlay`
+        // dans `body` faisait déborder la pile par profondeur de type SwiftUI.
+        // Ce que la garde protège est inchangé — UN calque, consommé par ses
+        // hôtes, jamais redessiné — seule son adresse a suivi.
+        // **RETOURNÉ le 2026-08-30 : il n'y a plus qu'UN hôte.**
+        //
+        // > « La zone de description en bas ne doit pas être affichée si on ne
+        // > touche pas l'icône description, même si une description existe ! »
+        //
+        // `ComposerSceneSurface` peignait le calque en PERMANENCE, dès qu'un
+        // texte existait — la place que la scène centrée réclame. Elle ne le
+        // peint plus : la description s'ouvre par sa PORTE, et le meuble monte
+        // l'éditeur en zone basse.
+        //
+        // Ce que la garde protégeait — un seul rendu « en mode lecture », jamais
+        // deux à faire diverger — est RENFORCÉ, pas affaibli : il n'y a plus
+        // qu'un site au lieu de deux.
+        XCTAssertTrue(
+            compact(try composer("ComposerSceneDescriptionEditor.swift"))
+                .contains("ComposerDescriptionLayer("),
+            "L'éditeur nommé doit CONSOMMER le calque, jamais le redessiner."
+        )
+        XCTAssertFalse(
+            compact(try composer("ComposerSceneSurface.swift")).contains("ComposerDescriptionLayer("),
+            "La surface de scène ne peint plus la description : elle s'affichait dès qu'un texte "
+                + "existait, sans que personne ne l'ait demandée."
+        )
+        XCTAssertTrue(
+            compact(try composer("MeeshyComposerHost+Surfaces.swift"))
+                .contains("ComposerSceneDescriptionEditor("),
+            "… et le meuble monte l'éditeur nommé, jamais le calque en direct."
+        )
     }
 
     /// Garde NÉGATIVE : la description n'est plus un champ PERMANENT nulle part.

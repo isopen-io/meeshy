@@ -83,11 +83,20 @@ jest.mock('../../../utils/sanitize.js', () => ({
 }));
 
 jest.mock('../../../routes/posts/types', () => ({
-  // Ce double ÉNUMÈRE les schémas : tout export neuf consommé par la route est
-  // `undefined` ici, et `.safeParse` lève AVANT la moindre garde — la route
-  // rend alors 500 sur des chemins qui n'ont rien à voir. C'est un inventaire
-  // à tenir à jour, pas une simple façade.
-  //
+  // AVANT #4147 : ce double ÉNUMÉRAIT les schémas à la main, sans
+  // `requireActual` — exactement le piège que son propre commentaire
+  // décrivait (« un inventaire à tenir à jour ») et qui s'est refermé au
+  // premier export neuf consommé par ce fichier : `comments.ts` importe
+  // désormais `TranslatePostSchema` (routes/posts/translate à la demande,
+  // désormais validée par le MÊME schéma que le post), et ce double ne le
+  // déclarait pas — `TranslatePostSchema.safeParse` aurait levé sur
+  // `undefined`, faisant 500 les trois tests `.../translate` ci-dessous SANS
+  // toucher à la moindre garde de la route. `requireActual` en base, avec
+  // surcharge CIBLÉE des seuls schémas dont CE fichier a besoin d'un
+  // comportement plus permissif que le vrai Zod (patron prescrit par
+  // CLAUDE.md § « TROISIÈME exemplaire ») : tout export réel, y compris ceux
+  // qu'aucune des lignes ci-dessous ne nomme, reste vivant.
+  ...(jest.requireActual('../../../routes/posts/types') as object),
   // `UnlikeSchema` est le jumeau SANS défaut de `LikeSchema` : sur un retrait,
   // l'absence d'emoji vaut « retire la plus récente », alors qu'un défaut '❤️'
   // rendrait ce repli inatteignable.
@@ -436,7 +445,15 @@ describe('POST /posts/:postId/comments/:commentId/translate — on-demand', () =
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.requested).toBe(true);
-    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'de', { force: false });
+    // #4147 — `force` vient désormais de `TranslatePostSchema.safeParse`
+    // (`z.boolean().optional()`), le MÊME schéma que POST /posts/:postId/translate
+    // (core.ts) : un `force` omis y a TOUJOURS résolu `undefined`, jamais
+    // `false` — c'était la validation à la main de cette route, disparue
+    // avec ce lot, qui produisait `false` par un `body.force === true` local.
+    // Attendre encore `false` ici aurait fait la preuve inverse de ce que le
+    // critère 3 demande : les deux routes ne partagent le même contrat que
+    // si elles produisent la MÊME valeur pour la même absence.
+    expect(mockTranslateCommentOnDemand).toHaveBeenCalledWith(COMMENT_ID, 'de', { force: undefined });
   });
 
   it('forwards force=true for the « Retraduire » path', async () => {

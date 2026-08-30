@@ -50,6 +50,8 @@ export { useFullscreen } from './use-fullscreen';
 export { useVolume } from './use-volume';
 
 // Hooks contacts (extraits de ContactsPage)
-export { useContactsData } from './use-contacts-data';
+// `useContactsData` et `useContactsActions` ont été retirés : tous deux
+// appelaient `GET /friend-requests`, une adresse qui n'existe pas côté gateway,
+// et aucun composant ne les montait — la page qu'ils servaient n'existe plus
+// (#4189). `useContactsFiltering` reste : il ne parle à aucune API.
 export { useContactsFiltering } from './use-contacts-filtering';
-export { useContactsActions } from './use-contacts-actions';

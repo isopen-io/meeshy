@@ -78,3 +78,78 @@ extension View {
                      StoryComposerHeaderAccessory { AnyView(content()) })
     }
 }
+
+// MARK: - L'accessoire de tête de la RANGÉE D'OUTILS (#4136)
+
+/// Ce que l'app pose en TÊTE de la rangée d'outils de l'atelier.
+///
+/// Symétrique de `storyComposerHeaderLeadingAccessory`, et pour la même raison :
+/// l'icône de description ouvre un éditeur dont le TEXTE appartient au meuble.
+/// Le SDK ne sait pas ce qu'est une description ; il sait qu'il y a une place en
+/// tête de sa rangée, et il la sert à qui l'occupe.
+///
+/// Elle vit en TÊTE, pas en queue : la description vise la **slide**, les six
+/// outils visent la **scène**. De gauche à droite, la rangée descend donc les
+/// niveaux du modèle — le même ordre que le bas de l'écran tient déjà de haut en
+/// bas (objet → scène → slide → publication).
+struct StoryComposerToolRowLeadingAccessoryKey: EnvironmentKey {
+    static let defaultValue: StoryComposerHeaderAccessory? = nil
+}
+
+public extension EnvironmentValues {
+    var storyComposerToolRowLeadingAccessory: StoryComposerHeaderAccessory? {
+        get { self[StoryComposerToolRowLeadingAccessoryKey.self] }
+        set { self[StoryComposerToolRowLeadingAccessoryKey.self] = newValue }
+    }
+}
+
+public extension View {
+    /// Pose l'accessoire de tête de la rangée d'outils de l'atelier.
+    func storyComposerToolRowLeadingAccessory<Accessory: View>(
+        @ViewBuilder _ make: @escaping () -> Accessory
+    ) -> some View {
+        environment(\.storyComposerToolRowLeadingAccessory,
+                    StoryComposerHeaderAccessory { AnyView(make()) })
+    }
+}
+
+// MARK: - La RÉSERVE BASSE déclarée par l'hôte (#4361)
+
+/// Combien de points l'hôte occupe EN BAS de l'atelier, et que le canvas doit
+/// donc libérer.
+///
+/// Le composer sait déjà se rétracter au-dessus de ce qui s'ouvre : une band,
+/// une feuille système. Mais ces deux termes sont INTERNES à l'atelier
+/// (`presentedSheetHeight`), et un meuble app-side qui ouvre sa propre zone —
+/// la saisie de description — n'avait aucun moyen de le dire. Il ne lui restait
+/// qu'à RECOUVRIR la scène, ce que #4124 avait fait avec un voile.
+///
+/// Recouvrir est le mauvais geste ici : **écrire une description, c'est
+/// regarder la scène qu'on décrit.** Le voile la retirait au moment précis où
+/// elle sert.
+///
+/// La valeur est MESURÉE, jamais constante : la zone de saisie grandit avec le
+/// texte et le clavier la pousse. C'est le même choix que la band, dont la
+/// réserve vient de sa hauteur rendue (`onBandHeightChange`) et non de son
+/// layout — une hauteur supposée sous-estime dès que le contenu déborde.
+///
+/// `0` = l'hôte n'occupe rien ; le canvas retrouve sa géométrie de repos.
+struct StoryComposerCanvasBottomReservationKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+public extension EnvironmentValues {
+    var storyComposerCanvasBottomReservation: CGFloat {
+        get { self[StoryComposerCanvasBottomReservationKey.self] }
+        set { self[StoryComposerCanvasBottomReservationKey.self] = newValue }
+    }
+}
+
+public extension View {
+    /// Déclare la hauteur que l'hôte occupe en bas de l'atelier. Le canvas se
+    /// rétracte AU-DESSUS, il ne se fait pas recouvrir.
+    func storyComposerCanvasBottomReservation(_ height: CGFloat) -> some View {
+        environment(\.storyComposerCanvasBottomReservation, max(0, height))
+    }
+}
+

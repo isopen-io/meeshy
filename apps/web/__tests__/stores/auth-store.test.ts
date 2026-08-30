@@ -5,9 +5,14 @@
 
 import { act } from '@testing-library/react';
 import { useAuthStore } from '../../stores/auth-store';
+import { buildApiUrl } from '../../lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { User } from '@meeshy/shared/types';
 
 // Mock the auth-manager.service
+// `getRefreshToken` n'existe plus (#4405, étape 3) — le store ne le
+// consulte plus dans `initializeAuth()`, et le retirer du mock l'aligne
+// sur la surface RÉELLE d'AuthManager.
 jest.mock('../../services/auth-manager.service', () => ({
   authManager: {
     clearAllSessions: jest.fn(),
@@ -16,7 +21,6 @@ jest.mock('../../services/auth-manager.service', () => ({
     getAnonymousSession: jest.fn(() => null),
     updateTokens: jest.fn(),
     getCurrentUser: jest.fn(() => null),
-    getRefreshToken: jest.fn(() => null),
   },
 }));
 
@@ -62,7 +66,7 @@ describe('AuthStore', () => {
         isAuthenticated: false,
         isAuthChecking: true,
         authToken: null,
-        refreshToken: null,
+        sessionToken: null,
         sessionExpiry: null,
       });
     });
@@ -78,8 +82,10 @@ describe('AuthStore', () => {
       expect(state.isAuthenticated).toBe(false);
       expect(state.isAuthChecking).toBe(true);
       expect(state.authToken).toBeNull();
-      expect(state.refreshToken).toBeNull();
       expect(state.sessionExpiry).toBeNull();
+      // Le champ d'état réactif `refreshToken` a été retiré (#4405, étape 3)
+      // — rien ne produisait jamais de valeur pour lui (mesuré).
+      expect(state).not.toHaveProperty('refreshToken');
     });
   });
 
@@ -137,25 +143,29 @@ describe('AuthStore', () => {
 
       const state = useAuthStore.getState();
       expect(state.authToken).toBe('test-auth-token');
-      expect(state.refreshToken).toBeNull();
       expect(state.sessionExpiry).toBeNull();
     });
 
-    it('should set both auth and refresh tokens', () => {
+    // Le 2e créneau (`refreshToken`) reste ACCEPTÉ positionnellement —
+    // `hooks/use-auth.ts:175`, hors territoire de ce lot, l'appelle encore —
+    // mais n'a plus de contrepartie en état réactif (#4405, étape 3) : rien
+    // ne produisait jamais de valeur pour lui (mesuré). Une valeur qui y
+    // transite ne doit apparaître NULLE PART dans l'état.
+    it('drops the (now inert) second positional slot — it never surfaces in state', () => {
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token');
+        useAuthStore.getState().setTokens('test-auth-token', 'legacy-value-that-must-be-dropped');
       });
 
       const state = useAuthStore.getState();
       expect(state.authToken).toBe('test-auth-token');
-      expect(state.refreshToken).toBe('test-refresh-token');
+      expect(state).not.toHaveProperty('refreshToken');
     });
 
     it('should calculate session expiry when expiresIn is provided', () => {
       const beforeTime = Date.now();
 
       act(() => {
-        useAuthStore.getState().setTokens('test-auth-token', 'test-refresh-token', undefined, 3600);
+        useAuthStore.getState().setTokens('test-auth-token', undefined, undefined, 3600);
       });
 
       const state = useAuthStore.getState();
@@ -166,20 +176,22 @@ describe('AuthStore', () => {
       expect(state.sessionExpiry!.getTime()).toBeLessThanOrEqual(afterTime + 3600 * 1000);
     });
 
-    it('should preserve existing refresh token if not provided', () => {
-      // First set both tokens
+    // Miroir de l'ancien "should preserve existing refresh token if not
+    // provided" (#4405) : le champ `refreshToken` a disparu, mais le MÊME
+    // mécanisme de repli (`sessionToken || get().sessionToken`) reste vivant
+    // pour `sessionToken` — c'est lui qui garde la couverture de cette logique.
+    it('should preserve existing session token if not provided', () => {
       act(() => {
-        useAuthStore.getState().setTokens('token-1', 'refresh-1');
+        useAuthStore.getState().setTokens('token-1', undefined, 'session-1');
       });
 
-      // Then update only the auth token
       act(() => {
         useAuthStore.getState().setTokens('token-2');
       });
 
       const state = useAuthStore.getState();
       expect(state.authToken).toBe('token-2');
-      expect(state.refreshToken).toBe('refresh-1');
+      expect(state.sessionToken).toBe('session-1');
     });
   });
 
@@ -200,7 +212,6 @@ describe('AuthStore', () => {
       expect(state.user).toBeNull();
       expect(state.isAuthenticated).toBe(false);
       expect(state.authToken).toBeNull();
-      expect(state.refreshToken).toBeNull();
       expect(state.sessionExpiry).toBeNull();
       expect(state.isAuthChecking).toBe(false);
     });
@@ -239,7 +250,7 @@ describe('AuthStore', () => {
   });
 
   describe('refreshSession', () => {
-    it('should return false if no tokens exist', async () => {
+    it('should return false and never call fetch when no authToken exists', async () => {
       let result: boolean = false;
 
       await act(async () => {
@@ -247,23 +258,80 @@ describe('AuthStore', () => {
       });
 
       expect(result).toBe(false);
+      expect(global.fetch).not.toHaveBeenCalled();
     });
 
-    it('should call refresh endpoint and update tokens on success', async () => {
-      const mockResponse = {
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-        expiresIn: 3600,
-      };
-
+    // #4338 — le bug mesuré : `refreshSession` postait `fetch('/api/auth/refresh', …)`
+    // À LA MAIN, un chemin RELATIF sans `/v1` qui frappe le serveur Next (aucune
+    // route `app/api/auth/refresh` n'existe) plutôt que le gateway. La correction
+    // fait passer le store par `authService.refreshToken()` — déjà câblé sur
+    // `buildApiUrl(API_ENDPOINTS.auth.refresh)` — au lieu de dupliquer un second
+    // `fetch`. Ce témoin assert sur l'URL RÉELLEMENT passée à `fetch`, calculée par
+    // le MÊME catalogue partagé que la production, jamais un littéral recopié.
+    it("vise l'adresse SERVIE (catalogue partagé + gateway), jamais un chemin relatif du serveur Next", async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
       (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse),
+        json: () => Promise.resolve({
+          success: true,
+          data: { token: 'new-jwt', expiresIn: 3600 },
+        }),
       });
 
-      // Set initial tokens
       act(() => {
-        useAuthStore.getState().setTokens('old-token', 'old-refresh');
+        useAuthStore.getState().setTokens('store-jwt');
+      });
+
+      await act(async () => {
+        await useAuthStore.getState().refreshSession();
+      });
+
+      const [calledUrl] = (global.fetch as jest.Mock).mock.calls[0] ?? [];
+      expect(calledUrl).toBe(buildApiUrl(API_ENDPOINTS.auth.refresh));
+    });
+
+    // Le schéma serveur (`AuthSchemas.refreshToken`,
+    // services/gateway/src/routes/auth/magic-link.ts) exige `token` et n'a AUCUN
+    // champ `refreshToken` — le corps que l'ancien store envoyait
+    // (`{ refreshToken }`, sans `token`) aurait été refusé (400, `token` manquant).
+    // `sessionToken` est le nom réel du second champ, optionnel.
+    it("envoie le corps que /auth/refresh exige (token requis, sessionToken optionnel — jamais 'refreshToken')", async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        json: () => Promise.resolve({
+          success: true,
+          data: { token: 'new-jwt', sessionToken: 'same-session-token', expiresIn: 3600 },
+        }),
+      });
+
+      act(() => {
+        useAuthStore.getState().setTokens('store-jwt', undefined, 'store-session-token');
+      });
+
+      await act(async () => {
+        await useAuthStore.getState().refreshSession();
+      });
+
+      const [, calledInit] = (global.fetch as jest.Mock).mock.calls[0] ?? [];
+      expect(JSON.parse((calledInit as RequestInit).body as string)).toEqual({
+        token: 'manager-jwt',
+        sessionToken: 'store-session-token',
+      });
+    });
+
+    it('should update authToken and sessionToken and return true on successful refresh', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
+      (global.fetch as jest.Mock).mockResolvedValueOnce({
+        json: () => Promise.resolve({
+          success: true,
+          data: { token: 'new-jwt', sessionToken: 'same-session-token', expiresIn: 3600 },
+        }),
+      });
+
+      act(() => {
+        useAuthStore.getState().setTokens('store-jwt');
       });
 
       let result: boolean = false;
@@ -273,27 +341,23 @@ describe('AuthStore', () => {
       });
 
       expect(result).toBe(true);
-      expect(global.fetch).toHaveBeenCalledWith('/api/auth/refresh', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer old-token',
-        },
-        body: JSON.stringify({ refreshToken: 'old-refresh' }),
-      });
-
       const state = useAuthStore.getState();
-      expect(state.authToken).toBe('new-access-token');
-      expect(state.refreshToken).toBe('new-refresh-token');
+      expect(state.authToken).toBe('new-jwt');
+      expect(state.sessionToken).toBe('same-session-token');
     });
 
-    it('should return false on refresh failure', async () => {
+    it('should return false when the server refuses the refresh', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
       (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
+        json: () => Promise.resolve({
+          success: false,
+          error: 'Session révoquée — veuillez vous reconnecter',
+        }),
       });
 
       act(() => {
-        useAuthStore.getState().setTokens('old-token', 'old-refresh');
+        useAuthStore.getState().setTokens('store-jwt');
       });
 
       let result: boolean = false;
@@ -306,10 +370,12 @@ describe('AuthStore', () => {
     });
 
     it('should return false on network error', async () => {
+      const { authManager } = await import('../../services/auth-manager.service');
+      (authManager.getAuthToken as jest.Mock).mockReturnValue('manager-jwt');
       (global.fetch as jest.Mock).mockRejectedValueOnce(new Error('Network error'));
 
       act(() => {
-        useAuthStore.getState().setTokens('old-token', 'old-refresh');
+        useAuthStore.getState().setTokens('store-jwt');
       });
 
       let result: boolean = false;
@@ -431,22 +497,26 @@ describe('AuthStore', () => {
   });
 
   describe('Persistence', () => {
-    it('should persist user, tokens, and sessionExpiry', () => {
+    it('should persist user, authToken, sessionToken, and sessionExpiry', () => {
       const sessionExpiry = new Date(Date.now() + 3600000);
 
       act(() => {
         useAuthStore.getState().setUser(mockUser);
-        useAuthStore.getState().setTokens('auth-token', 'refresh-token');
+        // Le 2e argument (créneau `refreshToken`, désormais inerte, #4405)
+        // ne doit atterrir NULLE PART — ni en état, ni dans ce que
+        // `partialize` retient pour la persistance.
+        useAuthStore.getState().setTokens('auth-token', 'legacy-refresh-slot-value');
         useAuthStore.setState({ sessionExpiry });
       });
 
       // Verify the persistence partialize function
       const state = useAuthStore.getState();
-      const persistedKeys = ['user', 'authToken', 'refreshToken', 'sessionExpiry'];
+      const persistedKeys = ['user', 'authToken', 'sessionToken', 'sessionExpiry'];
 
       persistedKeys.forEach(key => {
         expect(state).toHaveProperty(key);
       });
+      expect(state).not.toHaveProperty('refreshToken');
     });
   });
 });

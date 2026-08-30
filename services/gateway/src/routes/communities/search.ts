@@ -7,7 +7,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { validatePagination } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendPaginatedSuccess, sendInternalError, createPaginationMeta } from '../../utils/response.js';
-import { resolveCommunityMemberPresence } from '../community-member-presence';
+import { resolveCommunityMemberPresence } from '../../services/community-member-presence';
 
 const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 

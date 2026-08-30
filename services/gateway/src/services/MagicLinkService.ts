@@ -17,6 +17,7 @@ import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
+import { signSessionToken } from './auth/session-jwt';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
@@ -314,21 +315,32 @@ export class MagicLinkService {
         data: { usedAt: new Date() }
       });
 
-      // 8. Generate JWT token
-      const jwt = require('jsonwebtoken');
-      const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
-      const jwtToken = jwt.sign(
-        { userId: user.id, username: user.username },
-        jwtSecret,
-        { expiresIn: '24h' }
-      );
-
-      // 9. Create session with full device tracking
+      // 8. Créer la session AVANT de signer — l'ordre est le correctif (#4264)
+      //
+      // Ce site signait son JWT douze lignes plus haut, avec son PROPRE
+      // `require('jsonwebtoken')` et une charge à deux champs : pas de `role`,
+      // là où les quatre autres sites d'émission en posent un. Une divergence
+      // de forme entre deux jetons du même service, invisible parce qu'aucun
+      // appelant ne lisait `role` — jusqu'à ce qu'un jour l'un le lise.
+      //
+      // Signer d'abord rendait surtout IMPOSSIBLE de nommer la session : elle
+      // n'existait pas encore. Le mode de panne change et c'est voulu — si
+      // `createSession` échoue, aucun JWT n'est plus fabriqué du tout, au lieu
+      // d'un jeton signé puis jeté avec l'erreur. Le lien magique rejoint le
+      // site unique d'émission plutôt que d'en reproduire une moitié.
       const sessionToken = generateSessionToken();
       const session = await createSession({
         userId: user.id,
         token: sessionToken,
         requestContext
+      });
+
+      // 9. Signer le JWT, rattaché à la session qui vient de naître
+      const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
+      const jwtToken = signSessionToken({
+        user: { id: user.id, username: user.username, role: user.role },
+        secret: jwtSecret,
+        sessionId: session.id
       });
 
       // 10. Update user's last login info

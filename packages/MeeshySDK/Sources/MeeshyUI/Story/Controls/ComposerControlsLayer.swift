@@ -152,6 +152,8 @@ public struct ComposerControlsLayer: View {
         ComposerChromePolicy.fullChromeVisible(chrome)
     }
 
+    @Environment(\.storyComposerToolRowLeadingAccessory) private var toolRowLeadingAccessory
+
     public var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -161,7 +163,7 @@ public struct ComposerControlsLayer: View {
             if shouldShowFABs {
                 HStack {
                     Spacer()
-                    ComposerFABColumn(
+                    ComposerToolRow(
                         mediaBadge: mediaBadge,
                         sonBadge: sonBadge,
                         textBadge: textBadge,
@@ -195,7 +197,10 @@ public struct ComposerControlsLayer: View {
                                 bandStateMachine.swipeUpOnFAB(cat)
                             }
                         },
-                        onSwipeDownAny: { bandStateMachine.hideChrome() }
+                        onSwipeDownAny: { bandStateMachine.hideChrome() },
+                        // #4136 — l'icône de description entre par ce slot :
+                        // son texte appartient au meuble, pas au SDK.
+                        leadingAccessory: toolRowLeadingAccessory?.makeView()
                     )
                     Spacer()
                 }

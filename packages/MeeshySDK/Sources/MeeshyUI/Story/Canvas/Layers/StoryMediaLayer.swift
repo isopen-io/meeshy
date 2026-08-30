@@ -2,6 +2,7 @@ import Foundation
 import QuartzCore
 import AVFoundation
 import UIKit
+import os
 import MeeshySDK
 
 /// Async image loader used by `StoryMediaLayer.configureImage`. Default
@@ -69,6 +70,23 @@ public final class StoryMediaLayer: CALayer {
     public private(set) nonisolated(unsafe) var media: StoryMediaObject?
     public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
     public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
+
+    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+
+    /// Fenêtre de rognage NON destructive du média foreground courant — `nil`
+    /// tant que la durée réelle de la source n'a pas été chargée (le fichier
+    /// vient d'être attaché) OU quand le média n'a jamais été rogné.
+    /// `attachPlayer` la remet à `nil` à chaque nouvel item ; `startLoadingTrimWindow`
+    /// la peuple de façon asynchrone une fois `AVAsset.load(.duration)` résolu,
+    /// via le résolveur UNIQUE `StoryMediaObject.trimBounds(sourceDuration:)`
+    /// (voir `MediaTrimRule.swift`) — jamais une seconde logique de résolution
+    /// ici. `nil` se comporte comme "source entière" : c'est le repli qui
+    /// garantit qu'une fenêtre pas encore connue ne fige jamais l'image ni ne
+    /// coupe le son, elle joue seulement depuis le début le temps que la
+    /// vraie fenêtre arrive (rattrapée par `alignToTimelineThenPlay` dès que
+    /// `applyResolvedTrimBounds` la pose, via le même seuil de dérive que le
+    /// calage timeline normal).
+    private nonisolated(unsafe) var currentTrimBounds: MediaTrimBounds?
 
     /// Reflète l'état de mute global du reader (bouton sidebar / contexte). Le
     /// canvas synchronise cette propriété sur chaque media layer dès qu'un
@@ -625,6 +643,12 @@ public final class StoryMediaLayer: CALayer {
         // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
         item.preferredForwardBufferDuration = 2.0
 
+        // Nouvel item ⇒ fenêtre de rognage inconnue jusqu'à preuve du
+        // contraire : repli "source entière" pendant le chargement (voir
+        // doc de `currentTrimBounds`).
+        currentTrimBounds = nil
+        startLoadingTrimWindow(for: item)
+
         if let existing = avPlayerLayer?.player {
             existing.replaceCurrentItem(with: item)
         } else {
@@ -701,12 +725,21 @@ public final class StoryMediaLayer: CALayer {
             // Composer (`.edit`) : la vidéo reboucle indéfiniment pour la
             // prévisualisation live — comme le fond.
             player.actionAtItemEnd = .none
+            // `self` capturé via la boîte faible `@unchecked Sendable` — même
+            // raison que l'observer non-loop ci-dessous (nonisolated donc non
+            // Sendable). Lue au moment du BOUCLAGE, jamais à l'armement : la
+            // fenêtre peut encore être `nil` (durée pas chargée) quand cet
+            // observer est posé et résolue quelques secondes plus tard, bien
+            // avant que la vidéo n'atteigne sa fin. Boucler sur `.zero`
+            // rejouerait la portion COUPÉE en tête de chaque itération.
+            let weakSelfForLoop = StoryMediaLayerWeakBox(self)
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
                 queue: .main
             ) { [weak player] _ in
-                player?.seek(to: .zero)
+                let restart = weakSelfForLoop.value?.currentTrimBounds?.start ?? 0
+                player?.seek(to: CMTime(seconds: restart, preferredTimescale: 600))
                 player?.play()
             }
         } else {
@@ -763,15 +796,20 @@ public final class StoryMediaLayer: CALayer {
     }
 
     /// Scrub de preview timeline : pause puis cale le player sur le playhead
-    /// unifié (`max(0, slidePlayheadSeconds − startTime)`) avec une tolérance
-    /// large — un seek frame-accurate à la cadence du scrub gèle sur la
-    /// décompression GOP. Le seek fire à chaque appel (pas de seuil de
+    /// unifié (`max(0, slidePlayheadSeconds − startTime)`, décalé dans la
+    /// fenêtre de rognage courante — cf. `trimmedSeekTarget`) avec une
+    /// tolérance large — un seek frame-accurate à la cadence du scrub gèle
+    /// sur la décompression GOP. Le seek fire à chaque appel (pas de seuil de
     /// dérive) : en pause, la frame affichée DOIT suivre le doigt.
     @MainActor
     public func alignPausedToSlidePlayhead() {
         guard let player = avPlayer else { return }
         player.pause()
-        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let target = Self.trimmedSeekTarget(
+            bounds: currentTrimBounds,
+            slidePlayheadSeconds: slidePlayheadSeconds,
+            mediaStartTime: media?.startTime ?? 0
+        )
         let tolerance = CMTime(seconds: 0.05, preferredTimescale: 600)
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
                     toleranceBefore: tolerance, toleranceAfter: tolerance)
@@ -780,7 +818,11 @@ public final class StoryMediaLayer: CALayer {
     @MainActor
     private func alignToTimelineThenPlay() {
         guard let player = avPlayer else { return }
-        let target = max(0, slidePlayheadSeconds - (media?.startTime ?? 0))
+        let target = Self.trimmedSeekTarget(
+            bounds: currentTrimBounds,
+            slidePlayheadSeconds: slidePlayheadSeconds,
+            mediaStartTime: media?.startTime ?? 0
+        )
         let current = player.currentTime().seconds
         if Self.shouldSeekToAlign(current: current, target: target) {
             player.seek(to: CMTime(seconds: target, preferredTimescale: 600),
@@ -800,6 +842,73 @@ public final class StoryMediaLayer: CALayer {
     static func shouldSeekToAlign(current: Double, target: Double) -> Bool {
         guard target.isFinite, current.isFinite else { return false }
         return abs(current - target) > timelineSeekDriftThreshold
+    }
+
+    /// Position de seek DANS LA SOURCE pour un playhead de slide donné, la
+    /// fenêtre de rognage repliée dedans. `bounds == nil` (rognage jamais
+    /// déclaré, ou pas encore chargé) rend exactement `max(0, slidePlayheadSeconds
+    /// − mediaStartTime)` — le calcul d'aujourd'hui, bit à bit : c'est le repli
+    /// "source entière" qui garantit qu'un média non rogné ne change jamais de
+    /// comportement. Une fois `bounds` connu, l'origine du média glisse de `0`
+    /// à `bounds.start` et la cible ne dépasse jamais `bounds.end` — un resume
+    /// tardif ou une dérive réseau ne rejoue donc jamais la portion coupée.
+    /// Pure et statique : éprouvable sans `AVAsset` ni simulateur, comme
+    /// `shouldSeekToAlign` ci-dessus.
+    static func trimmedSeekTarget(bounds: MediaTrimBounds?,
+                                  slidePlayheadSeconds: Double,
+                                  mediaStartTime: Double) -> Double {
+        let elapsedInMedia = max(0, slidePlayheadSeconds - mediaStartTime)
+        guard let bounds else { return elapsedInMedia }
+        return min(bounds.start + elapsedInMedia, bounds.end)
+    }
+
+    /// Charge la durée réelle de la source PUIS résout la fenêtre de rognage —
+    /// jamais l'inverse. `MediaTrimRule.resolved` (via `StoryMediaObject.trimBounds`)
+    /// a besoin de la durée VRAIE pour rejeter des bornes vieillies (fichier
+    /// remplacé, plus court qu'au moment du rognage) ; tant qu'elle n'est pas
+    /// connue, `currentTrimBounds` reste `nil` et la couche joue la source
+    /// entière — jamais un silence ni une image figée pendant l'attente.
+    ///
+    /// `asset.load(.duration)` est asynchrone et ne bloque jamais le thread
+    /// principal (contrat explicite : un seek initial synchrone qui attendrait
+    /// dessus geler l'affichage de CHAQUE vidéo foreground, rognée ou non).
+    /// Sans intention de rognage déclarée (`sourceStart`/`sourceEnd` tous deux
+    /// `nil`), on ne charge RIEN : c'est le cas de loin le plus fréquent, et le
+    /// repli "source entière" est déjà exactement le comportement d'aujourd'hui.
+    @MainActor
+    private func startLoadingTrimWindow(for item: AVPlayerItem) {
+        guard let media, media.sourceStart != nil || media.sourceEnd != nil else { return }
+        let generation = videoLoadGeneration
+        let asset = item.asset
+        Task { @MainActor [weak self] in
+            do {
+                let cmDuration = try await asset.load(.duration)
+                let seconds = CMTimeGetSeconds(cmDuration)
+                guard seconds.isFinite, seconds > 0 else { return }
+                guard let self,
+                      self.videoLoadGeneration == generation,
+                      self.avPlayerLayer?.player?.currentItem === item
+                else { return }
+                self.applyResolvedTrimBounds(media.trimBounds(sourceDuration: seconds), to: item)
+            } catch {
+                Self.logger.error("StoryMediaLayer trim window: asset.load(.duration) failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// Pose la fenêtre résolue sur l'item (`forwardPlaybackEndTime` = borne de
+    /// fin — mécanisme non destructif, aucun ré-encodage) puis recale la
+    /// lecture en cours si elle a démarré AVANT que la fenêtre ne soit connue
+    /// (le repli "source entière" pendant le chargement, cf. `currentTrimBounds`).
+    /// `alignToTimelineThenPlay()` ne saute que si la dérive dépasse son seuil —
+    /// exactement le comportement qu'on veut ici : une fenêtre dont `start` est
+    /// proche de zéro ne provoque aucun à-coup visible.
+    @MainActor
+    private func applyResolvedTrimBounds(_ bounds: MediaTrimBounds, to item: AVPlayerItem) {
+        currentTrimBounds = bounds
+        item.forwardPlaybackEndTime = CMTime(seconds: bounds.end, preferredTimescale: 600)
+        guard avPlayerLayer?.player?.currentItem === item, isPlaybackActive else { return }
+        alignToTimelineThenPlay()
     }
 
     /// Reprise/pause transitoire sur lifecycle d'app (foreground/background),
@@ -885,6 +994,7 @@ public final class StoryMediaLayer: CALayer {
         avPlayerLayer?.player = nil
         avPlayer = nil
         attachedURL = nil
+        currentTrimBounds = nil
         placeholderLayer?.removeFromSuperlayer()
         placeholderLayer = nil
     }

@@ -134,9 +134,15 @@ struct OutboxDispatcher: OutboxDispatching {
     /// transient and the flusher's exponential backoff will retry.
     private func dispatchBlockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: BlockUserPayload.self)
+        // `PUT /directory/blocks/{id}` (#4164) — et c'est CE chemin-ci qui rend
+        // la migration urgente : le rejeu hors ligne rejoue des mutations
+        // enregistrées avant une mise à jour, et l'ancienne route rendait `409`
+        // sur un blocage DÉJÀ appliqué. Le dispatcher traitait donc un succès
+        // comme un échec 4xx non transitoire, et l'enregistrement mourait en
+        // `.exhausted` alors que le serveur avait écrit ce qu'il fallait.
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/users/\(payload.targetUserId)/block",
-            method: "POST",
+            endpoint: "/directory/blocks/\(payload.targetUserId)",
+            method: "PUT",
             body: try JSONEncoder().encode([String: String]()),
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
@@ -163,7 +169,7 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: UnblockUserPayload.self)
         let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/users/\(payload.targetUserId)/block",
+            endpoint: "/directory/blocks/\(payload.targetUserId)",
             method: "DELETE",
             body: nil,
             queryItems: nil,
@@ -182,7 +188,11 @@ struct OutboxDispatcher: OutboxDispatching {
         }
         let body = SendFriendRequestBody(receiverId: payload.targetUserId)
         let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/friend-requests",
+            // `/directory/friend-requests` (#4162) — et c'est CE chemin-ci qui
+            // rend la migration urgente : le rejeu hors ligne rejoue des
+            // mutations enregistrées AVANT la mise à jour, et une bascule
+            // partielle les enverrait sur une famille éteinte.
+            endpoint: "/directory/friend-requests",
             method: "POST",
             body: try JSONEncoder().encode(body),
             queryItems: nil,
@@ -191,17 +201,23 @@ struct OutboxDispatcher: OutboxDispatching {
         logger.info("sendFriendRequest dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
-    /// PATCH /friend-requests/:id — gateway expects `{ status: "accepted"|"rejected" }`.
-    /// Translate `accept|reject` → `accepted|rejected`.
+    /// `PATCH /directory/friend-requests/:id` — le corps porte une ACTION,
+    /// jamais un statut (#4162).
+    ///
+    /// L'ADRESSE et le CORPS changent ENSEMBLE. Migrer l'une sans l'autre
+    /// enverrait `{ status }` à une route qui déclare `action` en `required` :
+    /// AJV refuserait en 400, un code que le dispatcher traite en 4xx NON
+    /// transitoire — l'enregistrement mourrait en `.exhausted`, et la réponse
+    /// à une demande d'amitié faite hors ligne serait perdue en silence.
     private func dispatchRespondFriendRequest(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: RespondFriendRequestPayload.self)
         struct RespondBody: Encodable {
-            let status: String
+            let action: String
         }
-        let status = payload.action == .accept ? "accepted" : "rejected"
-        let body = RespondBody(status: status)
+        let status = payload.action == .accept ? "accept" : "reject"
+        let body = RespondBody(action: status)
         let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
-            endpoint: "/friend-requests/\(payload.friendRequestId)",
+            endpoint: "/directory/friend-requests/\(payload.friendRequestId)",
             method: "PATCH",
             body: try JSONEncoder().encode(body),
             queryItems: nil,

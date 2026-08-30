@@ -128,6 +128,9 @@ async function buildApp(): Promise<FastifyInstance> {
     },
     conversation: {
       findMany: jest.fn().mockResolvedValue([]),
+      // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
+      // part de la page (`.count()`), en plus du `.findMany` déjà mocké.
+      count: jest.fn().mockResolvedValue(0),
     },
     user: {
       findFirst: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),

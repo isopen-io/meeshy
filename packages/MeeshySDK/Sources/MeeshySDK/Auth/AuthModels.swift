@@ -162,15 +162,40 @@ public struct ResendVerificationRequest: Encodable {
 
 // MARK: - Availability Check
 
+/// La réponse de `GET /auth/check-availability`.
+///
+/// **Le contrat a changé (#4158).** L'adresse et le numéro ne disent plus si un
+/// compte existe : les confirmer sans authentification faisait de cette route
+/// un oracle, alors que `/forgot-password` et `/magic-link/request` répondent
+/// délibérément « succès » dans tous les cas pour ne rien révéler. Ils rendent
+/// désormais un verdict de FORME.
+///
+/// Le PSEUDO, lui, répond toujours sur l'existence — c'est une clé publique,
+/// déjà énumérable par `GET /u/:username`.
 public struct AvailabilityResponse: Decodable {
     public let usernameAvailable: Bool?
-    public let emailAvailable: Bool?
-    public let phoneNumberAvailable: Bool?
-    public let phoneNumberValid: Bool?
     public let suggestions: [String]?
 
+    /// Forme seulement. `nil` quand l'adresse n'a pas été soumise.
+    public let emailValid: Bool?
+    /// Forme seulement. `nil` quand le numéro n'a pas été soumis.
+    public let phoneNumberValid: Bool?
+    /// Le numéro normalisé, quand il est bien formé.
+    public let phoneNumberE164: String?
+
+    /// Ne parle QUE du pseudo.
+    ///
+    /// Elle retombait auparavant sur `emailAvailable ?? phoneNumberAvailable`,
+    /// des champs que le serveur ne sert plus : la laisser ainsi ferait rendre
+    /// `false` à chaque adresse, et l'écran d'inscription dirait « déjà
+    /// utilisée » à tout le monde.
     public var available: Bool {
-        usernameAvailable ?? emailAvailable ?? phoneNumberAvailable ?? false
+        usernameAvailable ?? false
+    }
+
+    /// L'identifiant de contact soumis est-il BIEN FORMÉ ? (jamais « libre »)
+    public var wellFormed: Bool {
+        emailValid ?? phoneNumberValid ?? true
     }
 }
 
@@ -186,13 +211,19 @@ public struct PhoneOwnerMaskedInfo: Decodable, Sendable, Equatable {
 /// le numéro appartient à un compte dormant dont l'identité déclarée matche —
 /// le client oriente alors vers la récupération de compte plutôt que la
 /// création d'un doublon.
+/// La réponse de `POST /auth/phone-transfer/check`.
+///
+/// **`exists` a été RETIRÉ du fil (#4239).** Il confirmait, sans compte, qu'un
+/// numéro appartient à un utilisateur Meeshy — le même oracle que #4158 ferme
+/// sur la porte voisine. `maskedInfo` ne vient plus que lorsque la récupération
+/// est suggérée, c'est-à-dire lorsque l'appelant a déjà prouvé qu'il connaît le
+/// vrai nom du titulaire.
+///
+/// `dormant`, `dormantSince` et `nameSimilarity` n'ont jamais été servis par
+/// cette route — elle les tait délibérément. Les déclarer ici les laissait
+/// paraître disponibles ; ils sont retirés avec `exists`.
 public struct PhoneOwnershipResponse: Decodable, Sendable, Equatable {
-    public let exists: Bool
     public let maskedInfo: PhoneOwnerMaskedInfo?
-    public let dormant: Bool?
-    public let dormantSince: String?
-    /// "exact" | "similar" | "different" | nil
-    public let nameSimilarity: String?
     public let recoverySuggested: Bool?
 }
 

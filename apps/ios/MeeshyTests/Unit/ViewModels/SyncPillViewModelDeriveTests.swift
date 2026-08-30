@@ -20,7 +20,7 @@ final class SyncPillViewModelDeriveTests: XCTestCase {
             titlePreview: "x",
             iconKind: .text,
             attachmentCount: 0,
-            source: .conversation(id: "c"),
+            source: .conversation(id: "c", messageId: nil),
             status: status,
             createdAt: createdAt ?? now
         )

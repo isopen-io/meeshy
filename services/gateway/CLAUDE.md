@@ -208,6 +208,64 @@ function registerSubRoutes(ctx: Context) {
 }
 ```
 
+## La table des routes est PUBLIÉE, et un cliquet la tient
+
+`docs/api/route-manifest.{json,md}` liste les routes réellement SERVIES — méthode,
+chemin complet, préfixe de montage, module déclarant, niveau S0–S6 et sa preuve —
+produites depuis le serveur ASSEMBLÉ (`registerAllRoutes`), jamais par `grep`.
+C'est la source qui fait foi pour les catalogues clients (#4276).
+
+**Ajouter, retirer ou déplacer une route rend `src/__tests__/route-manifest-ratchet.test.ts`
+ROUGE tant que le manifeste n'est pas régénéré** — c'est voulu :
+
+```bash
+npx tsx scripts/route-manifest.ts        # régénère (à commiter avec la route)
+npx tsx scripts/route-manifest.ts --check # vérifie sans écrire
+```
+
+Le manifeste CONSTATE aussi les anomalies d'adressage (chemin hors `/api/v1`,
+préfixe codé en dur dans le module). Ne les corrige pas au passage : c'est #4277.
+
+## Une adresse hors `/api` est hors de tout ce qui s'ancre sur `/api` — jusqu'à son retrait INCLUS
+
+Déprécier une adresse ne la retire pas d'un périmètre : ça annonce sa fin. Les trois
+en-têtes `Deprecation` / `Sunset` / `Link` (#4274) s'adressent à un **client** ; une
+règle de proxy, de WAF, de quota, de journalisation ou de catalogue s'ancre sur un
+**préfixe de chemin** et ne les lit jamais. Un alias racine reste donc servi, et hors
+de ces règles, pendant TOUTE sa fenêtre de retrait (180 jours par défaut,
+`FENETRE_DE_RETRAIT_JOURS`).
+
+**Une entrée montée avec un préfixe vide déclare donc DEUX choses, pas une** : pourquoi
+elle vit à cette adresse (déjà exigé par `RouteRegistrationEntry.prefix`, qui est requis)
+et **ce que cette adresse ne reçoit pas**. Écrire la première sans la seconde est le
+défaut fermé par #4367 — le commentaire de `voice-analysis-legacy-alias`
+(`routes/index.ts`) en est le modèle.
+
+Ancrer une règle sur `/api` sans y nommer les adresses racine SERVIES est le défaut
+symétrique. Deux règles vivent aujourd'hui dans le dépôt, à vérifier avant d'en écrire
+une troisième :
+
+| règle | ancrage | ce qu'elle fait des adresses racine |
+|---|---|---|
+| routage de production (Traefik, `docker-compose.{prod,staging}.yml`) | **HÔTE** — `Host(gate[.staging].meeshy.me)` → `gateway:3000` | les sert, tous chemins : il n'y a pas de porte `/api` à franchir |
+| routeur LAN de développement `gateway-ip` (`docker-compose.local.yml`) | **CHEMIN** — `Host(192.168.1.171) && PathPrefix('/api')` | ne les prend PAS : elles tombent chez `frontend-ip`, qui n'a pas de `PathPrefix` |
+| `ROUTES_SURVEILLEES` (`services/route-usage.service.ts`, #4275) | **CHEMIN** — 57 entrées (2026-08-30), toutes `/api/v1/` | les compte dans la table brute, ne les MATÉRIALISE pas dans la portée `watched` |
+
+Les `handle /api/*` du `Caddyfile` et les `location /api/` des quatre confs nginx qui
+relaient vers la passerelle (`default.conf`, `dev.conf`, `production.conf`,
+`ssl-optimized.conf`) décrivent une topologie mono-hôte que ce dépôt **ne déploie pas** :
+Caddy n'est référencé par aucun compose, trois de ces confs sont sur la liste de
+suppression de `scripts/cleanup-production.sh` et la quatrième n'est référencée nulle
+part. La seule conf nginx réellement montée est `static-files.conf`, qui sert
+`static.meeshy.me` et ne relaie rien vers la passerelle. Ne pas les lire comme des règles
+vivantes.
+
+Témoin : `src/__tests__/route-manifest/unprefixed-mounts.ts` fige les modules montés sans
+préfixe (5 modules, 22 routes) et rougit si l'un rejoint la racine sans décision écrite,
+ou si une décision `hors-api` ne dit pas sa conséquence de périmètre. Il complète, sans
+le doubler, `no-routes-outside-api-v1.ts` — celui-ci balaie les CHEMINS servis, celui-là
+les MONTAGES qui décident de l'adresse.
+
 ## Service Pattern
 ```typescript
 export class ServiceName {
@@ -1149,18 +1207,40 @@ tour, et en cliquet :
 `routes/__tests__/response-payload-mismatch.ts`, gardé par
 `response-payload-mismatch.test.ts` (cycle 91 bis).
 
-Il apparie chaque bloc `response:` avec les `sendSuccess(reply, { … })` qui le
+Il apparie chaque bloc `response:` avec les `sendSuccess(reply, …)` qui le
 SUIVENT — le gestionnaire d'une route vit entre son schéma et le schéma suivant
-— et compare les jeux de clés : `total` (aucune clé envoyée n'est déclarée ⇒
-`data` sort à `{}`) contre `partial` (les clés supprimées, nommées). Il ne
-conclut jamais au vide quand la charge porte un `...spread`, qui peut apporter
-les clés déclarées.
+— et rend TROIS formes : `envelope` (le statut 2xx déclare des `properties` où
+`data` ne figure pas ⇒ la charge ENTIÈRE est supprimée, la réponse part à
+`{"success":true}`), `total` (`data` est déclaré, aucune clé envoyée n'y figure
+⇒ `data` sort à `{}`) et `partial` (les clés supprimées, nommées).
 
-Sa limite, assumée : `sendSuccess(reply, maVariable)` lui échappe — remonter
-jusqu'à la variable demanderait un typeur, pas un balayage.
+Il lit DEUX formes de charge utile : le littéral, et la **variable locale** que
+le handler compose sous ses propres yeux (`const p = { … }`, ou le reste d'une
+déstructuration `const { success: _s, ...p } = result`). C'est l'élargissement
+de #4192, et il n'est pas cosmétique : la limite d'avant — « un
+`sendSuccess(reply, maVariable)` lui échappe, et c'est assumé » — était écrite
+dans un doc-comment, donc INCAPABLE DE ROUGIR, et #4139 y a vécu en entier.
+Mesuré : sur le `password-reset.ts` d'avant le correctif a62555bb15, la sonde
+d'avant rend `[]`, celle d'après nomme les quatre schémas fautifs.
 
-**`FROZEN_MISMATCHES` est VIDE depuis le cycle 92 bis**, et c'est un état à défendre,
-pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
+Un jeu de clés est OUVERT dès qu'il porte un `...spread`, qu'il vienne du
+littéral, du reste d'une déstructuration (`result` est un objet INCONNU) ou
+d'une mutation de la variable avant l'envoi : sur un jeu ouvert, l'outil ne
+conclut JAMAIS à `total`. Il se tait de même sur un schéma OUVERT (`200: ref`,
+`{ ...enveloppe }`, `additionalProperties` non `false`) et sur
+`sendSuccess(reply, undefined | null)`, qui n'écrit aucune clé `data`.
+
+Sa limite qui SUBSISTE, redite parce qu'une limite qu'on déplace sans la redire
+redevient un angle mort silencieux : il ne résout QUE ce que le handler déclare
+lui-même — un appel de fonction, un import, un paramètre, une variable de module
+ou un ternaire laissent la charge inconnue, et il se TAIT plutôt que de deviner.
+Elle a une TAILLE, et c'est ce qui la rend actionnable : sur `routes/` au moment
+de #4192, 268 charges littérales, 124 par variable — 20 vides, 14 résolues, et
+**90 hors de portée**. « Une limite assumée » sans chiffre ne dit pas s'il y a
+un trou d'un site ou de quatre-vingt-dix.
+
+**`FROZEN_MISMATCHES` a été VIDE du cycle 92 bis à #4192**, et c'est un état à
+défendre, pas un état atteint. Son dernier site — l'invitation — y a été gelé un cycle
 entier PAR DÉCISION, le temps que son gate de présence soit prêt. Quand le
 cliquet tombe : ouvrir l'ÉMETTEUR (le seul discriminant, cycle 91 bis) avant de
 geler quoi que ce soit, et ne geler que ce qu'une raison ÉCRITE justifie de

@@ -211,6 +211,11 @@ public struct StoryComposerView: View {
     /// propose jamais à l'utilisateur un choix qui sera refusé.
     let allowedVisibilities: [PostVisibility]?
 
+    /// **La réserve basse déclarée par le meuble** (#4361) — la hauteur de sa
+    /// zone de saisie de description. Le canvas se rétracte au-dessus ; il ne se
+    /// fait pas recouvrir.
+    @Environment(\.storyComposerCanvasBottomReservation) var hostCanvasBottomReservation
+
     @State var visibility: String
     @State var visibilityUserIds: [String]
     @State var audiencePickerMode: PostVisibility?
@@ -501,8 +506,23 @@ public struct StoryComposerView: View {
         // V3-1 — l'atelier arme la télécommande du meuble avec sa PROPRE
         // publication. Le meuble presse, il ne recompose rien : le rabattement
         // des effets du canvas, la visibilité et la langue restent lus ici.
-        .onAppear { publishTrigger?.arm { publishAllSlides() } }
+        .onAppear {
+            publishTrigger?.arm { publishAllSlides() }
+            // #4135 — l'ŒIL s'arme séparément, et il s'exécute ICI : l'aperçu
+            // se rend avec les médias PRÉCHARGÉS de l'atelier et ses effets de
+            // canvas rabattus (`snapshotAllSlides`). Un œil peint au meuble et
+            // exécuté par lui rendrait un aperçu amputé — c'est l'un des deux
+            // blocages qui avaient fait revenir ce lot en arrière au #4124.
+            publishTrigger?.armPreview { presentPreview() }
+            publishTrigger?.report(canPublish: canPublish)
+        }
         .onDisappear { publishTrigger?.disarm() }
+        // Le gate du bouton se RELAIE, il ne se recopie pas : le meuble ne voit
+        // ni `selectedAudioId` ni les traits de dessin, et conclurait « rien à
+        // publier » sur une story « fond + musique » parfaitement publiable.
+        .adaptiveOnChange(of: canPublish) { _, nouveau in
+            publishTrigger?.report(canPublish: nouveau)
+        }
         // Le bandeau de reprise ne flotte au-dessus de RIEN : dès que le chrome
         // plein cède la place (panneau d'outil, éditeur texte, dessin, timeline),
         // il se range. La règle est pure et testée

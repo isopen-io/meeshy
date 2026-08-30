@@ -13,10 +13,8 @@ import type { AuthenticatedRequest, IdParams, FriendRequestBody, FriendRequestAc
 import type { NotificationService } from '../../services/notifications/NotificationService';
 import type { EmailService } from '../../services/EmailService';
 import { validatePagination } from '../../utils/pagination';
-import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { generateCompactConversationIdentifier } from '@meeshy/shared/utils/conversation-helpers';
-import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
-import { viewerFromRequest } from './presence-gate';
+import { servirParties } from '../directory/friend-requests-core';
 
 /**
  * Bloc `pagination` de la réponse de `GET /users/friend-requests`.
@@ -33,44 +31,11 @@ export const friendRequestsPaginationSchema = {
   }
 } as const;
 
-/** Profil inline porté par une demande d'ami (`sender` / `receiver`). */
-type InlineProfile = { id: string; isOnline: boolean | null; lastActiveAt: Date | null };
-type FriendRequestRow = { sender?: InlineProfile | null; receiver?: InlineProfile | null };
-
-/**
- * Applique le gate de présence sur les deux profils inline de chaque demande.
- *
- * Les DEUX côtés passent par le résolveur, y compris le lecteur lui-même : la
- * politique le reconnaît (`isSelf` ⇒ visible) et une seule branche vaut mieux
- * qu'un cas particulier. Une page vide n'ouvre aucune requête.
- */
-async function gateFriendRequestPresence<T extends FriendRequestRow>(
-  fastify: FastifyInstance,
-  request: FastifyRequest,
-  rows: T[],
-): Promise<T[]> {
-  const ids = [
-    ...new Set(
-      rows
-        .flatMap((row) => [row.sender?.id, row.receiver?.id])
-        .filter((id): id is string => typeof id === 'string'),
-    ),
-  ];
-  if (ids.length === 0) return rows;
-
-  const visibility = await getPresenceVisibilityService(fastify.prisma).resolveForTargets(
-    viewerFromRequest(request),
-    ids,
-  );
-  const gate = <P extends InlineProfile | null | undefined>(profile: P) =>
-    profile ? applyPresenceVisibilityAsOffline(profile, visibility.get(profile.id)) : profile;
-
-  return rows.map((row) => ({
-    ...row,
-    ...(row.sender !== undefined ? { sender: gate(row.sender) } : {}),
-    ...(row.receiver !== undefined ? { receiver: gate(row.receiver) } : {}),
-  })) as T[];
-}
+// #4254 — le gate de présence des deux parties d'une demande n'a plus qu'UN
+// site : `servirParties` (`routes/directory/friend-requests-core.ts`). Ce
+// module en portait une SECONDE copie, `gateFriendRequestPresence`, qui disait
+// la même loi avec ses propres mots — une règle retapée à chaque site est une
+// règle qu'un site finira par ne pas avoir.
 
 /**
  * Get all friend requests for authenticated user
@@ -108,8 +73,10 @@ export async function getFriendRequests(fastify: FastifyInstance) {
                   receiverId: { type: 'string' },
                   status: { type: 'string', enum: ['pending', 'accepted', 'rejected'] },
                   createdAt: { type: 'string', format: 'date-time' },
-                  sender: userMinimalSchema,
-                  receiver: userMinimalSchema
+                  // `lastActiveAt` est CHARGÉ et GATÉ par `servirParties` ;
+                  // `userMinimalSchema` seul le SUPPRIMAIT à la sérialisation.
+                  sender: { ...userMinimalSchema, properties: { ...userMinimalSchema.properties, lastActiveAt: { type: 'string', format: 'date-time', nullable: true } } },
+                  receiver: { ...userMinimalSchema, properties: { ...userMinimalSchema.properties, lastActiveAt: { type: 'string', format: 'date-time', nullable: true } } }
                 }
               }
             },
@@ -185,7 +152,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
       // pas : la politique partagée masque quand même la présence d'un ami qui
       // a coupé `showOnlineStatus`, et le blocage comme la désactivation de
       // compte se résolvent ici et nulle part ailleurs.
-      const gated = await gateFriendRequestPresence(fastify, request, friendRequests);
+      const gated = await servirParties(fastify, request, friendRequests as unknown as Record<string, unknown>[]);
 
       return sendPaginatedSuccess(reply, gated, buildPaginationMeta(totalCount, offsetNum, limitNum, gated.length));
     } catch (error) {
@@ -198,415 +165,20 @@ export async function getFriendRequests(fastify: FastifyInstance) {
 /**
  * Send a friend request
  */
-export async function sendFriendRequest(fastify: FastifyInstance) {
-  fastify.post('/users/friend-requests', {
-    onRequest: [fastify.authenticate],
-    schema: {
-      description: 'Send a friend request to another user. Validates that users exist, prevents duplicate requests, and ensures users cannot add themselves.',
-      tags: ['users', 'friends'],
-      summary: 'Send friend request',
-      body: {
-        type: 'object',
-        required: ['receiverId'],
-        properties: {
-          receiverId: { type: 'string', description: 'User ID to send friend request to' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                friendRequest: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    senderId: { type: 'string' },
-                    receiverId: { type: 'string' },
-                    status: { type: 'string', example: 'pending' },
-                    createdAt: { type: 'string', format: 'date-time' },
-                    sender: userMinimalSchema,
-                    receiver: userMinimalSchema
-                  }
-                },
-                message: { type: 'string', example: 'Friend request sent successfully' }
-              }
-            }
-          }
-        },
-        400: errorResponseSchema,
-        401: errorResponseSchema,
-        404: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as AuthenticatedRequest).authContext;
-      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required');
-      }
-
-      const senderId = authContext.userId;
-      const body = z.object({ receiverId: z.string() }).parse(request.body);
-      const { receiverId } = body;
-
-      if (senderId === receiverId) {
-        return sendBadRequest(reply, 'You cannot add yourself as a friend');
-      }
-
-      const receiver = await fastify.prisma.user.findUnique({
-        where: { id: receiverId },
-        select: {
-          id: true,
-          username: true,
-          firstName: true,
-          lastName: true,
-          displayName: true,
-          avatar: true,
-          email: true,
-          systemLanguage: true
-        }
-      });
-
-      if (!receiver) {
-        return sendNotFound(reply, 'User not found');
-      }
-
-      const existingRequest = await fastify.prisma.friendRequest.findFirst({
-        where: {
-          OR: [
-            { senderId, receiverId },
-            { senderId: receiverId, receiverId: senderId }
-          ]
-        }
-      });
-
-      if (existingRequest) {
-        return sendBadRequest(reply, 'A friend request already exists between these users');
-      }
-
-      const friendRequest = await fastify.prisma.friendRequest.create({
-        data: {
-          senderId,
-          receiverId,
-          status: 'pending'
-        },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          },
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true
-            }
-          }
-        }
-      });
-
-      // Notification in-app au destinataire
-      const notificationService = fastify.notificationService;
-      if (notificationService) {
-        await notificationService.createFriendRequestNotification({
-          recipientUserId: receiverId,
-          requesterId: senderId,
-          friendRequestId: friendRequest.id,
-        }).catch((err: unknown) => logger.error('Notification friend request error', err as Error));
-      }
-
-      // Email au destinataire (respect des preferences)
-      const emailService = fastify.emailService;
-      if (emailService && receiver.email) {
-        const userPrefs = await fastify.prisma.userPreferences.findUnique({
-          where: { userId: receiverId },
-          select: { notification: true }
-        });
-        const prefs = userPrefs?.notification as any;
-        const shouldEmail = (prefs?.emailEnabled !== false) && (prefs?.contactRequestEnabled !== false);
-
-        if (shouldEmail) {
-          const sender = friendRequest.sender;
-          const senderName = sender.displayName || sender.username || `${sender.firstName} ${sender.lastName}`.trim();
-          await emailService.sendFriendRequestEmail({
-            to: receiver.email,
-            recipientName: receiver.displayName || receiver.username || '',
-            senderName,
-            senderAvatar: sender.avatar,
-            viewRequestUrl: `${process.env.FRONTEND_URL || 'https://meeshy.me'}/contacts#pending`,
-            language: receiver.systemLanguage || undefined,
-          }).catch((err: unknown) => logger.error('Email friend request error', err as Error));
-        }
-      }
-
-      return sendSuccess(reply, {
-        friendRequest,
-        message: 'Friend request sent successfully'
-      });
-    } catch (error) {
-      logger.error('Error sending friend request', error as Error);
-      return sendInternalError(reply, 'Internal server error');
-    }
-  });
-}
-
 /**
- * Respond to a friend request (accept/reject/cancel)
+ * `POST /users/friend-requests` et `PATCH /users/friend-requests/:id` sont
+ * SUPPRIMÉES (#4162).
+ *
+ * C'étaient les jumelles ORPHELINES d'une famille complète : montées sur le
+ * même préfixe que `routes/friends.ts`, avec des gardes divergentes, et
+ * appelées par PERSONNE — ni iOS, ni le web, ni Android. Leur seule garde qui
+ * manquait à leur jumelle vivante — le refus d'auto-envoi — a été RÉCUPÉRÉE
+ * dans `directory/friend-requests-core.ts` avant ce retrait, avec le contrôle
+ * de désactivation et celui de blocage, qui n'existaient dans aucune des deux.
+ *
+ * Une garde qui vit dans un handler que personne n'appelle ne protège personne.
  */
-export async function respondToFriendRequest(fastify: FastifyInstance) {
-  fastify.patch('/users/friend-requests/:id', {
-    onRequest: [fastify.authenticate],
-    schema: {
-      description: 'Respond to a friend request. Sender can cancel, receiver can accept or reject. Only pending requests can be modified.',
-      tags: ['users', 'friends'],
-      summary: 'Respond to friend request',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'Friend request ID' }
-        }
-      },
-      body: {
-        type: 'object',
-        required: ['action'],
-        properties: {
-          action: {
-            type: 'string',
-            enum: ['accept', 'reject', 'cancel'],
-            description: 'Action to perform (accept/reject by receiver, cancel by sender)'
-          }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                request: {
-                  type: 'object',
-                  nullable: true,
-                  properties: {
-                    id: { type: 'string' },
-                    senderId: { type: 'string' },
-                    receiverId: { type: 'string' },
-                    status: { type: 'string' },
-                    sender: userMinimalSchema,
-                    receiver: userMinimalSchema
-                  }
-                },
-                message: { type: 'string' }
-              }
-            }
-          }
-        },
-        400: errorResponseSchema,
-        401: errorResponseSchema,
-        403: errorResponseSchema,
-        404: errorResponseSchema,
-        500: errorResponseSchema
-      }
-    }
-  }, async (request: FastifyRequest, reply: FastifyReply) => {
-    try {
-      const authContext = (request as AuthenticatedRequest).authContext;
-      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required');
-      }
 
-      const userId = authContext.userId;
-      const params = z.object({ id: z.string() }).parse(request.params);
-      const body = z.object({ action: z.enum(['accept', 'reject', 'cancel']) }).parse(request.body);
-      const { id } = params;
-      const { action } = body;
-
-      const friendRequest = await fastify.prisma.friendRequest.findFirst({
-        where: {
-          id: id,
-          status: 'pending'
-        }
-      });
-
-      if (!friendRequest) {
-        return sendNotFound(reply, 'Friend request not found or already processed');
-      }
-
-      if (action === 'cancel') {
-        if (friendRequest.senderId !== userId) {
-          return sendForbidden(reply, 'Only the sender can cancel a friend request');
-        }
-
-        await fastify.prisma.friendRequest.delete({
-          where: { id: id }
-        });
-
-        return sendSuccess(reply, { message: 'Friend request cancelled successfully' });
-      } else {
-        if (friendRequest.receiverId !== userId) {
-          return sendForbidden(reply, 'Only the receiver can accept or reject a friend request');
-        }
-
-        const updatedRequest = await fastify.prisma.friendRequest.update({
-          where: { id: id },
-          data: {
-            status: action === 'accept' ? 'accepted' : 'rejected'
-          },
-          include: {
-            sender: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            },
-            receiver: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
-        });
-
-        if (action === 'accept') {
-          // Create direct conversation if none exists
-          const existingConversation = await fastify.prisma.conversation.findFirst({
-            where: {
-              type: 'direct',
-              AND: [
-                { participants: { some: { userId: friendRequest.senderId } } },
-                { participants: { some: { userId: friendRequest.receiverId } } }
-              ]
-            }
-          });
-
-          let conversationId: string | undefined;
-          if (!existingConversation) {
-            // Identifiant COMPACT — voir routes/friends.ts, meme raison.
-            const identifier = generateCompactConversationIdentifier();
-            const defaultPermissions = { canSendMessages: true, canSendFiles: true, canSendImages: true, canSendAudio: true, canSendVideo: true, canSendLinks: true, canReact: true, canReply: true, canMention: true };
-            const senderUser = await fastify.prisma.user.findUnique({ where: { id: friendRequest.senderId }, select: { displayName: true } });
-            const receiverUser = await fastify.prisma.user.findUnique({ where: { id: friendRequest.receiverId }, select: { displayName: true } });
-            const conversation = await fastify.prisma.conversation.create({
-              data: {
-                identifier,
-                type: 'direct',
-                participants: {
-                  create: [
-                    { userId: friendRequest.senderId, type: 'user', displayName: senderUser?.displayName || 'User', role: 'member', permissions: defaultPermissions },
-                    { userId: friendRequest.receiverId, type: 'user', displayName: receiverUser?.displayName || 'User', role: 'member', permissions: defaultPermissions }
-                  ]
-                }
-              }
-            });
-            conversationId = conversation.id;
-
-            // Auto-join both users' currently-connected sockets to the new DM
-            // room so they receive message:new immediately without a reconnect.
-            const socketManager = fastify.socketIOHandler?.getManager();
-            if (socketManager) {
-              for (const memberUserId of [friendRequest.senderId, friendRequest.receiverId]) {
-                socketManager.joinUserToConversationRoom(memberUserId, conversation.id).catch(
-                  (err: unknown) => logger.error('Failed to auto-join friend to new DM room', err as Error)
-                );
-              }
-            }
-          } else {
-            conversationId = existingConversation.id;
-          }
-
-          // Notification in-app a l'expediteur original
-          const notificationService = fastify.notificationService;
-          if (notificationService) {
-            await notificationService.createFriendAcceptedNotification({
-              recipientUserId: friendRequest.senderId,
-              accepterUserId: userId,
-              conversationId,
-            }).catch((err: unknown) => logger.error('Notification friend accepted error', err as Error));
-          }
-
-          // Email a l'expediteur original (respect des preferences)
-          const emailService = fastify.emailService;
-          if (emailService) {
-            const sender = await fastify.prisma.user.findUnique({
-              where: { id: friendRequest.senderId },
-              select: { email: true, displayName: true, username: true, systemLanguage: true }
-            });
-
-            if (sender?.email) {
-              const userPrefs = await fastify.prisma.userPreferences.findUnique({
-                where: { userId: friendRequest.senderId },
-                select: { notification: true }
-              });
-              const prefs = userPrefs?.notification as any;
-              const shouldEmail = (prefs?.emailEnabled !== false) && (prefs?.contactRequestEnabled !== false);
-
-              if (shouldEmail) {
-                const accepter = updatedRequest.receiver;
-                const accepterName = accepter.displayName || accepter.username || `${accepter.firstName} ${accepter.lastName}`.trim();
-                await emailService.sendFriendAcceptedEmail({
-                  to: sender.email,
-                  recipientName: sender.displayName || sender.username || '',
-                  accepterName,
-                  accepterAvatar: accepter.avatar,
-                  conversationUrl: `${process.env.FRONTEND_URL || 'https://meeshy.me'}/conversations/${conversationId}`,
-                  language: sender.systemLanguage || undefined,
-                }).catch((err: unknown) => logger.error('Email friend accepted error', err as Error));
-              }
-            }
-          }
-        }
-
-        if (action === 'reject') {
-          // Notification system a l'expediteur
-          const notificationService = fastify.notificationService;
-          if (notificationService) {
-            const receiver = updatedRequest.receiver;
-            const receiverName = receiver.displayName || receiver.username;
-            await notificationService.createSystemNotification({
-              recipientUserId: friendRequest.senderId,
-              content: `${receiverName} declined your friend request`,
-              priority: 'low',
-              systemType: 'announcement',
-            }).catch((err: unknown) => logger.error('Notification friend rejected error', err as Error));
-          }
-        }
-
-        return sendSuccess(reply, {
-          request: updatedRequest,
-          message: action === 'accept' ? 'Friend request accepted' : 'Friend request rejected'
-        });
-      }
-    } catch (error) {
-      logger.error('Error updating friend request', error as Error);
-      return sendInternalError(reply, 'Internal server error');
-    }
-  });
-}
 
 /**
  * Get active affiliate token for user
@@ -686,97 +258,17 @@ export async function getAffiliateToken(fastify: FastifyInstance) {
   });
 }
 
-/**
- * Stub routes for future implementation
- */
-export async function getAllUsers(fastify: FastifyInstance) {
-  fastify.get('/users', {
-    schema: {
-      description: 'Get all users (to be implemented). This endpoint will return a paginated list of all users in the system.',
-      tags: ['users'],
-      summary: 'Get all users',
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string', example: 'Get all users - to be implemented' }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    return sendSuccess(reply, { message: 'Get all users - to be implemented' });
-  });
-}
 
-export async function updateUserById(fastify: FastifyInstance) {
-  fastify.put('/users/:id', {
-    schema: {
-      description: 'Update a specific user by ID (to be implemented). Admin-only endpoint for managing user accounts.',
-      tags: ['users'],
-      summary: 'Update user by ID',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'User MongoDB ID' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string', example: 'Update user - to be implemented' }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    return sendSuccess(reply, { message: 'Update user - to be implemented' });
-  });
-}
-
-export async function deleteUserById(fastify: FastifyInstance) {
-  fastify.delete('/users/:id', {
-    schema: {
-      description: 'Delete a specific user by ID (to be implemented). Admin-only endpoint for removing user accounts.',
-      tags: ['users'],
-      summary: 'Delete user by ID',
-      params: {
-        type: 'object',
-        required: ['id'],
-        properties: {
-          id: { type: 'string', description: 'User MongoDB ID' }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              type: 'object',
-              properties: {
-                message: { type: 'string', example: 'Delete user - to be implemented' }
-              }
-            }
-          }
-        }
-      }
-    }
-  }, async (request, reply) => {
-    return sendSuccess(reply, { message: 'Delete user - to be implemented' });
-  });
-}
+// Les trois routes « to be implemented » ont été RETIRÉES (#4185).
+//
+// `GET /users`, `PUT /users/:id` et `DELETE /users/:id` rendaient chacune
+// `{ message: '… - to be implemented' }` — en **200, sans aucune garde**
+// (mesuré en intégration). Leur description Swagger annonçait pourtant
+// « Admin-only endpoint » pour les deux dernières : le contrat publié
+// déclarait une restriction que le code n'appliquait pas, prête à devenir une
+// vraie fuite le jour où quelqu'un les implémenterait.
+//
+// Un stub qui répond 200 est pire qu'une route absente : il fait croire à un
+// contrat. Le seul appelant du dépôt — le repli de la liste de contacts du web
+// — recevait un objet là où il attendait un tableau, et n'a donc JAMAIS
+// affiché personne.

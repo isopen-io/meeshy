@@ -12,7 +12,11 @@ import MeeshySDK
 /// distinction, refermer un panneau demandait de retrouver sa bulle d'origine.
 ///
 /// Vide tant que `viewModel.textEditingMode` est `.inactive`.
-struct StoryTextEditToolbar: View {
+/// **`public` depuis le #4401** : le composer unifié monte CE contrôleur — les
+/// 18 styles, la couleur, l'alignement, le fond, le cadrage, le contour — et
+/// non une rangée réduite. Même raison que `StoryDrawingToolbar` : un corps,
+/// deux montages.
+public struct StoryTextEditToolbar: View {
     @ObservedObject var viewModel: StoryComposerViewModel
 
     /// Rapporte le Y (écran) du bord SUPÉRIEUR de la rangée de contrôles —
@@ -26,7 +30,21 @@ struct StoryTextEditToolbar: View {
     /// le texte édité (spec 2026-08-01).
     var onTopBarBottomYChange: ((CGFloat) -> Void)? = nil
 
-    var body: some View {
+    /// **Les DEUX rappels de géométrie, pas un.** Un `init` public écrit de
+    /// mémoire n'en portait qu'un, et l'atelier — qui passe les deux — cessait
+    /// de compiler. C'est la leçon 336 à l'échelle d'un initialiseur : ce qui
+    /// n'appartient pas au dénominateur commun des deux sites est justement ce
+    /// qu'on oublie. Le compilateur l'a dit ici ; ailleurs, rien ne l'aurait
+    /// dit.
+    public init(viewModel: StoryComposerViewModel,
+                onControlsTopYChange: ((CGFloat) -> Void)? = nil,
+                onTopBarBottomYChange: ((CGFloat) -> Void)? = nil) {
+        self.viewModel = viewModel
+        self.onControlsTopYChange = onControlsTopYChange
+        self.onTopBarBottomYChange = onTopBarBottomYChange
+    }
+
+    public var body: some View {
         if case .active(let textId, let expandedTool) = viewModel.textEditingMode,
            let binding = textObjectBinding(for: textId) {
             ZStack {

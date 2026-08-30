@@ -19,22 +19,25 @@ final class BlockServiceTests: XCTestCase {
 
     // MARK: - blockUser
 
-    func testBlockUserPostsToBlockEndpoint() async throws {
+    func testBlockUserPutsToTheSetEndpoint() async throws {
         let blockResponse = BlockActionResponse(message: "User blocked")
         let response = APIResponse<BlockActionResponse>(success: true, data: blockResponse, error: nil)
-        mock.stub("/users/target123/block", result: response)
+        mock.stub("/directory/blocks/target123", result: response)
 
         try await service.blockUser(userId: "target123")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/target123/block")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/blocks/target123")
+        // `PUT`, jamais `POST` : bloquer est une APPARTENANCE à un ensemble, et
+        // le second appel doit rendre le même état — l'ancienne route répondait
+        // 409 (#4164).
+        XCTAssertEqual(mock.lastRequest?.method, "PUT")
     }
 
     func testBlockUserUpdatesLocalCache() async throws {
         let blockResponse = BlockActionResponse(message: "User blocked")
         let response = APIResponse<BlockActionResponse>(success: true, data: blockResponse, error: nil)
-        mock.stub("/users/target123/block", result: response)
+        mock.stub("/directory/blocks/target123", result: response)
 
         XCTAssertFalse(service.isBlocked(userId: "target123"))
 
@@ -48,24 +51,27 @@ final class BlockServiceTests: XCTestCase {
     // MARK: - unblockUser
 
     func testUnblockUserCallsDeleteOnBlockEndpoint() async throws {
-        let response = APIResponse<[String: Bool]>(success: true, data: ["success": true], error: nil)
-        mock.stub("/users/target123/block", result: response)
+        // `BlockActionResponse`, comme son jumeau — le gateway rend
+        // `{ "message": … }` sur les deux verbes. Un type trop STRICT ici a
+        // déjà transformé un succès serveur en « impossible de débloquer ».
+        let response = APIResponse<BlockActionResponse>(success: true, data: BlockActionResponse(message: "User unblocked"), error: nil)
+        mock.stub("/directory/blocks/target123", result: response)
 
         try await service.unblockUser(userId: "target123")
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/target123/block")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/blocks/target123")
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
     func testUnblockUserRemovesFromLocalCache() async throws {
         let blockResponse = BlockActionResponse(message: "blocked")
         let blockAPIResponse = APIResponse<BlockActionResponse>(success: true, data: blockResponse, error: nil)
-        mock.stub("/users/target123/block", result: blockAPIResponse)
+        mock.stub("/directory/blocks/target123", result: blockAPIResponse)
         try await service.blockUser(userId: "target123")
 
-        let deleteResponse = APIResponse<[String: Bool]>(success: true, data: ["success": true], error: nil)
-        mock.stub("/users/target123/block", result: deleteResponse)
+        let deleteResponse = APIResponse<BlockActionResponse>(success: true, data: BlockActionResponse(message: "User unblocked"), error: nil)
+        mock.stub("/directory/blocks/target123", result: deleteResponse)
 
         try await service.unblockUser(userId: "target123")
 
@@ -80,12 +86,12 @@ final class BlockServiceTests: XCTestCase {
         let blocked1 = BlockedUser(id: "u1", username: "blocked1", displayName: "Blocked One", avatar: nil, blockedAt: nil)
         let blocked2 = BlockedUser(id: "u2", username: "blocked2", displayName: nil, avatar: nil, blockedAt: nil)
         let response = APIResponse<[BlockedUser]>(success: true, data: [blocked1, blocked2], error: nil)
-        mock.stub("/users/me/blocked-users", result: response)
+        mock.stub("/directory/blocks", result: response)
 
         let result = try await service.listBlockedUsers()
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/me/blocked-users")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/blocks")
         XCTAssertEqual(mock.lastRequest?.method, "GET")
         XCTAssertEqual(result.count, 2)
         XCTAssertEqual(result[0].username, "blocked1")
@@ -103,7 +109,7 @@ final class BlockServiceTests: XCTestCase {
 
     func testListBlockedUsersWithEmptyList() async throws {
         let response = APIResponse<[BlockedUser]>(success: true, data: [], error: nil)
-        mock.stub("/users/me/blocked-users", result: response)
+        mock.stub("/directory/blocks", result: response)
 
         let result = try await service.listBlockedUsers()
 
@@ -121,12 +127,12 @@ final class BlockServiceTests: XCTestCase {
     func testRefreshCacheCallsListBlockedUsers() async throws {
         let blocked = BlockedUser(id: "u1", username: "cached", displayName: nil, avatar: nil, blockedAt: nil)
         let response = APIResponse<[BlockedUser]>(success: true, data: [blocked], error: nil)
-        mock.stub("/users/me/blocked-users", result: response)
+        mock.stub("/directory/blocks", result: response)
 
         await service.refreshCache()
 
         XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/me/blocked-users")
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/directory/blocks")
 
         let svc = service!
         let isBlocked = await MainActor.run { svc.isBlocked(userId: "u1") }
@@ -207,7 +213,7 @@ final class BlockServiceTests: XCTestCase {
     func testResetClearsBlockedUserIds() async throws {
         let blocked = BlockedUser(id: "u1", username: "blocked1", displayName: nil, avatar: nil, blockedAt: nil)
         let response = APIResponse<[BlockedUser]>(success: true, data: [blocked], error: nil)
-        mock.stub("/users/me/blocked-users", result: response)
+        mock.stub("/directory/blocks", result: response)
         await service.refreshCache()
 
         let svc = service!

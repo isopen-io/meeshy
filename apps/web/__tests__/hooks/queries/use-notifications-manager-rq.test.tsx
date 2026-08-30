@@ -108,9 +108,15 @@ jest.mock('@/stores/notification-store', () => {
   return { useNotificationStore };
 });
 
+// `jest.requireActual` d'abord, surcharge ENSUITE : un double PARTIEL perd en
+// silence tout ce que le module GAGNE, et ne se signale qu'au moment où le
+// module grandit. Ce doublon-ci listait quatre fonctions à la main ; le jour où
+// la bannière a lu `getActorDisplayName` et `getNotificationIcon`, elles sont
+// sorties `undefined` et quatre témoins sont tombés sur un `TypeError` qui ne
+// disait rien du comportement testé. Seules les deux valeurs que ce fichier
+// veut RENDRE CONSTANTES restent surchargées.
 jest.mock('@/utils/notification-helpers', () => ({
-  buildNotificationTitle: () => 'title',
-  buildNotificationContent: () => 'content',
+  ...jest.requireActual('@/utils/notification-helpers'),
   getNotificationLink: () => '/link',
   getNotificationBorderColor: () => 'border',
 }));

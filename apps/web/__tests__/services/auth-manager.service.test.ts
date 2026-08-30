@@ -30,6 +30,21 @@ function clearStorage() {
   });
 }
 
+// Le créneau de stockage dédié au jeton de rafraîchissement a été retiré
+// (#4405, étape 3) : aucune route d'authentification du gateway ne rend
+// jamais ce champ (mesuré), donc rien n'écrivait jamais durablement sous
+// cette clé. Ce lecteur prouve, par le CONTENU RÉEL du store (pas par une
+// clé nommée qui n'existe plus), que rien n'atterrit ailleurs qu'aux clés
+// attendues.
+function storedKeys(): string[] {
+  const keys: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) keys.push(key);
+  }
+  return keys;
+}
+
 beforeEach(() => {
   clearStorage();
   jest.clearAllMocks();
@@ -115,47 +130,83 @@ describe('AuthManager.registerOnTokensUpdated', () => {
 
 describe('AuthManager.setCredentials', () => {
   it('stores auth token in localStorage', () => {
-    authManager.setCredentials(mockUser, 'access-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('access-tok');
   });
 
-  it('stores refresh token when provided', () => {
-    authManager.setCredentials(mockUser, 'access-tok', 'refresh-tok');
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).toBe('refresh-tok');
+  // `refreshToken` reste un champ ACCEPTÉ par `setCredentials` mais n'a plus
+  // de clé de stockage dédiée (#4405, étape 3) : aucune route
+  // d'authentification du gateway ne rend jamais ce champ (mesuré). Ce
+  // témoin prouve, par le CONTENU RÉEL du store, qu'une valeur qui y transite
+  // n'atterrit NULLE PART — ni sous une clé qui n'existe plus, ni ailleurs.
+  it('no longer persists anything for the (now inert) refreshToken field', () => {
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok', refreshToken: 'legacy-value-that-must-be-dropped' });
+    expect(storedKeys().sort()).toEqual(
+      [AUTH_STORAGE_KEYS.AUTH_TOKEN, AUTH_STORAGE_KEYS.USER_DATA].sort()
+    );
   });
 
   it('stores session token when provided', () => {
-    authManager.setCredentials(mockUser, 'access-tok', undefined, 'sess-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok', sessionToken: 'sess-tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('sess-tok');
   });
 
   it('stores user data as JSON', () => {
-    authManager.setCredentials(mockUser, 'access-tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok' });
     const stored = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEYS.USER_DATA)!);
     expect(stored.id).toBe('user-42');
   });
 
-  it('skips refresh and session tokens when undefined', () => {
-    authManager.setCredentials(mockUser, 'access-tok');
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).toBeNull();
+  it('skips session token when undefined', () => {
+    authManager.setCredentials({ user: mockUser, authToken: 'access-tok' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBeNull();
   });
 
   it('calls clearAllSessions before storing (clears previous session)', () => {
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'old-token');
-    authManager.setCredentials(mockUser, 'new-token');
+    authManager.setCredentials({ user: mockUser, authToken: 'new-token' });
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('new-token');
   });
 
   it('sets a meeshy_session cookie', () => {
-    authManager.setCredentials(mockUser, 'tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'tok' });
     expect(document.cookie).toContain('meeshy_session=');
+  });
+
+  // Témoin de contrat (#4404, ajusté #4405/#4450) : les cinq champs sont posés
+  // EN MÊME TEMPS, avec des valeurs distinctes deux à deux, et chaque clé de
+  // localStorage est relue individuellement — pas seulement les arguments
+  // reçus par un double. Une future réécriture interne qui permuterait
+  // sessionToken avec refreshToken (désormais inerte, mais toujours
+  // `string | undefined`, indiscernable au typage) ferait tomber CE témoin,
+  // jamais les tests "un champ à la fois" ci-dessus qui ne peuvent pas voir
+  // une permutation.
+  it('lands each remaining field in its own localStorage key, none swapped with the inert refreshToken field', () => {
+    authManager.setCredentials({
+      user: mockUser,
+      authToken: 'access-tok',
+      refreshToken: 'legacy-value-that-must-be-dropped',
+      sessionToken: 'sess-tok',
+      expiresIn: 3600,
+    });
+
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('access-tok');
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('sess-tok');
+    // expiresIn n'a pas de clé dédiée dans AuthManager — il ne doit fuiter
+    // dans AUCUNE clé string.
+    expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).not.toBe('3600');
+    // Le champ refreshToken (désormais inerte, #4405) ne doit fuiter NULLE
+    // PART — ni sous une clé nommée d'après lui (elle n'existe plus), ni sous
+    // aucune autre.
+    expect(storedKeys().sort()).toEqual(
+      [AUTH_STORAGE_KEYS.AUTH_TOKEN, AUTH_STORAGE_KEYS.SESSION_TOKEN, AUTH_STORAGE_KEYS.USER_DATA].sort()
+    );
   });
 });
 
 describe('AuthManager.updateUser', () => {
   it('overwrites stored user data', () => {
-    authManager.setCredentials(mockUser, 'tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'tok' });
     const updated = { ...mockUser, username: 'bob' } as unknown as User;
     authManager.updateUser(updated);
     const stored = JSON.parse(localStorage.getItem(AUTH_STORAGE_KEYS.USER_DATA)!);
@@ -174,9 +225,12 @@ describe('AuthManager.updateTokens', () => {
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBe('new-access');
   });
 
-  it('updates refresh token when provided', () => {
-    authManager.updateTokens('tok', 'new-refresh');
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).toBe('new-refresh');
+  // Le 2e créneau (`refreshToken`) reste ACCEPTÉ positionnellement mais n'a
+  // plus de clé de stockage dédiée (#4405, étape 3 — même raison que
+  // `setCredentials`). Une valeur qui y transite n'atterrit nulle part.
+  it('no longer persists anything for the (now inert) second positional slot', () => {
+    authManager.updateTokens('tok', 'legacy-value-that-must-be-dropped');
+    expect(storedKeys().sort()).toEqual([AUTH_STORAGE_KEYS.AUTH_TOKEN].sort());
   });
 
   it('updates session token when provided', () => {
@@ -184,9 +238,8 @@ describe('AuthManager.updateTokens', () => {
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBe('new-session');
   });
 
-  it('skips optional tokens when not provided', () => {
+  it('skips optional session token when not provided', () => {
     authManager.updateTokens('tok');
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).toBeNull();
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBeNull();
   });
 });
@@ -199,18 +252,6 @@ describe('AuthManager.getAuthToken', () => {
   it('returns the stored token', () => {
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'my-token');
     expect(authManager.getAuthToken()).toBe('my-token');
-  });
-
-});
-
-describe('AuthManager.getRefreshToken', () => {
-  it('returns null when no refresh token stored', () => {
-    expect(authManager.getRefreshToken()).toBeNull();
-  });
-
-  it('returns the stored refresh token', () => {
-    localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, 'refresh-xyz');
-    expect(authManager.getRefreshToken()).toBe('refresh-xyz');
   });
 
 });
@@ -348,12 +389,10 @@ describe('AuthManager.decodeJWT', () => {
 describe('AuthManager.clearAllSessions', () => {
   it('removes all auth keys from localStorage', () => {
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, 'tok');
-    localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, 'ref');
     localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, 'ses');
     localStorage.setItem(AUTH_STORAGE_KEYS.USER_DATA, '{}');
     authManager.clearAllSessions();
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN)).toBeNull();
-    expect(localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN)).toBeNull();
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.SESSION_TOKEN)).toBeNull();
     expect(localStorage.getItem(AUTH_STORAGE_KEYS.USER_DATA)).toBeNull();
   });
@@ -397,7 +436,7 @@ describe('AuthManager.clearAllSessions', () => {
 describe('AuthManager.setCredentials (admin role branches)', () => {
   it('sets canAccessAdmin=true for ADMIN role', () => {
     const adminUser = { ...mockUser, role: 'ADMIN' } as unknown as User;
-    authManager.setCredentials(adminUser, 'tok');
+    authManager.setCredentials({ user: adminUser, authToken: 'tok' });
     const cookie = document.cookie;
     expect(cookie).toContain('meeshy_session=');
     const match = cookie.match(/meeshy_session=([^;]+)/);
@@ -408,7 +447,7 @@ describe('AuthManager.setCredentials (admin role branches)', () => {
   });
 
   it('sets canAccessAdmin=false for USER role without explicit flag', () => {
-    authManager.setCredentials(mockUser, 'tok');
+    authManager.setCredentials({ user: mockUser, authToken: 'tok' });
     const match = document.cookie.match(/meeshy_session=([^;]+)/);
     if (match) {
       const decoded = JSON.parse(atob(match[1]));

@@ -13,6 +13,7 @@ import { ContactDirectoryService, type DirectoryFilter, type SyncMode } from '..
 import { directoryEntrySchema } from './contacts-schemas';
 import { viewerFromRequest } from './presence-gate';
 import type { AuthenticatedRequest } from './types';
+import { synchroniser } from '../directory/contacts-sync';
 
 /**
  * Répertoire persisté — le carnet d'adresses de l'utilisateur, CONSERVÉ.
@@ -105,79 +106,18 @@ export async function syncContactsDirectory(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      // Horloge serveur à la réception — AVANT tout upsert. Toujours
-      // renvoyée en réponse, et sert de filigrane par défaut pour un lot
-      // unique final (`isFinalBatch: true` sans `syncStartedAt`).
-      const receivedAt = new Date();
+      // ALIAS de `PUT` / `PATCH /directory/contacts` (#4163).
+      //
+      // Le mode voyageait dans le CORPS — un champ qu'aucun intermédiaire ne
+      // peut lire, et qui rendait indiscernables deux requêtes dont l'une
+      // PURGE. Sur l'adresse canonique, c'est le VERBE qui le dit ; ici il
+      // reste lu dans le corps, parce que c'est le contrat de cette adresse et
+      // qu'un alias ne change pas le sien.
+      const mode: SyncMode = (request.body as { mode?: unknown } | undefined)?.mode === 'replace'
+        ? 'replace'
+        : 'merge';
 
-      const authContext = (request as AuthenticatedRequest).authContext;
-      if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return sendUnauthorized(reply, 'Authentication required');
-      }
-
-      const body = (request.body ?? {}) as {
-        contacts?: unknown;
-        defaultCountry?: unknown;
-        mode?: unknown;
-        syncStartedAt?: unknown;
-        isFinalBatch?: unknown;
-      };
-      if (!Array.isArray(body.contacts)) {
-        return sendBadRequest(reply, 'Invalid contacts payload');
-      }
-
-      let syncStartedAt: Date | undefined;
-      if (typeof body.syncStartedAt === 'string') {
-        const parsed = new Date(body.syncStartedAt);
-        if (Number.isNaN(parsed.getTime())) {
-          return sendBadRequest(reply, 'Invalid syncStartedAt');
-        }
-        if (parsed.getTime() > receivedAt.getTime() + SYNC_STARTED_AT_FUTURE_TOLERANCE_MS) {
-          return sendBadRequest(reply, 'syncStartedAt is in the future');
-        }
-        syncStartedAt = parsed;
-      }
-      const isFinalBatch = typeof body.isFinalBatch === 'boolean' ? body.isFinalBatch : undefined;
-      const batched = syncStartedAt !== undefined || isFinalBatch !== undefined;
-
-      const totalContacts = body.contacts.length;
-      const contacts = normalizeContacts(body.contacts, body.defaultCountry as string | undefined);
-      const mode: SyncMode = body.mode === 'replace' ? 'replace' : 'merge';
-
-      const truncated = totalContacts > MAX_CONTACTS_PER_SYNC;
-      if (truncated) {
-        fastify.log.warn(
-          `[CONTACTS-SYNC] Lot tronqué à ${MAX_CONTACTS_PER_SYNC} contacts (reçus: ${totalContacts}) — le client doit paginer le reste`
-        );
-      }
-
-      // Un lot tronqué ne doit JAMAIS purger — ni via `contactKey notIn`
-      // (garde-fou historique), ni via le filigrane par lots. La troncature
-      // (`normalizeContacts`) jette des fiches en silence : aucun lot ne les
-      // a jamais touchées, donc les purger amputerait le répertoire de
-      // données qu'aucun envoi n'a reçues. Un lot tronqué ne peut donc
-      // jamais être FINAL, quel que soit `isFinalBatch` demandé par le
-      // client.
-      const effectiveMode: SyncMode = !batched && truncated ? 'merge' : mode;
-
-      const service = new ContactDirectoryService(fastify.prisma);
-      const result = await service.sync({
-        ownerId: authContext.userId,
-        contacts,
-        mode: effectiveMode,
-        syncStartedAt,
-        isFinalBatch: truncated ? false : isFinalBatch,
-        receivedAt
-      });
-
-      return sendSuccess(reply, {
-        totalContacts,
-        processedContacts: contacts.length,
-        syncedCount: result.synced,
-        matchedCount: result.matched,
-        removedCount: result.removed,
-        syncStartedAt: receivedAt.toISOString()
-      });
+      return synchroniser(fastify, request, reply, mode);
     } catch (error) {
       logError(fastify.log, '[CONTACTS-SYNC] Error syncing directory', error);
       return sendInternalError(reply, 'Failed to sync contacts');

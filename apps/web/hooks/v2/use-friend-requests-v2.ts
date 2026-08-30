@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
@@ -45,15 +46,37 @@ function extractRequests(response: unknown): FriendRequest[] {
   return Array.isArray(inner) ? inner : [];
 }
 
-function extractHasMore(response: unknown): boolean | undefined {
+function extractPagination(response: unknown): Record<string, unknown> | undefined {
   if (!response || typeof response !== 'object') return undefined;
   const outer = (response as Record<string, unknown>).data;
   if (!outer || typeof outer !== 'object') return undefined;
   const pagination = (outer as Record<string, unknown>).pagination;
-  if (!pagination || typeof pagination !== 'object') return undefined;
-  const hasMore = (pagination as Record<string, unknown>).hasMore;
+  return pagination && typeof pagination === 'object'
+    ? (pagination as Record<string, unknown>)
+    : undefined;
+}
+
+function extractHasMore(response: unknown): boolean | undefined {
+  const hasMore = extractPagination(response)?.hasMore;
   return typeof hasMore === 'boolean' ? hasMore : undefined;
 }
+
+/**
+ * Le curseur de la page SUIVANTE — l'`createdAt` de la dernière ligne servie.
+ *
+ * Il remplace `offset`, et ce n'est pas un changement d'orthographe : la route
+ * à décalage repayait un `count()` COMPLET à chaque page pour rendre un `total`
+ * que ce hook n'a jamais lu, et une insertion pendant la pagination décalait
+ * toutes les pages suivantes — une relation acceptée pouvait être sautée. La
+ * borne par horodatage est stable sous insertion et sert l'index de tri.
+ */
+function extractNextCursor(response: unknown): string | undefined {
+  const cursor = extractPagination(response)?.nextCursor;
+  return typeof cursor === 'string' && cursor.length > 0 ? cursor : undefined;
+}
+
+/** L'adresse CANONIQUE des trois listings et du fantôme (#4162, #4254). */
+const FRIEND_REQUESTS_ENDPOINT = '/directory/friend-requests';
 
 /** Le gateway plafonne `limit` à 100 — même valeur côté iOS. */
 const ACCEPTED_PAGE_SIZE = 100;
@@ -63,6 +86,19 @@ const ACCEPTED_PAGE_SIZE = 100;
  * (`ForwardPickerViewModel.friendsFetchCap`).
  */
 const ACCEPTED_FETCH_CAP = 500;
+
+/**
+ * La forme SERVIE par `/directory/friend-requests` : pagination par CURSEUR.
+ *
+ * Il n'y a plus de `total` — ce n'est pas un oubli, c'est le `count()` qu'on ne
+ * paie plus. Aucun consommateur de ce hook ne le lisait : les trois compteurs
+ * de l'écran contacts se dérivent de `.length` des listes servies.
+ */
+type FriendRequestsPage = {
+  success: boolean;
+  data: FriendRequest[];
+  pagination: { limit: number; hasMore: boolean; nextCursor: string | null };
+};
 
 export function useFriendRequestsV2(
   options: UseFriendRequestsV2Options = {}
@@ -80,11 +116,16 @@ export function useFriendRequestsV2(
   } = useQuery({
     queryKey: receivedQueryKey,
     queryFn: async () => {
-      const response = await apiService.get<{
-        success: boolean;
-        data: FriendRequest[];
-        pagination: { total: number };
-      }>('/friend-requests/received', { offset: '0', limit: '100' });
+      // `direction=received&status=pending` reproduit EXACTEMENT ce que
+      // `/friend-requests/received` filtrait en dur côté serveur. Le `status`
+      // n'est pas une addition : l'omettre ferait remonter ici les relations
+      // acceptées et refusées, que `refused`/`pending` reclasseraient — un
+      // changement de contenu d'onglet qui n'appartient pas à cette bascule.
+      const response = await apiService.get<FriendRequestsPage>(FRIEND_REQUESTS_ENDPOINT, {
+        direction: 'received',
+        status: 'pending',
+        limit: String(ACCEPTED_PAGE_SIZE),
+      });
       return extractRequests(response);
     },
     enabled,
@@ -97,49 +138,61 @@ export function useFriendRequestsV2(
   } = useQuery({
     queryKey: sentQueryKey,
     queryFn: async () => {
-      const response = await apiService.get<{
-        success: boolean;
-        data: FriendRequest[];
-        pagination: { total: number };
-      }>('/friend-requests/sent', { offset: '0', limit: '100' });
+      // Sans `status` : `/friend-requests/sent` rendait TOUS les statuts (son
+      // propre contrat le disait), et c'est la seule source de l'onglet
+      // « refusées ». Le restreindre le viderait.
+      const response = await apiService.get<FriendRequestsPage>(FRIEND_REQUESTS_ENDPOINT, {
+        direction: 'sent',
+        limit: String(ACCEPTED_PAGE_SIZE),
+      });
       return extractRequests(response);
     },
     enabled,
   });
 
-  // `/friend-requests/received|sent` only surface requests where the caller is
-  // sender XOR receiver of a PENDING request server-side — an accepted relation
-  // where the user is the receiver never comes back through either. `connected`
-  // is derived instead from `/users/friend-requests?status=accepted`, which
-  // renders both directions regardless of who initiated it.
+  // `direction=received|sent` ne rend qu'un SENS : une relation acceptée dont
+  // l'utilisateur est le receveur ne remonte pas par `sent`, et `received` est
+  // filtré `pending`. `connected` vient donc de `direction=any&status=accepted`,
+  // qui rend les deux sens quel que soit celui qui a initié.
   const acceptedQueryKey = queryKeys.friendRequests.accepted();
 
-  // Paginé JUSQU'À ÉPUISEMENT : cet endpoint n'a aucune recherche texte
-  // serveur, et le sélecteur de transfert filtre `connected` LOCALEMENT — une
-  // seule page rendrait inatteignable tout ami au-delà d'elle (spec 2026-08-19,
-  // Volet C). Jumeau iOS : `ForwardPickerViewModel.fetchFriendContactTargets`.
+  // Paginé JUSQU'À ÉPUISEMENT, par CURSEUR — et la boucle reste, à dessein.
+  //
+  // Le critère 3 de #4254 la voulait remplacée par le `?q=` serveur. Mesuré :
+  // les CINQ consommateurs de ce hook veulent la liste COMPLÈTE — l'annuaire de
+  // contacts (`useContactsV2` trie et filtre localement), le sélecteur de
+  // transfert, la fiche profil, la recherche, la page contacts. Aucun ne porte
+  // de requête à passer, et un `?q=` non alimenté ne rendrait que la première
+  // page : ce serait troquer un drain coûteux contre une liste TRONQUÉE.
+  //
+  // Ce que la bascule gagne quand même, et c'est mesurable : la route à
+  // décalage repayait un `count()` complet à CHAQUE page pour un `total` que
+  // personne ne lisait, et son `offset` sautait des lignes dès qu'une relation
+  // était acceptée pendant la pagination.
+  //
+  // Jumeau iOS : `ForwardPickerViewModel.fetchFriendContactTargets`.
   const { data: acceptedData } = useQuery({
     queryKey: acceptedQueryKey,
     queryFn: async () => {
       const collected: FriendRequest[] = [];
-      let offset = 0;
+      let cursor: string | undefined;
       while (collected.length < ACCEPTED_FETCH_CAP) {
-        const response = await apiService.get<{
-          success: boolean;
-          data: FriendRequest[];
-          pagination: { total: number; hasMore?: boolean };
-        }>('/users/friend-requests', {
-          offset: String(offset),
-          limit: String(ACCEPTED_PAGE_SIZE),
+        const response = await apiService.get<FriendRequestsPage>(FRIEND_REQUESTS_ENDPOINT, {
+          direction: 'any',
           status: 'accepted',
+          limit: String(ACCEPTED_PAGE_SIZE),
+          // `undefined` est filtré par `apiService.get` : la PREMIÈRE page part
+          // sans curseur, les suivantes avec celui que la précédente a rendu.
+          cursor,
         });
         const page = extractRequests(response);
         collected.push(...page);
-        // `hasMore` peut manquer sur un gateway antérieur à la Task 1 : le repli
-        // sur la taille de page garde le comportement correct.
         const hasMore = extractHasMore(response) ?? page.length === ACCEPTED_PAGE_SIZE;
-        if (!hasMore || page.length === 0) break;
-        offset += ACCEPTED_PAGE_SIZE;
+        cursor = extractNextCursor(response);
+        // Sans curseur, redemander la même page tournerait en rond jusqu'au
+        // plafond en collectant des doublons : on s'arrête, c'est la fin de la
+        // liste que le serveur vient de déclarer.
+        if (!hasMore || page.length === 0 || !cursor) break;
       }
       return collected;
     },
@@ -233,7 +286,11 @@ export function useFriendRequestsV2(
 
   const sendMutation = useMutation({
     mutationFn: async ({ receiverId, message }: { receiverId: string; message?: string }) => {
-      await apiService.post('/friend-requests', { receiverId, ...(message && { message }) });
+      // `/directory/friend-requests` (#4162) : l'unique chemin d'envoi. Celui
+      // qu'appelait ce site était le plus FAIBLE des deux qui coexistaient —
+      // ni garde d'auto-envoi, ni contrôle de désactivation, ni contrôle de
+      // blocage. L'adresse canonique porte les trois.
+      await apiService.post(API_ENDPOINTS.directory.friendRequests, { receiverId, ...(message && { message }) });
     },
     onMutate: async ({ receiverId }) => {
       if (!currentUserId) return {};
@@ -259,7 +316,11 @@ export function useFriendRequestsV2(
 
   const acceptMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.patch(`/friend-requests/${requestId}`, { status: 'accepted' });
+      // Un geste, un VERBE (#4162) : le corps porte une action, et la réponse
+      // d'une acceptation porte enfin `conversation` — le serveur la greffait
+      // déjà, mais son schéma ne la déclarant pas, elle était supprimée à la
+      // sérialisation et le client devait la rechercher.
+      await apiService.patch(API_ENDPOINTS.directory.friendRequestsById(requestId), { action: 'accept' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
@@ -287,7 +348,7 @@ export function useFriendRequestsV2(
 
   const rejectMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.patch(`/friend-requests/${requestId}`, { status: 'rejected' });
+      await apiService.patch(API_ENDPOINTS.directory.friendRequestsById(requestId), { action: 'reject' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: receivedQueryKey });
@@ -305,7 +366,10 @@ export function useFriendRequestsV2(
 
   const cancelMutation = useMutation({
     mutationFn: async (requestId: string) => {
-      await apiService.delete(`/friend-requests/${requestId}`);
+      // `dismiss`, et non un `DELETE` à part : `cancel` est le geste de
+      // l'ÉMETTEUR, `dismiss` celui de l'une ou l'autre partie — ce que
+      // l'ancienne route acceptait sans distinguer.
+      await apiService.patch(API_ENDPOINTS.directory.friendRequestsById(requestId), { action: 'dismiss' });
     },
     onMutate: async (requestId) => {
       await queryClient.cancelQueries({ queryKey: sentQueryKey });
