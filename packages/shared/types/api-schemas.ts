@@ -1615,7 +1615,6 @@ export const conversationMinimalSchema = {
           isPinned: { type: 'boolean', description: 'Is pinned by user' },
           isMuted: { type: 'boolean', description: 'Is muted by user' },
           isArchived: { type: 'boolean', description: 'Is archived by user' },
-          isDeletedForUser: { type: 'boolean', description: 'Is deleted for user' },
           tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
           categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
           customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },

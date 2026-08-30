@@ -63,11 +63,9 @@ export const conversationUserPreferencesSelect = {
   isPinned: true,
   isMuted: true,
   isArchived: true,
-  deletedForUserAt: true,
   // Lu SERVEUR-side pour masquer l'aperçu d'un historique effacé (cf.
   // `resolveVisibleLastMessages`). Non déclaré dans le schema wire, donc
-  // strippé de la réponse — même sort que `deletedForUserAt`, qui n'y figure
-  // que sous la forme `isDeletedForUser`.
+  // strippé de la réponse.
   clearHistoryBefore: true,
   tags: true,
   categoryId: true,

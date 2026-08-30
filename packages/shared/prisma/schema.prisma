@@ -2205,9 +2205,6 @@ model UserConversationPreferences {
   /// Archive conversation (hide from main list)
   isArchived Boolean @default(false)
 
-  /// When the user deleted this conversation from their view (soft delete, null = not deleted)
-  deletedForUserAt DateTime?
-
   /// Hide all messages before this timestamp (clear history feature)
   clearHistoryBefore DateTime?
 
