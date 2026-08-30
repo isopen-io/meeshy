@@ -340,6 +340,23 @@ function instrumentEncapsulatedAuthHooks(
 
   const PHASES_DE_GARDE = new Set(['onRequest', 'preValidation', 'preHandler']);
 
+  // L'implémentation PRISTINE, capturée UNE fois sur la racine — jamais
+  // `instance.addHook`, et c'est la seule subtilité de ce bloc.
+  //
+  // Une instance encapsulée Fastify hérite PROTOTYPALEMENT de son parent :
+  // `enfant.addHook` résout donc vers l'enveloppe qu'on vient de poser sur le
+  // PARENT, dont la fermeture tient le registre du parent ET son propre
+  // `original` lié au parent. `instance.addHook.bind(instance)` ne rattrape
+  // rien : `bind` fixe `this`, pas la fermeture. Le hook finissait donc
+  // enregistré sur un ANCÊTRE — l'instrumentation MODIFIAIT le graphe qu'elle
+  // prétend seulement observer, et faisait fuir la garde de
+  // `me/preferences` sur ses modules FRÈRES (`delete-account`, `export`), qui
+  // rendaient alors 401 dans le serveur assemblé et nulle part ailleurs.
+  //
+  // Un observateur qui se branche sur une chaîne de prototypes doit prendre
+  // son point d'appui HORS de la chaîne.
+  const addHookPristine = app.addHook as (this: FastifyInstance, name: string, fn: unknown) => FastifyInstance;
+
   app.addHook('onRegister', (instance: FastifyInstance) => {
     const contexte: ContexteEncapsule = {
       porteUneGarde: false,
@@ -351,7 +368,7 @@ function instrumentEncapsulatedAuthHooks(
     // Fastify type `addHook` par une surcharge par nom de phase que la
     // réaffectation ci-dessous ne peut pas satisfaire structurellement — ce
     // module n'a besoin que du comportement RUNTIME.
-    const original = instance.addHook.bind(instance) as (name: string, fn: unknown) => FastifyInstance;
+    const original = (name: string, fn: unknown) => addHookPristine.call(instance, name, fn);
 
     (instance as unknown as { addHook: (name: string, fn: unknown) => FastifyInstance }).addHook =
       function instrumentedAddHook(name: string, fn: unknown) {
