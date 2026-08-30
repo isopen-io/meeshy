@@ -192,6 +192,13 @@ struct ComposerSceneSurface: View {
                     slide: $slide,
                     aspectRatio: aspectRatio,
                     cornerRadius: 22,
+                    // **Le dessin se pose DANS la carte, pas sur le cadre**
+                    // (#4515). Il était un `overlay` frère, donc étalé sur tout
+                    // le cadre de mise en page : mesuré à l'écran, un trait
+                    // descendait SOUS la carte, sur le plateau — et un trait
+                    // hors du canvas est perdu à la publication, le rendu final
+                    // ne connaissant que la carte.
+                    canvasOverlay: drawingSurface,
                     onItemTapped: onItemTapped,
                     onBackgroundTapped: onBackgroundTapped,
                     loadedImages: sceneImages,
@@ -205,13 +212,6 @@ struct ComposerSceneSurface: View {
                     onInlineTextEditEnded: onInlineTextEditEnded
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // **Le canvas cesse de recevoir les touches pendant le
-                // dessin.** Sans cela, le doigt qui trace déplacerait aussi
-                // l'objet sous lui : deux gestes pour un seul mouvement.
-                .allowsHitTesting(drawingSurface == nil)
-                .overlay { drawingSurface }
-                // Les contrôleurs PAR-DESSUS la couche de capture : ils doivent
-                // recevoir leurs taps, elle doit recevoir le reste.
 
                 // **La scène s'ENCASTRE entre les deux couloirs** (#4061). Le
                 // nombre se lit de la règle, jamais d'un littéral : il n'est pas

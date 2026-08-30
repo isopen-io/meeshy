@@ -42,6 +42,23 @@ public struct EmbeddedSceneCanvas: View {
     /// `.clipShape`.
     public var cornerRadius: CGFloat
 
+    /// **Ce qui se pose SUR la carte, dans SES bornes** (#4515).
+    ///
+    /// La carte est ajustée au ratio puis CENTRÉE dans la zone que le parent
+    /// donne : son rectangle dessiné est presque toujours plus petit que son
+    /// cadre de mise en page. Un `overlay` posé par l'appelant couvre le CADRE,
+    /// pas la CARTE — et sur un fond paysage dans une zone haute, l'écart est
+    /// énorme.
+    ///
+    /// Mesuré au simulateur le 2026-08-31 : un trait de l'outil dessin
+    /// descendait bien SOUS la carte, sur le plateau. Tracé hors du canvas, il
+    /// est perdu à la publication — le rendu final ne connaît que la carte.
+    ///
+    /// Ce slot existe pour que ce qui doit s'aligner sur la carte le fasse par
+    /// CONSTRUCTION : seul ce corps connaît `fit`, et le lui faire calculer
+    /// ailleurs redonnerait deux géométries à tenir d'accord.
+    public var canvasOverlay: AnyView?
+
     /// Notifié quand l'utilisateur tape un objet de la scène (texte, média,
     /// sticker, lieu) — transmis tel quel à `StoryComposerCanvasView`.
     ///
@@ -99,6 +116,7 @@ public struct EmbeddedSceneCanvas: View {
         slide: Binding<StorySlide>,
         aspectRatio: CGFloat = CanvasGeometry.portraitRatio,
         cornerRadius: CGFloat = 22,
+        canvasOverlay: AnyView? = nil,
         onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
         onBackgroundTapped: (() -> Void)? = nil,
         loadedImages: [String: UIImage] = [:],
@@ -112,6 +130,7 @@ public struct EmbeddedSceneCanvas: View {
         self._slide = slide
         self.aspectRatio = aspectRatio
         self.cornerRadius = cornerRadius
+        self.canvasOverlay = canvasOverlay
         self.onItemTapped = onItemTapped
         self.onBackgroundTapped = onBackgroundTapped
         self.loadedImages = loadedImages
@@ -161,10 +180,29 @@ public struct EmbeddedSceneCanvas: View {
                 // (même compensation que `canvasComposerLayer`).
                 canvasCornerRadius: scale > 0 ? cornerRadius / scale : 0
             )
+            // **Le canvas cesse de recevoir les touches pendant qu'un calque
+            // les capture** — sinon le doigt qui trace déplacerait aussi
+            // l'objet sous lui : deux gestes pour un seul mouvement.
+            //
+            // La garde vit ICI et non chez l'appelant, et c'est le correctif :
+            // posée dehors, elle couvrait le calque LUI-MÊME depuis qu'il est
+            // borné à la carte, et le dessin ne recevait plus rien. Mesuré à
+            // l'écran — aucun trait, sur une surface pourtant active.
+            .allowsHitTesting(canvasOverlay == nil)
             .frame(width: reference.width, height: reference.height)
             .scaleEffect(scale, anchor: .center)
             .frame(width: fit.width, height: fit.height)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            // Le calque de l'appelant est BORNÉ à la carte — même taille, même
+            // découpe. C'est ce qui aligne l'outil de dessin sur le canvas
+            // final au lieu du cadre de mise en page (#4515).
+            .overlay {
+                if let canvasOverlay {
+                    canvasOverlay
+                        .frame(width: fit.width, height: fit.height)
+                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                }
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         }
     }

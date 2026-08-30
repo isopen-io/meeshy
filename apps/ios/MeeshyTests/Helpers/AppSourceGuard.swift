@@ -133,6 +133,10 @@ enum AppSourceGuard {
     static let composerSurfaceCompanions = [
         "Meeshy/Features/Main/Composer/ComposerSurfaceRules.swift",
         "Meeshy/Features/Main/Composer/ComposerDocumentRules.swift",
+        // **La géométrie de la rangée, extraite le 2026-08-31** — même raison
+        // que les deux ci-dessous : le nom ne porte pas celui du type hôte,
+        // donc le glob ne la voit pas.
+        "Meeshy/Features/Main/Composer/ComposerDocumentToolRow.swift",
         // **Les deux types extraits le 2026-08-30**, quand le fichier a franchi
         // le plafond de 1 100 lignes. Ils ne portent PAS le nom du type, donc le
         // glob `ComposerDocumentSurface+*.swift` ne les voit pas — c'est
