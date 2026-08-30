@@ -18,12 +18,11 @@ package me.meeshy.sdk.model
  * unit test asserts the lookup covers every [NotificationTypeVocabulary.KNOWN_TYPES] entry so
  * a newly-added wire type can never silently fall through.
  *
- * Boundary (faithful to the current Android prefs surface): the two categories iOS gates on
- * `callsEnabled` (incoming-call) and `friendContentEnabled` (friend feed/story/mood) have no
- * matching field in [UserNotificationPreferences] yet, so — like iOS's own toggle-less
- * power-user types (translation, transcription, gamification) — they resolve to always-enabled
- * until those toggles exist. Adding the two fields (model + sync + settings row) is a tracked
- * follow-up, not invented here.
+ * Full iOS parity: incoming-call types are gated on `callsEnabled` and friend feed/story/mood
+ * on `friendContentEnabled` — the two fields [UserNotificationPreferences] now carries. The
+ * only remaining always-enabled types are the ones iOS itself leaves toggle-less (power-user
+ * features — translation, transcription, voice-clone — plus gamification and the legacy
+ * status/affiliate cases), exactly as its `isTypeEnabled` returns `true` for them.
  */
 public object NotificationTypeToggle {
 
@@ -40,9 +39,6 @@ public object NotificationTypeToggle {
         // Gamification + legacy status/affiliate: iOS `return true`.
         "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned",
         "AFFILIATE_SIGNUP", "STATUS_UPDATE",
-        // No Android toggle field yet (iOS gates these on callsEnabled / friendContentEnabled).
-        "incoming_call", "call", "CALL_INCOMING",
-        "friend_new_story", "friend_new_post", "friend_new_mood",
     )
 
     private val GROUPS: List<ToggleGroup> = listOf(
@@ -62,6 +58,8 @@ public object NotificationTypeToggle {
         ToggleGroup(setOf("comment_reply")) { it.commentReplyEnabled },
         ToggleGroup(setOf("comment_like", "comment_reaction")) { it.commentLikeEnabled },
         ToggleGroup(setOf("missed_call", "CALL_MISSED", "call_ended", "call_declined")) { it.missedCallEnabled },
+        ToggleGroup(setOf("incoming_call", "call", "CALL_INCOMING")) { it.callsEnabled },
+        ToggleGroup(setOf("friend_new_story", "friend_new_post", "friend_new_mood")) { it.friendContentEnabled },
         ToggleGroup(
             setOf("contact_request", "friend_request", "FRIEND_REQUEST", "contact_accepted", "friend_accepted", "FRIEND_ACCEPTED"),
         ) { it.contactRequestEnabled },

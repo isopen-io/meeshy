@@ -5,6 +5,18 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — Adding a REQUIRED field to a `@Serializable` wire body breaks its "every key present" decode fixtures (slice `notification-prefs-calls-friend-content`)
+`NotificationPreferenceSyncBody` fields are non-nullable with NO Kotlin defaults (a wire contract carries every
+key), so adding `callsEnabled`/`friendContentEnabled` to the data class made `kotlinx.serialization` throw
+`MissingFieldException` on any test JSON fixture that predated them — here `PreferenceSyncBodyReadProjectionTest`'s
+`notificationResponse` (documented "every key present"). The `NotificationPreferenceSyncBodyTest` `from`-projection
+tests did NOT break (they build the body from a `UserNotificationPreferences`, never decode raw JSON), which is
+why the first `check` only surfaced the two decode tests. **Lesson: when you add a field to a `@Serializable` sync
+body, grep the test tree for `decodeFromString<ThatBody>` / raw JSON fixtures with its sibling keys BEFORE running
+the gate** — the round-trip-from-model tests will pass and hide the fixture gap. Fixing the fixture is a
+correction, not a weakening: a real gateway response DOES carry the new key, so I set it to a value (`false`) that
+overrides the local `true` default and STRENGTHENED the witness (`assertThat(next.callsEnabled).isFalse()`).
+
 ## 2026-08-30 — `UserNotificationPreferences()` is NOT "all on" (slice `notification-toast-per-type-gate`)
 Two per-type booleans default to `false` in the model: `memberLeftEnabled` and `commentLikeEnabled`
 (`Preferences.kt`). A test fixture named `allOn = UserNotificationPreferences()` therefore lies — and the

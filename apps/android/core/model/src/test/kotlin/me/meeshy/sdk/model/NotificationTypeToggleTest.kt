@@ -23,6 +23,7 @@ class NotificationTypeToggleTest {
     private val allOff = UserNotificationPreferences(
         newMessageEnabled = false,
         missedCallEnabled = false,
+        callsEnabled = false,
         voicemailEnabled = false,
         systemEnabled = false,
         conversationEnabled = false,
@@ -39,21 +40,21 @@ class NotificationTypeToggleTest {
         storyReactionEnabled = false,
         commentReplyEnabled = false,
         commentLikeEnabled = false,
+        friendContentEnabled = false,
     )
 
     /**
      * Known wire types iOS gates on no per-type toggle (`isTypeEnabled` returns `true`) —
-     * power-user features (translation/transcription/voice-clone), gamification, and the two
-     * categories Android has no toggle field for yet (incoming-call, friend-content). These
-     * must surface even with every toggle turned off.
+     * the power-user features (translation/transcription/voice-clone) plus gamification and
+     * the legacy status/affiliate cases. These must surface even with every toggle turned
+     * off. Incoming-call and friend-content are NOT here: they are now gated on
+     * `callsEnabled` / `friendContentEnabled` (full iOS parity), so all-off silences them.
      */
     private val alwaysOn = setOf(
         "translation_completed", "translation_ready", "TRANSLATION_READY",
         "transcription_completed", "voice_clone_ready",
         "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned",
         "AFFILIATE_SIGNUP", "STATUS_UPDATE",
-        "incoming_call", "call", "CALL_INCOMING",
-        "friend_new_story", "friend_new_post", "friend_new_mood",
     )
 
     /** Wire types iOS routes to `systemEnabled`. */
@@ -116,8 +117,31 @@ class NotificationTypeToggleTest {
         listOf("missed_call", "call_declined", "CALL_MISSED", "call_ended").forEach { type ->
             assertThat(NotificationTypeToggle.isEnabled(type, off)).isFalse()
         }
-        // Incoming-call types have no Android toggle → still allowed.
+        // Incoming-call rides callsEnabled (still on here), a DIFFERENT toggle from missedCall.
         assertThat(NotificationTypeToggle.isEnabled("incoming_call", off)).isTrue()
+    }
+
+    @Test
+    fun callsToggleGovernsIncomingCallTypesButNotFinishedCalls() {
+        val off = allOn.copy(callsEnabled = false)
+        listOf("incoming_call", "call", "CALL_INCOMING").forEach { type ->
+            assertThat(NotificationTypeToggle.isEnabled(type, off)).isFalse()
+        }
+        // The finished-call types ride missedCallEnabled, unaffected by callsEnabled.
+        assertThat(NotificationTypeToggle.isEnabled("missed_call", off)).isTrue()
+        assertThat(NotificationTypeToggle.isEnabled("call_ended", off)).isTrue()
+    }
+
+    @Test
+    fun friendContentToggleGovernsFriendFeedStoryAndMood() {
+        val off = allOn.copy(friendContentEnabled = false)
+        listOf("friend_new_story", "friend_new_post", "friend_new_mood").forEach { type ->
+            assertThat(NotificationTypeToggle.isEnabled(type, off)).isFalse()
+        }
+        // A friend's comment on a story rides postCommentEnabled, not friendContentEnabled.
+        assertThat(NotificationTypeToggle.isEnabled("friend_story_comment", off)).isTrue()
+        // A post like is its own toggle, untouched by friendContentEnabled.
+        assertThat(NotificationTypeToggle.isEnabled("post_like", off)).isTrue()
     }
 
     @Test

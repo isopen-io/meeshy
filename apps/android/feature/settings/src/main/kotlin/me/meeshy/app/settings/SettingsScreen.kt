@@ -762,6 +762,7 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
     NotificationType.MENTION -> R.string.settings_notif_type_mention
     NotificationType.REACTION -> R.string.settings_notif_type_reaction
     NotificationType.CONVERSATION -> R.string.settings_notif_type_conversation
+    NotificationType.INCOMING_CALL -> R.string.settings_notif_type_incoming_call
     NotificationType.MISSED_CALL -> R.string.settings_notif_type_missed_call
     NotificationType.VOICEMAIL -> R.string.settings_notif_type_voicemail
     NotificationType.POST_LIKE -> R.string.settings_notif_type_post_like
@@ -770,6 +771,7 @@ private fun notificationTypeLabelRes(type: NotificationType): Int = when (type) 
     NotificationType.STORY_REACTION -> R.string.settings_notif_type_story_reaction
     NotificationType.COMMENT_REPLY -> R.string.settings_notif_type_comment_reply
     NotificationType.COMMENT_LIKE -> R.string.settings_notif_type_comment_like
+    NotificationType.FRIEND_CONTENT -> R.string.settings_notif_type_friend_content
     NotificationType.CONTACT_REQUEST -> R.string.settings_notif_type_contact_request
     NotificationType.GROUP_INVITE -> R.string.settings_notif_type_group_invite
     NotificationType.MEMBER_JOINED -> R.string.settings_notif_type_member_joined
