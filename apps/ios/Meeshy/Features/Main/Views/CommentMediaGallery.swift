@@ -175,6 +175,12 @@ enum CommentMediaGallery {
 ///   la dérivation O(n) n'est payée qu'au premier `snapshot()` — c'est-à-dire au
 ///   tap qui ouvre le plein écran, jamais pendant le défilement.
 final class CommentMediaGalleryContext: ObservableObject {
+    // iOS 26.1 : la `deinit` synthétisée d'un type `@MainActor` est ISOLÉE
+    // (SE-0466, isolation MainActor par défaut) et double-libère au démontage
+    // hors d'une tâche — `pointer being freed was not allocated`, abrt.
+    // Garde : `MainActorDeinitSourceGuardTests`.
+    nonisolated deinit {}
+
     private var topLevel: [FeedComment] = []
     private var replies: [String: [FeedComment]] = [:]
     private var cached: CommentMediaGallerySnapshot?
