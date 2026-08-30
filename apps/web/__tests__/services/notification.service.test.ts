@@ -429,7 +429,7 @@ describe('NotificationService - Structure Groupée V2', () => {
 
       await NotificationService.deleteNotification('notif_123');
 
-      expect(apiService.delete).toHaveBeenCalledWith('/notifications/notif_123');
+      expect(apiService.delete).toHaveBeenCalledWith('/api/v1/notifications/notif_123');
     });
   });
 

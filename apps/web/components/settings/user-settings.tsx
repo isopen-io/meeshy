@@ -29,6 +29,7 @@ import { toast } from 'sonner';
 import { Upload, Camera, Lock, Eye, EyeOff, Languages, Monitor, Wand2, CheckCircle2, AlertCircle, Mail, Phone, Send, Loader2, Edit, Check, X } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { validateAvatarFile } from '@/utils/avatar-upload';
 import { compressAvatarImage } from '@/utils/media-compression';
 import { AvatarCropDialog } from './avatar-crop-dialog';
@@ -216,7 +217,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
         return;
       }
 
-      const response = await fetch(buildApiUrl('/users/me'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.me), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -319,7 +320,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       const imageUrl = uploadData.data.url;
 
       // Étape 2: Mettre à jour l'avatar dans la base de données via l'API backend
-      const updateResponse = await fetch(buildApiUrl('/users/me/avatar'), {
+      const updateResponse = await fetch(buildApiUrl(API_ENDPOINTS.users.meAvatar), {
         method: 'PATCH',
         headers: { 
           'Content-Type': 'application/json',
@@ -372,7 +373,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsChangingUsername(true);
     try {
-      const response = await fetch(buildApiUrl('/users/me/username'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.meUsername), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -428,7 +429,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsSavingEmail(true);
     try {
-      const response = await fetch(buildApiUrl('/users/me/change-email'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.meChangeEmail), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -473,7 +474,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
     setIsSavingPhone(true);
     try {
       // Envoyer le numéro au format E.164
-      const response = await fetch(buildApiUrl('/users/me/change-phone'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.meChangePhone), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -512,7 +513,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsVerifyingPhone(true);
     try {
-      const response = await fetch(buildApiUrl('/users/me/verify-phone-change'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.meVerifyPhoneChange), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -556,8 +557,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
     const loadSuggestions = async () => {
       if (usernameValidation.status === 'taken' && newUsername) {
         try {
+          const checkAvailabilityEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?username=${encodeURIComponent(newUsername)}`;
           const response = await fetch(
-            buildApiUrl(`/auth/check-availability?username=${encodeURIComponent(newUsername)}`)
+            buildApiUrl(checkAvailabilityEndpoint)
           );
           const data = await response.json();
           if (data.success && data.data.suggestions) {
@@ -585,7 +587,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsResendingEmail(true);
     try {
-      const response = await fetch(buildApiUrl('/auth/resend-verification'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.resendVerification), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -607,7 +609,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
           // Recharger les données utilisateur pour mettre à jour l'interface
           try {
-            const meResponse = await fetch(buildApiUrl('/auth/me'), {
+            const meResponse = await fetch(buildApiUrl(API_ENDPOINTS.auth.me), {
               headers: {
                 'Authorization': `Bearer ${authManager.getAuthToken()}`
               }
@@ -650,7 +652,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsResendingPendingEmail(true);
     try {
-      const response = await fetch(buildApiUrl('/users/me/resend-email-change-verification'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.meResendEmailChangeVerification), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -687,7 +689,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsSendingPhoneCode(true);
     try {
-      const response = await fetch(buildApiUrl('/auth/send-phone-code'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.sendPhoneCode), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -724,7 +726,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsVerifyingPhone(true);
     try {
-      const response = await fetch(buildApiUrl('/auth/verify-phone'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.auth.verifyPhone), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -771,7 +773,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       const { ...profileData } = formData;
 
       // Appel API pour sauvegarder les modifications
-      const response = await fetch(buildApiUrl('/users/me'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.me), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -849,7 +851,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
 
     setIsPasswordLoading(true);
     try {
-      const response = await fetch(buildApiUrl('/users/me/password'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.users.mePassword), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

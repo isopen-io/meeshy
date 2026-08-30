@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOgImageUrl } from '@/lib/og-images';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
 interface MetadataResponse {
@@ -55,7 +56,7 @@ async function generateAffiliateMetadata(
 
   try {
     // Valider le token d'affiliation
-    const response = await fetch(buildApiUrl(`/affiliate/validate/${affiliateToken}`));
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.affiliate.validateByToken(affiliateToken)));
     
     if (response.ok) {
       const data = await response.json();
@@ -89,7 +90,15 @@ async function generateConversationMetadata(
   }
 
   try {
-    // Récupérer les informations de la conversation
+    // ADRESSE FANTÔME, trouvée par #4281 en migrant ce fichier vers le
+    // catalogue partagé : `GET /links/:identifier/info` n'existe dans AUCUNE
+    // des 419 routes de @meeshy/shared/api/endpoints (#4280) — le manifeste ne
+    // porte que `GET /api/v1/links/:identifier` (sans `/info`), qui sert déjà
+    // cette même charge (aperçu public d'un lien). Chaque appel 404 en
+    // silence (`if (response.ok)` juste dessous) et retombe sur les
+    // métadonnées OG génériques — même famille que #4219/#4222. Laissée en
+    // littéral EXPRÈS : ce n'est pas à une migration de chemins de deviner le
+    // correctif. Suivi à ouvrir.
     const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
     
     if (response.ok) {
@@ -124,6 +133,9 @@ async function generateJoinMetadata(
   }
 
   try {
+    // ADRESSE FANTÔME — même défaut que generateConversationMetadata
+    // ci-dessus (voir son commentaire), trouvé par #4281 : `/info` n'est le
+    // suffixe d'aucune route du catalogue. Laissée en littéral EXPRÈS.
     // Récupérer les informations du lien de jointure
     const response = await fetch(buildApiUrl(`/links/${linkId}/info`));
     

@@ -1,6 +1,7 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getServerLocale } from '@/lib/i18n/server-locale';
 import { composeMetadata, getMetadataPage, interpolate, pageString } from '@/lib/i18n/metadata';
 
@@ -45,7 +46,7 @@ export async function generateMetadata({ params }: UserProfileLayoutProps): Prom
     // en prime `Cache-Control: public, max-age=60, stale-while-revalidate=600`
     // pour l'anonyme, ce que le `revalidate: 300` de Next complète au lieu de
     // le contredire.
-    const response = await fetch(buildApiUrl(`/directory/people/${id}`), {
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.directory.peopleByHandle(id)), {
       next: { revalidate: 300 }, // Cache 5 minutes
       signal: controller.signal,
       headers: {

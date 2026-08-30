@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import MediaManager from '@/utils/media-manager';
 
 class VideoManager {
@@ -59,7 +60,7 @@ export function useVideoPlayback({
     const playPositionMs = video ? Math.round(video.currentTime * 1000) : 0;
     /* istanbul ignore next -- defensive null guard */
     const durationMs = video ? Math.round(video.duration * 1000) : 0;
-    apiService.post(`/attachments/${attachmentId}/status`, {
+    apiService.post(API_ENDPOINTS.attachments.byAttachmentIdStatus(attachmentId), {
       action: 'watched',
       playPositionMs,
       durationMs: isFinite(durationMs) ? durationMs : 0,

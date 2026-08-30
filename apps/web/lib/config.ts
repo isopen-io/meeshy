@@ -1,6 +1,16 @@
 // Configuration centralisée Meeshy - Variables d'environnement
 // Ce fichier centralise toutes les configurations depuis .env
 
+// #4281 (critère 1) — API_ENDPOINTS est réexporté depuis le catalogue partagé
+// (packages/shared/api/endpoints.ts, #4280) : ce fichier ne le définit plus,
+// il en devient une PROJECTION. Le catalogue est GÉNÉRÉ depuis
+// services/gateway/route-manifest.json et cliqueté contre lui — une route
+// renommée ou retirée côté gateway et régénérée y fait tomber le cliquet de
+// packages/shared avant qu'un seul appel web ne puisse viser une adresse
+// morte. Ne jamais réintroduire d'entrée manuscrite ici : régénérer le
+// catalogue (`cd packages/shared && npm run api-endpoints:generate`).
+export { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
+
 interface MeeshyConfig {
   // Ports et URLs
   frontend: {
@@ -184,108 +194,6 @@ export const API_CONFIG = {
 };
 
 export default config;
-
-// URLs d'API fréquemment utilisées
-// Les entrées ci-dessous ont été mesurées contre services/gateway/route-manifest.json
-// (#4276, 517 routes servies au 2026-08-29) dans le cadre de #4280. Six adresses
-// n'avaient PLUS de route correspondante côté serveur (le corps de #4280 en annonçait
-// trois — mesuré : c'est le manifeste qui fait foi, pas le chiffre de l'issue), et trois
-// entrées supplémentaires étaient déclarées en CONSTANTE avec un `:paramètre` littéral
-// jamais interpolé — un bug distinct de la péremption, garanti 404 quel que soit l'appelant.
-// Aucune des neuf n'est lue par un fichier de ce dépôt (vérifié) : la correction ne change
-// le comportement d'aucun écran. Le catalogue GÉNÉRÉ depuis le manifeste — celui que ce
-// bloc ne remplace pas encore, cf. #4281 — vit désormais dans @meeshy/shared/api/endpoints.
-export const API_ENDPOINTS = {
-  AUTH: {
-    LOGIN: '/auth/login',
-    REGISTER: '/auth/register',
-    ME: '/auth/me',
-    LOGOUT: '/auth/logout'
-  },
-  CONVERSATION: {
-    LIST: '/conversations',
-    CREATE: '/conversations',
-    // PÉRIMÉE : appelait '/conversations/join' SANS paramètre. La route réelle exige un
-    // identifiant de lien (POST /api/v1/conversations/join/:linkId) — elle n'a jamais pu
-    // résoudre une adresse valide telle quelle. use-conversation-join.ts et
-    // link-conversation.service.ts contournent déjà le problème en reconstruisant l'URL à
-    // la main (aucun des deux ne lit cette entrée). Corrigée en fonction paramétrée.
-    JOIN: (linkId: string) => `/conversations/join/${linkId}`,
-    // PÉRIMÉE, RETIRÉE : LINK ('/conversations/link') n'a jamais eu de route serveur
-    // correspondante (aucune entrée '/conversations/link' dans les 517 routes du
-    // manifeste) et n'était lue par aucun fichier. Créer un lien de conversation passe par
-    // CREATE_LINK ci-dessous, qui appelle une route qui existe bien (POST /api/v1/links).
-    CREATE_LINK: '/api/links',
-    GET_CONVERSATION_LINKS: (conversationId: string) => `/conversations/${conversationId}/links`,
-    // PÉRIMÉE, RETIRÉE : GET_LINK_CONVERSATION appelait '/api/links/:linkId/conversations'
-    // — absente du manifeste, et non lue par aucun fichier. Un lien Meeshy désigne UNE
-    // conversation ; consulter son historique passe par GET /api/v1/links/:identifier/messages
-    // (une liste de "conversations" au pluriel pour un lien n'a jamais existé côté serveur).
-    //
-    // CORRIGÉE (n'était pas dans les "trois" de l'issue, trouvée par mesure contre le
-    // manifeste) : MESSAGES appelait '/conversations/:id/messages' en CONSTANTE — le ':id'
-    // littéral n'était donc JAMAIS interpolé. La route existe bien (GET/POST
-    // /api/v1/conversations/:id/messages) ; seule la FORME de la déclaration empêchait tout
-    // appel valide, garanti 404. Les 80 fichiers qui envoient/listent des messages
-    // aujourd'hui reconstruisent ce même chemin à la main (services/conversations/messages.service.ts,
-    // lib/server-cache.ts…) précisément parce que cette entrée ne pouvait pas servir. Elle
-    // absorbe désormais ce que le bloc MESSAGE ci-dessous prétendait couvrir en double — voir
-    // la note sur la double déclaration, sous ce bloc CONVERSATION.
-    MESSAGES: (id: string) => `/conversations/${id}/messages`,
-    // CORRIGÉE (idem, hors des "trois" de l'issue) : GET_GROUP_CONVERSATIONS appelait
-    // '/conversations/group/:groupId' — absente du manifeste. Le vocabulaire "group" désigne
-    // aujourd'hui une COMMUNAUTÉ partout ailleurs dans ce fichier (bloc GROUP ci-dessous, dont
-    // chaque entrée résout déjà vers /communities/...) ; la route réelle est
-    // GET /api/v1/communities/:id/conversations. Corrigée plutôt que retirée : la même
-    // bascule de vocabulaire est déjà appliquée, sans exception, par les douze entrées du
-    // bloc GROUP.
-    GET_GROUP_CONVERSATIONS: (groupId: string) => `/communities/${groupId}/conversations`,
-    CHECK_IDENTIFIER: (identifier: string) => `/conversations/check-identifier/${identifier}`,
-    CHECK_LINK_IDENTIFIER: (identifier: string) => `/links/check-identifier/${identifier}`
-  },
-  // DOUBLE DÉCLARATION RETIRÉE : le bloc MESSAGE (LIST: '/messages/conversation',
-  // SEND: '/messages') déclarait une SECONDE FOIS « lister/envoyer les messages d'une
-  // conversation » — un besoin déjà porté par CONVERSATION.MESSAGES ci-dessus. Ses deux
-  // entrées appelaient en outre des adresses PÉRIMÉES : le manifeste (517 routes) ne porte
-  // ni POST /api/v1/messages ni GET /api/v1/messages/conversation, seulement la forme
-  // imbriquée que CONVERSATION.MESSAGES sert désormais correctement. Ni LIST ni SEND
-  // n'étaient lues par aucun fichier. CONVERSATION.MESSAGES(id) couvre les deux verbes,
-  // comme GROUP.DETAILS/GROUP.UPDATE couvrent déjà GET et PUT sur la même adresse plus bas.
-  USER: {
-    SEARCH: '/users/search'
-  },
-  GROUP: {
-    LIST: '/communities',
-    CREATE: '/communities',
-    // CORRIGÉES (hors des "trois" de l'issue) : JOIN/LEAVE appelaient
-    // '/communities/:id/join' et '/communities/:id/leave' en CONSTANTE — même bug que
-    // CONVERSATION.MESSAGES ci-dessus, le ':id' littéral n'était jamais interpolé. Les
-    // routes existent (POST /api/v1/communities/:id/join, .../leave) ; seule la forme de la
-    // déclaration empêchait tout appel valide.
-    JOIN: (id: string) => `/communities/${id}/join`,
-    LEAVE: (id: string) => `/communities/${id}/leave`,
-    SEARCH: '/communities/search',
-    DETAILS: (id: string) => `/communities/${id}`,
-    MEMBERS: (id: string) => `/communities/${id}/members`,
-    UPDATE: (id: string) => `/communities/${id}`,
-    ADD_MEMBER: (groupId: string) => `/communities/${groupId}/members`,
-    REMOVE_MEMBER: (groupId: string, memberId: string) => `/communities/${groupId}/members/${memberId}`,
-    UPDATE_MEMBER_ROLE: (groupId: string, memberId: string) => `/communities/${groupId}/members/${memberId}/role`,
-    CHECK_IDENTIFIER: (identifier: string) => `/communities/check-identifier/${identifier}`
-  },
-  TRACKING_LINK: {
-    CREATE: '/api/tracking-links',
-    CLICK: (token: string) => `/api/tracking-links/${token}/click`,
-    GET: (token: string) => `/api/tracking-links/${token}`,
-    STATS: (token: string) => `/api/tracking-links/${token}/stats`,
-    USER_LINKS: '/api/tracking-links/user/me',
-    CONVERSATION_LINKS: (conversationId: string) => `/api/tracking-links/conversation/${conversationId}`,
-    DEACTIVATE: (token: string) => `/api/tracking-links/${token}/deactivate`,
-    DELETE: (token: string) => `/api/tracking-links/${token}`,
-    REDIRECT: (token: string) => `/l/${token}`,
-    CHECK_TOKEN: (token: string) => `/api/tracking-links/check-token/${token}`
-  }
-};
 
 // === FONCTIONS UNIFIÉES POUR LES URLs ===
 

@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { authManager } from '@/services/auth-manager.service';
 import { FontFamily, getFontConfig } from '@/lib/fonts';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 const FONT_PREFERENCE_KEY = 'font-family';
 const DEFAULT_FONT_ID: FontFamily = 'nunito';
@@ -49,7 +50,8 @@ export function useFontPreference() {
           try {
             // La route unique de #4181 : `?categories=application` ne
             // repatrie qu'UNE catégorie (~15 clés), pas les sept (~130).
-            const response = await fetch(buildApiUrl('/me/preferences?categories=application'), {
+            const fontPrefsEndpoint = `${API_ENDPOINTS.me.preferences}?categories=application`;
+            const response = await fetch(buildApiUrl(fontPrefsEndpoint), {
               headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json',
@@ -153,7 +155,7 @@ export function useFontPreference() {
       if (typeof window !== 'undefined') {
         const token = authManager.getAuthToken();
         if (token) {
-          fetch(buildApiUrl('/me/preferences'), {
+          fetch(buildApiUrl(API_ENDPOINTS.me.preferences), {
             method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${token}`,

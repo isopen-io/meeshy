@@ -7,6 +7,7 @@
  */
 
 import { apiService } from './api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import type { ApiResponse } from '@meeshy/shared/types';
 import type {
   Notification,
@@ -280,7 +281,7 @@ export const NotificationService = {
    */
   async deleteNotification(notificationId: string): Promise<ApiResponse<void>> {
     return withRetry(async () => {
-      return apiService.delete(`/notifications/${notificationId}`);
+      return apiService.delete(API_ENDPOINTS.notifications.byId(notificationId));
     });
   },
 
@@ -289,7 +290,7 @@ export const NotificationService = {
    */
   async deleteAllRead(): Promise<ApiResponse<void>> {
     return withRetry(async () => {
-      return apiService.delete('/notifications/read');
+      return apiService.delete(API_ENDPOINTS.notifications.read);
     });
   },
 
@@ -339,7 +340,7 @@ export const NotificationService = {
   async getPreferences(): Promise<ApiResponse<any>> {
     return withRetry(async () => {
       const response = await apiService.get<{ notification?: unknown }>(
-        '/api/v1/me/preferences',
+        API_ENDPOINTS.me.preferences,
         { categories: 'notification' }
       );
       return { ...response, data: response.data?.notification };
@@ -354,7 +355,7 @@ export const NotificationService = {
   async updatePreferences(preferences: any): Promise<ApiResponse<any>> {
     return withRetry(async () => {
       const response = await apiService.patch<{ notification?: unknown }>(
-        '/api/v1/me/preferences',
+        API_ENDPOINTS.me.preferences,
         { notification: preferences }
       );
       return { ...response, data: response.data?.notification };

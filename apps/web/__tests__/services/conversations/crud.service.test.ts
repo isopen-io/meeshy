@@ -71,7 +71,7 @@ describe('ConversationsCrudService', () => {
 
       const result = await svc.getConversations();
 
-      expect(mockApi.get).toHaveBeenCalledWith('/conversations', expect.objectContaining({ limit: '20' }));
+      expect(mockApi.get).toHaveBeenCalledWith('/api/v1/conversations', expect.objectContaining({ limit: '20' }));
       expect(result.conversations).toHaveLength(2);
       expect(result.pagination).toEqual(pagination);
     });
@@ -114,7 +114,7 @@ describe('ConversationsCrudService', () => {
       await svc.getConversations({ limit: 10, offset: 5 });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        '/conversations',
+        '/api/v1/conversations',
         expect.objectContaining({ limit: '10', offset: '5' }),
       );
     });
@@ -135,7 +135,7 @@ describe('ConversationsCrudService', () => {
       await svc.getConversations({ type: 'direct' });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        '/conversations',
+        '/api/v1/conversations',
         expect.objectContaining({ type: 'direct' }),
       );
     });
@@ -146,7 +146,7 @@ describe('ConversationsCrudService', () => {
       await svc.getConversations({ withUserId: 'user-42' });
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        '/conversations',
+        '/api/v1/conversations',
         expect.objectContaining({ withUserId: 'user-42' }),
       );
     });
@@ -212,7 +212,7 @@ describe('ConversationsCrudService', () => {
 
       const result = await svc.getConversation('conv-42');
 
-      expect(mockApi.get).toHaveBeenCalledWith('/conversations/conv-42');
+      expect(mockApi.get).toHaveBeenCalledWith('/api/v1/conversations/conv-42');
       expect(result.id).toBe('conv-42');
     });
 
@@ -241,7 +241,7 @@ describe('ConversationsCrudService', () => {
 
       const result = await svc.createConversation(createRequest);
 
-      expect(mockApi.post).toHaveBeenCalledWith('/conversations', createRequest);
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/conversations', createRequest);
       expect(result.id).toBe('new-conv');
     });
 
@@ -270,7 +270,7 @@ describe('ConversationsCrudService', () => {
 
       const result = await svc.updateConversation('conv-1', { title: 'Updated' });
 
-      expect(mockApi.put).toHaveBeenCalledWith('/conversations/conv-1', { title: 'Updated' });
+      expect(mockApi.put).toHaveBeenCalledWith('/api/v1/conversations/conv-1', { title: 'Updated' });
       expect(result).toEqual(updated);
     });
 
@@ -285,7 +285,7 @@ describe('ConversationsCrudService', () => {
         banner: 'https://static.meeshy.me/b.jpg',
       } as never);
 
-      expect(mockApi.put).toHaveBeenCalledWith('/conversations/conv-1', {
+      expect(mockApi.put).toHaveBeenCalledWith('/api/v1/conversations/conv-1', {
         avatar: 'https://static.meeshy.me/a.jpg',
         banner: 'https://static.meeshy.me/b.jpg',
       });
@@ -308,7 +308,7 @@ describe('ConversationsCrudService', () => {
 
       await svc.deleteConversation('conv-1');
 
-      expect(mockApi.delete).toHaveBeenCalledWith('/conversations/conv-1');
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/v1/conversations/conv-1');
     });
   });
 
@@ -321,7 +321,7 @@ describe('ConversationsCrudService', () => {
 
       const result = await svc.getEncryptionStatus('conv-1');
 
-      expect(mockApi.get).toHaveBeenCalledWith('/conversations/conv-1/encryption-status');
+      expect(mockApi.get).toHaveBeenCalledWith('/api/v1/conversations/conv-1/encryption-status');
       expect(result).toBe(status);
     });
 
@@ -343,7 +343,7 @@ describe('ConversationsCrudService', () => {
 
       const response = await svc.enableEncryption('conv-1', 'e2ee');
 
-      expect(mockApi.post).toHaveBeenCalledWith('/conversations/conv-1/encryption', { mode: 'e2ee' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/conversations/conv-1/encryption', { mode: 'e2ee' });
       expect(response).toBe(result);
     });
 
@@ -365,7 +365,7 @@ describe('ConversationsCrudService', () => {
 
       const result = await svc.searchConversations('hello');
 
-      expect(mockApi.get).toHaveBeenCalledWith('/conversations/search', { q: 'hello' });
+      expect(mockApi.get).toHaveBeenCalledWith('/api/v1/conversations/search', { q: 'hello' });
       expect(result).toHaveLength(2);
       expect(mockTransformers.transformConversationData).toHaveBeenCalledTimes(2);
     });
@@ -402,7 +402,7 @@ describe('ConversationsCrudService', () => {
       const result = await svc.getConversationsWithUser('user-99');
 
       expect(mockApi.get).toHaveBeenCalledWith(
-        '/conversations',
+        '/api/v1/conversations',
         expect.objectContaining({ type: 'direct', withUserId: 'user-99' }),
       );
       // newer first

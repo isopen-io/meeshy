@@ -34,7 +34,7 @@ describe('monitoringService.getRealtime', () => {
   it('calls /admin/analytics/realtime and returns response', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     const result = await monitoringService.getRealtime();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/realtime');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/realtime');
     expect(result).toEqual(SUCCESS);
   });
 
@@ -60,7 +60,7 @@ describe('monitoringService.getReadiness', () => {
   it('appelle /health/ready et lit le verdict', async () => {
     mockApi.get.mockResolvedValue(servi({ status: 'ready' }));
     const res = await monitoringService.getReadiness();
-    expect(mockApi.get).toHaveBeenCalledWith('/health/ready');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/health/ready');
     expect(res).toEqual({ etat: 'ok', valeur: { status: 'ready' } });
   });
 
@@ -87,7 +87,7 @@ describe('monitoringService.getProcessMetrics', () => {
       socketConnections: 7,
     }));
     const res = await monitoringService.getProcessMetrics();
-    expect(mockApi.get).toHaveBeenCalledWith('/health/metrics');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/health/metrics');
     expect(res).toEqual({
       etat: 'ok',
       valeur: {
@@ -132,7 +132,7 @@ describe('monitoringService.getCircuitBreakers', () => {
       { name: 'cacheStore', state: 'OPEN', failures: 3, successes: 1, totalRequests: 9, lastFailure: '2026-08-29T10:00:00.000Z' },
     ]));
     const res = await monitoringService.getCircuitBreakers();
-    expect(mockApi.get).toHaveBeenCalledWith('/health/circuit-breakers');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/health/circuit-breakers');
     expect(res).toEqual({
       etat: 'ok',
       valeur: [{ name: 'cacheStore', state: 'OPEN', failures: 3, successes: 1, totalRequests: 9, lastFailure: '2026-08-29T10:00:00.000Z' }],
@@ -161,13 +161,13 @@ describe('monitoringService.getKpis', () => {
   it('calls /admin/analytics/kpis with default period 7d', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getKpis();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/kpis', { period: '7d' });
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/kpis', { period: '7d' });
   });
 
   it('accepts custom period', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getKpis('30d');
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/kpis', { period: '30d' });
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/kpis', { period: '30d' });
   });
 
   it('throws on API failure', async () => {
@@ -182,7 +182,7 @@ describe('monitoringService.getVolumeTimeline', () => {
   it('calls /admin/analytics/volume-timeline', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getVolumeTimeline();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/volume-timeline');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/volume-timeline');
   });
 });
 
@@ -192,7 +192,7 @@ describe('monitoringService.getLanguageDistribution', () => {
   it('calls /admin/analytics/language-distribution', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getLanguageDistribution();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/language-distribution');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/language-distribution');
   });
 });
 
@@ -202,7 +202,7 @@ describe('monitoringService.getUserDistribution', () => {
   it('calls /admin/analytics/user-distribution', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getUserDistribution();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/user-distribution');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/user-distribution');
   });
 });
 
@@ -212,7 +212,7 @@ describe('monitoringService.getHourlyActivity', () => {
   it('calls /admin/analytics/hourly-activity', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getHourlyActivity();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/hourly-activity');
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/hourly-activity');
   });
 });
 
@@ -222,13 +222,13 @@ describe('monitoringService.getMessageTypes', () => {
   it('calls /admin/analytics/message-types with default period 7d', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getMessageTypes();
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/message-types', { period: '7d' });
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/message-types', { period: '7d' });
   });
 
   it('accepts custom period', async () => {
     mockApi.get.mockResolvedValue(SUCCESS as any);
     await monitoringService.getMessageTypes('24h');
-    expect(mockApi.get).toHaveBeenCalledWith('/admin/analytics/message-types', { period: '24h' });
+    expect(mockApi.get).toHaveBeenCalledWith('/api/v1/admin/analytics/message-types', { period: '24h' });
   });
 
   it('throws on API failure', async () => {

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import MediaManager from '@/utils/media-manager';
 
 /**
@@ -97,7 +98,7 @@ export function useAudioPlayback({
     const audio = audioRef.current;
     const playPositionMs = audio ? Math.round(audio.currentTime * 1000) : 0;
     const durationMs = audio ? Math.round(audio.duration * 1000) : 0;
-    apiService.post(`/attachments/${attachmentId}/status`, {
+    apiService.post(API_ENDPOINTS.attachments.byAttachmentIdStatus(attachmentId), {
       action: 'listened',
       playPositionMs,
       durationMs: isFinite(durationMs) ? durationMs : 0,

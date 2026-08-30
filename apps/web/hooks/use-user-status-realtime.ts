@@ -38,6 +38,7 @@ import { useEffect, useRef } from 'react';
 import { getSocketIOService } from '@/services/meeshy-socketio.service';
 import { useUserStore } from '@/stores/user-store';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getAuthToken } from '@/utils/token-utils';
 import type { User, UserStatusEvent } from '@/types';
 
@@ -163,7 +164,8 @@ export function useUserStatusRealtime() {
         // FAIL-CLOSED : l'ancienne adresse servait la présence runtime BRUTE
         // pour tout id absent de la carte de visibilité, l'inverse exact de la
         // règle du 2026-08-25.
-        const url = buildApiUrl(`/directory/presence?ids=${encodeURIComponent(ids.join(','))}`);
+        const presenceEndpoint = `${API_ENDPOINTS.directory.presence}?ids=${encodeURIComponent(ids.join(','))}`;
+        const url = buildApiUrl(presenceEndpoint);
         const response = await fetch(url, {
           method: 'GET',
           headers: {

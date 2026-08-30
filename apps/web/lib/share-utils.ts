@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from './config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { copyToClipboard } from './clipboard';
 import { buildShareLinkUrl } from '@/lib/conversations/share-link-url';
 
@@ -126,7 +127,7 @@ export async function shareLink(
  */
 export async function validateAffiliateToken(token: string): Promise<boolean> {
   try {
-    const response = await fetch(buildApiUrl(`/affiliate/validate/${token}`));
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.affiliate.validateByToken(token)));
     return response.ok;
   } catch (error) {
     console.error('Erreur validation token affiliation:', error);
@@ -145,7 +146,7 @@ export async function validateAffiliateToken(token: string): Promise<boolean> {
  */
 export async function validateConversationLink(linkId: string): Promise<boolean> {
   try {
-    const response = await fetch(buildApiUrl(`/links/${linkId}`));
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byIdentifier(linkId)));
     return response.ok;
   } catch (error) {
     console.error('Erreur validation lien conversation:', error);
@@ -182,7 +183,7 @@ export async function getShareStats(linkId: string): Promise<{
   totalAnonymousParticipants: number;
 } | null> {
   try {
-    const response = await fetch(buildApiUrl(`/links/${linkId}`));
+    const response = await fetch(buildApiUrl(API_ENDPOINTS.links.byIdentifier(linkId)));
 
     if (response.ok) {
       const data = await response.json();

@@ -17,6 +17,7 @@ import {
 import { User } from '@/types';
 import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { useI18n } from '@/hooks/useI18n';
 import { getUserDisplayName } from '@/utils/user-display-name';
@@ -52,7 +53,8 @@ export function InviteUserModal({
 
     setIsSearching(true);
     try {
-      const response = await apiService.get<User[]>(`/api/users/search?q=${encodeURIComponent(query)}`);
+      const searchEndpoint = `${API_ENDPOINTS.users.search}?q=${encodeURIComponent(query)}`;
+      const response = await apiService.get<User[]>(searchEndpoint);
 
       if (response.data) {
         const users = response.data;
@@ -101,7 +103,7 @@ export function InviteUserModal({
     try {
       // Inviter chaque utilisateur
       const invitePromises = selectedUsers.map(user => 
-        apiService.post(`/api/conversations/${conversationId}/invite`, { userId: user.id })
+        apiService.post(API_ENDPOINTS.conversations.byIdInvite(conversationId), { userId: user.id })
       );
 
       const results = await Promise.all(invitePromises);

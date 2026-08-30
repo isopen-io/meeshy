@@ -460,7 +460,7 @@ describe('TusUploadService', () => {
       mockXhrInstance.triggerEvent('load');
 
       await promise;
-      expect(mockXhrInstance.open).toHaveBeenCalledWith('POST', 'https://api.test/attachments/upload');
+      expect(mockXhrInstance.open).toHaveBeenCalledWith('POST', 'https://api.test/api/v1/attachments/upload');
     });
 
     it('appends metadata to FormData when provided', async () => {
@@ -570,7 +570,7 @@ describe('TusUploadService', () => {
       expect(Upload).toHaveBeenCalledWith(
         file,
         expect.objectContaining({
-          endpoint: 'https://api.test/uploads',
+          endpoint: 'https://api.test/api/v1/uploads',
         })
       );
     });

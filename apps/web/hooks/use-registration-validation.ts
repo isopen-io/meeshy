@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { isValidEmail, getEmailValidationError } from '@meeshy/shared/utils/email-validator';
 import type { WizardFormData } from './use-registration-wizard';
 
@@ -60,8 +61,9 @@ export function useRegistrationValidation({
     setUsernameSuggestions([]);
 
     try {
+      const checkUsernameEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?username=${encodeURIComponent(username.trim())}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?username=${encodeURIComponent(username.trim())}`)
+        buildApiUrl(checkUsernameEndpoint)
       );
       if (response.ok) {
         const data = await response.json();
@@ -93,8 +95,9 @@ export function useRegistrationValidation({
     // gateway n'a JAMAIS émis ce champ — l'aperçu de compte masqué était une
     // branche morte depuis son écriture, ce qui rend le coût de la bascule nul.
     try {
+      const checkEmailEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?email=${encodeURIComponent(email)}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?email=${encodeURIComponent(email)}`)
+        buildApiUrl(checkEmailEndpoint)
       );
       if (response.ok) {
         const data = await response.json();
@@ -111,8 +114,9 @@ export function useRegistrationValidation({
     if (!phone || phone.length < 8) return;
 
     try {
+      const checkPhoneEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?phoneNumber=${encodeURIComponent(phone)}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?phoneNumber=${encodeURIComponent(phone)}`)
+        buildApiUrl(checkPhoneEndpoint)
       );
       if (response.ok) {
         const data = await response.json();

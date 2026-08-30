@@ -85,7 +85,7 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
     setIsLoading(true);
 
     try {
-      const apiUrl = buildApiUrl(API_ENDPOINTS.AUTH.LOGIN);
+      const apiUrl = buildApiUrl(API_ENDPOINTS.auth.login);
 
       const response = await fetch(apiUrl, {
         method: 'POST',

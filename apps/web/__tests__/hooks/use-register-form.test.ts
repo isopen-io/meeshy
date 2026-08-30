@@ -15,7 +15,7 @@ jest.mock('@/hooks/useI18n', () => ({
 jest.mock('sonner');
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (path: string) => `https://api.example.com${path}`,
-  API_ENDPOINTS: { AUTH: { REGISTER: '/auth/register' }, JOIN_LINK: '/join' },
+  API_ENDPOINTS: { auth: { register: '/auth/register' }, JOIN_LINK: '/join' },
 }));
 jest.mock('@/lib/geolocation', () => ({
   requestBrowserGeolocation: jest.fn(),

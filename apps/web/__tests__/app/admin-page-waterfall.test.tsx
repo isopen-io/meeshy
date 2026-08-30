@@ -95,8 +95,8 @@ jest.mock('@/stores/language-store', () => ({
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (path: string) => `http://test-api${path}`,
   API_ENDPOINTS: {
-    AUTH: {
-      ME: '/auth/me',
+    auth: {
+      me: '/auth/me',
     },
   },
 }));

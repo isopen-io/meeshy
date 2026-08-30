@@ -288,7 +288,7 @@ describe('storyService', () => {
 
       await storyService.deleteStory('story-1');
 
-      expect(mockApi.delete).toHaveBeenCalledWith('/posts/story-1');
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/v1/posts/story-1');
     });
   });
 
@@ -300,7 +300,7 @@ describe('storyService', () => {
 
       await storyService.recordView('story-1');
 
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/story-1/view');
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/story-1/view');
     });
   });
 
@@ -312,7 +312,7 @@ describe('storyService', () => {
 
       await storyService.reactToStory('story-1', '🔥');
 
-      expect(mockApi.post).toHaveBeenCalledWith('/posts/story-1/like', { emoji: '🔥' });
+      expect(mockApi.post).toHaveBeenCalledWith('/api/v1/posts/story-1/like', { emoji: '🔥' });
     });
   });
 
@@ -324,7 +324,7 @@ describe('storyService', () => {
 
       await storyService.removeReaction('story-1');
 
-      expect(mockApi.delete).toHaveBeenCalledWith('/posts/story-1/like');
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/v1/posts/story-1/like');
     });
   });
 

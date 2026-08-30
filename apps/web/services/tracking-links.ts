@@ -3,6 +3,7 @@
  */
 
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { copyToClipboard } from '@/lib/clipboard';
 import { authManager } from '@/services/auth-manager.service';
 import type {
@@ -35,7 +36,7 @@ export async function getUserTrackingLinks(): Promise<TrackingLink[]> {
     throw new Error('Non authentifié');
   }
 
-  const response = await fetch(buildApiUrl('/api/tracking-links/user/me'), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.userMe), {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -77,7 +78,9 @@ export async function getTrackingLinkStats(
     queryParams.append('endDate', options.endDate.toISOString());
   }
 
-  const url = buildApiUrl(`/api/tracking-links/${token}/stats${queryParams.toString() ? `?${queryParams.toString()}` : ''}`);
+  const statsQuery = queryParams.toString();
+  const statsEndpoint = `${API_ENDPOINTS.trackingLinks.byTokenStats(token)}${statsQuery ? `?${statsQuery}` : ''}`;
+  const url = buildApiUrl(statsEndpoint);
   
   const response = await fetch(url, {
     method: 'GET',
@@ -110,7 +113,7 @@ export async function createTrackingLink(
   
   // Pas besoin d'être authentifié pour créer un lien tracké (peut être anonyme)
 
-  const response = await fetch(buildApiUrl('/api/tracking-links'), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.root), {
     method: 'POST',
     headers: {
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -140,7 +143,7 @@ export async function recordTrackingLinkClick(
 ): Promise<string> {
   const token = authManager.getAuthToken();
 
-  const response = await fetch(buildApiUrl(`/api/tracking-links/${request.token}/click`), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.byTokenClick(request.token)), {
     method: 'POST',
     headers: {
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -172,7 +175,7 @@ export async function deactivateTrackingLink(token: string): Promise<TrackingLin
     throw new Error('Non authentifié');
   }
 
-  const response = await fetch(buildApiUrl(`/api/tracking-links/${token}/deactivate`), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.byTokenDeactivate(token)), {
     method: 'PATCH',
     headers: {
       'Authorization': `Bearer ${authToken}`,
@@ -203,7 +206,7 @@ export async function deleteTrackingLink(token: string): Promise<void> {
     throw new Error('Non authentifié');
   }
 
-  const response = await fetch(buildApiUrl(`/api/tracking-links/${token}`), {
+  const response = await fetch(buildApiUrl(API_ENDPOINTS.trackingLinks.byToken(token)), {
     method: 'DELETE',
     headers: {
       'Authorization': `Bearer ${authToken}`,

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useI18n } from '@/hooks/useI18n';
 import { LargeLogo } from '@/components/branding';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { toast } from 'sonner';
 
 // Composants inline légers pour éviter les imports lourds
@@ -124,7 +125,7 @@ function VerifyEmailContent() {
       }
 
       try {
-        const apiUrl = buildApiUrl('/auth/verify-email');
+        const apiUrl = buildApiUrl(API_ENDPOINTS.auth.verifyEmail);
         console.log('[VERIFY_EMAIL] Appel API:', apiUrl);
 
         const response = await fetch(apiUrl, {
@@ -172,7 +173,7 @@ function VerifyEmailContent() {
 
     setIsResending(true);
     try {
-      const apiUrl = buildApiUrl('/auth/resend-verification');
+      const apiUrl = buildApiUrl(API_ENDPOINTS.auth.resendVerification);
       console.log('[VERIFY_EMAIL] Renvoi à:', apiUrl);
 
       const response = await fetch(apiUrl, {

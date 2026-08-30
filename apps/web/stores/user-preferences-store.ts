@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { authManager } from '@/services/auth-manager.service';
 import { trackPreferenceWrite } from '@/lib/preferences/preference-write-lock';
 // Ce qu'une écriture a le droit d'envoyer : les clés que L'APPELANT a soumises,
@@ -376,7 +377,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return false;
 
         try {
-          const response = await fetch(buildApiUrl('/me/preferences/notification'), {
+          const response = await fetch(buildApiUrl(API_ENDPOINTS.me.preferencesNotification), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -402,7 +403,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
 
         try {
           // Encryption preferences are now part of privacy preferences
-          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+          const response = await fetch(buildApiUrl(API_ENDPOINTS.me.preferencesPrivacy), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -446,7 +447,8 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
           // `signalRegistrationId`, `lastKeyRotation`), nichée sous
           // `data.user.security` puisque `security` est un des trois
           // développements possibles de `/me`, pas une réponse à elle seule.
-          const response = await fetch(buildApiUrl('/me?expand=security'), {
+          const meExpandSecurity = `${API_ENDPOINTS.me.root}?expand=security`;
+          const response = await fetch(buildApiUrl(meExpandSecurity), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -478,7 +480,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         if (!token) return false;
 
         try {
-          const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+          const response = await fetch(buildApiUrl(API_ENDPOINTS.me.preferencesPrivacy), {
             headers: { 'Authorization': `Bearer ${token}` },
           });
 
@@ -533,7 +535,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
         }));
 
         try {
-          const response = await fetch(buildApiUrl('/me/preferences/notification'), {
+          const response = await fetch(buildApiUrl(API_ENDPOINTS.me.preferencesNotification), {
             method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${token}`,
@@ -574,7 +576,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             // sur un AUTRE appareil à chaque bascule de chiffrement, et
             // estampait les huit défauts de la tranche quand l'hydratation
             // n'avait pas abouti.
-            const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.me.preferencesPrivacy), {
               method: 'PATCH',
               headers: {
                 'Authorization': `Bearer ${token}`,
@@ -621,7 +623,7 @@ export const useUserPreferencesStore = create<UserPreferencesState & UserPrefere
             // `autoEncryptNewConversations`, `showEncryptionStatus` et
             // `warnOnUnencrypted` aux défauts de Zod — à chaque bascule d'un
             // réglage sans rapport.
-            const response = await fetch(buildApiUrl('/me/preferences/privacy'), {
+            const response = await fetch(buildApiUrl(API_ENDPOINTS.me.preferencesPrivacy), {
               method: 'PATCH',
               headers: {
                 'Authorization': `Bearer ${token}`,

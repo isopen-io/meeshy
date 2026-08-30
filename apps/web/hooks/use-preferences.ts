@@ -28,6 +28,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { broadcastPreferenceUpdate } from '@/lib/settings-sync';
 import {
@@ -131,7 +132,7 @@ export function usePreferences<C extends PreferenceCategory>(
         // range son document sous son propre nom (§ en-tête du fichier).
         const response = await apiService.get<
           PreferenceResponse<Record<string, PreferenceDataType<C>>>
-        >('/api/v1/me/preferences', { categories: category });
+        >(API_ENDPOINTS.me.preferences, { categories: category });
 
         // Gérer les erreurs de réponse
         if (isPreferenceErrorResponse(response.data)) {
@@ -187,7 +188,7 @@ export function usePreferences<C extends PreferenceCategory>(
       // l'identique de l'ancien PATCH par catégorie.
       const response = await apiService.patch<
         PreferenceResponse<Record<string, PreferenceDataType<C>>>
-      >('/api/v1/me/preferences', { [category]: updates });
+      >(API_ENDPOINTS.me.preferences, { [category]: updates });
 
       if (isPreferenceErrorResponse(response.data)) {
         // Vérifier si c'est une erreur de consentement
@@ -261,7 +262,7 @@ export function usePreferences<C extends PreferenceCategory>(
       // que rendait l'ancien PUT pour un appelant qui respecte ce contrat.
       const response = await apiService.patch<
         PreferenceResponse<Record<string, PreferenceDataType<C>>>
-      >('/api/v1/me/preferences?mode=replace', { [category]: newData });
+      >(`${API_ENDPOINTS.me.preferences}?mode=replace`, { [category]: newData });
 
       if (isPreferenceErrorResponse(response.data)) {
         if (response.data.violations) {

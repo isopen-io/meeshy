@@ -13,6 +13,7 @@ import {
   PhoneValidationResult
 } from '@/utils/phone-validation-robust';
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 
 export type PhoneValidationStatus = 'idle' | 'checking' | 'valid' | 'invalid' | 'exists';
 
@@ -95,8 +96,9 @@ export function usePhoneValidation({
    */
   const checkServerAvailability = useCallback(async (formattedPhone: string) => {
     try {
+      const checkPhoneEndpoint = `${API_ENDPOINTS.auth.checkAvailability}?phoneNumber=${encodeURIComponent(formattedPhone)}`;
       const response = await fetch(
-        buildApiUrl(`/auth/check-availability?phoneNumber=${encodeURIComponent(formattedPhone)}`)
+        buildApiUrl(checkPhoneEndpoint)
       );
 
       if (response.ok) {

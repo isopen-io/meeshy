@@ -158,8 +158,8 @@ jest.mock('@/components/ui/badge', () => ({
 jest.mock('@/lib/config', () => ({
   buildApiUrl: (endpoint: string) => `http://localhost:3001${endpoint}`,
   API_ENDPOINTS: {
-    AUTH: {
-      ME: '/auth/me',
+    auth: {
+      me: '/auth/me',
     },
   },
 }));

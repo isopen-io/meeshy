@@ -71,7 +71,7 @@ describe('AuthService', () => {
       const result = await authService.login('testuser', 'password123');
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gate.meeshy.me/auth/login',
+        'https://gate.meeshy.me/api/v1/auth/login',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -147,7 +147,7 @@ describe('AuthService', () => {
       await authService.logout();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gate.meeshy.me/auth/logout',
+        'https://gate.meeshy.me/api/v1/auth/logout',
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -202,7 +202,7 @@ describe('AuthService', () => {
       const result = await authService.getCurrentUser();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gate.meeshy.me/auth/me',
+        'https://gate.meeshy.me/api/v1/auth/me',
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({
@@ -271,7 +271,7 @@ describe('AuthService', () => {
       const result = await authService.refreshToken();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gate.meeshy.me/auth/refresh',
+        'https://gate.meeshy.me/api/v1/auth/refresh',
         expect.objectContaining({
           method: 'POST',
           body: JSON.stringify({
@@ -340,7 +340,7 @@ describe('AuthService', () => {
       const result = await authService.refreshToken();
 
       expect(mockFetch).toHaveBeenCalledWith(
-        'https://gate.meeshy.me/auth/refresh',
+        'https://gate.meeshy.me/api/v1/auth/refresh',
         expect.objectContaining({
           body: JSON.stringify({
             token: 'jwt-token',

@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Share2, Copy, Plus } from 'lucide-react';
 
 import { buildApiUrl } from '@/lib/config';
+import { API_ENDPOINTS } from '@meeshy/shared/api/endpoints';
 import { useI18n } from '@/hooks/useI18n';
 import { authManager } from '@/services/auth-manager.service';
 
@@ -79,7 +80,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
       const token = authManager.getAuthToken();
       if (!token) return;
 
-      const response = await fetch(buildApiUrl('/affiliate/tokens'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.affiliate.tokens), {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -106,7 +107,7 @@ export function ShareAffiliateModal({ isOpen, onClose, userLanguage }: ShareAffi
       const token = authManager.getAuthToken();
       if (!token) return false;
 
-      const response = await fetch(buildApiUrl('/affiliate/tokens'), {
+      const response = await fetch(buildApiUrl(API_ENDPOINTS.affiliate.tokens), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

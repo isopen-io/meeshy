@@ -3,9 +3,11 @@
  *
  * ## Le trou que cette garde ferme
  *
- * `API_ENDPOINTS` (`lib/config.ts`, 46 entrées) et son successeur DÉRIVÉ
- * (`packages/shared/api/endpoints.ts`, #4280, 419 entrées, cliqueté contre le
- * manifeste de routes) existent — mais RIEN n'empêche un développeur d'écrire
+ * `API_ENDPOINTS` (réexporté depuis `lib/config.ts` — c'était 46 entrées
+ * manuscrites avant #4281, c'est désormais une PROJECTION du catalogue) et sa
+ * source, le catalogue GÉNÉRÉ `packages/shared/api/endpoints.ts` (#4280, 419
+ * entrées, cliqueté contre le manifeste de routes), existent — mais RIEN
+ * n'empêchait, avant #4281, un développeur d'écrire
  * un chemin `/api/...` (ou un argument nu de `buildApiUrl(`) directement au
  * site d'appel, sans jamais lire le catalogue. C'est EXACTEMENT la faille qui
  * a laissé passer #4219 (trois `/health/*` inexistantes appelées depuis
@@ -341,111 +343,68 @@ function countByFile(sites: ReadonlyArray<ApiLiteralSite>): Record<string, numbe
 }
 
 // =============================================================================
-// Inventaire GELÉ — photographie du 2026-08-29 (voir header, « Ce qu'il est,
-// et comment il décroît »). AUCUN de ces 231 sites n'est corrigé par ce lot :
-// cette session écrit une garde, pas du code de production (territoire
-// #4285). Décroître un compte ci-dessous FAIT PARTIE du correctif qui migre
-// le site vers `API_ENDPOINTS` (#4281) ou vers une route existante.
+// Inventaire GELÉ — photographie du 2026-08-29 (231 sites, 74 fichiers), migrée
+// par #4281 (2026-08-30) vers 14 sites, 10 fichiers. Voir header, « Ce qu'il
+// est, et comment il décroît » : décroître un compte ci-dessous FAIT PARTIE du
+// correctif qui migre le site vers `API_ENDPOINTS` (#4281) ou vers une route
+// existante. Les dix entrées restantes se répartissent en deux familles —
+// aucune n'est un défaut de #4281 :
+//
+//   (a) SKIP délibéré, sur instruction de l'issue #4281 elle-même — trois
+//       adresses mortes déjà instruites, avec leurs propres issues (#4337 pour
+//       les quatre appels de souscription push, #4338 pour le rafraîchissement
+//       de session et les quatre sites d'image sociale) : migrer ces sites ici
+//       les aurait enterrés dans un lot de migration plutôt que dans le
+//       correctif de bug qui leur est dû. Comptes INCHANGÉS depuis le
+//       2026-08-29 : 'app/chat/[id]/layout.tsx', 'app/signup/affiliate/[token]/layout.tsx'
+//       (og-image-dynamic, #4338), 'hooks/use-push-notifications.ts',
+//       'services/push-token.service.ts' (#4337), 'stores/auth-store.ts' (#4338).
+//
+//   (b) DÉCOUVERTES pendant la migration — une adresse fantôme (aucune route
+//       correspondante dans les 419 du catalogue #4280) qu'un chemin littéral
+//       migrable côtoyait dans le même fichier. Chaque site est commenté SUR
+//       PLACE dans le fichier source ('ADRESSE FANTÔME, trouvée par #4281…')
+//       et compte encore ici, exactement comme (a) : ce n'est pas à une
+//       migration de chemins de deviner le correctif d'une route absente.
+//       'app/conversation/[conversationId]/page.tsx' et 'app/u/[id]/layout.tsx'
+//       gardent chacun LEUR site og-image-dynamic (famille (a), #4338) — le
+//       second site de chaque fichier, lui, a bien migré vers le catalogue.
+//       'app/api/metadata/route.ts' (3→2) : `/links/:id/info`, appelée deux
+//       fois, n'a pas de route `.../info` dans le catalogue — seule
+//       `/links/:id` existe et sert déjà cette charge.
+//       'lib/server-cache.ts' (4→1) : `getUserNotifications`, zéro appelant,
+//       vise `/users/:id/notifications`, absente du manifeste — même famille
+//       que les trois fonctions retirées de ce fichier par #4189.
+//       'services/message-translation.service.ts' (1→2, en HAUSSE) : deux
+//       adresses `/messages/:id/translate/:lang(/status)` étaient déjà
+//       fantômes AVANT #4281, mais invisibles au balayage (littéral niché dans
+//       un `${…}` d'un gabarit englobant — angle mort distinct de celui déjà
+//       documenté en tête de fichier, à signaler à #4285). Migrer le PRÉFIXE
+//       `/messages/:id` vers le catalogue les a rendues visibles : c'est un
+//       GAIN de visibilité, pas une régression — deux sites nommés et
+//       commentés valent mieux qu'un hors de portée du balayage.
 // =============================================================================
 const FROZEN_API_PATH_LITERALS: Readonly<Record<string, number>> = {
-  'app/account/deletion/page.tsx': 1,
-  'app/admin/users/new/page.tsx': 1,
-  'app/api/metadata/route.ts': 3,
-  'app/auth/verify-email/page.tsx': 2,
-  'app/auth/verify-phone/page.tsx': 2,
   // `/api/og-image-dynamic` : AUCUNE route locale `app/api/og-image-dynamic/route.ts`
   // n'existe (vérifié — cf. `nextLocalApiPrefixes`), et ces quatre sites ne
   // passent NI par `buildApiUrl` NI par `apiService` : une image OG qui vise une
-  // adresse absente, famille exacte de #4219/#4222, PAS corrigée ici (hors
-  // territoire d'une garde — cette découverte mérite sa propre issue de suivi).
+  // adresse absente, famille exacte de #4219/#4222. Suivi : #4338.
+  'app/api/metadata/route.ts': 2,
   'app/chat/[id]/layout.tsx': 1,
-  'app/conversation/[conversationId]/page.tsx': 2,
-  'app/l/[token]/page.tsx': 3,
-  'app/links/page.tsx': 5,
-  'app/search/SearchPageContent.tsx': 2,
-  'app/settings/page.tsx': 1,
-  'app/settings/verify-email-change/page.tsx': 1,
+  'app/conversation/[conversationId]/page.tsx': 1,
   'app/signup/affiliate/[token]/layout.tsx': 1,
-  'app/signup/affiliate/[token]/page.tsx': 1,
-  'app/u/[id]/layout.tsx': 2,
-  'components/admin/user-detail/UserSecuritySection.tsx': 2,
-  'components/affiliate/share-affiliate-modal.tsx': 2,
-  // #4170 -- entree AJOUTEE a l'integration du lot 5, pas a l'ecriture de cette
-  // garde : #4170 a migre ce composant de /conversations/:id/links (route qui
-  // rendait 500 pour un membre non-moderateur) vers GET /links?conversationId=.
-  // L'inventaire est une PHOTOGRAPHIE, et cinq agents ecrivaient pendant la prise
-  // de vue -- le rafraichir avant le merge fait partie de l'integration, pas de
-  // l'ecriture. Ce site descendra a zero quand #4281 migrera le web vers le
-  // catalogue partage.
-  'components/conversations/conversation-links-section.tsx': 1,
-  'components/conversations/invite-user-modal.tsx': 2,
-  'components/groups/groups-layout-responsive.tsx': 2,
-  'components/links/edit-tracking-link-modal.tsx': 2,
-  'components/links/link-edit-modal.tsx': 1,
-  'components/settings/encryption-settings.tsx': 1,
-  'components/settings/password-settings.tsx': 1,
-  'components/settings/user-settings.tsx': 14,
-  'components/translation/language-settings.tsx': 1,
-  'hooks/queries/use-conversation-messages-rq.ts': 1,
-  'hooks/use-audio-playback.ts': 1,
-  'hooks/use-conversation-messages.ts': 1,
-  'hooks/use-field-validation.ts': 1,
-  'hooks/use-font-preference.ts': 2,
-  'hooks/use-group-modal.ts': 1,
-  'hooks/use-link-validation.ts': 1,
-  'hooks/use-phone-validation.ts': 1,
-  'hooks/use-preferences.ts': 3,
+  'app/u/[id]/layout.tsx': 1,
+  // Quatre appels de souscription push, intégralement muets — #4337. Ne pas
+  // migrer ici : #4281 l'exclut explicitement (« les traiter ici les
+  // enterrerait dans un lot de migration »).
   'hooks/use-push-notifications.ts': 2,
-  'hooks/use-registration-submit.ts': 1,
-  'hooks/use-registration-validation.ts': 3,
-  'hooks/use-user-status-realtime.ts': 1,
-  'hooks/use-video-playback.ts': 1,
-  'hooks/use-voice-analysis.ts': 3,
-  'hooks/v2/use-blocked-users-v2.ts': 2,
-  'hooks/v2/use-friend-requests-v2.ts': 4,
-  'lib/server-cache.ts': 4,
-  'lib/share-utils.ts': 3,
-  'lib/utils/link-parser.ts': 2,
-  'services/agent-admin.service.ts': 35,
-  'services/anonymous-chat.service.ts': 4,
-  'services/attachmentService.ts': 6,
-  'services/auth.service.ts': 4,
-  'services/conversations/crud.service.ts': 1,
-  'services/conversations/links.service.ts': 1,
-  'services/conversations/messages.service.ts': 1,
-  'services/conversations/participants.service.ts': 3,
-  // Assignés en `endpoint`/`fallbackEndpoint` puis relayés par un wrapper PRIVÉ
-  // (`buildApiUrl(endpoint)`, propre à ce fichier) — motif (a) directement, sans
-  // dépendre de connaître ce wrapper (voir header, « Sa limite »).
-  'services/link-conversation.service.ts': 2,
-  'services/magic-link.service.ts': 2,
-  'services/message-translation.service.ts': 1,
-  'services/message.service.ts': 2,
-  // `/health/ready|metrics|circuit-breakers` : forme EXACTE de #4219, servie
-  // depuis #4219 (les trois routes existent désormais) mais toujours tapée à
-  // la main, jamais vérifiée contre le catalogue — c'est la preuve que « la
-  // route existe » et « le littéral vient du catalogue » sont deux propriétés
-  // distinctes ; motif (b), c'est le cas que #4219 aurait dû rendre visible.
-  'services/monitoring.service.ts': 10,
-  'services/notification.service.ts': 4,
-  'services/password-reset.service.ts': 3,
-  'services/phone-password-reset.service.ts': 4,
-  'services/phone-transfer.service.ts': 6,
-  'services/postMediaService.ts': 1,
-  'services/posts.service.ts': 8,
+  'lib/server-cache.ts': 1,
+  'services/message-translation.service.ts': 2,
   'services/push-token.service.ts': 2,
-  'services/reading-mode-sync.service.ts': 1,
-  'services/story.service.ts': 4,
-  'services/tracking-links.ts': 6,
-  'services/tusUploadService.ts': 2,
-  'services/two-factor.service.ts': 7,
-  'services/user-preferences.service.ts': 7,
   // `/api/auth/refresh` (`fetch` direct, ni `buildApiUrl` ni `apiService`) :
   // AUCUNE route locale `app/api/auth/refresh/route.ts` — même famille que
-  // `og-image-dynamic` ci-dessus, mêmes réserves (non corrigé, hors territoire).
+  // `og-image-dynamic` ci-dessus. Suivi : #4338.
   'stores/auth-store.ts': 1,
-  'stores/user-preferences-store.ts': 7,
-  'utils/auth.ts': 2,
 };
 
 describe('Le balayage LIT bien apps/web — sinon les gardes ci-dessous seraient vertes à vide', () => {
@@ -476,10 +435,14 @@ describe('Aucun littéral d\'API hors inventaire figé (#4285 critère 2)', () =
     const source = fs.readFileSync(path.join(WEB_ROOT, 'lib/config.ts'), 'utf8');
     const prefixes = nextLocalApiPrefixes(API_ROOT);
     // La preuve que l'exclusion travaille vraiment : le fichier CONTIENT bel
-    // et bien des dizaines de littéraux `/api/...` (46 entrées d'API_ENDPOINTS)
-    // — un balayage qui ne les verrait pas parce qu'il ne cherche rien ne
-    // prouverait rien du tout.
-    expect(scanApiPathLiterals(source, 'lib/config.ts', prefixes).length).toBeGreaterThan(10);
+    // et bien AU MOINS un littéral `/api/...` (le gabarit `API_PATH`, la
+    // normalisation de version que buildApiUrl consomme) — un balayage qui ne
+    // le verrait pas parce qu'il ne cherche rien ne prouverait rien du tout.
+    // Ce nombre est descendu à 1 avec #4281 : les 46 entrées manuscrites
+    // d'API_ENDPOINTS ont quitté ce fichier pour devenir une RÉEXPORTATION du
+    // catalogue partagé (@meeshy/shared/api/endpoints) — la baisse est le
+    // signe que la migration a fonctionné, pas un défaut de ce test.
+    expect(scanApiPathLiterals(source, 'lib/config.ts', prefixes).length).toBeGreaterThan(0);
     expect(sweepApiPathLiterals(WEB_ROOT).some((s) => s.file === 'lib/config.ts')).toBe(false);
   });
 });

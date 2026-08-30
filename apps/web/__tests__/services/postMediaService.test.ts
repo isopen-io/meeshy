@@ -40,7 +40,7 @@ describe('PostMediaService.deletePendingMedia', () => {
     await PostMediaService.deletePendingMedia('media-42', 'tok');
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://api.test/posts/media/media-42',
+      'https://api.test/api/v1/posts/media/media-42',
       expect.objectContaining({ method: 'DELETE' })
     );
   });

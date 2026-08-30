@@ -117,7 +117,7 @@ describe('AnonymousChatService.refreshSession', () => {
     await svc.refreshSession();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/anonymous/refresh',
+      'http://localhost:3000/api/v1/anonymous/refresh',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ sessionToken: TOKEN }),
@@ -173,7 +173,7 @@ describe('AnonymousChatService.loadMessages', () => {
     await svc.loadMessages();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      `http://localhost:3000/api/links/${LINK_ID}/messages?limit=50&offset=0`,
+      `http://localhost:3000/api/v1/links/${LINK_ID}/messages?limit=50&offset=0`,
       expect.objectContaining({ method: 'GET', headers: { 'X-Session-Token': TOKEN } })
     );
   });
@@ -186,7 +186,7 @@ describe('AnonymousChatService.loadMessages', () => {
     await svc.loadMessages(10, 20);
 
     expect(global.fetch).toHaveBeenCalledWith(
-      `http://localhost:3000/api/links/${LINK_ID}/messages?limit=10&offset=20`,
+      `http://localhost:3000/api/v1/links/${LINK_ID}/messages?limit=10&offset=20`,
       expect.anything()
     );
   });
@@ -240,7 +240,7 @@ describe('AnonymousChatService.sendMessage', () => {
     await svc.sendMessage({ content: 'hello' });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      `http://localhost:3000/api/links/${LINK_ID}/messages`,
+      `http://localhost:3000/api/v1/links/${LINK_ID}/messages`,
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'X-Session-Token': TOKEN }),
@@ -345,7 +345,7 @@ describe('AnonymousChatService.leaveSession', () => {
     await svc.leaveSession();
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:3000/anonymous/leave',
+      'http://localhost:3000/api/v1/anonymous/leave',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ sessionToken: TOKEN }),

@@ -65,7 +65,7 @@ describe('useBlockedUsersV2', () => {
 
     // `PUT` sur l'ENSEMBLE : bloquer est une appartenance, donc idempotente.
     // L'ancienne route rendait 409 au second appel (#4164).
-    expect(mockPut).toHaveBeenCalledWith('/directory/blocks/userToBlock');
+    expect(mockPut).toHaveBeenCalledWith('/api/v1/directory/blocks/userToBlock');
   });
 
   it('unblocks a user via mutation', async () => {
@@ -82,7 +82,7 @@ describe('useBlockedUsersV2', () => {
       await result.current.unblockUser('userToUnblock');
     });
 
-    expect(mockDelete).toHaveBeenCalledWith('/directory/blocks/userToUnblock');
+    expect(mockDelete).toHaveBeenCalledWith('/api/v1/directory/blocks/userToUnblock');
   });
 
   it('checks if a user is blocked via isBlocked', async () => {

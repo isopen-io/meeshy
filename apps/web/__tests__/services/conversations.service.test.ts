@@ -79,7 +79,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.getConversations();
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations', {
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/v1/conversations', {
         limit: '20',
         offset: '0',
       });
@@ -138,7 +138,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.getConversations({ type: 'group' });
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations', {
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/v1/conversations', {
         limit: '20',
         offset: '0',
         type: 'group',
@@ -157,7 +157,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.getConversations({ withUserId: 'user-123' });
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations', {
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/v1/conversations', {
         limit: '20',
         offset: '0',
         withUserId: 'user-123',
@@ -186,7 +186,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.getConversation('conv-123');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations/conv-123');
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/v1/conversations/conv-123');
       expect(result.id).toBe('conv-123');
     });
 
@@ -232,7 +232,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.createConversation(createData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations', createData);
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/v1/conversations', createData);
       expect(result.id).toBe('conv-new');
     });
 
@@ -285,7 +285,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.deleteConversation('conv-123');
 
-      expect(mockApiService.delete).toHaveBeenCalledWith('/conversations/conv-123');
+      expect(mockApiService.delete).toHaveBeenCalledWith('/api/v1/conversations/conv-123');
     });
   });
 
@@ -320,7 +320,7 @@ describe('ConversationsService', () => {
       const result = await conversationsService.getMessages('conv-123', 1, 20);
 
       expect(mockApiService.get).toHaveBeenCalledWith(
-        '/conversations/conv-123/messages',
+        '/api/v1/conversations/conv-123/messages',
         { offset: 0, limit: 20 },
         expect.any(Object)
       );
@@ -385,7 +385,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.sendMessage('conv-123', messageData);
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/messages', messageData);
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/v1/conversations/conv-123/messages', messageData);
       expect(result.id).toBe('msg-new');
     });
 
@@ -414,7 +414,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.markAsRead('conv-123');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/mark-as-read');
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/v1/conversations/conv-123/mark-as-read');
     });
   });
 
@@ -427,7 +427,7 @@ describe('ConversationsService', () => {
 
       await conversationsService.addParticipant('conv-123', 'user-456');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/participants', {
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/v1/conversations/conv-123/participants', {
         userId: 'user-456',
       });
     });
@@ -441,7 +441,7 @@ describe('ConversationsService', () => {
       await conversationsService.removeParticipant('conv-123', 'user-456');
 
       expect(mockApiService.delete).toHaveBeenCalledWith(
-        '/conversations/conv-123/participants/user-456'
+        '/api/v1/conversations/conv-123/participants/user-456'
       );
     });
 
@@ -454,7 +454,7 @@ describe('ConversationsService', () => {
       await conversationsService.updateParticipantRole('conv-123', 'user-456', 'admin');
 
       expect(mockApiService.patch).toHaveBeenCalledWith(
-        '/conversations/conv-123/participants/user-456/role',
+        '/api/v1/conversations/conv-123/participants/user-456/role',
         { role: 'admin' }
       );
     });
@@ -486,7 +486,7 @@ describe('ConversationsService', () => {
       await conversationsService.getParticipants('conv-123', { onlineOnly: true });
 
       expect(mockApiService.get).toHaveBeenCalledWith(
-        '/conversations/conv-123/participants',
+        '/api/v1/conversations/conv-123/participants',
         expect.objectContaining({ onlineOnly: 'true' })
       );
     });
@@ -509,7 +509,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.searchConversations('test');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations/search', { q: 'test' });
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/v1/conversations/search', { q: 'test' });
       expect(result).toEqual(expect.arrayContaining([
         expect.objectContaining({ id: 'conv-1', type: 'direct', title: 'Test Search Result' }),
       ]));
@@ -550,7 +550,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.updateConversation('conv-123', updateData);
 
-      expect(mockApiService.put).toHaveBeenCalledWith('/conversations/conv-123', updateData);
+      expect(mockApiService.put).toHaveBeenCalledWith('/api/v1/conversations/conv-123', updateData);
       expect(result.title).toBe('Updated Conversation Name');
     });
 
@@ -622,7 +622,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.markConversationAsRead('conv-123');
 
-      expect(mockApiService.post).toHaveBeenCalledWith('/conversations/conv-123/mark-read', {});
+      expect(mockApiService.post).toHaveBeenCalledWith('/api/v1/conversations/conv-123/mark-read', {});
       expect(result.markedCount).toBe(5);
     });
   });
@@ -648,7 +648,7 @@ describe('ConversationsService', () => {
 
       const result = await conversationsService.getConversationsWithUser('user-456');
 
-      expect(mockApiService.get).toHaveBeenCalledWith('/conversations', {
+      expect(mockApiService.get).toHaveBeenCalledWith('/api/v1/conversations', {
         limit: '20',
         offset: '0',
         type: 'direct',
