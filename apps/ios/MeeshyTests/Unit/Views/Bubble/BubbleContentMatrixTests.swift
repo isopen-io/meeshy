@@ -1017,4 +1017,48 @@ final class BubbleBodyFooterLayoutHeightTests: XCTestCase {
     func test_cacheUsable_nanWidth_isFalse() {
         XCTAssertFalse(BubbleBodyFooterLayout.cacheUsable(proposedWidth: .nan, isMainThread: true))
     }
+
+    // MARK: - #4020 — quelles bulles acceptent le double tap de réaction
+
+    /// **Le double tap est le geste de la barre de réaction rapide.**
+    ///
+    /// La règle est écrite comme une fonction PURE de la nature de la bulle,
+    /// et non par un `if` dans le corps de la vue : c'est ce qui la rend
+    /// mesurable ici, et ce qui empêche la deuxième surface (les cellules
+    /// média) d'en écrire une seconde version.
+    ///
+    /// Une bulle STANDARD l'accepte — c'est le seul cas où il y a quelque
+    /// chose à réagir.
+    func test_doubleTap_estAccepteParUneBulleStandard() {
+        XCTAssertTrue(QuickReactionGesture.acceptsDoubleTap(kind: .standard))
+    }
+
+    /// **Les quatre refus, et chacun a sa raison.** Sans eux, le geste
+    /// s'attacherait à des bulles où il ouvrirait une barre pour réagir à
+    /// RIEN — et le serveur refuserait la réaction, laissant l'utilisateur
+    /// devant un geste qui a l'air de marcher.
+    func test_doubleTap_estRefuseParToutCeQuiNaRienAReagir() {
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .deleted),
+                       "un message supprimé n'a plus de contenu")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .burned),
+                       "une vue unique consommée ne se réagit pas après coup")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .ephemeralExpired),
+                       "un éphémère expiré n'est plus là")
+        XCTAssertFalse(QuickReactionGesture.acceptsDoubleTap(kind: .system),
+                       "un avis système n'est pas une parole de quelqu'un")
+    }
+
+    /// **Le témoin d'EXHAUSTIVITÉ.** Un cinquième `Kind` ajouté demain doit
+    /// forcer une décision explicite plutôt que de tomber dans un défaut
+    /// silencieux — et ce compte est ce qui fait rougir l'oubli.
+    ///
+    /// Condition de levée : si `BubbleContent.Kind` gagne un cas, trancher
+    /// dans `QuickReactionGesture` puis monter ce compte, jamais l'inverse.
+    func test_laRegleCouvreTousLesKinds() {
+        let tous: [BubbleContent.Kind] = [.standard, .deleted, .burned, .ephemeralExpired, .system]
+        XCTAssertEqual(tous.count, 5,
+                       "BubbleContent.Kind a changé — trancher le nouveau cas dans QuickReactionGesture")
+        XCTAssertEqual(tous.filter(QuickReactionGesture.acceptsDoubleTap(kind:)).count, 1,
+                       "une seule nature de bulle accepte le geste : la standard")
+    }
 }
