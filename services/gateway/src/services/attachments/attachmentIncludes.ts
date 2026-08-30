@@ -160,6 +160,84 @@ export const attachmentForwardPreviewSelect = Prisma.validator<Prisma.MessageAtt
   fileUrl: true,
 });
 
+/**
+ * The exact field set `AttachmentService.toAttachment()` reads to build its
+ * public `Attachment` shape (`getAttachment`, `getAttachmentsByIds`).
+ *
+ * #4166 — `getAttachment` used to `findUnique`/`findMany` with NO `select`
+ * at all: the ENTIRE `MessageAttachment` row (transcription, translations,
+ * encryptionIv, every consumption counter…) was loaded and immediately
+ * discarded by `toAttachment`, which only ever reads the 26 fields below.
+ * This shape mirrors `toAttachment`'s parameter type exactly — it is not a
+ * narrower contract than what the method already served, it is the same
+ * contract made explicit at the query.
+ */
+export const attachmentServiceRowSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
+  id: true,
+  messageId: true,
+  fileName: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  fileUrl: true,
+  thumbnailUrl: true,
+  width: true,
+  height: true,
+  duration: true,
+  bitrate: true,
+  sampleRate: true,
+  codec: true,
+  channels: true,
+  uploadedBy: true,
+  isAnonymous: true,
+  createdAt: true,
+  isForwarded: true,
+  capturedInApp: true,
+  isViewOnce: true,
+  viewOnceCount: true,
+  isBlurred: true,
+  viewedCount: true,
+  downloadedCount: true,
+  consumedCount: true,
+  isEncrypted: true,
+});
+
+/**
+ * Root-row shape needed by `AttachmentTranslateService.translate()` — the
+ * dispatcher that decides how to translate an attachment and, for audio,
+ * drives cache lookup, forwarding-chain resolution, and job-mapping
+ * bookkeeping (`verifyUserAccess`, `translateAudio`).
+ *
+ * #4166, critère 4 — `POST /attachments/:attachmentId/translate` reads this
+ * row for its own consent gate (`mimeType`), then handed off to
+ * `translate()`, which read the SAME row again via a bare `include` (every
+ * scalar column: transcription, translations, encryptionIv…) for a handful
+ * of fields — two round-trips for one row. This shape lets the route read
+ * ONCE and pass the row through (`translate`'s `preloadedAttachment` param).
+ *
+ * `message` is reduced to `{ id, conversationId }` — the only two fields
+ * `translate()` reads off it (`verifyUserAccess`, job-mapping bookkeeping).
+ * `senderId`, present on the old bare `include`, was never read from THIS
+ * particular join (the forwarding-chain walk in `_findOriginalAttachmentAndSender`
+ * resolves its own sender from a DIFFERENT attachment id, via its own query).
+ */
+export const attachmentTranslateSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
+  id: true,
+  messageId: true,
+  mimeType: true,
+  uploadedBy: true,
+  isForwarded: true,
+  forwardedFromAttachmentId: true,
+  duration: true,
+  filePath: true,
+  message: {
+    select: {
+      id: true,
+      conversationId: true,
+    },
+  },
+});
+
 // ============================================================================
 // Derived payload types — consumers get fully-typed Prisma results, no casts.
 // ============================================================================
@@ -177,4 +255,14 @@ export type AttachmentFullPayload = Prisma.MessageAttachmentGetPayload<{
 /** Forward chip preview payload — just enough to render the chip. */
 export type AttachmentForwardPreviewPayload = Prisma.MessageAttachmentGetPayload<{
   select: typeof attachmentForwardPreviewSelect;
+}>;
+
+/** `AttachmentService.toAttachment()`'s input row — see `attachmentServiceRowSelect`. */
+export type AttachmentServiceRowPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentServiceRowSelect;
+}>;
+
+/** `AttachmentTranslateService.translate()`'s input row — see `attachmentTranslateSelect`. */
+export type AttachmentTranslateRowPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentTranslateSelect;
 }>;

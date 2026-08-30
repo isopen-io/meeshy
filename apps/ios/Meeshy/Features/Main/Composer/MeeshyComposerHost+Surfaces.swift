@@ -77,6 +77,13 @@ extension MeeshyComposerHost {
         // l'aurait rangée parmi ce qui QUALIFIE la publication, où elle n'est
         // pas.
         .storyComposerToolRowLeadingAccessory { atelierDescriptionButton }
+        // **#4361 — ce que le meuble occupe en bas, l'atelier le libère.** Le
+        // canvas se rétracte au-dessus de la saisie (`bottomInset` du solveur de
+        // cadrage), exactement comme il le fait déjà devant une band. `0` quand
+        // la saisie est fermée : la scène retrouve sa géométrie de repos.
+        .storyComposerCanvasBottomReservation(
+            editsSceneDescription ? sceneDescriptionEditorHeight : 0
+        )
     }
 
     /// **L'icône qui ouvre la description de la slide** (#4124).
@@ -543,85 +550,63 @@ extension MeeshyComposerHost {
     /// CIBLE tactile entière, pas la seule pastille visible (36 pt).
     static let descriptionLayerHeaderClearance: CGFloat = 76
 
-    var sceneDescriptionLayer: some View {
-        // **La couche commence SOUS l'en-tête, qui reste NET.** La directive dit
-        // « en dessous de l'entête », et ce n'est pas un détail de marge : la
-        // rangée haute est le seul repère qui dise OÙ l'on est pendant qu'on
-        // écrit — le ✕ pour sortir, le chip pour savoir ce qu'on compose. La
-        // flouter avec la scène ferait un écran d'écriture sans adresse.
-        ZStack(alignment: .top) {
-            VStack(spacing: 0) {
-                Color.clear.frame(height: Self.descriptionLayerHeaderClearance)
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    // Taper le fond ferme : la sortie ne dépend pas du seul bouton.
-                    .onTapGesture { editsSceneDescription = false }
-            }
-            .ignoresSafeArea(edges: .bottom)
-
-            // **Ancrée en HAUT, jamais centrée.** Une zone centrée passe sous le
-            // clavier dès qu'il monte — et sa hauteur varie avec la langue, la
-            // barre de suggestions et le clavier tiers. Ancrée sous la zone
-            // sûre, elle reste visible quelle que soit cette hauteur, et le
-            // texte grandit vers le bas comme dans n'importe quel éditeur.
-            // **Elle prend TOUT l'écran sous l'en-tête** (directive porteur
-            // 2026-08-28). Pas une zone posée en haut : une SURFACE d'écriture,
-            // qui commence sous la rangée et descend jusqu'au clavier.
-            //
-            // La raison donnée porte plus loin que cet écran — « ceci permet de
-            // maintenir la même logique partout plus tard comme comportement au
-            // niveau de modification de Slide » : ce qu'on fixe ici est le
-            // patron d'ÉDITION d'une slide, que toute surface éditant une slide
-            // reprendra.
-            VStack(spacing: 0) {
-                ComposerDescriptionLayer(
-                    text: sceneDescriptionBinding,
-                    placeholder: String(localized: "composer.scene.description.placeholder",
-                                        defaultValue: "Ajoutez une description…", bundle: .main),
-                    // La couche a toute la place : la troncature du repos n'a
-                    // plus de raison d'être ici.
-                    collapsedLineLimit: 24,
-                    opensEditingOnAppear: true,
-                    // Le texte part du HAUT de la surface et descend, comme dans
-                    // n'importe quel éditeur — centré, il flotterait au milieu
-                    // d'un vide et sauterait à chaque ligne ajoutée.
-                    fillsAvailableHeight: true
-                )
-                .padding(.horizontal, 8)
-                .padding(.top, Self.descriptionLayerHeaderClearance + 8)
-                .padding(.bottom, 12)
-            }
-        }
-        // **« Terminé » au-dessus du clavier**, à la place que le système lui
-        // réserve — jamais un bouton flottant posé sur la couche, qui se
-        // retrouverait sous le clavier dès que le texte grandit.
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                // `indigo400`, pas `indigo500` : c'est le jeton d'accent que le
-                // meuble mesure déjà au seuil composant (3:1). En introduire un
-                // second obligerait la suite de contraste à le mesurer sur les
-                // trois teintes de plateau — pour un bouton qui vit sur la barre
-                // de clavier, où aucune de ces teintes n'est le fond.
-                Button(ComposerDescriptionCopy.doneShort) { editsSceneDescription = false }
-                    .foregroundColor(MeeshyColors.indigo400)
-            }
-        }
-        .transition(.opacity)
+    /// **La zone de saisie de la description — en BAS, la scène au-dessus**
+    /// (#4361, directive porteur 2026-08-30).
+    ///
+    /// > « L'icône description doit faire remonter et rétrécir la scène et
+    /// > laisser une zone de saisie en bas plutôt que ce voile par-dessus toute
+    /// > la scène. »
+    ///
+    /// Elle fut une COUCHE plein écran (#4124) : un `.ultraThinMaterial` sur
+    /// toute la hauteur, la scène floutée derrière. Le geste était juste — la
+    /// description ne doit pas occuper le bas en permanence — mais la réponse ne
+    /// l'était pas : **écrire une description, c'est regarder la scène qu'on
+    /// décrit.** Le voile la retirait au moment précis où elle sert.
+    ///
+    /// Ce qui remplace le voile n'est pas une invention : c'est le comportement
+    /// que l'atelier a DÉJÀ quand une band ou une feuille s'ouvre — le canvas se
+    /// rétracte au-dessus (`StoryCanvasFraming.Input.bottomInset`), il ne se
+    /// fait pas recouvrir. La description rejoint cette mécanique par
+    /// `storyComposerCanvasBottomReservation` plutôt que d'en inventer une
+    /// seconde.
+    ///
+    /// **Le corps vit dans un TYPE NOMMÉ** (`ComposerSceneDescriptionEditor`),
+    /// et ce n'est pas un rangement : monté en fermeture d'`.overlay` dans
+    /// `body`, il plantait à l'ouverture — débordement de pile par profondeur de
+    /// type SwiftUI. Le fichier du type porte la trace et la leçon.
+    var sceneDescriptionEditor: some View {
+        ComposerSceneDescriptionEditor(
+            text: sceneDescriptionBinding,
+            placeholder: String(localized: "composer.scene.description.placeholder",
+                                defaultValue: "Ajoutez une description…", bundle: .main),
+            plateauTint: tint.color,
+            onDone: { editsSceneDescription = false },
+            onHeightChange: { sceneDescriptionEditorHeight = $0 }
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    /// **Le binding qui garde UN seul contenu.** Écrire dans la description met
-    /// à jour `documentText` (l'état partagé du meuble) ET le sème sur la slide
-    /// de la scène (`applyContentText`) : ainsi le texte part à la publication
-    /// depuis la scène, et se retrouve dans le champ du document au retour —
-    /// jamais deux champs à faire diverger (loi 9 / B1).
+    /// **La description appartient à la SLIDE** (rappel porteur 2026-08-30,
+    /// décision de #4125).
+    ///
+    /// > « cette description est propre à chaque slide »
+    ///
+    /// Elle lisait `documentText` — le texte de la PUBLICATION — et l'écrivait
+    /// des deux côtés. L'écriture était déjà juste (`applyContentText` pose sur
+    /// `currentSlide.content`) ; c'est la LECTURE qui mentait, et le défaut ne
+    /// se voyait qu'à la deuxième slide : on y trouvait la description de la
+    /// première, puis on écrasait la sienne en tapant.
+    ///
+    /// Le second écrivain part avec : mettre à jour `documentText` versait la
+    /// description d'une slide dans le contenu du post, que le porteur a
+    /// explicitement séparé — « le poste n'affiche que le `content`, pas les
+    /// descriptions ». Ce que la loi 9 / B1 protégeait (un seul contenu,
+    /// aller-retour scène ↔ document) valait tant que la description ÉTAIT le
+    /// texte du post ; cette prémisse est révoquée, la loi la suit.
     var sceneDescriptionBinding: Binding<String> {
         Binding(
-            get: { documentText },
-            set: { newValue in
-                documentText = newValue
-                viewModel.applyContentText(newValue)
-            }
+            get: { viewModel.currentSlide.content ?? "" },
+            set: { viewModel.applyContentText($0) }
         )
     }
     // MARK: - Le mood

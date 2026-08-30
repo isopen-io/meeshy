@@ -99,6 +99,44 @@ export function resolveEntryRights(
   };
 }
 
+/**
+ * **Ce qu'une fiche ou un événement a le droit de DIRE des droits d'entrée, selon
+ * qui regarde** (#4056).
+ *
+ * Le porteur a tranché le 2026-08-27 : « qui a le droit de voir l'historique »
+ * est un fait de MODÉRATION, au même titre que `historyVisibleFrom` que #3898
+ * avait déjà retiré du même payload. #4009 l'a appliqué au push — l'événement
+ * `participant:rights-updated` diffusé à la room ne porte plus `canViewHistory`.
+ *
+ * **Le pull, lui, le servait toujours à tout le monde.** `GET …/participants/:id/profile`
+ * rendait `entryCapabilities` sans condition, à côté d'un `historyVisibleFrom`
+ * déjà gardé. Tant qu'une route REST sert le fait, le retrait côté socket ne
+ * protège rien : n'importe quel membre ouvre la fiche et le lit. C'est la forme
+ * « le correctif n'atteint aucun lecteur » que le `CLAUDE.md` documente au cycle
+ * 122 du Prisme, appliquée à une garde de confidentialité.
+ *
+ * Cette fonction est la loi UNIQUE des deux chemins. Les deux omissions écrites
+ * à la main auraient divergé au premier droit ajouté — et la divergence se serait
+ * faite du côté BAVARD, puisque c'est celui qui ne rougit jamais.
+ *
+ * **La clé est ABSENTE, jamais `false`.** Un `false` dirait « ce visiteur ne voit
+ * pas l'historique », ce qui est une affirmation sur la modération — exactement
+ * ce qu'on refuse de divulguer. Le contrat de fil est prêt depuis #4009 : les
+ * trois clients acceptent le champ manquant.
+ */
+export type DisclosableEntryRights =
+  Omit<Record<ParticipantRightName, boolean>, 'canViewHistory'>
+  & { canViewHistory?: boolean };
+
+export function disclosableEntryRights(
+  rights: Record<ParticipantRightName, boolean>,
+  viewerHostsTheRoom: boolean,
+): DisclosableEntryRights {
+  if (viewerHostsTheRoom) return { ...rights };
+  const { canViewHistory: _reservedToHosts, ...disclosable } = rights;
+  return disclosable;
+}
+
 export function resolveParticipantRights(
   participant: ParticipantRightsSource,
 ): ParticipantPermissions {

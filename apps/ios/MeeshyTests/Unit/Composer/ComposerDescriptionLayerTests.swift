@@ -114,10 +114,20 @@ final class ComposerDescriptionLayerTests: XCTestCase {
     /// sur le rendu final — le profil P et le profil S verraient alors deux
     /// aperçus différents du même geste.
     func test_lesDeuxSurfaces_montentLeMemeCalque() throws {
-        for fichier in ["ComposerSceneSurface.swift", "MeeshyComposerHost.swift"] {
+        // #4361 — côté meuble, l'hôte du calque est désormais le TYPE NOMMÉ
+        // `ComposerSceneDescriptionEditor` : le monter en fermeture d'`.overlay`
+        // dans `body` faisait déborder la pile par profondeur de type SwiftUI.
+        // Ce que la garde protège est inchangé — UN calque, consommé par ses
+        // hôtes, jamais redessiné — seule son adresse a suivi.
+        for fichier in ["ComposerSceneSurface.swift", "ComposerSceneDescriptionEditor.swift"] {
             XCTAssertTrue(compact(try composer(fichier)).contains("ComposerDescriptionLayer("),
                           "\(fichier) doit CONSOMMER le calque, jamais le redessiner.")
         }
+        XCTAssertTrue(
+            compact(try composer("MeeshyComposerHost+Surfaces.swift"))
+                .contains("ComposerSceneDescriptionEditor("),
+            "… et le meuble monte l'éditeur nommé, jamais le calque en direct."
+        )
     }
 
     /// Garde NÉGATIVE : la description n'est plus un champ PERMANENT nulle part.

@@ -228,6 +228,13 @@ describe('Partie 2 — cliquet repo-wide sur QUI se déclare alias/adaptateur', 
     // convention de #4274, pas une intention empruntée ; la garde ne
     // regarde que le TEXTE, elle a donc raison de la traiter pareil.
     'anonymous.ts',
+    // `conversations/sharing.ts` (#4353) — `POST /conversations/join/:linkId`
+    // devient à son tour un ADAPTATEUR MINCE vers `performLinkJoin()`
+    // (`./link-admission`, le cœur partagé de #4167), exactement comme les
+    // trois routes-sœurs de `anonymous.ts` ci-dessus. Même coïncidence
+    // lexicale, même traitement : elle annonce désormais son successeur
+    // (`/api/v1/links/:key/members`) via `depreciee(...)`.
+    'conversations/sharing.ts',
   ].sort();
 
   // Fichiers HORS territoire (autres sessions/issues du même lot). Cliquet :

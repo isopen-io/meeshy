@@ -103,7 +103,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// ingestion, envoi, refus, gate, libellés) et la VUE (1 043). Le plafond
     /// baisse de tout ce que le fichier pesait — un nom qui sort de la liste en
     /// sort ENTIER.
-    private static let legacyLineCeiling = 82_770
+    /// **82 767 depuis #4363.** Le gate plein écran du splash a quitté
+    /// `MeeshyApp.swift` pour `FullScreenGate.swift` — la seule façon d'y écrire
+    /// la raison du correctif sans faire grossir un fichier déjà hors budget.
+    /// Le cliquet a fait exactement son travail : il a refusé l'ajout, et
+    /// l'extraction qui s'en est suivie nomme le concept au lieu de le cacher
+    /// dans un `body`.
+    private static let legacyLineCeiling = 82_767
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

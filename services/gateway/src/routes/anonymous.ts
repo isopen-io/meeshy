@@ -72,9 +72,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       return identifier;
     }
 
-    // Sinon, chercher par le champ identifier
+    // Sinon, chercher par le champ identifier — #4166 : seul `id` est lu ;
+    // un `findFirst` sans `select` chargeait la ligne entière pour ça.
     const shareLink = await fastify.prisma.conversationShareLink.findFirst({
-      where: { identifier: identifier }
+      where: { identifier: identifier },
+      select: { id: true }
     });
 
     return shareLink ? shareLink.id : null;
@@ -525,6 +527,50 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
     try {
       const { identifier } = request.params as { identifier: string };
 
+      // #4166, critère 1 — `include` sans `select` à la racine chargeait la
+      // ligne `ConversationShareLink` ENTIÈRE (compteurs de session,
+      // `allowedCountries`/`allowedIpRanges`, `createdAt`/`updatedAt`…) pour
+      // n'en servir qu'un sous-ensemble : les champs ci-dessous sont
+      // exactement ceux que la réponse de cette route sert (voir
+      // `sendSuccess` plus bas), plus `isActive` (garde d'expiration, jamais
+      // renvoyé).
+      const anonymousLinkPreviewSelect = {
+        id: true,
+        linkId: true,
+        name: true,
+        description: true,
+        isActive: true,
+        expiresAt: true,
+        maxUses: true,
+        currentUses: true,
+        maxConcurrentUsers: true,
+        currentConcurrentUsers: true,
+        requireAccount: true,
+        requireNickname: true,
+        requireEmail: true,
+        requireBirthday: true,
+        allowedLanguages: true,
+        conversation: {
+          select: {
+            id: true,
+            title: true,
+            description: true,
+            type: true,
+            createdAt: true
+          }
+        },
+        creator: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
+          }
+        }
+      };
+
       // Resoudre l'ID de ConversationShareLink reel
       let shareLink;
 
@@ -532,27 +578,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       if (identifier.startsWith('mshy_')) {
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { linkId: identifier },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                type: true,
-                createdAt: true
-              }
-            },
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
+          select: anonymousLinkPreviewSelect
         });
       } else {
         // Sinon, resoudre l'ID (peut etre un ObjectID ou un identifier)
@@ -563,27 +589,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
           where: { id: shareLinkId },
-          include: {
-            conversation: {
-              select: {
-                id: true,
-                title: true,
-                description: true,
-                type: true,
-                createdAt: true
-              }
-            },
-            creator: {
-              select: {
-                id: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                displayName: true,
-                avatar: true
-              }
-            }
-          }
+          select: anonymousLinkPreviewSelect
         });
       }
 

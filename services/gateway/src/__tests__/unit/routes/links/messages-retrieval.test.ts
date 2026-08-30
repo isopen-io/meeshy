@@ -137,6 +137,49 @@ async function buildApp(opts: {
   return app;
 }
 
+// ─── GET /links/:identifier/messages — select explicite (#4166 critère 1) ────
+//
+// Témoin sur l'APPEL PRISMA : capture l'argument de
+// `conversationShareLink.findUnique` et vérifie qu'il porte un `select`
+// explicite (jamais `include`) listant exactement les trois champs racine
+// que le handler lit (`id`, `conversationId`, `allowViewHistory`) — pas la
+// ligne entière du lien.
+
+describe('GET /links/:identifier/messages — select racine explicite', () => {
+  it('appelle findUnique avec select (jamais include) pour un identifiant mshy_*', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_ID}/messages` });
+
+    expect(prisma.conversationShareLink.findUnique).toHaveBeenCalledTimes(1);
+    const call = (prisma.conversationShareLink.findUnique as jest.Mock<any>).mock.calls[0][0];
+    expect(call).not.toHaveProperty('include');
+    expect(call.select).toMatchObject({
+      id: true,
+      conversationId: true,
+      allowViewHistory: true,
+    });
+    await app.close();
+  });
+
+  it('appelle findUnique avec le même select pour un identifiant en base de données (sans préfixe mshy_)', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp({ prisma });
+
+    await app.inject({ method: 'GET', url: `/links/${LINK_DB_ID}/messages` });
+
+    const call = (prisma.conversationShareLink.findUnique as jest.Mock<any>).mock.calls[0][0];
+    expect(call).not.toHaveProperty('include');
+    expect(call.select).toMatchObject({
+      id: true,
+      conversationId: true,
+      allowViewHistory: true,
+    });
+    await app.close();
+  });
+});
+
 // ─── GET /links/:identifier/messages — not found ──────────────────────────────
 
 describe('GET /links/:identifier/messages — link not found by linkId', () => {

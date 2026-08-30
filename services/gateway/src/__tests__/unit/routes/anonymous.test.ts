@@ -468,3 +468,51 @@ describe('GET /anonymous/link/:identifier', () => {
     expect(stats.languageCount).toBe(2);
   });
 });
+
+// ─── GET /anonymous/link/:identifier — select racine explicite (#4166 c1) ────
+//
+// Témoin sur l'APPEL PRISMA : la ligne `ConversationShareLink` était chargée
+// via `include` sans `select` à la racine (toute colonne future du modèle
+// part automatiquement). Capture l'argument des deux branches
+// (`mshy_*` et ObjectId) et vérifie un `select` explicite, jamais `include`.
+
+describe('GET /anonymous/link/:identifier — select racine explicite', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => { app = await buildApp(); });
+  afterAll(async () => { await app.close(); });
+
+  it('branche mshy_* : findUnique porte select (jamais include), avec conversation et creator imbriqués', async () => {
+    const findUnique = (app as any).prisma.conversationShareLink.findUnique;
+    findUnique.mockClear();
+    findUnique.mockResolvedValueOnce({ ...mockShareLink });
+
+    await app.inject({ method: 'GET', url: '/anonymous/link/' + LINK_ID });
+
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    const call = findUnique.mock.calls[0][0];
+    expect(call).not.toHaveProperty('include');
+    expect(call.select).toMatchObject({
+      id: true,
+      linkId: true,
+      name: true,
+      requireAccount: true,
+      allowedLanguages: true,
+    });
+    expect(call.select.conversation).toBeDefined();
+    expect(call.select.creator).toBeDefined();
+  });
+
+  it('branche ObjectId : findUnique porte le même select — jamais include', async () => {
+    (app as any).prisma.conversationShareLink.findFirst.mockResolvedValueOnce(null);
+    const findUnique = (app as any).prisma.conversationShareLink.findUnique;
+    findUnique.mockClear();
+    findUnique.mockResolvedValueOnce({ ...mockShareLink });
+
+    await app.inject({ method: 'GET', url: '/anonymous/link/507f1f77bcf86cd799439011' });
+
+    expect(findUnique).toHaveBeenCalledTimes(1);
+    const call = findUnique.mock.calls[0][0];
+    expect(call).not.toHaveProperty('include');
+    expect(call.select).toBeDefined();
+  });
+});

@@ -23,7 +23,7 @@ import {
   getConversationMessages,
   getConversationMessagesWithDetails,
   countConversationMessages,
-  shareLinkIncludeStructure,
+  shareLinkSelectStructure,
   findActiveUserParticipant,
   findLinkMembers,
   findLinkAnonymousParticipants,
@@ -53,7 +53,7 @@ function makeMockPrisma(overrides: Record<string, unknown> = {}): PrismaClient {
       count: jest.fn(),
     },
     // #4165 — les cinq requêtes ciblées qui remplacent l'ancienne relation
-    // `participants` chargée en bloc SANS `take` sur `shareLinkIncludeStructure`.
+    // `participants` chargée en bloc SANS `take` sur `shareLinkSelectStructure`.
     participant: {
       findFirst: jest.fn(),
       findMany: jest.fn(),
@@ -78,7 +78,7 @@ describe('findShareLinkByIdentifier — ObjectId routing', () => {
     expect(findUnique).toHaveBeenCalledTimes(1);
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: OBJECT_ID },
-      include: shareLinkIncludeStructure,
+      select: shareLinkSelectStructure,
     });
   });
 
@@ -123,7 +123,7 @@ describe('findShareLinkByIdentifier — slug/linkId routing', () => {
     expect(findFirst).toHaveBeenCalledTimes(1);
     expect(findFirst).toHaveBeenCalledWith({
       where: { OR: [{ linkId: CUSTOM_SLUG }, { identifier: CUSTOM_SLUG }] },
-      include: shareLinkIncludeStructure,
+      select: shareLinkSelectStructure,
     });
   });
 
@@ -136,7 +136,7 @@ describe('findShareLinkByIdentifier — slug/linkId routing', () => {
 
     expect(findFirst).toHaveBeenCalledWith({
       where: { OR: [{ linkId: LINK_ID }, { identifier: LINK_ID }] },
-      include: shareLinkIncludeStructure,
+      select: shareLinkSelectStructure,
     });
   });
 
@@ -218,7 +218,7 @@ describe('findShareLinkByIdentifier — ObjectId boundary cases', () => {
 
     expect(findUnique).toHaveBeenCalledWith({
       where: { id: upperHex },
-      include: shareLinkIncludeStructure,
+      select: shareLinkSelectStructure,
     });
   });
 });
@@ -475,11 +475,11 @@ describe('countConversationMessages', () => {
 });
 
 // ---------------------------------------------------------------------------
-// shareLinkIncludeStructure
+// shareLinkSelectStructure
 // ---------------------------------------------------------------------------
 
 // #4165 — cette section a été RÉÉCRITE, pas assouplie : la relation
-// `participants` chargée en bloc SANS `take` sur `shareLinkIncludeStructure`
+// `participants` chargée en bloc SANS `take` sur `shareLinkSelectStructure`
 // (au plus 5 000 lignes sur "meeshy", le salon public, à CHAQUE appel de
 // `GET /links/:identifier`) est le pire cas nommé par #4165. Chaque garantie
 // que l'ancien `select` monolithique portait a un TÉMOIN ci-dessous, sur son
@@ -499,12 +499,12 @@ describe('countConversationMessages', () => {
 //   user.role (bypass plateforme ADMIN/BIGBOSS)      → loadReaderHistoryFloor,
 //                                                       select INCHANGÉ (SSOT),
 //                                                       jamais recopié ici
-describe('shareLinkIncludeStructure — la relation participants EN BLOC a disparu', () => {
+describe('shareLinkSelectStructure — la relation participants EN BLOC a disparu', () => {
   // La preuve POSITIVE du correctif #4165 : plus aucune relation à profondeur
   // non bornée sur la conversation d'un lien. Une régression qui la
   // réintroduirait (avec ou sans `take`) doit faire tomber CE témoin.
   it("ne charge plus `participants` du tout — la SOURCE du findMany sans take a été retirée, pas seulement bornée", () => {
-    const conversationSelect = shareLinkIncludeStructure.conversation.select as Record<string, any>;
+    const conversationSelect = shareLinkSelectStructure.conversation.select as Record<string, any>;
 
     expect(conversationSelect.participants).toBeUndefined();
   });
