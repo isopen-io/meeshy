@@ -24,6 +24,15 @@
  * `registerVoiceRoutes` (sans quoi tout `routes/voice/*` échapperait au
  * balayage), et un hook `onRoute` qui draine la table réelle.
  *
+ * Il monte DEUX surfaces, pas une (#4376) : `registerAllRoutes` et
+ * `socketIOAdminRoutes`. La seconde est montée par `setupSocketIO()` en
+ * production, hors de `registerAllRoutes`, et son absence ici rendait quatre
+ * routes servies invisibles à tout le monde. Le hook `onRoute` voit tout ce
+ * qui est monté ; il ne peut rien contre ce qui ne l'est pas — d'où le témoin
+ * `src/__tests__/route-manifest/root-mounted-surfaces.test.ts`, qui lit dans
+ * `server.ts` la liste des surfaces reçues par l'instance racine et exige que
+ * chacune de celles qui déclarent des routes d'API soit reproduite ici.
+ *
  * `buildRouteManifest()` est la couche AU-DESSUS : elle appelle
  * `buildAssembledApp()`, projette chaque route collectée vers la forme de
  * l'ARTEFACT (méthode, chemin, module d'origine, niveau de sécurité), TRIE le
@@ -134,6 +143,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { EventEmitter } from 'events';
 import { registerAllRoutes, type RouteRegistrationDeps } from '../route-registration';
 import { createUnifiedAuthMiddleware } from '../middleware/auth';
+import { socketIOAdminRoutes } from '../socketio/socketio-admin-routes';
 
 // ---------------------------------------------------------------------------
 // Stub Prisma "profond" — IDENTIQUE à celui que portait
@@ -353,6 +363,29 @@ export async function buildAssembledApp(): Promise<{ app: FastifyInstance; route
     mentionService: {} as any,
     orphanMediaCleanup: {} as any,
   };
+
+  // `registerAllRoutes` n'est PAS le seul graphe que la production monte sur
+  // l'instance racine — c'est le défaut #4376, et il était structurel.
+  // `MeeshyServer.start()` appelle `setupSocketIO()` AVANT `setupRoutes()`, et
+  // c'est `setupSocketIO()` qui monte les deux gestes d'administration
+  // Socket.IO (statistiques, déconnexion forcée) sous leur adresse canonique
+  // ET leur alias déprécié — quatre routes, servies en production, absentes de
+  // tous les manifestes régénérés jusqu'ici. Le hook `onRoute` ci-dessus est
+  // exhaustif par construction ; ce qui ne l'était pas, c'est le MONTAGE.
+  //
+  // Le plugin monté ici est le MÊME objet que celui du serveur de production
+  // (`socketio/socketio-admin-routes.ts`), jamais une copie de ses
+  // déclarations : deux montages jetables divergent tôt ou tard, et c'est
+  // exactement la classe de défaut que ce module existe pour fermer.
+  // `getManager` rend `null` — aucun handler n'est appelé ici, seule la table
+  // est lue — et l'ORDRE reproduit celui de `start()` : avant
+  // `registerAllRoutes`.
+  //
+  // Le témoin qui garde la correspondance entre ce montage et celui de la
+  // production est `src/__tests__/route-manifest/root-mounted-surfaces.test.ts`
+  // : il extrait de `server.ts` tout ce qui reçoit l'instance racine, et exige
+  // que chaque surface qui déclare des routes d'API soit reproduite ici.
+  await app.register(socketIOAdminRoutes, { getManager: () => null });
 
   await registerAllRoutes(app, deps);
   await app.ready();

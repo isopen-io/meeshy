@@ -49,49 +49,15 @@ import { requireSovereign, withAudit } from '../../middleware/authorize';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
-import { maskedAttachment } from '../../services/notifications/NotificationService';
+// #4388 — le prédicat de CONTENU (et son select associé) vivait ICI, dans un
+// fichier de ROUTE, alors que `content.ts` l'importait déjà en second
+// appelant (#4384) : même défaut qu'un prédicat recopié, juste pas encore
+// dupliqué. Il est déplacé à côté de son jumeau MÉDIA
+// (`mediaAttachmentIsProtected`), dans `routes/admin/media-protection.ts` —
+// voir son doc-comment pour le détail des six colonnes.
+import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
 
 const REASON_MIN_LENGTH = 10;
-
-/**
- * Les six colonnes de protection lues sur CHAQUE message — le plancher
- * structurel que `messageContentIsProtected` exige de son appelant. Le reste
- * de la ligne (Prisma-inféré depuis le `select` littéral plus bas) n'a pas
- * besoin d'un type nommé : laisser l'inférence porter le contrat évite un
- * second endroit où la forme peut diverger de la requête qui la produit.
- */
-interface MessageProtectionFields {
-  readonly isViewOnce: boolean;
-  readonly isBlurred: boolean;
-  readonly effectFlags: number;
-  readonly expiresAt: Date | null;
-  readonly isEncrypted: boolean;
-  readonly encryptionMode: string | null;
-}
-
-/**
- * `true` si le CONTENU d'un message ne doit pas voyager en clair : vue
- * unique / flou / effet masquant (`maskedAttachment`, colonnes homonymes sur
- * `Message`), expiration éphémère déjà consommée, ou message chiffré (le
- * serveur ne détient de toute façon jamais son texte en clair — voir
- * `MessageProcessor.getEncryptionContext`, qui écrit `content: ''` pour tout
- * message chiffré : cette garde est un SIGNAL explicite pour l'admin, pas un
- * retrait de fuite qui n'existait pas).
- *
- * EXPORTÉ depuis #4384 : `GET /admin/messages` (`routes/admin/content.ts`) pose
- * exactement la même question sur exactement la même colonne, et la seule chose
- * qu'une seconde écriture puisse produire est une divergence — c'est la raison
- * pour laquelle `mediaAttachmentIsProtected` vit déjà dans un module partagé
- * (`routes/admin/media-protection.ts`). L'appelant reste seul juge de la FORME
- * du masquage ; ce prédicat ne rend que le verdict.
- */
-export function messageContentIsProtected(message: MessageProtectionFields): boolean {
-  if (maskedAttachment(message)) return true;
-  if (message.expiresAt && message.expiresAt.getTime() <= Date.now()) return true;
-  if (message.isEncrypted === true) return true;
-  if (message.encryptionMode) return true;
-  return false;
-}
 
 export function registerConversationMessagesSovereignRoute(fastify: FastifyInstance): void {
   fastify.get<{
@@ -215,12 +181,10 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
             editedAt: true,
             replyToId: true,
             createdAt: true,
-            isViewOnce: true,
-            isBlurred: true,
-            effectFlags: true,
-            expiresAt: true,
-            isEncrypted: true,
-            encryptionMode: true,
+            // #4388 — les six colonnes que `messageContentIsProtected` exige,
+            // désormais un select NOMMÉ et partagé avec `content.ts` plutôt
+            // que retapées ici à la main.
+            ...messageContentProtectionSelect,
             sender: {
               select: {
                 id: true,
