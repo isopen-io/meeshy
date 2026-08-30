@@ -131,13 +131,12 @@ function createMockPrisma() {
       update: jest.fn<any>().mockResolvedValue({}),
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    notification: {
+      // La trace des promotions, lue par la succession du créateur (#4058).
+      findMany: jest.fn<any>().mockResolvedValue([]),
+    },
     user: {
       findMany: jest.fn<any>(),
-    },
-    // La trace `member_promoted` qui date l'ancienneté DE RANG des
-    // administrateurs candidats à la succession (#4058).
-    notification: {
-      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     // Les deux routes de clôture committent leur écriture jumelle et le geste
     // de l'appelant dans UNE transaction. Le double n'en simule pas l'atomicité
@@ -237,34 +236,30 @@ describe('registerLeaveRoutes — POST /conversations/:id/leave', () => {
     );
   });
 
-  it('transmet le fil au successeur quand le créateur part en laissant des membres', async () => {
-    // #4058 : cette porte répondait 400 (« transférez l'ownership ou
-    // supprimez ») pendant que sa jumelle `delete-for-me.ts` transférait — deux
-    // réponses opposées au même geste, selon le bouton pressé.
-    const SUCCESSOR_ID = '507f1f77bcf86cd799439088';
+  it("laisse le créateur partir et transfère le fil, plutôt que de REFUSER (#4058)", async () => {
+    // Cette porte rendait `400` « transférez l'ownership ou supprimez la
+    // conversation » — un mur, pendant que sa jumelle `delete-for-me.ts`
+    // transférait en silence. La décision porteur du 2026-08-28 a tranché :
+    // le créateur part, et l'héritier se calcule.
+    const SUCCESSOR = '507f1f77bcf86cd7994390aa';
     const { prisma, route, reply } = setup();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.count.mockResolvedValue(2);
-    prisma.participant.findMany.mockImplementation((args: any) =>
-      Promise.resolve(
-        args?.where?.role || args?.take !== 1
-          ? []
-          : [{ id: SUCCESSOR_ID, userId: TARGET_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') }]
-      )
-    );
+    prisma.participant.findMany.mockResolvedValue([
+      { id: SUCCESSOR, userId: TARGET_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+    ]);
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
+    expect(mockedSendBadRequest).not.toHaveBeenCalled();
     expect(prisma.participant.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: SUCCESSOR_ID }, data: { role: 'creator' } })
+      expect.objectContaining({ where: { id: SUCCESSOR }, data: { role: 'creator' } })
     );
     expect(prisma.conversation.update).not.toHaveBeenCalled();
-    expect(mockedSendSuccess).toHaveBeenCalled();
   });
 
   it('deactivates conversation when creator is last member', async () => {
     const { prisma, route, reply } = setup();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.count.mockResolvedValue(0);
+    prisma.participant.findMany.mockResolvedValue([]);
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     // Ce témoin épinglait `data: { isActive: false }` À L'EXCLUSION du reste,
@@ -865,19 +860,18 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     );
   });
 
-  it('transmet au successeur élu par la loi de succession partagée', async () => {
-    const MODERATOR_ID = '507f1f77bcf86cd799439066';
+  it("transfers ownership to the first admin when the creator leaves (#4058)", async () => {
+    const ADMIN_ID = '507f1f77bcf86cd799439066';
     const io = createMockIO();
     const { prisma, route, reply } = setup(io);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockImplementation((args: any) =>
-      Promise.resolve(args?.where?.role ? [] : [
-      { id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]));
+    prisma.participant.findMany.mockResolvedValue([
+      { id: ADMIN_ID, userId: TARGET_USER_ID, role: 'admin', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+    ]);
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     expect(prisma.participant.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: MODERATOR_ID }, data: { role: 'creator' } })
+      expect.objectContaining({ where: { id: ADMIN_ID }, data: { role: 'creator' } })
     );
     expect(io._emit).toHaveBeenCalledWith(
       SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED,
@@ -897,14 +891,13 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     // Elle ne nomme ni la transaction ni l'ordre des lignes : elle affirme la
     // PROPRIÉTÉ (rien n'est annoncé de ce qui n'est pas committé), et tombe sur
     // toute forme qui la perd.
-    const MODERATOR_ID = '507f1f77bcf86cd799439066';
+    const ADMIN_ID = '507f1f77bcf86cd799439066';
     const io = createMockIO();
     const { prisma, route, reply } = setup(io);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockImplementation((args: any) =>
-      Promise.resolve(args?.where?.role ? [] : [
-      { id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]));
+    prisma.participant.findMany.mockResolvedValue([
+      { id: ADMIN_ID, userId: TARGET_USER_ID, role: 'admin', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+    ]);
     prisma.$transaction.mockRejectedValue(new Error('write failed'));
 
     await expect(
@@ -918,13 +911,12 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
   });
 
   it("committe la promotion du successeur et le masquage de l'appelant dans UNE transaction", async () => {
-    const MODERATOR_ID = '507f1f77bcf86cd799439066';
+    const ADMIN_ID = '507f1f77bcf86cd799439066';
     const { prisma, route, reply } = setup(createMockIO());
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockImplementation((args: any) =>
-      Promise.resolve(args?.where?.role ? [] : [
-      { id: MODERATOR_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]));
+    prisma.participant.findMany.mockResolvedValue([
+      { id: ADMIN_ID, userId: TARGET_USER_ID, role: 'admin', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+    ]);
 
     await route.handler(makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID), reply);
 
@@ -935,7 +927,7 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     expect(prisma.participant.update).toHaveBeenCalledTimes(2);
     expect(prisma.participant.update).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ where: { id: MODERATOR_ID }, data: { role: 'creator' } })
+      expect.objectContaining({ where: { id: ADMIN_ID }, data: { role: 'creator' } })
     );
     expect(prisma.participant.update).toHaveBeenNthCalledWith(
       2,
@@ -966,13 +958,11 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
 
     const viaLeave = await closeVia(registerLeaveRoutes, 'POST', 'leave', p => {
       p.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-      p.participant.count.mockResolvedValue(0);
+      p.participant.findMany.mockResolvedValue([]); // plus personne à qui donner le fil
     });
     const viaDeleteForMe = await closeVia(registerDeleteForMeRoutes, 'DELETE', 'delete-for-me', p => {
-      p.participant.findFirst
-        .mockResolvedValueOnce(makeParticipant({ role: 'creator' }))
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
+      p.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
+      p.participant.findMany.mockResolvedValue([]);
     });
 
     const shape = (p: any) => ({
@@ -993,14 +983,13 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     });
   });
 
-  it('transmet au membre actif le plus ancien quand aucun administrateur ne reste', async () => {
+  it('falls back to the oldest active member when there is no admin', async () => {
     const MEMBER_SUCCESSOR_ID = '507f1f77bcf86cd799439077';
     const { prisma, route, reply } = setup();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockImplementation((args: any) =>
-      Promise.resolve(args?.where?.role ? [] : [
+    prisma.participant.findMany.mockResolvedValue([
       { id: MEMBER_SUCCESSOR_ID, userId: TARGET_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]));
+    ]);
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     expect(prisma.participant.update).toHaveBeenCalledWith(
@@ -1012,7 +1001,7 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
   it('deactivates conversation when creator is last member', async () => {
     const { prisma, route, reply } = setup();
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockResolvedValue([]); // plus aucun membre actif
+    prisma.participant.findMany.mockResolvedValue([]); // plus aucun membre
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     // La clôture s'ENREGISTRE comme telle. `loadConversationTombstones`
@@ -1041,19 +1030,18 @@ describe('registerDeleteForMeRoutes — DELETE /conversations/:id/delete-for-me'
     );
   });
 
-  it('does not emit PARTICIPANT_ROLE_UPDATED when no IO but a successor is found', async () => {
-    const MOD_ID = '507f1f77bcf86cd799439066';
+  it('does not emit PARTICIPANT_ROLE_UPDATED when no IO but a successor was found', async () => {
+    const ADMIN_ID = '507f1f77bcf86cd799439066';
     const { prisma, route, reply } = setup(undefined);
     prisma.participant.findFirst.mockResolvedValue(makeParticipant({ role: 'creator' }));
-    prisma.participant.findMany.mockImplementation((args: any) =>
-      Promise.resolve(args?.where?.role ? [] : [
-      { id: MOD_ID, userId: TARGET_USER_ID, role: 'moderator', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
-    ]));
+    prisma.participant.findMany.mockResolvedValue([
+      { id: ADMIN_ID, userId: TARGET_USER_ID, role: 'admin', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+    ]);
     const request = makeRequest({ id: VALID_CONV_ID }, VALID_USER_ID);
     await route.handler(request, reply);
     // update still happens (DB update), success is sent
     expect(prisma.participant.update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: MOD_ID }, data: { role: 'creator' } })
+      expect.objectContaining({ where: { id: ADMIN_ID }, data: { role: 'creator' } })
     );
     expect(mockedSendSuccess).toHaveBeenCalled();
   });

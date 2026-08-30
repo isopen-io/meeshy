@@ -12,21 +12,26 @@ import Foundation
 /// relire — « pourquoi mon image est-elle partie en fond ? » se répond en la
 /// lisant, pas en instrumentant un écran.
 ///
-/// **Le basculement fond / premier plan est le cas intéressant.** La même
-/// matière va à deux endroits selon ce que la scène porte déjà : poser une image
-/// en premier plan sur une scène vide donnerait une vignette flottant sur du
-/// vide, là où l'auteur voulait manifestement un fond. C'est la loi 12 —
-/// « la complexité se paie dans le CODE, jamais chez l'utilisateur » : il colle,
-/// et c'est nous qui décidons.
+/// **Elle ne porte QUE le texte, et c'est une décision.** La directive demande
+/// aussi qu'un média collé aille en fond quand la scène n'en a pas, en premier
+/// plan sinon — et **cette règle existe déjà**, deux fois, à l'endroit où
+/// l'insertion se fait :
+///
+/// | matière | où la règle vit |
+/// |---|---|
+/// | image, vidéo | `shouldBeBackground = resolvedBackgroundMedia == nil && !hasSlideLevelBgImage` (`StoryComposerViewModel+Elements`) |
+/// | son | `ComposerAudioPlacement.isBackground(sceneAlreadyHasBackgroundAudio:)` |
+///
+/// La réécrire ici aurait donné DEUX règles pour une question — et la seconde
+/// aurait divergé au premier ajustement, en silence, puisque rien ne compare des
+/// règles qui ne s'appellent pas. Ce qui manquait n'était donc pas la décision
+/// du média : c'était le TEXTE, que le vocabulaire d'entrée du canvas ne nommait
+/// pas du tout.
 public nonisolated enum StoryPastePlacement: Equatable, Sendable {
     /// Le texte long DÉCRIT la slide — il ne se pose pas dessus.
     case description(String)
     /// Le texte court est une matière de scène : il devient un objet.
     case textObject(String)
-    /// La scène n'a pas de fond : cette matière le devient.
-    case background
-    /// La scène a déjà un fond : cette matière se pose dessus.
-    case foreground
 }
 
 public nonisolated enum StoryPastePolicy {
@@ -67,14 +72,4 @@ public nonisolated enum StoryPastePolicy {
             : .textObject(propre)
     }
 
-    /// Le placement d'un MÉDIA collé — image, vidéo ou son.
-    ///
-    /// `sceneHasBackground` est la SEULE entrée, et c'est délibéré : le type du
-    /// média ne change rien. La directive traite les trois de la même façon
-    /// (« si c'est un audio mettre en foreground ; si c'est une image ou vidéo
-    /// faire de même »), et un `switch` sur le type ici inviterait à les faire
-    /// diverger sans qu'aucune règle ne le demande.
-    public static func placement(forMediaWhenSceneHasBackground sceneHasBackground: Bool) -> StoryPastePlacement {
-        sceneHasBackground ? .foreground : .background
-    }
 }

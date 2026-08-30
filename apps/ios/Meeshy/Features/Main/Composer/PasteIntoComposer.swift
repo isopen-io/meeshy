@@ -162,7 +162,15 @@ extension PasteIntoComposer {
     static func storyScene(_ providers: [NSItemProvider]) async -> [StoryPastedItem] {
         let resolved = await resolve(providers, surface: .scene)
         announceWhatTheStorySceneCannotHost(resolved)
-        return await sceneItems(resolved.scene, surface: .scene)
+        // **Le texte n'est plus annoncé, il est POSÉ** (#4378). Il l'était
+        // « appartenant à l'outil texte » — une destination qu'aucun geste
+        // n'ouvrait depuis le collage : l'annonce était donc un refus poli pour
+        // une matière que la scène savait parfaitement héberger.
+        //
+        // Où il va est décidé par `StoryPastePolicy`, côté SDK, au moment de la
+        // pose : ce résolveur transporte, il ne place pas.
+        let textes = resolved.text.map { StoryPastedItem.text($0) }
+        return await sceneItems(resolved.scene, surface: .scene) + textes
     }
 
     /// Ce que la scène ne peut pas héberger, en VALEURS — pur, donc testable.
@@ -175,7 +183,11 @@ extension PasteIntoComposer {
         let candidates: [ComposerPasteExclusion?] = [
             batch.unreadable.isEmpty ? nil : .unreadable(batch.unreadable),
             batch.attachments.isEmpty ? nil : .documentBelongsToAPost(batch.attachments.map(\.name)),
-            batch.text.isEmpty ? nil : .textBelongsToTheTextTool
+            // #4378 — le texte n'est plus exclu : il est POSÉ, en description
+            // ou en objet selon `StoryPastePolicy`. L'annoncer maintenant
+            // refuserait poliment une matière qu'on sait héberger, ce qui est
+            // pire qu'un rejet muet : c'est un rejet qui se croit poli.
+            nil
         ]
         return candidates.compactMap { $0 }
     }

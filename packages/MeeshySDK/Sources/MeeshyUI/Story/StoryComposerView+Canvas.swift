@@ -571,8 +571,26 @@ extension StoryComposerView {
     /// passé. `.item` ferme la liste, comme sur la cible de dépôt de la barre de
     /// conversation : ce que le composer ne sait pas peindre est ANNONCÉ
     /// app-side, jamais avalé.
+    /// **RESTREINTE au #4378** (directive porteur 2026-08-30) :
+    ///
+    /// > « que coller n'apparaisse que si on a une image, un texte ou vidéo dans
+    /// > le presse-papier »
+    ///
+    /// `.item` acceptait TOUT : `PasteButton` se croyait donc toujours servi, et
+    /// « Coller » s'affichait quel que soit le contenu du presse-papier —
+    /// l'affordance sans effet que la loi 4 interdit.
+    ///
+    /// **Ce n'est pas une annulation de la directive du 2026-08-23**, qui
+    /// voulait qu'un document collé soit ANNONCÉ plutôt qu'avalé. Elle est
+    /// RESTREINTE : ce qui n'est ni image, ni vidéo, ni son, ni texte n'est plus
+    /// proposé du tout — il n'y a donc plus rien à annoncer sur ce chemin. La
+    /// succession se consigne ; elle ne s'efface pas.
+    ///
+    /// Le TEXTE y entre en même temps que `StoryPastedItem.text` : l'accepter
+    /// sans savoir le poser aurait rendu la capsule active devant un
+    /// presse-papier qu'elle ne sait pas servir — pire que de ne pas l'accepter.
     nonisolated static let pasteStarterContentTypes: [UTType] = [
-        .image, .movie, .audio, .pdf, .item
+        .image, .movie, .audio, .plainText, .utf8PlainText
     ]
 
     /// Durée au-delà de laquelle l'appui devient un appui LONG.
@@ -626,8 +644,39 @@ extension StoryComposerView {
                 addCapturedMedia(.video(url))
             case .audio(let url):
                 addRecordingToBackground(url: url)
+            case .text(let contenu):
+                // **La destination du texte est une RÈGLE, pas un `if` ici**
+                // (#4378) : « pourquoi mon texte est-il parti en description ? »
+                // se répond en lisant `StoryPastePolicy`, pas en instrumentant
+                // un écran.
+                //
+                // Le média, lui, n'a rien à décider à ce niveau : sa règle vit
+                // déjà dans les chemins d'insertion (`shouldBeBackground`,
+                // `ComposerAudioPlacement`), et la redoubler ici aurait donné
+                // deux règles pour une question.
+                switch StoryPastePolicy.placement(forText: contenu) {
+                case .description(let texte):
+                    viewModel.applyContentText(texte)
+                case .textObject(let texte):
+                    poseTextObject(texte)
+                case nil:
+                    break   // coller le vide n'est pas une erreur, c'est un geste sans matière
+                }
             }
         }
+    }
+
+    /// Pose un objet texte PORTANT déjà son contenu.
+    ///
+    /// `addText()` crée un objet VIDE et ouvre l'éditeur — c'est le geste de
+    /// l'auteur qui écrit. Un collage, lui, apporte son texte : le faire passer
+    /// par l'éditeur obligerait l'auteur à valider ce qu'il vient de coller.
+    /// L'objet est donc créé puis rempli par le même chemin que l'éditeur
+    /// emprunte à la validation — jamais un second site de création.
+    private func poseTextObject(_ contenu: String) {
+        guard let objet = viewModel.addText() else { return }
+        viewModel.updateTextContent(id: objet.id, text: contenu)
+        viewModel.exitTextEditingMode()
     }
 
     /// Règle PURE de l'amorce « pellicule ». `hasRecentAsset` ne vaut vrai que

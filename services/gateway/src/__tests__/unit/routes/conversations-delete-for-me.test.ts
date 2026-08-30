@@ -58,21 +58,21 @@ function makeSocketIO() {
   return { mockIo, mockManager, mockFetchSockets, mockEmit, mockLeave };
 }
 
-/**
- * Le résolveur de succession lit d'abord les ADMINISTRATEURS (`where.role`,
- * plafonné) puis, à défaut, le membre le plus ancien (`take: 1`). Ces scénarios
- * n'ont aucun administrateur : le double rend la liste sur la SECONDE lecture
- * seulement, sans quoi un modérateur y passerait pour un administrateur.
- */
-const successorFindMany = (rows: any[]) =>
-  jest.fn<any>((args: any) => Promise.resolve(args?.where?.role ? [] : rows));
-
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
       findFirst: jest.fn<any>(),
+      // La succession du créateur (#4058) lit les candidats EN BLOC et
+      // classe en mémoire — une seule loi, partagée avec `leave.ts`.
+      findMany: jest.fn<any>().mockResolvedValue([]),
       update: jest.fn<any>().mockResolvedValue({}),
       ...(overrides.participant ?? {}),
+    },
+    notification: {
+      // La trace des promotions : `PATCH …/role` la pose, la succession la
+      // lit. Absente par défaut — la règle replie alors sur `joinedAt`.
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      ...(overrides.notification ?? {}),
     },
     conversation: {
       update: jest.fn<any>().mockResolvedValue({}),
@@ -81,10 +81,6 @@ function makePrisma(overrides: Record<string, any> = {}) {
       // to 0 here regardless.
       count: jest.fn<any>().mockResolvedValue(0),
       ...(overrides.conversation ?? {}),
-    },
-    notification: {
-      // La trace `member_promoted` qui date l'ancienneté DE RANG (#4058).
-      findMany: jest.fn<any>().mockResolvedValue([]),
     },
     // La clôture (ou la promotion du successeur) et le masquage de l'appelant
     // committent ensemble (cycle 69).
@@ -196,7 +192,7 @@ describe('DELETE /conversations/:id/delete-for-me — regular member', () => {
   });
 });
 
-describe('DELETE /conversations/:id/delete-for-me — creator with a successor', () => {
+describe('DELETE /conversations/:id/delete-for-me — creator with an admin successor', () => {
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
   let socket: ReturnType<typeof makeSocketIO>;
@@ -207,20 +203,30 @@ describe('DELETE /conversations/:id/delete-for-me — creator with a successor',
       prismaOverrides: {
         participant: {
           findFirst: jest.fn<any>().mockResolvedValue({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            }),
-          findMany: successorFindMany([
-            { joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          // Un modérateur ARRIVÉ AVANT l'administrateur : la décision
+          // porteur (#4058) ne connaît que deux étages, et le rang de
+          // modérateur n'en est pas un.
+          findMany: jest.fn<any>().mockResolvedValue([
+            {
+              id: 'p-moderateur',
+              userId: 'u-moderateur',
+              role: 'moderator',
+              joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
-              role: 'moderator',
-              isActive: true,
+              role: 'admin',
+              joinedAt: new Date('2026-05-01T00:00:00.000Z'),
             },
-          ]),update: jest.fn<any>().mockResolvedValue({}),
+          ]),
+          update: jest.fn<any>().mockResolvedValue({}),
         },
       },
     }));
@@ -228,13 +234,13 @@ describe('DELETE /conversations/:id/delete-for-me — creator with a successor',
 
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 when creator transfers to the elected successor', async () => {
+  it("returns 200 when creator transfers to the first admin", async () => {
     const res = await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/delete-for-me` });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
   });
 
-  it('promotes the elected successor to creator role', async () => {
+  it('promotes the admin to creator role, over an older moderator', async () => {
     expect(prisma.participant.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: SUCCESSOR_ID },
@@ -318,20 +324,21 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
       prismaOverrides: {
         participant: {
           findFirst: jest.fn<any>().mockResolvedValue({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            }),
-          findMany: successorFindMany([
-            { joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([
+            {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
-              role: 'moderator',
-              isActive: true,
+              role: 'member',
+              joinedAt: new Date('2026-01-01T00:00:00.000Z'),
             },
-          ]),update: jest.fn<any>().mockResolvedValue({}),
+          ]),
+          update: jest.fn<any>().mockResolvedValue({}),
         },
         conversation: {
           update: jest.fn<any>().mockResolvedValue({}),
@@ -355,7 +362,7 @@ describe('DELETE /conversations/:id/delete-for-me — creator, legacy direct DM 
   });
 });
 
-describe('DELETE /conversations/:id/delete-for-me — creator with no admin but an oldest member', () => {
+describe('DELETE /conversations/:id/delete-for-me — creator with no admin, oldest member inherits', () => {
   let app: FastifyInstance;
   let prisma: ReturnType<typeof makePrisma>;
 
@@ -365,19 +372,24 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no admin but 
       prismaOverrides: {
         participant: {
           findFirst: jest.fn<any>().mockResolvedValue({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            }),
-          findMany: successorFindMany([
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([
             {
               id: SUCCESSOR_ID,
               userId: SUCCESSOR_USER_ID,
               role: 'member',
-              isActive: true,
               joinedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'p-recent',
+              userId: 'u-recent',
+              role: 'moderator',
+              joinedAt: new Date('2026-06-01T00:00:00.000Z'),
             },
           ]),
           update: jest.fn<any>().mockResolvedValue({}),
@@ -414,13 +426,13 @@ describe('DELETE /conversations/:id/delete-for-me — creator with no other memb
       prismaOverrides: {
         participant: {
           findFirst: jest.fn<any>().mockResolvedValue({
-              id: PARTICIPANT_ID,
-              userId: USER_ID,
-              conversationId: CONV_ID,
-              role: 'creator',
-              isActive: true,
-            }),
-          findMany: successorFindMany([]), // plus aucun membre actif
+            id: PARTICIPANT_ID,
+            userId: USER_ID,
+            conversationId: CONV_ID,
+            role: 'creator',
+            isActive: true,
+          }),
+          findMany: jest.fn<any>().mockResolvedValue([]), // plus personne
           update: jest.fn<any>().mockResolvedValue({}),
         },
         conversation: {

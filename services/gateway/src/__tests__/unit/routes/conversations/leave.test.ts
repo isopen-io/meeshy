@@ -24,7 +24,6 @@ jest.mock('../../../../utils/participant-lookup-cache', () => ({
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
   SERVER_EVENTS: {
     CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
-    PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   },
   ROOMS: {
     conversation: (id: string) => `conversation:${id}`,
@@ -81,30 +80,6 @@ const remainingParticipants = [
   { id: REMAINING_ANON_PARTICIPANT_ID, userId: null },
 ];
 
-/**
- * `participant.findMany` sert TROIS lectures dans cette route : les
- * administrateurs candidats à la succession (`where.role`), le membre le plus
- * ancien à défaut (`take: 1`), et l'effectif restant du fanout (ni l'un ni
- * l'autre). Les distinguer par la FORME de la requête évite un
- * `mockResolvedValueOnce` dont l'ORDRE serait la vraie assertion.
- */
-function splitFindMany(
-  candidates: any[],
-  opts: { admins?: any[]; remaining?: any[] } = {}
-) {
-  const { admins = [], remaining = remainingParticipants } = opts;
-  return jest.fn<any>((args: any) =>
-    Promise.resolve(args?.where?.role ? admins : args?.take === 1 ? candidates : remaining)
-  );
-}
-
-const successorCandidate = {
-  id: 'p-successor',
-  userId: REMAINING_USER_ID,
-  role: 'member',
-  joinedAt: new Date('2026-01-01T00:00:00.000Z'),
-};
-
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     participant: {
@@ -113,12 +88,16 @@ function makePrisma(overrides: Record<string, any> = {}) {
       findMany: jest.fn<any>().mockResolvedValue(remainingParticipants),
       update: jest.fn<any>().mockResolvedValue({ ...mockParticipant, isActive: false }),
     },
-    conversation: {
-      count: jest.fn<any>().mockResolvedValue(0),
-      update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
-    },
     notification: {
+      // La trace des promotions, lue par la succession du créateur (#4058).
+      // Vide : la règle replie alors sur `joinedAt`, et reste totale.
       findMany: jest.fn<any>().mockResolvedValue([]),
+    },
+    conversation: {
+      update: jest.fn<any>().mockResolvedValue({ id: CONV_ID, isActive: false }),
+      // La loi de succession écarte d'abord le DM JAMAIS UTILISÉ, qui se ferme
+      // au lieu de se transmettre — 0 ici : ces scénarios ne sont pas ce DM.
+      count: jest.fn<any>().mockResolvedValue(0),
     },
     // La clôture et le départ committent ensemble (cycle 69).
     $transaction: jest.fn<any>((ops: any) => Promise.all(ops)),
@@ -211,77 +190,22 @@ describe('POST /conversations/:id/leave — success as member', () => {
 });
 
 describe('POST /conversations/:id/leave — creator with other members', () => {
-  // Le créateur PART, et la conversation trouve son successeur (#4058). Cette
-  // porte répondait 400 (« transférez l'ownership ou supprimez ») pendant que sa
-  // jumelle `delete-for-me.ts` transférait : deux réponses opposées au même
-  // geste, selon le bouton pressé.
-  it('transmet la conversation au successeur au lieu de refuser le départ', async () => {
-    const update = jest.fn<any>().mockResolvedValue({});
+  it("part en transférant le fil, au lieu de rendre 400 (#4058)", async () => {
+    const HERITIER = 'p-heritier';
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(3),
-        findMany: splitFindMany([successorCandidate]),
-        update,
-      },
-    });
-    const app = await buildApp({ prisma });
-    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
-
-    expect(res.statusCode).toBe(200);
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'p-successor' }, data: { role: 'creator' } })
-    );
-    // La conversation NE ferme PAS : elle a un créateur.
-    expect(prisma.conversation.update).not.toHaveBeenCalled();
-    await app.close();
-  });
-
-  it('annonce le nouveau rang au fil, une fois les deux écritures committées', async () => {
-    const emitted: EmittedEvent[] = [];
-    const prisma = makePrisma({
-      participant: {
-        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(3),
-        findMany: splitFindMany([successorCandidate]),
-        update: jest.fn<any>().mockResolvedValue({}),
-      },
-    });
-    const app = await buildApp({ prisma, withSocket: true, emitted });
-    await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
-
-    const promoted = emitted.filter(e => e.event === 'participant:role-updated');
-    expect(promoted).toHaveLength(1);
-    expect(promoted[0].payload).toMatchObject({
-      userId: REMAINING_USER_ID,
-      newRole: 'creator',
-      updatedBy: USER_ID,
-    });
-    await app.close();
-  });
-
-  it('ferme le fil quand il ne reste aucun successeur éligible', async () => {
-    // Règle 3 : personne n'hérite ⇒ la conversation se termine, ENREGISTRÉE
-    // (`closedAt`/`closedBy`), sans quoi aucun tombstone ne la sort des caches.
-    // Aucun candidat éligible : ni administrateur, ni membre avec un compte —
-    // l'exclusion des invités est faite par le `where` du résolveur, dont
-    // l'unité porte le témoin.
-    const prisma = makePrisma({
-      participant: {
-        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(1),
-        findMany: splitFindMany([]),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: HERITIER, userId: REMAINING_USER_ID, role: 'admin', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
     const app = await buildApp({ prisma });
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
-
     expect(res.statusCode).toBe(200);
-    expect(prisma.conversation.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ isActive: false, closedBy: USER_ID }),
-      })
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: HERITIER }, data: { role: 'creator' } })
     );
     await app.close();
   });
@@ -292,8 +216,7 @@ describe('POST /conversations/:id/leave — creator alone in conversation', () =
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'creator' }),
-        count: jest.fn<any>().mockResolvedValue(0), // no other members
-        findMany: splitFindMany([]),
+        findMany: jest.fn<any>().mockResolvedValue([]), // no other members
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -385,47 +308,30 @@ describe('POST /conversations/:id/leave — participant lookup cache invalidatio
  * l'ancien `InitService` posait en `CREATOR`/`ADMIN`.
  *
  * #4008 range ces lecteurs parmi les défauts « fail-closed » — un droit refusé,
- * jamais accordé à tort. **Ce site-ci est l'inverse** : la comparaison stricte
- * ne sert pas à ACCORDER un pouvoir, elle sert à REFUSER un départ. Sur une
- * ligne `CREATOR`, la garde ne tire pas, et le créateur du salon global quitte
- * en y laissant tous ses membres — sans transfert d'ownership ni clôture.
+ * jamais accordé à tort. **Ce site-ci est l'inverse** : la comparaison ne sert
+ * pas à ACCORDER un pouvoir, elle décide d'une CONSÉQUENCE. Sur une ligne
+ * `CREATOR`, l'égalité stricte ne tire pas, et le créateur du salon global
+ * quitte en y laissant tous ses membres — sans transfert d'ownership ni
+ * clôture.
  *
  * > Une comparaison de rôle qui échoue « fermé » quand elle autorise échoue
  * > « ouvert » quand elle interdit. Le sens de la garde décide du sens de la
  * > panne : ranger une famille entière d'un seul côté rate exactement les sites
  * > où elle est dangereuse.
+ *
+ * Depuis #4058, la conséquence n'est plus un refus mais un TRANSFERT — et la
+ * propriété testée est la même : sur une ligne écrite `CREATOR`, la
+ * conversation ne reste jamais sans créateur.
  */
-describe('POST /conversations/:id/leave — le rang tient quelle que soit la casse (#4008)', () => {
-  it('transmet le fil d’un créateur dont la ligne est écrite CREATOR', async () => {
-    // Sur cette casse — celle que l'ancien `InitService` posait pour le salon
-    // global — l'égalité stricte ne tirait pas : le créateur partait sans que
-    // personne n'hérite du fil, sans erreur ni log.
-    const update = jest.fn<any>().mockResolvedValue({});
+describe('POST /conversations/:id/leave — le créateur reste protégé quelle que soit la casse (#4008)', () => {
+  it("transmet le fil quand la ligne est écrite CREATOR, au lieu de le laisser sans créateur", async () => {
+    const HERITIER = 'p-heritier-casse';
     const prisma = makePrisma({
       participant: {
         findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
-        count: jest.fn<any>().mockResolvedValue(3),
-        findMany: splitFindMany([successorCandidate]),
-        update,
-      },
-    });
-    const app = await buildApp({ prisma });
-
-    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
-
-    expect(res.statusCode).toBe(200);
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 'p-successor' }, data: { role: 'creator' } })
-    );
-    await app.close();
-  });
-
-  it('ferme le fil d’un créateur écrit CREATOR resté seul', async () => {
-    const prisma = makePrisma({
-      participant: {
-        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
-        count: jest.fn<any>().mockResolvedValue(0),
-        findMany: splitFindMany([]),
+        findMany: jest.fn<any>().mockResolvedValue([
+          { id: HERITIER, userId: REMAINING_USER_ID, role: 'member', joinedAt: new Date('2026-01-01T00:00:00.000Z') },
+        ]),
         update: jest.fn<any>().mockResolvedValue({}),
       },
     });
@@ -434,7 +340,25 @@ describe('POST /conversations/:id/leave — le rang tient quelle que soit la cas
     const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
 
     expect(res.statusCode).toBe(200);
-    expect(prisma.conversation.update).toHaveBeenCalled();
+    expect(prisma.participant.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: HERITIER }, data: { role: 'creator' } })
+    );
+    await app.close();
+  });
+
+  it('laisse partir un créateur écrit CREATOR resté seul, en fermant le fil', async () => {
+    const prisma = makePrisma({
+      participant: {
+        findFirst: jest.fn<any>().mockResolvedValue({ ...mockParticipant, role: 'CREATOR' }),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+        update: jest.fn<any>().mockResolvedValue({}),
+      },
+    });
+    const app = await buildApp({ prisma });
+
+    const res = await app.inject({ method: 'POST', url: `/conversations/${CONV_ID}/leave`, payload: {} });
+
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 });

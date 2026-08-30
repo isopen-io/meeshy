@@ -331,8 +331,18 @@ final class StoryComposerCaptureLongPressTests: XCTestCase {
     /// rangée la fait rougir.
     func test_theCapsuleAndTheLongPressReadTheSameRule() throws {
         let code = try canvasSource()
-        let row = try XCTUnwrap(
+        // **L'adresse est l'UNITÉ des deux rangées depuis #4378.** « Coller » a
+        // sa propre rangée (`blankCanvasPasteRow` de fait), et la capsule
+        // « Caméra » vit dans `blankCanvasCaptureRow` : lire la seule
+        // `blankCanvasStarterRow` faisait rougir la garde pour un membre
+        // simplement DÉMÉNAGÉ. Les concaténer garde la mesure vraie quel que
+        // soit le découpage — c'est la même parade qu'`AppSourceGuard.unit`
+        // côté app.
+        let starter = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "private var blankCanvasStarterRow:", in: code))
+        let capture = try XCTUnwrap(
+            ComposerSourceGuard.functionBody(named: "private var blankCanvasCaptureRow:", in: code))
+        let row = starter + "\n" + capture
         let longPress = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "private var blankCanvasCaptureLongPress:", in: code))
 

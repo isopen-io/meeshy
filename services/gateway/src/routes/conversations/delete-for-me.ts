@@ -9,7 +9,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache'
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache'
 import { announceConversationClosed } from '../../socketio/announceConversationClosed'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
-import { resolveConversationSuccession } from './utils/conversation-succession'
+import { resoudreSuccessionDuCreateur } from '../../services/conversations/creatorSuccession'
 
 /** Ce que rend un « delete-for-me » réussi — identique sur les deux adresses qui le servent. */
 export type ConversationDeleteForMeResult = {
@@ -91,7 +91,7 @@ export async function performConversationDeleteForMe(
   // clôture et pas pour la promotion, qui partait au milieu du geste — un
   // successeur proclamé créateur auprès de tout le fil, pendant que le 500
   // affirmait que rien n'avait eu lieu.
-  let promotedSuccessor: { userId: string } | null = null
+  let promotedSuccessor: { userId: string | null } | null = null
 
   // Le masquage de l'appelant, DÉCRIT une fois et committé par chaque
   // branche AVEC son écriture jumelle. Les deux moitiés du geste ne peuvent
@@ -109,26 +109,30 @@ export async function performConversationDeleteForMe(
   // écrite `CREATOR`, l'égalité stricte sautait cette branche et la
   // conversation restait sans créateur — sans erreur ni log.
   if (isMemberCreator(participant.role ?? 'member')) {
-    // QUI hérite est une loi, pas une requête locale : cette porte élisait un
-    // MODÉRATEUR avant un administrateur — l'ordre des rangs y était inversé —
-    // pendant que sa jumelle `leave.ts` refusait purement le départ.
-    // `resolveConversationSuccession` (#4058) porte la règle unique, le DM
-    // jamais utilisé compris.
-    const succession = await resolveConversationSuccession({
-      prisma,
+    // QUI hérite : la loi de succession, écrite UNE fois et partagée avec
+    // `leave.ts` (#4058). Cette porte élisait un MODÉRATEUR en premier —
+    // l'ordre des rangs était inversé, et la décision porteur du 2026-08-28 ne
+    // connaît que deux étages : le premier à avoir été ADMINISTRATEUR, sinon le
+    // plus ancien membre. Le DM jamais utilisé, qui se ferme au lieu de se
+    // transmettre, était posé ICI seul : sa jumelle `leave.ts` transmettait donc
+    // ce que cette porte fermait. Il est passé dans la loi avec le reste — voir
+    // `creatorSuccession.ts` pour où vit l'instant de la promotion, pourquoi la
+    // trace n'a pas à être protégée, et pourquoi hériter demande un compte.
+    const succession = await resoudreSuccessionDuCreateur(prisma, {
       conversationId,
-      departingUserId: userId,
+      sortantUserId: userId,
     })
 
     if (succession.kind === 'transfer') {
+      const successor = succession.successor
       await prisma.$transaction([
         prisma.participant.update({
-          where: { id: succession.participantId },
+          where: { id: successor.id },
           data: { role: 'creator' },
         }),
         prisma.participant.update(hideSelf),
       ])
-      promotedSuccessor = { userId: succession.userId }
+      promotedSuccessor = { userId: successor.userId }
     } else {
       // Personne n'hérite — DM jamais utilisé, ou plus aucun membre éligible.
       // Personne à prévenir dans le second cas (c'est la condition même), mais
