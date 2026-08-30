@@ -75,7 +75,7 @@ class AuthManager {
 
   /**
    * Persiste les credentials d'un compte inscrit — seul point d'écriture pour
-   * `AUTH_TOKEN` / `REFRESH_TOKEN` / `SESSION_TOKEN` / `USER_DATA` ensemble.
+   * `AUTH_TOKEN` / `SESSION_TOKEN` / `USER_DATA` ensemble.
    *
    * Cinq paramètres positionnels, dont trois `string | undefined`
    * indiscernables au typage : le compilateur ne peut pas voir un
@@ -85,6 +85,16 @@ class AuthManager {
    * (#4404). Passer explicitement `undefined` pour tout paramètre dont la
    * source n'a pas de valeur ; ne JAMAIS décaler l'argument suivant dans le
    * créneau resté vide. Modèle de référence : `hooks/use-auth.ts:173`.
+   *
+   * `refreshToken` n'a plus de créneau de stockage (#4405, étape 3) : aucune
+   * route d'authentification du gateway ne rend jamais ce champ (mesuré), et
+   * la clé de stockage qui lui était dédiée a été retirée — il n'y avait
+   * rien de réel à y conserver. Le paramètre reste néanmoins ACCEPTÉ, à sa
+   * position, et n'est plus lu : deux appelants hors du territoire de ce lot
+   * (`magic-link.service.ts`, `two-factor.service.ts`) le passent encore
+   * positionnellement, et `auth.service.test.ts` verrouille explicitement
+   * que ce créneau doit continuer d'exister si le serveur envoie un jour ce
+   * champ (« threads a refreshToken through to its own slot »).
    */
   setCredentials(
     user: User,
@@ -100,7 +110,6 @@ class AuthManager {
 
     // Store tokens in localStorage for persistence and easy access outside React
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);
-    if (refreshToken) localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
     if (sessionToken) localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, sessionToken);
     localStorage.setItem(AUTH_STORAGE_KEYS.USER_DATA, JSON.stringify(user));
 
@@ -114,11 +123,12 @@ class AuthManager {
     this.setSessionCookie(user);
   }
 
+  // `refreshToken` (2e créneau) n'a plus de créneau de stockage (#4405, étape
+  // 3 — même raison que `setCredentials` ci-dessus) : accepté, plus lu.
   updateTokens(authToken: string, refreshToken?: string, sessionToken?: string, expiresIn?: number): void {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return;
     localStorage.setItem(AUTH_STORAGE_KEYS.AUTH_TOKEN, authToken);
-    if (refreshToken) localStorage.setItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
     if (sessionToken) localStorage.setItem(AUTH_STORAGE_KEYS.SESSION_TOKEN, sessionToken);
 
     this.notifyTokensUpdated();
@@ -130,12 +140,6 @@ class AuthManager {
     /* istanbul ignore next */
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
-  }
-
-  getRefreshToken(): string | null {
-    /* istanbul ignore next */
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
   }
 
   getCurrentUser(): User | null {
@@ -226,7 +230,6 @@ class AuthManager {
 
       // 1. Cleanup storage
       localStorage.removeItem(AUTH_STORAGE_KEYS.AUTH_TOKEN);
-      localStorage.removeItem(AUTH_STORAGE_KEYS.REFRESH_TOKEN);
       localStorage.removeItem(AUTH_STORAGE_KEYS.SESSION_TOKEN);
       localStorage.removeItem(AUTH_STORAGE_KEYS.USER_DATA);
 
