@@ -19757,58 +19757,6 @@ Voir la leçon 261 (une énumération de sites porte deux affirmations, dont une
 vérifiée) : même famille, autre support — là c'était la LISTE qui mentait par omission, ici c'est sa
 JUSTIFICATION.
 
-## Leçon 335 bis — un gate de TEST ne peut pas voir ce que son compilateur AMNISTIE
-
-> Numérotée « bis » : cette entrée portait 335 sur `origin/dev` au moment du merge du lot L-0.5 de
-> la v3 web, en collision avec la leçon précédente. Renumérotation mécanique à trancher par une
-> passe dédiée si le dépôt veut une séquence strictement continue ; le contenu n'a pas bougé.
-
-Le lot #4359 a livré cinq routes canoniques sous `/me/categories`. Son agent a joué ses témoins
-ciblés (25/25) puis sept suites de non-régression (55/55) : **tout vert**. Le gate complet du gateway
-l'était aussi — **1028 suites, 21627 témoins, zéro échec**.
-
-`npx tsc --noEmit` rendait **EXIT=2**, sur quatre `TS2345` dans le fichier neuf.
-
-Les quatre montages canoniques omettaient les **génériques de route** que leur alias déclare
-(`fastify.post<{ Body: CategoryBody }>(…)`). Sans eux, Fastify infère `RouteGenericInterface`, et le
-gestionnaire typé n'est plus assignable au paramètre attendu. Le code sort **avant même** de tourner.
-
-### Pourquoi aucun témoin ne pouvait le voir
-
-`jest.config.json` du gateway porte `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]`.
-**`TS2345` est dans la liste.** `ts-jest` compile donc le fichier fautif, avale l'erreur, et exécute
-un code que `tsc` refuse. Un témoin — ciblé, complet, ou les deux — est **structurellement incapable**
-de rougir sur cette classe.
-
-Et l'étape « Type-check » de la CI est **BLOQUANTE** pour `gateway` depuis le cycle 105 bis. Le lot
-serait donc parti vert en local et rouge en CI, sur une erreur qu'aucun test n'aurait localisée.
-
-> **Un gate ne garde que ce que son outil REGARDE.** `services/gateway/CLAUDE.md` le dit déjà, à
-> propos des couples `(événement, charge)` : *« noter les codes IGNORÉS par ts-jest : 2322 et 2345
-> sont exactement ceux qu'un couple dépareillé produit — un témoin ne peut donc pas servir de cliquet
-> pour ces deux-là »*. La règle était écrite. Elle vaut au-delà des événements : **elle vaut pour
-> toute assignabilité**, et donc pour tout montage Fastify typé.
-
-### La règle de manœuvre
-
-**`npx tsc --noEmit` se joue SÉPARÉMENT de `jest`, et son code de sortie se lit.** Les deux ne sont
-pas redondants : ils regardent des choses disjointes, et l'un amnistie précisément ce que l'autre
-bloque. Un lot qui ajoute un **montage de route** ou touche une **signature partagée** est
-exactement le cas où l'écart s'ouvre.
-
-Corollaire de brief : un sous-agent à qui l'on interdit le gate complet (à raison — un run parasite
-rend les mesures inattribuables) **ne peut pas découvrir cette classe**. C'est donc à l'intégrateur
-de la chercher, et de ne jamais lire « mes témoins sont verts » comme « ça compile ».
-
-### Deux corollaires de forme, tirés du correctif
-
-- **Le générique se recopie de l'ALIAS, jamais réinventé.** Le module d'origine déclarait déjà les
-  six formes exactes ; le canonique en omettait quatre.
-- **Un type nommé par un générique doit être EXPORTÉ, pas redéclaré.** `CategoryBody` et
-  `CategoryIdParams` étaient `interface` privées du module d'origine. Les redéclarer côté canonique
-  aurait créé la jumelle divergente que tout le lot cherchait à éviter — elles sont désormais
-  exportées et importées.
-
 ## Leçon 336 — une extraction qui perd une capacité de son site d'origine n'est pas une extraction, c'est une réécriture
 
 **Le fait.** Le composer unifié avait besoin de la surface de dessin de l'atelier. La règle du dépôt est
@@ -19927,9 +19875,57 @@ Sites : `services/gateway/src/utils/safe-regex.ts` (`DEFAULT_STARTUP_BUDGET_MS`,
 `relancer`), témoin dans `__tests__/unit/routes/admin/agent-topics-safe-regex.test.ts`.
 Gate après correctif : 1028 suites, 21 628 tests, exit 0.
 
+## Leçon 338 — un gate de TEST ne peut pas voir ce que son compilateur AMNISTIE
+
+Le lot #4359 a livré cinq routes canoniques sous `/me/categories`. Son agent a joué ses témoins
+ciblés (25/25) puis sept suites de non-régression (55/55) : **tout vert**. Le gate complet du gateway
+l'était aussi — **1028 suites, 21627 témoins, zéro échec**.
+
+`npx tsc --noEmit` rendait **EXIT=2**, sur quatre `TS2345` dans le fichier neuf.
+
+Les quatre montages canoniques omettaient les **génériques de route** que leur alias déclare
+(`fastify.post<{ Body: CategoryBody }>(…)`). Sans eux, Fastify infère `RouteGenericInterface`, et le
+gestionnaire typé n'est plus assignable au paramètre attendu. Le code sort **avant même** de tourner.
+
+### Pourquoi aucun témoin ne pouvait le voir
+
+`jest.config.json` du gateway porte `diagnostics.ignoreCodes: [2307, 2322, 2339, 2345, 2740]`.
+**`TS2345` est dans la liste.** `ts-jest` compile donc le fichier fautif, avale l'erreur, et exécute
+un code que `tsc` refuse. Un témoin — ciblé, complet, ou les deux — est **structurellement incapable**
+de rougir sur cette classe.
+
+Et l'étape « Type-check » de la CI est **BLOQUANTE** pour `gateway` depuis le cycle 105 bis. Le lot
+serait donc parti vert en local et rouge en CI, sur une erreur qu'aucun test n'aurait localisée.
+
+> **Un gate ne garde que ce que son outil REGARDE.** `services/gateway/CLAUDE.md` le dit déjà, à
+> propos des couples `(événement, charge)` : *« noter les codes IGNORÉS par ts-jest : 2322 et 2345
+> sont exactement ceux qu'un couple dépareillé produit — un témoin ne peut donc pas servir de cliquet
+> pour ces deux-là »*. La règle était écrite. Elle vaut au-delà des événements : **elle vaut pour
+> toute assignabilité**, et donc pour tout montage Fastify typé.
+
+### La règle de manœuvre
+
+**`npx tsc --noEmit` se joue SÉPARÉMENT de `jest`, et son code de sortie se lit.** Les deux ne sont
+pas redondants : ils regardent des choses disjointes, et l'un amnistie précisément ce que l'autre
+bloque. Un lot qui ajoute un **montage de route** ou touche une **signature partagée** est
+exactement le cas où l'écart s'ouvre.
+
+Corollaire de brief : un sous-agent à qui l'on interdit le gate complet (à raison — un run parasite
+rend les mesures inattribuables) **ne peut pas découvrir cette classe**. C'est donc à l'intégrateur
+de la chercher, et de ne jamais lire « mes témoins sont verts » comme « ça compile ».
+
+### Deux corollaires de forme, tirés du correctif
+
+- **Le générique se recopie de l'ALIAS, jamais réinventé.** Le module d'origine déclarait déjà les
+  six formes exactes ; le canonique en omettait quatre.
+- **Un type nommé par un générique doit être EXPORTÉ, pas redéclaré.** `CategoryBody` et
+  `CategoryIdParams` étaient `interface` privées du module d'origine. Les redéclarer côté canonique
+  aurait créé la jumelle divergente que tout le lot cherchait à éviter — elles sont désormais
+  exportées et importées.
+
 ---
 
-## Leçon 338 — Un artefact de DEV n'est pas un artefact de PROD, et la preuve d'un build se prend sur `next start`
+## Leçon 339 — Un artefact de DEV n'est pas un artefact de PROD, et la preuve d'un build se prend sur `next start`
 
 Cycle : revue croisée du lot L-0.5 de la v3 web (issue #4396, « Le paquet apps/web-v3 existe et se
 construit »).
@@ -19963,7 +19959,7 @@ correctif « évident » qui ne se vérifie pas sur le manifeste APRÈS l'ajout 
   plus sur le layout, c'est `bun run build` = `next build && node scripts/check-app-router-built.mjs`,
   qui lit le manifeste et sort en 1 s'il est vide. Prouvé rouge en retirant la route.
 
-## Leçon 339 — Une règle de lint se prouve sur la forme d'import RÉELLEMENT utilisée
+## Leçon 340 — Une règle de lint se prouve sur la forme d'import RÉELLEMENT utilisée
 
 Même cycle. Le lot posait trois `no-restricted-imports` interdisant `lucide-react`, la fonte
 `@phosphor-icons/web` et `next-themes`. La clé `paths` de cette règle ne matche que le nom **EXACT**
@@ -19987,7 +19983,7 @@ processus fils (`--stdin --stdin-filename`, `--format json`), ce qui a le mérit
 que la CI exécute. `ESLint.lintText` n'exige pas que le fichier existe sur le disque : la sonde ne
 pollue donc pas le dépôt.
 
-## Leçon 340 — Lire le corps ENTIER d'une issue avant de dire qu'un livrable est hors périmètre
+## Leçon 341 — Lire le corps ENTIER d'une issue avant de dire qu'un livrable est hors périmètre
 
 Même cycle. La revue reprochait, en majeur, d'avoir livré le moteur de thème sous une issue dont le
 **Critère de fin** est « squelette seul, aucune route requise » — donc en avance sur son lot. Le
@@ -20012,7 +20008,7 @@ valider ». Une décision produit signalée dans un rapport n'existe pas : elle 
 Le réfuter avec sa preuve, puis se demander *qu'est-ce qui a fait sentir quelque chose au relecteur ?*
 — et ouvrir l'issue de ça.
 
-## Leçon 341 — Un garde qui itère la structure DÉRIVÉE est aveugle à ce qui manque à la structure dérivée
+## Leçon 342 — Un garde qui itère la structure DÉRIVÉE est aveugle à ce qui manque à la structure dérivée
 
 Cycle : revue croisée du lot L-0.5 de la v3 web, issue #4397 (« Le lockfile s'aligne sur les
 manifestes »).
@@ -20105,7 +20101,7 @@ chaque passage que le garde SAIT rougir, avant de lui demander s'il est vert.
 
 ---
 
-## Leçon 342 — Un préfixe d'assets ne protège que ce qu'il PRÉFIXE, et une règle de routage publie tout ce qu'elle réclame
+## Leçon 343 — Un préfixe d'assets ne protège que ce qu'il PRÉFIXE, et une règle de routage publie tout ce qu'elle réclame
 
 **Contexte.** Lot L-0.5 de la v3 web. `apps/web-v3` pose `assetPrefix: '/__v3'`, et le routeur
 Traefik `frontend-v3` (priority=100, devant le `frontend` legacy à priority=1) réclamait

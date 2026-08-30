@@ -827,3 +827,113 @@ final class ComposerDrawingWiringGuardTests: XCTestCase {
         XCTAssertTrue(source.contains("drawingSurface:viewModel.isDrawingActive"))
     }
 }
+
+/// **Les six actions de l'objet parlent la langue du lecteur** (#4431).
+///
+/// Vu au simulateur en locale ANGLAISE : le rail *leading* rendait « Describe »,
+/// « Add media », « Add a sticker » — le catalogue de l'app faisait son travail
+/// — pendant que le rail *trailing*, à quelques points de distance, répondait
+/// « Dupliquer », « Mettre au premier plan », « Supprimer ».
+///
+/// La cause était six littéraux français rendus comme VALEUR, jamais comme
+/// `defaultValue:` — donc invisibles au cliquet de localisation, qui ne balaie
+/// que les seconds.
+final class StoryCanvasActionTitleLocalizationTests: XCTestCase {
+
+    private func sdkSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()   // .../apps
+            .deletingLastPathComponent()   // racine du dépôt
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView+ContextMenu.swift")
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    private func compact(_ t: String) -> String {
+        t.components(separatedBy: .whitespacesAndNewlines).joined()
+    }
+
+    /// **Le fusible** — un chemin faux rendrait la garde négative verte par
+    /// omission, ce qui est exactement le piège qu'elle existe pour éviter.
+    func test_laSourceDuMenu_estLisible() throws {
+        let s = try sdkSource()
+        XCTAssertGreaterThan(s.count, 500)
+        XCTAssertTrue(s.contains("enum StoryCanvasContextAction"))
+    }
+
+    /// Les six titres passent par le catalogue du SDK.
+    func test_lesSixTitres_passentParLeCatalogue() throws {
+        let source = compact(try sdkSource())
+        for cle in ["story.canvas.action.edit", "story.canvas.action.duplicate",
+                    "story.canvas.action.bringForward", "story.canvas.action.sendBackward",
+                    "story.canvas.action.leaveScene", "story.canvas.action.delete"] {
+            XCTAssertTrue(source.contains("\"\(cle)\""), cle)
+        }
+    }
+
+    /// Le corps d'UNE propriété calculée — la garde négative ci-dessous doit
+    /// lire `title` et rien d'autre.
+    ///
+    /// **Sans ce cadrage, elle serait rouge en permanence** : `systemImage`, sa
+    /// voisine immédiate, rend six littéraux `case .edit: return "pencil"` qui
+    /// sont des noms de symboles SF — parfaitement légitimes, et de la même
+    /// FORME que l'interdit. Une garde négative posée sur un fichier entier
+    /// attrape les jumelles innocentes de ce qu'elle vise.
+    private func corpsDe(_ ancre: String, dans code: String) -> String? {
+        guard let debut = code.range(of: ancre) else { return nil }
+        var profondeur = 0
+        var corps = ""
+        for c in code[debut.lowerBound...] {
+            corps.append(c)
+            if c == "{" { profondeur += 1 }
+            if c == "}" {
+                profondeur -= 1
+                if profondeur == 0 { return corps }
+            }
+        }
+        return nil
+    }
+
+    /// **La garde NÉGATIVE.** Elle rougit si un titre redevient un littéral nu —
+    /// la forme exacte du défaut, et la seule que le cliquet de localisation ne
+    /// voit pas.
+    func test_aucunTitre_neRedevientUnLitteralNu() throws {
+        guard let corps = corpsDe("public var title: String", dans: try sdkSource()) else {
+            return XCTFail("`title` est introuvable — la garde doit être re-pointée.")
+        }
+        let source = compact(corps)
+        XCTAssertTrue(source.contains("story.canvas.action.edit"),
+                      "Le corps lu n'est pas celui de `title` — la garde ne mesurerait rien.")
+        for interdit in ["case.edit:return\"", "case.duplicate:return\"",
+                        "case.bringForward:return\"", "case.sendBackward:return\"",
+                        "case.leaveScene:return\"", "case.delete:return\""] {
+            XCTAssertFalse(source.contains(interdit),
+                           "\(interdit) — un littéral rendu comme VALEUR échappe au cliquet.")
+        }
+    }
+
+    /// **Et la voisine reste libre.** `systemImage` DOIT continuer de rendre des
+    /// littéraux : ce sont des noms de symboles SF, pas des mots. Ce témoin
+    /// empêche qu'on « corrige » par excès de zèle ce qui n'est pas un défaut.
+    func test_lesNomsDeSymboles_restentDesLitteraux() throws {
+        guard let corps = corpsDe("public var systemImage: String", dans: try sdkSource()) else {
+            return XCTFail("`systemImage` est introuvable")
+        }
+        XCTAssertTrue(compact(corps).contains("case.edit:return\"pencil\""))
+        XCTAssertFalse(compact(corps).contains("String(localized:"),
+                       "Un nom de symbole SF n'est pas une chaîne à traduire.")
+    }
+
+    /// Les six titres restent DISTINCTS : deux actions qui s'annoncent pareil
+    /// sont indiscernables à VoiceOver, qui les lit dans le rail.
+    ///
+    /// `@MainActor` parce que `title` l'est — `Bundle.module` l'exige. Le
+    /// témoin lit donc le titre exactement comme la vue le lit.
+    @MainActor
+    func test_lesSixTitres_restentDistincts() {
+        let titres = StoryCanvasContextAction.allCases.map(\.title)
+        XCTAssertEqual(Set(titres).count, StoryCanvasContextAction.allCases.count)
+        XCTAssertFalse(titres.contains(where: \.isEmpty))
+    }
+}
