@@ -129,7 +129,18 @@ final class MockFriendService: FriendServiceProviding, @unchecked Sendable {
     ) async throws -> PaginatedAPIResponse<[FriendRequest]> {
         friendRequestsCursors.append(cursor)
         let depart = Self.offset(fromCursor: cursor)
-        let page = try await allFriendRequests(status: status, offset: depart, limit: limit)
+        // **`direction` décide QUEL endpoint répond**, exactement comme le pont
+        // du SDK : `.received` → `receivedRequests`, `.sent` → `sentRequests`,
+        // `.any` → `allFriendRequests`. L'ignorer ferait répondre le mauvais
+        // stub — et c'est le même défaut, rejoué un cran plus bas, que celui
+        // qu'on corrige : un double qui reprend une exigence doit la reprendre
+        // ENTIÈRE, pas la tranche que son premier appelant exerce.
+        let page: OffsetPaginatedAPIResponse<[FriendRequest]>
+        switch direction {
+        case .received: page = try await receivedRequests(offset: depart, limit: limit)
+        case .sent: page = try await sentRequests(offset: depart, limit: limit)
+        case .any: page = try await allFriendRequests(status: status, offset: depart, limit: limit)
+        }
         // `hasMore` absent ⇒ une page PLEINE veut dire « il en reste », une page
         // partielle veut dire la fin. C'est la règle que l'appelant applique ;
         // la répéter ici ferait DEUX règles à faire diverger, mais le double
