@@ -187,7 +187,20 @@ NC='\033[0m'
 #
 # Ce cliquet a donc echoue en annoncant une BONNE nouvelle, et c'est sa raison
 # d'etre : sans lui, le point regagne redeviendrait silencieusement depensable.
-readonly WEB_BASELINE=1183
+#
+# 1183 -> 1182 le 2026-08-30, en integrant le lot 22, et l'histoire vaut d'etre
+# dite parce qu'elle passe par un ROUGE. Le lot amont qui a retire
+# `deletedForUserAt` du contrat de fil a mis a jour la passerelle et laisse
+# derriere une fixture de `apps/web` : ce cliquet est passe a 1184 (+1) sans
+# qu'aucun commit de ce lot ne touche le fichier fautif. Aligner la fixture sur
+# le type -- `readingMode` a la place du champ retire, aux trois sites --
+# retire DEUX erreurs, d'ou 1182 et non 1183.
+#
+# La valeur est donc enregistree ici parce que la mesure locale est passee de
+# 1184 (rouge) a 1182 (amelioration non enregistree) par un correctif dont
+# l'effet est ENTIEREMENT attribue : les deux erreurs retirees nommaient toutes
+# deux `ConversationPreferencesPayload` et le champ absent.
+readonly WEB_BASELINE=1182
 
 # Le compilateur DU DÉPÔT, en chemin absolu — jamais `npx tsc`.
 #
