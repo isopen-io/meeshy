@@ -19,7 +19,7 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 ## Current State
 
-> **POINTEUR iOS AUTORITAIRE (mis à jour 257i, 2026-08-29)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
+> **POINTEUR iOS AUTORITAIRE (mis à jour 270i, 2026-08-30)** — piste iOS (suffixe `i`). **Ce bloc prime sur tous les pointeurs plus anciens ci-dessous.**
 >
 > | itération | PR | squash sur `main` | issue |
 > |---|---|---|---|
@@ -41,8 +41,61 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 > | 266i | [#4320](https://github.com/isopen-io/meeshy/pull/4320) | `6fc9486c` | #4319 |
 > | 267i | [#4323](https://github.com/isopen-io/meeshy/pull/4323) | `a9b5ee8c` | #4322 |
 > | 268i | [#4326](https://github.com/isopen-io/meeshy/pull/4326) | `d110653a` | #4308 (avancée) |
+> | 269i | [#4330](https://github.com/isopen-io/meeshy/pull/4330) | `5c2c6387` | #4328, #4329 (ouvertes) |
 >
-> - **Branche de travail** : `claude/intelligent-noether-6zxsbz`, **réinitialisée** (jamais supprimée) sur `origin/main` `d110653a` — base de 269i.
+> - **Branche de travail** : `claude/intelligent-noether-m8jpj8`, **réinitialisée** (jamais supprimée) sur `origin/main` `56bc5fd9` — base de 270i.
+>
+> ### 270i — le widget parlait sept langues, et la garde ne le savait pas (#4364)
+>
+> | mesure | avant | après |
+> |---|---|---|
+> | cliquet i18n (`backlogCeiling`) | 114 | **81** |
+> | écrans épinglés | 240 | **246** |
+> | règle A / règle B sur les épinglés | 0 / 0 | **0 / 0** |
+> | clés du catalogue app | 3 402 | **3 413** |
+>
+> - **`catalogByTargetFragment` nommait DEUX catalogues sur TROIS.**
+>   `apps/ios/MeeshyWidgets/Localizable.xcstrings` existe depuis que la cible
+>   existe — 39 clés, les sept locales — et aucune garde ne l'avait jamais ouvert.
+>   Une extension est un bundle SÉPARÉ : ses `String(localized:)` se résolvent
+>   contre le catalogue embarqué dans elle. **22 clés du widget et des Live
+>   Activities étaient comptées comme non traduites contre le catalogue de l'app**,
+>   où elles n'existent pas, et ses deux sources étaient inépinglables bien
+>   qu'elles passent déjà les deux règles.
+>   → *Rien ne rougissait* : une cible non mappée retombe SILENCIEUSEMENT sur le
+>   catalogue de l'app. Ce n'est pas un échec de garde, c'est une **mesure
+>   fausse** — elle compte une dette inexistante et refuse une protection acquise.
+> - **Un témoin qui interroge la carte ne peut pas voir ce qui n'y est pas.**
+>   `test_everyPerTargetCatalogIsMapped` lit le SYSTÈME DE FICHIERS — seul endroit
+>   qui connaît l'inventaire complet — dans les deux directions (aucun catalogue
+>   non mappé, aucun mappage mort), et SONDE chaque fragment pour prouver que
+>   `catalog(resolvedFor:)` s'en sert. Forme, appliquée à une table de
+>   configuration, de la leçon 261.
+> - **Les trous ne sont pas dispersés : ce sont les VALEURS MANQUANTES de familles
+>   traduites.** `DeliveryStatus` a six cas, trois au catalogue et trois absents :
+>   un lecteur d'écran arabophone entendait **trois états en arabe et trois en
+>   français dans la même phrase**. La pastille de synchronisation annonce ses 53
+>   opérations en sept langues et ses **deux boutons** en français.
+>   → *Un `defaultValue` rend invisible l'absence de sa clé* (#4328) ; quand
+>   l'absence frappe une VALEUR d'énumération, elle rend en plus invisible que la
+>   famille est à moitié traduite — la complétude qu'on vérifie à l'œil est celle
+>   du `switch`, pas celle du catalogue. **La question à poser à une clé absente
+>   n'est pas seulement « que voit l'utilisateur ? » mais « quelles sont ses
+>   SŒURS ? »**
+> - **Onze clés remplies dans les sept locales sans un mot inventé** : dix copiées
+>   verbatim d'une entrée portant déjà le même français, la onzième
+>   (`a11y.delivery.sending`) complétée depuis sa famille — un balayage par
+>   ÉGALITÉ DE CHAÎNE l'aurait laissée derrière, son français différant de sa
+>   jumelle. **Zéro ligne de production modifiée** : les onze `defaultValue`
+>   inline étaient déjà exactement le français retenu.
+> - **Les deux premières sources hors cible app jamais épinglées**
+>   (`MeeshyWidgets.swift`, `LiveActivities.swift`) : elles ne demandaient AUCUN
+>   travail, seulement la ligne de carte qui dit quel catalogue les sert.
+> - **Suite nommée** : une famille DISTINCTE de #4328 et plus grave — les
+>   `defaultValue` écrits en **ANGLAIS** dans un catalogue de langue source
+>   française (`security.verify.*`, `comments.*.a11yLabel`,
+>   `bubble.meta.ephemeral.a11y`). Ceux-là s'affichent en anglais dans les **sept**
+>   locales, francophone comprise.
 >
 > ### 269i — solder la réconciliation, et nommer ce qu'elle ne peut pas atteindre (#4328, #4329)
 >
