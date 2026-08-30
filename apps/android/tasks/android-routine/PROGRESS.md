@@ -2,6 +2,69 @@
 
 > Older entries archived in `PROGRESS-archive-2026-08.md` (prepend/newest-first, same convention).
 
+> On 2026-08-30 **global search became cache-first — a repeated query in the TTL window serves from an
+> in-memory LRU with no network and no spinner, and a socket data-change invalidates it** (slice
+> `global-search-query-cache`, feature-parity §N "Global search … with recent searches"). iOS keeps a 5-entry /
+> 120 s `messageQueryCache` in `GlobalSearchViewModel` plus `setupSocketInvalidation` (clear on
+> `conversation:updated`/`conversation:deleted`); Android's `GlobalSearchViewModel` had NO query cache — every
+> debounced keystroke past the 2-char floor re-fetched all three tabs, and no socket event ever freshened stale
+> results (dimension 2 Performance gap, dimension 13 Complétude gap vs iOS).
+>
+> **Step 0 — no open android-routine PR.** `list_pull_requests` (open) → #4390/#4368/#4336/#4267 (all jcnm:
+> web/gateway), none a `claude/apps/android/<slice-id>` slice, no `apps/android` collision, nothing of mine to
+> merge. Prior slice (`search-accent-fold-highlight`) is on `main` (#4385, commit 892aa83f). Branched off
+> freshly-fetched `origin/main`; local HEAD == origin/main before branching (`rev-list --left-right --count` =
+> 0/0). Diff verified `apps/android` only (1 new main + 1 new test + 1 edited main + 1 edited test, no
+> `local.properties`).
+>
+> **The change — one pure LRU+TTL cache + cache-first ViewModel wiring.** (1) New pure `:core:model`
+> `SearchQueryCache<V>` (`me.meeshy.sdk.model.search`): an immutable, generic, capacity-bounded (default 5) +
+> TTL-bounded (default 120_000 ms — exact iOS parity) cache keyed by a normalised query (`normalize` = trim +
+> lowercase, exposed as the shared key SSOT). `get(query, nowMillis)` is a PURE read — an expired entry
+> (`now - cachedAt >= ttl`, boundary exclusive like iOS `< staleTTL`) is a MISS and never mutates; a blank query
+> always misses. `put` replaces an existing key in place (no extra slot on re-put), evicts the OLDEST past
+> capacity, and is a no-op returning the same instance on a blank key. `invalidate` clears all (same instance if
+> already empty). `@ConsistentCopyVisibility` + private constructor, matching the `UserCategoryCatalog` precedent.
+> (2) `GlobalSearchViewModel` gains `MessageSocketManager` + `CacheClock` deps: the debounced search now checks the
+> cache first (HIT → serve instantly, `isSearching=false`, record the recent search, no `repository.search`),
+> caches every real fetch, and `invalidateSearchCache()` (public, also the socket path) dumps it; init subscribes
+> to `conversationUpdated`/`conversationDeleted` → invalidate. **SOTA over iOS:** the cache is a pure immutable
+> value type with no clock/socket knowledge (iOS mutates an array in the ViewModel), so every branch is
+> JVM-testable and the "when" (clock, socket) stays entirely in the orchestration layer. Blast radius:
+> `SearchQueryCache` all-new; `GlobalSearchViewModel` +2 ctor deps (Hilt-provided, only call site is
+> `hiltViewModel()` so no call-site churn) + cache-first branch + 3 init collectors. Deliberately EXCLUDED
+> (faithful boundary): the local FTS leg (Room, device-bound) and rendering `highlightRanges` in the result rows
+> (a Compose-glue follow-up, noted in §N).
+>
+> **Tests: +25, RED-proven.** `SearchQueryCacheTest` +20 (put/get in TTL; trim+lowercase key on both sides; TTL
+> boundary miss + one-ms-before hit; get-is-pure-no-mutate; unknown miss; blank never stored + always miss; replace
+> existing; evict oldest past capacity; re-put evicts no other key; invalidate clears; invalidate-empty same
+> instance; put-blank same instance; put returns new instance; capacity/ttl guards reject non-positive; defaults =
+> cap 5 / TTL 120 s + evict at cap 5; normalize SSOT). `GlobalSearchViewModelTest` +5 (cached query in TTL skips the
+> network; TTL-expiry re-fetches; `invalidateSearchCache` re-fetches; `conversation:updated` invalidates;
+> `conversation:deleted` invalidates) — driven through a controllable `CacheClock` fake and real `MutableSharedFlow`
+> socket seams (mirroring `ConversationListViewModelTest`'s established socket-mock pattern). **RED:** mutating the
+> pure TTL comparison `>=`→`>` flips the boundary MISS to a HIT, failing exactly the boundary test (verified via the
+> embeddable-kotlinc harness).
+>
+> **SDK bootstrap WORKED this run** (contra the 2026-08-30 `search-accent-fold-highlight` note): `dl.google.com`
+> reachable; cmdline-tools (11076708) + `platforms;android-37.0`/`android-35` + `build-tools;35.0.0` +
+> `platform-tools`; the `android-37 → android-37.0` symlink resolved cleanly for AGP this time — `compileSdk = 37`
+> built without the `Failed to find target hash string 'android-37'` failure the prior note documented. Kept
+> `local.properties` out of the diff (gitignored).
+>
+> **Verified — full gate GREEN.** `./apps/android/meeshy.sh check` (assembleDebug + all-module testDebugUnitTest)
+> **BUILD SUCCESSFUL in 3m 58s**, 973 actionable tasks, 0 failed. Reviewer **PASS** (diff `apps/android` only —
+> 2 main + 2 test, no `local.properties`; SDK purity — pure `:core:model` building block with no clock/socket,
+> orchestration in the `:feature` ViewModel; SSOT — one `SearchQueryCache`, no re-implementation; instant-app —
+> cache-first, no spinner on a hit; UDF — immutable `StateFlow`; no tautological tests; no coverage floor lowered —
+> new pure logic with near-total branch coverage, RED-proven).
+>
+> **Next**: render `MessageTextParser.highlightRanges` in the global-search RESULT rows (iOS `highlightedText`,
+> error hue + bold on the first/every match — a Compose-glue slice) closes another §N clause; the local FTS +
+> network-merge leg is Room-device-bound. For a pure-core next slice, consider a Conversations/Chat value type or an
+> Auth glue follow-up. Read the chosen box's iOS audit part read-only before branching.
+
 > On 2026-08-30 **search-highlight became accent-insensitive — iOS `.diacriticInsensitive` parity, closing a real
 > gap in the in-conversation search bubble** (slice `search-accent-fold-highlight`, feature-parity §C "Rich text
 > rendering … search highlight"). iOS highlights search matches with `.folding(options: [.diacriticInsensitive,

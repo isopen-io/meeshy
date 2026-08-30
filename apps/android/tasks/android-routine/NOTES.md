@@ -5,6 +5,35 @@ Append-only log of gotchas and decisions that save time next run.
 > **Archive:** entries older than the ~300-line hygiene threshold live in
 > [`NOTES-archive-2026-08.md`](./NOTES-archive-2026-08.md) (same append/oldest-first order).
 
+## 2026-08-30 — the `android-37 → android-37.0` symlink DID resolve this run; keep bootstrapping before assuming it can't (slice `global-search-query-cache`)
+The immediately-prior note (below) reported AGP could not resolve `compileSdk = 37` even via the ROUTINE's
+documented `android-37 → android-37.0` symlink. **This run the symlink recipe worked**: install
+`platforms;android-37.0` + `platforms;android-35` + `build-tools;35.0.0` + `platform-tools`, symlink
+`android-37 → android-37.0`, and `assembleDebug` + all-module `testDebugUnitTest` built GREEN (973 tasks, 0
+failed). So the failure below was environment- or revision-specific, not a permanent property of `compileSdk = 37`.
+**Lesson: always attempt the full SDK bootstrap first** — the local Gradle gate is the strongest verification and
+it may well work; only fall back to the embeddable-kotlinc pure-logic harness (still handy for a fast RED-mutation
+check) when the bootstrap actually fails. Don't pre-emptively skip the local gate on the strength of a one-day-old
+note.
+
+## 2026-08-30 — a pure cache is a VALUE, the clock and the socket are the caller's (slice `global-search-query-cache`)
+Porting iOS's in-ViewModel `messageQueryCache` (a mutated array + `Date()` + Combine socket sinks) to Android, the
+clean split is: the cache is a pure immutable `:core:model` value type that takes `nowMillis: Long` as a PARAMETER
+and knows nothing of clocks, sockets or coroutines; the ViewModel supplies `CacheClock.nowMillis()` at the call
+site and owns the socket subscriptions that call `invalidate()`. This keeps EVERY cache branch JVM-testable with a
+plain `Long` (TTL boundary, eviction, blank-key no-op) and keeps the "when" (debounce, clock, socket) in the
+orchestration layer where it belongs (SDK-purity grain). Two design choices worth repeating: (1) `get` is a PURE
+read — an expired entry is a MISS but is NOT evicted on read (eviction happens at `put` via capacity), so a test can
+assert `get` never changes `size`; iOS evicts-on-read by mutating, which a pure value type can't and shouldn't do.
+(2) A no-op returns `this` (blank-key `put`, `invalidate` on empty), letting a test pin inertness with `assertSame`.
+For the ViewModel's socket-invalidation tests, reuse the established `ConversationListViewModelTest` pattern:
+`mockk<MessageSocketManager>` stubbing only the two flows the VM collects, backed by real `MutableSharedFlow`s you
+`emit` into after an `advanceUntilIdle` (so the init collector is subscribed before the emit — a no-replay
+SharedFlow drops anything emitted before subscription). A controllable `CacheClock` fake (a `var` the override
+returns) makes the TTL-expiry path testable without sleeping. Also: a private-constructor `data class` needs
+`@ConsistentCopyVisibility` in this module (precedent `UserCategoryCatalog`) or kotlinc warns about `copy()`
+visibility.
+
 ## 2026-08-30 — AGP 8.13 + `compileSdk = 37` can't resolve locally; the symlink recipe no longer holds (slice `search-accent-fold-highlight`)
 `dl.google.com` was reachable, but the ONLY publishable API-37 platform is the preview `platforms;android-37.0`,
 and AGP 8.13 demands target hash `android-37`. That hash is never satisfied — reproduced on (a) a pristine

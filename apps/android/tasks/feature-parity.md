@@ -6898,7 +6898,23 @@ Wired so far (login → conversations → chat, all on the SWR + Hilt foundation
       parity, blank→null, unparseable→null, unix-epoch preserved).
 
 ## N. Search
-- [ ] Global search (messages, conversations, users) with recent searches + query highlighting
+- [~] Global search (messages, conversations, users) with recent searches + query highlighting —
+      three-tab search (`GlobalSearchViewModel` + `GlobalSearchRepository`, debounce 300 ms / 2-char
+      floor / single query feeds all tabs), recent searches (`RecentSearches`/`RecentSearchesStore`),
+      and accent-folded highlight ranges (`MessageTextParser.highlightRanges` via `SearchTextFolder`)
+      all done in earlier slices. **Cache-first query cache + socket invalidation done** (slice
+      `global-search-query-cache`, 2026-08-30): pure `:core:model` `SearchQueryCache<V>` — immutable
+      LRU (capacity 5) + TTL (120 s) keyed by normalised query (trim+lowercase), faithful port of iOS
+      `GlobalSearchViewModel.messageQueryCache` (`get` a pure read — an expired entry is a MISS, never a
+      mutation; `put` evicts the oldest past capacity and never a slot on re-put; `invalidate` clears).
+      `GlobalSearchViewModel` now serves a repeated in-TTL query from the cache with NO network round-trip
+      and NO spinner (dimension 2 Performance), and invalidates on `conversation:updated`/`conversation:deleted`
+      socket events (parity iOS `setupSocketInvalidation`), so a stale result never survives a data change.
+      +20 `SearchQueryCacheTest` (RED-proven: `>=`→`>` on the TTL boundary flips the boundary miss to a hit)
+      +5 `GlobalSearchViewModelTest` (cache-hit skips network, TTL-expiry re-fetches, `invalidateSearchCache`
+      re-fetches, both socket events invalidate). Full `assembleDebug` + all-module `testDebugUnitTest` green.
+      **Remaining:** query highlighting rendered in the RESULT rows (iOS `highlightedText`, currently only the
+      chat bubble renders `highlightRanges`), and the local FTS leg below.
 - [ ] Local full-text search (FTS, accent-folded, BM25-ranked) + network merge
 - [x] User search (paginated) — closed 2026-08-16 (slice `user-search-pagination`). The search
       itself already existed (`NewConversationViewModel`'s debounced `UserRepository.searchUsers`,
